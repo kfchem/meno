@@ -364,6 +364,9 @@ export function valueText(v: Cell, m: Measure): string {
   return unit ? `${t} ${unit}` : t;
 }
 
+/** A line with each number held to the unit after it ("−8.226118 Eh", "1.85 D"): never broken between them where it wraps - shown, not written to a file. */
+export const unitsHeld = (line: string) => line.replace(/(\d) (?=[A-Za-z\u00c5\u00b0\u00b5%])/g, "$1\u00a0");
+
 /** Whether a value is marked where it is written: an imaginary wavenumber. */
 export function isMarked(v: Cell, m: Measure): boolean {
   return m.quantity === "wavenumber" && typeof v === "number" && v < 0;

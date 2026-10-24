@@ -8,13 +8,13 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
 import { combinedSet, measuredSet, speciesSet, taggedSet } from "./structureSteps";
 import { positionIds, substituted } from "./substituents";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import type { SeriesCore } from "../store/types";
+import type { DrawnRecord, SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
@@ -86,7 +86,15 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
           ? substituted(entries[0].drawn, positionIds(String(options.positions ?? "")), String(options.groups ?? ""), options.combine === "together" ? "together" : "one", style)
           : enumerated(entries[0].drawn, String(options.lists ?? ""), style);
       if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
-      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: numberedRecord(m.number, m.how, why) });
+      // (each made from its template: what that was made from, and its values as the template's - `made_from.nll` - never as
+      //  its own; a template drawn on the page has none)
+      const template = entries[0].record;
+      const fromTemplate = (record: DrawnRecord): DrawnRecord => ({
+        ...(template?.from?.length ? { from: template.from } : {}),
+        ...record,
+        properties: { ...record.properties, ...Object.fromEntries(madeFrom(template)) },
+      });
+      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: fromTemplate(numberedRecord(m.number, m.how, why)) });
       // (its valence as it was checked before it ran, where it was: never claimed where it was not)
       // (run with nothing asked first - in another step's run, as one before it: neither its valence nor its configurations left open looked at, and said so)
       const valence = said.length ? said : ["Valence not checked", "Configurations left open not looked for"];

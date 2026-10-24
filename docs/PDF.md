@@ -860,10 +860,10 @@ Not yet, and where it comes:
 
 Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
-  - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is.
+  - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is. One line with an atom's label at an end of it, along it - CH3NH3+ - is one too, however thin: the label read as a structure's labels are (NH3+, OMe, CH3 - never a number nor a word), the line a bond and a half long at most (a bond drawn as long as its label's letters are tall and half again). A word's underline, its word over it, is none, nor a rule with a word or a number at its end ("Date ____", "____ 12", a leader).
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame, nor a filled shape across nearly all of the page's width - a panel's ground, behind an abstract's words and its figure.
   - Nor is a page scanned after all: a figure over most of the page, most of it picture, with the page's words within it - its picture in strips further apart than a scan is told by, the words read over them widening it (2026-10-14). A figure drawn with lines as large, on a page cut close round it - a scheme exported as a PDF of its own - is still one.
-  - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it.
+  - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it. A "+" drawn with lines - one filled cross, or a stroke each way - square, at least 2.5 points across and at most 14, by no word (a charge drawn with lines is as small, but by its label), joins them as a written one does; and a "+" written is never a line beside a structure (*Structures picked from a PDF*).
   - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
   - A page's figures are worked out once, when its words are first wanted: as it comes into the column, or onto the screen at a size its words can be read.
 - **A box, in the column.** A press in a figure, or where no word is near, begins a box.
@@ -1327,7 +1327,24 @@ it where it lies out of view.
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
     neither could (where only one could, it is that one);
-  - more bonds meeting at a carbon than it has;
+  - more bonds meeting at an atom than it takes - an element's valence, a
+    heavier one's highest (P(V), S(VI), I(VII)), as its charge leaves it;
+    a group's label (OMe) what its atom has left past the group's own
+    bonds; a metal never - however its label is drawn ("More bonds meet
+    here than oxygen has."), and a charge more than its atom carries. And
+    the structure is checked again as a file has it, each label written
+    out as the atoms it stands for: any atom of it with more bonds than it
+    takes - an H with two, or one charged; a halogen bonded to more than
+    one atom that is not O nor F (an iodine to more than two that are not
+    a halogen, O nor C - PhICl2 and Ph3I take theirs; one more for each
+    positive charge: a diaryliodonium's iodine); a charge past four
+    either way - marks the atom or
+    label drawn, so that nothing whose valence is broken is put down
+    looking sure;
+  - a radical's dots by an atom whose bonds leave it no unpaired electron:
+    no radical is read - a speck, or a letter's round shape, lies there
+    as often ("A dot by it, but its bonds leave it no unpaired electron:
+    no radical is read.");
   - a bond drawn twice over;
   - a stereocentre whose configuration the figure does not show - no
     wedge or hash narrow at it, as a cage drawn in perspective has none -

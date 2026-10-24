@@ -51,6 +51,7 @@ import { stopRenders } from "./ui/features/Workspace/render/renders";
 import ConfirmDiscard from "./ui/layouts/ConfirmDiscard";
 import { ErrorBoundary, StoppedCard } from "./ui/layouts/ErrorBoundary";
 import { loadAppSettings, useAppSettings } from "./lib/settings/appSettings";
+import { firstActionDone, watchFirstEdit } from "./lib/firstAction";
 import {
   applyNetworkSettings,
   startNetwork,
@@ -109,6 +110,8 @@ export default function App() {
     if (held && held.kind === tab.content.kind) return held.doc;
     const doc = entry.createDocument(tab.content.data);
     documentsRef.current.set(tab.meta.id, { kind: tab.content.kind, doc });
+    // (a workspace's first edit - a structure put down, a paste - the user's first action, where nothing came before it: lib/firstAction)
+    if (tab.content.kind === "workspace") watchFirstEdit(doc);
     return doc;
   }, []);
 
@@ -381,7 +384,15 @@ export default function App() {
   // Files opened by their paths - picked in Open's dialog, or opened from
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
   // - by what each is.
+  // (a file opened is the user's first action, where nothing came before it - once it is open: lib/firstAction)
   const openPaths = async (paths: readonly string[]) => {
+    try {
+      await openPathsAlone(paths);
+    } finally {
+      if (paths.length) firstActionDone();
+    }
+  };
+  const openPathsAlone = async (paths: readonly string[]) => {
     // (where what is not a workspace file goes: the workspace in front as
     // Open was pressed - not the tab of a workspace file opened with it,
     // which opens as it was saved, untouched: the maintainer, 2026-10-13)
@@ -488,6 +499,13 @@ export default function App() {
     else void getCurrentWindow().destroy();
   };
   const openFiles = async (files: File[]) => {
+    try {
+      await openFilesAlone(files);
+    } finally {
+      if (files.length) firstActionDone();
+    }
+  };
+  const openFilesAlone = async (files: File[]) => {
     const texts: OpenedText[] = [];
     const structures: OpenedFile[] = [];
     for (const f of files) {
@@ -683,8 +701,9 @@ export default function App() {
       ? { save: () => void saverOf(state.activeId!)?.() }
       : {}),
     openByKind: async (kind: TabKind, opts?: { label?: string }) => {
-      // There is one Settings tab: asking again brings it to the front.
+      // There is one Settings tab: asking again brings it to the front. (Opened, it is the user's first action, where nothing came before it: lib/firstAction.)
       if (kind === "settings") {
+        firstActionDone();
         const open = state.tabOrder.find(
           (id) => state.tabsById[id]?.content.kind === "settings"
         );

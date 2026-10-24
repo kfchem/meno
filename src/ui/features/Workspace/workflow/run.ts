@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { compoundLetter, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { compoundLetter, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -27,7 +27,7 @@ export { frameAt, placeFor } from "./place";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
-import { structuresAsTable } from "./structuresTable";
+import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import type { Table } from "../../../../lib/table";
 
 /**
@@ -133,7 +133,15 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
 function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: string): WorkspaceDocument {
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
-  const table = tableInto(doc, step.id);
+  // (structures drawn come in: seen as a table, a row each (structuresTable) - a point stands on its record's values as results: a row
+  //  failed, or edited since its values were given, refuses the chart, each named, as molecules' do; one set aside is finished, and charted)
+  const from = wireInto(doc, step.id)?.from;
+  const set = from && !tableWired(doc, step.id) ? findSet(doc, from.set) : undefined;
+  const drawn = set && holdsOf(doc, set) === "structures" ? setStructuresTable(doc, set) : null;
+  // (those it shows on the page first, then those it holds off it: these said to be, where named)
+  const notFinished = drawn && set && notFinishedRows(drawn, setMembers(doc, set).structures.length);
+  if (notFinished) return setRan(keepRun(doc, step), step.id, said(false, notFinished));
+  const table = drawn ?? tableInto(doc, step.id);
   if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
   // (molecules come in: a point stands on its entry's values as results - one that failed, by any kind, or whose marks did
   //  not read refuses the chart, each named, as an Energy diagram's levels do: never plotted as if it were one)
@@ -143,7 +151,12 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const o = step.options ?? {};
   const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
   if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));
-  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, chartSaid(chart)));
+  // (and what of the set wired in did not read from its step's files - never charted round unsaid)
+  const wired = from ? findSet(doc, from.set) : undefined;
+  const unread = wired?.unread ?? 0;
+  const noun = wired && holdsOf(doc, wired) === "structures" ? ["structure", "structures"] : ["molecule", "molecules"];
+  const notRead = unread ? ` \u00b7 ${unread} ${unread === 1 ? `${noun[0]} could` : `${noun[1]} could`} not be read and ${unread === 1 ? "is" : "are"} not charted` : "";
+  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, `${chartSaid(chart)}${notRead}`));
 }
 
 /**
@@ -380,7 +393,7 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   // (of molecules in 3D, molecules in 3D: no kind's second exit gives structures drawn of them)
   const asideHolds = (restHolds(kind, outcome.holds) ?? outcome.holds) as Holds3D;
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
-  return { molecules: moleculesOf(outcome), rest, holds: outcome.holds };
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -797,7 +810,7 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
 /** The imaginary frequencies an entry was judged to have: its calculation's verdict - one a program step just made - else its own. */
 const imaginaryOfEntry = (e: SetEntry): number[] | undefined => (e as Worked).calc?.imaginary ?? e.imaginary;
 
-function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
+function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   // (the shares a step worked out - Meno's Populations - else those the program that found them gave)
   const share = new Map(outcome.kept.map((e, i) => [e, outcome.shares?.[i] ?? (e as Worked).share]));
@@ -853,8 +866,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       ...(degeneracies ? { degeneracies } : {}),
       ...(properties ? { properties } : {}),
       ...(g.some((e) => e.mirror) ? { mirrors: g.map((e) => (e.mirror ? [...e.mirror] : null)) } : {}),
-      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
-      ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
+      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's; but a
+      //  search's results, which programs conformersWorked keeps with the first, are of its run, the compound's: how it
+      //  took conformers as one, as its program said - kept)
+      ...(calc ? { calc: { ...calc, results: search ? calc.results : undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),

@@ -6,6 +6,7 @@ import { ROOM_TEMPERATURE } from "../../../../lib/units";
 import * as THREE from "three";
 import { bentPieces } from "./stickBend";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { PAGE_PX } from "./pageScale";
 import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
@@ -1255,4 +1256,20 @@ export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye
     size,
     color: HIDDEN_MARK_COLOUR,
   }));
+}
+
+/** How far a molecule's frames chip hangs below where it hangs from, in page pixels (workflow/look CHIP makes room for it). */
+export const FRAMES_CHIP_GAP = 10;
+
+/**
+ * Where a molecule's frames chip hangs from, on the page (y, up): just below
+ * its lowest atom as seen (`lowest`) - or, opened by a click, below the foot
+ * of the set it is in (`setFoot`) where that is lower: clear of the set, over
+ * none of its other molecules and their chips, half a bond below its line
+ * (its own gap counted in).
+ */
+export function framesChipAt(lowest: number, setFoot?: number): number {
+  if (setFoot == null || !Number.isFinite(setFoot)) return lowest;
+  const clear = NOMINAL_BOND_LENGTH / 2 - FRAMES_CHIP_GAP * PAGE_PX;
+  return Math.min(lowest, setFoot - clear);
 }

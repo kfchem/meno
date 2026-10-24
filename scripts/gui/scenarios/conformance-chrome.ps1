@@ -11,8 +11,10 @@
 #
 # - "first-start": the page alone - no guide opens of itself (Getting
 #   started's is shown only when asked, from Settings, Plugins).
-# - "update-asked": the question about keeping Meno up to date, a moment
-#   after (declined with Escape).
+# - "not-asked": still the page alone, a while later: the question about
+#   keeping Meno up to date waits for the user's first action.
+# - "update-asked": Settings opened - a first action - and the question,
+#   a beat after (declined with Escape; the workspace's tab brought back).
 # - "chrome": no buttons on the canvas, no logo menu; along the top the
 #   tabs, +, the network's globe, Save and Settings - Save beside Settings.
 # - "menu-bar" (a shot of the screen's menu bar, Meno in front): Meno's
@@ -87,10 +89,16 @@ if ($Part -ne "rest") {
 Start-Meno
 Start-Sleep -Milliseconds 1500
 Save-Step "first-start"
-Start-Sleep -Milliseconds 3000
+Start-Sleep -Milliseconds 4000
+Save-Step "not-asked"
+# (Settings, the gear at the top right; then the workspace's tab, the first)
+Invoke-MenoClick -X 2515 -Y 40
+Start-Sleep -Milliseconds 2000
 Save-Step "update-asked"
 Set-MenoWindow
 Send-MenoKey Escape
+Start-Sleep -Milliseconds 800
+Invoke-MenoClick -X 240 -Y 40
 Start-Sleep -Milliseconds 800
 Move-MenoPointer -X 1850 -Y 600
 Start-Sleep -Milliseconds 400

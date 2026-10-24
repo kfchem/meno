@@ -9,7 +9,12 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ImportedScheme } from "../document";
 import { style3dOf } from "../style3d";
 import type { Style3D } from "../../../../lib/chem/style3d";
-import { lookOf, solidOf } from "./molecule3d";
+import { lookOf, notesOf, poseOf, seenBounds, solidOf } from "./molecule3d";
+import { principalTurn } from "./align3d";
+import { chipWide } from "../workflow/run";
+import { hasChip } from "../workflow/selectionSet";
+import { CHIP, PX } from "../workflow/look";
+import type { Molecule3D, Turn3D } from "../store/types";
 import type { ProcessedFileResult } from "./io";
 
 type Pt = { x: number; y: number };
@@ -59,6 +64,34 @@ const NONE = new Set<number>();
  * (workflow/entries), and one on a step's card would hide it - and the
  * frames of renders under way, where what they make will land.
  */
+/** How high one of a molecule's notes stands over it on the page, and the gap under the lowest (Molecule3DView `NoteMark`: 20 pixels and 4 between, 8 under them). */
+const NOTE_H = 24 * PX;
+const NOTES_GAP = 8 * PX;
+
+/**
+ * Boxes round what a molecule in 3D shows besides its atoms, as it is seen
+ * (`seen`, its atoms' bounds on the page): its frames chip under it, as
+ * wide as it is (Frames3D), and its notes over it (`notesOf`). A place
+ * found clear of its atoms alone was found over these: a TS's notes over
+ * the chip of the molecule above it.
+ */
+export function shownBeside(m: Molecule3D, seen: Box, style: Style3D): Box[] {
+  const out: Box[] = [];
+  if (hasChip(m)) {
+    const half = Math.max(chipWide(m) / 2, (seen.x1 - seen.x0) / 2);
+    out.push({ x0: m.at.x - half, x1: m.at.x + half, y0: seen.y0 - CHIP, y1: seen.y0 });
+  }
+  const notes = notesOf(m, solidOf(m, style), lookOf(m)).length;
+  if (notes) out.push({ x0: seen.x0, x1: seen.x1, y0: seen.y1, y1: seen.y1 + NOTES_GAP + notes * NOTE_H });
+  return out;
+}
+
+/** A molecule in 3D's atoms' bounds on the page, turned as it is (`turn`), as a box. */
+function seenBox(m: Molecule3D, style: Style3D, turn?: Turn3D, frame?: number): Box {
+  const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), turn, frame));
+  return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
+}
+
 export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   const out = besidesBoxes(
     { ...st, sel: { atoms: NONE, bonds: NONE }, sel3d: NONE, selCaptions: NONE, selArrows: NONE, selPluses: NONE, selPictures: NONE, selPdfs: NONE, selTexts: NONE, selSlides: NONE, selShapes: NONE, selInks: NONE, selCycles: NONE },
@@ -70,6 +103,9 @@ export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   for (const b of st.sets ?? []) out.push({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
   // (each as far as its card closed reaches, as workflow/parts measures them)
   for (const s of st.steps ?? []) out.push({ x0: s.x, y0: s.y - CARD_H, x1: s.x + CARD_W, y1: s.y });
+  // (and what each molecule in 3D shows besides its atoms: its frames chip, its notes)
+  const style3d = style3dOf(st);
+  for (const m of st.molecules3d) out.push(...shownBeside(m, seenBox(m, style3d, st.turns3d[m.id], st.frames3d[m.id]), style3d));
   return out;
 }
 
@@ -137,11 +173,15 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
   // (its "+" signs, each a label's size, as the page measures them: ./extent)
   const plusHalf = editorLayoutOptions(drawingStyle).fontPx / 2;
   for (const p of scheme.pluses ?? []) take(p.x - plusHalf, p.y - plusHalf, p.x + plusHalf, p.y + plusHalf);
+  // (each molecule in 3D as it will first be seen - along its principal axes, as modelSlice `shownTurns` turns it -
+  //  with its frames chip and its notes)
   (result.molecules3d ?? []).forEach((m, i) => {
     const at = scheme.molecules3d?.[i]?.at;
     if (!at) return;
-    const r = solidOf({ ...m, id: 0, at }, style).reach[lookOf(m)];
-    take(at.x - r, at.y - r, at.x + r, at.y + r);
+    const placed = { ...m, id: 0, at } as Molecule3D;
+    const turn = m.drawnFrom ? undefined : principalTurn(m.atoms.flatMap((a) => [a.x, a.y, a.z ?? 0]));
+    const seen = seenBox(placed, style, turn, (scheme.molecules3d?.[i] as { frame?: number } | undefined)?.frame);
+    for (const b of [seen, ...shownBeside(placed, seen, style)]) take(b.x0, b.y0, b.x1, b.y1);
   });
   // (its words, as far as they are set: ./extent)
   for (const c of scheme.captions ?? []) {
