@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { useNetwork } from "./net/network";
-import { mayLook, readySaid, UPDATE_PURPOSE } from "./update";
+import { mayLook, noticeShown, readySaid, UPDATE_PURPOSE } from "./update";
 
 describe("keeping Meno up to date", () => {
   afterEach(() => useNetwork.setState({ offline: false, granted: [] }));
@@ -26,5 +26,15 @@ describe("keeping Meno up to date", () => {
       "Meno 0.1.12 is ready. It goes in when you quit Meno with no jobs waiting or running: installing it now would stop the job waiting or running.",
     );
     expect(readySaid({ version: "0.1.12", held: 3 })).toMatch(/would stop the 3 jobs waiting or running\.$/);
+  });
+
+  it("shows each look's notice unless the user turned it off - the one notice that can be; every other task's always shows", () => {
+    expect(noticeShown(UPDATE_PURPOSE, true)).toBe(true);
+    expect(noticeShown(UPDATE_PURPOSE, false)).toBe(false);
+    // (a download, a plugin's set-up, anything else: shown either way)
+    for (const purpose of ["plugin-env", "ccd", "python-code", "web-view"]) {
+      expect(noticeShown(purpose, false)).toBe(true);
+      expect(noticeShown(purpose, true)).toBe(true);
+    }
   });
 });
