@@ -154,7 +154,10 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   `accel-base`.
 - **Checkbox**: a 14 px square, `rounded-[3px] border-gh-line`, ticked
   on `accel-base`.
-- **Switch**: as Settings draws them, on in `accel-base`.
+- **Switch** (a setting turned on or off at once): a pill `h-6 w-11
+  rounded-full`, `bg-gh-line` off, `accel-base` on, its white knob
+  sliding; `accel-accent` on only where being on refuses something
+  (working offline).
 
 Each is reachable by keyboard and shows focus with an `accel-base` border.
 
@@ -168,7 +171,8 @@ OK* or says what to change and why, rule by rule. A lint rule
 be caught by reading the code: a native select, radio or checkbox outside
 `src/ui/controls`, and a colour written out - a literal that is only a
 colour, one in a CSS place (after `:`, `(`, `,` or `[`), `rgb(…)`,
-`hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`.
+`hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`; and a
+switch drawn in place (`role="switch"`) outside `src/ui/controls`.
 
 ## Not yet
 

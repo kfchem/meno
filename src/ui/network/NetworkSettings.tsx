@@ -9,6 +9,7 @@ import {
   type NetConnection,
 } from "../../lib/net/network";
 import UpdateSettings from "./UpdateSettings";
+import Switch from "../controls/Switch";
 
 const time = (ms: number) =>
   new Date(ms).toLocaleTimeString(undefined, {
@@ -44,23 +45,7 @@ export default function NetworkSettings() {
             and everything else keep working.
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={offline}
-          aria-label="Work offline"
-          onClick={() => void setOffline(!offline)}
-          className={clsx(
-            "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-            offline ? "bg-accel-accent" : "bg-gh-line",
-          )}
-        >
-          <span
-            className={clsx(
-              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
-              offline ? "left-[1.375rem]" : "left-0.5",
-            )}
-          />
-        </button>
+        <Switch on={offline} tone="attention" label="Work offline" onChange={(v) => void setOffline(v)} />
       </div>
 
       <UpdateSettings />

@@ -8,6 +8,10 @@
     {
       "selector": "JSXOpeningElement[name.name='input']:has(JSXAttribute[name.name='type'][value.value=/^(radio|checkbox)$/])",
       "message": "A native radio or checkbox: use RadioGroup or Checkbox from src/ui/controls (docs/LOOK.md)."
+    },
+    {
+      "selector": "JSXAttribute[name.name='role'][value.value='switch']",
+      "message": "A switch drawn in place: use Switch from src/ui/controls (docs/LOOK.md)."
     }
   ],
   "colourLiterals": [

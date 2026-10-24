@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { chemAtHand, chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import RoleChoices from "./RoleChoices";
@@ -6,6 +5,7 @@ import {
   useAppSettings,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
+import Switch from "../../controls/Switch";
 
 const SWITCHES: { key: keyof Settings; name: string; detail: string }[] = [
   {
@@ -71,25 +71,7 @@ export default function ChemistrySettings() {
             <div className="text-sm text-gh-black">{s.name}</div>
             <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">{s.detail}</p>
           </div>
-          <button
-            role="switch"
-            aria-checked={chemistry[s.key]}
-            aria-label={s.name}
-            onClick={() =>
-              setChemistry({ ...chemistry, [s.key]: !chemistry[s.key] })
-            }
-            className={clsx(
-              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-              chemistry[s.key] ? "bg-accel-base" : "bg-gh-line",
-            )}
-          >
-            <span
-              className={clsx(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
-                chemistry[s.key] ? "left-[1.375rem]" : "left-0.5",
-              )}
-            />
-          </button>
+          <Switch on={chemistry[s.key]} label={s.name} onChange={(v) => setChemistry({ ...chemistry, [s.key]: v })} />
         </div>
       ))}
       <div className="flex items-start gap-3 px-1 pt-1 text-xs text-gh-gray">
