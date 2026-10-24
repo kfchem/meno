@@ -435,7 +435,11 @@ molecule in 3D or a picture.
   layout, turned and moved with it, its labels upright beside their atoms,
   and electron-pushing arrows on it are carried likewise; each is laid out
   again once, as it is let go (found on a Surface, 2026-10-24: a turn was
-  choppy). A frame that would put the selection where it already is - a
+  choppy). Let go, nothing jumps: a label set otherwise now - OH become HO
+  - goes over as the one carried fades out by its atom and the one set now
+  fades in, together (`DURATION.quick`); an arrow eases from the curve
+  carried to the one laid now (`DURATION.move`), or, not drawn with as
+  many dots, the one fades out as the other comes in. A frame that would put the selection where it already is - a
   step of 15 degrees held, a drag held on a guide - puts nothing.
 - The keys that act on what is under the pointer act on the selection
   instead, once there is one: Delete or Backspace deletes it,
