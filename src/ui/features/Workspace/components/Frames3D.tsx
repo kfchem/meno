@@ -1,13 +1,15 @@
 import PageHtml from "./PageHtml";
 import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
+import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
 import { barsAbove } from "../utils/barsAbove";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 import { imaginaryWords } from "../../../../lib/calc/output";
+import { PORTS_Z } from "../workflow/look";
+import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -19,9 +21,10 @@ const WIDE = 300;
 const LEAST_BAR = 3;
 /** How long a single geometry's chip stays once its molecule is let go - time to reach it - in milliseconds. */
 const LINGER_MS = 400;
-/** The chip kept clear of the canvas's lower edge, in pixels. */
-/** How far below its molecule it hangs, in page pixels (workflow/look CHIP makes room for it). */
-const GAP = 10;
+/** How far below its molecule it hangs, in page pixels (utils/molecule3d, which places it). */
+const GAP = FRAMES_CHIP_GAP;
+/** How long it stays over the rest once shut, while it shrinks back: the length of its own easing, and a little more. */
+const SHUTTING_MS = 260;
 
 /** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
 function share(p: number): string {
@@ -58,13 +61,42 @@ const absolute = (e: number) => valueText(e, { quantity: "energy" });
  * opened from its file does - it rises as far as it must to stay within
  * the canvas (`area`), over its molecule, and goes back down as it shuts.
  */
-export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
+export default function Frames3D({ raised, ...props }: ComponentProps<typeof FramesChip> & { raised?: boolean }) {
+  // (opened, above every other thing on the page - its neighbours' chips, their notes - never under them; and so
+  //  as it shrinks back once shut, and while its molecule takes it back up (`raised`): nothing pops over it on the way)
+  const [opened, setOpened] = useState(false);
+  const [shutting, setShutting] = useState(false);
+  const was = useRef(false);
+  const { onOpened } = props;
+  const said = useCallback(
+    (o: boolean) => {
+      if (was.current && !o) setShutting(true);
+      was.current = o;
+      setOpened(o);
+      onOpened?.(o);
+    },
+    [onOpened],
+  );
+  useEffect(() => {
+    if (!shutting) return;
+    const t = window.setTimeout(() => setShutting(false), SHUTTING_MS);
+    return () => window.clearTimeout(t);
+  }, [shutting]);
   return (
-    <PageHtml zIndexRange={[30, 20]}>
-      <FramesChip {...props} />
+    <PageHtml zIndexRange={opened || shutting || raised ? OPENED_Z : [30, 20]}>
+      <FramesChip {...props} onOpened={said} />
     </PageHtml>
   );
 }
+
+/**
+ * Where an opened chip lies among what is on the page: over the rest of the
+ * page's chips and notes (at most 40), and over the workflow's ports
+ * (`PORTS_Z`) - as a step's card opened is, the ports under it not drawn -
+ * so that nothing under it shows through it. A press on it is its own; one
+ * anywhere else shuts it.
+ */
+const OPENED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
 
 /** Words begun with a capital, as a label is. */
 const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -92,6 +124,7 @@ export function FramesChip({
   marksUnread,
   warnings,
   imaginary,
+  onOpened,
 }: {
   count: number;
   frame: number;
@@ -137,6 +170,8 @@ export function FramesChip({
   warnings?: readonly Warning[];
   /** The imaginary frequencies each frame's calculation judged it has, in cm-1 (null, none): the one told's said on it - a mark that it is no minimum. */
   imaginary?: readonly (readonly number[] | null)[];
+  /** Told as it is opened by a click, and as it shuts: its molecule takes it clear of its set (Molecule3DView), and it goes above the rest. */
+  onOpened?: (opened: boolean) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -169,6 +204,9 @@ export function FramesChip({
   }, [opened]);
   // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
   const reading = opened;
+  useEffect(() => {
+    onOpened?.(opened);
+  }, [opened, onOpened]);
   // (each above the lowest of those that finished alone: one that failed is no bar's zero, and has none of its own)
   const bars = energies ? barsAbove(energies, failed, marksUnread) : null;
   const above = bars?.above;
@@ -248,11 +286,14 @@ export function FramesChip({
     .join(" · ");
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
-  const line = (energy?: number) => chipLine([about ?? "", energy != null ? absolute(energy) : ""], results);
+  const line = (energy?: number) => unitsHeld(chipLine([about ?? "", energy != null ? absolute(energy) : ""], results));
   // how far it has risen, and slid aside, to stay within the canvas -
   // its details as wide as they are, by a molecule at its edge - followed
   // each frame while it is open, and until it is back in place
   const chipEl = useRef<HTMLDivElement>(null);
+  // (how many device pixels one of its own pixels is drawn as - the page's scale, and the screen's - that its bars are laid on whole ones)
+  const [devicePx, setDevicePx] = useState<number | null>(null);
+  const devicePxNow = useRef<number | null>(null);
   const [lift, setLift] = useState(0);
   const lifted = useRef(0);
   const [slide, setSlide] = useState(0);
@@ -265,6 +306,11 @@ export function FramesChip({
       if (el) {
         const r = el.getBoundingClientRect();
         const a = area.getBoundingClientRect();
+        const k = el.offsetWidth ? Math.round((r.width / el.offsetWidth) * window.devicePixelRatio * 1000) / 1000 : null;
+        if (k && k !== devicePxNow.current) {
+          devicePxNow.current = k;
+          setDevicePx(k);
+        }
         const over = r.bottom + EDGE - a.bottom;
         const next = Math.max(0, Math.round(lifted.current + over));
         if (next !== lifted.current) {
@@ -303,7 +349,8 @@ export function FramesChip({
         <div className="relative">
           <div
             ref={chipEl}
-            className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
+            // (shut, it lets the page show through a little; open, nothing shows through it - what lies under it would read as part of it)
+            className={`rounded-2xl border border-gh-line shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity,background-color] duration-200 ease-out ${full || reading ? "bg-white" : "bg-white/85 backdrop-blur"}`}
             style={{
               opacity: shown ? (full ? 1 : 0.75) : 0,
               pointerEvents: shown ? "auto" : "none",
@@ -315,6 +362,10 @@ export function FramesChip({
               style={{ gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
             >
               <div className="overflow-hidden flex flex-col items-center" style={{ width }}>
+                {/* (what the bars are, named over them) */}
+                {above && !single && (
+                  <div className="mt-1 mb-0.5 self-start text-[10px] leading-[14px] text-gh-gray">Energy above the lowest, each {conformers ? "conformer" : "frame"}</div>
+                )}
                 {above && !single && (
                   <Energies
                     above={above}
@@ -323,6 +374,7 @@ export function FramesChip({
                     frame={frame}
                     pointed={pointed}
                     width={width}
+                    devicePx={devicePx ?? (typeof window === "undefined" ? 1 : window.devicePixelRatio)}
                     onPoint={setPointed}
                     onFrame={onFrame}
                   />
@@ -417,6 +469,7 @@ function Energies({
   frame,
   pointed,
   width,
+  devicePx,
   onPoint,
   onFrame,
 }: {
@@ -428,6 +481,8 @@ function Energies({
   frame: number;
   pointed: number | null;
   width: number;
+  /** How many device pixels one of its own is drawn as: its bars, their gaps and heights laid on whole ones, each bar as wide as the next. */
+  devicePx: number;
   onPoint: (i: number | null) => void;
   onFrame: (i: number) => void;
 }) {
@@ -436,10 +491,23 @@ function Energies({
   const heightOf = (e: number) => 4 + (BARS - 4) * (e / highest);
   const frameAt = (svg: Element, clientX: number) => {
     const r = svg.getBoundingClientRect();
-    return Math.min(count - 1, Math.max(0, Math.floor(((clientX - r.left) / r.width) * count)));
+    const at = (clientX - r.left) / r.width;
+    // (bars: by the step they are laid at, from where the first begins; a profile: across the whole)
+    const i = bars ? Math.floor((at * width * k - (fromD - Math.floor(gapD / 2))) / stepD) : Math.floor(at * count);
+    return Math.min(count - 1, Math.max(0, i));
   };
   const bars = step >= LEAST_BAR;
   const x = (i: number) => (i + 0.5) * step;
+  // (bars on whole device pixels: one step, one gap and one width for all - a row even, never a pixel wider here and there -
+  //  centred in the room; heights rounded the same way)
+  const k = devicePx > 0 && Number.isFinite(devicePx) ? devicePx : 1;
+  const stepD = Math.max(1, Math.floor((width * k) / count));
+  const gapD = Math.min(stepD - 1, Math.max(1, Math.round(Math.min(2, step * 0.4) * k)));
+  const barD = Math.max(1, stepD - gapD);
+  const fromD = Math.floor((width * k - stepD * count) / 2) + Math.floor(gapD / 2);
+  const barX = (i: number) => (fromD + i * stepD) / k;
+  const barW = barD / k;
+  const barH = (h: number) => Math.max(1, Math.round(h * k)) / k;
   // (the profile in pieces: one through each run of frames that finished, broken at each that did not - never drawn
   //  as if at the foot, which would read as the lowest)
   const runs: number[][] = [];
@@ -461,7 +529,9 @@ function Energies({
       width={width}
       height={BARS}
       data-cursor="sideways"
-      className="mt-1.5 block touch-none"
+      className="block touch-none"
+      // (bars' edges on whole device pixels, however the page is zoomed - never soft; a profile stays smooth)
+      shapeRendering={bars ? "crispEdges" : undefined}
       role="img"
       aria-label="Energy of each frame"
       onPointerDown={(e) => {
@@ -492,10 +562,10 @@ function Energies({
             <rect
               key={i}
               data-unfinished=""
-              x={i * step + Math.min(1, step * 0.2)}
-              y={BARS - 4}
-              width={Math.max(1, step - Math.min(2, step * 0.4))}
-              height={4}
+              x={barX(i)}
+              y={BARS - barH(4)}
+              width={barW}
+              height={barH(4)}
               rx={Math.min(1.5, step / 4)}
               fill="none"
               stroke={i === frame ? "rgb(49, 118, 137)" : "rgb(207, 222, 229)"}
@@ -506,11 +576,11 @@ function Energies({
           ) : (
             <rect
               key={i}
-              x={i * step + Math.min(1, step * 0.2)}
-              y={BARS - heightOf(e)}
-              width={Math.max(1, step - Math.min(2, step * 0.4))}
-              height={heightOf(e)}
-              rx={Math.min(1.5, step / 4)}
+              data-bar=""
+              x={barX(i)}
+              y={BARS - barH(heightOf(e))}
+              width={barW}
+              height={barH(heightOf(e))}
               className="transition-[fill] duration-150"
               fill={i === frame ? "rgb(49, 118, 137)" : i === pointed ? "rgb(140, 172, 184)" : "rgb(207, 222, 229)"}
             />
