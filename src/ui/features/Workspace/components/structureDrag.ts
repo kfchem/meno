@@ -30,7 +30,6 @@ export function sayWhy(store: EditorStore, why: string): void {
   sayers.get(store)?.(why);
 }
 
-/** `model` moved so that its middle - where a structure read has naught - is at `at`. */
 /**
  * Whether a click on a structure of a PDF adds it to those picked or takes it out of them, rather than picking it alone: with
  * Ctrl (⌘ on a Mac), as everywhere in Meno - or with Shift, which does the same, structures having no range between them.
@@ -46,6 +45,7 @@ export function picksAfter(was: readonly PdfStructurePick[], pick: PdfStructureP
   return was.some(same) ? was.filter((k) => !same(k)) : [...was, pick];
 }
 
+/** `model` moved so that its middle - where a structure read has naught - is at `at`. */
 export function movedTo(model: Model, at: { x: number; y: number }): Model {
   return { ...model, atoms: model.atoms.map((a) => ({ ...a, x: a.x + at.x, y: a.y + at.y })) };
 }
