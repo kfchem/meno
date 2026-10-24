@@ -56,6 +56,8 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
     endPdfFlight: () => set({ pdfFlight: null }),
     setPdfFind: (find: EditorState["pdfFind"]) => set({ pdfFind: find }),
     askPdfMenu: (ask: EditorState["menuAsk"]) => set({ menuAsk: ask }),
+    setFigureChecked: (atoms: readonly number[], checked: boolean) =>
+      doc.edit(checked ? "checked against the figure" : "not checked against the figure", (d) => ops.setFigureChecked(d, atoms, checked)),
     setPdfFlash: (flash: EditorState["pdfFlash"]) => set({ pdfFlash: flash }),
     setPdfWords: (words: EditorState["pdfWords"]) => set({ pdfWords: words }),
     // (words selected let the drawing's selection go: one selection, what is copied)

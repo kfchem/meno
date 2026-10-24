@@ -93,7 +93,15 @@ export type RecordSwap = { from: number[]; to: number[]; start: number; gone?: M
  * long the bonds of the figure there are drawn, in the same, which says how
  * near is near.
  */
-export type FigureSpot = { sha256: string; page?: number; x: number; y: number; bond: number };
+export type FigureSpot = {
+  sha256: string;
+  page?: number;
+  x: number;
+  y: number;
+  bond: number;
+  /** Said to have been checked against the figure, by the chemist (docs/PDF.md, *Read from a figure*): its structure's note gone. */
+  checked?: true;
+};
 /** What Meno said was unsure of a part as it read it from a figure, and what the part was then (utils/figures `partAs`): marked while it is still that. */
 export type Unsure = { said: string[]; as: string };
 /** Where a mark was put by hand: its middle, from what it is of - an atom, a bond's middle - in ems of the drawing's labels. */
@@ -1061,8 +1069,11 @@ export type EditorState = {
   pdfSel: PdfSelection | null;
   setPdfSel: (sel: PdfSelection | null) => void;
   /** The canvas asked to open a PDF's menu where the column was right-clicked, in the window's pixels. */
-  menuAsk: { id: number; clientX: number; clientY: number } | null;
-  askPdfMenu: (ask: { id: number; clientX: number; clientY: number } | null) => void;
+  /** A menu asked for from outside the canvas: a PDF's, by the column it is read in; or a structure's, by the note over it (an atom of it). */
+  menuAsk: { id: number; clientX: number; clientY: number; kind?: "atom" } | null;
+  askPdfMenu: (ask: { id: number; clientX: number; clientY: number; kind?: "atom" } | null) => void;
+  /** The structures of these atoms said to have been checked against the figure they were read from, or not: one step to undo. */
+  setFigureChecked: (atoms: readonly number[], checked: boolean) => void;
   /** Words being carried out of a PDF, as Meno's own, peeling off it. */
   pdfWords: WordsFlight | null;
   setPdfWords: (words: WordsFlight | null) => void;

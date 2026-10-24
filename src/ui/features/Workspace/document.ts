@@ -221,6 +221,19 @@ export function setMagnified2d(doc: WorkspaceDocument, ids: readonly number[], k
   return atoms.every((a, i) => a === doc.model.atoms[i]) ? doc : { ...doc, model: { ...doc.model, atoms } };
 }
 
+/** `doc` with the atoms `ids` that were read from a figure said to have been checked against it, or not (FigureSpot `checked`). */
+export function setFigureChecked(doc: WorkspaceDocument, ids: readonly number[], checked: boolean): WorkspaceDocument {
+  const these = new Set(ids);
+  let changed = false;
+  const atoms = doc.model.atoms.map((a) => {
+    if (!these.has(a.id) || !a.seen || !!a.seen.checked === checked) return a;
+    changed = true;
+    const { checked: _was, ...seen } = a.seen;
+    return { ...a, seen: checked ? { ...seen, checked: true as const } : seen };
+  });
+  return changed ? { ...doc, model: { ...doc.model, atoms } } : doc;
+}
+
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
