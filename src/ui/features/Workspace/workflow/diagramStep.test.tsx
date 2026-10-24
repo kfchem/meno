@@ -8,7 +8,7 @@ import type { Molecule3D } from "../store/types";
 import { countOf, MARKS_UNREAD } from "./entries";
 import { canWire, inputKey, resultOf, stateOf } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
-import { diagramKept, diagramOptions, diagramValues } from "./diagramOptions";
+import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "./diagramOptions";
 import { howOf, kindInfo } from "./kinds";
 import { stepOptions } from "./doers";
 import { runStep, whyNot, type RunWith } from "./run";
@@ -90,6 +90,23 @@ describe("an Energy diagram step", () => {
     const ran = inputKey(doc, s(), "meno");
     doc = { ...doc, molecules3d: doc.molecules3d!.map((m) => (m.title === "TS" ? { ...m, title: "TS1" } : m)) };
     expect([inputKey(doc, s(), "meno") !== ran, stateOf(doc, s(), "meno")]).toEqual([true, "changed"]);
+  });
+
+  it("says, where Ready would be, a Relative to naming no level that comes in - and is refused on it as it runs - and is ready once it names one, by either name", () => {
+    const { doc, step } = page(undefined, { reference: "Zed" });
+    const s = (d: WorkspaceDocument) => d.steps!.find((x) => x.id === step)!;
+    expect([diagramNeeds(doc, s(doc)), whyNot(doc, s(doc), "meno")]).toEqual(['No level is called "Zed"', 'No level is called "Zed"']);
+    const ran = runStep(doc, step, W);
+    expect([s(ran).ran?.ok, s(ran).ran?.said, diagramOf(ran, step)]).toEqual([false, 'No level is called "Zed"', undefined]);
+    // (named by the name Levels shows it by, or its own)
+    const shown = updateStep(doc, step, { options: { reference: "start", levels: "R = start" } });
+    expect([diagramNeeds(shown, s(shown)), whyNot(shown, s(shown), "meno")]).toEqual([undefined, null]);
+    expect(diagramOf(runStep(shown, step, W), step)?.reference).toBe("start");
+    const own = updateStep(doc, step, { options: { reference: "P" } });
+    expect(diagramNeeds(own, s(own))).toBeUndefined();
+    // (nothing in yet: no input says so, not this)
+    const bare = { ...doc, wires: [] };
+    expect(diagramNeeds(bare, s(bare))).toBeUndefined();
   });
 
   it("runs the step before each of its inputs first, wherever it is wired - and does not run where one of them failed", () => {

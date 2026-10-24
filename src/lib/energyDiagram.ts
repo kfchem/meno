@@ -84,6 +84,8 @@ export type DiagramValue = {
   links: [number, number][];
   /** What was left out, by why: each conformer with no value named by its row (as a chart names one), each line by its row of *Connects*. */
   left: ChartLeft[];
+  /** The names lines of *Levels* give that no level that comes in has - each once: left out, as `left` counts them. */
+  unlisted?: string[];
 };
 
 /**
@@ -218,7 +220,7 @@ export function diagramOf(
   }
   const reference = options.reference?.trim();
   const ref = reference ? levels.find((g) => g.shown === reference) ?? levels.find((g) => g.name === reference) : levels[0];
-  if (!ref) return { why: `There is no level "${reference}"` };
+  if (!ref) return { why: noLevel(reference!) };
   // (each compound at its lowest; a level, the sum of its compounds')
   const lowest = (p: Part) => p.values.reduce((a, b) => (b.v < a.v ? b : a));
   const sum = (g: Gathered) => g.parts.reduce((n, p) => n + lowest(p).v, 0);
@@ -265,7 +267,28 @@ export function diagramOf(
   } else for (let k = 1; k < out.length; k++) links.push([k - 1, k]);
 
   const axis: Axis = { name: deltaOf(quantity), unit: "kcal/mol", ...(column.by ? { by: column.by } : {}), ...(column.at ? { at: column.at } : {}) };
-  return { kind: "diagram", axis, reference: ref.shown, levels: out, links, left };
+  return { kind: "diagram", axis, reference: ref.shown, levels: out, links, left, ...(listed.unlisted.length ? { unlisted: listed.unlisted } : {}) };
+}
+
+/** What a reference naming no level says. */
+const noLevel = (reference: string) => `No level is called "${reference}"`;
+
+/**
+ * Why an energy diagram cannot be relative to `reference`, its levels those
+ * named `names` as they come in, shown as *Levels* `text` gives them: it is
+ * neither name of any (as `diagramOf` takes it). None, where it names one,
+ * is blank - the first - or where the levels themselves cannot be shown, which
+ * `diagramOf` says.
+ */
+export function referenceNeed(names: readonly string[], text: string, reference: string | undefined): string | undefined {
+  const r = reference?.trim();
+  if (!r) return undefined;
+  const listed = arranged(
+    [...new Set(names)].map((name) => ({ name })),
+    text,
+  );
+  if ("why" in listed || listed.levels.some((g) => g.shown === r || g.name === r)) return undefined;
+  return noLevel(r);
 }
 
 /** A count as a line says it: in words up to ten, else in figures. */
@@ -281,6 +304,9 @@ function partsSaid(parts: readonly { elements: readonly string[]; charge: number
   });
 }
 
+/** What lines of Levels naming no level that comes in are, left out. */
+const NAMING_NONE = "of Levels naming no level that comes in";
+
 /**
  * `levels` in the order the lines of `text` list them (`levelsTyped`), each
  * by the name its line gives - or its own - and those no line names after
@@ -288,7 +314,7 @@ function partsSaid(parts: readonly { elements: readonly string[]; charge: number
  * or one listed already, counted. Why not, where two levels would be shown
  * by one name.
  */
-function arranged<G extends { name: string }>(levels: readonly G[], text: string): { levels: (G & { shown: string })[]; left: ChartLeft[] } | { why: string } {
+function arranged<G extends { name: string }>(levels: readonly G[], text: string): { levels: (G & { shown: string })[]; left: ChartLeft[]; unlisted: string[] } | { why: string } {
   const byName = new Map(levels.map((g) => [g.name, g]));
   const out: (G & { shown: string })[] = [];
   const unknown: { line: string; name: string }[] = [];
@@ -304,17 +330,21 @@ function arranged<G extends { name: string }>(levels: readonly G[], text: string
   const shownTwice = out.find((g, k) => out.findIndex((x) => x.shown === g.shown) !== k);
   if (shownTwice) return { why: `Two levels are named "${shownTwice.shown}"` };
   const left: ChartLeft[] = [];
-  if (unknown.length) left.push({ count: unknown.length, why: `line${unknown.length === 1 ? "" : "s"} of Levels naming no level that comes in (${[...new Set(unknown.map((u) => u.name))].join(", ")})`, rows: unknown.map((u) => u.line) });
+  const unlisted = [...new Set(unknown.map((u) => u.name))];
+  if (unknown.length) left.push({ count: unknown.length, why: `line${unknown.length === 1 ? "" : "s"} ${NAMING_NONE} (${unlisted.join(", ")})`, rows: unknown.map((u) => u.line) });
   if (twice.length) left.push({ count: twice.length, why: `line${twice.length === 1 ? "" : "s"} of Levels naming a level listed already`, rows: twice });
-  return { levels: out, left };
+  return { levels: out, left, unlisted };
 }
 
-/** What an energy diagram's step says it made: how many levels, relative to which; and what was left, where anything was. */
+/** What an energy diagram's step says it made: how many levels, relative to which; and what was left, where anything was - each name a line of Levels gives that no level has, named ("1 left: Foo"). */
 export function diagramSaid(d: DiagramValue): string {
   const left = d.left.reduce((n, l) => n + l.count, 0);
+  // (the lines of Levels naming no level: theirs all that was left, or among it)
+  const lines = d.left.filter((l) => l.why.includes(NAMING_NONE)).reduce((n, l) => n + l.count, 0);
+  const names = left && d.unlisted?.length ? (lines === left ? `: ${d.unlisted.join(", ")}` : `, ${d.unlisted.join(", ")} among them`) : "";
   // (those that sum several compounds, each said)
   const sums = d.levels.flatMap((l) => (l.sums ? [`${l.name} sums ${l.sums.map((p) => p.formula).join(" + ")}`] : []));
-  return `${d.levels.length} levels \u00b7 relative to ${d.reference}${sums.length ? ` \u00b7 ${sums.join("; ")}` : ""}${left ? ` \u00b7 ${left} left` : ""}`;
+  return `${d.levels.length} levels \u00b7 relative to ${d.reference}${sums.length ? ` \u00b7 ${sums.join("; ")}` : ""}${left ? ` \u00b7 ${left} left${names}` : ""}`;
 }
 
 /** A level's compounds as a workspace's file keeps them, read back: each a formula, a count of one at least and its lowest's row; none where any does not read, or there are fewer than two. */
@@ -331,7 +361,7 @@ function sumsIn(v: unknown): DiagramLevel["sums"] | undefined {
 
 /** An energy diagram as a workspace's file keeps it, read back: its axis, levels - each a finite value, a count of one at least - lines between levels it has, and what was left; none where any of that does not read. */
 export function diagramIn(v: unknown): DiagramValue | undefined {
-  const d = v as { kind?: unknown; axis?: unknown; reference?: unknown; levels?: unknown; links?: unknown; left?: unknown } | null;
+  const d = v as { kind?: unknown; axis?: unknown; reference?: unknown; levels?: unknown; links?: unknown; left?: unknown; unlisted?: unknown } | null;
   const axis = axisIn(d?.axis);
   if (!d || d.kind !== "diagram" || !axis || typeof d.reference !== "string" || !Array.isArray(d.levels) || !Array.isArray(d.links)) return undefined;
   const levels: DiagramLevel[] = [];
@@ -357,5 +387,6 @@ export function diagramIn(v: unknown): DiagramValue | undefined {
     if (!Array.isArray(k) || k.length !== 2 || !k.every((i) => Number.isInteger(i) && i >= 0 && i < levels.length)) return undefined;
     links.push([k[0], k[1]]);
   }
-  return { kind: "diagram", axis, reference: d.reference, levels, links, left: leftIn(d.left) };
+  const unlisted = Array.isArray(d.unlisted) && d.unlisted.length && d.unlisted.every((n: unknown) => typeof n === "string") ? { unlisted: d.unlisted as string[] } : {};
+  return { kind: "diagram", axis, reference: d.reference, levels, links, left: leftIn(d.left), ...unlisted };
 }

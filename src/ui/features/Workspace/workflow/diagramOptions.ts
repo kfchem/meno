@@ -7,7 +7,7 @@
  * and which one the rest are relative to - so that none is typed blind. As
  * the kind declares them where nothing comes in.
  */
-import { diagramQuantities, levelNamer, levelsTyped, type LevelLine } from "../../../../lib/energyDiagram";
+import { diagramQuantities, levelNamer, levelsTyped, referenceNeed, type LevelLine } from "../../../../lib/energyDiagram";
 import type { LineRead, Option, OptionValues } from "../../../../lib/options";
 import { moleculesSeen } from "./flow";
 import type { WorkflowStep } from "../store/types";
@@ -59,6 +59,20 @@ export function diagramKept(values: OptionValues, shown: OptionValues, own: Opti
   const kept: OptionValues = { ...values };
   for (const [id, v] of Object.entries(values)) if ((own?.[id] == null || own[id] === "") && v === shown[id]) kept[id] = own?.[id] ?? "";
   return kept;
+}
+
+/**
+ * What an Energy diagram step still needs, what comes into its Levels in
+ * `flow` known: a *Relative to* naming one of them - by the name it comes in
+ * by or the one Levels shows it by, as its run takes it (lib/energyDiagram
+ * `referenceNeed`). Said where its card would say *Ready*, and its run
+ * refused on it; nothing, where nothing comes in yet.
+ */
+export function diagramNeeds(flow: Seen, step: Pick<WorkflowStep, "id" | "options">): string | undefined {
+  const seen = moleculesSeen(flow, step.id, "levels");
+  if (!seen) return undefined;
+  const o = step.options ?? {};
+  return referenceNeed(seen.table.rows.map(levelNamer(seen.table)), String(o.levels ?? ""), typeof o.reference === "string" ? o.reference : undefined);
 }
 
 function listed(flow: Seen, id: number, levels: string, declared: readonly Option[]): Option[] {

@@ -31,7 +31,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
-import { diagramKept, diagramOptions, diagramValues } from "../workflow/diagramOptions";
+import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -741,7 +741,7 @@ export default function Workflow2D() {
             how={how}
             state={run?.waiting ? "waiting" : (states.get(s.id) ?? "ready")}
             run={run?.view}
-            missing={notReadyFor(s)}
+            missing={notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined)}
             {...(wireRefused?.step === s.id ? { refused: wireRefused.said } : {})}
             compact={compact}
             selected={selFlow.steps.has(s.id)}

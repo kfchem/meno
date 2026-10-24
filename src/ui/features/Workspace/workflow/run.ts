@@ -28,6 +28,7 @@ import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { structuresAsTable } from "./structuresTable";
+import { diagramNeeds } from "./diagramOptions";
 import type { Table } from "../../../../lib/table";
 
 /**
@@ -95,7 +96,8 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
 /**
  * Why a step cannot run as things are, whoever does it: the step before it
  * failed this time; nothing comes into it; what does is not what it takes;
- * nothing added does it. None, where it can.
+ * nothing added does it; what it comes to needs of its options (an Energy
+ * diagram's reference: diagramOptions `diagramNeeds`). None, where it can.
  */
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
@@ -120,6 +122,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
+  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
 }
 

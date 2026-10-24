@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deltaOf, diagramIn, diagramOf, diagramQuantities, diagramSaid, levelsTyped, withoutExtension, type DiagramValue } from "./energyDiagram";
+import { deltaOf, diagramIn, diagramOf, diagramQuantities, diagramSaid, levelsTyped, referenceNeed, withoutExtension, type DiagramValue } from "./energyDiagram";
 import { readTable, type Table } from "./table";
 import { factor } from "./units";
 
@@ -87,7 +87,7 @@ describe("an energy diagram", () => {
     expect(diagramOf(RTP, { quantity: "number" })).toEqual({ why: '"number" is no energy' });
     expect(diagramOf(RTP, { quantity: "thermo.free-energy" })).toEqual({ why: "It has no G" });
     expect(diagramOf(RTP, { quantity: "G" })).toEqual({ why: 'It has no "G"' });
-    expect(diagramOf(RTP, { reference: "Q" })).toEqual({ why: 'There is no level "Q"' });
+    expect(diagramOf(RTP, { reference: "Q" })).toEqual({ why: 'No level is called "Q"' });
     expect(diagramOf(levels([["R", 1, -76.4]]))).toEqual({ why: "It takes two levels at least" });
   });
 
@@ -168,8 +168,27 @@ describe("an energy diagram's levels as Levels lists them", () => {
       { count: 1, why: "line of Levels naming no level that comes in (Q)", rows: ["Levels, line 3"] },
       { count: 1, why: "line of Levels naming a level listed already", rows: ["Levels, line 4"] },
     ]);
+    // (the name no level has, said; among the rest left, where there are others - and kept with the workspace)
+    expect([d.unlisted, diagramSaid(d)]).toEqual([["Q"], "3 levels \u00b7 relative to TS \u00b7 2 left, Q among them"]);
+    expect(diagramIn(JSON.parse(JSON.stringify(d)))).toEqual(d);
+    const foo = ok(diagramOf(opened, { levels: "R\nTS\nP\nFoo" }));
+    expect([foo.unlisted, diagramSaid(foo)]).toEqual([["Foo"], "3 levels \u00b7 relative to R \u00b7 1 left: Foo"]);
+    expect(diagramSaid(ok(diagramOf(opened, { levels: "R\nR" })))).toBe("3 levels \u00b7 relative to R \u00b7 1 left");
     expect(diagramOf(opened, { levels: "R = X\nP = X" })).toEqual({ why: 'Two levels are named "X"' });
     expect(diagramOf(opened, { levels: "R = TS" })).toEqual({ why: 'Two levels are named "TS"' });
+  });
+
+  it("names a reference no level has before it runs - by either of a level's names, as the diagram takes it - and none where it is blank", () => {
+    const names = ["R", "TS", "TS", "P"];
+    expect(referenceNeed(names, "", "Zed")).toBe('No level is called "Zed"');
+    expect(referenceNeed(names, "R = HCN", "HCN")).toBeUndefined();
+    expect(referenceNeed(names, "R = HCN", "R")).toBeUndefined();
+    expect(referenceNeed(names, "", " P ")).toBeUndefined();
+    expect([referenceNeed(names, "", ""), referenceNeed(names, "", undefined)]).toEqual([undefined, undefined]);
+    // (the same as the diagram's own refusal, where it is drawn from those levels)
+    expect(diagramOf(opened, { reference: "Zed" })).toEqual({ why: referenceNeed(["R", "TS", "P"], "", "Zed") });
+    // (levels that cannot be shown as listed: the diagram says why, not this)
+    expect(referenceNeed(names, "R = X\nP = X", "Zed")).toBeUndefined();
   });
 
   it("reads a line as a level's name, and a name to show it by after =", () => {

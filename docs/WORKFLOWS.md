@@ -2509,11 +2509,14 @@ molecules of one geometry - which a step that works on entries refuses
   the set's own. The lines put in another order are the order drawn; "R =
   HCN" shows R as HCN. A level no line names comes after the rest, as it
   came, never left out; a line naming no level that comes in, or one
-  listed already, is said beside it and counted; two levels shown by one
-  name refuse it.
+  listed already, is said beside it and counted - the name no level has
+  said with its run too ("3 levels · relative to R · 1 left: Foo"); two
+  levels shown by one name refuse it.
 - **Relative to** the level its card's list picks - each by the name it is
   shown by - none picked the first; in kcal/mol, written to a tenth,
-  signed. A table into *Connects* names levels by either name.
+  signed. One naming no level that comes in, by either name, is said where
+  its card would say *Ready* ("No level is called "Zed"") and refuses its
+  run. A table into *Connects* names levels by either name.
 - **Which energy** is a list on its card of those its levels carry, each by
   its symbol and what worked it out and where ("ΔG · Gibbs free energy ·
   ORCA · r2SCAN-3c · 298.15 K"); the thermochemistry's corrections are no
