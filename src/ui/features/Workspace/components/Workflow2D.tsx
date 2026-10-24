@@ -31,7 +31,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
-import { diagramOptions } from "../workflow/diagramOptions";
+import { diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -726,8 +726,10 @@ export default function Workflow2D() {
       const info = kindInfo(s.kind);
       const doer = doerOf(s);
       // (an Energy diagram's: lists of what comes into its Levels)
-      const takes = s.kind === "energy-diagram" ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
-      const how = howOf(takes, s.options, byOf(s) === "meno" ? info.how : undefined);
+      const diagram = s.kind === "energy-diagram";
+      const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
+      const own = diagram ? diagramValues(takes, s.options) : s.options;
+      const how = howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
       return (
         // (its top at its place: the card grows downwards as it opens - over the cards below it)
@@ -746,7 +748,7 @@ export default function Workflow2D() {
             open={openStep === s.id}
             inputs={inputsFor(s.kind, byOf(s)).map((p) => ({ id: p.id, name: p.name, look: portLook("take", { step: s.id, port: p.id }) }))}
             optionList={takes}
-            options={optionsOf(takes, s.options)}
+            options={optionsOf(takes, own)}
             kinds={kindsOf(byOf(s)).map((k) => ({ kind: k, name: kindInfo(k).name }))}
             runs={runRows(s)}
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}

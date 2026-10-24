@@ -8,7 +8,7 @@
  * the kind declares them where nothing comes in.
  */
 import { diagramQuantities, levelNamer, levelsTyped, type LevelLine } from "../../../../lib/energyDiagram";
-import type { LineRead, Option } from "../../../../lib/options";
+import type { LineRead, Option, OptionValues } from "../../../../lib/options";
 import { moleculesSeen } from "./flow";
 import type { WorkflowStep } from "../store/types";
 
@@ -29,6 +29,23 @@ export function diagramOptions(flow: Seen, step: Pick<WorkflowStep, "id" | "opti
   const out = listed(flow, step.id, levels, declared);
   mine.set(key, out);
   return out;
+}
+
+/**
+ * An Energy diagram step's options' values as its card shows them, `own` over
+ * the defaults of `options` (`diagramOptions`): one left blank - as a step is
+ * put down with its kind's - or one its list no longer has, as that list's
+ * default, so that its levels show listed and one is picked. The step runs on
+ * a blank one alike: its levels as they come, relative to the first.
+ */
+export function diagramValues(options: readonly Option[], own: OptionValues | undefined): OptionValues {
+  const values: OptionValues = {};
+  for (const o of options) {
+    const v = own?.[o.id];
+    const blank = v == null || v === "";
+    values[o.id] = blank || (o.type === "choice" && !o.choices.some((c) => c.value === v)) ? o.default : v;
+  }
+  return values;
 }
 
 function listed(flow: Seen, id: number, levels: string, declared: readonly Option[]): Option[] {

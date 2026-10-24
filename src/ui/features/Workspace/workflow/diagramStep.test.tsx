@@ -8,7 +8,8 @@ import type { Molecule3D } from "../store/types";
 import { countOf, MARKS_UNREAD } from "./entries";
 import { canWire, inputKey, resultOf, stateOf } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
-import { diagramOptions } from "./diagramOptions";
+import { diagramOptions, diagramValues } from "./diagramOptions";
+import { howOf, kindInfo } from "./kinds";
 import { stepOptions } from "./doers";
 import { runStep, whyNot, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
@@ -294,6 +295,13 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
       { said: 'No level "Q" comes in', problem: true },
       { said: "Listed already", problem: true },
     ]);
+    // (put down blank - its levels as they come, relative to the first - the card shows them listed, the first picked, and says which)
+    const blank = diagramValues(options, { ...s.options, quantity: "energy", levels: "", reference: "" });
+    expect([blank.levels, blank.reference, blank.quantity]).toEqual(["P\nR\nTS", "P", "energy"]);
+    expect(howOf(options, blank, kindInfo("energy-diagram").how)).toBe("ΔE, relative to P");
+    // (one its list no longer has: its list's default; one it has, as it is - by the name it is shown by)
+    expect(diagramValues(listed, { reference: "R.out", levels: "R = HCN\nTS\nP" }).reference).toBe("R");
+    expect(howOf(listed, diagramValues(listed, { reference: "R", levels: "R = HCN\nTS\nQ\nTS" }), kindInfo("energy-diagram").how)).toBe("ΔE, relative to HCN");
     // (nothing in Levels: as the kind declares them)
     const bare = addStep(emptyWorkspaceDocument(), "energy-diagram", 0, 0);
     expect(diagramOptions(bare, bare.steps![0], stepOptions(bare.steps![0])).map((o) => o.type)).toEqual(["text", "lines", "text"]);
