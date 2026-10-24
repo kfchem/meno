@@ -14,6 +14,7 @@ import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
+import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
 import type { StepKind } from "./kinds";
@@ -300,6 +301,43 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  */
 const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => entry;
 
+/** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
+export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
+
+/**
+ * Whether a geometry a program gave an entry is still of the compound it
+ * came as: its atoms are the entry's, in order (`workedOf` checks them);
+ * each atom bonded to the same others as where it stood before - by the
+ * bonds each geometry's places give (`bondedPairs`), orders aside, so that
+ * what is read the one way of both is not taken for a change; and of the
+ * charge it went with, where the calculation says one. A bond broken or
+ * formed, or another charge, is another compound.
+ */
+export function sameCompound(entry: Pick<SetEntry, "atoms" | "xyz" | "charge" | "multiplicity" | "skeleton">, xyz: readonly number[], charge?: number | null): boolean {
+  const radii = bondRadii(entry.atoms.map((a) => a.el));
+  if (bondedPairs(entry.xyz, radii).join() !== bondedPairs(xyz, radii).join()) return false;
+  if (charge == null) return true;
+  const atoms = entry.atoms.map((a, i) => ({ ...a, x: entry.xyz[3 * i], y: entry.xyz[3 * i + 1], z: entry.xyz[3 * i + 2] }));
+  return speciesOf({ atoms, bonds: [], ...(entry.skeleton ? { skeleton: true } : {}) }, entry)?.charge === charge;
+}
+
+/**
+ * What an entry a program worked out anew keeps of what it came with: the
+ * structure drawn it was made from (`drawnFrom`, `drawnAs`) and its bonds
+ * to ring centres - where it is still that compound (`sameCompound`) - so
+ * that what it comes to stands by its structure drawn. Never how it was
+ * made, nor its stereo labels: those were of the geometry it came with, not
+ * of this one - its configurations are perceived anew from its own. Where
+ * its bonds or charge changed, none of them: and it says so, in how it was
+ * made.
+ */
+function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | null): Pick<SetEntry, "keep"> {
+  const k = entry.keep;
+  if (!k?.drawnFrom && !k?.drawnAs) return {};
+  if (!sameCompound(entry, xyz, charge)) return { keep: { made: { how: [{ label: "Drawing", text: UNLINKED_WHY }] } } };
+  return { keep: { drawnFrom: k.drawnFrom, drawnAs: k.drawnAs, ...(k.centres?.length ? { centres: k.centres } : {}) } };
+}
+
 /**
  * An entry as a job worked it out (lib/calc/output): its last geometry and
  * energy - an optimisation's path before it, kept where the step is
@@ -321,6 +359,8 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const calc = calcOf(out, readers, source);
   return {
     ...anew(entry),
+    // (what it came as - its structure drawn - where it still is that compound)
+    ...keptAnew(entry, last, calc?.charge),
     xyz: [...last],
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
@@ -336,7 +376,8 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
  * found besides (its results) with the first alone: the conformers of one
  * compound are of one calculation (entries `unlikeMade`). They are the
  * compound's conformers as that search found them, whole, not a part of
- * another's (`partOf`).
+ * another's (`partOf`); each linked to the structure drawn as `workedOf`
+ * keeps it (`keptAnew`).
  */
 export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | Failure {
   const n = entry.atoms.length;
@@ -352,6 +393,8 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
   const { partOf: _part, ...from } = entry;
   return frames.map((f, k) => ({
     ...anew(from),
+    // (each still linked to the structure drawn the entry was made from, where it is still that compound)
+    ...keptAnew(entry, f, calc?.charge),
     number: k + 1,
     xyz: [...f],
     ...(energies ? { energy: energies[k] } : {}),

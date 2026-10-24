@@ -1,3 +1,5 @@
+import * as THREE from "three";
+import { principalTurn } from "../utils/align3d";
 import { describe, expect, it, vi } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
 import { addMolecule3d, createWorkspaceDocument } from "../document";
@@ -5,6 +7,7 @@ import { molecules3dIn } from "../utils/selection";
 import { readRecord, recordText } from "../utils/copyPaste";
 import { linkOf, signatureOf } from "../utils/drawnLink";
 import type { CalcInfo } from "../../../../lib/calc/output";
+import type { Turn3D } from "./types";
 
 const water = {
   atoms: [
@@ -364,6 +367,61 @@ describe("molecules in 3D a file brings", () => {
     expect("frame" in doc.getState().molecules3d![0]).toBe(false);
     state().appendModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...water, at: { x: 9, y: 0 } }, { ...steps, at: { x: 18, y: 0 } }] });
     expect(state().frames3d).toEqual({ 1: 2, 3: 2 });
+  });
+
+  it("are first seen along their principal axes, their coordinates as the file has them - one tied to a drawing as the drawing lies", () => {
+    // (HCN along z, end-on to the canvas, as a calculation's output may give it)
+    const hcn = { ...water, atoms: [{ el: "H", x: 0, y: 0, z: -1.066 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "N", x: 0, y: 0, z: 1.153 }], bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 3 }] };
+    const { doc, state } = editor();
+    state().openModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...hcn, at: { x: 0, y: 0 } }] });
+    const turn = state().turns3d[1];
+    expect(turn).toBeDefined();
+    // (its coordinates untouched: the view turned, not the molecule)
+    expect(doc.getState().molecules3d![0].atoms.map((a) => a.z)).toEqual([-1.066, 0, 1.153]);
+    // (seen side-on: its axis turned across the canvas, out of the line of sight)
+    const axis = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...turn!));
+    expect(Math.abs(axis.z)).toBeLessThan(1e-6);
+    state().appendModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...hcn, at: { x: 9, y: 0 }, drawnFrom: [1, 2, 3] }] });
+    expect(state().turns3d[2]).toBeUndefined();
+  });
+
+  it("are turned back as they were when a file opened over them is undone - turned by hand, or as first seen - and as it had them on redo", () => {
+    const hcn = { ...water, atoms: [{ el: "H", x: 0, y: 0, z: -1.066 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "N", x: 0, y: 0, z: 1.153 }], bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 3 }] };
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const state = () => store.getState();
+    // (HCN opened, a second molecule added; the first turned by hand)
+    state().appendModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...hcn, at: { x: 0, y: 0 } }] });
+    state().appendModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...water, at: { x: 9, y: 0 } }] });
+    const byHand: Turn3D = [0, 0, Math.sin(0.3), Math.cos(0.3)];
+    state().setTurn3d(1, byHand);
+    const firstOfWater = state().turns3d[2];
+    expect(firstOfWater).toBeDefined();
+    // (another file opened over the canvas: its own molecule, its own first view)
+    state().replaceModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...water, atoms: water.atoms.map((a) => ({ ...a, z: a.x })), at: { x: 0, y: 0 } }] });
+    const replacing = state().turns3d[1];
+    expect(replacing).not.toEqual(byHand);
+    // (undone: the two back, each turned as it was)
+    doc.undo();
+    expect(doc.getState().molecules3d).toHaveLength(2);
+    expect(state().turns3d[1]).toEqual(byHand);
+    expect(state().turns3d[2]).toEqual(firstOfWater);
+    // (redone: the file's, as it first saw it - and none left of the second)
+    doc.redo();
+    expect(state().turns3d[1]).toEqual(replacing);
+    expect(state().turns3d[2]).toBeUndefined();
+  });
+
+  it("is turned back, on Reset, to how it was first seen - along its principal axes - not to its file's own lie", () => {
+    const hcn = { ...water, atoms: [{ el: "H", x: 0, y: 0, z: -1.066 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "N", x: 0, y: 0, z: 1.153 }], bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 3 }] };
+    const { state } = editor();
+    state().appendModel({ atoms: [], bonds: [] }, { molecules3d: [{ ...hcn, at: { x: 20, y: 0 } }] });
+    const first = state().turns3d[3];
+    state().setTurn3d(3, [1, 0, 0, 0]);
+    state().resetTurn3d(3);
+    expect(state().turns3d[3]).toEqual(first);
+    expect(state().turns3d[3]).toEqual(principalTurn(hcn.atoms.flatMap((a) => [a.x, a.y, a.z])));
   });
 });
 

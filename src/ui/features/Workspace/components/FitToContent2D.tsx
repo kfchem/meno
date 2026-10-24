@@ -25,6 +25,8 @@ import { asBonds, bondLinePtOf, shapeBounds } from "../../../../lib/chem/shapes"
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { schemeExtent } from "../utils/schemeExtent";
 import { partsBounds } from "../workflow/parts";
+import { joined, notesOnPage, screenToPage, wiresExtent, type PageBox } from "../utils/fitExtent";
+import { usePageHtmlLayer } from "./coverLayer";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 
 export default function FitToContent2D({
@@ -48,9 +50,12 @@ export default function FitToContent2D({
   const texts = useEditor((s) => s.texts);
   const sets = useEditor((s) => s.sets);
   const steps = useEditor((s) => s.steps);
+  const wires = useEditor((s) => s.wires);
   const store = useEditorStore();
   const style = useDrawingStyle();
-  const { camera, size, invalidate } = useThree();
+  const { camera, size, invalidate, gl } = useThree();
+  // (where this canvas's HTML is drawn: its own chips and notes, never another tab's kept alive)
+  const htmlLayer = usePageHtmlLayer();
   // Fit only when asked (the trigger): opening, adding or dropping a
   // structure asks, and so does the fit button. Drawing never does - the
   // first bond on an empty canvas is drawn where it was put, at the zoom
@@ -153,10 +158,27 @@ export default function FitToContent2D({
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
     }
     // and a workflow's sets and steps: their frames, and the cards closed
-    const flow = partsBounds({ sets, steps, wires: [] });
-    if (flow) {
-      bounds.min = { x: Math.min(bounds.min.x, flow.x0), y: Math.min(bounds.min.y, flow.y0) };
-      bounds.max = { x: Math.max(bounds.max.x, flow.x1), y: Math.max(bounds.max.y, flow.y1) };
+    // (and the wires between them, where one bends out past them - one going back to a step to the left loops out on both sides)
+    for (const b of [partsBounds({ sets, steps, wires: [] }), wiresExtent(sets, steps, wires)]) {
+      if (!b) continue;
+      bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
+      bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
+    }
+    // and the chips drawn over the page - a molecule's frames chip wider than the set it is in: each as large on the page at
+    // any zoom (utils/pageScale), so where it lies now is where it lies after the fit (utils/fitExtent). The canvas's camera
+    // looks straight down; one that does not, none taken.
+    const straight = (cam as THREE.Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera;
+    const doc = htmlLayer?.current ?? gl.domElement.parentElement ?? gl.domElement;
+    const now = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
+    const canvasBox = gl.domElement.getBoundingClientRect();
+    const chips = straight ? screenToPage([...doc.querySelectorAll(".meno-page-chip")].map((el) => el.getBoundingClientRect()), now, canvasBox) : null;
+    // (and the molecules' notes over them, drawn as large as the page only between two scales: how much they take, at the zoom a fit comes to)
+    const notes = straight
+      ? [...doc.querySelectorAll<HTMLElement>("[data-fit-notes]")].map((el) => ({ box: el.getBoundingClientRect(), gap: Number(el.dataset.fitNotes) || 0 }))
+      : [];
+    if (chips) {
+      bounds.min = { x: Math.min(bounds.min.x, chips.x0), y: Math.min(bounds.min.y, chips.y0) };
+      bounds.max = { x: Math.max(bounds.max.x, chips.x1), y: Math.max(bounds.max.y, chips.y1) };
     }
     // and the molecules in 3D, as each is turned and shown now, as the
     // camera sees them: straight from above, by an orthographic camera (the
@@ -174,11 +196,11 @@ export default function FitToContent2D({
     const w = size.width - cover;
     const h = size.height;
     const pad = Math.max(0, Math.min(paddingPx, Math.min(w, h) * 0.45));
-    const fitFrom = (over?: { x: number; y: number }) => {
-      let minX = bounds.min.x;
-      let minY = bounds.min.y;
-      let maxX = bounds.max.x;
-      let maxY = bounds.max.y;
+    const fitFrom = (over?: { x: number; y: number }, more?: PageBox | null) => {
+      let minX = Math.min(bounds.min.x, more?.x0 ?? Infinity);
+      let minY = Math.min(bounds.min.y, more?.y0 ?? Infinity);
+      let maxX = Math.max(bounds.max.x, more?.x1 ?? -Infinity);
+      let maxY = Math.max(bounds.max.y, more?.y1 ?? -Infinity);
       for (const pose of poses) {
         const from = over ?? pose.at;
         const b = seenBounds(pose, eyeHeight == null ? undefined : { x: from.x, y: from.y, z: eyeHeight });
@@ -194,6 +216,14 @@ export default function FitToContent2D({
     let seen = fitFrom();
     if (!isFinite(seen.cx)) return;
     if (poses.length && eyeHeight != null) seen = fitFrom({ x: seen.cx, y: seen.cy });
+    // (the notes at the zoom it comes to, and again at the zoom they bring it to: it settles in a pass or two)
+    for (let pass = 0; pass < 3 && notes.length; pass++) {
+      const more = joined(null, notesOnPage(notes, now, canvasBox, seen.zoom));
+      const again = fitFrom(poses.length && eyeHeight != null ? { x: seen.cx, y: seen.cy } : undefined, more);
+      const settled = Math.abs(again.zoom - seen.zoom) < seen.zoom * 1e-3;
+      seen = again;
+      if (settled) break;
+    }
     const fit = seen.zoom;
     const z = first ? Math.min(fit, cam.zoom || fit) : fit;
     // (the middle of what can be seen lies half the column to the left of the canvas's)
@@ -226,11 +256,14 @@ export default function FitToContent2D({
     texts,
     sets,
     steps,
+    wires,
     style,
     camera,
     size.width,
     size.height,
     invalidate,
+    gl,
+    htmlLayer,
     paddingPx,
     trigger,
     autoFitSuspended,

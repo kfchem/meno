@@ -8,7 +8,7 @@ import { countOf, holdsOf, MARKS_UNREAD } from "./entries";
 import { STATE_FINISHED } from "./meno";
 import { canWire, entryOnPage, inputKey, resultOf, stateOf, tableInto } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
-import { runStep, whyNot, type RunWith } from "./run";
+import { runStep, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
 import { noting } from "../utils/readNotes";
 import { ChartBody } from "./ValueBody";
@@ -233,14 +233,16 @@ describe("a Chart step", () => {
     expect(html).toContain("1 row with no energy: molecule:2#2 (frame 3 of 3)");
   });
 
-  it("takes no structures drawn, and says what it takes", () => {
+  it("takes structures drawn, seen as a table - and says why it charts nothing where they hold no two columns of numbers", () => {
     let doc = emptyWorkspaceDocument();
     doc = { ...doc, model: { ...doc.model, atoms: [{ id: 1, el: "C", x: 0, y: 0 } as WorkspaceDocument["model"]["atoms"][number]] } };
     doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
     doc = addStep(doc, "chart", 10, 0);
-    expect(canWire(doc, { set: 1 }, 2)).toBe(false);
+    expect(canWire(doc, { set: 1 }, 2)).toBe(true);
     doc = { ...doc, wires: [{ id: 99, from: { set: 1 }, to: { step: 2, port: "in" } }] };
-    expect(whyNot(doc, doc.steps![0], "meno")).toBe("Takes a table");
+    // (a structure drawn by hand: no record, so no numbers to chart)
+    doc = runStep(doc, 2, W);
+    expect(doc.steps![0].ran).toMatchObject({ ok: false, said: "It takes a table with two columns of numbers" });
   });
 
   it("is kept in the workspace's file, and reads back as it was - none where a point does not read", () => {

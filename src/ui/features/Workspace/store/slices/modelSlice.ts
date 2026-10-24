@@ -35,6 +35,8 @@ import { editAtTrueSize } from "../../utils/trueSize";
 import { style3dOf } from "../../style3d";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
+import { principalTurn } from "../../utils/align3d";
+import { noteTurns } from "../turnJournal";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -425,7 +427,7 @@ export const createModelSlice = (
     // the first, in order, as replaceModel left them to be - and each stack
     // of drawings the record marked, where it carries one: utils/stacks)
     const recordsShown = recordsShownOf(next.atoms);
-    set((prev: EditorState) => ({ ...prev, frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    set((prev: EditorState) => ({ ...prev, turns3d: shownTurns(scheme, 1, {}), frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   joinReadings: () => {
@@ -505,12 +507,18 @@ export const createModelSlice = (
 
   /** A file opened over what the canvas holds: one step, arrow and all. */
   replaceModel: (next: Model, scheme?: ImportedScheme) => {
+    const before = doc.getState();
+    const turnsWere = get().turns3d;
     doc.edit("open structure", (d) =>
       ops.withImportedScheme(ops.replaceModel(d, next), scheme),
     );
     get().forgetInteraction();
     const recordsShown = recordsShownOf(next.atoms);
-    set((prev: EditorState) => ({ ...prev, recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    const turns3d = shownTurns(scheme, 1, {});
+    set((prev: EditorState) => ({ ...prev, turns3d, recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    // (an undo puts back how the molecules it replaced were turned - by hand or as they were first seen - and a redo
+    //  how its own are: the turns go with the step, as a turn as one body's do)
+    journalTurns(doc, before, turnsWere, turns3d);
   },
 
   forgetInteraction: () => {
@@ -684,9 +692,12 @@ export const createModelSlice = (
     const before = get();
     const empty = !before.model.atoms.length && !before.pdfs.length && !before.pictures.length && !before.captions.length && !before.molecules3d.length && !before.texts.some((t) => t.at);
     const start3d = doc.getState().nextMolecule3dId ?? 1;
+    const before3d = doc.getState();
     const edited = doc.edit("add structure", (d) =>
       ops.withImportedScheme(ops.appendModel(d, next), scheme),
     );
+    // (a redo puts back how those it added were first seen: their turns go with the step)
+    if (edited) journalTurns(doc, before3d, {}, shownTurns(scheme, start3d, {}));
     // (a stack of drawings it brings showing its first record: utils/stacks)
     const ids = new Map(next.atoms.map((a, k) => [a.id, start + k]));
     const recordsShown = edited ? { ...get().recordsShown, ...recordsShownAdded(next.atoms, doc.getState().model, (id) => ids.get(id)) } : get().recordsShown;
@@ -696,7 +707,7 @@ export const createModelSlice = (
       recordsShown,
       model,
       // (each molecule in 3D added showing the frame its file says)
-      ...(edited ? { frames3d: shownFrames(scheme, start3d, prev.frames3d), lists3d: shownLists(scheme, start3d, prev.lists3d) } : {}),
+      ...(edited ? { turns3d: shownTurns(scheme, start3d, prev.turns3d), frames3d: shownFrames(scheme, start3d, prev.frames3d), lists3d: shownLists(scheme, start3d, prev.lists3d) } : {}),
       // (selected, as a paste is)
       // (as it is shown: of a stack of drawings it brings, the record shown - utils/stacks)
       ...(edited && next.atoms.length ? { sel: added(start, model), selAnchor: null } : {}),
@@ -836,6 +847,41 @@ export const createModelSlice = (
  * its file says - an optimisation's last - those molecules numbered from
  * `first`, in order.
  */
+let journalled = 0;
+/**
+ * A step that adds molecules in 3D and turns them, noted with their turns
+ * (turnJournal): an undo across it puts back `was` - every molecule's turn
+ * as it stood, and none for one that had none - and a redo `now`. The turns
+ * are the view's, outside the document; without this, an undo of a file
+ * opened over the canvas brought back the molecules it replaced turned as
+ * the file's own were, not as they had been.
+ */
+function journalTurns(doc: DocumentStore<WorkspaceDocument>, before: WorkspaceDocument, was: EditorState["turns3d"], now: EditorState["turns3d"]): void {
+  const after = doc.getState();
+  if (after === before) return;
+  const ids = new Set([...Object.keys(was), ...Object.keys(now)].map(Number));
+  const turnsBefore = Object.fromEntries([...ids].map((id) => [id, was[id]]));
+  const turnsAfter = Object.fromEntries([...ids].map((id) => [id, now[id]]));
+  noteTurns(doc, `opened-${++journalled}`, before, after, turnsBefore, turnsAfter);
+}
+
+/**
+ * Each molecule in 3D added from a file, first seen along its principal
+ * axes (utils/align3d `principalTurn`): its coordinates as the file has
+ * them, the view turned - a linear molecule side-on, a planar one face-on;
+ * one tied to a drawing as the drawing lies. Numbered as `shownFrames`
+ * numbers them.
+ */
+function shownTurns(scheme: ImportedScheme | undefined, first: number, shown: EditorState["turns3d"]): EditorState["turns3d"] {
+  const out = { ...shown };
+  (scheme?.molecules3d ?? []).forEach((m, i) => {
+    if (m.drawnFrom) return;
+    const turn = principalTurn(m.atoms.flatMap((a) => [a.x, a.y, a.z ?? 0]));
+    if (turn) out[first + i] = turn;
+  });
+  return out;
+}
+
 function shownFrames(scheme: ImportedScheme | undefined, first: number, shown: EditorState["frames3d"]): EditorState["frames3d"] {
   const out = { ...shown };
   (scheme?.molecules3d ?? []).forEach((m, i) => {
