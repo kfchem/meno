@@ -14,6 +14,8 @@ import type { FigureRead } from "../../../../lib/figure/read";
 import type { GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Model } from "../store/types";
 import { readDrawnLabel } from "../../../../lib/figure/structure";
+import { abbreviationStructure } from "../../../../lib/chem/abbreviations";
+import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { figureLabels, modelOf, schemeDrawn, type FigureResult, type Unread } from "./figures";
 
 type Point = { x: number; y: number };
@@ -295,16 +297,19 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
 }
 
 /**
- * Whether a structure read is a line of words - "R2 = SPh", "t-BuNH2·BH3" - its signs read as bonds: every atom a label, all
- * on one line, each bond level - and an "=" read as a double bond, or a label that reads as nothing (an italic t). Its labels,
- * in order along the line, where it is one; else null. A molecule drawn so with bonds, its labels all read and its bonds single
- * - Cl-Hg-Cl - is none.
+ * Whether a structure read is a line of words - "R2 = SPh", "PG = Boc", "t-BuNH2·BH3" - its signs read as bonds: every atom a
+ * label, all on one line, each bond level - and an "=" read as a double bond with a label at an end that names no element nor
+ * group (R2, PG, Ar, X), or a label that reads as nothing (an italic t). Its labels, in order along the line, where it is one;
+ * else null. A molecule written so - O=C=O, Me3Si-C≡C-SiMe3, Ph-N=N-Ph, Cl-Hg-Cl - is none.
  */
 function lineOfWords(f: FigureRead): string | null {
   if (f.atoms.length < 2 || f.atoms.some((a) => !a.label)) return null;
   const level = (p: number, q: number) => Math.abs(p - q) <= 0.2 * f.bond;
   if (!f.atoms.every((a) => level(a.y, f.atoms[0].y)) || !f.bonds.every((b) => level(f.atoms[b.a].y, f.atoms[b.b].y))) return null;
-  const odd = f.bonds.some((b) => b.order > 1) || f.atoms.some((a) => !readDrawnLabel(a.label!, figureLabels).read);
+  const read = f.atoms.map((a) => readDrawnLabel(a.label!, figureLabels));
+  // (an element, or a group Meno knows the structure of: not R2, PG, Ar - the names of a kind of group)
+  const chemical = (i: number) => read[i].read && (isElementSymbol(read[i].el) || abbreviationStructure(read[i].el) != null);
+  const odd = read.some((r) => !r.read) || f.bonds.some((b) => b.order > 1 && (!chemical(b.a) || !chemical(b.b)));
   return odd ? [...f.atoms].sort((p, q) => p.x - q.x).map((a) => `"${a.label}"`).join(", ") : null;
 }
 

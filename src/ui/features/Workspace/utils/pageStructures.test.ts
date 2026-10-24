@@ -205,9 +205,42 @@ describe("a line of words, its signs read as bonds", () => {
     expect(out.some((o) => o.startsWith("It is a line of words"))).toBe(true);
   });
 
-  it("but reads a molecule drawn on one line with single bonds, its labels all read - Cl-Hg-Cl - as one", () => {
-    const out = reads([stroke([113, 300], [123, 300]), stroke([136, 300], [146, 300])], [...word("Cl", 100), ...word("Hg", 124), ...word("Cl", 148)]);
-    expect(out.filter((o) => o.startsWith("It is a line of words"))).toEqual([]);
+  it("refuses \"PG = Boc\" and \"LG = SEt\": a name of a kind of group at an end of the =", () => {
+    for (const [l, r] of [["PG", "Boc"], ["LG", "SEt"]]) {
+      const out = reads([stroke([114, 298.6], [124, 298.6]), stroke([114, 301.4], [124, 301.4])], [...word(l, 100), ...word(r, 126)]);
+      expect(out).toContain(`It is a line of words ("${l}", "${r}"), not a structure drawn, so none of it is taken.`);
+    }
+  });
+
+  /** A molecule written on one line: its labels, each with the bonds after it - single, double, triple - as strokes beside each other. */
+  const written = (parts: [string, number][]) => {
+    const paths: FigureDrawn["paths"] = [];
+    const letters: FigureDrawn["letters"] = [];
+    let x = 100;
+    for (const [label, order] of parts) {
+      letters.push(...word(label, x));
+      x += label.length * 6 + 2;
+      if (order) {
+        for (let k = 0; k < order; k++) paths.push(stroke([x, 300 + (k - (order - 1) / 2) * 2.4], [x + 10, 300 + (k - (order - 1) / 2) * 2.4]));
+        x += 12;
+      }
+    }
+    return reads(paths, letters);
+  };
+
+  it("but reads molecules written on one line, their labels all elements or groups - O=C=O, S=C=S, MeC≡CMe, Me3SiC≡CSiMe3, PhN=NPh, N≡N, MeC≡N, HC≡CH, Cl-Hg-Cl", () => {
+    const molecules: [string, number][][] = [
+      [["O", 2], ["C", 2], ["O", 0]],
+      [["S", 2], ["C", 2], ["S", 0]],
+      [["H3C", 1], ["C", 3], ["C", 1], ["CH3", 0]],
+      [["Me3Si", 1], ["C", 3], ["C", 1], ["SiMe3", 0]],
+      [["Ph", 1], ["N", 2], ["N", 1], ["Ph", 0]],
+      [["N", 3], ["N", 0]],
+      [["CH3", 1], ["C", 3], ["N", 0]],
+      [["HC", 3], ["CH", 0]],
+      [["Cl", 1], ["Hg", 1], ["Cl", 0]],
+    ];
+    for (const m of molecules) expect([m.map((p) => p[0]).join(""), written(m)]).toEqual([m.map((p) => p[0]).join(""), ["whole", "whole"]]);
   });
 });
 
