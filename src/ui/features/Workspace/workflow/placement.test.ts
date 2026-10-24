@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, wireKey } from "./look";
+import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -365,6 +365,22 @@ describe("a wire going round what is in its way", () => {
     const { pts, detour } = route(from, to, [block]);
     expect(pts.some(inside(block)) || pts.some(inside(from)) || pts.some(inside(to))).toBe(false);
     expect(detour).toBeLessThan(3);
+  });
+});
+
+describe("the time a frame gives to working wires out", () => {
+  it("is so much of each frame: spent, none left till the next frame begins", () => {
+    let t = 0;
+    const budget = new FrameBudget(8, 16, () => t);
+    expect(budget.left()).toBe(true);
+    budget.spend(5);
+    expect(budget.left()).toBe(true);
+    budget.spend(4);
+    expect(budget.left()).toBe(false);
+    t = 10;
+    expect(budget.left()).toBe(false);
+    t = 16;
+    expect(budget.left()).toBe(true);
   });
 });
 

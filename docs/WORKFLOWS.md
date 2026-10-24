@@ -1957,8 +1957,13 @@ page could not be read after one run.
     its card is not eased at all (`shapeMoved`).
   - **Only what moved is worked out again.** Each wire looks at the sets
     and cards near it (`nearWire`), and is keyed by its ends and those
-    (`wireKey`): a drag works out again only the wires whose key changed -
-    about 7 ms a frame among 100 sets and 50 wires on this Mac.
+    (`wireKey`): a drag works out again only the wires whose key changed.
+    Of those, a wire whose ends moved is worked out at once; one where
+    only what is near it moved waits while the frame's 8 ms for wires is
+    spent, and follows a frame or two behind (`FrameBudget`). Within a
+    wire, the ways round are tried shortest first, and no further than the
+    first clear of all - the longest a wire takes is about 7 ms on this
+    Mac, among 100 sets and 50 cards.
   - **Smooth** (look `byTurn`, `pointsFor`). A wire is worked out as a
     close path, then drawn through points spread by how far it runs and
     how much it turns: one about every 3 screen pixels and every 2

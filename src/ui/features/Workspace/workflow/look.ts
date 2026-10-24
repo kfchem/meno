@@ -247,19 +247,37 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
     }
     return { pts: shape, way: "plain" };
   }
-  // (every level it may cross at, gone round all it would cross - and, where none is clear, again with what any of them crosses then, twice at most)
-  const tryAll = (past: readonly Side[]) => levelsFor(p, q, ends, past).map(([sd, y]) => {
-    const r = roundEnds(p, q, DENSE, ends, sd, past, y);
-    return { ...r, box: boxOf(r.pts), over: over(r.pts), length: lengthOf(r.pts) };
-  });
+  // (every level it may cross at, gone round all it would cross - the shortest first, by its corners, and no further than the first clear of all,
+  //  and of the side it passed before; where none is clear, again with what any of them crosses then, twice at most)
+  type Tried = { pts: Pt[]; side: WireSide; box: Side; over: number; length: number };
+  const tried: Tried[] = [];
+  const tryAll = (past: readonly Side[]) => {
+    const ways = levelsFor(p, q, ends, past)
+      .map(([sd, y]) => roundWay(p, q, ends, sd, past, y))
+      .map((w) => ({ ...w, length: lengthOf(w.corners) }))
+      .sort((a, b) => a.length - b.length);
+    let clear = false;
+    let clearKept = !wasSide;
+    for (const w of ways) {
+      if (clear && clearKept) break;
+      if (clear && w.side !== wasSide) continue;
+      const pts = rounded(w.corners, WIRE_ROOM, DENSE);
+      const r = { pts, side: w.side, box: boxOf(pts), over: over(pts), length: lengthOf(pts) };
+      tried.push(r);
+      if (r.over === 0) {
+        clear = true;
+        if (r.side === wasSide) clearKept = true;
+      }
+    }
+  };
   let past: readonly Side[] = crossed;
-  const tried = tryAll(past);
+  tryAll(past);
   // (again only where none of them is clear of all)
   for (let i = 0; i < 2 && tried.every((r) => r.over > 0); i++) {
     const more = others.filter((f) => !past.includes(f) && tried.some((r) => meet(grown.get(f)!, r.box) && r.pts.some((pt) => within(grown.get(f)!, pt))));
     if (!more.length) break;
     past = [...past, ...more];
-    tried.push(...tryAll(past));
+    tryAll(past);
   }
   const scored = tried;
   const best = scored.reduce((x, y) => (y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x));
@@ -343,6 +361,12 @@ export function pointsFor(pts: readonly Pt[], zoom: number): number {
  * it.
  */
 function roundEnds(p: Pt, q: Pt, n: number, ends: { from?: Side; to?: Side }, prefer?: WireSide, past: readonly Side[] = [], at?: number): { pts: Pt[]; side: WireSide } {
+  const w = roundWay(p, q, ends, prefer, past, at);
+  return { pts: rounded(w.corners, WIRE_ROOM, n), side: w.side };
+}
+
+/** A way round (`roundEnds`) as its corners, before they are rounded. */
+function roundWay(p: Pt, q: Pt, ends: { from?: Side; to?: Side }, prefer?: WireSide, past: readonly Side[] = [], at?: number): { corners: Pt[]; side: WireSide } {
   const from = ends.from ?? { x0: p.x, x1: p.x, y0: p.y, y1: p.y };
   const to = ends.to ?? { x0: q.x, x1: q.x, y0: q.y, y1: q.y };
   const levels = levelsFor(p, q, ends, past);
@@ -370,7 +394,7 @@ function roundEnds(p: Pt, q: Pt, n: number, ends: { from?: Side; to?: Side }, pr
   };
   const out = aside(Math.max(p.x, from.x1), p.y, level, 1, from);
   const into = aside(Math.min(q.x, to.x0), q.y, level, -1, to);
-  return { pts: rounded([p, { x: out, y: p.y }, { x: out, y: level }, { x: into, y: level }, { x: into, y: q.y }, q], WIRE_ROOM, n), side };
+  return { corners: [p, { x: out, y: p.y }, { x: out, y: level }, { x: into, y: level }, { x: into, y: q.y }, q], side };
 }
 
 /**
@@ -398,6 +422,34 @@ function levelsFor(p: Pt, q: Pt, ends: { from?: Side; to?: Side }, past: readonl
     top = Math.max(top, y1);
   }
   return levels;
+}
+
+/**
+ * Time to work wires out in, frame by frame: `ms` of each `frame` ms -
+ * the rest left for drawing them. A frame begins when one is asked of
+ * after the last one is over (`now`, in ms).
+ */
+export class FrameBudget {
+  private at = -Infinity;
+  private used = 0;
+  constructor(
+    private readonly ms: number,
+    private readonly frame: number,
+    private readonly now: () => number = () => performance.now(),
+  ) {}
+  /** Whether there is time left in this frame. */
+  left(): boolean {
+    const t = this.now();
+    if (t - this.at >= this.frame) {
+      this.at = t;
+      this.used = 0;
+    }
+    return this.used < this.ms;
+  }
+  /** `ms` of this frame's time spent. */
+  spend(ms: number): void {
+    this.used += ms;
+  }
 }
 
 /**
