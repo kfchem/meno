@@ -251,12 +251,15 @@ function readKept(v: unknown): StepRunKept | null {
         : {}),
     };
   }
+  // (structures drawn it could not make in 3D, set aside as they came - Conformers' - read as the page's drawing is)
+  const drawnRest = Array.isArray(res?.drawn?.rest) ? (res!.drawn!.rest as unknown[]).flatMap(drawnModelIn) : [];
+  const restUnread = rest.unread + (Array.isArray(res?.drawn?.rest) ? (res!.drawn!.rest as unknown[]).length - drawnRest.length : 0);
   return {
     ...ran,
     kind: r!.kind as StepKind,
     ...(Object.keys(options).length ? { options } : {}),
-    ...(holds && (molecules.length || unread || rest.molecules.length || rest.unread)
-      ? { results: { molecules, rest: rest.molecules, holds, ...(unread ? { unread } : {}), ...(rest.unread ? { restUnread: rest.unread } : {}) } }
+    ...(holds && (molecules.length || unread || rest.molecules.length || restUnread || drawnRest.length)
+      ? { results: { molecules, rest: rest.molecules, holds, ...(drawnRest.length ? { drawn: { made: [], rest: drawnRest } } : {}), ...(unread ? { unread } : {}), ...(restUnread ? { restUnread } : {}) } }
       : {}),
   };
 }

@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -421,7 +421,9 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   // (of molecules in 3D, molecules in 3D: no kind's second exit gives structures drawn of them)
   const asideHolds = (restHolds(kind, outcome.holds) ?? outcome.holds) as Holds3D;
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
-  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds };
+  // (structures drawn it could not make in 3D - Conformers' - in its aside exit's set as they came: there to be followed, and wired on)
+  const asideDrawn = "asideDrawn" in outcome && outcome.asideDrawn?.length ? { drawn: { made: [], rest: outcome.asideDrawn.map(drawnModel) } } : {};
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -494,7 +496,8 @@ export function placeResults(
     return aside ? fillDrawn(doc, step, aside.id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
   }
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
-  // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on)
+  // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
+  if (aside && results.drawn?.rest.length) return fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
   if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
   return doc;
 }
@@ -877,8 +880,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
     const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
-    // (each conformer's properties, as it came - an empty map where it had none)
-    const properties = g.some((e) => e.properties) ? g.map((e) => e.properties ?? {}) : undefined;
+    // (each conformer's properties, as it came, and what its own calculation read - its free energy, its vibrations - which
+    //  the molecule's one calculation below cannot keep for each (entries `calcProperties`): an empty map where it had none)
+    const carried = g.map((e) => ({ ...e.properties, ...calcProperties(e) }));
+    const properties = carried.some((p) => Object.keys(p).length) ? carried : undefined;
     // (what the calculation was, where a program worked them out - each conformer's results its own, not the
     //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set

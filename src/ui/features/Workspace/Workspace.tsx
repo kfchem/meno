@@ -66,7 +66,7 @@ import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
-import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
+import { flowOf, partsBounds, procedureParts, type FlowParts } from "./workflow/parts";
 import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from "./workflow/procedures";
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
@@ -1831,6 +1831,10 @@ function WorkspaceContent({
               // (its port that takes where Quick Add was opened - where the wire was let go)
               const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN);
               if (wire) st.connect(wire, id);
+              // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
+              const now = store.getState();
+              const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
+              if (box) now.requestShow(box);
             }}
             procedures={quickAdd.wire ? [] : proceduresSaved(procedures).map((p) => ({ id: p.id, name: p.name, needs: procedureNeeds(p.parts) }))}
             onProcedure={(id) => {

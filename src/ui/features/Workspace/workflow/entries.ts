@@ -919,10 +919,65 @@ function vibrationsOf(e: SetEntry, at: At): { vibrations?: Property; modes?: Pro
   };
 }
 
-/** An entry's imaginary frequencies, as its calculation judged them (cm-1): none where its vibrations were worked out and it has none; "not computed" where they were not. */
-export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc">): number[] | "not computed" {
+/**
+ * The names of what an entry's calculation read that it carries as its own
+ * properties where its calculation's readings are not kept with it: a
+ * conformer of a conformer set, whose molecule keeps one calculation, not
+ * its frames' each (run `moleculesOf`, `calcProperties`).
+ */
+export const CALC_CARRIED: readonly string[] = [...THERMO_PROPERTIES, "vibrations"];
+
+/**
+ * What an entry's calculation read, as properties of its own: its
+ * thermochemistry (`thermoOf`) and its vibrations' frequencies
+ * (`vibrationsOf`, without the modes' displacements, which are large), at
+ * its geometry - what a conformer carries, frame by frame, where its
+ * molecule cannot keep each conformer's calculation (run `moleculesOf`).
+ */
+export function calcProperties(e: SetEntry): Record<string, Property> {
+  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
+  const { vibrations } = vibrationsOf(e, at);
+  return { ...thermoOf(e, at.geometry), ...(vibrations ? { vibrations } : {}) };
+}
+
+/** An entry without what it carries of a calculation (`CALC_CARRIED`): of a geometry it is no longer at, or one a new calculation reads again. */
+export function withoutCarried(e: SetEntry): SetEntry {
+  if (!e.properties || !CALC_CARRIED.some((k) => k in e.properties!)) return e;
+  const { properties, ...rest } = e;
+  const left = Object.fromEntries(Object.entries(properties).filter(([k]) => !CALC_CARRIED.includes(k)));
+  return Object.keys(left).length ? { ...rest, properties: left } : rest;
+}
+
+/**
+ * An entry's free energy G: its calculation's (`thermoOf`), else one it
+ * carries (`calcProperties`) - only one of its geometry, worked out, a
+ * finite number in hartrees. None where it has none.
+ */
+export function freeEnergyOf(e: SetEntry): Property | undefined {
+  const geometry = geometryKey(e.xyz);
+  const p = thermoOf(e, geometry)["thermo.free-energy"] ?? e.properties?.["thermo.free-energy"];
+  if (!p || p.status !== "computed" || p.unit !== "Eh" || typeof p.value !== "number" || !Number.isFinite(p.value)) return undefined;
+  return p.at?.geometry == null || p.at.geometry === geometry ? p : undefined;
+}
+
+/**
+ * An entry's imaginary frequencies (cm-1): as its calculation judged them;
+ * else, where its vibrations were worked out - its calculation's, or those
+ * it carries (`calcProperties`) - those the table lists as negative, none
+ * where it lists none: a table with one never reads as none; "not computed"
+ * where they were not worked out.
+ */
+export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties">): number[] | "not computed" {
   if (e.imaginary?.length) return [...e.imaginary];
-  return e.calc?.results?.some((x) => x.on === "list" && x.id === "vibrations") ? [] : "not computed";
+  const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
+  if (list && list.on === "list") {
+    const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
+    return k < 0 ? [] : list.rows.map((r) => r.cells[k]).filter((f): f is number => typeof f === "number" && f < 0);
+  }
+  const table = e.properties?.vibrations?.value;
+  if (!e.properties?.vibrations) return "not computed";
+  const rows = typeof table === "object" && table && "table" in table ? table.table.rows : [];
+  return rows.map((r) => r[0]).filter((f): f is number => typeof f === "number" && f < 0);
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
@@ -1091,13 +1146,16 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
   if (!was || !sameAs(was, made)) return made;
   // (that entry still: all it held, its properties as the step left them - and its charge and spin given, where the step gave the ones it had)
   const { properties: _, ...held } = was;
+  // (what it carries of its calculation - a conformer's free energy, its vibrations - of that geometry still: kept, as its calculation is)
+  const carried = Object.fromEntries(CALC_CARRIED.flatMap((k) => (was.properties?.[k] ? [[k, was.properties[k]]] : [])));
+  const properties = { ...own, ...carried };
   return {
     ...held,
     compound: place.compound,
     number: place.number,
     ...(made.charge != null ? { charge: made.charge } : {}),
     ...(made.multiplicity != null ? { multiplicity: made.multiplicity } : {}),
-    ...(Object.keys(own).length ? { properties: own } : {}),
+    ...(Object.keys(properties).length ? { properties } : {}),
     ...(made.name ? { name: made.name } : {}),
   };
 }
