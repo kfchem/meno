@@ -2016,9 +2016,9 @@ page could not be read after one run.
     eases that (`DURATION.move`). Into a card that names its inputs, a
     wire comes in level for as long as the input's name, under it.
   - **A lane of its own** (look `wireLanes`). Wires going round that
-    would run on one another - up or down, or across, within a quarter
-    bond of each other along the same stretch - are moved apart into lanes
-    a quarter bond apart (`WIRE_LANE`), as near where they ran as that
+    would run on one another - up or down, or across, within half a bond
+    of each other along the same stretch - are moved apart into lanes half
+    a bond apart (`WIRE_LANE`, the room from a frame), as near where they ran as that
     lets them be: half a bond clear of every frame still, no further than
     halfway to the corners either side, and never a wire's runs into its
     ends, so its ends are where they were. The lanes are in the order the

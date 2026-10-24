@@ -6,7 +6,7 @@ const down = (x: number, from: { x: number; y: number }, to: { x: number; y: num
 const xOfRun = (c: { x: number; y: number }[]) => c[1].x;
 
 describe("wires moved into lanes", () => {
-  it("two wires running down one way: a lane each, a quarter bond apart, about where they ran - their ends where they were", () => {
+  it("two wires running down one way: a lane each, a lane apart, about where they ran - their ends where they were", () => {
     const a = down(10, { x: 0, y: 10 }, { x: 20, y: -10 });
     const b = down(10, { x: 0, y: 8 }, { x: 20, y: -12 });
     const [na, nb] = wireLanes([a, b], []);

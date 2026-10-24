@@ -512,12 +512,13 @@ function offEnds(from: readonly Pt[], to: readonly Pt[], i: number): Pt {
 }
 
 /**
- * How far apart wires running side by side are kept (`wireLanes`): a
- * quarter of a bond, as the page draws it - half the room a wire keeps
- * from a frame (`BETWEEN`), so that two wires in one way between frames
- * still keep that room from them.
+ * How far apart wires running side by side are kept (`wireLanes`): half a
+ * bond, as the page draws it - the room a wire keeps from a frame
+ * (`BETWEEN`, docs/LOOK.md *Room*), so that two wires side by side read
+ * as two at any zoom, as a wire beside a frame does, never as one line
+ * drawn double.
  */
-export const WIRE_LANE = BETWEEN / 2;
+export const WIRE_LANE = BETWEEN;
 
 /** Further than any page reaches, in page units: where the order of lanes is measured from (`wireLanes`). */
 const FAR = 1e7;
