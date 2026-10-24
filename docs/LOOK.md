@@ -152,10 +152,14 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   `bg-white hover:bg-gh-base`.
 - **Choice of cards** (a look, a format, each a picture or a word with a
   note): the chosen one `border-accel-base bg-accel-lightbase`.
-- **Radio**: a 14 px circle, `border-gh-line`, the chosen one's dot
+- **Radio**: a 14 px circle, `gh-line`, the chosen one's dot
   `accel-base`.
-- **Checkbox**: a 14 px square, `rounded-[3px] border-gh-line`, ticked
-  on `accel-base`.
+- **Checkbox**: a 14 px square, its corners 2.5 px round, `gh-line`,
+  ticked on `accel-base`.
+- A small round or square mark (a radio's ring and dot, a checkbox's box)
+  is drawn as an SVG shape, not a bordered box with rounded corners: a box
+  14 px across is 17.5 device pixels at 125%, and its width and height
+  round apart, a circle seen as a stadium.
 - **Switch** (a setting turned on or off at once): a pill `h-6 w-11
   rounded-full`, `bg-gh-line` off, `accel-base` on, its white knob
   sliding; `accel-accent` on only where being on refuses something
