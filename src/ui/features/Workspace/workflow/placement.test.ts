@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_BAND, wireCurve, wireKey } from "./look";
+import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, wireKey } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -245,25 +245,40 @@ describe("a wire's shape", () => {
 
   });
 
-  it("never jumps as its input is moved across the band where it turns from going round to the curve: 1 px apart, a few px at most", () => {
+  it("as its input is moved past where it leaves, turns over from going round to the curve once - 1 px apart, a few px at most, but there", () => {
     const from: Frame = { x0: 0, x1: 6, y0: -12, y1: -2 };
     const p = setGives(from);
     let was: { x: number; y: number }[] | null = null;
-    let most = 0;
-    // (the input moved right a page pixel at a time, from well before the band to well past it, level with the set's top)
-    for (let px = WIRE_BAND.from / PX - 20; px <= WIRE_BAND.to / PX + 20; px++) {
+    const steps: { px: number; moved: number }[] = [];
+    // (the input moved right a page pixel at a time, from well behind where it leaves to well past where it turns, level with the set's top)
+    for (let px = -40; px <= WIRE_TURNS / PX + 80; px++) {
       const at = { x: p.x + px * PX, y: 2 };
       const pts = wireCurve(p, stepTakes(at, 0), 48, { from, to: cardOf(at) });
       // (as it is seen: how far either line lies from the other - its points slide along it as its bends are spread anew, which is no change to see)
-      if (was) most = Math.max(most, apart(pts, was) / PX);
+      if (was) steps.push({ px, moved: apart(pts, was) / PX });
       was = pts;
     }
-    expect(most).toBeLessThan(12);
-    // (before the band, round: clear of its set; well past it, level with where it leaves and clear of both, the curve, as it ever was)
-    const before = { x: p.x + WIRE_BAND.from - PX, y: 2 };
+    // (once, where its input comes to be `WIRE_TURNS` on - the drawing eases that - and nowhere else more than a few px)
+    const big = steps.filter((st) => st.moved >= 12);
+    expect(big.map((st) => st.px)).toEqual([Math.ceil(WIRE_TURNS / PX - 1e-9)]);
+    // (before, round: clear of its set; well past, level with where it leaves and clear of both, the curve, as it ever was)
+    const before = { x: p.x + WIRE_TURNS - PX, y: 2 };
     expect(wireCurve(p, stepTakes(before, 0), 48, { from, to: cardOf(before) }).some(strictly(from))).toBe(false);
     const level = { x: p.x + 300 * PX, y: p.y + PORT_DOWN };
     expect(wireCurve(p, stepTakes(level, 0), 48, { from, to: cardOf(level) })).toEqual(wireCurve(p, stepTakes(level, 0), 48));
+  });
+
+  it("goes on across all the way, its input however near: never back out over what is beside its ends", () => {
+    const from: Frame = { x0: -20 * PX, x1: 0, y0: -10 * PX, y1: 10 * PX };
+    const p = setGives(from);
+    for (const run of [WIRE_TURNS / PX, 30, 39, 60]) {
+      for (const down of [0, 40, 300]) {
+        const q = { x: p.x + run * PX, y: p.y - down * PX };
+        const pts = wirePath(p, q, { from, to: cardOf({ x: q.x, y: q.y + PORT_DOWN }) });
+        // (each point no further left than the one before)
+        expect(pts.every((pt, i) => i === 0 || pt.x >= pts[i - 1].x - 1e-9)).toBe(true);
+      }
+    }
   });
 
   it("where no way round is clear of all, goes the way over least - over what it must, not over what a set holds", () => {
@@ -308,6 +323,69 @@ describe("a wire's shape", () => {
     const pts = wireCurve(p, q, 96, { from: card, to: own }, [card, between, own]);
     expect([pts[0], pts[96]]).toEqual([p, q]);
     for (const f of [card, between, own]) expect(pts.some(strictly(f))).toBe(false);
+  });
+});
+
+describe("a wire going round what is in its way", () => {
+  // (frames given in page pixels, as left, right, bottom, top; a set's line out at its right side's middle, into a card's left side 20 px down)
+  const px = (x0: number, x1: number, y0: number, y1: number): Frame => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX });
+  const inside = (b: Frame) => (pt: { x: number; y: number }) => pt.x > b.x0 + 1e-9 && pt.x < b.x1 - 1e-9 && pt.y > b.y0 + 1e-9 && pt.y < b.y1 - 1e-9;
+  const route = (from: Frame, to: Frame, others: Frame[]) => {
+    const p = { x: from.x1, y: (from.y0 + from.y1) / 2 };
+    const q = { x: to.x0, y: to.y1 - 20 * PX };
+    const pts = wirePath(p, q, { from, to }, nearWire(p, q, { from, to }, others));
+    const long = pts.reduce((k, pt, i) => (i ? k + Math.hypot(pt.x - pts[i - 1].x, pt.y - pts[i - 1].y) : 0), 0);
+    return { pts, detour: long / Math.hypot(q.x - p.x, q.y - p.y) };
+  };
+
+  it("never goes inside one, however near its ends: a frame just before the card it comes into, on its curve", () => {
+    const from = px(0, 150, -75, 75);
+    const to = px(400, 400 + CARD_W / PX, 180 - CARD_H / PX, 180);
+    // (on the curve's way in, level with the input, 30 to 50 px before it - well within its handles' reach)
+    const block = px(350, 370, 150, 170);
+    const { pts } = route(from, to, [block]);
+    expect(pts.some(inside(block))).toBe(false);
+  });
+
+  it("goes up or down short of a frame across the level it leaves at - between it and its set - not past it and back through it", () => {
+    // (a frame right of the set, across the line out of it, half a bond and more off: its way up a bond out would meet it)
+    const from = px(68, 280, 166, 256);
+    const to = px(656, 864, 386, 462);
+    const block = px(330, 408, 165, 279);
+    const { pts } = route(from, to, [block]);
+    expect(pts.some(inside(block))).toBe(false);
+    expect(pts.some(inside(from)) || pts.some(inside(to))).toBe(false);
+  });
+
+  it("crosses at a level between what stands in its way, where that is clear, not round all of it: no more than three times as long as straight", () => {
+    // (coming back up into a card a little right of its set, a frame between them: across under the card, over that frame)
+    const from = px(16, 254, 348, 511);
+    const to = px(345, 553, 142, 218);
+    const block = px(304, 373, 273, 360);
+    const { pts, detour } = route(from, to, [block]);
+    expect(pts.some(inside(block)) || pts.some(inside(from)) || pts.some(inside(to))).toBe(false);
+    expect(detour).toBeLessThan(3);
+  });
+});
+
+describe("a wire on its way to a new shape", () => {
+  const line = (n: number, f: (s: number) => { x: number; y: number }) => Array.from({ length: n + 1 }, (_, i) => f(i / n));
+  it("has its ends where they are now, all the way: only the rest is eased", () => {
+    const was = line(40, (s) => ({ x: s * 10, y: 0 }));
+    const now = line(40, (s) => ({ x: 1 + s * 12, y: 4 * Math.sin(Math.PI * s) }));
+    for (const k of [0, 0.3, 1]) {
+      const pts = wireToward(was, now, k);
+      expect([pts[0], pts[40]]).toEqual([now[0], now[40]]);
+    }
+    // (at the start, as it was, its ends' moves taken with it: here a line still, from where its ends are now)
+    expect(wireToward(was, now, 0)[20].y).toBeCloseTo(0, 9);
+    expect(wireToward(was, now, 1)).toEqual(now);
+  });
+
+  it("takes a wire dragged by its end as no change of shape, and one gone round something as one", () => {
+    const was = line(40, (s) => ({ x: s * 10, y: 0 }));
+    expect(shapeMoved(was, was.map((pt) => ({ x: pt.x + 3, y: pt.y - 2 })))).toBeCloseTo(0, 9);
+    expect(shapeMoved(was, line(40, (s) => ({ x: s * 10, y: 5 * Math.sin(Math.PI * s) })))).toBeCloseTo(5, 9);
   });
 });
 

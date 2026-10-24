@@ -29,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, pointsFor, wireRoute, wireKey, type WireWay } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, pointsFor, shapeMoved, wireRoute, wireToward, wireKey, type WireWay } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -67,10 +67,14 @@ type Ends = { from?: Frame; to?: Frame; lead?: number; around?: readonly Frame[]
 const WIRE_JUMP_PX = 4;
 
 /**
- * A wire's points as drawn: where `target` says - and where that moved by
- * more than a few pixels at once (it went round something else now, or its
- * ends came to be one above the other), eased there from where it was over
- * `DURATION.move` with `EASE`, so that a wire never jumps (theme/motion).
+ * A wire's points as drawn: where `target` says - and where its shape
+ * changed by more than a few pixels at once (it went round something else
+ * now, or its ends came to be one above the other), eased there from where
+ * it was over `DURATION.move` with `EASE`, so that a wire never jumps
+ * (theme/motion). Its ends are where `target`'s are, always - only the rest
+ * is eased (look `wireToward`), so that a wire dragged by its card never
+ * comes away from its port; and a wire on its way somewhere goes on to where
+ * it is now to go, in the time it was given, however often that moves.
  */
 function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
   const [shown, setShown] = useState(target);
@@ -78,10 +82,14 @@ function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
   const was = useRef(target);
   const { invalidate } = useThree();
   if (was.current !== target) {
-    // (as many points as it is drawn through now: where that changed - zoomed, or grown - what was shown spread over as many, to be eased from)
-    const prior = shown.length === target.length ? shown : byTurn(shown, target.length - 1);
-    const jump = Math.max(...target.map((p, i) => Math.hypot(p.x - prior[i].x, p.y - prior[i].y)));
-    from.current = jump > WIRE_JUMP_PX / zoom ? { pts: prior, at: performance.now() } : null;
+    const going = from.current;
+    // (as many points as it is drawn through now: where that changed - zoomed, or grown - what it is eased from spread over as many)
+    const spread = (pts: readonly Pt[]) => (pts.length === target.length ? pts : byTurn(pts, target.length - 1));
+    if (going) from.current = { pts: spread(going.pts), at: going.at };
+    else {
+      const prior = spread(shown);
+      from.current = shapeMoved(prior, target) > WIRE_JUMP_PX / zoom ? { pts: prior, at: performance.now() } : null;
+    }
     was.current = target;
     if (!from.current) setShown(target);
   }
@@ -89,8 +97,7 @@ function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
     const f = from.current;
     if (!f) return;
     const u = Math.min(1, (performance.now() - f.at) / (DURATION.move * 1000));
-    const k = eased(EASE, u);
-    setShown(target.map((p, i) => ({ x: f.pts[i].x + (p.x - f.pts[i].x) * k, y: f.pts[i].y + (p.y - f.pts[i].y) * k })));
+    setShown(wireToward(f.pts, target, eased(EASE, u)));
     if (u >= 1) from.current = null;
     invalidate();
   });

@@ -112,15 +112,14 @@ export const stepTakes = (s: { x: number; y: number }, k: number): Pt => ({ x: s
 export const stepGives = (s: { x: number; y: number }): Pt => ({ x: s.x + CARD_W, y: s.y - PORT_DOWN });
 
 /**
- * The band of runs across - from where a wire leaves to its input, to the
- * right - over which a wire given its ends turns from going round them to
- * the curve going on: at the band's start or less - its input level with
- * where it leaves, or behind it - round; at its end or more - `GAP`, as far
- * as a step's line to its set beside it runs across - the curve; between,
- * the one eased into the other point by point, so that a step moved
- * across it never makes its wire jump.
+ * The least run across - from where a wire leaves to its input, to the
+ * right - over which a wire given its ends goes on, turning as its curve
+ * does: half a bond (`BETWEEN`), the least that a turn up or down between
+ * them is seen across as a turn, not a line down their sides. Less - its
+ * input level with where it leaves, or behind it - it goes round them, the
+ * once it turns over from the one to the other eased by the drawing.
  */
-export const WIRE_BAND = { from: 0, to: 64 * PX };
+export const WIRE_TURNS = BETWEEN;
 
 /** `f` and `g` the same frame. */
 const same = (f?: Side, g?: Side) => !!f && !!g && f.x0 === g.x0 && f.x1 === g.x1 && f.y0 === g.y0 && f.y1 === g.y1;
@@ -134,13 +133,13 @@ const within = (f: Side, p: Pt) => p.x > f.x0 + 1e-9 && p.x < f.x1 - 1e-9 && p.y
  * its handles half the run across - 40 px at least, and more on a long run
  * up or down, half of it to 240 px, so that it turns in an arc as wide as
  * its run is long, never a tight hook - but never more than its run across,
- * so that it keeps between its ends, never swinging out over what is
- * beside them. Coming back - its input to the left of where it
- * leaves, or too near to turn (`WIRE_BAND`) - where what it leaves and
- * what it comes into are given (`ends`: a set's frame, a step's card),
- * round them rather than over them (`roundEnds`). And where it would cross
- * any other of `around` - the page's sets and cards - round that too, taken
- * with the end it is nearer as one (`roundEnds` again): never over a set,
+ * so that it runs on across all the way, never swinging back out over what
+ * is beside its ends, however near its input. Coming back - its input less
+ * than `WIRE_TURNS` to the right of where it leaves, or to the left of it -
+ * where what it leaves and what it comes into are given (`ends`: a set's frame, a step's card), round them
+ * rather than over them (`roundEnds`). And where it would cross any other
+ * of `around` - the page's sets and cards - round that too, at whichever
+ * level clear of them is the shortest way (`levelsFor`): never over a set,
  * a card, or what a set holds, where it can go round.
  */
 export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = []): Pt[] {
@@ -186,7 +185,8 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   }
   // (the side it passed before, where it went round)
   const wasSide = was && was !== "plain" ? was : undefined;
-  const d = Math.max(Math.abs(q.x - p.x) / 2, Math.min(Math.max(Math.abs(q.y - p.y) / 2, 40 * PX), 240 * PX, Math.max(q.x - p.x, 40 * PX)));
+  // (going on, never more than its run across - so that it runs on across all the way, never swinging back on itself, however near its input)
+  const d = Math.max(Math.abs(q.x - p.x) / 2, Math.min(Math.max(Math.abs(q.y - p.y) / 2, 40 * PX), 240 * PX, q.x > p.x ? q.x - p.x : 40 * PX));
   const c1 = { x: p.x + d, y: p.y };
   const c2 = { x: q.x - d, y: q.y };
   const at = (t: number): Pt => {
@@ -196,9 +196,10 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
       y: u * u * u * p.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * q.y,
     };
   };
-  const curve = Array.from({ length: DENSE + 1 }, (_, i) => at(i / DENSE));
+  // (worked out finer first, then spread by how it turns: a tight turn - its input near - drawn through as many points as a wide one)
+  const curve = byTurn(Array.from({ length: 2 * DENSE + 1 }, (_, i) => at(i / (2 * DENSE))), DENSE);
   if (!ends) return { pts: curve, way: "plain" };
-  // (half a bond clear of every frame's line - docs/LOOK.md, *Room* - what it leaves and comes into too, but where it meets them, at its ends)
+  // (half a bond clear of every other frame's line - docs/LOOK.md, *Room* - but where it meets them, beside its ends)
   const near = (f: Side) => ({ x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN });
   // (where it meets them: as far from its ends as its curve's handles reach, a bond at least - leaving and arriving level)
   const reach = Math.max(WIRE_ROOM, d);
@@ -206,32 +207,34 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   const meets = (pt: Pt) => Math.max(0, reach - Math.min(Math.hypot(pt.x - p.x, pt.y - p.y), Math.hypot(pt.x - q.x, pt.y - q.y)));
   // (how far it keeps from them, past where it meets them: none where it goes inside one)
   const outside = (f: Side, pt: Pt) => (within(f, pt) ? 0 : Math.hypot(Math.max(f.x0 - pt.x, 0, pt.x - f.x1), Math.max(f.y0 - pt.y, 0, pt.y - f.y1)));
-  const keeps = (pts: readonly Pt[]) => Math.min(Infinity, ...[ends.from, ends.to].flatMap((f) => (f ? pts.map((pt) => outside(f, pt) + meets(pt)) : [])));
-  // (going on: the curve - or, where it would run along what it leaves or comes into, closer than half a bond, round them;
-  //  across the band, the one eased into the other: smoothly, at each end the one or the other whole -
-  //  and as it comes clear of them - from touching them to half a bond off - the one eased into the other too, so that it never jumps from one to the other)
-  const run = q.x - p.x;
-  const ease = (u: number) => {
-    const c = Math.min(1, Math.max(0, u));
-    return c * c * (3 - 2 * c);
-  };
-  const k = ease((run - WIRE_BAND.from) / (WIRE_BAND.to - WIRE_BAND.from)) * ease(keeps(curve) / BETWEEN);
-  let shape = curve;
-  if (k < 1) {
-    const round = roundEnds(p, q, DENSE, ends, wasSide).pts;
-    shape = k === 0 ? round : round.map((a, i) => ({ x: a.x + (curve[i].x - a.x) * k, y: a.y + (curve[i].y - a.y) * k }));
-  }
+  // (going on, the curve; coming back - or too near to turn - round what it leaves and comes into)
+  const shape = q.x - p.x < WIRE_TURNS ? roundEnds(p, q, DENSE, ends, wasSide).pts : curve;
   const others = around.filter((f) => !same(f, ends.from) && !same(f, ends.to));
   // (each grown by half a bond once, not for every point it is looked at for)
   const grown = new Map(others.map((f) => [f, near(f)]));
+  // (only what meets the box round its points looked at point by point)
+  const boxOf = (pts: readonly Pt[]): Side => {
+    let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const pt of pts) [x0, x1, y0, y1] = [Math.min(x0, pt.x), Math.max(x1, pt.x), Math.min(y0, pt.y), Math.max(y1, pt.y)];
+    return { x0, x1, y0, y1 };
+  };
+  const meet = (a: Side, b: Side) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
   // (what it has to go round: where the curve would cross anything, all that stands between its ends - across from one to the other, up and
   //  down from the one to the other - not only what the curve happens to cross, which a step dragged a pixel changes)
-  // (near what is beside its ends where it meets them - coming down past one exit's set into the next: no more than its way in)
-  const touched = others.filter((f) => shape.some((pt) => within(grown.get(f)!, pt) && outside(f, pt) + meets(pt) < BETWEEN));
+  // (near what is beside its ends where it meets them - coming down past one exit's set into the next: no more than its way in; but inside any, however near its ends)
+  const shapeBox = boxOf(shape);
+  const touched = others.filter((f) => meet(grown.get(f)!, shapeBox) && shape.some((pt) => within(grown.get(f)!, pt) && (within(f, pt) || outside(f, pt) + meets(pt) < BETWEEN)));
   const span = { x0: Math.min(p.x, q.x), x1: Math.max(p.x, q.x), y0: Math.min(p.y, q.y), y1: Math.max(p.y, q.y) };
   const crossed = touched.length ? others.filter((f) => touched.includes(f) || (f.x0 < span.x1 && f.x1 > span.x0 && f.y0 < span.y1 && f.y1 > span.y0)) : [];
   // (round it all: what it leaves, what it comes into, and what stands between - the side it passed before, where it still can)
-  const over = (pts: readonly Pt[]) => pts.reduce((k, pt) => k + others.reduce((j, f) => j + (within(grown.get(f)!, pt) ? (within(f, pt) ? 10 : 1) : 0), 0), 0);
+  const nearIn = (pts: readonly Pt[]) => {
+    const box = boxOf(pts);
+    return others.filter((f) => meet(grown.get(f)!, box));
+  };
+  const over = (pts: readonly Pt[]) => {
+    const fs = nearIn(pts);
+    return fs.length ? pts.reduce((k, pt) => k + fs.reduce((j, f) => j + (within(grown.get(f)!, pt) ? (within(f, pt) ? 10 : 1) : 0), 0), 0) : 0;
+  };
   if (!crossed.length) {
     // (the curve clear: kept, unless it went round before and still can, no more than a fifth longer)
     if (was && was !== "plain") {
@@ -240,11 +243,24 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
     }
     return { pts: shape, way: "plain" };
   }
-  const sides = (["above", "below", "between"] as const).map((sd) => roundEnds(p, q, DENSE, ends, sd, crossed)).filter((r, k, rs) => rs.findIndex((x) => x.side === r.side) === k);
-  const scored = sides.map((r) => ({ ...r, over: over(r.pts), length: lengthOf(r.pts) }));
+  // (every level it may cross at, gone round all it would cross - and, where none is clear, again with what any of them crosses then, twice at most)
+  const tryAll = (past: readonly Side[]) => levelsFor(p, q, ends, past).map(([sd, y]) => {
+    const r = roundEnds(p, q, DENSE, ends, sd, past, y);
+    return { ...r, box: boxOf(r.pts), over: over(r.pts), length: lengthOf(r.pts) };
+  });
+  let past: readonly Side[] = crossed;
+  const tried = tryAll(past);
+  // (again only where none of them is clear of all)
+  for (let i = 0; i < 2 && tried.every((r) => r.over > 0); i++) {
+    const more = others.filter((f) => !past.includes(f) && tried.some((r) => meet(grown.get(f)!, r.box) && r.pts.some((pt) => within(grown.get(f)!, pt))));
+    if (!more.length) break;
+    past = [...past, ...more];
+    tried.push(...tryAll(past));
+  }
+  const scored = tried;
   const best = scored.reduce((x, y) => (y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x));
   // (the side it passed before, kept where it is clear - or no worse - and the other is not a fifth shorter)
-  const kept = wasSide && scored.find((r) => r.side === wasSide);
+  const kept = wasSide && scored.filter((r) => r.side === wasSide).reduce<(typeof scored)[number] | undefined>((x, y) => (!x || y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x), undefined);
   if (kept && kept !== best && (kept.over === 0 || kept.over <= best.over) && kept.length * 0.8 <= best.length) return { pts: kept.pts, way: kept.side };
   return { pts: best.pts, way: best.side };
 }
@@ -322,36 +338,99 @@ export function pointsFor(pts: readonly Pt[], zoom: number): number {
  * else the shorter way. Its corners rounded as wide: `n` + 1 points along
  * it.
  */
-function roundEnds(p: Pt, q: Pt, n: number, ends: { from?: Side; to?: Side }, prefer?: WireSide, past: readonly Side[] = []): { pts: Pt[]; side: WireSide } {
+function roundEnds(p: Pt, q: Pt, n: number, ends: { from?: Side; to?: Side }, prefer?: WireSide, past: readonly Side[] = [], at?: number): { pts: Pt[]; side: WireSide } {
   const from = ends.from ?? { x0: p.x, x1: p.x, y0: p.y, y1: p.y };
   const to = ends.to ?? { x0: q.x, x1: q.x, y0: q.y, y1: q.y };
-  const all = [from, to, ...past];
-  // (the level it crosses at)
-  const lo = from.y1 < to.y0 ? from : to;
-  const hi = lo === from ? to : from;
-  const gap = { y0: lo.y1, y1: hi.y0 };
-  const free = gap.y1 - gap.y0 >= 2 * BETWEEN && !past.some((f) => f.y0 < (gap.y0 + gap.y1) / 2 + BETWEEN && f.y1 > (gap.y0 + gap.y1) / 2 - BETWEEN && f.x1 > Math.min(p.x, q.x) - WIRE_ROOM && f.x0 < Math.max(p.x, q.x) + WIRE_ROOM);
-  const levels: [WireSide, number][] = [
-    ["above", Math.max(...all.map((f) => f.y1)) + WIRE_ROOM],
-    ["below", Math.min(...all.map((f) => f.y0)) - WIRE_ROOM],
-    ...(free ? [["between", (gap.y0 + gap.y1) / 2] as [WireSide, number]] : []),
-  ];
+  const levels = levelsFor(p, q, ends, past);
   const way = (y: number) => Math.abs(p.y - y) + Math.abs(y - q.y);
   // (the side it went before, where it still can: else the shorter way)
-  const [side, level] = levels.find(([sd]) => sd === prefer) ?? levels.reduce((a, b) => (way(b[1]) < way(a[1]) ? b : a));
-  // (a way up or down at `x` from `y0` to `y1`, stepped aside - right or left, as `dir` - past each frame in it, a bond clear)
-  const aside = (x: number, ya: number, yb: number, dir: 1 | -1, own: Side) => {
+  const shortest = (ls: [WireSide, number][]) => ls.reduce((a, b) => (way(b[1]) < way(a[1]) ? b : a));
+  const [side, level]: [WireSide, number] = at !== undefined ? [prefer ?? "between", at] : levels.some(([sd]) => sd === prefer) ? shortest(levels.filter(([sd]) => sd === prefer)) : shortest(levels);
+  // (a way up or down, a bond out from its end's `edge`, from the level it leaves or comes in at (`ya`) to `yb`, stepped aside - right or left,
+  //  as `dir` - past each frame in it, a bond clear; but kept short of the first that stands between - not the other end - between it and
+  //  the edge, where that leaves half a bond either side, and short of any across the level it leaves or comes in at, however near: else
+  //  the way along to it would cross it)
+  const aside = (edge: number, ya: number, yb: number, dir: 1 | -1, own: Side) => {
     const [y0, y1] = [Math.min(ya, yb), Math.max(ya, yb)];
+    const other = own === from ? to : from;
+    let x = edge + dir * WIRE_ROOM;
     for (let k = 0; k < 8; k++) {
-      const hit = [...past, own === from ? to : from].find((f) => f.x0 - BETWEEN < x && f.x1 + BETWEEN > x && f.y0 - BETWEEN < y1 && f.y1 + BETWEEN > y0);
+      const hit = [...past, other].find((f) => f.x0 - BETWEEN < x && f.x1 + BETWEEN > x && f.y0 - BETWEEN < y1 && f.y1 + BETWEEN > y0);
       if (!hit) break;
+      const near = dir > 0 ? hit.x0 : hit.x1;
+      const short = (near - edge) * dir;
+      if (hit !== other && short > 0 && ((k === 0 && short >= 2 * BETWEEN) || (hit.y0 - BETWEEN < ya && hit.y1 + BETWEEN > ya))) return (edge + near) / 2;
       x = dir > 0 ? hit.x1 + WIRE_ROOM : hit.x0 - WIRE_ROOM;
     }
     return x;
   };
-  const out = aside(Math.max(p.x, from.x1) + WIRE_ROOM, p.y, level, 1, from);
-  const into = aside(Math.min(q.x, to.x0) - WIRE_ROOM, level, q.y, -1, to);
+  const out = aside(Math.max(p.x, from.x1), p.y, level, 1, from);
+  const into = aside(Math.min(q.x, to.x0), q.y, level, -1, to);
   return { pts: rounded([p, { x: out, y: p.y }, { x: out, y: level }, { x: into, y: level }, { x: into, y: q.y }, q], WIRE_ROOM, n), side };
+}
+
+/**
+ * The levels a wire from `p` to `q` going round what it leaves and comes
+ * into (`ends`) and what stands in its way (`past`) may cross at: a bond
+ * above all of them, a bond below all, and - between - the middle of each
+ * gap between them, across from the one end to the other, that leaves half
+ * a bond either side (`BETWEEN`).
+ */
+function levelsFor(p: Pt, q: Pt, ends: { from?: Side; to?: Side }, past: readonly Side[]): [WireSide, number][] {
+  const from = ends.from ?? { x0: p.x, x1: p.x, y0: p.y, y1: p.y };
+  const to = ends.to ?? { x0: q.x, x1: q.x, y0: q.y, y1: q.y };
+  const all = [from, to, ...past];
+  const levels: [WireSide, number][] = [
+    ["above", Math.max(...all.map((f) => f.y1)) + WIRE_ROOM],
+    ["below", Math.min(...all.map((f) => f.y0)) - WIRE_ROOM],
+  ];
+  // (what stands across from the one end to the other - its way out and in a bond beyond them - each half a bond taller and deeper: the gaps left between them)
+  const x0 = Math.min(p.x, q.x) - WIRE_ROOM;
+  const x1 = Math.max(p.x, q.x) + WIRE_ROOM;
+  const spans = all.filter((f) => f.x1 > x0 && f.x0 < x1).map((f) => [f.y0 - BETWEEN, f.y1 + BETWEEN]).sort((a, b) => a[0] - b[0]);
+  let top = spans.length ? spans[0][1] : 0;
+  for (const [y0, y1] of spans.slice(1)) {
+    if (y0 > top) levels.push(["between", (top + y0) / 2]);
+    top = Math.max(top, y1);
+  }
+  return levels;
+}
+
+/**
+ * How far a wire's shape moved from `from` to `to` - the same number of
+ * points - its ends aside: each point's move less its ends' moves, eased
+ * from the one end's into the other's along it. A wire dragged by its end
+ * moves none; one gone round something else now, as far as that.
+ */
+export function shapeMoved(from: readonly Pt[], to: readonly Pt[]): number {
+  let most = 0;
+  for (let i = 0; i < to.length; i++) {
+    const r = offEnds(from, to, i);
+    most = Math.max(most, Math.hypot(r.x, r.y));
+  }
+  return most;
+}
+
+/**
+ * A wire on its way from `from` to `to` - the same number of points - `k`
+ * of the way (0 to 1): its ends where `to`'s are, always, so that a wire
+ * never comes away from its port; the rest `k` of the way from where it was
+ * - its ends' moves taken with it - to where it goes.
+ */
+export function wireToward(from: readonly Pt[], to: readonly Pt[], k: number): Pt[] {
+  return to.map((pt, i) => {
+    const r = offEnds(from, to, i);
+    return { x: pt.x - (1 - k) * r.x, y: pt.y - (1 - k) * r.y };
+  });
+}
+
+/** How far a wire's point `i` moved from `from` to `to` less its ends' moves, eased from the one into the other by how far along it is. */
+function offEnds(from: readonly Pt[], to: readonly Pt[], i: number): Pt {
+  const n = to.length - 1;
+  const s = n > 0 ? i / n : 0;
+  const ex = (to[0].x - from[0].x) * (1 - s) + (to[n].x - from[n].x) * s;
+  const ey = (to[0].y - from[0].y) * (1 - s) + (to[n].y - from[n].y) * s;
+  return { x: to[i].x - from[i].x - ex, y: to[i].y - from[i].y - ey };
 }
 
 /**
