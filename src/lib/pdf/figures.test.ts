@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { figureAt, figuresOf, pageObjectsOf, type Box, type PageObject } from "./figures";
+import { figureAt, figuresOf, pageObjectsOf, setAtomLabel, type Box, type PageObject } from "./figures";
 
 const path = (box: Box): PageObject => ({ kind: "path", box });
 const text = (box: Box): PageObject => ({ kind: "text", box });
@@ -158,6 +158,30 @@ describe("a PDF page's figures", () => {
     // (both lines of the conditions over the arrow, the line under it, and the numbers under the compounds)
     expect(y0).toBeLessThanOrEqual(279);
     expect(y1).toBeGreaterThanOrEqual(338);
+  });
+
+  it("take a \"+\" drawn with lines between two compounds as a \"+\": the two one scheme - but not a sign drawn with lines right by a word, a charge", () => {
+    // (a stroke each way, 6 points across, its middle level with the compounds', 8 points clear of the second's label)
+    const cross = [path([192, 307.5, 198, 308.5]), path([194.5, 305, 195.5, 311])];
+    expect(figuresOf([...structureAt(100, 300), ...cross, ...structureAt(215, 300)])).toHaveLength(1);
+    // (the same signs 2 points from a word - a label with its charge - join nothing)
+    const by = text([199, 304, 205, 312]);
+    expect(figuresOf([...structureAt(100, 300), ...cross, by, ...structureAt(215, 300)])).toHaveLength(2);
+  });
+
+  it("take one line with an atom's label at its end as a structure - CH3NH3+ - but not a word's underline, a line alone, nor one too long", () => {
+    // (the editor's label reader, here as it reads these: lib/figure, utils/figures)
+    setAtomLabel((t) => ["NH3+", "OMe"].includes(t));
+    const words = new Map<string, string>([["116,296", "NH3+"], ["100,290", "OMe"]]);
+    const wordsIn = (b: Box) => words.get(`${b[0]},${b[1]}`) ?? "";
+    const bond = path([100, 300, 114.4, 300.6]);
+    expect(figuresOf([bond, text([116, 296, 138, 305])], wordsIn)).toHaveLength(1);
+    expect(figuresOf([path([100, 300, 114.4, 300.6]), text([100, 290, 130, 298])], wordsIn)).toEqual([]);
+    expect(figuresOf([bond], wordsIn)).toEqual([]);
+    // (a line three bonds long - a rule - with the label at its end: none; nor any, its words not known)
+    expect(figuresOf([path([75, 300, 114.4, 300.6]), text([116, 296, 138, 305])], wordsIn)).toEqual([]);
+    expect(figuresOf([bond, text([116, 296, 138, 305])])).toEqual([]);
+    setAtomLabel(() => false);
   });
 
   it("join no compounds without an arrow or a + between them: not by a small word, nor by a chain drawn flat", () => {

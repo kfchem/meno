@@ -136,6 +136,19 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // (those a set holds on the page: their notes kept short, within their room under its name)
   const sets = useEditor((s) => s.sets);
   const inSets = useMemo(() => new Set(sets.flatMap((b) => (b.members ?? []).flatMap((m) => ("molecule" in m ? [m.molecule] : [])))), [sets]);
+  // (the foot of the set each is in - the least that holds it - where its frames chip, opened, goes clear of the set: Molecule3DView `setFoot`)
+  const setFeet = useMemo(() => {
+    const feet = new Map<number, { foot: number; area: number }>();
+    for (const b of sets) {
+      const area = Math.abs((b.x1 - b.x0) * (b.y1 - b.y0));
+      for (const m of b.members ?? []) {
+        if (!("molecule" in m)) continue;
+        const had = feet.get(m.molecule);
+        if (!had || area < had.area) feet.set(m.molecule, { foot: Math.min(b.y0, b.y1), area });
+      }
+    }
+    return feet;
+  }, [sets]);
   const turns = useEditor((s) => s.turns3d);
   const rising = useEditor((s) => s.rising3d);
   const overlay = useEditor((s) => s.overlay3d);
@@ -790,6 +803,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             following={active?.kind === "move" && active.group.includes(m.id)}
             framesOpen={hovered?.id === m.id || sel3d.has(m.id)}
             inSet={inSets.has(m.id)}
+            setFoot={setFeet.get(m.id)?.foot}
             onFrame={(f) => store.getState().setFrame3d(m.id, f)}
             // (from its mark: it, and those selected with it - each about its own place)
             onMagnify={(k, gesture) => {

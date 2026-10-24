@@ -12,7 +12,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { NOTES_SCALE, pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -194,6 +194,8 @@ export type Molecule3DViewProps = {
   framesOpen: boolean;
   /** One of a set's: its notes kept short, within its room under the set's name (`NoteMark`). */
   inSet?: boolean;
+  /** The foot of the set it is in, on the page: its frames chip, opened, goes down clear of it - never over the set's other molecules and their chips. */
+  setFoot?: number;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
   hoveredMeasure: number | null;
@@ -329,6 +331,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const pieces = useRef<THREE.InstancedMesh>(null!);
   const fans = useRef<THREE.Mesh>(null!);
   const pill = useRef<THREE.Group>(null!);
+  // (its frames chip opened by a click: Frames3D says so - and kept over the rest until it is back where it hangs shut)
+  const framesOpened = useRef(false);
+  const [chipRaised, setChipRaised] = useState(false);
+  const chipRaisedNow = useRef(false);
   const pillAt = useRef<number | null>(null);
   // where the mark of hydrogens left out stands: over its highest atom, followed gently
   const markAnchor = useRef<THREE.Group>(null);
@@ -1573,9 +1579,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
         low = Math.min(low, seen.y - r * mag * seen.k);
       }
-      const below = low - at.y;
+      // (opened, clear of its set: from the set's foot down - followed there, and back up as it shuts)
+      const below = framesChipAt(low, framesOpened.current ? props.setFoot : undefined) - at.y;
       pillAt.current = pillAt.current == null || reshaped ? below : follow(pillAt.current, below, step, PILL_TAU);
       if (Math.abs(pillAt.current - below) > 1e-3) moving = true;
+      // (shut and back where it hangs: no longer over the rest)
+      else if (chipRaisedNow.current && !framesOpened.current) {
+        chipRaisedNow.current = false;
+        setChipRaised(false);
+      }
       pill.current.position.set(0, pillAt.current / g, -at.z / g);
     }
     if (moving) invalidate();
@@ -1973,6 +1985,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
           {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
             <Frames3D
+              onOpened={(o) => {
+                framesOpened.current = o;
+                if (o && !chipRaisedNow.current) {
+                  chipRaisedNow.current = true;
+                  setChipRaised(true);
+                }
+                invalidate();
+              }}
+              raised={chipRaised}
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
               energies={m.energies?.length === solid.frames.length ? m.energies : undefined}

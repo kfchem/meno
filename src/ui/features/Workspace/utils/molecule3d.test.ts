@@ -41,6 +41,7 @@ import {
   valueSpots,
   VALUE_SLACK_PX,
   type SpotAbout,
+  framesChipAt,
 } from "./molecule3d";
 import type { SolidMark } from "../../../../lib/chem/layout2d";
 import { LARGE_ATOMS } from "./largeDrawing";
@@ -880,5 +881,16 @@ describe("fadeStep", () => {
     const g = fresh();
     fadeStep(g, 1, true, -1, TIME);
     expect(g.v).toBe(0);
+  });
+});
+
+describe("where a frames chip hangs from", () => {
+  it("is below its lowest atom - and, opened, clear of its set: half a bond below the set's foot, its own gap counted in", () => {
+    expect(framesChipAt(-1.2)).toBe(-1.2);
+    // (half a bond, 0.9; less the chip's own 10 page pixels, 0.375: 0.525 below the foot)
+    expect(framesChipAt(-1.2, -3.5)).toBeCloseTo(-4.025, 9);
+    // (a set whose foot is above the molecule's lowest atom - not drawn round it: never raised into it)
+    expect(framesChipAt(-1.2, 0.5)).toBe(-1.2);
+    expect(framesChipAt(-1.2, Number.NaN)).toBe(-1.2);
   });
 });

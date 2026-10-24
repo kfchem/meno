@@ -205,7 +205,14 @@ As Meno's own things look (decided: 15), not as the figures here do:
   about 8 px, they fade out, as a set's name and count do and a card's
   words; what opens for a moment - a card on pointing, a menu, Quick Add -
   stays the screen's size. The R and S beside atoms are the drawing's, not
-  chips.
+  chips. A frames chip opened by a click (2026-10-24) goes down, eased,
+  to half a bond below the foot of the set its molecule is in - over none
+  of the set's other molecules and their chips - and back up as it shuts;
+  opened, and until it is back, it lies over all else on the page, the
+  workflow's ports too, and nothing shows through it (shut, the page
+  shows through a little). Its bars are named over them (*Energy above
+  the lowest, each conformer*), laid on whole device pixels, each as wide
+  as the next; in its line a number is never parted from its unit.
 
 Everything comes and goes as Meno's things do (theme/motion): a set, a
 step and a wire fade in where they are put; a state changes its words
@@ -2043,6 +2050,17 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
   Where the set was kept out of the file, those atoms are not in it, so
   the molecule opens with its link to the drawing gone, as when the
   drawing is deleted.
+- **Through a calculation** (*Optimise*, *Energy*, *Frequencies*, or a
+  program's *Conformers*), a molecule keeps that link, and its bonds to
+  ring centres, where it is still the same compound: each atom bonded to
+  the same others, by the bonds where its atoms stand, before and after,
+  and of the charge it went with, where the calculation says one. So conformers optimised and
+  given their populations still stand by the structure drawn. It keeps
+  neither how it was made nor its stereo labels, which were of the
+  geometry it came with; its configurations are perceived anew from its
+  own geometry. Where a bond broke or formed, or the charge changed, the
+  link is dropped, and *How it was made* says why (2026-10-24; until then
+  every calculation dropped it).
 
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
@@ -2481,7 +2499,8 @@ Not yet: conditions picked from what comes in rather than typed.
 ### Charts (2026-10-22)
 
 **Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
-takes a table - or molecules or conformer sets, seen as one - and gives a
+takes a table - or molecules, conformer sets or structures drawn, seen as
+one - and gives a
 chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
@@ -2489,6 +2508,16 @@ each entry's number, then its energy).
 - **A chart of molecules plots no entry that is no result**: one that
   failed, by any kind, or whose marks did not read refuses it, each named,
   as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).
+- **Structures drawn** go into Chart too, seen as a table the way *Open as
+  a table* shows them (structuresTable `structuresAsTable`, every structure
+  a set holds, on the page and off it). A point stands on a structure's
+  record as results. A row whose state is not *finished*, because it
+  failed or was edited since its values were given, refuses the chart,
+  each named ("structure 2 of 3 failed: no 3D"), with the Filter that
+  takes it out ("state = finished") (`notFinishedRows`). A row set aside
+  is a result still, with its state finished, and is charted. A cell that
+  says a value was not worked out is no number: that row is left out,
+  counted and named, as any row without a number is.
 - A point for each row with a number in both; **a row without is counted
   and said**, by what it lacks ("4 points · 1 row left (1 with no
   measured)"), and each such row named, pointed at - its entry and what it
