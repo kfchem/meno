@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { MANY_CHOICES, type Option, type OptionValues } from "../../lib/options";
 import Checkbox from "../controls/Checkbox";
+import NumberField from "../controls/NumberField";
 import Select from "../controls/Select";
 
 /**
@@ -50,21 +51,17 @@ export default function OptionRows({
             <Checkbox label={o.label} checked={values[o.id] === true} onChange={(v) => set(o.id, v)} />
           ) : (
             <span className="shrink-0 flex items-center gap-1.5">
-              <input
-                type={o.type === "number" ? "number" : "text"}
-                aria-label={o.label}
-                value={String(values[o.id] ?? "")}
-                {...(o.type === "number" ? { min: o.min, max: o.max, step: o.step } : {})}
-                onChange={(e) => {
-                  if (o.type !== "number") return set(o.id, e.target.value);
-                  const n = Number(e.target.value);
-                  if (e.target.value !== "" && Number.isFinite(n)) set(o.id, n);
-                }}
-                className={clsx(
-                  "h-7 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black tabular-nums",
-                  o.type === "number" ? "w-24 text-right" : "w-48",
-                )}
-              />
+              {o.type === "number" ? (
+                <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
+              ) : (
+                <input
+                  type="text"
+                  aria-label={o.label}
+                  value={String(values[o.id] ?? "")}
+                  onChange={(e) => set(o.id, e.target.value)}
+                  className="h-7 w-48 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black"
+                />
+              )}
               {o.type === "number" && <span className="min-w-14 whitespace-nowrap text-xs text-gh-gray">{o.unit ?? ""}</span>}
             </span>
           )}
