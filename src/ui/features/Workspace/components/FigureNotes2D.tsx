@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { drawnBox } from "../../../../utils/importers";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
-import type { Model } from "../store/types";
-import { figureNotesOf, figureNoteText, figureNoteTitle, type FigureNote } from "../utils/figureNotes";
+import { figureNotePlaces, figureNotesKey, figureNotesOf, figureNoteText, figureNoteTitle, type FigureNote, type NotePlaces } from "../utils/figureNotes";
 import { pageScale } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 
-/** How far over a structure's ink its note stands, in world units: half a bond. */
-const NOTE_OVER = NOMINAL_BOND_LENGTH / 2;
 /** Below this many screen pixels to a bond the note is a dot, its words too small to read: a page pixel's scale, a bond being 48 of them. */
 const DOT_BELOW = 12 / 48;
 
@@ -30,12 +25,19 @@ type Shown = { key: number; note: FigureNote; at: { x: number; y: number }; leav
 export default function FigureNotes2D() {
   const model = useEditor((s) => s.model);
   const flying = useEditor((s) => s.pdfStructureFlight != null);
-  const notes = useMemo(() => figureNotesOf(model), [model]);
+  // (worked out again only where what they depend on has changed: not at each frame of a drag - figureNotesKey)
+  const key = useMemo(() => figureNotesKey(model), [model]);
+  const held = useRef<{ key: string; notes: FigureNote[] } | null>(null);
+  if (held.current?.key !== key) held.current = { key, notes: figureNotesOf(model) };
+  const notes = held.current.notes;
+  // (and where they stand, again only for a structure moved: the one dragged - figureNotePlaces)
+  const places = useRef<NotePlaces>(new Map());
   const [shown, setShown] = useState<Shown[]>([]);
   useEffect(() => {
     setShown((was) => {
       const now = performance.now();
-      const fresh = notes.map((note): Shown => ({ key: Math.min(...note.atoms), note, at: noteAt(model, note.atoms), leaving: null }));
+      const at = figureNotePlaces(model, notes, places.current);
+      const fresh = notes.map((note): Shown => ({ key: Math.min(...note.atoms), note, at: at.get(Math.min(...note.atoms))!, leaving: null }));
       const keys = new Set(fresh.map((s) => s.key));
       const had = new Set(was.filter((s) => s.leaving == null).map((s) => s.key));
       // (while one is carried out of a PDF: none comes in that was not shown before - it comes once the structure has landed)
@@ -57,12 +59,6 @@ export default function FigureNotes2D() {
       ))}
     </>
   );
-}
-
-/** Where a structure's note stands: over the middle of its ink, its labels and all, half a bond off (y up). */
-function noteAt(model: Model, atoms: ReadonlySet<number>): { x: number; y: number } {
-  const box = drawnBox({ atoms: model.atoms.filter((a) => atoms.has(a.id)), bonds: model.bonds.filter((b) => atoms.has(b.a) && atoms.has(b.b)) });
-  return { x: (box.minX + box.maxX) / 2, y: box.maxY + NOTE_OVER };
 }
 
 function FigureNote2D({ shown }: { shown: Shown }) {
