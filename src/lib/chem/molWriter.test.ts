@@ -633,7 +633,8 @@ describe("overBonded", () => {
     expect([...overBonded(star({ el: "I" }, [["C", 1], ["C", 1], ["C", 1]]))]).toEqual([]);
     expect([...overBonded(star({ el: "Si", charge: -2 }, [["F", 1], ["F", 1], ["F", 1], ["F", 1], ["F", 1], ["F", 1]]))]).toEqual([]);
     expect([...overBonded(star({ el: "Si", charge: -1 }, [["C", 1], ["O", 1], ["O", 1], ["O", 1], ["O", 1]]))]).toEqual([]);
-    // (but an iodine with three bonds to nitrogens, uncharged, is)
+    // (but a neutral silicon with five is - a silyl group's label read with a double bond - and an iodine with three bonds to nitrogens, uncharged)
+    expect([...overBonded(star({ el: "Si" }, [["C", 1], ["C", 1], ["C", 1], ["C", 2]]))]).toEqual([1]);
     expect([...overBonded(star({ el: "I" }, [["N", 1], ["N", 1], ["N", 1]]))]).toEqual([1]);
   });
 

@@ -269,19 +269,22 @@ function valenceAs(v: { group: number }, valence: number, charge: number, radica
   return valence;
 }
 
-/** The highest valence an element below the second row takes, past its own: SiF6 2-'s six, P(V), S(VI), I(VII). */
-const HIGHEST: Record<string, number> = { Si: 6, P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
+/** The highest valence an element below the second row takes, past its own: P(V), S(VI), I(VII). */
+const HIGHEST: Record<string, number> = { P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
 
 /**
  * The most an atom's bonds' orders can sum to: its element's valence as its
  * charge and an unpaired electron leave it, counted as `implicitHydrogens`
  * counts them - or a heavier one's highest (P(V), S(VI), I(VII)), a charge
- * either way taking it further (PF6-); null for an element with no valence
+ * either way taking it further (PF6-), and a silicon's one more for each
+ * negative charge, to six (SiF6 2-); null for an element with no valence
  * here, a metal.
  */
 export function mostBonds(el: string, charge = 0, radical?: Radical): number | null {
   const v = VALENCE[el];
   if (!v) return null;
+  // (a silicon's four, and one more for each negative charge, to six: a siliconate's five, SiF6 2-'s six - a neutral one none past four)
+  if (el === "Si") return Math.min(6, 4 + Math.max(0, -charge)) - (radical === "doublet" ? 1 : radical ? 2 : 0);
   // (a heavier one's highest, its charge either way taking it further: PF6-'s six, a sulfonium's)
   const highest = HIGHEST[el];
   return highest != null ? highest + Math.abs(charge) - (radical === "doublet" ? 1 : radical ? 2 : 0) : valenceAs(v, v.valence, charge, radical);
