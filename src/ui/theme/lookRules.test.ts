@@ -83,13 +83,15 @@ describe("the look rules", () => {
     "refuse a control drawn by the browser or in place, and leave Meno's own",
     async () => {
       const [r] = await lookLint().lintText(
-        ['const a = <select />;', 'const b = <input type="checkbox" />;', 'const c = <button role="switch" />;', 'const d = <Switch on label="x" onChange={() => {}} />;', 'const e = <input type="text" />;'].join("\n"),
+        ['const a = <select />;', 'const b = <input type="checkbox" />;', 'const c = <button role="switch" />;', 'const d = <Switch on label="x" onChange={() => {}} />;', 'const e = <input type="text" />;', 'const f = <input type="number" />;', 'const g = <input type={n ? "number" : "text"} />;', 'const h = <NumberField value={1} onChange={() => {}} />;'].join("\n"),
         { filePath: "src/ui/example.tsx" },
       );
       expect(r.messages.map((m) => [m.line, m.message.split(":")[0]])).toEqual([
         [1, "A native <select>"],
         [2, "A native radio or checkbox"],
         [3, "A switch drawn in place"],
+        [6, "A native number field"],
+        [7, "A native number field"],
       ]);
     },
     measured(3_000),
