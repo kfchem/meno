@@ -2024,8 +2024,15 @@ page could not be read after one run.
     ends, so its ends are where they were. The lanes are in the order the
     wires turn in and out of them, so that they cross each other no more
     than they must. Where a way between frames has no room for lanes so
-    far apart, they are left as they ran. A wire moved into a lane, or out
-    of one as another comes or goes, is eased there by the drawing.
+    far apart, they are left as they ran; and a lane that would bring a
+    wire nearer a frame than its own way went - its turn round a frame's
+    corner - takes it only as far in as keeps that room. While a card or a
+    set is dragged, the wires not on it keep the lanes they had, and only
+    those it moves are put in lanes among them; all are put in lanes anew
+    once it is let go. A wire moved into a lane, or out of one, is eased
+    there by the drawing. So wires run together as little as there is room
+    for: where a way has no room for lanes, or the runs are into their
+    wires' ends, they still do.
   - **It keeps its way** while that is still clear: the side it passed
     what it goes round, unless the other side has become a fifth shorter.
     A card dragged past a set makes its wire change way twice at most.

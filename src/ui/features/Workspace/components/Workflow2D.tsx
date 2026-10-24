@@ -131,7 +131,7 @@ type Routed = { key: string; p: Pt; q: Pt; route: WireRouted };
  * by its drawing (`useEasedPoints`). Those of `keep` no longer given are
  * kept as they were, for a wire going to fade where it was.
  */
-function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoom: number, keep: readonly string[]): Map<string, Pt[]> {
+function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoom: number, keep: readonly string[], moving: boolean): Map<string, Pt[]> {
   const at = zoomStep(zoom);
   const routed = useRef(new Map<string, Routed>());
   const drawn = useRef(new Map<string, { of: string; pts: Pt[] }>());
@@ -186,11 +186,28 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
     invalidate();
   });
   // (those going round, into lanes: each wire's corners as moved - worked out again only where a way, or a frame, changed)
+  type Laned = { corners: Pt[]; p: Pt; q: Pt; key: string };
+  const lanes = useRef<{ of: string; laned: Map<string, Laned> } | null>(null);
+  // (while a card or a set is dragged, the lanes as they were when it began: those of wires not on it held there - their way, where that is
+  //  as it was, in its lane; else as it goes now - and only the wires it moves put in lanes among them; all put in lanes anew once it is let go)
+  const held = useRef<Map<string, Laned> | null>(null);
+  if (!moving) held.current = null;
+  else if (!held.current) held.current = new Map(lanes.current?.laned ?? []);
   const round = [...routed.current.entries()].filter(([, r]) => r.route.corners);
-  const lanesOf = `${round.map(([key, r]) => `${key}:${r.key}`).join("|")}#${framesHash(frames)}`;
-  const lanes = useRef<{ of: string; laned: Map<string, Pt[]> } | null>(null);
-  if (lanes.current?.of !== lanesOf) lanes.current = { of: lanesOf, laned: new Map(wireLanes(round.map(([, r]) => r.route.corners!), frames).map((c, i) => [round[i][0], c])) };
-  const laned = lanes.current.laned;
+  const holds = round.map(([key, r]) => {
+    const h = held.current?.get(key);
+    return h && h.p.x === r.p.x && h.p.y === r.p.y && h.q.x === r.q.x && h.q.y === r.q.y ? (h.key === r.key ? h.corners : r.route.corners!) : null;
+  });
+  const lanesOf = `${round.map(([key, r], i) => `${key}:${r.key}${holds[i] ? "*" : ""}`).join("|")}#${framesHash(frames)}`;
+  if (lanes.current?.of !== lanesOf) {
+    const put = wireLanes(
+      round.map(([, r], i) => holds[i] ?? r.route.corners!),
+      frames,
+      holds.map((h) => !!h),
+    );
+    lanes.current = { of: lanesOf, laned: new Map(round.map(([key, r], i) => [key, { corners: put[i], p: r.p, q: r.q, key: r.key }])) };
+  }
+  const laned = new Map([...lanes.current.laned].map(([key, l]) => [key, l.corners]));
   const out = new Map<string, Pt[]>();
   for (const [key, r] of routed.current) {
     const corners = laned.get(key);
@@ -621,6 +638,9 @@ export default function Workflow2D() {
     return true;
   };
 
+  // (a card or a set being dragged: the wires not on it kept in their lanes till it is let go - `useWirePoints`)
+  const [moving, setMoving] = useState(false);
+
   /** A set dragged by its tab, with all it holds; clicked, chosen. */
   const dragSet = (e: ReactPointerEvent, set: WorkflowSet) => {
     if (e.button !== 0) return;
@@ -630,10 +650,12 @@ export default function Workflow2D() {
     follow(
       e,
       (p) => {
+        setMoving(true);
         store.getState().moveSet(set.id, p.x - last.x, p.y - last.y, gesture);
         last = p;
       },
       (moved) => {
+        setMoving(false);
         if (!moved) store.getState().setWorkflowView({ chosenSet: set.id });
       },
     );
@@ -677,8 +699,12 @@ export default function Workflow2D() {
     const gesture = `${performance.now()}`;
     follow(
       e,
-      (p) => store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture),
+      (p) => {
+        setMoving(true);
+        store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture);
+      },
       (moved) => {
+        setMoving(false);
         if (!moved) open();
       },
     );
@@ -960,7 +986,7 @@ export default function Workflow2D() {
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);
-  const wirePoints = useWirePoints([...wireParts, ...(drawn ? [{ key: "drawn", p: drawn.p, q: drawn.q }] : [])], around, zoom, shownWires.map((w) => w.key));
+  const wirePoints = useWirePoints([...wireParts, ...(drawn ? [{ key: "drawn", p: drawn.p, q: drawn.q }] : [])], around, zoom, shownWires.map((w) => w.key), moving);
 
   return (
     <group>

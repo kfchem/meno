@@ -561,7 +561,7 @@ type Run = {
  * given lanes together, three times at most. The corners of each wire, as
  * many as it had.
  */
-export function wireLanes(wires: readonly (readonly Pt[])[], frames: readonly Side[]): Pt[][] {
+export function wireLanes(wires: readonly (readonly Pt[])[], frames: readonly Side[], held: readonly boolean[] = []): Pt[][] {
   const runs: Run[] = [];
   wires.forEach((c, w) => {
     for (let i = 0; i + 1 < c.length; i++) {
@@ -575,7 +575,7 @@ export function wireLanes(wires: readonly (readonly Pt[])[], frames: readonly Si
       const [before, after] = [c[i - 1], c[i + 2]];
       // (a run between two that turn off it may be moved - they then run longer or shorter; one into an end, or on in line with the next, not)
       const turns = (o: Pt | undefined) => !!o && Math.abs(side(o) - pos) > 1e-9;
-      const fixed = !turns(before) || !turns(after);
+      const fixed = !!held[w] || !turns(before) || !turns(after);
       // (its ends in order along it, and which way it turns off at each: towards the greater side, or the less - or not at all)
       const [first, last, off0, off1] = along(a) <= along(b) ? [a, b, before, after] : [b, a, after, before];
       const turn0 = turns(off0) ? Math.sign(side(off0!) - pos) : 0;
@@ -639,7 +639,41 @@ export function wireLanes(wires: readonly (readonly Pt[])[], frames: readonly Si
     for (const i of [r.at, r.at + 1]) if (r.dir === "v") out[r.wire][i].x = r.pos;
     else out[r.wire][i].y = r.pos;
   }
-  return out;
+  // (a wire its lane brings nearer a frame than its own way went: as far into its lane as keeps that room - three quarters, half, a quarter - else as it ran)
+  return out.map((c, w) => {
+    const was = wires[w];
+    if (c.every((pt, i) => pt.x === was[i].x && pt.y === was[i].y)) return c;
+    const room = clearOf(roundedWay(was), frames);
+    for (const k of [1, 0.75, 0.5, 0.25]) {
+      const part = k === 1 ? c : was.map((pt, i) => ({ x: pt.x + (c[i].x - pt.x) * k, y: pt.y + (c[i].y - pt.y) * k }));
+      const now = clearOf(roundedWay(part), frames);
+      if (now.every((d, f) => d >= Math.min(BETWEEN, room[f]) - 1e-9)) return part;
+    }
+    return was.map((pt) => ({ ...pt }));
+  });
+}
+
+/**
+ * How far a wire through `pts` keeps from each of `frames` - beyond where it
+ * meets its ends, as far as its curve's least handle (40 px): what it leaves
+ * and comes into it meets at its ends, and is never counted.
+ */
+function clearOf(pts: readonly Pt[], frames: readonly Side[]): number[] {
+  const [p, q] = [pts[0], pts[pts.length - 1]];
+  const meet = 40 * PX;
+  const away = pts.filter((pt) => Math.min(Math.hypot(pt.x - p.x, pt.y - p.y), Math.hypot(pt.x - q.x, pt.y - q.y)) > meet);
+  const xs = away.map((pt) => pt.x);
+  const ys = away.map((pt) => pt.y);
+  const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  return frames.map((f) => {
+    // (one its way ends on - what it leaves or comes into: not counted; one far off: as far as it is)
+    const on = (e: Pt) => e.x >= f.x0 - 1e-9 && e.x <= f.x1 + 1e-9 && e.y >= f.y0 - 1e-9 && e.y <= f.y1 + 1e-9;
+    if (on(p) || on(q)) return Infinity;
+    if (f.x0 > box.x1 + BETWEEN || f.x1 < box.x0 - BETWEEN || f.y0 > box.y1 + BETWEEN || f.y1 < box.y0 - BETWEEN) return Infinity;
+    let d = Infinity;
+    for (const pt of away) d = Math.min(d, Math.hypot(Math.max(f.x0 - pt.x, 0, pt.x - f.x1), Math.max(f.y0 - pt.y, 0, pt.y - f.y1)));
+    return d;
+  });
 }
 
 /**

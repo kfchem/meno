@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BETWEEN, WIRE_LANE, wireLanes } from "./look";
+import { BETWEEN, PX, WIRE_LANE, roundedWay, wireLanes } from "./look";
 
 // (a wire's corners in page units: out level, a run down at `x`, then across and in level)
 const down = (x: number, from: { x: number; y: number }, to: { x: number; y: number }) => [from, { x, y: from.y }, { x, y: to.y }, to];
@@ -54,6 +54,45 @@ describe("wires moved into lanes", () => {
     expect(na).toEqual(a);
     expect(nb[2].y).toBeCloseTo(WIRE_LANE, 9);
     expect(nb[3].y).toBeCloseTo(WIRE_LANE, 9);
+  });
+
+  it("holds a wire held - as one not on a card being dragged - where it is: another takes a lane beside it", () => {
+    const a = down(10, { x: 0, y: 10 }, { x: 20, y: -10 });
+    const b = down(10, { x: 0, y: 8 }, { x: 20, y: -12 });
+    const [na, nb] = wireLanes([a, b], [], [true, false]);
+    expect(na).toEqual(a);
+    expect(Math.abs(xOfRun(nb) - 10)).toBeCloseTo(WIRE_LANE, 9);
+  });
+
+  it("never brings a wire nearer a frame than its own way went: only as far into its lane as keeps that room - a case from the sweep", () => {
+    // (page pixels: a page of the sweep - eight wires among eight frames; a lane would put one wire's turn under a set's corner, nearer than half a bond)
+    const at = (pts: [number, number][]) => pts.map(([x, y]) => ({ x: x * PX, y: y * PX }));
+    const wires = [
+      at([[955, 28], [1003, 28], [1003, -93], [83, -93], [83, 3], [131, 3]]),
+      at([[617, 306], [665, 306], [665, 71], [83, 71], [83, -17], [131, -17]]),
+      at([[339, 3], [387, 3], [387, 242], [743, 242], [743, 568], [768, 568]]),
+      at([[955, 28], [1003, 28], [1003, -93], [-48, -93], [-48, 396], [0, 396]]),
+      at([[946, 568], [994, 568], [994, 386], [788, 386], [788, 281], [836, 281]]),
+      at([[1044, 281], [1092, 281], [1092, 357], [384, 357], [384, 161], [432, 161]]),
+      at([[550, 161], [598, 161], [598, 242], [426, 242], [426, 513], [509, 513]]),
+      at([[717, 513], [743, 513], [743, 242], [384, 242], [384, 161], [432, 161]]),
+    ];
+    const frames = [[432, 550, 112, 211], [474, 617, 273, 339], [768, 946, 462, 673], [761, 955, -43, 99], [131, 339, -45, 31], [0, 208, 348, 424], [836, 1044, 233, 309], [509, 717, 465, 541]].map(([x0, x1, y0, y1]) => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX }));
+    const near = (c: { x: number; y: number }[]) => {
+      const pts = roundedWay(c);
+      const [p, q] = [pts[0], pts[pts.length - 1]];
+      // (beyond where it meets its ends: 40 px - and from frames other than those it ends on)
+      const away = pts.filter((pt) => Math.min(Math.hypot(pt.x - p.x, pt.y - p.y), Math.hypot(pt.x - q.x, pt.y - q.y)) > 40 * PX);
+      const on = (f: (typeof frames)[number], e: { x: number; y: number }) => e.x >= f.x0 - 1e-9 && e.x <= f.x1 + 1e-9 && e.y >= f.y0 - 1e-9 && e.y <= f.y1 + 1e-9;
+      return frames.filter((f) => !on(f, p) && !on(f, q)).map((f) => Math.min(...away.map((pt) => Math.hypot(Math.max(f.x0 - pt.x, 0, pt.x - f.x1), Math.max(f.y0 - pt.y, 0, pt.y - f.y1)))));
+    };
+    const laned = wireLanes(wires, frames);
+    laned.forEach((c, w) => {
+      const was = near(wires[w]);
+      near(c).forEach((d, f) => expect(d).toBeGreaterThanOrEqual(Math.min(BETWEEN, was[f]) - 1e-9));
+    });
+    // (and some were put in lanes still)
+    expect(laned.some((c, w) => JSON.stringify(c) !== JSON.stringify(wires[w]))).toBe(true);
   });
 
   it("leaves wires apart as they are, and runs along different stretches", () => {
