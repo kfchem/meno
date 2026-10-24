@@ -39,7 +39,7 @@ export type PageStructure = {
 const REACH = 1 / 3;
 
 /** Something on the page outside a structure's own figure - words, or lines - and what its words say, where they are words. */
-export type Beside = { box: Box; text?: string };
+export type Beside = { box: Box; text?: string; kind?: PageObject["kind"] };
 
 /** How far a segment lies from a box: naught where it crosses it. */
 function segmentToBox(a: Point, b: Point, box: Box): number {
@@ -66,6 +66,8 @@ export type PageMarks = { segments: [Point, Point][]; points: Point[]; boxes: Bo
 
 /** How far from a structure a lone labelled atom - an ion beside it, Na+ by an acetate - may be and still be its, in bonds as drawn. */
 const LONE_JOINS = 1.6;
+/** How far an ion set level with the atom of a structure nearest it - a salt's counter-ion beside it in a row, NMe4+ Br- - may be, in bonds. */
+const ION_ROW = 3;
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 
@@ -107,8 +109,9 @@ export type Apart = { segments: readonly [Point, Point][]; pluses: readonly Poin
 
 /**
  * The atoms of a figure read, in its structures: each atom's structure's place, by atom - none that is one line with no label,
- * nor a lone labelled atom by no structure. A lone labelled atom is the structure's it lies by, within LONE_JOINS bonds, with
- * no arrow nor "+" between them (`apart`): an ion (Na+, Cl-) where the ions so by it make it neutral - the structure carrying
+ * nor a lone labelled atom by no structure. A lone labelled atom is the structure's it lies by, within LONE_JOINS bonds (an ion
+ * level with the atom nearest it, ION_ROW), with no arrow nor "+" between them (`apart`): an ion (Na+, Cl-) where the ions so
+ * by it make it neutral - the structure carrying
  * their charge the other way, an ammonium's Cl-, a carboxylate's Na+ - and else its own: never a neutral molecule's, nor
  * across a scheme.
  */
@@ -129,21 +132,28 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
   // (each lone labelled atom by the structure nearest it, the way clear; those by each, nearest first)
   const by = new Map<number[], { i: number; d: number }[]>();
   const alone: number[] = [];
-  // (the box round the figure's bonds: a lone label within it, or within LONE_JOINS bonds of a structure, may be an ion of its
+  // (the box round the figure's bonds: a lone label within it, or as near a structure as it may be its, may be an ion of its
   // own; one further out - a word of a caption or a table, "Na+" - is words, as any other is)
   const xs = [...bonded].map((i) => f.atoms[i].x);
   const ys = [...bonded].map((i) => f.atoms[i].y);
+  const lengths = f.bonds.map((b) => dist(f.atoms[b.a], f.atoms[b.b])).sort((p, q) => p - q);
+  const between = lengths.length ? lengths[Math.floor(lengths.length / 2)] : f.bond;
   const drawn = (p: Point) => xs.length > 0 && p.x >= Math.min(...xs) && p.x <= Math.max(...xs) && p.y >= Math.min(...ys) && p.y <= Math.max(...ys);
   f.atoms.forEach((a, i) => {
     if (bonded.has(i) || !a.label) return;
     let best: number[] | null = null;
-    let near = LONE_JOINS * f.bond;
+    let near = Infinity;
     let candidate = drawn(a);
+    // (an ion set level with the atom nearest it, a salt's counter-ion in a row with it, as far as ION_ROW bonds - bonds from atom
+    // to atom, as all of them drawn short to labels are longer than their lines)
+    const ion = chargeOf(a) !== 0;
     for (const g of found) {
       const j = g.reduce((m, k) => (dist(a, f.atoms[k]) < dist(a, f.atoms[m]) ? k : m), g[0]);
       const d = dist(a, f.atoms[j]);
-      if (d <= LONE_JOINS * f.bond) candidate = true;
-      if (d <= near && clear(a, f.atoms[j])) [best, near] = [g, d];
+      const reach = ion && Math.abs(a.y - f.atoms[j].y) <= 0.5 * f.bond ? ION_ROW * Math.max(f.bond, between) : LONE_JOINS * f.bond;
+      if (d > reach) continue;
+      candidate = true;
+      if (d < near && clear(a, f.atoms[j])) [best, near] = [g, d];
     }
     if (best) by.set(best, [...(by.get(best) ?? []), { i, d: near }]);
     else if (candidate) alone.push(i);
@@ -219,7 +229,7 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
     // (all of the page whose middle is not within this figure - its own labels' boxes, a letter's full height, may pass its edge a
     // little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
     // (a "+" written between a scheme's compounds is none of that: no line of a structure cut in two)
-    const beside = made.objects.filter((o) => o.kind !== "plus" && !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    const beside = made.objects.filter((o) => o.kind !== "plus" && !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, kind: o.kind, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
     const read = figureOn(drawn, k, sha256, page, beside, known);
     // (and the words of the page within this figure that are none of a structure's labels, at one of its open ends: a label
     // its figure's drawing did not hold, the structure refused - a compound's number aside)
@@ -336,10 +346,14 @@ function endWordsChecked(st: PageStructure, own: readonly PageObject[], wordsIn?
  * labels: the page's figures may have been cut through it there (a label
  * wider than a figure's word between its two halves), and the rest of it
  * be in another figure. Never half a molecule: refused, the words named.
+ * Lines whose box holds all of the structure - its bonds and its labels -
+ * are none of that: a page's background, a frame round it, a coloured panel
+ * behind it and its neighbours. Lines that cross into it still count.
  */
 function besideChecked(st: PageStructure, beside: readonly Beside[], bond: number): PageStructure {
   if ("none" in st.read) return st;
-  const near = beside.find((b) => boxToBox(b.box, st.box) <= bond && (st.atoms.some((a) => toBox(a, b.box) <= bond) || st.labels.some((l) => boxToBox(l, b.box) <= bond) || st.bonds.some(([a, c]) => segmentToBox(a, c, b.box) <= bond)));
+  const behind = (b: Beside) => b.kind !== "text" && b.text == null && b.box[0] <= st.box[0] && b.box[1] <= st.box[1] && b.box[2] >= st.box[2] && b.box[3] >= st.box[3];
+  const near = beside.find((b) => !behind(b) && boxToBox(b.box, st.box) <= bond && (st.atoms.some((a) => toBox(a, b.box) <= bond) || st.labels.some((l) => boxToBox(l, b.box) <= bond) || st.bonds.some(([a, c]) => segmentToBox(a, c, b.box) <= bond)));
   if (!near) return st;
   const what = near.text?.trim() ? `"${near.text.trim()}" lies beside it` : "lines drawn beside it lie outside its figure";
   return { ...st, read: { none: `Part of this structure could not be read (${what}), so none of it is taken.` } };

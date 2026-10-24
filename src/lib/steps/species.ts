@@ -46,3 +46,16 @@ export function speciesTyped(charge: string, multiplicity: string): { given: Spe
   }
   return { given };
 }
+
+/**
+ * What a Species step still needs before it can run, its charge and
+ * multiplicity as typed - one that does not read, or neither given - or
+ * nothing, where it can: what its card says where it would say *Ready*,
+ * and why its run is refused.
+ */
+export function speciesNeeds(charge: string, multiplicity: string): string | undefined {
+  const typed = speciesTyped(charge, multiplicity);
+  if ("why" in typed) return typed.why;
+  if (typed.given.charge == null && typed.given.multiplicity == null) return "Give a charge, a multiplicity, or both";
+  return undefined;
+}

@@ -62,7 +62,7 @@ describe("Filter", () => {
     const out = filter(named, { conditions: [{ property: "name", compare: "=", value: "start" }], match: "all" });
     expect(out.ok && ids(out.exits.kept)).toEqual(["x"]);
     expect(filter(named, { conditions: [{ property: "name", compare: "<", value: "s" }], match: "all" })).toEqual({ ok: false, said: "name < s: a text or true/false is compared by = or ≠ alone" });
-    expect(filter(named, { conditions: [], match: "all" })).toEqual({ ok: false, said: "No condition to filter by" });
+    expect(filter(named, { conditions: [], match: "all" })).toEqual({ ok: false, said: "No conditions yet" });
   });
 
   it("does not read a property that failed as a value", () => {

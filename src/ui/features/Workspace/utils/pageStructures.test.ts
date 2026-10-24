@@ -88,6 +88,71 @@ describe("the structures of a figure, each taken whole", () => {
     });
   });
 
+  describe("a salt drawn with its counter-ion in a row beside it, more than 1.6 bonds off", () => {
+    const L = 14.4;
+    type P = [number, number];
+    const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+    const step = (p: P, deg: number): P => [p[0] + L * Math.cos((deg * Math.PI) / 180), p[1] - L * Math.sin((deg * Math.PI) / 180)];
+    const towards = (p: P, q: P, share = 0.6): P => [p[0] + (q[0] - p[0]) * share, p[1] + (q[1] - p[1]) * share];
+    const letters = (text: string, [x, y]: P) => [...text].map((c, i) => ({ c, box: [x - 3.4 + 6.8 * i, y - 3.6, x + 3.4 + 6.8 * i, y + 3.6] as [number, number, number, number], at: [x - 3.4 + 6.8 * i, y + 3.6] as [number, number], size: 10 }));
+    /** A bond from `p` to `q`, short of a label at either end. */
+    const bond = (p: P, q: P, labelled: [boolean, boolean] = [false, false]) => stroke(labelled[0] ? towards(q, p) : p, labelled[1] ? towards(p, q) : q);
+    /** A second line beside a bond, `by` to its left: a double bond's. */
+    const beside = (p: P, q: P, by = 1.8) => {
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const [nx, ny] = [(-(q[1] - p[1]) / l) * by, ((q[0] - p[0]) / l) * by];
+      return stroke([p[0] + nx, p[1] + ny], [q[0] + nx, q[1] + ny]);
+    };
+    /** A six-membered ring about `c`, its first atom at the right. */
+    const ring = (c: P): P[] => [0, 1, 2, 3, 4, 5].map((k): P => [c[0] + L * Math.cos((k * Math.PI) / 3), c[1] - L * Math.sin((k * Math.PI) / 3)]);
+    const one = (drawn: FigureDrawn) => structuresOf(drawn, 0, "pdf", 0, []).map((s) => [formula(s), read(s).atoms.reduce((t, a) => t + (a.charge ?? 0), 0)]);
+    /** An ion's label 2.4 bonds to the right of `p`, level with it. */
+    const right = (p: P, ion: string) => letters(ion, [p[0] + 2.4 * L, p[1]]);
+
+    it("takes the Br- of tetramethylammonium bromide with it: NMe4+ Br- one structure, neutral", () => {
+      const n: P = [150, 200];
+      const ends = [step(n, 0), step(n, 90), step(n, 180), step(n, 270)];
+      const drawn: FigureDrawn = { paths: ends.map((e) => bond(e, n, [false, true])), letters: [...letters("N+", n), ...right(ends[0], "Br−")], pictures: [] };
+      expect(one(drawn)).toEqual([["Br1 C4 N1", 0]]);
+    });
+
+    it("takes the Cl- of pyridinium chloride with it", () => {
+      const r = ring([150, 200]);
+      const paths = r.map((p, k) => bond(p, r[(k + 1) % 6], [k === 0, k === 5]));
+      const drawn: FigureDrawn = { paths: [...paths, beside(r[1], r[2], -1.8), beside(r[3], r[4], -1.8)], letters: [...letters("N+", r[0]), ...right(r[0], "Cl−")], pictures: [] };
+      expect(one(drawn)).toEqual([["C5 Cl1 N1", 0]]);
+    });
+
+    it("takes the Na+ of sodium benzoate with it", () => {
+      const r = ring([120, 200]);
+      const c = step(r[0], 0);
+      const o1 = step(c, 60);
+      const o2 = step(c, -60);
+      const paths = [...r.map((p, k) => bond(p, r[(k + 1) % 6])), bond(r[0], c), bond(c, o1, [false, true]), beside(c, towards(c, o1), 1.8), bond(c, o2, [false, true])];
+      const drawn: FigureDrawn = { paths, letters: [...letters("O", o1), ...letters("O−", o2), ...right(o2, "Na+")], pictures: [] };
+      expect(one(drawn)).toEqual([["C7 Na1 O2", 0]]);
+    });
+
+    it("takes the K+ of a potassium enolate with it", () => {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const o = step(b, -30);
+      const drawn: FigureDrawn = { paths: [bond(a, b), beside(a, b, -1.8), bond(b, o, [false, true])], letters: [...letters("O−", o), ...right(o, "K+")], pictures: [] };
+      expect(one(drawn)).toEqual([["C2 K1 O1", 0]]);
+    });
+
+    it("but leaves a counter-ion as far off not level with the structure a word, and one by a neutral molecule its own", () => {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const o = step(b, -30);
+      const enolate = [bond(a, b), beside(a, b, -1.8), bond(b, o, [false, true])];
+      const below: FigureDrawn = { paths: enolate, letters: [...letters("O−", o), ...letters("K+", [o[0] + 2 * L, o[1] + 1.4 * L])], pictures: [] };
+      expect(one(below)).toEqual([["C2 O1", -1]]);
+      const neutral: FigureDrawn = { paths: enolate, letters: [...letters("OH", o), ...right(o, "Br−")], pictures: [] };
+      expect(one(neutral).sort()).toEqual([["Br1", -1], ["C2 O1", 0]]);
+    });
+  });
+
   it("finds none in one line with no label - a chart's tick, a table's rule - nor in a lone word: they are no structures", () => {
     const line: FigureDrawn = { paths: [{ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 100, 100], ["L", 120, 100]] }], letters: [], pictures: [] };
     expect(structuresOf(line, 0, "pdf", 0, [])).toEqual([]);
@@ -215,6 +280,31 @@ describe("every structure on a page", () => {
     const figureB = [figure[2] + 50, y - 10, figure[2] + 60 + 3 * bond, y + 10] as [number, number, number, number];
     const { structures } = pageStructuresOf({ objects: [label, halfB], wordsIn: () => "OSiPh2tBu" }, [figure, figureB], (k) => (k === 0 ? drawn : null), "pdf", 0);
     expect("none" in structures[0].read).toBe(true);
+  });
+
+  it("reads a structure whole on a page with a background behind all of it - three full-page paths, as a browser prints a page", () => {
+    const page = { kind: "path" as const, box: [0, 0, 612, 792] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [page, page, page, { kind: "path", box: whole.box }] }, [figure], () => drawn, "pdf", 0);
+    expect("model" in structures[0].read).toBe(true);
+  });
+
+  it("reads a structure whole in a frame drawn round it, and two whole on a coloured panel behind both", () => {
+    const frame = { kind: "path" as const, box: [figure[0] - 0.5 * bond, figure[1] - 0.5 * bond, figure[2] + 0.5 * bond, figure[3] + 0.5 * bond] as [number, number, number, number] };
+    expect("model" in pageStructuresOf({ objects: [frame] }, [figure], () => drawn, "pdf", 0).structures[0].read).toBe(true);
+    // (the same structure again, four bonds to the right, in a figure of its own: a panel behind both, its middle between them)
+    const shift = (b: [number, number, number, number], dx: number) => [b[0] + dx, b[1], b[2] + dx, b[3]] as [number, number, number, number];
+    const dx = figure[2] - figure[0] + 4 * bond;
+    const moved: FigureDrawn = { ...drawn, paths: drawn.paths.map((p) => ({ ...p, d: p.d.map((st) => (st[0] === "Z" ? st : ([st[0], st[1] + dx, st[2]] as typeof st))) })), letters: drawn.letters.map((l) => ({ ...l, box: shift(l.box, dx), at: l.at ? ([l.at[0] + dx, l.at[1]] as [number, number]) : l.at })) };
+    const panel = { kind: "shading" as const, box: [figure[0] - bond, figure[1] - bond, figure[2] + dx + bond, figure[3] + bond] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [panel] }, [figure, shift(figure, dx)], (k) => (k === 0 ? drawn : moved), "pdf", 0);
+    expect(structures.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("still refuses a structure where lines cross into it from outside its figure, though a background lies behind all", () => {
+    const page = { kind: "path" as const, box: [0, 0, 612, 792] as [number, number, number, number] };
+    const crossing = { kind: "path" as const, box: [figure[2] - 0.5 * bond, y - 2, figure[2] + 3 * bond, y + 2] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [page, crossing] }, [figure], () => drawn, "pdf", 0);
+    expect(structures[0].read).toEqual({ none: "Part of this structure could not be read (lines drawn beside it lie outside its figure), so none of it is taken." });
   });
 
   it("reads a structure whole where all else on the page lies far from it", () => {
