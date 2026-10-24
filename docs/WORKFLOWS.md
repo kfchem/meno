@@ -216,6 +216,9 @@ As Meno's own things look (decided: 15), not as the figures here do:
   *How it was made* (the method, seed and what was kept, as what made it
   says them) stays shut under its name until its chevron opens it,
   eased: the card keeps to what the molecule is, and leaves it in view.
+  Opening and shutting, its width and its height go together - one time
+  and one curve (theme/motion), each the same part of the way at every
+  frame - its width known from the start, never measured as it grows.
 
 Everything comes and goes as Meno's things do (theme/motion): a set, a
 step and a wire fade in where they are put; a state changes its words

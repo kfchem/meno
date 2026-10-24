@@ -1,5 +1,6 @@
 import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { forwardRef, useState } from "react";
+import { EASED } from "../../../theme/motion";
 
 /**
  * A card's rows, group by group: each row its name and its value, written;
@@ -37,16 +38,16 @@ function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number][
       <button
         type="button"
         aria-expanded={open}
-        className="flex items-center gap-0.5 text-[10px] text-gh-gray hover:text-gh-black transition-colors duration-150 ease-out"
+        className="flex items-center gap-0.5 text-[10px] text-gh-gray hover:text-gh-black transition-colors duration-150 ease-meno"
         onClick={(e) => {
           e.stopPropagation();
           setOpen((o) => !o);
         }}
       >
-        <ChevronRightIcon className={`h-2.5 w-2.5 transition-transform duration-200 ease-out ${open ? "rotate-90" : ""}`} strokeWidth={2.5} />
+        <ChevronRightIcon className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-90" : ""}`} style={EASED} strokeWidth={2.5} />
         {group}
       </button>
-      <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-out" style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}>
+      <div className="grid transition-[grid-template-rows,opacity]" style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}>
         <div className="overflow-hidden">
           <Rows rows={rows} />
         </div>

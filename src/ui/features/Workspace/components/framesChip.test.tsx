@@ -84,6 +84,15 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain('<div class="text-[10px] text-gh-gray">Energies</div>');
   });
 
+  it("eases its width and its rows' height in one time and one curve, and measures what its details say whole - never as squeezed by its own width", () => {
+    const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
+    const html = renderToString(<FramesChip count={3} frame={0} energies={[0, 0.001, 0.002]} open={false} onFrame={none} made={made} conformers />);
+    // (the chip's width, its bars' rows, its details' rows and the fold: each 160 ms on Meno's curve, none other)
+    expect(html.match(/transition-duration:160ms;transition-timing-function:var\(--ease-meno\)/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(html).not.toMatch(/duration-200|ease-out/);
+    expect(html).toMatch(/class="w-max max-w-\[20rem\] shrink-0/);
+  });
+
   it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {
     const kcal = (e: number) => e / 627.509474;
     const energies = [0, kcal(0.5), kcal(1.2)];
