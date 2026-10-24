@@ -14,5 +14,8 @@ export const WORDS_LEAST = 0.75;
 /** How many screen pixels a page pixel is drawn as, at `zoom` (the canvas's orthographic camera's). */
 export const pageScale = (zoom: number) => zoom * PAGE_PX;
 
+/** The scales a molecule's notes are drawn at, as the page is between them (Molecule3DView): never smaller than three quarters, nor larger than half as large again. */
+export const NOTES_SCALE = { least: 0.75, most: 1.5 } as const;
+
 /** Whether the words of chips and cards on the page are too small to read at `zoom`. */
 export const wordsTooSmall = (zoom: number) => pageScale(zoom) < WORDS_LEAST;
