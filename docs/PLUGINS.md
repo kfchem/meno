@@ -41,8 +41,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
   another plugin, and knows of none (the maintainer, 2026-10-06).
   Examples: RDKit, cclib, PySCF. A plugin may also run nothing and bring
   data alone - a guide, a catalogue: Getting started.
-- **Guide** - steps a plugin brings, shown once in a card of Meno's
-  (*A plugin's guide*).
+- **Guide** - steps a plugin brings, shown when asked in a card of
+  Meno's (*A plugin's guide*).
 - **Catalogue** - the plugins a plugin suggests, and the kinds of file it
   suggests them for (*A plugin's catalogue*).
 - **Meno's own parts** - what comes with Meno and fills roles too: its
@@ -263,12 +263,13 @@ page itself.
 - **A step may offer plugins to add** (`suggest`, by id), each with what
   its plugin's catalogue says it is for, and Add, which asks for the
   network as adding always does.
-- **Once.** A plugin's guide is shown the first time the plugin is there:
-  on Meno's first start for one that comes added, or as soon as one that
-  brings a guide is added. Gone through or skipped - Skip, or Escape where
-  nothing else takes it (the maintainer, 2026-10-13) - it is kept as shown
-  (settings `plugins.guided`). Settings, *Plugins*, shows it again
-  (*Show*), with a workspace brought to the front.
+- **Only when asked.** A plugin's guide is shown from Settings, *Plugins*
+  (*Show*), with a workspace brought to the front - never of itself: not
+  on Meno's first start, nor as its plugin is added (2026-10-24; before,
+  each was shown once of itself, and Meno opened on its first step). It
+  closes when gone through or skipped - Skip, or Escape where nothing else
+  takes it (the maintainer, 2026-10-13) - and when its plugin is taken
+  away.
 - **Meno's question about keeping itself up to date** waits until a guide
   is closed.
 
@@ -278,9 +279,9 @@ start, that can be removed like any other). It runs nothing. Its steps:
 double-click on empty space for Quick Add; Chain and SMILES there; press
 and hold to select a structure; a right-click menu and its row of icons;
 Save, with Settings beside it; the plugins to add first - RDKit, cclib,
-xTB. It is shown once to everyone, those who used Meno before included.
-Taken away, no guide is shown, and no plugin is suggested for a file
-(*A plugin's catalogue*).
+xTB. It is shown when asked, as every guide is: Meno's first start
+opens on the page alone. Taken away, its guide is not offered, and no
+plugin is suggested for a file (*A plugin's catalogue*).
 
 ## A plugin's catalogue
 
@@ -1128,8 +1129,8 @@ By the maintainer, 2026-10-10 (lane L6):
    one worker for each plugin; the same checks in Meno and its backend.
    The plugins Meno carries were rewritten in it, and behave as before.
 10. **The first-run guide is a plugin**, Getting started, there from the
-    start and removable like any other; its guide is shown once to
-    everyone (*A plugin's guide*).
+    start and removable like any other; its guide was shown once to
+    everyone, and since 2026-10-24 only when asked (*A plugin's guide*).
 11. **The plugins to suggest are a catalogue's**, Getting started's: what
     a file is, where no plugin added reads it, is told only by the
     catalogues of the plugins added - their own marks - never by the
