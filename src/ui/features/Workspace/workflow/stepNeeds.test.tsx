@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { WorkflowStep } from "../store/types";
 import StepCard from "./StepCard";
-import { kindInfo, needsOf, optionsOf, type StepKind } from "./kinds";
+import { howOf, kindInfo, needsOf, optionsOf, type StepKind } from "./kinds";
 import { speciesSet } from "./structureSteps";
 import { filter, filterNeeds } from "../../../../lib/nodes/filter";
 import { tag, tagNeeds } from "../../../../lib/nodes/tag";
@@ -23,7 +23,7 @@ function card(s: WorkflowStep): string {
       step={s}
       info={info}
       who="Meno"
-      how=""
+      how={howOf(info.options ?? [], s.options, info.how)}
       state="ready"
       compact={false}
       open={false}
@@ -97,10 +97,16 @@ describe("what a step still needs before it can run", () => {
       expect(speciesSet([], "molecules", charge, multiplicity)).toEqual({ ok: false, said: needsOf(step("species", { charge, multiplicity })) });
   });
 
-  it("is said on the card where Ready would be - never Ready while it cannot run", () => {
+  it("is said on the card where Ready would be - never Ready while it cannot run - and once: its summary its kind alone", () => {
     const needing = card(step("species"));
     expect(needing).toContain("Give a charge, a multiplicity, or both");
     expect(needing).not.toContain(">Ready<");
+    // (as shown: in the card's words, not its tooltips)
+    const shown = (html: string, words: string) => html.replace(/<[^>]*>/g, "\n").split("\n").filter((t) => t.includes(words)).length;
+    expect(shown(needing, "Give a charge, a multiplicity, or both")).toBe(1);
+    expect(shown(card(step("filter")), "No conditions yet")).toBe(1);
+    // (how it works, said where it can run)
+    expect(card(step("species", { charge: "0" }))).toContain("Species \u00b7 Charge 0, its own multiplicity");
     expect(card(step("species", { charge: "0" }))).toContain(">Ready<");
   });
 });
