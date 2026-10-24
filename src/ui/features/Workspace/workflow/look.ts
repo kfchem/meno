@@ -246,14 +246,40 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
     const fs = nearIn(pts);
     return fs.length ? pts.reduce((k, pt) => k + fs.reduce((j, f) => j + (within(grown.get(f)!, pt) ? (within(f, pt) ? 10 : 1) : 0), 0), 0) : 0;
   };
+  // (how far it runs over them, each point for half its steps either side: to weigh ways of different lengths - a longer way's points lie
+  //  further apart, and counted, would take it for less over what it passes the same)
+  const overAlong = (pts: readonly Pt[]) => {
+    const fs = nearIn(pts);
+    if (!fs.length) return 0;
+    const step = (i: number) => (i > 0 && i < pts.length ? Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) : 0);
+    return pts.reduce((k, pt, i) => k + ((step(i) + step(i + 1)) / 2) * fs.reduce((j, f) => j + (within(grown.get(f)!, pt) ? (within(f, pt) ? 10 : 1) : 0), 0), 0);
+  };
+  // (never out past both its ends and back again round nothing: where the way it would go does, straight across at the level of the one end
+  //  or the other instead, where that runs on one way across and is over what it passes no further)
+  const straight = (r: WireRouted): WireRouted => {
+    if (!r.corners || !doublesBack(r.corners, [...[ends.from, ends.to].filter((f): f is Side => !!f), ...others])) return r;
+    let best = r;
+    let least = overAlong(r.pts);
+    for (const y of [p.y, q.y]) {
+      const w = roundWay(p, q, ends, "between", others, y);
+      // (up or down where it leaves, across at its input's level; or across at the level it leaves at, and up or down a bond before its input)
+      const leg = y === q.y ? w.corners[1].x : w.corners[3].x;
+      if (!(leg > p.x && leg < q.x)) continue;
+      const corners = turnsOf([p, { x: leg, y: p.y }, { x: leg, y: q.y }, q]);
+      const pts = rounded(corners, WIRE_ROOM, DENSE);
+      const o = overAlong(pts);
+      if (o < least || (o === least && lengthOf(pts) < lengthOf(best.pts))) [best, least] = [{ pts, way: w.side, corners }, o];
+    }
+    return best;
+  };
   if (!crossed.length) {
     // (the curve clear: kept, unless it went round before and still can, no more than a fifth longer)
     if (was && was !== "plain") {
       const kept = roundWay(p, q, ends, wasSide, touchedBefore(others, p, q));
       const pts = rounded(kept.corners, WIRE_ROOM, DENSE);
-      if (over(pts) === 0 && lengthOf(pts) * 0.8 <= lengthOf(shape)) return { pts, way: kept.side, corners: kept.corners };
+      if (over(pts) === 0 && lengthOf(pts) * 0.8 <= lengthOf(shape)) return straight({ pts, way: kept.side, corners: kept.corners });
     }
-    return { pts: shape, way: "plain", ...(back ? { corners: back.corners } : {}) };
+    return back ? straight({ pts: shape, way: "plain", corners: back.corners }) : { pts: shape, way: "plain" };
   }
   // (every level it may cross at, gone round all it would cross - the shortest first, by its corners, and no further than the first clear of all,
   //  and of the side it passed before; where none is clear, again with what any of them crosses then, twice at most)
@@ -291,8 +317,43 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   const best = scored.reduce((x, y) => (y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x));
   // (the side it passed before, kept where it is clear - or no worse - and the other is not a fifth shorter)
   const kept = wasSide && scored.filter((r) => r.side === wasSide).reduce<(typeof scored)[number] | undefined>((x, y) => (!x || y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x), undefined);
-  if (kept && kept !== best && (kept.over === 0 || kept.over <= best.over) && kept.length * 0.8 <= best.length) return { pts: kept.pts, way: kept.side, corners: kept.corners };
-  return { pts: best.pts, way: best.side, corners: best.corners };
+  if (kept && kept !== best && (kept.over === 0 || kept.over <= best.over) && kept.length * 0.8 <= best.length) return straight({ pts: kept.pts, way: kept.side, corners: kept.corners });
+  return straight({ pts: best.pts, way: best.side, corners: best.corners });
+}
+
+/** A way's corners with those it does not turn at left out: one where the one before is, or on the line on from it. */
+function turnsOf(corners: readonly Pt[]): Pt[] {
+  const c = corners.filter((pt, i) => i === 0 || Math.hypot(pt.x - corners[i - 1].x, pt.y - corners[i - 1].y) > 1e-9);
+  return c.filter((b, i) => {
+    if (i === 0 || i === c.length - 1) return true;
+    const [a, d] = [c[i - 1], c[i + 1]];
+    return Math.abs((b.x - a.x) * (d.y - b.y) - (b.y - a.y) * (d.x - b.x)) > 1e-12;
+  });
+}
+
+/**
+ * Whether a way through `corners` turns back on itself out past both its
+ * ends round nothing: a run it comes into and leaves going opposite ways
+ * - out and back - lying beyond both its ends that way, with none of
+ * `frames` within the turn, for it to have gone round.
+ */
+export function doublesBack(corners: readonly Pt[], frames: readonly Side[]): boolean {
+  const c = turnsOf(corners);
+  const [p, q] = [c[0], c[c.length - 1]];
+  for (let i = 1; i + 2 < c.length; i++) {
+    const [a, b, d, e] = [c[i - 1], c[i], c[i + 1], c[i + 2]];
+    // (a run across, or up and down: how it comes into it and leaves it, at right angles to it)
+    const across = Math.abs(d.y - b.y) < 1e-9;
+    const into = Math.sign(across ? b.y - a.y : b.x - a.x);
+    const from = Math.sign(across ? e.y - d.y : e.x - d.x);
+    if (!into || into !== -from) continue;
+    const at = across ? b.y : b.x;
+    if (!(across ? [p.y, q.y] : [p.x, q.x]).every((v) => (at - v) * into > 1e-9)) continue;
+    const [lo, hi] = across ? [Math.min(b.x, d.x), Math.max(b.x, d.x)] : [Math.min(b.y, d.y), Math.max(b.y, d.y)];
+    const round = frames.some((f) => (across ? f.x0 < hi && f.x1 > lo && (into < 0 ? f.y0 > at : f.y1 < at) : f.y0 < hi && f.y1 > lo && (into < 0 ? f.x0 > at : f.x1 < at)));
+    if (!round) return true;
+  }
+  return false;
 }
 
 /** What a wire going round may have gone round before: what stands between its ends, as it does now. */
@@ -509,6 +570,49 @@ function offEnds(from: readonly Pt[], to: readonly Pt[], i: number): Pt {
   const ex = (to[0].x - from[0].x) * (1 - s) + (to[n].x - from[n].x) * s;
   const ey = (to[0].y - from[0].y) * (1 - s) + (to[n].y - from[n].y) * s;
   return { x: to[i].x - from[i].x - ex, y: to[i].y - from[i].y - ey };
+}
+
+/**
+ * A wire as drawn (Workflow2D `useEasedPoints`): where it is to be - and
+ * where its shape changed by more than `jump` at once (it went round
+ * something else now, or its ends came to be one above the other), eased
+ * there from where it was over `ms` with `ease`, its ends where they are to
+ * be all the way (`wireToward`). Worked out for the moment it is drawn at,
+ * from where it is to be then: never from where it was to be a frame
+ * before, so that it is never drawn off its ports, however slow the
+ * frames, or however late what was worked out for them.
+ */
+export class WireEasing {
+  private from: { pts: readonly Pt[]; at: number } | null = null;
+  private was: readonly Pt[] | null = null;
+  private shown: readonly Pt[] | null = null;
+  constructor(
+    private readonly ms: number,
+    private readonly ease: (u: number) => number,
+  ) {}
+  /** Whether it is on its way. */
+  get going(): boolean {
+    return this.from !== null;
+  }
+  /** Its points drawn at `now` (ms), on their way to `target` - eased where its shape moved further than `jump` at once. */
+  at(target: readonly Pt[], jump: number, now: number): readonly Pt[] {
+    if (this.was !== target) {
+      // (as many points as it is drawn through now: where that changed - zoomed, or grown - what it is eased from spread over as many)
+      const spread = (pts: readonly Pt[]) => (pts.length === target.length ? pts : byTurn(pts, target.length - 1));
+      const going = this.from;
+      if (going) this.from = { pts: spread(going.pts), at: going.at };
+      else if (this.shown) {
+        const prior = spread(this.shown);
+        this.from = shapeMoved(prior, target) > jump ? { pts: prior, at: now } : null;
+      }
+      this.was = target;
+    }
+    const f = this.from;
+    const u = f ? Math.min(1, (now - f.at) / this.ms) : 1;
+    if (u >= 1) this.from = null;
+    this.shown = f && u < 1 ? wireToward(f.pts, target, this.ease(u)) : target;
+    return this.shown;
+  }
 }
 
 /**

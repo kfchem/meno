@@ -29,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, shapeMoved, WIRE_LANE, wireLanes, wireRoute, wireToward, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -73,36 +73,23 @@ const WIRE_JUMP_PX = 4;
  * now, or its ends came to be one above the other), eased there from where
  * it was over `DURATION.move` with `EASE`, so that a wire never jumps
  * (theme/motion). Its ends are where `target`'s are, always - only the rest
- * is eased (look `wireToward`), so that a wire dragged by its card never
- * comes away from its port; and a wire on its way somewhere goes on to where
- * it is now to go, in the time it was given, however often that moves.
+ * is eased (look `WireEasing`). Worked out as it is drawn, from the target
+ * of this drawing, not set for the next: so that a wire dragged by its
+ * card never comes away from its port, however slow the machine - an
+ * update set aside for later can wait behind a drag's, all the drag long.
  */
 function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
-  const [shown, setShown] = useState(target);
-  const from = useRef<{ pts: readonly Pt[]; at: number } | null>(null);
-  const was = useRef(target);
+  const easing = useRef<WireEasing | null>(null);
+  easing.current ??= new WireEasing(DURATION.move * 1000, (u) => eased(EASE, u));
+  const [, tick] = useState(0);
   const { invalidate } = useThree();
-  if (was.current !== target) {
-    const going = from.current;
-    // (as many points as it is drawn through now: where that changed - zoomed, or grown - what it is eased from spread over as many)
-    const spread = (pts: readonly Pt[]) => (pts.length === target.length ? pts : byTurn(pts, target.length - 1));
-    if (going) from.current = { pts: spread(going.pts), at: going.at };
-    else {
-      const prior = spread(shown);
-      from.current = shapeMoved(prior, target) > WIRE_JUMP_PX / zoom ? { pts: prior, at: performance.now() } : null;
-    }
-    was.current = target;
-    if (!from.current) setShown(target);
-  }
+  const pts = easing.current.at(target, WIRE_JUMP_PX / zoom, performance.now());
   useFrame(() => {
-    const f = from.current;
-    if (!f) return;
-    const u = Math.min(1, (performance.now() - f.at) / (DURATION.move * 1000));
-    setShown(wireToward(f.pts, target, eased(EASE, u)));
-    if (u >= 1) from.current = null;
+    if (!easing.current?.going) return;
+    tick((n) => n + 1);
     invalidate();
   });
-  return shown;
+  return pts;
 }
 
 /**
@@ -143,11 +130,17 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
   const whoOf = (key: string) => who.current.get(key) ?? who.current.set(key, {}).get(key)!;
   const [, redraw] = useState(0);
   const { invalidate } = useThree();
+  // (let go: every wire worked out anew, its way kept while dragged forgotten - those whose ends did not move as their turn comes; and
+  //  dragged or not as it is now, for one served late)
+  const dragged = useRef(false);
+  if (dragged.current && !moving) for (const r of routed.current.values()) r.key = "";
+  dragged.current = moving;
   const keyOf = (it: WireItem) => wireKey(it.p, it.q, it.ends, it.ends?.aroundKey ?? 0);
   const work = (it: WireItem) => {
     const t = performance.now();
-    // (the way it went before, kept while it still can: so that a card dragged past something makes its wires flip neither way - look `wireRoute`)
-    const was = routed.current.get(it.key)?.route.way;
+    // (the way it went before, kept while it still can - so that a card dragged past something makes its wires flip neither way, look
+    //  `wireRoute` - but only while it is dragged: let go, or undone, worked out anew)
+    const was = dragged.current ? routed.current.get(it.key)?.route.way : undefined;
     const route = wireRoute(it.p, it.q, it.ends && { from: it.ends.from, to: it.ends.to, lead: it.ends.lead }, it.ends?.around ?? [], was);
     routed.current.set(it.key, { key: keyOf(it), p: it.p, q: it.q, route });
     WIRES_BUDGET.spend(performance.now() - t);

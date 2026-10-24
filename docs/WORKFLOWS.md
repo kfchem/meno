@@ -2009,7 +2009,13 @@ page could not be read after one run.
     between it and its end, where that leaves half a bond either side or
     the frame lies across the line in or out. Of these, the way over
     least, then the shortest; where every way is over something, each is
-    tried again round that too. Inside another set or card it never goes,
+    tried again round that too. It never goes out past both its ends and
+    back again round nothing (look `doublesBack`): where the way chosen
+    would - every way passing too near something, as a gap of less than a
+    bond between a card and the set beside it - it goes straight across
+    at the level of the one end or the other instead, where that runs on
+    one way across and passes over no more (measured along it, not by
+    its points). Inside another set or card it never goes,
     however near its ends. Its turns are a bond wide, on the page, so they
     are arcs at any zoom; two turns closer than that both shrink alike.
     It keeps half a bond from every other frame's line (docs/LOOK.md,
@@ -2040,10 +2046,17 @@ page could not be read after one run.
   - **It keeps its way** while that is still clear: the side it passed
     what it goes round, unless the other side has become a fifth shorter.
     A card dragged past a set makes its wire change way twice at most.
+    That is kept only while a card or a set is dragged: let go, every wire
+    is worked out anew, and one moved by an undo is worked out as if new.
     Placement keeps clear of the same routes, and a change of way on the
     page is eased, never a jump: its ends stay on their ports while it
     eases, only the rest moving (look `wireToward`), and a wire dragged by
-    its card is not eased at all (`shapeMoved`).
+    its card is not eased at all (`shapeMoved`). What is drawn is worked
+    out as it is drawn, from where the wire is to be then (look
+    `WireEasing`), not set aside for the next frame: an update set aside
+    can wait behind a drag's on a slower machine, all the drag long, and
+    the wire would be drawn where its ports were. Its ends are on its
+    ports at every frame, however slow the frames.
   - **Only what moved is worked out again.** Each wire looks at the sets
     and cards near it (`nearWire`), and is keyed by its ends and those
     (`wireKey`): a drag works out again only the wires whose key changed.

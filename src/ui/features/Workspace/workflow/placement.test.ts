@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey } from "./look";
+import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey, doublesBack, WireEasing } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -368,6 +368,87 @@ describe("a wire going round what is in its way", () => {
   });
 });
 
+describe("a wire never runs on past its ends and back", () => {
+  it("is drawn from a step to its set below, a set beside the step: down and in level, never past the set and back up", () => {
+    // (as the maintainer's page had it, in page pixels: xTB's card, its Energies set to its right and above, its Failed set below; the gap
+    //  between the card and Energies under a bond, so that every way down passes nearer Energies than half a bond)
+    const card: Frame = { x0: 21.8 * PX, x1: 229.8 * PX, y0: -366.9 * PX, y1: -290.9 * PX };
+    const energies: Frame = { x0: 277.1 * PX, x1: 642.2 * PX, y0: -407.3 * PX, y1: -65.5 * PX };
+    const failed: Frame = { x0: 296 * PX, x1: 506.9 * PX, y0: -690.9 * PX, y1: -654.5 * PX };
+    const p = stepGives({ x: card.x0, y: card.y1 });
+    const q = setTakes(failed);
+    const e = { from: card, to: failed };
+    const r = wireRoute(p, q, e, nearWire(p, q, e, [card, energies, failed]));
+    expect(Math.min(...r.pts.map((pt) => pt.y))).toBeGreaterThanOrEqual(q.y - 1e-9);
+    expect(doublesBack(r.corners!, [card, energies, failed])).toBe(false);
+  });
+
+  it("is told: a turn out past both ends round nothing, not one round a frame, nor a way on one way across", () => {
+    const pt = (x: number, y: number) => ({ x, y });
+    // (down past both ends, a step left, up into the other: round nothing - and round a frame lying within the turn)
+    const hook = [pt(0, 0), pt(2, 0), pt(2, -10), pt(1, -10), pt(1, -4), pt(3, -4)];
+    expect(doublesBack(hook, [])).toBe(true);
+    expect(doublesBack(hook, [{ x0: 0, x1: 1.5, y0: -8, y1: -6 }])).toBe(false);
+    // (a frame within the turn's width, but beyond it: not gone round)
+    expect(doublesBack(hook, [{ x0: 0, x1: 1.5, y0: -14, y1: -12 }])).toBe(true);
+    // (down and in level; and down to a level between the ends, across, and down again)
+    expect(doublesBack([pt(0, 0), pt(2, 0), pt(2, -4), pt(3, -4)], [])).toBe(false);
+    expect(doublesBack([pt(0, 0), pt(2, 0), pt(2, -2), pt(1, -2), pt(1, -4), pt(3, -4)], [])).toBe(false);
+  });
+
+  it("on random pages, frames as near as a quarter bond: none of 300 pages' wires turns out past both its ends round nothing", () => {
+    // (seeded: 3 to 6 sets, 2 to 4 cards, a quarter bond apart at least; each card wired from a set, and to a set of its own)
+    let a = 21;
+    const rnd = () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    let wires = 0;
+    let round = 0;
+    const back: string[] = [];
+    for (let page = 0; page < 300; page++) {
+      const frames: Frame[] = [];
+      const fits = (f: Frame) => !frames.some((g) => f.x0 < g.x1 + 12 * PX && g.x0 < f.x1 + 12 * PX && f.y0 < g.y1 + 12 * PX && g.y0 < f.y1 + 12 * PX);
+      const sets: Frame[] = [];
+      const cards: { x: number; y: number }[] = [];
+      for (let k = 0, t = 0, n = 3 + Math.floor(rnd() * 4); k < n && t < 200; t++) {
+        const x0 = rnd() * 900 * PX;
+        const y0 = -rnd() * 700 * PX;
+        const f = { x0, x1: x0 + (60 + rnd() * 300) * PX, y0, y1: y0 + (36 + rnd() * 300) * PX };
+        if (!fits(f)) continue;
+        frames.push(f);
+        sets.push(f);
+        k++;
+      }
+      for (let k = 0, t = 0, n = 2 + Math.floor(rnd() * 3); k < n && t < 200; t++) {
+        const s = { x: rnd() * 900 * PX, y: -rnd() * 700 * PX };
+        if (!fits(cardOf(s))) continue;
+        frames.push(cardOf(s));
+        cards.push(s);
+        k++;
+      }
+      cards.forEach((s, i) => {
+        const into = sets[Math.floor(rnd() * sets.length)];
+        const made = sets[(i + 1) % sets.length];
+        for (const [p, q, from, to] of [
+          [setGives(into), stepTakes(s, 0), into, cardOf(s)],
+          [stepGives(s), setTakes(made), cardOf(s), made],
+        ] as const) {
+          const r = wireRoute(p, q, { from, to }, nearWire(p, q, { from, to }, frames));
+          wires++;
+          if (r.corners) round++;
+          if (r.corners && doublesBack(r.corners, frames)) back.push(`page ${page}`);
+        }
+      });
+    }
+    expect(round).toBeGreaterThan(1000);
+    expect(back).toEqual([]);
+    expect(wires).toBeGreaterThan(1300);
+  }, 60000);
+});
+
 describe("the time a frame gives to working wires out", () => {
   it("is so much of each frame: spent, none left till the next frame begins", () => {
     const budget = new FrameBudget(8);
@@ -433,6 +514,37 @@ describe("a wire on its way to a new shape", () => {
     const was = line(40, (s) => ({ x: s * 10, y: 0 }));
     expect(shapeMoved(was, was.map((pt) => ({ x: pt.x + 3, y: pt.y - 2 })))).toBeCloseTo(0, 9);
     expect(shapeMoved(was, line(40, (s) => ({ x: s * 10, y: 5 * Math.sin(Math.PI * s) })))).toBeCloseTo(5, 9);
+  });
+});
+
+describe("a wire dragged by its card, as drawn", () => {
+  it("has its ends on its ports at every frame, frames four times as slow: a card dragged past a set, 8 px a frame, 15 frames a second", () => {
+    // (a set, another between it and the card, the card dragged from well above it to well below; drawn as Workflow2D draws it - its way,
+    //  through as many points as its zoom wants, eased where its shape jumps - at 1 screen pixel a page pixel)
+    const from: Frame = { x0: 0, x1: 10, y0: -10, y1: 0 };
+    const block: Frame = { x0: 16, x1: 26, y0: -12, y1: 2 };
+    const easing = new WireEasing(180, (u) => u);
+    let was: WireWay | undefined;
+    let eased = 0;
+    let frames = 0;
+    for (let dy = 240, now = 0; dy >= -240; dy -= 8, now += 1000 / 15) {
+      const at = { x: 34, y: -5 + dy * PX };
+      const card = cardOf(at);
+      const p = setGives(from);
+      const q = stepTakes(at, 0);
+      const e = { from, to: card };
+      const r = wireRoute(p, q, e, nearWire(p, q, e, [from, block, card]), was);
+      was = r.way;
+      const target = byTurn(r.pts, pointsFor(r.pts, 1 / PX));
+      const pts = easing.at(target, 4 * PX, now);
+      if (pts !== target) eased++;
+      frames++;
+      // (no gap at all: the very points of its ports)
+      expect([pts[0], pts[pts.length - 1]]).toEqual([p, q]);
+    }
+    // (and eased on some: its way changed at once as it passed the set between)
+    expect(eased).toBeGreaterThan(0);
+    expect(frames).toBe(61);
   });
 });
 
