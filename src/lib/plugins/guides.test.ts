@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { closeGuide, guideNotice, keyOnGuide, nextStep, NOTICED_MS, showGuide, showGuidesDue, shownStep, useGuide } from "./guides";
+import { closeGuide, guideNotice, keyOnGuide, nextStep, NOTICED_MS, showGuide, shownStep, useGuide } from "./guides";
 import { useAppSettings } from "../settings/appSettings";
 import { useReaders } from "../calc/workers";
 import { MANIFESTS } from "./known";
 
-const plugins = (p: Partial<{ removed: string[]; guided: string[] }> = {}) =>
-  useAppSettings.setState({ loaded: true, plugins: { removed: [], roles: {}, programs: {}, guided: [], ...p } });
+const plugins = (p: Partial<{ removed: string[] }> = {}) =>
+  useAppSettings.setState({ loaded: true, plugins: { removed: [], roles: {}, programs: {}, ...p } });
 
 describe("a plugin's guide", () => {
   beforeEach(() => {
@@ -37,47 +37,35 @@ describe("a plugin's guide", () => {
     }
   });
 
-  it("is shown once, the first time its plugin is there - not before the settings say which were shown", () => {
-    useAppSettings.setState({ loaded: false });
-    showGuidesDue();
+  it("is never shown of itself - not as its plugin is added, nor as another is - only when asked (Settings, Plugins, Show)", () => {
+    useReaders.setState({ state: { "getting-started": "added" } });
+    useReaders.setState({ state: { "getting-started": "added", rdkit: "added" } });
     expect(useGuide.getState().open).toBeNull();
-    plugins();
-    showGuidesDue();
+    showGuide("getting-started");
     expect(useGuide.getState().open).toEqual({ plugin: "getting-started", step: 0 });
     expect(shownStep()?.step.title).toBe("Welcome to Meno");
   });
 
-  it("goes on a step at a time, and once closed - gone through or skipped - is kept as shown, and not shown again of itself", () => {
-    showGuidesDue();
+  it("goes on a step at a time, and once closed - gone through or skipped - nothing opens after it", () => {
+    showGuide("getting-started");
     nextStep();
     expect(useGuide.getState().open?.step).toBe(1);
     closeGuide();
     expect(useGuide.getState().open).toBeNull();
-    expect(useAppSettings.getState().plugins.guided).toEqual(["getting-started"]);
-    showGuidesDue();
-    expect(useGuide.getState().open).toBeNull();
-    // (shown again when asked: Settings, Plugins)
     showGuide("getting-started");
-    expect(useGuide.getState().open).toEqual({ plugin: "getting-started", step: 0 });
     for (let i = 0; i < 6; i++) nextStep();
     expect(useGuide.getState().open).toBeNull();
   });
 
-  it("is not shown where its plugin was taken away, and closes as it is", () => {
-    plugins({ removed: ["getting-started"] });
-    showGuidesDue();
-    expect(useGuide.getState().open).toBeNull();
-    plugins();
-    showGuidesDue();
+  it("closes as its plugin is taken away", () => {
+    showGuide("getting-started");
     useReaders.setState({ state: { "getting-started": "absent" } });
     expect(useGuide.getState().open).toBeNull();
-    // (taken away, not kept as shown: it comes again with the plugin)
-    expect(useAppSettings.getState().plugins.guided).toEqual([]);
   });
 
   it("goes on by itself, a moment after the chemist does what its step waits for - nothing else", () => {
     vi.useFakeTimers();
-    showGuidesDue();
+    showGuide("getting-started");
     guideNotice("menu");
     vi.advanceTimersByTime(NOTICED_MS + 1);
     expect(useGuide.getState().open?.step).toBe(0);
@@ -101,11 +89,10 @@ describe("Escape on a guide", () => {
     plugins();
   });
 
-  it("skips it, as Skip does: closed, and kept as shown", () => {
+  it("skips it, as Skip does: closed", () => {
     showGuide("getting-started");
     expect(keyOnGuide("Escape", false)).toBe(true);
     expect(useGuide.getState().open).toBeNull();
-    expect(useAppSettings.getState().plugins.guided).toContain("getting-started");
   });
 
   it("leaves it open where something else took that Escape, or for another key", () => {

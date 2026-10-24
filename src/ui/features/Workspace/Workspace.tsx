@@ -37,6 +37,7 @@ import {
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
+import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -1168,10 +1169,10 @@ function WorkspaceContent({
       if (menuTargetGone(menu, s)) setMenu(null);
     });
   }, [menu, store]);
-  // the selection as a box would take it, where it holds whole structures or molecules in 3D
+  // the selection as a box would take it, where it holds whole structures or molecules in 3D - round its labels as they are drawn, as Workflow2D shows it
   const selectionAsSet = () => {
     const st = store.getState();
-    return selectionFrame(st.model, st.sel.atoms, st.molecules3d, st.sel3d, style3dOf(store.getState()), st.turns3d, st.frames3d);
+    return selectionFrame(st.model, st.sel.atoms, st.molecules3d, st.sel3d, style3dOf(store.getState()), st.turns3d, st.frames3d, labelReachOf(store));
   };
   // a box's tab or a step's card right-clicked (Workflow2D): its menu, there
   const workflowMenu = useEditor((s) => s.workflowMenu);
