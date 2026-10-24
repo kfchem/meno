@@ -2127,7 +2127,11 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
   geometry it came with; its configurations are perceived anew from its
   own geometry. Where a bond broke or formed, or the charge changed, the
   link is dropped, and *How it was made* says why (2026-10-24; until then
-  every calculation dropped it).
+  every calculation dropped it). Two atoms are bonded within 1.2 times
+  the sum of their radii, so a bond that changes but stays within that
+  reach - a stretch towards a transition state, a symmetric hydrogen
+  bond - is read as the same compound and keeps the link: right for
+  minima. One that crosses it, as a proton shifted does, drops the link.
 
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
