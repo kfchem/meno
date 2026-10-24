@@ -107,4 +107,22 @@ describe("plugins added one after another", () => {
     await again;
     expect(useReaders.getState().state[b.id]).toBe("added");
   });
+
+  it("ends one skipped at once - asked for again, it waits anew - while the set-up before it still holds the line", async () => {
+    const first = addPlugin(a).catch(() => "failed");
+    const skipped = addPlugin(b).catch((e: Error) => e.message);
+    await settle();
+    skipSetUp(b);
+    // (ended now, not when a's set-up ends: what pressed Add may take it again)
+    expect(await skipped).toBe(`${b.name}'s set-up was skipped.`);
+    expect(asked).toEqual([a.profile]);
+    const again = addPlugin(b);
+    expect(useReaders.getState().state[b.id]).toBe("waiting");
+    ends.get(a.profile)!.done();
+    await settle();
+    expect(asked).toEqual([a.profile, b.profile]);
+    ends.get(b.profile)!.done();
+    await Promise.all([first, again]);
+    expect(states().slice(0, 2)).toEqual(["added", "added"]);
+  });
 });

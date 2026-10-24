@@ -103,20 +103,37 @@ export async function addPlugin(p: Plugin): Promise<void> {
   const mine = ++lastAsked;
   asked.set(p.id, mine);
   setState(p.id, "waiting");
+  // (skipped while it waits: ended at once - not when its turn comes, after the set-up that holds the line)
+  const skip = new Promise<never>((_, reject) => skips.set(p.id, () => reject(new Error(`${p.name}'s set-up was skipped.`))));
   const turn = setUps.then(async () => {
     if (asked.get(p.id) !== mine) throw new Error(`${p.name}'s set-up was skipped.`);
+    skips.delete(p.id);
     setState(p.id, "adding");
     try {
       await ensurePyEnv(p.profile);
       markTakenAway(p, false);
       setState(p.id, "added");
     } catch (e) {
-      setState(p.id, "absent", `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`);
+      const why = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+      setState(p.id, "absent", why);
+      // (said where it is known to have failed: never left to what the state seems to have done)
+      for (const tell of failed) tell(p, why);
       throw e;
     }
   });
   setUps = turn.catch(() => undefined);
-  return turn;
+  return Promise.race([turn, skip]);
+}
+
+/** How to end each set-up that waits at once, as it is skipped (`skipSetUp`). */
+const skips = new Map<string, () => void>();
+/** Those told of each set-up that fails (`onSetUpFailed`). */
+const failed = new Set<(p: Plugin, why: string) => void>();
+
+/** Tells `tell` of each set-up that fails from now on - the plugin, and why, in words; the returned function stops it. */
+export function onSetUpFailed(tell: (p: Plugin, why: string) => void): () => void {
+  failed.add(tell);
+  return () => void failed.delete(tell);
 }
 
 /**
@@ -127,6 +144,8 @@ export async function addPlugin(p: Plugin): Promise<void> {
 export function skipSetUp(p: Plugin): void {
   if (useReaders.getState().state[p.id] !== "waiting") return;
   asked.delete(p.id);
+  skips.get(p.id)?.();
+  skips.delete(p.id);
   const before = settingUp();
   const name = before ? (anyPluginById(before)?.name ?? before) : null;
   setState(p.id, "absent", `${p.name} was not added: skipped${name ? ` while it waited for ${name}'s set-up` : ""}.`);
