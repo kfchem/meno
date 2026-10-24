@@ -4,6 +4,8 @@ import { addedReaders, useReaders } from "../../../lib/calc/workers";
 import { MENO_KINDS, MENO_WRITES, useKinds } from "../../../lib/io/kinds";
 import { pluginWriters } from "../../../lib/io/writers";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import Checkbox from "../../controls/Checkbox";
+import Select from "../../controls/Select";
 
 /**
  * Files in Settings: every kind of file Meno reads - its own, and those the
@@ -52,18 +54,13 @@ export default function FileSettings() {
               {k.name} <span className="text-xs text-gh-gray">{k.extensions.join(" ")}</span>
             </span>
             {can.length > 1 ? (
-              <select
-                aria-label={`Who reads ${k.name}`}
-                value={reader?.id ?? ""}
-                onChange={(e) => setFiles({ ...files, read: { ...files.read, [k.id]: e.target.value } })}
-                className="h-7 w-fit rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black"
-              >
-                {can.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              <Select
+                label={`Who reads ${k.name}`}
+                value={reader?.id ?? null}
+                options={can.map((p) => ({ value: p.id, label: p.name }))}
+                onChange={(v) => setFiles({ ...files, read: { ...files.read, [k.id]: v } })}
+                className="w-fit"
+              />
             ) : reader ? (
               <span className="text-xs text-gh-black">{reader.name}</span>
             ) : (
@@ -72,10 +69,9 @@ export default function FileSettings() {
             <span className="flex flex-wrap gap-x-3 gap-y-1">
               {others.length ? (
                 others.map((p) => (
-                  <label key={p.id} className="flex items-center gap-1.5 text-xs text-gh-black">
-                    <input type="checkbox" checked={also.includes(p)} onChange={(e) => toggle(p.id, e.target.checked)} />
+                  <Checkbox key={p.id} checked={also.includes(p)} onChange={(v) => toggle(p.id, v)} className="gap-1.5 text-xs text-gh-black">
                     {p.name}
-                  </label>
+                  </Checkbox>
                 ))
               ) : (
                 <span className="text-xs text-gh-gray">-</span>
