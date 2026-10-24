@@ -1527,10 +1527,19 @@ words are: by itself, not by a box drawn round it.
 - **A structure in a scheme is taken alone.** The whole scheme, its arrows
   and words with it, is still taken by a box and *Read as structure*.
 - **A picture**, not lines, is still taken by a box, as before.
-- **Never read in part.** A structure with letters or words inside it that
-  no atom took is refused, with why, and nothing of it is put down. An atom
-  the reader is unsure of comes marked as such, as *Read as structure* marks
-  one.
+- **What is read is taken; the rest is marked** (the maintainer, 2026-10-24,
+  reversing "never read in part"). A structure with letters inside it that no
+  atom took, words at an open end of a bond not read as its label, or words
+  or lines of the page outside its figure lying by it, is taken still: the
+  atom nearest what is not read marked unsure, saying what lies there
+  ('"OTBS" lies at this end, not read as its label.'), so its note counts it
+  and the chemist puts it right. A label not read stays an atom, its words as
+  written, marked unsure: nothing is dropped. A piece of three heavy atoms
+  or fewer that would be so marked is refused still, as before, with why -
+  most likely a cut-off bit of a drawing, or none (the maintainer,
+  2026-10-24); a small molecule read whole (MeOH, CO2, a lone ion) is taken
+  as ever. And what is no structure - a line of words, a chart - is refused,
+  with why.
 - In the column first. The PDF on the page, whose presses move the view,
   comes later.
 
@@ -1550,7 +1559,7 @@ words are: by itself, not by a box drawn round it.
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
 - dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;
 - clicked, it is picked; ⌘-click (Ctrl-click on Windows) adds it to those picked or takes it out, as everywhere in Meno, and Shift-click does the same, structures having no range between them (in words, Shift-click still draws the selection on, onto another page too); a link under a structure is not followed, the structure taken first; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
-- one not read whole is never carried: a press says why, where the chemistry's notices are said.
+- one refused - a line of words - is never carried: a press says why, where the chemistry's notices are said; one taken with parts not read is carried, those marked.
 
 **A structure, and where it lies** (`utils/pageStructures`):
 - each figure of the page is read as *Read as structure* reads one (the

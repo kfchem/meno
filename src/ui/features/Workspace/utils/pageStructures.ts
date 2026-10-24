@@ -16,7 +16,7 @@ import type { Model } from "../store/types";
 import { readDrawnLabel } from "../../../../lib/figure/structure";
 import { abbreviationStructure } from "../../../../lib/chem/abbreviations";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
-import { figureLabels, modelOf, schemeDrawn, type FigureResult, type Unread } from "./figures";
+import { atomAs, figureLabels, modelOf, schemeDrawn, type FigureResult, type Unread } from "./figures";
 
 type Point = { x: number; y: number };
 
@@ -228,14 +228,33 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
 }
 
 /** Letters of `left` - those no atom of the figure took - that lie within a structure: in its box, and within a bond of one of its bonds. */
-function lettersWithin(left: readonly Pick<FigureLetter, "c" | "box">[], bonds: readonly [Point, Point][], box: Box, reach: number): string {
-  return left
-    .filter((l) => {
-      const mid = { x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 };
-      return toBox(mid, box) === 0 && bonds.some(([a, b]) => toSegment(mid, a, b) < reach);
-    })
-    .map((l) => l.c)
-    .join("");
+function lettersWithin<L extends Pick<FigureLetter, "c" | "box">>(left: readonly L[], bonds: readonly [Point, Point][], box: Box, reach: number): L[] {
+  return left.filter((l) => {
+    const mid = { x: (l.box[0] + l.box[2]) / 2, y: (l.box[1] + l.box[3]) / 2 };
+    return toBox(mid, box) === 0 && bonds.some(([a, b]) => toSegment(mid, a, b) < reach);
+  });
+}
+
+/** The most heavy atoms a structure read in part may have and still be refused, as before (the maintainer, 2026-10-24): a piece that small, a part of it not read, is most likely a cut-off bit of a drawing, or none. */
+const SMALL_PART = 3;
+
+/** How many heavy atoms a structure read has: each element's atom but H, and each group's named by a label (OTBS) as many as it holds. */
+function heavyAtoms(model: Model): number {
+  return model.atoms.reduce((n, a) => n + (a.el === "H" ? 0 : isElementSymbol(a.el) ? 1 : (abbreviationStructure(a.el)?.atoms.filter((g) => g.el !== "H").length ?? 1)), 0);
+}
+
+/**
+ * A structure taken though part of it is not read (the maintainer, 2026-10-24: what is read is taken, the rest marked for
+ * the chemist to put right): the atom of it nearest `at`, on the page, marked unsure - saying what lies there - as each part
+ * read unsure is, so its note counts it. One of SMALL_PART heavy atoms or fewer is refused still, `refused` saying why.
+ */
+function markedNear(st: PageStructure, at: Point, said: string, refused: string): PageStructure {
+  if ("none" in st.read) return st;
+  const model = st.read.model;
+  if (heavyAtoms(model) <= SMALL_PART) return { ...st, read: { none: refused } };
+  const k = st.atoms.reduce((m, p, i) => (i < model.atoms.length && dist(p, at) < dist(st.atoms[m], at) ? i : m), 0);
+  const atoms = model.atoms.map((a, i) => (i === k ? { ...a, unsure: { said: [...(a.unsure?.said ?? []), said], as: atomAs(a, model.bonds) } } : a));
+  return { ...st, read: { model: { ...model, atoms } } };
 }
 
 /**
@@ -351,9 +370,19 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     const own = ids.map((i) => (said && chargeOf(f.atoms[i]) ? { ...f.atoms[i], unsure: [...(f.atoms[i].unsure ?? []), said] } : f.atoms[i]));
     const part: FigureRead = { atoms: own, bonds: mine.map((b) => ({ ...b, a: at.get(b.a)!, b: at.get(b.b)! })), bond: f.bond, left: { letters: [] } };
     const mid = { x: (Math.min(...part.atoms.map((a) => a.x)) + Math.max(...part.atoms.map((a) => a.x))) / 2, y: (Math.min(...part.atoms.map((a) => a.y)) + Math.max(...part.atoms.map((a) => a.y))) / 2 };
-    const within = lettersWithin([...f.left.letters, ...words].map((l) => ({ c: l.c, box: boxBack(l.box, back) })), bonds, box, f.bond);
+    // (letters within it no atom took: it taken still, the atom nearest them unsure, saying so)
+    const within = lettersWithin([...f.left.letters, ...words].map((l) => ({ c: l.c, box: boxBack(l.box, back), on: l.box })), bonds, box, f.bond);
+    if (within.length) {
+      const at = { x: (within[0].on[0] + within[0].on[2]) / 2, y: (within[0].on[1] + within[0].on[3]) / 2 };
+      const j = part.atoms.reduce((m, a, i) => (dist(a, at) < dist(part.atoms[m], at) ? i : m), 0);
+      const said = `"${within.map((l) => l.c).join("")}" lies within it, not read as part of it.`;
+      part.atoms[j] = { ...part.atoms[j], unsure: [...(part.atoms[j].unsure ?? []), said] };
+    }
     const line = lineOfWords(part);
-    const model: Model | null = within || line ? null : modelOf(part, (x, y) => ({ sha256, page, ...back({ x, y }), bond: f.bond }), mid);
+    const read: Model | null = line ? null : modelOf(part, (x, y) => ({ sha256, page, ...back({ x, y }), bond: f.bond }), mid);
+    // (but a piece as small as SMALL_PART heavy atoms, letters within it not read: refused, as before)
+    const small = read && within.length && heavyAtoms(read) <= SMALL_PART ? `Part of this structure could not be read ("${within.map((l) => l.c).join("")}"), so none of it is taken.` : null;
+    const model = small ? null : read;
     return {
       key: `${figure}:${k}`,
       bonds,
@@ -362,7 +391,7 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
       box,
       ends,
       reach,
-      read: model ? { model } : line ? { none: `It is a line of words (${line}), not a structure drawn, so none of it is taken.` } : { none: `Part of this structure could not be read ("${within}"), so none of it is taken.` },
+      read: model ? { model } : { none: small ?? `It is a line of words (${line}), not a structure drawn, so none of it is taken.` },
     };
   });
 }
@@ -397,10 +426,11 @@ const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
 const AT_END = 1;
 
 /**
- * A structure refused where words of its own figure - not its labels, nor a
+ * A structure marked where words of its own figure - not its labels, nor a
  * compound's number - lie within a bond of the open end of one of its bonds
  * (an atom of one bond, with no label): a label too wide, too tall or too far
- * to be read as one, the rest of the structure perhaps past it.
+ * to be read as one, the rest of the structure perhaps past it - that end
+ * unsure, saying so.
  */
 function atEndChecked(st: PageStructure, f: FigureRead, words: readonly { text: string; box: Box }[], back: (p: Point) => Point): PageStructure {
   if ("none" in st.read) return st;
@@ -408,11 +438,15 @@ function atEndChecked(st: PageStructure, f: FigureRead, words: readonly { text: 
   for (const b of f.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
   const ends = f.atoms.flatMap((a, i) => (degree.get(i) === 1 && !a.label ? [a] : []));
   const mine = new Set(st.atoms.map((p) => `${p.x},${p.y}`));
-  const word = words.find((w) => !COMPOUND_NUMBER.test(w.text.trim()) && ends.some((a) => mine.has(`${back(a).x},${back(a).y}`) && toBox(a, w.box) <= AT_END * f.bond));
-  return word ? { ...st, read: { none: `Part of this structure could not be read ("${word.text.trim()}" lies beside it), so none of it is taken.` } } : st;
+  // (a word lying within it is said so already: not again at its end)
+  const within = (w: { text: string; box: Box }) => lettersWithin([{ c: w.text, box: boxBack(w.box, back) }], st.bonds, st.box, f.bond).length > 0;
+  const word = words.find((w) => !COMPOUND_NUMBER.test(w.text.trim()) && !within(w) && ends.some((a) => mine.has(`${back(a).x},${back(a).y}`) && toBox(a, w.box) <= AT_END * f.bond));
+  if (!word) return st;
+  const end = ends.find((a) => mine.has(`${back(a).x},${back(a).y}`) && toBox(a, word.box) <= AT_END * f.bond)!;
+  return markedNear(st, back(end), `"${word.text.trim()}" lies at this end, not read as its label.`, `Part of this structure could not be read ("${word.text.trim()}" lies beside it), so none of it is taken.`);
 }
 
-/** A structure refused where a word of the page within its figure - none of its labels, no compound's number - lies within a bond of one of its open ends. */
+/** A structure marked where a word of the page within its figure - none of its labels, no compound's number - lies within a bond of one of its open ends: that end unsure, saying so. */
 function endWordsChecked(st: PageStructure, own: readonly PageObject[], wordsIn?: (box: Box) => string): PageStructure {
   if ("none" in st.read || !st.ends.length) return st;
   const bond = st.reach / REACH;
@@ -424,15 +458,16 @@ function endWordsChecked(st: PageStructure, own: readonly PageObject[], wordsIn?
   });
   if (!near) return st;
   const text = wordsIn?.(near.box)?.trim();
-  return { ...st, read: { none: `Part of this structure could not be read (${text ? `"${text}" lies beside it` : "words beside it were not read"}), so none of it is taken.` } };
+  const end = st.ends.find((e) => toBox(e, near.box) <= AT_END * bond)!;
+  return markedNear(st, end, text ? `"${text}" lies at this end, not read as its label.` : "Words at this end were not read as its label.", `Part of this structure could not be read (${text ? `"${text}" lies beside it` : "words beside it were not read"}), so none of it is taken.`);
 }
 
 /**
- * A structure refused where anything on the page outside its own figure -
+ * A structure marked where anything on the page outside its own figure -
  * words, or lines - lies within a bond of its atoms, its bonds or its
  * labels: the page's figures may have been cut through it there (a label
  * wider than a figure's word between its two halves), and the rest of it
- * be in another figure. Never half a molecule: refused, the words named.
+ * be in another figure. Taken still, the atom nearest it unsure, saying so.
  * Lines whose box holds all of the structure - its bonds and its labels -
  * are none of that: a page's background, a frame round it, a coloured panel
  * behind it and its neighbours. Lines that cross into it still count.
@@ -442,8 +477,9 @@ function besideChecked(st: PageStructure, beside: readonly Beside[], bond: numbe
   const behind = (b: Beside) => b.kind !== "text" && b.text == null && b.box[0] <= st.box[0] && b.box[1] <= st.box[1] && b.box[2] >= st.box[2] && b.box[3] >= st.box[3];
   const near = beside.find((b) => !behind(b) && boxToBox(b.box, st.box) <= bond && (st.atoms.some((a) => toBox(a, b.box) <= bond) || st.labels.some((l) => boxToBox(l, b.box) <= bond) || st.bonds.some(([a, c]) => segmentToBox(a, c, b.box) <= bond)));
   if (!near) return st;
+  const at = { x: (near.box[0] + near.box[2]) / 2, y: (near.box[1] + near.box[3]) / 2 };
   const what = near.text?.trim() ? `"${near.text.trim()}" lies beside it` : "lines drawn beside it lie outside its figure";
-  return { ...st, read: { none: `Part of this structure could not be read (${what}), so none of it is taken.` } };
+  return markedNear(st, at, near.text?.trim() ? `"${near.text.trim()}" lies beside it, outside its figure: part of it may lie there.` : "Lines drawn beside it lie outside its figure: part of it may lie there.", `Part of this structure could not be read (${what}), so none of it is taken.`);
 }
 
 /**
