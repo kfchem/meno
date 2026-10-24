@@ -1512,7 +1512,7 @@ words are: by itself, not by a box drawn round it.
   comes later.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
-- a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept;
+- a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
 - dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;

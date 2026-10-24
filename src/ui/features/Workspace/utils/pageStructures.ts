@@ -39,7 +39,7 @@ export type PageStructure = {
 const REACH = 1 / 3;
 
 /** Something on the page outside a structure's own figure - words, or lines - and what its words say, where they are words. */
-export type Beside = { box: Box; text?: string };
+export type Beside = { box: Box; text?: string; kind?: PageObject["kind"] };
 
 /** How far a segment lies from a box: naught where it crosses it. */
 function segmentToBox(a: Point, b: Point, box: Box): number {
@@ -218,7 +218,7 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
     if (!drawn) return;
     // (all of the page whose middle is not within this figure - its own labels' boxes, a letter's full height, may pass its edge a
     // little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
-    const beside = made.objects.filter((o) => !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    const beside = made.objects.filter((o) => !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, kind: o.kind, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
     const read = figureOn(drawn, k, sha256, page, beside, known);
     // (and the words of the page within this figure that are none of a structure's labels, at one of its open ends: a label
     // its figure's drawing did not hold, the structure refused - a compound's number aside)
@@ -335,10 +335,14 @@ function endWordsChecked(st: PageStructure, own: readonly PageObject[], wordsIn?
  * labels: the page's figures may have been cut through it there (a label
  * wider than a figure's word between its two halves), and the rest of it
  * be in another figure. Never half a molecule: refused, the words named.
+ * Lines whose box holds all of the structure - its bonds and its labels -
+ * are none of that: a page's background, a frame round it, a coloured panel
+ * behind it and its neighbours. Lines that cross into it still count.
  */
 function besideChecked(st: PageStructure, beside: readonly Beside[], bond: number): PageStructure {
   if ("none" in st.read) return st;
-  const near = beside.find((b) => boxToBox(b.box, st.box) <= bond && (st.atoms.some((a) => toBox(a, b.box) <= bond) || st.labels.some((l) => boxToBox(l, b.box) <= bond) || st.bonds.some(([a, c]) => segmentToBox(a, c, b.box) <= bond)));
+  const behind = (b: Beside) => b.kind !== "text" && b.text == null && b.box[0] <= st.box[0] && b.box[1] <= st.box[1] && b.box[2] >= st.box[2] && b.box[3] >= st.box[3];
+  const near = beside.find((b) => !behind(b) && boxToBox(b.box, st.box) <= bond && (st.atoms.some((a) => toBox(a, b.box) <= bond) || st.labels.some((l) => boxToBox(l, b.box) <= bond) || st.bonds.some(([a, c]) => segmentToBox(a, c, b.box) <= bond)));
   if (!near) return st;
   const what = near.text?.trim() ? `"${near.text.trim()}" lies beside it` : "lines drawn beside it lie outside its figure";
   return { ...st, read: { none: `Part of this structure could not be read (${what}), so none of it is taken.` } };
