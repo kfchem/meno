@@ -9,8 +9,9 @@
  *   or without a space, once what comes after it is no letter or digit:
  *   60dc, 60 dc → 60 °C. Always one space between the number and °C.
  * - **Minus:** a hyphen at a word's start (the text's start, after a space,
- *   or after an opening bracket) straight before a digit: -78 → −78. Hyphens
- *   within words stay: 2-propanol, t-BuOK, 18-crown-6.
+ *   an opening bracket or a comma) straight before a digit: -78 → −78,
+ *   LDA,-78 → LDA,−78. Hyphens within words stay: 2-propanol, t-BuOK,
+ *   18-crown-6; so does a range's, between two numbers: 1-2 h.
  * - **Ranges:** a number, one hyphen and a number, as a word of its own, once
  *   the word has ended: 1-2 h → 1–2 h, compounds 3-5 → 3–5. A run of numbers
  *   joined by more hyphens is no range - a CAS number (7647-01-0), a date
@@ -19,7 +20,7 @@
  *
  * - **Commas:** a comma typed straight before a word gets a space after it,
  *   once that word has ended: Pd(OAc)2,PPh3 → Pd(OAc)2, PPh3; rt,12 h →
- *   rt, 12 h. Not where the comma is part of a name, joining two locants -
+ *   rt, 12 h; a word that is a negative number too: LDA,-78dc → LDA, −78 °C. Not where the comma is part of a name, joining two locants -
  *   numbers, a number and a letter, a capital letter alone, each maybe
  *   primed: 1,2-DCE, 2,2,6,6-tetramethyl, 1',2', 4a,8a, N,N-DMF, N,O-bis,
  *   (R,R), (E,Z), (1R,2S) - nor between two numbers, 1,000. Never a second
@@ -53,8 +54,8 @@ const CELSIUS = new RegExp(String.raw`(^|[^\p{L}\p{N}.,])(${NUM})(?:([\-\u2013])
  */
 const RANGE = new RegExp(String.raw`(^|[^\p{L}\p{N}.,'\u2032\-\u2212\u2013])(${NUM})(-)(${UPPER})[.,;:]?$`, "u");
 
-/** A word ended straight after a comma, and the word - with its primes, and a degree sign, °C's - before the comma. */
-const COMMA = /([\p{L}\p{N}'\u2032\u2033\u00b0]*),([\p{L}\p{N}]+)$/u;
+/** A word ended straight after a comma - maybe a negative number, its minus typed or written - and the word - with its primes, and a degree sign, °C's - before the comma. */
+const COMMA = /([\p{L}\p{N}'\u2032\u2033\u00b0]*),((?:[-\u2212](?=\d))?[\p{L}\p{N}]+)$/u;
 /** A locant, as a name joins them with commas: digits maybe with a letter (1, 12, 4a, 1R), or a capital letter alone (N, O, R, E), maybe primed. */
 const LOCANT = /^(?:\d+\p{L}?|\p{Lu})['\u2032\u2033]*$/u;
 
@@ -62,8 +63,8 @@ const LOCANT = /^(?:\d+\p{L}?|\p{Lu})['\u2032\u2033]*$/u;
 const WORDLY = /[\p{L}\p{N}]/u;
 /** What ends a word with a range in it: anything that could not go on with its number either. */
 const NUMBERLY = /[\p{L}\p{N}.,'\u2032\-\u2212\u2013]/u;
-/** Where a word starts, for a minus: the text's start, a space, an opening bracket. */
-const STARTS = /[\s([{]/u;
+/** Where a word starts, for a minus: the text's start, a space, an opening bracket, a comma. */
+const STARTS = /[\s([{,]/u;
 
 const isDigit = (ch: string | undefined) => !!ch && ch >= "0" && ch <= "9";
 
@@ -130,7 +131,8 @@ export function typedChanges(text: string, from: number, to: number): Change[] {
 function withChanges<S>(text: string, styles: readonly S[], changes: readonly Change[]): { text: string; styles: S[] } {
   let t = text;
   let st = [...styles];
-  for (const c of [...changes].sort((a, b) => b.from - a.from)) {
+  // (from the last; at one place, what replaces before what is put in, so that the one put in goes before it)
+  for (const c of [...changes].sort((a, b) => b.from - a.from || b.to - a.to)) {
     const s = st[c.from] ?? st[c.from - 1];
     t = t.slice(0, c.from) + c.insert + t.slice(c.to);
     st = [...st.slice(0, c.from), ...Array.from({ length: c.insert.length }, () => s), ...st.slice(c.to)];
@@ -140,7 +142,7 @@ function withChanges<S>(text: string, styles: readonly S[], changes: readonly Ch
 
 /** A degree written in a temperature - after a number, with or without a space, a space in it - or a temperature's minus written as a dash. */
 const DEGREES = /(\d)[ \u00a0]*\u00b0[ \u00a0]*C(?![\p{L}\p{N}])/gu;
-const DASH_MINUS = /(^|[\s([{])([\u2013\u2012])(?=\d)/gu;
+const DASH_MINUS = /(^|[\s([{,])([\u2013\u2012])(?=\d)/gu;
 
 /**
  * Words written as Meno writes words typed, all of them at once - words
@@ -158,6 +160,6 @@ export function writtenAsMeant<S>(text: string, styles: readonly S[]): { text: s
   // (and the last word, ended by the text's end)
   const typed = [...typedChanges(first.text, 0, first.text.length).filter((c) => c.insert !== BULLET), ...wordEnded(first.text, first.text.length)];
   const apart: Change[] = [];
-  for (const c of typed.sort((p, q) => p.from - q.from)) if (!apart.length || c.from >= apart[apart.length - 1].to) apart.push(c);
+  for (const c of typed.sort((p, q) => p.from - q.from || p.to - q.to)) if (!apart.length || c.from >= apart[apart.length - 1].to) apart.push(c);
   return withChanges(first.text, first.styles, apart);
 }

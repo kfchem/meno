@@ -67,6 +67,37 @@ describe("words on the page typed as they are meant", () => {
     expect(typing("- 5 mL")).toBe("• 5 mL");
   });
 
+  it("write conditions typed with no space after a comma as they are meant - a space after a comma between items, a minus at a number's start - and leave names and numbers as typed", () => {
+    const cases: [string, string][] = [
+      // (a space after a comma between items; a minus after a comma, a space, a bracket or the start)
+      ["LDA,-78dc", "LDA, \u221278 \u00b0C"],
+      ["LDA,-78", "LDA, \u221278"],
+      ["THF,rt", "THF, rt"],
+      ["Pd(OAc)2,PPh3", "Pd(OAc)2, PPh3"],
+      ["-78", "\u221278"],
+      ["(-20 \u00b0C)", "(\u221220 \u00b0C)"],
+      ["(-20dc)", "(\u221220 \u00b0C)"],
+      ["n-BuLi,THF,-78dc,1 h", "n-BuLi, THF, \u221278 \u00b0C, 1 h"],
+      // (no space within a list of locants that ends in a hyphen or a prime, nor between two digits)
+      ["2,6-lutidine", "2,6-lutidine"],
+      ["1,4-dioxane", "1,4-dioxane"],
+      ["N,N-DMF", "N,N-DMF"],
+      ["N,O-bis(trimethylsilyl)acetamide", "N,O-bis(trimethylsilyl)acetamide"],
+      ["1',2'-dideoxy", "1',2'-dideoxy"],
+      ["1,000", "1,000"],
+      ["1,5", "1,5"],
+      // (a hyphen between two numbers is a range, its en dash; one within a word stays)
+      ["1-2 h", "1\u20132 h"],
+      ["3-pentanone", "3-pentanone"],
+      ["t-BuOK", "t-BuOK"],
+      ["LDA,t-BuOK", "LDA, t-BuOK"],
+    ];
+    expect(cases.map(([typed]) => [typed, typing(typed)])).toEqual(cases);
+    // (and so written all at once, as a figure's words are)
+    expect(writtenAsMeant("LDA,-78\u00b0C", Array.from("LDA,-78\u00b0C", () => 0)).text).toBe("LDA, \u221278 \u00b0C");
+    expect(writtenAsMeant("LDA,\u201378 \u00b0C", Array.from("LDA,\u201378 \u00b0C", () => 0)).text).toBe("LDA, \u221278 \u00b0C");
+  });
+
   it("write a range typed with a hyphen with an en dash, once its word has ended", () => {
     expect(typing("1-2 h")).toBe("1–2 h");
     expect(typing("0-25dc")).toBe("0–25 °C");

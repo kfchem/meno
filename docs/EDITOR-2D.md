@@ -1238,9 +1238,11 @@ All hover-based, as above.
        between the number and °C. DCC, DCM, DCE and dCTP have no number
        before them and stay.
     2. **Minus.** A hyphen at a word's start - the words' start, after a
-       space or an opening bracket - is a minus sign (U+2212) as soon as a
-       digit is typed after it: -78 is −78, (-20 °C) (−20 °C). Hyphens
-       within words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6.
+       space, an opening bracket or a comma - is a minus sign (U+2212) as
+       soon as a digit is typed after it: -78 is −78, (-20 °C) (−20 °C),
+       LDA,-78 LDA,−78 (and its comma then spaced, 5). Hyphens within
+       words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6, 3-pentanone;
+       so does a range's, between two numbers (3).
     3. **Ranges.** A number, one hyphen and a number, a word of its own,
        have an en dash (U+2013) once the word has ended - a space or a
        bracket after it, or the words kept; a stop or a comma only once
@@ -1256,7 +1258,8 @@ All hover-based, as above.
     5. **Commas.** A comma typed straight before a word gets one space
        after it once that word has ended (the maintainer, 2026-10-17):
        Pd(OAc)2,PPh3 is Pd(OAc)2, PPh3, rt,12 h rt, 12 h, and a
-       temperature after it is written as ever (DMF,80dc is DMF, 80 °C).
+       temperature after it is written as ever (DMF,80dc is DMF, 80 °C) -
+       a negative one too (LDA,-78dc is LDA, −78 °C).
        Not where the comma is part of a name, joining two locants - digits
        maybe with a letter, or a capital letter alone, either maybe
        primed: 1,2-DCE, 2,6-lutidine, 2,2,6,6-tetramethyl-, 1',2', 4a,8a,
