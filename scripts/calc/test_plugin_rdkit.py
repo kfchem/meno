@@ -1273,12 +1273,17 @@ class OpenStereo(unittest.TestCase):
         for name, smiles in [("camphor", "CC1(C)C2CCC1(C)C(=O)C2"), ("5-methylnorbornene", "C[C@H]1CC2C=CC1C2"), ("2-butanol", "CC(O)CC")]:
             self.assertEqual(self.drawn(smiles)["isomers"], 2, name)
         # (the same, every centre wedged: nothing open)
-        self.assertEqual(self.drawn("C[C@@H]1C[C@@H]2C=C[C@H]1C2"), {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "free": False})
+        self.assertEqual(self.drawn("C[C@@H]1C[C@@H]2C=C[C@H]1C2"), {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "cumulated": [], "free": False})
 
     def test_an_allenes_axis_left_open_is_said_as_cumulated(self):
         got = self.drawn("CC=C=CC")
         self.assertEqual(got["bonds"], [1, 2])
         self.assertEqual(got["cumulenes"], [1, 2])
+        # (and the run they make, one: an allene's axis, as stereo_left_open gives it)
+        self.assertEqual(got["cumulated"], [[1, 2]])
+        # (a cumulene of three, and two allenes apart, each its own run)
+        self.assertEqual(self.drawn("CC=C=C=CC")["cumulated"], [[1, 2, 3]])
+        self.assertEqual(self.drawn("CC=C=CCC(F)CC=C=CCCC=CC")["cumulated"], [[1, 2], [8, 9]])
         # (not counted: RDKit's enumeration does not give an allene's two forms - why the cumulated bonds are said)
         self.assertEqual(got["isomers"], 1)
 
