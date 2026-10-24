@@ -1554,3 +1554,10 @@ class SmilesStereoOpen(unittest.TestCase):
         self.assertEqual(self.left("CC=CC(=O)O"), (0, 1))
         self.assertEqual(self.left("C/C=C/C(=O)O"), (0, 0))
         self.assertEqual(self.left("CCO"), (0, 0))
+
+    def test_cumulated_double_bonds_left_open_are_one_run_each(self):
+        # (an allene's two bonds one axis, a butatriene's three one cis or trans, a pentatetraene's four one axis: the
+        #  runs say so, whatever RDKit lists each bond as)
+        for smiles, runs in [("CC=C=CC", [[1, 2]]), ("CC=C=C=CC", [[1, 2, 3]]), ("CC=C=C=C=CC", [[1, 2, 3, 4]]), ("CC=CC=CC", [])]:
+            block = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
+            self.assertEqual(self.worker.op_stereo_left_open({"molblock": block})["cumulated"], runs, smiles)
