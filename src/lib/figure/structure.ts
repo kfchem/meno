@@ -4,9 +4,10 @@
  * Meno draws a bond, the page's y turned up as the drawing's is.
  */
 import { NOMINAL_BOND_LENGTH } from "../chem/acs";
-import { reversedLabel } from "../chem/abbreviations";
+import { abbreviationStructure, reversedLabel } from "../chem/abbreviations";
+import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
-import { implicitHydrogens, type Radical } from "../chem/molecule";
+import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
 import type { FigureRead } from "./read";
 
@@ -42,6 +43,30 @@ function drawnHydrogens(label: string): number | null {
   const n = (s: string | undefined) => (s == null ? 0 : s === "" ? 1 : Number.parseInt(s));
   return n(m[1]) + n(m[3]);
 }
+
+const NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
+
+/**
+ * The most bonds an atom read as `el` takes, their orders summed, with its
+ * charge: an element's (lib/chem/molecule `mostBonds`), or a group's - one
+ * bonded by one atom, OMe - what its atom has left past the group's own
+ * bonds; null where nothing says (a metal, a label that names no group).
+ */
+function mostTaken(el: string, charge: number): number | null {
+  const element = mostBonds(el, charge);
+  if (element != null || NAMES.has(el)) return element;
+  const g = abbreviationStructure(el);
+  if (!g || g.attach.length !== 1 || g.haptic?.length || g.lends?.some(Boolean)) return null;
+  const a = g.atoms[g.attach[0]];
+  const most = mostBonds(a.el, (a.charge ?? 0) + charge);
+  if (most == null) return null;
+  const own = g.bonds.filter((b) => b.a1 === g.attach[0] || b.a2 === g.attach[0]).reduce((t, b) => t + b.order, 0);
+  // (its hydrogens: as its SMILES says them, or - not in brackets - as many as its valence leaves with the one bond it is bonded by)
+  return most - own - (a.hs ?? implicitHydrogens(a.el, own + 1, (a.charge ?? 0) + charge));
+}
+
+/** What an atom read as `el` is called, saying it has too many bonds: a carbon, oxygen, "OMe". */
+const calledAs = (el: string) => (el === "C" ? "a carbon" : (NAMES.get(el) ?? `"${el}"`));
 
 /**
  * The structure a figure reads as: the page's points made Meno's units,
@@ -95,6 +120,19 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
       if (orders[i] > 1) double[end] = true;
     }
   });
+  // (more bonds than an atom takes - its charge counted, a group's atom past the group's own bonds - said, whatever it is drawn
+  // as; and a radical's dots by an atom its bonds leave no unpaired electron, none - a speck, or a letter's round shape - said)
+  const tooMany = read.atoms.map((_, i): string | null => {
+    const most = mostTaken(els[i], charges[i]);
+    if (most == null) return null;
+    if (most < 0) return `A charge of ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
+    if (valence[i] > most) {
+      return valence[i] > (mostTaken(els[i], 0) ?? most) ? `More bonds meet here than ${calledAs(els[i])} has.` : `Its charge, ${chargeText(charges[i])}, and its bonds are more than ${calledAs(els[i])} takes.`;
+    }
+    if (!radicals[i] || valence[i] <= most - (radicals[i] === "doublet" ? 1 : 2)) return null;
+    radicals[i] = undefined;
+    return `${read.atoms[i].dots === 1 ? "A dot" : "Two dots"} by it, but its bonds leave it no unpaired electron: no radical is read.`;
+  });
   const atoms = read.atoms.map((a, i): StructureAtom => {
     const unsure = [...(a.unsure ?? [])];
     const label = labels[i];
@@ -107,9 +145,9 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
         const left = implicitHydrogens(els[i], valence[i], charges[i], radicals[i]);
         if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
-    } else if (els[i] === "C" && valence[i] > 4) {
-      unsure.push("More bonds meet here than a carbon has.");
     }
+    const over = tooMany[i];
+    if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;
     if (radicals[i] === "singlet") unsure.push("Two dots: read as a pair of electrons (a singlet); a triplet is drawn the same.");
     return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(isotope ? { isotope } : {}), ...(radicals[i] ? { radical: radicals[i] } : {}), ...(unsure.length ? { unsure } : {}) };

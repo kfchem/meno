@@ -1317,7 +1317,21 @@ it where it lies out of view.
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
     neither could (where only one could, it is that one);
-  - more bonds meeting at a carbon than it has;
+  - more bonds meeting at an atom than it takes - an element's valence, a
+    heavier one's highest (P(V), S(VI), I(VII)), as its charge leaves it;
+    a group's label (OMe) what its atom has left past the group's own
+    bonds; a metal never - however its label is drawn ("More bonds meet
+    here than oxygen has."), and a charge more than its atom carries. And
+    the structure is checked again as a file has it, each label written
+    out as the atoms it stands for: any atom of it with more bonds than it
+    takes - an H with two, a halogen bonded to two carbons (one more for
+    each positive charge: a diaryliodonium's iodine) - marks the atom or
+    label drawn, so that nothing whose valence is broken is put down
+    looking sure;
+  - a radical's dots by an atom whose bonds leave it no unpaired electron:
+    no radical is read - a speck, or a letter's round shape, lies there
+    as often ("A dot by it, but its bonds leave it no unpaired electron:
+    no radical is read.");
   - a bond drawn twice over;
   - a stereocentre whose configuration the figure does not show - no
     wedge or hash narrow at it, as a cage drawn in perspective has none -

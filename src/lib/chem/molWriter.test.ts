@@ -1,6 +1,6 @@
 import { readSDfile } from "./ctfile";
 import { describe, expect, it } from "vitest";
-import { writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type Atom3D, type Bond3D, type WriterModel } from "./molWriter";
+import { overBonded, writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type Atom3D, type Bond3D, type WriterModel } from "./molWriter";
 import { readMolfile, readRxnfile } from "./ctfile";
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import {
@@ -606,5 +606,49 @@ describe("past what V2000 holds", () => {
     const title = "a".repeat(79) + two + "b";
     expect(writeMolfile(chain2d(2), { title }).split("\n")[0]).toBe("a".repeat(79) + two);
     expect(writeRxnfile({ reactants: [chain2d(2)], products: [chain2d(2)], reagents: [] }, { title }).split("\n")[1]).toBe("a".repeat(79) + two);
+  });
+});
+
+describe("overBonded", () => {
+  /** A centre atom (id 1) with the given atoms bonded to it, each by its order. */
+  const star = (centre: Partial<WriterModel["atoms"][number]> & { el: string }, around: [string, 1 | 2 | 3, number?][]): WriterModel => ({
+    atoms: [{ id: 1, x: 0, y: 0, ...centre }, ...around.map(([el, , charge], k) => ({ id: k + 2, x: Math.cos(k), y: Math.sin(k), el, ...(charge ? { charge } : {}) }))],
+    bonds: around.map(([, order], k) => ({ a: 1, b: k + 2, order })),
+  });
+
+  it("finds an atom with more bonds than it takes, written out as a file has it: a carbon of five, an oxygen of three, an H double bonded", () => {
+    expect([...overBonded(star({ el: "C" }, [["C", 1], ["C", 1], ["C", 1], ["C", 2]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "O" }, [["C", 1], ["C", 1], ["C", 1]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "H" }, [["C", 2]]))]).toEqual([1]);
+  });
+
+  it("finds a halogen bonded to two carbons, but not perchlorate's chlorine nor a diaryliodonium's iodine", () => {
+    expect([...overBonded(star({ el: "Cl" }, [["C", 1], ["C", 1]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "Cl" }, [["O", 2], ["O", 2], ["O", 2], ["O", 1, -1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "I", charge: 1 }, [["C", 1], ["C", 1]]))]).toEqual([]);
+  });
+
+  it("finds a halogen with a second bond to a nitrogen or a label, or a dot by it; an H charged and bonded; an O given a third by a bond lent to it", () => {
+    expect([...overBonded(star({ el: "Br" }, [["C", 1], ["N", 1]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "Cl" }, [["X1", 2]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "Cl", radical: "doublet" }, [["C", 1]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "H", charge: 1 }, [["Br", 1]]))]).toEqual([1]);
+    const lent: WriterModel = { atoms: [{ id: 1, x: 0, y: 0, el: "O" }, { id: 2, x: 1, y: 0, el: "C" }, { id: 3, x: -1, y: 0, el: "C" }, { id: 4, x: 0, y: 1, el: "C" }], bonds: [{ a: 2, b: 1, order: 1, dative: true }, { a: 1, b: 3, order: 1 }, { a: 1, b: 4, order: 1 }] };
+    expect([...overBonded(lent)]).toEqual([1]);
+    // (but not a boron lent a pair: H3N->BH3)
+    const borane: WriterModel = { atoms: [{ id: 1, x: 0, y: 0, el: "B" }, { id: 2, x: 1, y: 0, el: "N" }], bonds: [{ a: 2, b: 1, order: 1, dative: true }] };
+    expect([...overBonded(borane)]).toEqual([]);
+  });
+
+  it("finds a label whose atoms, written out, have more bonds than they take - OEt bonded twice - by the label's id", () => {
+    expect([...overBonded(star({ el: "OEt" }, [["C", 1], ["C", 1]]))]).toEqual([1]);
+    expect([...overBonded(star({ el: "OEt" }, [["C", 1]]))]).toEqual([]);
+  });
+
+  it("finds none in what takes its bonds: an ammonium's nitrogen, a sulfone's sulfur, a phosphate's phosphorus, a halide bridging two metals", () => {
+    expect([...overBonded(star({ el: "N", charge: 1 }, [["C", 1], ["C", 1], ["C", 1], ["C", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "S" }, [["C", 1], ["C", 1], ["O", 2], ["O", 2]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "P" }, [["O", 2], ["O", 1], ["O", 1], ["O", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "Cl" }, [["Pd", 1], ["Pd", 1]]))]).toEqual([]);
   });
 });

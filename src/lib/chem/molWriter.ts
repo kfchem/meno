@@ -2,7 +2,7 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import type { AbbreviationStructure, AtomChem, BondChem, Radical, SgroupMark } from "./molecule";
+import { mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
 import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
@@ -213,6 +213,58 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   }
   return { model: { atoms, bonds }, sups, aliases };
 }
+
+/**
+ * The atoms drawn that, written out as a file has them - each label as the
+ * atoms it stands for - have an atom with more bonds than it takes
+ * (./molecule `mostBonds`; a hydrogen one, none charged or with its
+ * electron unpaired; a halogen one to what is not oxygen nor fluorine, and
+ * one more for each positive charge): by id, a label's for any atom of it.
+ * A metal is never one, nor an atom bonded to a metal (a halide bridging
+ * two, a hydride). A bond lent between two non-metals counts at the end it
+ * is lent to, but a boron's; any other counts as `valenceOrder` counts it.
+ */
+export function overBonded(model: WriterModel): Set<number> {
+  const { model: out, sups } = prepared(model);
+  const drawn = new Map<number, number>();
+  for (const s of sups) for (const id of s.atoms) drawn.set(id, s.atoms[0]);
+  const byId = new Map(out.atoms.map((a) => [a.id, a]));
+  const sums = new Map<number, number>();
+  const byMetal = new Set<number>();
+  // (a halogen's bonds to what is not oxygen nor fluorine: its higher valences are those - ClO4-, IF5, PhI(OAc)2)
+  const plain = new Map<number, number>();
+  const add = (m: Map<number, number>, id: number, v: number) => m.set(id, (m.get(id) ?? 0) + v);
+  for (const b of out.bonds) {
+    const metal = [b.a, b.b].some((id) => isMetal(byId.get(id)?.el ?? ""));
+    for (const [end, other] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      // (a bond lent between two non-metals counts at the end it is lent to - C->O gives the O a third - but a boron's, an
+      // aluminium's, which take a pair: H3N->BH3)
+      const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "");
+      add(sums, end, lent ? b.order : valenceOrder(b, byId.get(end)?.el));
+      if (isMetal(byId.get(other)?.el ?? "")) byMetal.add(end);
+      if (HALOGENS.has(byId.get(end)?.el ?? "") && !["O", "F"].includes(byId.get(other)?.el ?? "")) add(plain, end, b.order);
+    }
+  }
+  const unpaired = (a: (typeof out.atoms)[number]) => (a.radical === "doublet" ? 1 : a.radical ? 2 : 0);
+  const over = new Set<number>();
+  for (const a of out.atoms) {
+    if (byMetal.has(a.id)) continue;
+    const sum = sums.get(a.id) ?? 0;
+    // (an H takes one bond - none, charged or with its electron unpaired; a halogen one to what is not O nor F, and one more for
+    // each positive charge, as a diaryliodonium's iodine has two carbons)
+    const h = a.el === "H" && sum + Math.abs(a.charge ?? 0) + unpaired(a) > 1;
+    const halogen = HALOGENS.has(a.el) && (plain.get(a.id) ?? 0) + unpaired(a) > 1 + Math.max(0, a.charge ?? 0);
+    const most = mostBonds(a.el, a.charge ?? 0, a.radical);
+    if (h || halogen || (most != null && sum > most)) over.add(drawn.get(a.id) ?? a.id);
+  }
+  return over;
+}
+
+const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
+const TAKE_A_PAIR = new Set(["B", "Al", "Ga", "In"]);
 
 /** An Sgroup to write: its type, its atoms by id, and what the file says of it. */
 type Group = {

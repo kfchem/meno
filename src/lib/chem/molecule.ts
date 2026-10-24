@@ -256,13 +256,31 @@ export function implicitHydrogens(
 ): number {
   const v = VALENCE[el];
   if (!v) return 0;
-  let valence = v.valence;
+  return Math.max(0, valenceAs(v, v.valence, charge, radical) - bondOrderSum);
+}
+
+/** A valence as a charge and an unpaired electron leave it, as `implicitHydrogens` counts them. */
+function valenceAs(v: { group: number }, valence: number, charge: number, radical?: Radical): number {
   if (v.group >= 15) valence += charge;
   else if (v.group === 14) valence -= Math.abs(charge);
   else valence -= charge;
   if (radical === "doublet") valence -= 1;
   else if (radical) valence -= 2;
-  return Math.max(0, valence - bondOrderSum);
+  return valence;
+}
+
+/** The highest valence an element below the second row takes, past its own: P(V), S(VI), I(VII). */
+const HIGHEST: Record<string, number> = { P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
+
+/**
+ * The most an atom's bonds' orders can sum to: its element's valence - a
+ * heavier one's highest (P(V), S(VI), I(VII)) - as its charge and an
+ * unpaired electron leave it, counted as `implicitHydrogens` counts them;
+ * null for an element with no valence here, a metal.
+ */
+export function mostBonds(el: string, charge = 0, radical?: Radical): number | null {
+  const v = VALENCE[el];
+  return v ? valenceAs(v, HIGHEST[el] ?? v.valence, charge, radical) : null;
 }
 
 /**
