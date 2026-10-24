@@ -197,13 +197,14 @@ body {
   pointer-events: none !important;
 }
 /* The words of the page's cards and sets, faded with the zoom as chips are
-   (`--words`); and what stands for them where they go, faded in as they go. */
+   (`--words`); and what stands for them where they are gone, faded in once
+   they are (`--stand-in`): one after the other, never both at once. */
 .meno-words,
 .meno-words-each > span {
   opacity: var(--words, 1);
 }
 .meno-words-gone {
-  opacity: calc(1 - var(--words, 1));
+  opacity: var(--stand-in, 0);
 }
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */

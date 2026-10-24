@@ -1,13 +1,14 @@
 import { useContext, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { PageHtmlLayer } from "./coverLayer";
-import { pageScale, wordsShown, wordsTooSmall } from "../utils/pageScale";
+import { pageScale, standInShown, wordsShown, wordsTooSmall } from "../utils/pageScale";
 
 /**
  * The page's scale, told to what is drawn on it in HTML (utils/pageScale):
  * `--page` on the layer it is drawn in, how many screen pixels a page pixel
  * is - which chips grow and shrink by (`.meno-page-chip`) - `--words`,
- * how much of their words is shown (`wordsShown`), and `data-words-small`
+ * how much of their words is shown (`wordsShown`) and of what stands for
+ * them (`standInShown`), and `data-words-small`
  * there while their words would be too small to read.
  */
 export default function PageScale() {
@@ -21,6 +22,7 @@ export default function PageScale() {
     told.current = { layer, zoom };
     layer.style.setProperty("--page", pageScale(zoom).toFixed(4));
     layer.style.setProperty("--words", wordsShown(zoom).toFixed(3));
+    layer.style.setProperty("--stand-in", standInShown(zoom).toFixed(3));
     layer.toggleAttribute("data-words-small", wordsTooSmall(zoom));
   });
   return null;

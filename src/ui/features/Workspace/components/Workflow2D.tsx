@@ -20,7 +20,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { wordsShown, wordsTooSmall } from "../utils/pageScale";
+import { standInShown, wordsShown, wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
@@ -507,6 +507,7 @@ export default function Workflow2D() {
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
     layer.current?.style.setProperty("--words", wordsShown(z).toFixed(3));
+    layer.current?.style.setProperty("--stand-in", standInShown(z).toFixed(3));
     portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
   });
 

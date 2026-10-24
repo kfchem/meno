@@ -2631,11 +2631,13 @@ each entry's number, then its energy).
   an energy diagram - is still drawn, its points, levels, lines and axes;
   only its words fade out, as a set's name and count do. A table and a
   number, all words, fade out whole. All of these, and a step's card's
-  words - its icons alone growing in as they go - fade with the zoom, not
-  at once: from fully shown at 1.15 times the least scale words are read
-  at to gone at 1/1.15 of it, about four notches of a mouse wheel
-  (utils/pageScale `wordsShown`, `--words` on the page's layer), as a
-  molecule's chips do.
+  words, fade with the zoom, not at once: from fully shown at 1.15 times
+  the least scale words are read at to gone at that scale, about two
+  notches of a mouse wheel (utils/pageScale `wordsShown`, `--words` on the
+  page's layer), as a molecule's chips do. A step's card's large icons,
+  which stand for its words where they are gone, come in only after, from
+  that scale to 1/1.15 of it (`standInShown`, `--stand-in`): the two are
+  never seen at once.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`
