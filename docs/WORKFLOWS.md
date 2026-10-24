@@ -213,6 +213,9 @@ As Meno's own things look (decided: 15), not as the figures here do:
   shows through a little). Its bars are named over them (*Energy above
   the lowest, each conformer*), laid on whole device pixels, each as wide
   as the next; in its line a number is never parted from its unit.
+  *How it was made* (the method, seed and what was kept, as what made it
+  says them) stays shut under its name until its chevron opens it,
+  eased: the card keeps to what the molecule is, and leaves it in view.
 
 Everything comes and goes as Meno's things do (theme/motion): a set, a
 step and a wire fade in where they are put; a state changes its words

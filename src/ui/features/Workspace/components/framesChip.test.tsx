@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { FramesChip } from "./Frames3D";
+import { ResultGroups } from "./PointedCard3D";
 import { unitsHeld } from "../../../../lib/calc/results";
 import { barsAbove, FAILURES_ASTRAY } from "../utils/barsAbove";
 
@@ -63,6 +64,24 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain("3<!-- --> / <!-- -->60");
     expect(html).toContain("aspirin");
     expect(html).toContain("cursor-pointer");
+  });
+
+  it("keeps how it was made shut under its name, a chevron to open it - the rest of what it says shown as it was", () => {
+    const html = renderToString(
+      <ResultGroups
+        groups={[
+          { group: "Energies", rows: [{ label: "Total", text: "-1 Eh" }] },
+          { group: "How it was made", rows: [{ label: "Method", text: "ETKDG v3 + MMFF94" }], folded: true },
+        ]}
+      />,
+    );
+    // (a button of its own, shut; its rows under it laid out but shut - no browser disclosure)
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*How it was made<\/button>/);
+    expect(html).toMatch(/grid-template-rows:\s*0fr[^"]*opacity:\s*0/);
+    expect(html).not.toContain("<details");
+    // (a group not folded: its name and rows as they were, no button)
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).toContain('<div class="text-[10px] text-gh-gray">Energies</div>');
   });
 
   it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {

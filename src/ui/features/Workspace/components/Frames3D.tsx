@@ -269,9 +269,9 @@ export function FramesChip({
     return { text: valueText(v, r), marked: isMarked(v, r) };
   });
   if (unread?.length) details.push({ group: "Could not read it", rows: unread.map((u) => ({ label: readerNameOf(u.from), text: u.why })) });
-  // (its method first, in the words of what made it: a starting geometry, as it was made)
+  // (its method first, in the words of what made it: a starting geometry, as it was made - shut until asked for, as it would fill the card past what the molecule is)
   const madeRows = made ? [...(made.method ? [{ label: "Method", text: made.method }] : []), ...made.how] : [];
-  if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })) });
+  if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })), folded: true });
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
   if (noShares) details.push({ group: "Shares", rows: [{ label: "None", text: noShares }] });
   // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
