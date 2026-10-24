@@ -155,7 +155,7 @@ describe("the energy a structure's notes give it", () => {
   it("is none of a structure whose notes give two that differ, saying why beside them", () => {
     const m = water(["E(MP2) = -76.30 au", "E(HF) = -76.01 au"]);
     expect([m.energies, m.made]).toEqual([undefined, undefined]);
-    expect(m.said?.at(-1)).toEqual({ label: "Energy", text: "none taken: its notes give E(MP2) = -76.3 and E(HF) = -76.01, which differ" });
+    expect(m.said?.[m.said.length - 1]).toEqual({ label: "Energy", text: "none taken: its notes give E(MP2) = -76.3 and E(HF) = -76.01, which differ" });
   });
 
   it("is none of a structure whose notes give another quantity alone: the note shown, no energy given it", () => {
