@@ -628,7 +628,13 @@ describe("overBonded", () => {
     expect([...overBonded(star({ el: "I", charge: 1 }, [["C", 1], ["C", 1]]))]).toEqual([]);
     // (nor an alkynyl benziodoxolone's: two carbons and an oxygen, neutral)
     expect([...overBonded(star({ el: "I" }, [["C", 1], ["C", 1], ["O", 1]]))]).toEqual([]);
-    expect([...overBonded(star({ el: "I" }, [["C", 1], ["C", 1], ["C", 1]]))]).toEqual([1]);
+    // (nor an iodine(III) with halogens, oxygens or carbons - PhICl2, Ph3I - nor hypervalent silicon: SiF6 2-)
+    expect([...overBonded(star({ el: "I" }, [["C", 1], ["Cl", 1], ["Cl", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "I" }, [["C", 1], ["C", 1], ["C", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "Si", charge: -2 }, [["F", 1], ["F", 1], ["F", 1], ["F", 1], ["F", 1], ["F", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "Si", charge: -1 }, [["C", 1], ["O", 1], ["O", 1], ["O", 1], ["O", 1]]))]).toEqual([]);
+    // (but an iodine with three bonds to nitrogens, uncharged, is)
+    expect([...overBonded(star({ el: "I" }, [["N", 1], ["N", 1], ["N", 1]]))]).toEqual([1]);
   });
 
   it("finds a halogen with a second bond to a nitrogen or a label, or a dot by it; an H charged and bonded; an O given a third by a bond lent to it", () => {

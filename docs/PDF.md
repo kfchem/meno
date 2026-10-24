@@ -1335,8 +1335,9 @@ it where it lies out of view.
     the structure is checked again as a file has it, each label written
     out as the atoms it stands for: any atom of it with more bonds than it
     takes - an H with two, or one charged; a halogen bonded to more than
-    one atom that is not O nor F (an iodine to more than two; one more for
-    each positive charge: a diaryliodonium's iodine); a charge past four
+    one atom that is not O nor F (an iodine to more than two that are not
+    a halogen, O nor C - PhICl2 and Ph3I take theirs; one more for each
+    positive charge: a diaryliodonium's iodine); a charge past four
     either way - marks the atom or
     label drawn, so that nothing whose valence is broken is put down
     looking sure;

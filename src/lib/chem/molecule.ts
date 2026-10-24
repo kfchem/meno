@@ -269,8 +269,8 @@ function valenceAs(v: { group: number }, valence: number, charge: number, radica
   return valence;
 }
 
-/** The highest valence an element below the second row takes, past its own: P(V), S(VI), I(VII). */
-const HIGHEST: Record<string, number> = { P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
+/** The highest valence an element below the second row takes, past its own: SiF6 2-'s six, P(V), S(VI), I(VII). */
+const HIGHEST: Record<string, number> = { Si: 6, P: 5, S: 6, Se: 6, Cl: 7, Br: 7, I: 7 };
 
 /**
  * The most an atom's bonds' orders can sum to: its element's valence as its

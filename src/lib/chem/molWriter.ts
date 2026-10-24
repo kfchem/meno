@@ -218,9 +218,9 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
  * The atoms drawn that, written out as a file has them - each label as the
  * atoms it stands for - have an atom with more bonds than it takes
  * (./molecule `mostBonds`; a hydrogen one, none charged or with its
- * electron unpaired; a halogen one to what is not oxygen nor fluorine, an
- * iodine two, and one more for each positive charge): by id, a label's for
- * any atom of it.
+ * electron unpaired; a halogen one to what is not oxygen nor fluorine - an
+ * iodine two to what is not a halogen, oxygen nor carbon - and one more for
+ * each positive charge): by id, a label's for any atom of it.
  * A metal is never one, nor an atom bonded to a metal (a halide bridging
  * two, a hydride). A bond lent between two elements, neither a metal,
  * counts at the end it is lent to, but a boron's; any other counts as
@@ -233,7 +233,8 @@ export function overBonded(model: WriterModel): Set<number> {
   const byId = new Map(out.atoms.map((a) => [a.id, a]));
   const sums = new Map<number, number>();
   const byMetal = new Set<number>();
-  // (a halogen's bonds to what is not oxygen nor fluorine: its higher valences are those - ClO4-, IF5, PhI(OAc)2)
+  // (a halogen's bonds to what is not oxygen nor fluorine: its higher valences are those - ClO4-, IF5 - and an iodine's to a
+  // halogen, an oxygen or a carbon too: PhICl2, PhI(OAc)2, Ph3I)
   const plain = new Map<number, number>();
   const add = (m: Map<number, number>, id: number, v: number) => m.set(id, (m.get(id) ?? 0) + v);
   for (const b of out.bonds) {
@@ -247,7 +248,8 @@ export function overBonded(model: WriterModel): Set<number> {
       const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "") && ELEMENT_SYMBOLS.has(byId.get(other)?.el ?? "");
       add(sums, end, lent ? b.order : valenceOrder(b, byId.get(end)?.el));
       if (isMetal(byId.get(other)?.el ?? "")) byMetal.add(end);
-      if (HALOGENS.has(byId.get(end)?.el ?? "") && !["O", "F"].includes(byId.get(other)?.el ?? "")) add(plain, end, b.order);
+      const el = byId.get(end)?.el ?? "";
+      if (HALOGENS.has(el) && !(el === "I" ? IODINE_TAKES : ["O", "F"]).includes(byId.get(other)?.el ?? "")) add(plain, end, b.order);
     }
   }
   const unpaired = (a: (typeof out.atoms)[number]) => (a.radical === "doublet" ? 1 : a.radical ? 2 : 0);
@@ -268,6 +270,7 @@ export function overBonded(model: WriterModel): Set<number> {
 
 const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
 const TAKE_A_PAIR = new Set(["B", "Al", "Ga", "In"]);
+const IODINE_TAKES = ["O", "F", "Cl", "Br", "I", "C"];
 
 /** An Sgroup to write: its type, its atoms by id, and what the file says of it. */
 type Group = {
