@@ -179,6 +179,27 @@ describe("the structures of a figure, each taken whole", () => {
       expect([one(picolinium), unsure(picolinium)]).toEqual([[["C6 Cl1 N1", 0]], [[]]]);
     });
 
+    it("takes a counter-ion in a row 3 bonds and more from the atom by it, its label's ink within 3 of that atom's: a pyridinium's Cl- level with its ring's middle", () => {
+      const r = ring([150, 200]);
+      const paths = r.map((p, k) => bond(p, r[(k + 1) % 6], [k === 0, k === 5]));
+      const drawn: FigureDrawn = { paths: [...paths, beside(r[1], r[2], -1.8), beside(r[3], r[4], -1.8), beside(r[5], r[0], -1.8)], letters: [...letters("N+", r[0]), ...letters("Cl−", [r[0][0] + 3.05 * L, 200])], pictures: [] };
+      expect([one(drawn), unsure(drawn)]).toEqual([[["C5 Cl1 N1", 0]], [[]]]);
+    });
+
+    it("says a structure charged still is unsure of an ion further than it takes one from: as far again as a piece is set from the next", () => {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const o = step(b, -30);
+      // (4.2 bonds off, level - its label's ink 3.3 from the O-'s: past what it takes, within what it says - and a word)
+      const far: FigureDrawn = { paths: [bond(a, b), beside(a, b, -1.8), bond(b, o, [false, true])], letters: [...letters("O−", o), ...letters("K+", [o[0] + 4.2 * L, o[1]])], pictures: [] };
+      expect(one(far)).toEqual([["C2 O1", -1]]);
+      expect(unsure(far)).toContainEqual(['"K+" beside it is not taken with it: a counter-ion of it, perhaps.']);
+      // (but not one a "+" stands between: set apart, as two things are)
+      const plus = { c: "+", box: [o[0] + 2 * L - 3, o[1] - 3, o[0] + 2 * L + 3, o[1] + 3] as [number, number, number, number], at: [o[0] + 2 * L - 3, o[1] + 3] as [number, number], size: 10 };
+      const apart: FigureDrawn = { ...far, letters: [...far.letters, plus] };
+      expect(unsure(apart)).toEqual([[]]);
+    });
+
     it("leaves an ion in a row that would not make the structure neutral apart - and the structure, charged still, unsure, saying so; one with no ion by it sure", () => {
       const a: P = [100, 200];
       const b = step(a, 30);

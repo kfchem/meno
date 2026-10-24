@@ -73,6 +73,8 @@ const LONE_JOINS = 1.6;
  * salt's pieces out in a row, each centred on it (lib/layout/engine) - may be, in bonds: a salt's counter-ion, NMe4+ Br-.
  */
 const ION_ROW = 3;
+/** The paper Meno sets between the ink of one piece of a drawing and the next's, in bonds (lib/layout/engine): a salt's ion, as far again past ION_ROW, is still said not taken where it is not. */
+const PIECE_GAP = 1.5;
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 
@@ -112,6 +114,11 @@ function crosses(p: Point, q: Point, r: Point, s: Point): boolean {
 /** What of a scheme lies between its structures, in the figure read's own points: its arrows' pieces, and its "+" signs. */
 export type Apart = { segments: readonly [Point, Point][]; pluses: readonly Point[] };
 
+/** Whether nothing of a scheme lies between two points: no arrow's piece across the way, no "+" within half a bond of it. */
+function clearBetween(apart: Apart, bond: number, p: Point, q: Point): boolean {
+  return !apart.segments.some(([r, s]) => crosses(p, q, r, s)) && !apart.pluses.some((c) => toSegment(c, p, q) < 0.5 * bond);
+}
+
 /**
  * The atoms of a figure read, in its structures: each atom's structure's place, by atom - none that is one line with no label,
  * nor a lone labelled atom by no structure. A lone labelled atom is the structure's it lies by, within LONE_JOINS bonds (an ion
@@ -134,7 +141,7 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
   });
   const found = [...groups.values()];
   // (nothing of the scheme between two points: no arrow's piece across the way, no "+" within half a bond of it)
-  const clear = (p: Point, q: Point) => !apart.segments.some(([r, s]) => crosses(p, q, r, s)) && !apart.pluses.some((c) => toSegment(c, p, q) < 0.5 * f.bond);
+  const clear = (p: Point, q: Point) => clearBetween(apart, f.bond, p, q);
   // (each lone labelled atom by the structure nearest it, the way clear; those by each, nearest first)
   const by = new Map<number[], { i: number; d: number }[]>();
   const alone: number[] = [];
@@ -158,8 +165,11 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
       const d = dist(a, f.atoms[j]);
       const ys = g.map((k) => f.atoms[k].y);
       const level = (y: number) => Math.abs(a.y - y) <= 0.5 * f.bond;
-      const reach = ion && (level(f.atoms[j].y) || level((Math.min(...ys) + Math.max(...ys)) / 2)) ? ION_ROW * Math.max(f.bond, between) : LONE_JOINS * f.bond;
-      if (d > reach) continue;
+      // (in a row, as far as ION_ROW bonds of paper from the ink of its label to the ink of the atom's - as Meno sets a salt's
+      // pieces apart, ink to ink - else LONE_JOINS from atom to atom)
+      const row = ion && (level(f.atoms[j].y) || level((Math.min(...ys) + Math.max(...ys)) / 2));
+      const inkOf = (k: number): Box => f.atoms[k].box ?? [f.atoms[k].x, f.atoms[k].y, f.atoms[k].x, f.atoms[k].y];
+      if (row ? boxToBox(inkOf(i), inkOf(j)) > ION_ROW * Math.max(f.bond, between) : d > LONE_JOINS * f.bond) continue;
       candidate = true;
       if (d < near && clear(a, f.atoms[j])) [best, near] = [g, d];
     }
@@ -182,8 +192,9 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
     if (left === 0) g.push(...taken);
     else alone.push(...taken);
   }
-  // (a structure charged still, by an ion of the other charge none took - as near as ION_ROW bonds, level or not, across the
-  // way or not: what is not known to be its counter-ion is not known not to be)
+  // (a structure charged still, by an ion of the other charge none took - as near as ION_ROW and PIECE_GAP bonds, atom to
+  // atom, level or not - with no arrow nor "+" between, which says the two are apart: what is not known to be its
+  // counter-ion is not known not to be)
   const taken = new Set(found.flat());
   const missed = new Map<number[], string[]>();
   for (const g of found) {
@@ -191,7 +202,8 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
     if (!left) continue;
     const near = f.atoms.flatMap((a, i) => {
       if (taken.has(i) || bonded.has(i) || !a.label || Math.sign(chargeOf(a)) !== -Math.sign(left)) return [];
-      return g.some((k) => dist(a, f.atoms[k]) <= ION_ROW * Math.max(f.bond, between)) ? [a.label] : [];
+      const j = g.reduce((m, k) => (dist(a, f.atoms[k]) < dist(a, f.atoms[m]) ? k : m), g[0]);
+      return dist(a, f.atoms[j]) <= (ION_ROW + PIECE_GAP) * Math.max(f.bond, between) && clear(a, f.atoms[j]) ? [a.label] : [];
     });
     if (near.length) missed.set(g, near);
   }
@@ -293,7 +305,7 @@ export function figureOn(given: FigureDrawn, figure: number, sha256: string, pag
 
 /** The structures of a figure read - each refused where letters of the figure no atom took, or words it read, lie within it. */
 function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number, sha256: string, page: number, words: readonly Pick<FigureLetter, "c" | "box">[], apart?: Apart): PageStructure[] {
-  return structuresIn(f, apart).map(({ ids, missed }, k): PageStructure => {
+  return structuresIn(f, apart).map(({ ids, missed: notTaken }, k): PageStructure => {
     const at = new Map(ids.map((i, j) => [i, j]));
     const atoms = ids.map((i) => back(f.atoms[i]));
     const mine = f.bonds.filter((b) => at.has(b.a));
@@ -308,7 +320,19 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     for (const b of mine) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
     const ends = ids.filter((i) => degree.get(i) === 1 && !f.atoms[i].label).map((i) => back(f.atoms[i]));
     // (its own reading: its atoms and bonds alone, its middle at naught, each atom tied to where it lies on the page)
-    // (charged still, an ion of the other charge by it not taken: each charged atom of it unsure, saying so)
+    // (charged still, an ion of the other charge by it not taken - read as an atom of no structure's, or left a word: each
+    // charged atom of it unsure, saying so)
+    const left = ids.reduce((t, i) => t + chargeOf(f.atoms[i]), 0);
+    const ionWords = left
+      ? words.flatMap((w) => {
+          const label = readDrawnLabel(w.c.trim(), figureLabels);
+          const mid = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
+          const j = ids.reduce((m, k) => (toBox(f.atoms[k], w.box) < toBox(f.atoms[m], w.box) ? k : m), ids[0]);
+          const near = toBox(f.atoms[j], w.box) <= (ION_ROW + PIECE_GAP) * f.bond && (!apart || clearBetween(apart, f.bond, f.atoms[j], mid));
+          return label.read && Math.sign(label.charge ?? 0) === -Math.sign(left) && near ? [w.c.trim()] : [];
+        })
+      : [];
+    const missed = [...notTaken, ...ionWords];
     const said = missed.length ? `${missed.map((l) => `"${l}"`).join(", ")} beside it ${missed.length > 1 ? "are" : "is"} not taken with it: ${missed.length > 1 ? "counter-ions" : "a counter-ion"} of it, perhaps.` : null;
     const own = ids.map((i) => (said && chargeOf(f.atoms[i]) ? { ...f.atoms[i], unsure: [...(f.atoms[i].unsure ?? []), said] } : f.atoms[i]));
     const part: FigureRead = { atoms: own, bonds: mine.map((b) => ({ ...b, a: at.get(b.a)!, b: at.get(b.b)! })), bond: f.bond, left: { letters: [] } };
