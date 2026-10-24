@@ -56,6 +56,20 @@ describe("partToCopy", () => {
 });
 
 describe("the clipboard's items", () => {
+  it("keep where a structure was read from a figure, and that it was said to be checked, so its note goes with it: but only a check that reads as one", () => {
+    const seen = { sha256: "a".repeat(64), page: 2, x: 0, y: 0, bond: 14.4 };
+    const read: Model = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", seen },
+        { id: 2, x: 1.5, y: 0, r: 0.9, el: "O", seen: { ...seen, checked: true } },
+      ],
+      bonds: [{ id: 3, a: 1, b: 2, order: 1 }],
+    };
+    expect(readRecord(clipItems(read)[0].text!)).toEqual(read);
+    const odd = clipItems({ ...read, atoms: read.atoms.map((a) => ({ ...a, seen: { ...seen, checked: "yes" } })) as unknown as Model["atoms"] })[0].text!;
+    expect(readRecord(odd)?.atoms.map((a) => a.seen)).toEqual([seen, seen]);
+  });
+
   it("are Meno's own record, read back as it was, and a MOL file - never plain text", () => {
     const items = clipItems(model);
     expect(items.map((i) => i.flavor)).toEqual(["meno", "mol"]);

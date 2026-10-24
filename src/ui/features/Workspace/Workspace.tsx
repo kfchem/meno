@@ -130,7 +130,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
-import { cleanUp } from "./chem/cleanUp";
+import { cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
@@ -222,6 +222,8 @@ import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
+import FigureNotes2D from "./components/FigureNotes2D";
+import { figureNotesOf } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
@@ -765,7 +767,7 @@ function WorkspaceContent({
     const box = dropRef.current?.getBoundingClientRect();
     if (!box) return;
     setMenu({
-      kind: "pdf",
+      kind: menuAsk.kind ?? "pdf",
       id: menuAsk.id,
       selection: "none",
       at: pasteTarget(),
@@ -2368,6 +2370,15 @@ function WorkspaceContent({
             const at = structureAt(menu.kind, menu.id);
             if (at != null) store.getState().selectStructure(at);
           }}
+          figure={(() => {
+            // (its structure read from a figure, not yet said to be checked: saying so, one step - its note going)
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            if (at == null) return undefined;
+            const m = store.getState().model;
+            const atoms = fragmentOf(m, at);
+            const note = figureNotesOf(m).find((n) => n.atoms.has(at));
+            return note ? { run: () => store.getState().setFigureChecked([...atoms], true) } : undefined;
+          })()}
           stereo={(() => {
             const st = store.getState();
             const item = stereoItemFor(st, menu);
@@ -2644,6 +2655,7 @@ function WorkspaceContent({
           <StackSwap2D />
           <StackChips2D />
           <MagnifiedMarks2D />
+          <FigureNotes2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />

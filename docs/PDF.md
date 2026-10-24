@@ -1314,7 +1314,8 @@ it where it lies out of view.
   radical's unpaired electron; two side by side a pair, read as a singlet
   and marked so (a triplet is drawn the same). A lone H takes one
   bond: its wedge's, where it has one. A word with a charge - written,
-  or drawn in a ring beside it - by the structure, at no bond's end and
+  or drawn in a ring beside it - by the structure (within two and a half
+  bonds of its ink, its labels and all), at no bond's end and
   not an H by another atom's label (an element's ion set close by one is
   still an ion), is an ion (Na+, Br-, PF6-), as is one in parentheses,
   counted ((Cl-)2), and several set in a
@@ -1533,28 +1534,48 @@ words are: by itself, not by a box drawn round it.
 - In the column first. The PDF on the page, whose presses move the view,
   comes later.
 
+**Read from a figure** (`utils/figureNotes`, `components/FigureNotes2D`; the look as LOOK set it, 2026-10-24): every structure taken from a figure - picked out of a PDF, or read from a box of it or a picture - carries a note over it, calm and small, until the chemist says it was checked:
+- **What it says**: "Read from a figure: check it", and, while parts of it are still marked unsure (the dashed rings), how many: "Read from a figure: check it · 2 parts unsure". Where the pointer is on it: "From <file>, p. <page>, read as drawn there. Check it against the figure; right-click it to say it was checked." How it was read is never said.
+- **How it looks**: as the 3D molecules' grey notes ("Edited from …"), never the accent, no icon; centred over the structure's ink, its labels and all, half a bond off; scaled with the page within 0.75 to 1.5, and a 6-pixel grey dot in its place where a bond is under 12 pixels on the screen, the same words where the pointer is on it.
+- **When it goes**: not when the structure is edited - putting one part right does not make the rest so; each part's dashed ring goes as that part is changed, as before. *Checked against the figure*, in the structure's menu (a right-click on the note gives the same menu), says it was checked: one step to undo, kept with its atoms (`seen.checked`) and saved with the workspace; the note fades over `DURATION.base`, as what leaves does.
+- **Joined to another**: a structure stays noted while any atom of it read from a figure is not said to be checked - a checked one bonded to an unchecked one leaves the unchecked one's note - and its count of unsure parts, and where it was read from, are of the unchecked atoms.
+- **When it comes**: once the structure has landed, not while it is carried out of the PDF, fading in.
+- **Copied**: a noted structure copied and pasted in Meno keeps its note - it is still from the figure - and one said to be checked stays checked (`seen` goes with its atoms in Meno's own record); pasted into another program, it carries neither.
+- **Its cost**: the notes are worked out again only when what they depend on changes - which atoms each bond joins, which atoms were read from a figure and which of those are checked, and whether each marked part is still as it was read (as its dashed ring is) - and where each stands only for a structure that moved or changed: dragging one structure moves only its own note, never at each frame for all.
+- **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
+
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
 - a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
 - dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;
-- clicked, it is picked; Shift-click adds or takes away; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
+- clicked, it is picked; ⌘-click (Ctrl-click on Windows) adds it to those picked or takes it out, as everywhere in Meno, and Shift-click does the same, structures having no range between them (in words, Shift-click still draws the selection on, onto another page too); a link under a structure is not followed, the structure taken first; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
 - one not read whole is never carried: a press says why, where the chemistry's notices are said.
 
 **A structure, and where it lies** (`utils/pageStructures`):
 - each figure of the page is read as *Read as structure* reads one (the
   one reading, `schemeDrawn`), and split into its structures: an atom and
   every atom bonded to it, on and on. A lone ion (Na+, Cl-) within 1.6
-  bonds of a structure - or within 3, set level with the atom nearest it,
-  as a salt's counter-ion is in a row beside it (bonds measured atom to
-  atom) - with no arrow nor "+" between them, is that
+  bonds of a structure - or within 3, set level with the atom nearest it
+  or with the structure's middle, as a salt's counter-ion is in a row
+  beside it (Meno lays a salt's pieces out so, each centred on the row,
+  ink to ink; measured from its label's ink to that atom's) - with no
+  arrow nor "+" between them, is that
   structure's where the ions so by it make it neutral - it carrying their
   charge the other way: sodium acetate, an ammonium chloride, NMe4+ Br-,
   are each one structure. Any other ion by a structure - as near as that, or
   within the box round the figure's bonds - is its own, never a neutral
   molecule's nor taken across a scheme; one further out (a "Na+" of a
   caption or a table) is words. A lone label that is no ion - a lone
-  metal - is the structure's it lies by so, and by none, words;
+  metal - is the structure's it lies by so, and by none, words. A
+  structure charged still, with an ion of the other charge within 4.5
+  bonds of it that it did not take - the 3 and as far again as Meno sets
+  one piece of a drawing from the next; level or not, read as an ion or
+  left a word - one written as an ion though it reads as no label, a
+  Bu4N+, too - with no arrow nor "+" between them - has
+  each of its charged atoms marked unsure, saying so ('"K+" beside it is
+  not taken with it: a counter-ion of it, perhaps.'): never a salt read
+  without its counter-ion and none the wiser;
 - a line of words read as a structure - its signs taken for bonds, "R2 =
   SPh", "PG = Boc", "t-BuNH2·BH3": every atom a label, all on one line,
   each bond level, with an "=" read as a double bond beside a label that

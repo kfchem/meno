@@ -5,7 +5,7 @@ import aldol from "../../../../lib/figure/fixtures/aldol-rdkitrxn.json";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { PRESS_WIDENED, structureAt, structuresOf, type PageStructure } from "../utils/pageStructures";
-import { dragStructure, inRow, movedTo, setStructureSay } from "./structureDrag";
+import { dragStructure, inRow, movedTo, picksAfter, setStructureSay, togglesPick } from "./structureDrag";
 import { setCanvasPlace } from "./wordsDrag";
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import { marksOn, shadesNow } from "./pdfMarks";
@@ -133,6 +133,23 @@ describe("structures picked from a PDF, in the editor", () => {
     expect(at(200, [])[0].color.moving).toBe(true);
     expect(at(260, [])[0].color.hex).not.toBe(SELECTION_SHADE);
     expect(at(400, [])).toEqual([]);
+  });
+});
+
+describe("a click on a structure of a PDF", () => {
+  const key = (k: Partial<{ shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }>) => ({ shiftKey: false, ctrlKey: false, metaKey: false, ...k });
+  const a = { id: 1, page: 0, figure: [0, 0, 1, 1] as [number, number, number, number], key: "0:0" };
+  const b = { ...a, key: "0:1" };
+
+  it("adds it to those picked or takes it out with ⌘ or Shift on a Mac, with Ctrl or Shift elsewhere - as everywhere in Meno, structures having no range", () => {
+    expect([key({ metaKey: true }), key({ shiftKey: true }), key({ ctrlKey: true }), key({})].map((e) => togglesPick(e, true))).toEqual([true, true, false, false]);
+    expect([key({ ctrlKey: true }), key({ shiftKey: true }), key({ metaKey: true }), key({})].map((e) => togglesPick(e, false))).toEqual([true, true, false, false]);
+  });
+
+  it("toggling: added, and clicked again, taken out; else picked alone", () => {
+    expect(picksAfter([a], b, true)).toEqual([a, b]);
+    expect(picksAfter([a, b], a, true)).toEqual([b]);
+    expect(picksAfter([a, b], b, false)).toEqual([b]);
   });
 });
 

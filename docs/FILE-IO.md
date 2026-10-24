@@ -738,7 +738,9 @@ As this part of step 5 was built (#155, from main beside step 3):
     say - (`> <Charge>`, `> <Multiplicity>`; none of a skeleton); and its
     imaginary frequencies in cm-1 as its calculation gave them
     (`> <Imaginary frequencies (cm-1)>`), `none` where its vibrations were
-    worked out and it has none, the item left out where they were not.
+    worked out and it has none, the item left out where they were not -
+    frame by frame for a conformer set, each conformer's as its own job
+    found them, as a step reads them.
     After them, what else was found of that frame - a model's value, a
     descriptor, what it was made from (`made_from.nll`) - each under its
     own name, as a structure drawn's record writes its properties (below):
@@ -751,7 +753,13 @@ As this part of step 5 was built (#155, from main beside step 3):
     (cm-1)`, and a record's `State`, `Set aside`, `Stale`, `From`) is
     written under that name and "(property)", here and in a structure
     drawn's record, and the export says so: read back, a second `Charge`
-    would be taken for the species. They are written only: opened
+    would be taken for the species. A property whose value is a table - a
+    conformer's vibrations, one row for each - is not written, here or in
+    a record: on one line it passes the 200 characters an SD data line
+    may hold at about 20 atoms. The export counts and names them ("3
+    properties not written, "vibrations": an SD file does not hold a
+    table"); the imaginary frequencies item above still says what they
+    found. They are written only: opened
     again, an SD file's items other than `Charge` and `Multiplicity` are
     not read back into a molecule in 3D.
     Opened again, an SD file's `Charge` and `Multiplicity` are what a
