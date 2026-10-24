@@ -430,7 +430,13 @@ molecule in 3D or a picture.
   `dragsSelection`); an atom that is not selected, or is selected alone,
   moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
-  freely after a pause - one undo step.
+  freely after a pause - one undo step. While it turns, or a selection is
+  dragged, each frame only draws: a structure only carried keeps its
+  layout, turned and moved with it, its labels upright beside their atoms,
+  and electron-pushing arrows on it are carried likewise; each is laid out
+  again once, as it is let go (found on a Surface, 2026-10-24: a turn was
+  choppy). A frame that would put the selection where it already is - a
+  step of 15 degrees held, a drag held on a guide - puts nothing.
 - The keys that act on what is under the pointer act on the selection
   instead, once there is one: Delete or Backspace deletes it,
   Ctrl/⌘+Shift+K cleans up every structure it is in, and + or - steps the
@@ -996,6 +1002,12 @@ All hover-based, as above.
     labels, the bonds' lines - not as the drawing is laid out again the
     same at each frame of a zoom; and what takes the pointer round each,
     unseen until the pointer is on it, is not drawn until it is lit.
+  - Laying one out weighs only what lies near the curves it could take -
+    the bonds, labels and atoms within reach of them - never the whole
+    drawing, and stops weighing a curve once it is worse than one found:
+    the same curve, at a cost that grows with what is near it (2026-10-24:
+    on a Surface, drawing one, moving a structure with them and zooming
+    were choppy on a large drawing).
   - Anchored: it is kept by the atoms and bonds it leaves and reaches, not
     by where it was drawn, so it goes with them as they are moved, turned,
     turned over (bent to its other side, as a mirror shows it) and cleaned

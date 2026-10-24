@@ -65,9 +65,13 @@ export function dragSelection(
   selectionMoving.active = true;
   let frame: number | null = null;
   let last = p0;
+  // (the shift last put: a frame that would put the same - held on a guide - puts nothing, the drawing as it is)
+  let put = { x: 0, y: 0 };
   const apply = () => {
     frame = null;
     const d = guide.step(last.x - p0.x, last.y - p0.y, keys);
+    if (d.x === put.x && d.y === put.y) return;
+    put = d;
     const dx = d.x;
     const dy = d.y;
     const by = (p: { id: number; x: number; y: number }) => ({ id: p.id, x: p.x + dx, y: p.y + dy });

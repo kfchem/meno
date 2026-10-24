@@ -226,6 +226,63 @@ export function pushShapes(
   });
 }
 
+/** The atoms an arrow's ends are kept by, by id: its atom, its bond's two, or the two of the gap it goes to. */
+function endAtoms(push: PushArrow, bonds: ReadonlyMap<number, Pick<Bond, "a" | "b">>): number[] | null {
+  const of = (e: PushEnd): number[] | null => {
+    if ("atom" in e) return [e.atom];
+    if ("gap" in e) return [...e.gap];
+    const b = bonds.get(e.bond);
+    return b ? [b.a, b.b] : null;
+  };
+  const a = of(push.from);
+  const b = of(push.to);
+  return a && b ? [...a, ...b] : null;
+}
+
+/** Where those atoms are, by id. */
+export function endPlaces(pushes: readonly PushArrow[], atoms: readonly AtomAt[], bonds: readonly Pick<Bond, "id" | "a" | "b">[]): Map<number, P> {
+  const bondOf = new Map(bonds.map((b) => [b.id, b]));
+  const wanted = new Set(pushes.flatMap((q) => endAtoms(q, bondOf) ?? []));
+  return new Map(atoms.flatMap((a) => (wanted.has(a.id) ? [[a.id, { x: a.x, y: a.y }] as const] : [])));
+}
+
+/**
+ * Arrows as they were laid (`pushShapes`, their ends' atoms then at `was`),
+ * carried with those atoms to where they are now - each turned and moved
+ * as its ends' atoms were, together, not laid again: while a gesture moves
+ * or turns what they are drawn on, each frame draws them, and they are
+ * laid out once it ends. None where an arrow's ends were not carried so -
+ * one end moved, the other not.
+ */
+export function carriedShapes(
+  laid: readonly { push: PushArrow; shape: PushShape; from: PushEndAt; to: PushEndAt }[],
+  was: ReadonlyMap<number, P>,
+  atoms: readonly AtomAt[],
+  bonds: readonly Pick<Bond, "id" | "a" | "b">[],
+): typeof laid | null {
+  const bondOf = new Map(bonds.map((b) => [b.id, b]));
+  const now = new Map(atoms.map((a) => [a.id, a]));
+  const out: { push: PushArrow; shape: PushShape; from: PushEndAt; to: PushEndAt }[] = [];
+  for (const one of laid) {
+    const ids = [...new Set(endAtoms(one.push, bondOf) ?? [])];
+    if (!ids.length || ids.some((id) => !was.has(id) || !now.has(id))) return null;
+    const a = ids.map((id) => was.get(id)!);
+    const b = ids.map((id) => now.get(id)!);
+    // (the turn from the first end's atom to the farthest of the others; then each of them where it takes them)
+    let far = 0;
+    for (let k = 1; k < a.length; k++) if (Math.hypot(a[k].x - a[0].x, a[k].y - a[0].y) > Math.hypot(a[far].x - a[0].x, a[far].y - a[0].y)) far = k;
+    const angle = far ? Math.atan2(b[far].y - b[0].y, b[far].x - b[0].x) - Math.atan2(a[far].y - a[0].y, a[far].x - a[0].x) : 0;
+    const c = Math.cos(angle);
+    const sn = Math.sin(angle);
+    const pt = (p: P): P => ({ x: (p.x - a[0].x) * c - (p.y - a[0].y) * sn + b[0].x, y: (p.x - a[0].x) * sn + (p.y - a[0].y) * c + b[0].y });
+    const reach = Math.max(1, ...a.map((p) => Math.hypot(p.x - a[0].x, p.y - a[0].y)));
+    if (a.some((p, k) => Math.hypot(pt(p).x - b[k].x, pt(p).y - b[k].y) > 1e-6 * reach)) return null;
+    const { shape } = one;
+    out.push({ ...one, shape: { start: pt(shape.start), c1: pt(shape.c1), c2: pt(shape.c2), end: pt(shape.end), dots: shape.dots.map((d) => ({ ...d, c: pt(d.c) })) } });
+  }
+  return out;
+}
+
 /** Where an electron-pushing arrow drawn to `p` ends: the atom or the bond under the pointer, else the gap between two atoms not bonded whose middle `p` is near - where a bond forms - else nowhere. */
 export function pushTargetAt(
   p: P,

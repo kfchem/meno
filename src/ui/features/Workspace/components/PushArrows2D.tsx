@@ -8,7 +8,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { DOUBLE_CLICK_MS } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
-import { laidKey, pushShapes, pushTargetAt } from "../utils/pushes";
+import { carriedShapes, endPlaces, laidKey, pushShapes, pushTargetAt } from "../utils/pushes";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
@@ -65,11 +65,18 @@ export default function PushArrows2D() {
   // an end being drawn out: where the pointer is
   const [moving, setMoving] = useState<{ of: number; end: "from" | "to"; at: P } | null>(null);
   // (laid out again only as what they are laid by changes - not as the drawing is laid out again the same, at each frame of a zoom)
+  // (a press held - a selection moved or turned: arrows carried with what they are drawn on, laid out again once it is let go)
+  const held = useEditor((s) => s.panHold.active);
+  const laidAt = useRef<{ shapes: ReturnType<typeof pushShapes>; at: Map<number, P> } | null>(null);
   const laidOn = useKept(layout, pushes.length ? laidKey(layout) : "");
-  const shapes = useMemo(
-    () => pushShapes(pushes, atoms, bonds, laidOn, opts, opts.fontPx, m, moving ?? undefined),
-    [pushes, atoms, bonds, laidOn, opts, m, moving],
-  );
+  const shapes = useMemo(() => {
+    const last = laidAt.current;
+    const carried = held && !moving && last && last.shapes.length === pushes.length && last.shapes.every((x, i) => x.push === pushes[i]) ? carriedShapes(last.shapes, last.at, atoms, bonds) : null;
+    if (carried) return carried;
+    const out = pushShapes(pushes, atoms, bonds, laidOn, opts, opts.fontPx, m, moving ?? undefined);
+    laidAt.current = { shapes: out, at: endPlaces(pushes, atoms, bonds) };
+    return out;
+  }, [pushes, atoms, bonds, laidOn, opts, m, moving, held]);
   // (one mesh for each colour they are drawn in: the bonds' ink, unless an arrow is given its own)
   const ink = opts.bondColor ?? "black";
   const drawn = useMemo(() => {
