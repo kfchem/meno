@@ -2017,6 +2017,17 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
   Where the set was kept out of the file, those atoms are not in it, so
   the molecule opens with its link to the drawing gone, as when the
   drawing is deleted.
+- **Through a calculation** (*Optimise*, *Energy*, *Frequencies*, or a
+  program's *Conformers*), a molecule keeps that link, and its bonds to
+  ring centres, where it is still the same compound: each atom bonded to
+  the same others, by the bonds where its atoms stand, before and after,
+  and of the charge it went with, where the calculation says one. So conformers optimised and
+  given their populations still stand by the structure drawn. It keeps
+  neither how it was made nor its stereo labels, which were of the
+  geometry it came with; its configurations are perceived anew from its
+  own geometry. Where a bond broke or formed, or the charge changed, the
+  link is dropped, and *How it was made* says why (2026-10-24; until then
+  every calculation dropped it).
 
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
