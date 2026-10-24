@@ -114,18 +114,19 @@ function wirePoints(p: Pt, q: Pt, ends: Ends | undefined, zoom: number, was: { c
 
 /**
  * The time a frame gives to working wires out: half of one at 60 frames a
- * second, the other half left for drawing them.
+ * second (16.7 ms), the other half left for drawing them.
  */
-const WIRES_BUDGET = new FrameBudget(8, 1000 / 60);
+const WIRES_BUDGET = new FrameBudget(8);
 
 /**
  * A wire's points (`wirePoints`), worked out again where its key changed
  * (look `wireKey`): at once where its ends moved - a wire is never drawn
  * off its ports - but where only what is near it moved, while this frame
- * has time for it (`WIRES_BUDGET`), else in the next that has: so that a
- * card dragged among many wires near it keeps up with the pointer, those
- * it is not wired to following a frame or two behind - eased, as ever,
- * where that moves them far (`useEasedPoints`).
+ * has time for it and none waits before it (`WIRES_BUDGET`), else when its
+ * turn comes, the longest waiting first: so that a card dragged among many
+ * wires near it keeps up with the pointer, those it is not wired to
+ * following some frames behind - eased, as ever, where that moves them far
+ * (`useEasedPoints`).
  */
 function useWireTarget(p: Pt, q: Pt, ends: Ends | undefined, at: number): Pt[] {
   const way = useRef<WireWay | undefined>(undefined);
@@ -142,14 +143,26 @@ function useWireTarget(p: Pt, q: Pt, ends: Ends | undefined, at: number): Pt[] {
   const done = useRef<{ key: string; p: Pt; q: Pt; pts: Pt[] } | null>(null);
   const [, redraw] = useState(0);
   const { invalidate } = useThree();
+  // (who this wire is, in the line of those waiting)
+  const [me] = useState(() => ({}));
+  useEffect(() => () => WIRES_BUDGET.leave(me), [me]);
   const d = done.current;
-  if (!d || (d.key !== key && (d.p.x !== p.x || d.p.y !== p.y || d.q.x !== q.x || d.q.y !== q.y || WIRES_BUDGET.left()))) done.current = work();
-  else if (d.key !== key) invalidate();
-  useFrame(() => {
-    if (done.current?.key === now.current.key) return;
-    if (!WIRES_BUDGET.left()) return invalidate();
+  if (!d || (d.key !== key && (d.p.x !== p.x || d.p.y !== p.y || d.q.x !== q.x || d.q.y !== q.y || (WIRES_BUDGET.waiting === 0 && WIRES_BUDGET.left())))) {
     done.current = work();
-    redraw((n) => n + 1);
+    WIRES_BUDGET.leave(me);
+  } else if (d.key !== key) {
+    WIRES_BUDGET.wait(me, () => {
+      if (done.current?.key === now.current.key) return;
+      done.current = work();
+      redraw((n) => n + 1);
+    });
+    invalidate();
+  }
+  useFrame((state) => {
+    WIRES_BUDGET.frame(state.clock.elapsedTime);
+    if (!WIRES_BUDGET.waiting) return;
+    WIRES_BUDGET.serve();
+    invalidate();
   });
   return done.current!.pts;
 }

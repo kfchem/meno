@@ -370,17 +370,48 @@ describe("a wire going round what is in its way", () => {
 
 describe("the time a frame gives to working wires out", () => {
   it("is so much of each frame: spent, none left till the next frame begins", () => {
-    let t = 0;
-    const budget = new FrameBudget(8, 16, () => t);
+    const budget = new FrameBudget(8);
+    budget.frame(1);
     expect(budget.left()).toBe(true);
     budget.spend(5);
     expect(budget.left()).toBe(true);
     budget.spend(4);
     expect(budget.left()).toBe(false);
-    t = 10;
+    // (the same frame said again: no time given anew)
+    budget.frame(1);
     expect(budget.left()).toBe(false);
-    t = 16;
+    budget.frame(2);
     expect(budget.left()).toBe(true);
+  });
+
+  it("serves those waiting the longest waiting first, as much as a frame has time for - none waiting for ever behind those after it", () => {
+    const budget = new FrameBudget(8);
+    budget.frame(0);
+    const served: string[] = [];
+    // (each takes 3 ms: two a frame, the third's start over the 8 - three)
+    const who = ["a", "b", "c", "d", "e"].map((name) => ({ name }));
+    const serve = (w: { name: string }) => () => {
+      served.push(w.name);
+      budget.spend(3);
+    };
+    who.forEach((w) => budget.wait(w, serve(w)));
+    // (one waiting already keeps its place, however often it asks again)
+    budget.wait(who[0], serve(who[0]));
+    budget.serve();
+    expect(served).toEqual(["a", "b", "c"]);
+    // (a newcomer waits behind those before it)
+    const f = { name: "f" };
+    budget.wait(f, serve(f));
+    budget.frame(1);
+    budget.serve();
+    expect(served).toEqual(["a", "b", "c", "d", "e", "f"]);
+    expect(budget.waiting).toBe(0);
+    // (one gone no longer waits)
+    budget.wait(who[1], serve(who[1]));
+    budget.leave(who[1]);
+    budget.frame(2);
+    budget.serve();
+    expect(served.length).toBe(6);
   });
 });
 

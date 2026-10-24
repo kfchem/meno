@@ -425,30 +425,51 @@ function levelsFor(p: Pt, q: Pt, ends: { from?: Side; to?: Side }, past: readonl
 }
 
 /**
- * Time to work wires out in, frame by frame: `ms` of each `frame` ms -
- * the rest left for drawing them. A frame begins when one is asked of
- * after the last one is over (`now`, in ms).
+ * Time to work wires out in, frame by frame: `ms` of each - the rest left
+ * for drawing them. Each frame is said as it begins (`frame`), by its time
+ * as the drawing has it, the same for all that is done in it. What waits
+ * for time is served the longest waiting first, so that none waits behind
+ * others for ever.
  */
 export class FrameBudget {
-  private at = -Infinity;
+  private at: number | undefined;
   private used = 0;
-  constructor(
-    private readonly ms: number,
-    private readonly frame: number,
-    private readonly now: () => number = () => performance.now(),
-  ) {}
+  /** What waits for time, by who waits - in the order they came: the longest waiting first. */
+  private readonly line = new Map<object, () => void>();
+  constructor(private readonly ms: number) {}
+  /** The frame at `at` begun - its time given anew - where it is not the one begun already. */
+  frame(at: number): void {
+    if (at === this.at) return;
+    this.at = at;
+    this.used = 0;
+  }
   /** Whether there is time left in this frame. */
   left(): boolean {
-    const t = this.now();
-    if (t - this.at >= this.frame) {
-      this.at = t;
-      this.used = 0;
-    }
     return this.used < this.ms;
   }
   /** `ms` of this frame's time spent. */
   spend(ms: number): void {
     this.used += ms;
+  }
+  /** How many wait. */
+  get waiting(): number {
+    return this.line.size;
+  }
+  /** `who` waits for time, to be served by `serve` - in its place, where it waits already. */
+  wait(who: object, serve: () => void): void {
+    if (!this.line.has(who)) this.line.set(who, serve);
+  }
+  /** `who` no longer waits. */
+  leave(who: object): void {
+    this.line.delete(who);
+  }
+  /** Those waiting served, the longest waiting first, while this frame has time. */
+  serve(): void {
+    for (const [who, serve] of this.line) {
+      if (!this.left()) return;
+      this.line.delete(who);
+      serve();
+    }
   }
 }
 

@@ -1960,7 +1960,11 @@ page could not be read after one run.
     (`wireKey`): a drag works out again only the wires whose key changed.
     Of those, a wire whose ends moved is worked out at once; one where
     only what is near it moved waits while the frame's 8 ms for wires is
-    spent, and follows a frame or two behind (`FrameBudget`). Within a
+    spent (`FrameBudget`), and is served the longest waiting first. A
+    frame serves at least one, so none waits more frames than there are
+    wires waiting before it: dragging a card among 100 sets and 45 long
+    wires near it, each waited at most 19 frames (0.3 s), and none was
+    left waiting 19 frames after the card was let go. Within a
     wire, the ways round are tried shortest first, and no further than the
     first clear of all - the longest a wire takes is about 7 ms on this
     Mac, among 100 sets and 50 cards.
