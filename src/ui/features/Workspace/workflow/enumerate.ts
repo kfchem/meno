@@ -86,37 +86,42 @@ export function readOption(typed: string): OptionRead | OptionProblem {
   return { typed, as: "label", label, group, formula: groupFormula(group) };
 }
 
+/** A line that starts an R number's list - R1:, r1: - and what follows on it. */
+const HEAD = /^R(\d+)\s*:\s*(.*)$/iu;
+
 /**
- * What each line of the step's text was read as, line for line, as the
- * step shows it beside the lines (`LinesOption.readAs`): an R number's
- * start, an option's reading and formula ("OTBS · C6H15OSi"), or why it
- * cannot be read - blank for a blank line.
+ * The options a line holds: one, or several apart by commas or semicolons
+ * ("Me, Et; Cl"), each as typed, trimmed - a comma between two digits, a
+ * locant's, kept within its option (2,4-(MeO)2C6H3). An option empty
+ * between two of them is one, "" (said, not passed over); one after the
+ * last, ending the line, is none.
  */
-export function listsReadAs(text: string): LineRead[] {
-  let started = false;
-  return text.split(/\r?\n/).map((raw): LineRead => {
-    const line = raw.normalize("NFKC").trim();
-    if (!line) return { said: "" };
-    const head = /^R(\d+)\s*:\s*(.*)$/.exec(line);
-    const option = head ? head[2].trim() : line;
-    if (head) started = true;
-    else if (!started) return { said: "Start with an R number, as R1:", problem: true };
-    if (!option) return { said: `R${head![1]}` };
-    const read = readOption(option);
-    if ("problem" in read) return { said: read.problem, problem: true };
-    // (the group's formula; and its label, where it reads as other than typed: otbs as OTBS)
-    return { said: read.as === "label" && read.label !== option ? `${read.label} \u00b7 ${read.formula}` : read.formula };
-  });
+export function optionsOn(line: string): string[] {
+  const out: string[] = [];
+  let from = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === ";" || (ch === "," && !(/[\d'\u2032]/u.test(line[i - 1] ?? "") && /\d/u.test(line[i + 1] ?? "")))) {
+      out.push(line.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  const last = line.slice(from).trim();
+  if (last || !out.length) out.push(last);
+  return out.length === 1 && !out[0] ? [] : out;
 }
 
-/** The lists typed on the step, by R number, each line read - and what could not be, by its R number and line. */
-export type Lists = { lists: Map<number, (OptionRead | OptionProblem)[]>; problems: string[] };
+/** What makes two options of a list the same option, as typed and read: a label's, an element's or a SMILES's reading. */
+const sameAs = (o: OptionRead) => (o.as === "element" ? o.formula : o.label);
 
 /**
- * The step's text read as lists, one option to a line: a line `R1:` (or
- * `R1: Me`) starts R1's list, and each line after it is one more option,
- * until the next. Blank lines are passed over; a line before any R number,
- * an R number listed twice, or a list with no option in it is said.
+ * The step's text read as lists, by R number: a line `R1:` - or `r1:`,
+ * with or without its groups after it - starts R1's list or adds to it, and
+ * each group on a line, one or several apart by commas or semicolons
+ * (`optionsOn`), is one more option of the last R number started. Blank
+ * lines are passed over. Said, each: a group before any R number, an empty
+ * one, one given twice in one R's list (never dropped as if it were not),
+ * an R number with no option in it, and an option that does not read.
  */
 export function readLists(text: string): Lists {
   const lists = new Map<number, (OptionRead | OptionProblem)[]>();
@@ -125,19 +130,25 @@ export function readLists(text: string): Lists {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.normalize("NFKC").trim();
     if (!line) continue;
-    const head = /^R(\d+)\s*:\s*(.*)$/.exec(line);
+    const head = HEAD.exec(line);
     if (head) {
       at = Number.parseInt(head[1], 10);
-      if (lists.has(at)) problems.push(`R${at} is listed twice`);
-      else lists.set(at, []);
-      if (head[2].trim()) lists.get(at)!.push(readOption(head[2]));
-      continue;
-    }
-    if (at == null) {
+      if (!lists.has(at)) lists.set(at, []);
+    } else if (at == null) {
       problems.push(`"${line}" comes before any R number: start each list with its number, as "R1:"`);
       continue;
     }
-    lists.get(at)!.push(readOption(line));
+    const list = lists.get(at)!;
+    for (const typed of optionsOn(head ? head[2] : line)) {
+      if (!typed) {
+        problems.push(`R${at} has an empty option in "${line}"`);
+        continue;
+      }
+      const read = readOption(typed);
+      const twice = !("problem" in read) && list.some((o) => !("problem" in o) && sameAs(o) === sameAs(read));
+      if (twice) problems.push(`R${at} lists ${sameAs(read as OptionRead)} twice`);
+      else list.push(read);
+    }
   }
   for (const [n, options] of lists) {
     if (!options.length) problems.push(`R${n} has no options`);
@@ -147,6 +158,43 @@ export function readLists(text: string): Lists {
   }
   return { lists, problems };
 }
+
+/**
+ * What each line of the step's text was read as, line for line, as the
+ * step shows it beside the lines (`LinesOption.readAs`), as `readLists`
+ * reads them: an R number's start, each option's reading and formula
+ * ("OTBS · C6H15OSi"; several apart by commas), or why one cannot be read
+ * or is not wanted there - blank for a blank line.
+ */
+export function listsReadAs(text: string): LineRead[] {
+  const seen = new Map<number, string[]>();
+  let at: number | null = null;
+  return text.split(/\r?\n/).map((raw): LineRead => {
+    const line = raw.normalize("NFKC").trim();
+    if (!line) return { said: "" };
+    const head = HEAD.exec(line);
+    if (head) at = Number.parseInt(head[1], 10);
+    else if (at == null) return { said: "Start with an R number, as R1: Me, Et", problem: true };
+    const options = optionsOn(head ? head[2] : line);
+    if (!options.length) return { said: `R${at}` };
+    const had = seen.get(at!) ?? [];
+    seen.set(at!, had);
+    const said: string[] = [];
+    for (const typed of options) {
+      if (!typed) return { said: "An empty option between two commas", problem: true };
+      const read = readOption(typed);
+      if ("problem" in read) return { said: read.problem, problem: true };
+      if (had.includes(sameAs(read))) return { said: `${sameAs(read)} is in R${at}'s list already`, problem: true };
+      had.push(sameAs(read));
+      // (the group's formula; and its label, where it reads as other than typed: otbs as OTBS)
+      said.push(read.as === "label" && read.label !== typed ? `${read.label} \u00b7 ${read.formula}` : read.formula);
+    }
+    return { said: said.join(", ") };
+  });
+}
+
+/** The lists typed on the step, by R number, each line read - and what could not be, by its R number and line. */
+export type Lists = { lists: Map<number, (OptionRead | OptionProblem)[]>; problems: string[] };
 
 /**
  * A template's R atoms, by number, each number's atoms by id in the
