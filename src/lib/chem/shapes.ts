@@ -97,6 +97,15 @@ export function cornerRadius(s: ShapeGeometry, pointPx: number): number {
   return Math.min(Math.max(0, s.radius * pointPx), roundestOf(s.x1 - s.x0, s.y1 - s.y0));
 }
 
+/**
+ * Rounded corners for a box `w` by `h` page units, in points, as a rounded
+ * rectangle saved before 2026-10-19 (its own kind then, holding no radius)
+ * was drawn: 9 points, less in a small box - so that one opens as it looked.
+ */
+export function roundedBeforePt(w: number, h: number, pointPx: number): number {
+  return Math.min(Math.min(w, h) * ROUNDED_SHARE, 9 * pointPx) / pointPx;
+}
+
 /** Rounded corners for a box `w` by `h` page units, in points, as *Box around these* has them: a fifth of a bond, less in a small box. */
 export function roundedPt(w: number, h: number, pointPx: number): number {
   return Math.min(Math.min(w, h) * ROUNDED_SHARE, ROUNDED_OF_BOND * NOMINAL_BOND_LENGTH) / pointPx;
