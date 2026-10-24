@@ -1919,9 +1919,24 @@ page could not be read after one run.
     where something else is there (`keepExitsUnder`). A step's empty
     exit frames, made as it is added, go clear in the same way (model
     `withExits`).
+  - **A wire goes round** (look `wireCurve`). Going on to the right it
+    is a curve. Where its input lies to the left of where it leaves, or
+    too near to turn, it goes round what it leaves and what it comes
+    into, half a bond clear of each, its corners rounded: out to the
+    right, across between them or above or below both, and in from the
+    left. Between 0 and 40 px of run the two shapes are eased one into
+    the other, so a step moved across never makes its wire jump; a
+    step's line to its set beside it, 64 px across, is always the curve.
+    Into a card that names its inputs, a wire comes in level for as long
+    as the input's name, under it, never through it. A wire
+    that would cross another set or card goes round that too, taken with
+    the end it is nearer. Placement keeps clear of the same route, and a
+    change of route on the page is eased, never a jump.
   - **A card put down** (Quick Add, or a wire let go on empty space)
     goes where it was put, or lower where that is over a set, a card, a
-    structure or a wire, as far as it must (place `placeCard`). Put down
+    structure or a wire, as far as it must (place `placeCard`): it is made
+    there, so nothing on the page moves. A card the chemist drags lands
+    where they let it go. Put down
     near the window's edge, or moved lower, it is brought into view with
     the sets it will give, as what is put down is shown.
 - **How many it shows** (look `DRAWN_ON_PAGE`, the maintainer,

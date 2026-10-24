@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, GAP, PORT_DOWN, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
+import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_BAND, wireCurve } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -169,5 +169,57 @@ describe("what a set keeps clear of: a structure's ink, and its own wires", () =
     // (going on to the right, as it was: the curve)
     const far = stepTakes({ x: 40, y: 0 }, 0);
     expect(wireCurve(p, far, 48, { from: set, to: cardOf({ x: 40, y: 0 }) })).toEqual(wireCurve(p, far, 48));
+  });
+});
+
+describe("a wire's shape", () => {
+  const strictly = (b: Frame) => (pt: { x: number; y: number }) => pt.x > b.x0 + 1e-9 && pt.x < b.x1 - 1e-9 && pt.y > b.y0 + 1e-9 && pt.y < b.y1 - 1e-9;
+
+  it("never jumps as its input is moved across the band where it turns from going round to the curve: 1 px apart, a few px at most", () => {
+    const from: Frame = { x0: 0, x1: 6, y0: -12, y1: -2 };
+    const p = setGives(from);
+    let was: { x: number; y: number }[] | null = null;
+    let most = 0;
+    // (the input moved right a page pixel at a time, from well before the band to well past it, level with the set's top)
+    for (let px = WIRE_BAND.from / PX - 20; px <= WIRE_BAND.to / PX + 20; px++) {
+      const at = { x: p.x + px * PX, y: 2 };
+      const pts = wireCurve(p, stepTakes(at, 0), 48, { from, to: cardOf(at) });
+      if (was) most = Math.max(most, ...pts.map((pt, i) => Math.hypot(pt.x - was![i].x, pt.y - was![i].y) / PX));
+      was = pts;
+    }
+    expect(most).toBeLessThan(6);
+    // (and either side of it, the one or the other whole)
+    const before = { x: p.x + WIRE_BAND.from - PX, y: 2 };
+    const after = { x: p.x + WIRE_BAND.to + PX, y: 2 };
+    expect(wireCurve(p, stepTakes(after, 0), 48, { from, to: cardOf(after) })).toEqual(wireCurve(p, stepTakes(after, 0), 48));
+    expect(wireCurve(p, stepTakes(before, 0), 48, { from, to: cardOf(before) }).some(strictly(from))).toBe(false);
+  });
+
+  it("into a card that names its inputs, comes in level under the name: from above or below, never through it", () => {
+    const at = { x: 40, y: 0 };
+    const card = cardOf(at);
+    for (const [k, name] of ["Levels", "Connects"].entries()) {
+      const q = stepTakes(at, k);
+      // (the name: 10 px letters, their middle half a port's step above the input, from 8 px out from the card to its lead's start)
+      const label: Frame = { x0: q.x - inputLead(name), x1: q.x - 8 * PX, y0: q.y + (PORT_STEP / 2) - 5 * PX, y1: q.y + (PORT_STEP / 2) + 5 * PX };
+      for (const from of [{ x0: 0, x1: 10, y0: 20, y1: 40 }, { x0: 0, x1: 10, y0: -40, y1: -20 }, { x0: 0, x1: 10, y0: -2, y1: 4 }] as Frame[]) {
+        const pts = wireCurve(setGives(from), q, 96, { from, to: card, lead: inputLead(name) });
+        expect([pts[0], pts[96]]).toEqual([setGives(from), q]);
+        expect(pts.some(strictly(label))).toBe(false);
+      }
+    }
+  });
+
+  it("goes round a set between its ends - a step's line to its set, below another set it would cross - never over what that holds", () => {
+    // (as steps laid close have it: the step's card, the set of the step before under it, and its own set below that)
+    const card = cardOf({ x: 10, y: 0 });
+    const between: Frame = { x0: 6, x1: 16, y0: -40, y1: -4 };
+    const own: Frame = { x0: 12, x1: 22, y0: -70, y1: -44 };
+    const p = stepGives({ x: 10, y: 0 });
+    const q = setTakes(own);
+    expect(wireCurve(p, q, 96, { from: card, to: own }).some(strictly(between))).toBe(true);
+    const pts = wireCurve(p, q, 96, { from: card, to: own }, [card, between, own]);
+    expect([pts[0], pts[96]]).toEqual([p, q]);
+    for (const f of [card, between, own]) expect(pts.some(strictly(f))).toBe(false);
   });
 });

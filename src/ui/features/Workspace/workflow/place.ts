@@ -11,7 +11,7 @@ import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { inputsOf } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, GAP, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
+import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
@@ -46,7 +46,7 @@ const WIRE_POINTS = 24;
 
 type Pt = { x: number; y: number };
 /** What a frame keeps clear of: frames - a card's with its step - and points; and the lines its own wires would be, each with the card at its far end, which it meets. */
-type Taken = { frames: (Frame & { card?: number })[]; points: Pt[]; from?: { step: number; at: Pt; card: Frame }; to: { step: number; at: Pt; card: Frame }[] };
+type Taken = { frames: (Frame & { card?: number })[]; round: Frame[]; points: Pt[]; from?: { step: number; at: Pt; card: Frame }; to: { step: number; at: Pt; card: Frame; lead?: number }[] };
 
 /** How far a structure's ink may reach past its atoms, about: its labels' letters - "OSiPh2tBu" written out from its O. A structure whose atoms lie further than this from where a frame is looked for cannot reach it. */
 const INK_REACH = 8 * NOMINAL_BOND_LENGTH;
@@ -66,7 +66,15 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   const sets = new Map((doc.sets ?? []).map((b) => [b.id, b]));
   const steps = new Map((doc.steps ?? []).map((s) => [s.id, s]));
   const takes = (s: { x: number; y: number; kind: Parameters<typeof inputsOf>[0] }, port: string) => stepTakes(s, Math.max(0, inputsOf(s.kind).findIndex((p) => p.id === port)));
+  // (into a card that names its inputs: in level under the name, as Workflow2D draws it)
+  const lead = (s: { kind: Parameters<typeof inputsOf>[0] }, port: string) => {
+    const inputs = inputsOf(s.kind);
+    const name = inputs.length > 1 ? inputs.find((p) => p.id === port)?.name : undefined;
+    return name ? { lead: inputLead(name) } : {};
+  };
   const frames: Taken["frames"] = [...(doc.sets ?? []).filter((b) => !own(b.id)), ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_H), card: s.id }))];
+  // (what wires go round: the sets and cards, as Workflow2D has them go round - look `wireCurve`)
+  const round = frames.slice();
   frames.push(...inkOf(doc, own, along));
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
   const to: Taken["to"] = [];
@@ -75,15 +83,15 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const b = sets.get(w.from.set);
     const s = steps.get(w.to.step);
     if (!b || !s) continue;
-    if (b.id === self?.set) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s) });
-    else if (!own(b.id)) points.push(...wireCurve(setGives(b), takes(s, w.to.port), WIRE_POINTS, { from: b, to: cardOf(s) }));
+    if (b.id === self?.set) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s), ...lead(s, w.to.port) });
+    else if (!own(b.id)) points.push(...wireCurve(setGives(b), takes(s, w.to.port), WIRE_POINTS, { from: b, to: cardOf(s), ...lead(s, w.to.port) }, round));
   }
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
-    if (s && !own(b.id)) points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS, { from: cardOf(s), to: b }));
+    if (s && !own(b.id)) points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS, { from: cardOf(s), to: b }, round));
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;
-  return { frames, points, ...(step ? { from: { step: step.id, at: stepGives(step), card: cardOf(step) } } : {}), to };
+  return { frames, round, points, ...(step ? { from: { step: step.id, at: stepGives(step), card: cardOf(step) } } : {}), to };
 }
 
 /**
@@ -119,8 +127,8 @@ function clearIn(taken: Taken, f: Frame, lines = true): boolean {
   if (!lines) return true;
   const over = [...taken.frames, f];
   const crosses = (pts: readonly Pt[], meets: number) => pts.some((p) => over.some((t) => (t as { card?: number }).card !== meets && p.x > t.x0 && p.x < t.x1 && p.y > t.y0 && p.y < t.y1));
-  if (taken.from && crosses(wireCurve(taken.from.at, setTakes(f), WIRE_POINTS, { from: taken.from.card, to: f }), taken.from.step)) return false;
-  return !taken.to.some((w) => crosses(wireCurve(setGives(f), w.at, WIRE_POINTS, { from: f, to: w.card }), w.step));
+  if (taken.from && crosses(wireCurve(taken.from.at, setTakes(f), WIRE_POINTS, { from: taken.from.card, to: f }, taken.round), taken.from.step)) return false;
+  return !taken.to.some((w) => crosses(wireCurve(setGives(f), w.at, WIRE_POINTS, { from: f, to: w.card, lead: w.lead }, taken.round), w.step));
 }
 
 /**
