@@ -113,6 +113,28 @@ export function figureNotePlaces(model: Model, notes: readonly FigureNote[], hel
   return out;
 }
 
+/**
+ * The marks of parts read from a figure (`readMarks`) as they are drawn: only
+ * on what is not said to be checked - an atom not checked, a bond with an end
+ * not checked - as they are counted in its note. Said checked, they go with
+ * the note, eased; said not to be, they come back: they stay in the drawing
+ * all the while, never drawn while checked.
+ */
+export function readMarksShown(model: Model, marks: ReturnType<typeof readMarks>): ReturnType<typeof readMarks> {
+  const checked = new Set(model.atoms.flatMap((a) => (a.seen?.checked ? [a.id] : [])));
+  if (!checked.size) return marks;
+  const ends = new Map(model.bonds.map((b) => [b.id, b] as const));
+  return {
+    atoms: new Map([...marks.atoms].filter(([id]) => !checked.has(id))),
+    bonds: new Map(
+      [...marks.bonds].filter(([id]) => {
+        const b = ends.get(id);
+        return !b || !checked.has(b.a) || !checked.has(b.b);
+      }),
+    ),
+  };
+}
+
 /** Whether a structure read from a figure has its note over it at all times: while parts of it not said to be checked are still unsure. Else where it came from is said only with the pointer on it, and in its menu. */
 export function figureNoteShown(note: FigureNote): boolean {
   return !note.checked && note.unsure > 0;

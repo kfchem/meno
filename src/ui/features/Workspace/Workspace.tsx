@@ -223,7 +223,7 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import FigureNotes2D from "./components/FigureNotes2D";
-import { figureNoteSource, figureNotesOf } from "./utils/figureNotes";
+import { figureNoteSource, figureNotesOf, readMarksShown } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
@@ -391,7 +391,8 @@ function WorkspaceContent({
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
-  const readUnsure = useMemo(() => readMarks(model), [model]);
+  // (drawn only on what is not said to be checked: utils/figureNotes)
+  const readUnsure = useMemo(() => readMarksShown(model, readMarks(model)), [model]);
   const procedures = useAppSettings((s) => s.procedures);
   const chem = useChem();
   // (a plugin's files besides its packages, as they come while it is set up)

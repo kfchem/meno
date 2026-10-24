@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { emptyWorkspaceDocument, setFigureChecked } from "../document";
-import { figureNotePlaces, figureNoteShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type NotePlaces } from "./figureNotes";
-import { atomAs, bondAs } from "./figures";
+import { figureNotePlaces, figureNoteShown, readMarksShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type NotePlaces } from "./figureNotes";
+import { atomAs, bondAs, readMarks } from "./figures";
 
 const SHA = "a".repeat(64);
 /** Two structures: an ethanol read from page 3 of a PDF, its O marked unsure, and a methane drawn by hand. */
@@ -121,5 +121,24 @@ describe("the note over a structure read from a figure", () => {
     expect(figureNotesKey(joined)).not.toBe(figureNotesKey(apart));
     expect(figureNotesOf(apart).map((n) => [...n.atoms].sort((a, b) => a - b))).toEqual([[1, 2, 3]]);
     expect(figureNotesOf(joined).map((n) => [...n.atoms].sort((a, b) => a - b))).toEqual([[1, 2, 3, 10]]);
+  });
+
+  it("has its parts' marks drawn only while they are not said to be checked: said checked, they go with the note; said not, they come back - kept all the while", () => {
+    const m = model();
+    // (the O unsure, and its bond to the C too)
+    const both: Model = { ...m, bonds: m.bonds.map((b) => (b.id === 5 ? { ...b, unsure: { said: ["Drawn as a line"], as: bondAs(b) } } : b)) };
+    const shown = (x: Model) => {
+      const r = readMarksShown(x, readMarks(x));
+      return [[...r.atoms.keys()], [...r.bonds.keys()]];
+    };
+    expect(shown(both)).toEqual([[3], [5]]);
+    const doc = { ...emptyWorkspaceDocument(), model: both };
+    const checked = setFigureChecked(doc, [1, 2, 3], true).model;
+    expect(shown(checked)).toEqual([[], []]);
+    expect([readMarks(checked).atoms.size, readMarks(checked).bonds.size]).toEqual([1, 1]);
+    expect(shown(setFigureChecked({ ...doc, model: checked }, [1, 2, 3], false).model)).toEqual([[3], [5]]);
+    // (a bond with an end not checked: drawn still, as it is counted)
+    const half = { ...both, atoms: both.atoms.map((a) => (a.id === 2 && a.seen ? { ...a, seen: { ...a.seen, checked: true as const } } : a)) };
+    expect(shown(half)).toEqual([[3], [5]]);
   });
 });
