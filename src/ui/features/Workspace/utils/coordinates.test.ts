@@ -7,7 +7,8 @@ import { noting } from "./readNotes";
 import { readWorkspace, workspaceText } from "./workspace";
 import { entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { placeAsSet } from "../workflow/run";
-import { coordinateMolecules, energyOf } from "./coordinates";
+import { coordinateMolecules, energyNoted, energyOf } from "./coordinates";
+import { energiesFrom } from "../workflow/setTable";
 
 // (made up for the test: a water and a methane, each under its name)
 const TEXT = [
@@ -115,5 +116,100 @@ describe("the charge and multiplicity a text gives a structure read from its coo
       { charge: "given", multiplicity: "given" },
       { charge: "atoms", multiplicity: "atoms" },
     ]);
+  });
+});
+
+describe("the energy a structure's notes give it", () => {
+  it("is an electronic energy a note names as one - in hartrees, after its value or in brackets after its name", () => {
+    expect(energyOf(["E = -76.4 Hartree"])).toBe(-76.4);
+    expect(energyOf(["SCF Done: E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
+    expect(energyOf(["SCF energy (a.u.) = -154.987654"])).toBe(-154.987654);
+    expect(energyOf(["FINAL SINGLE POINT ENERGY = -93.399651434575 Eh"])).toBe(-93.399651434575);
+    expect(energyOf(["Electronic energy = -76.4 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
+  });
+
+  it("is never another quantity in its place, whichever comes first: a zero-point energy, a correction, a free energy, an enthalpy, a sum", () => {
+    expect(energyOf(["ZPE = 0.021 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
+    expect(energyOf(["Zero-point correction= 0.021234 (Hartree/Particle)", "E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
+    expect(energyOf(["G = -76.38 Hartree", "E = -76.40 Hartree"])).toBe(-76.4);
+    for (const note of ["ZPE = 0.021 Hartree", "Thermal correction to Gibbs Free Energy= 0.003 Hartree", "Sum of electronic and thermal Free Energies= -76.38 Hartree", "G = -76.38 Hartree", "H = -76.37 Eh", "Free energy = -76.38 Hartree"]) {
+      expect(energyOf([note]), note).toBeUndefined();
+    }
+  });
+
+  it("is none where two notes give two that differ - an MP2 energy and an HF one - never one of them chosen", () => {
+    expect(energyOf(["E(MP2) = -76.30 au", "E(HF) = -76.01 au"])).toBeUndefined();
+  });
+
+  /** A water read from a text, its notes `notes`. */
+  const water = (notes: string[]) =>
+    coordinateMolecules(readCoordinates(["TS1", ...notes, "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n")).map((structure) => ({ structure, name: structure.name })), "Pasted text")[0];
+
+  it("is given a structure with what its note names it - its method with it - as what its energies are, shown and set apart from others' by it", () => {
+    const m = water(["E(MP2) = -76.30 au"]);
+    expect([m.energies, m.made]).toEqual([[-76.3], { how: [], energies: "E(MP2)" }]);
+    expect(energiesFrom(m)).toBe("E(MP2)");
+    expect(energiesFrom(water(["E(HF) = -76.01 au"]))).toBe("E(HF)");
+  });
+
+  it("is none of a structure whose notes give two that differ, saying why beside them", () => {
+    const m = water(["E(MP2) = -76.30 au", "E(HF) = -76.01 au"]);
+    expect([m.energies, m.made]).toEqual([undefined, undefined]);
+    expect(m.said?.[m.said.length - 1]).toEqual({ label: "Energy", text: "none taken: its notes give E(MP2) = -76.3 and E(HF) = -76.01, which differ" });
+  });
+
+  it("is none of a structure whose notes give another quantity alone: the note shown, no energy given it", () => {
+    const [m] = coordinateMolecules(readCoordinates(["TS1", "ZPE = 0.021 Hartree", "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n")).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+    expect(m.energies).toBeUndefined();
+    expect(m.said).toEqual([{ label: "Note", text: "ZPE = 0.021 Hartree" }]);
+  });
+});
+
+describe("the energy a note names, among the ways notes write it", () => {
+  // (each note, and whether it gives a geometry's electronic energy: a false refusal costs an energy not shown; a false taking, one that is wrong)
+  const NOTES: [string, boolean][] = [
+    ["E = -154.987654 Hartree", true], ["E(RB3LYP) = -154.98765 A.U.", true], ["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles", true],
+    ["SCF energy (a.u.) = -154.98", true], ["Electronic energy = -154.98 Eh", true], ["Total energy = -154.98 Hartree", true], ["Final single point energy = -154.98 Eh", true],
+    ["E(RB3LYP/6-31G(d)) = -154.98 Eh", true], ["E(CCSD(T)) = -154.98 Eh", true], ["E(B3LYP-D3(BJ)/def2-TZVP) = -154.98 Eh", true], ["E(wB97X-D/def2-TZVP) = -154.98 Eh", true],
+    ["E(RB3LYP) = -154.98", true], ["E: -154.98 Eh", true], ["Total energy: -154.98 Eh", true], ["E_SCF = -154.98 Eh", true], ["Etot = -154.98 Eh", true], ["E_tot = -154.98 Eh", true], ["E(SCF) = -154.98 Eh", true],
+    ["FINAL SINGLE POINT ENERGY -154.987654321", true], ["E = -1.5498765E+02 Eh", true], ["E = -154.987654 Eh; G = -154.90 Eh", true], ["Energy = -154.98 Eh", true], ["E (Hartree) = -154.98", true],
+    ["E(MP2) = -155.123 Eh and E(HF) = -154.98 Eh", false],
+    ["ZPE = 0.12345 Hartree", false], ["G = -154.90 Hartree", false], ["H = -154.91 Eh", false], ["E0 = -154.88 Eh", false], ["Zero-point energy = 0.1234 Eh", false], ["Thermal correction to Gibbs free energy = 0.0987 Hartree", false],
+    ["Sum of electronic and zero-point Energies = -154.86 Hartree", false], ["Free energy = -154.90 Eh", false], ["Gibbs free energy = -154.90 Eh", false], ["Enthalpy = -154.91 Eh", false],
+    ["E(corr) = -0.2345 Eh", false], ["E(T) = -0.0123 Eh", false], ["E(ZPE) = 0.1234 Eh", false], ["E(thermal) = 0.1345 Eh", false], ["E(ZPE-corrected) = -154.86 Eh", false], ["Total energy (E+ZPE) = -154.86 Eh", false], ["Energy (incl. ZPE) = -154.86 Eh", false],
+    ["Total energy (free energy) = -154.90 Eh", false], ["E(rel) = 0.0123 Eh", false], ["E(dispersion) = -0.0123 Eh", false], ["E(D3) = -0.0123 Eh", false], ["E(solv) = -0.0123 Eh", false], ["E(vib) = 0.0123 Eh", false], ["E(int) = -0.0123 Eh", false],
+    ["SCF Done: E(RB3LYP) = -154.9 A.U. ZPE = 0.12 Hartree", true],
+  ];
+
+  it("is taken from each that names one, and from none that names another quantity - a correction, a part of one, a sum", () => {
+    const wrong = NOTES.filter(([note, taken]) => {
+      const r = energyNoted([note]);
+      return (!!r && "energy" in r) !== taken;
+    }).map(([note]) => note);
+    expect(wrong).toEqual([]);
+  });
+
+  it("is none of two run together in one note that differ, both named", () => {
+    expect(energyNoted(["E(MP2) = -155.123 Eh and E(HF) = -154.98 Eh"])).toEqual({ why: "its notes give E(MP2) = -155.123 and E(HF) = -154.98, which differ" });
+  });
+
+  it("is read as written - a power of ten, ORCA's line with no \"=\", a colon - and named as it is", () => {
+    expect(energyNoted(["E = -1.5498765E+02 Eh"])).toEqual({ energy: -154.98765, name: "E" });
+    expect(energyNoted(["FINAL SINGLE POINT ENERGY -154.987654321"])).toEqual({ energy: -154.987654321, name: "Final single point energy" });
+    expect(energyNoted(["Total energy: -154.98 Eh"])).toEqual({ energy: -154.98, name: "Total energy" });
+    expect(energyNoted(["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles"])).toEqual({ energy: -154.98765432, name: "E(RB3LYP)" });
+  });
+
+  it("is none of a bracket naming a part of an energy, a correction or a counterpoise, though it reads like a method", () => {
+    for (const part of ["gCP", "CP", "NL", "vdW", "SRB", "XC", "Coul", "Exch", "Kin", "Nuc", "Rep", "BSSE"]) expect(energyNoted([`E(${part}) = -0.0123 Eh`]), part).toBeNull();
+  });
+
+  it("is taken of a final energy and an E_elec, named so", () => {
+    expect(energyNoted(["Final energy = -154.98 Eh"])).toEqual({ energy: -154.98, name: "Final energy" });
+    expect(energyNoted(["E_elec = -154.98 Eh"])).toEqual({ energy: -154.98, name: "E_elec" });
+  });
+
+  it("is never one with no unit and no method said: a bare E with a number", () => {
+    expect(energyNoted(["E = -154.98"])).toBeNull();
   });
 });

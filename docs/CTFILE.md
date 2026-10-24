@@ -60,7 +60,9 @@ title, its first line; the record's data items are not kept:
 
 Not read: an SD file's data items - the `> <name>` fields after each
 record's M  END, among them the energy Meno writes for each frame of a
-molecule in 3D saved with all its frames (`readSDfile`); V3000 3D blocks
+molecule in 3D saved with all its frames (`readSDfile`) - but a record
+in 3D's `Charge` and `Multiplicity`, which Meno writes and reads back
+(docs/FILE-IO.md, lib/io/structures `speciesItems`); V3000 3D blocks
 and templates (SCSR), RDfiles and XDfiles.
 
 A connection table that ends before the atoms and bonds its counts line

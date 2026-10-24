@@ -16,7 +16,7 @@ import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
-import { exitOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
+import { exitOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -161,4 +161,9 @@ export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | un
   const by = byOf(step);
   const d = installedFor(step.kind, by).find((d) => whereIs(by, d.name) === null);
   return d && `${d.label} ${tooOld(by, d.name) ? "too old" : "not found"}`;
+}
+
+/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (kinds `needsOf`). */
+export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
+  return missingFor(s) ?? needsOf(s);
 }

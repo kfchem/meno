@@ -26,7 +26,11 @@ import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
-import type { Carried3D, Drawn, EditorState } from "./store/types";
+import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
+import type { Property } from "../../../lib/entry";
+import { recordNow, recordNumber } from "./workflow/entries";
+import { partsOf } from "./workflow/parts";
+import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
@@ -41,7 +45,7 @@ import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemePieces } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
-import { extensionOf, type Writer, type WriterId } from "../../../lib/io/writers";
+import { extensionOf, SD_CHARGE, SD_IMAGINARY, SD_MULTIPLICITY, speciesOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
 import { writtenAtoms, writtenOf } from "./utils/written";
@@ -216,13 +220,18 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     // (each frame's energy, where it is known: the frame shown's too)
     // (and, beside it, where the frame did not finish - it failed, or its marks did not read - why, so that no reader takes the value for a result)
     const n = 1 + (m.frames?.length ?? 0);
+    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
+    const skeleton = isSkeleton(m);
     const data = (i: number) => {
       const energy = m.energies?.[i];
       const failed = m.marksUnread ? "its marks of which frames failed could not be read" : m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
-      return (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") + (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "");
+      return (
+        (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") +
+        (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "") +
+        speciesData(m, i, skeleton) +
+        imaginaryData(m, i, n)
+      );
     };
-    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
-    const skeleton = isSkeleton(m);
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
     if (options.frames !== "all") return [writeMolfile3d(atomsOf(m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
@@ -232,11 +241,158 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
+  // (each structure a set carries a record of - a step's result, its products or what it worked out - a record of its own,
+  // with what its record says as data items; the rest of what is drawn one record, as before)
+  const inSets = setRecordsOf(drawn, loose);
+  const taken = new Set(inSets.flatMap((r) => ("ids" in r ? r.ids : [])));
+  const rest = { ...loose, atoms: loose.atoms.filter((a) => !taken.has(a.id)), bonds: loose.bonds.filter((b) => !taken.has(b.a) && !taken.has(b.b)) };
+  const ofSets = inSets.map((r, k) => {
+    const ids = "ids" in r ? new Set(r.ids) : null;
+    const one = "model" in r ? r.model : { ...loose, atoms: loose.atoms.filter((a) => ids!.has(a.id)), bonds: loose.bonds.filter((b) => ids!.has(b.a) && ids!.has(b.b)) };
+    const number = recordNumber(r.record);
+    return writeMolfile(forFlatReaders(one), { title: `${title} ${number ?? k + 1}`, version }) + recordData(r.record) + "$$$$\n";
+  });
   return (
-    (loose.atoms.length ? writeSdf(forFlatReaders(loose), { title, version }) : "") +
+    (rest.atoms.length ? writeSdf(forFlatReaders(rest), { title, version }) : "") +
+    ofSets.join("") +
     stacked.map((r) => writeSdf(forFlatReaders(r.model), { title: r.title ?? title, version })).join("") +
     records.join("")
   );
+}
+
+/**
+ * A frame's charge and spin multiplicity as an SD file's data items: those
+ * every step is told (lib/io/writers `speciesOf`) - what it was given, by a
+ * calculation or by the chemist, else what its atoms say - so that a reader
+ * takes the species it is, which its atom block alone may not say (a
+ * radical cation read back from a calculation: its atoms carry no charge).
+ * None of a skeleton, whose atoms say neither.
+ */
+function speciesData(m: Carried3D, i: number, skeleton: boolean): string {
+  const s = speciesOf(
+    { atoms: frameAtoms(m, i).map((a, k) => ({ ...a, ...(m.atoms[k].radical ? { radical: m.atoms[k].radical } : {}) })), bonds: m.bonds, ...(skeleton ? { skeleton: true } : {}) },
+    { charge: m.calc?.charge, multiplicity: m.calc?.multiplicity },
+  );
+  return s ? `> <${SD_CHARGE}>\n${s.charge}\n\n> <${SD_MULTIPLICITY}>\n${s.multiplicity}\n\n` : "";
+}
+
+/**
+ * A frame's imaginary frequencies as an SD file's data item, in cm-1 as its
+ * calculation gave them (workflow/entries `imaginaryOf`): each, where it was
+ * judged to have any; "none", where its vibrations were worked out and it
+ * has none; left out where they were not worked out - never "none" for not known.
+ */
+function imaginaryData(m: Carried3D, i: number, n: number): string {
+  const own = m.imaginary?.length === n ? m.imaginary[i] : i === n - 1 ? m.calc?.imaginary : undefined;
+  if (own?.length) return `> <${SD_IMAGINARY}>\n${own.join(" ")}\n\n`;
+  const computed = i === n - 1 && m.imaginary?.length !== n && m.calc?.results?.some((r) => r.on === "list" && r.id === "vibrations");
+  return computed ? `> <${SD_IMAGINARY}>\nnone\n\n` : "";
+}
+
+/**
+ * The structures drawn that the sets of what is written carry records of
+ * (workflow/parts `partsOf`: a set selected carries its structures' records
+ * by their atoms' ids), each once, in its set's order - its record as its
+ * structure stands now (workflow/entries `recordNow`: edited since it was
+ * given, its properties and state taken away, said so); only those whose
+ * atoms are all among `drawing`'s. After them, each set's structures it
+ * holds off the page (`Drawn.held`), in its order, each with its own record:
+ * holding is for the page alone, and every one of them is written.
+ */
+function setRecordsOf(drawn: Drawn, drawing: Model): ({ ids: number[]; record: DrawnRecord } | { model: Model; record: DrawnRecord })[] {
+  const here = new Set(drawing.atoms.map((a) => a.id));
+  const seen = new Set<number>();
+  return (drawn.flow?.sets ?? []).flatMap((set) => [
+    ...(set.carried ?? []).flatMap((c) => {
+      if (!c.structure.length || !c.structure.every((id) => here.has(id) && !seen.has(id))) return [];
+      c.structure.forEach((id) => seen.add(id));
+      return [{ ids: c.structure, record: recordNow(c.record, drawing, c.structure) ?? {} }];
+    }),
+    ...(drawn.held?.[set.id] ?? []).map(({ record, ...model }) => ({ model, record: recordNow(record, model, model.atoms.map((a) => a.id)) ?? {} })),
+  ]);
+}
+
+/** What is exported, `part`, with the structures each set selected in it holds off the page (`Drawn.held`), as `state` holds them. */
+export function withHeld(part: Drawn, state: Pick<EditorState, "sets">): Drawn {
+  const held = Object.fromEntries((part.flow?.sets ?? []).flatMap((s) => {
+    const own = state.sets.find((b) => b.id === s.id)?.drawnCollection;
+    return own?.length ? [[s.id, own]] : [];
+  }));
+  return Object.keys(held).length ? { ...part, held } : part;
+}
+
+/**
+ * What a structure's file is written from (`structureFileText`): the part
+ * selected, or - nothing selected - the whole canvas, its molecules in 3D as
+ * they are seen and each of its sets with the records it carries of its
+ * structures (workflow/parts `partsOf`); and, of each of those sets, the
+ * structures it holds off the page (`withHeld`): holding is for the page alone.
+ */
+export function exportedDrawn(state: Parameters<typeof drawnOf>[0] & Pick<EditorState, "sets" | "steps" | "wires" | "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<EditorState, "lists3d" | "stacksShown">>, part?: Drawn): Drawn {
+  if (part) return withHeld(part, state);
+  const flow = state.sets.length ? partsOf(state, new Set(state.sets.map((b) => b.id)), new Set(state.steps.map((s) => s.id))) : undefined;
+  return withHeld({ ...drawnOf(state), molecules3d: carriedOf(state), ...(flow ? { flow } : {}) }, state);
+}
+
+/** What a file of one molfile - MOL or RXN - says it left out of what is written (`drawn`): the structures its sets hold off the page, which one molfile cannot hold as records; none where they hold none. */
+export function heldNotWritten(drawn: Drawn): string | null {
+  const held = Object.values(drawn.held ?? {});
+  const n = held.reduce((k, models) => k + models.length, 0);
+  if (!n) return null;
+  const structures = `${n.toLocaleString("en-US")} ${n === 1 ? "structure" : "structures"}`;
+  return held.length === 1
+    ? `${structures} this set holds off the page ${n === 1 ? "was" : "were"} not written; export the set as SD to write them all.`
+    : `${structures} the sets hold off the page ${n === 1 ? "was" : "were"} not written; export the sets as SD to write them all.`;
+}
+
+/** A data item's name as an SD file can hold it: on one line, no angle brackets (CTfile Formats, the SDfile's data header). */
+const itemName = (name: string) => name.replace(/[<>\r\n]+/g, " ").trim() || "value";
+
+/**
+ * A data item's lines as an SD file can hold them, so that the item never
+ * ends early nor another seems to begin: a blank line - which ends an item -
+ * a line holding one space; one beginning ">" - a data header - or "$$$$" -
+ * the record's end - with a space before it.
+ */
+const itemLines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((l) => (!l.trim() ? " " : /^(>|\${4})/.test(l) ? ` ${l}` : l))
+    .join("\n");
+
+/** A property's value as an SD data item says it: a number as it is held, every digit; a text as it is; a list or a vector its numbers in turn; anything else as Meno's own record holds it. */
+function valueData(v: Property["value"]): string {
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v === "string") return v;
+  if ("entry" in v) return v.entry;
+  if ("list" in v) return v.list.join(" ");
+  if ("vector" in v) return v.vector.join(" ");
+  return JSON.stringify(v);
+}
+
+/**
+ * A structure's record as an SD file's data items, after its molfile: its
+ * state - finished, failed or set aside, and why; that its properties were
+ * taken away as it was edited (`Stale`); what it was made from (`From`);
+ * and each of its properties under its own name - a number worked out with
+ * its unit beside it as the page shows it ("mw (g/mol)") - its number, how
+ * it was made, the values of what it was made from (`made_from.nll`) among
+ * them. A property not worked out says why in place of a value, under its
+ * bare name, so that no reader takes a value for one. A value worked out of
+ * the structure as it is stays true whatever a later step did: a structure
+ * a step set aside or failed keeps it, beside its State saying so.
+ */
+function recordData(r: DrawnRecord): string {
+  const item = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
+  const s = r.status;
+  const state = s == null ? [] : s === "done" ? [item("State", "finished")] : "failed" in s ? [item("State", "failed"), item("Failed", s.failed)] : [item("State", "set aside"), item("Set aside", s.aside)];
+  const props = Object.entries(r.properties ?? {}).map(([name, p]) => {
+    const st = p.status;
+    // (its unit beside its name only where it is a number worked out: one not worked out has no value its unit is of)
+    const label = st === "computed" && typeof p.value === "number" && p.unit !== "none" ? `${name} (${p.unit})` : name;
+    return item(label, st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
+  });
+  return [...state, ...(r.stale ? [item("Stale", r.stale)] : []), ...(r.from?.length ? [item("From", r.from.join(" "))] : []), ...props].join("");
 }
 
 /**
@@ -693,12 +849,18 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         }
         const kind = writer.id as WriterId;
         // (the part, or everything on the canvas - the molecules in 3D as they are seen)
-        const drawn = part ?? { ...drawnOf(state), molecules3d: carriedOf(state) };
         if (kind === "svg") {
           // The style the canvas is drawn in: the document's own, or the app's.
           const style = styleOf(state.docStyle);
-          await writeDocument(path, drawingSvg(drawn, state, style, true));
-        } else await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
+          await writeDocument(path, drawingSvg(part ?? { ...drawnOf(state), molecules3d: carriedOf(state) }, state, style, true));
+          return;
+        }
+        // (and of each set - those selected, or every one on the canvas - what it holds off the page too: every structure it holds is written)
+        const drawn = exportedDrawn(state, part);
+        await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
+        // (a MOL or RXN file - one molfile - cannot hold a set's records: what it holds off the page, said not written)
+        const notWritten = kind === "mol" || kind === "rxn" ? heldNotWritten(drawn) : null;
+        if (notWritten) useNotices.getState().show({ id: `held-not-written ${path}`, title: "Part of the set not written", text: notWritten });
       }),
     [attempt, store],
   );

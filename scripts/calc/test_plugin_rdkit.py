@@ -1222,7 +1222,8 @@ class OpenStereo(unittest.TestCase):
                 left = self.worker.op_stereo_left_open({"molblock": block})
             finally:
                 self.worker.EnumerateStereoisomers = real
-            self.assertEqual(left, {"atoms": full["atoms"], "bonds": full["bonds"]}, smiles)
+            # (and the open bonds that run on into one another, by run: an allene's two, one axis)
+            self.assertEqual(left, {"atoms": full["atoms"], "bonds": full["bonds"], "cumulated": [full["cumulenes"]] if full["cumulenes"] else []}, smiles)
             self.assertEqual(calls, [], smiles)
 
     def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
@@ -1435,6 +1436,24 @@ class StructureSteps(unittest.TestCase):
         # (a lone proton, read as drawn: its weight and the rest, none chosen for it)
         self.assertEqual(got[1]["properties"]["mw"]["value"], 1.008)
 
+    def test_descriptors_of_a_lone_ion_leave_out_its_logp_saying_why(self):
+        # (a lone atom or ion as Meno gives one - its valence written as none: Na+, Cl-, a sodium atom - has no logP of
+        #  its own, Crippen's typing giving every one the same; its weight as any. Methane, a lone C with its H, has one)
+        def lone(el, charge):
+            chg = f" CHG={charge}" if charge else ""
+            return {"molblocks": [
+                "\n  Meno\n\n  0  0  0     0  0            999 V3000\nM  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n"
+                f"M  V30 1 {el} 0.0000 0.0000 0 0{chg} VAL=-1\nM  V30 END ATOM\nM  V30 END CTAB\nM  END\n"
+            ]}
+        got = self.run_step("descriptors", [lone("Na", 1), lone("Cl", -1), lone("Na", 0), self.entry("C")])
+        for g, mw in zip(got[:3], [22.99, 35.453, 22.99]):
+            props = g["properties"]
+            self.assertNotIn("logp", props)
+            self.assertEqual(props["not_given"]["value"], "logp: not defined for a lone ion")
+            self.assertEqual(props["mw"]["value"], mw)
+            self.assertEqual((props["tpsa"]["value"], props["hbd"]["value"]), (0.0, 0))
+        self.assertIn("logp", got[3]["properties"])
+        self.assertNotIn("not_given", got[3]["properties"])
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class MovingCN(unittest.TestCase):
@@ -1496,7 +1515,7 @@ class MovingCN(unittest.TestCase):
             self.assertEqual(got["as"], "drawn", smiles)
             self.assertIn(why, self.note(got), smiles)
             self.assertEqual(self.worker.op_open_stereo({"molblock": self.block(smiles)})["bonds"], [], smiles)
-            self.assertEqual(self.worker.op_stereo_left_open({"molblock": self.block(smiles)}), {"atoms": [], "bonds": []}, smiles)
+            self.assertEqual(self.worker.op_stereo_left_open({"molblock": self.block(smiles)}), {"atoms": [], "bonds": [], "cumulated": []}, smiles)
 
     def test_one_drawn_with_its_e_z_keeps_it_and_nothing_is_said(self):
         got = self.stereoisomers("CC/N=C(/N)NCC")
@@ -1515,9 +1534,49 @@ class MovingCN(unittest.TestCase):
         bond.SetBondDir(Chem.BondDir.UNKNOWN)
         wavy = Chem.MolToMolBlock(mol)
         self.assertEqual(self.worker.op_open_stereo({"molblock": wavy})["atoms"], [1])
-        self.assertEqual(self.worker.op_stereo_left_open({"molblock": wavy}), {"atoms": [1], "bonds": []})
+        self.assertEqual(self.worker.op_stereo_left_open({"molblock": wavy}), {"atoms": [1], "bonds": [], "cumulated": []})
 
     def test_conformers_of_a_guanidine_choose_nothing_for_its_c_n(self):
         # (one 3D structure of each of its two, its C=N as the embedding places it: never a configuration given it)
         made = self.worker.op_conformers({"molblock": self.block("CN=C(N)NCC(O)C"), "isomers": "all", "options": {"count": 1}})["isomers"]
         self.assertEqual(len(made), 2)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class SmilesStereoOpen(unittest.TestCase):
+    """A SMILES read (`from_smiles`), and what its drawing leaves without a configuration (`stereo_left_open`): what a
+    paste of it is told, by the one definition a step refusing a structure for it uses."""
+
+    #: Paclitaxel, every one of its eleven stereocentres given (as PubChem's isomeric SMILES of CID 36314 gives them).
+    PACLITAXEL = (
+        "CC1=C2[C@H](C(=O)[C@@]3([C@H](C[C@@H]4[C@]([C@H]3[C@@H]([C@@](C2(C)C)(C[C@@H]1OC(=O)[C@@H]([C@H](C5=CC=CC=C5)"
+        "NC(=O)C6=CC=CC=C6)O)O)OC(=O)C7=CC=CC=C7)(CO4)OC(=O)C)O)C)OC(=O)C"
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def left(self, smiles):
+        block = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
+        got = self.worker.op_stereo_left_open({"molblock": block})
+        return len(got["atoms"]), len(got["bonds"])
+
+    def test_paclitaxel_given_whole_leaves_none_open_and_one_mark_short_leaves_one(self):
+        self.assertEqual(self.left(self.PACLITAXEL), (0, 0))
+        # (the side chain's phenyl-bearing centre given no configuration: ten of eleven, as a stereo-incomplete record has it)
+        self.assertEqual(self.left(self.PACLITAXEL.replace("[C@H](C5=CC=CC=C5)", "C(C5=CC=CC=C5)")), (1, 0))
+
+    def test_a_double_bond_given_no_configuration_is_one_left_open_and_nothing_stereogenic_none(self):
+        self.assertEqual(self.left("CC=CC(=O)O"), (0, 1))
+        self.assertEqual(self.left("C/C=C/C(=O)O"), (0, 0))
+        self.assertEqual(self.left("CCO"), (0, 0))
+
+    def test_cumulated_double_bonds_left_open_are_one_run_each(self):
+        # (an allene's two bonds one axis, a butatriene's three one cis or trans, a pentatetraene's four one axis: the
+        #  runs say so, whatever RDKit lists each bond as)
+        for smiles, runs in [("CC=C=CC", [[1, 2]]), ("CC=C=C=CC", [[1, 2, 3]]), ("CC=C=C=C=CC", [[1, 2, 3, 4]]), ("CC=CC=CC", [])]:
+            block = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
+            self.assertEqual(self.worker.op_stereo_left_open({"molblock": block})["cumulated"], runs, smiles)
