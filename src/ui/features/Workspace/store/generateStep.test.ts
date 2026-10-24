@@ -253,10 +253,10 @@ describe("Generate: a step that takes nothing in", () => {
     await st().runStep(step);
     expect(ran()).toMatchObject({ ok: false, said: "Its seeds are not told one by one" });
     // (none read: failed, each seed named with why, from the tally)
-    const why = (place: number) => ({ place, why: place % 2 ? "it has no atoms" : "a part RDKit cannot read" });
+    const why = (place: number) => ({ place, why: place % 2 ? "it is a label of no element" : "a part RDKit cannot read" });
     run.mockResolvedValueOnce({ outputs: [], seeds: Array.from({ length: 7 }, (_, k) => why(k)), said: "No seed could be read", by: { program: "CReM" } });
     await st().runStep(step);
-    expect(ran()).toMatchObject({ ok: false, said: "No seed could be read · seeds 1, 3, 5 and 7 not read: a part RDKit cannot read; seeds 2, 4 and 6 not read: it has no atoms" });
+    expect(ran()).toMatchObject({ ok: false, said: "No seed could be read · seeds 1, 3, 5 and 7 not read: a part RDKit cannot read; seeds 2, 4 and 6 not read: it is a label of no element" });
     // (six made none: five named on the line, the sixth counted - and every one kept, shown where the line is pointed at)
     run.mockResolvedValueOnce({
       outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
