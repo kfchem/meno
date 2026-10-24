@@ -10,7 +10,7 @@ const wroteIn = new Map<string, string>();
 const lookedIn = new Map<string, number>();
 const commands: { cmd: string; args?: Record<string, unknown> }[] = [];
 const asked: ConsentRequest[] = [];
-const state = { missing: [] as string[], changed: [] as string[], allowed: true, granted: new Set<string>() };
+const state = { missing: [] as string[], changed: [] as string[], unreadable: [] as string[], allowed: true, granted: new Set<string>(), checkMs: 0 };
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
@@ -39,7 +39,12 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "py_env_setup_uv") return void files.set(VENV_PYTHON, "");
     if (cmd === "plugin_files") {
       if (args?.fetch) state.missing = state.changed = [];
-      return { folder: "/data/uv/plugin-blender/files", missing: state.missing, bytes: 0, changed: state.changed };
+      // (a check that takes a while: its files read through)
+      if (!args?.fetch && state.checkMs) {
+        await new Promise((r) => setTimeout(r, state.checkMs));
+        checkingSeen.push(...Object.values(useCheckingFiles.getState()));
+      }
+      return { folder: "/data/uv/plugin-blender/files", missing: state.missing, bytes: 0, changed: state.changed, unreadable: state.unreadable };
     }
   },
 }));
@@ -53,7 +58,9 @@ vi.mock("./net/network", () => ({
   },
 }));
 
-const { ensurePyEnv, setUpFiles } = await import("./pyEnv");
+const { ensurePyEnv, setUpFiles, useCheckingFiles } = await import("./pyEnv");
+// (what was said of a check of its files, as the check went)
+const checkingSeen: string[] = [];
 const { PLUGINS } = await import("./calc/catalog");
 
 const VENV_PYTHON = "uv/plugin-blender/venv/bin/python";
@@ -75,6 +82,9 @@ describe("setting a plugin up, with what it downloads besides", () => {
     asked.length = 0;
     state.missing = [dmg.file];
     state.changed = [];
+    state.unreadable = [];
+    state.checkMs = 0;
+    checkingSeen.length = 0;
     state.allowed = true;
     state.granted.clear();
   });
@@ -156,7 +166,7 @@ describe("setting a plugin up, with what it downloads besides", () => {
     await ensurePyEnv("plugin-blender");
     expect(asked).toHaveLength(1);
     expect(asked[0]).toMatchObject({ again: true });
-    expect(asked[0].detail.startsWith(`${dmg.file} is not the file Meno downloaded: its fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since. The Blender plugin needs`)).toBe(true);
+    expect(asked[0].detail.startsWith(`${dmg.file} is not the file Meno downloaded: its size or fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since. The Blender plugin needs`)).toBe(true);
     expect(fetched()).toBe(true);
   });
 
@@ -168,6 +178,31 @@ describe("setting a plugin up, with what it downloads besides", () => {
     state.allowed = false;
     await expect(ensurePyEnv("plugin-blender")).rejects.toThrow(/is not the file Meno downloaded/);
     expect(fetched()).toBe(false);
+  });
+
+  it("says a file there it could not read, with why - neither asking nor fetching over it - and reads it again the next time", async () => {
+    state.granted.add("python-env:plugin-blender");
+    files.set(VENV_PYTHON, "");
+    files.set(STAMP, JSON.stringify({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] }));
+    state.missing = [];
+    state.unreadable = [`${dmg.file}: Permission denied (os error 13)`];
+    await expect(ensurePyEnv("plugin-blender")).rejects.toThrow(`${dmg.file}: Permission denied (os error 13) - it could not be read, so Blender cannot run. Meno reads it again the next time.`);
+    expect(asked).toEqual([]);
+    expect(fetched()).toBe(false);
+    // (readable again: asked about again, and nothing said)
+    state.unreadable = [];
+    await ensurePyEnv("plugin-blender");
+    expect(commands.filter((c) => c.cmd === "plugin_files" && c.args?.fetch === false)).toHaveLength(2);
+  });
+
+  it("says its files are being checked where that takes more than a moment - and nothing once done", async () => {
+    files.set(VENV_PYTHON, "");
+    files.set(STAMP, JSON.stringify({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] }));
+    state.missing = [];
+    state.checkMs = 400;
+    await ensurePyEnv("plugin-blender");
+    expect(checkingSeen).toEqual(["Blender"]);
+    expect(useCheckingFiles.getState()).toEqual({});
   });
 
   it("fetches nothing where the user says no", async () => {

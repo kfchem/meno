@@ -197,14 +197,17 @@ pub fn folder(data: &Path, id: &str, pixi: bool) -> PathBuf {
 }
 
 /// How a file a plugin downloads stands in its folder.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Held {
     /// There, as it was fetched: its size and SHA-256 the manifest's - an archive, unpacked whole.
     Whole,
-    /// Not there, or not the size it should be - an archive, not unpacked whole.
+    /// Not there - an archive, not unpacked whole. (One cut short is kept as `<file>.part`, never under its name.)
     Missing,
-    /// There at its size, but its SHA-256 not the manifest's: changed, or damaged, since it was fetched.
+    /// There, but not its size, or its SHA-256 not the manifest's: changed, or damaged, since it was fetched.
     Changed,
+    /// There, but it could not be read through - held by another program, not allowed, a share gone - and why: not
+    /// known to be changed, so never fetched over, and read again the next time it is asked about.
+    Unreadable(String),
 }
 
 /// What this launch found of each kept file's SHA-256, by its path: at the size and the time it was last changed
@@ -220,23 +223,31 @@ pub fn held(dir: &Path, d: &Download) -> Held {
         return if copy_of(dir, d).is_some() { Held::Whole } else { Held::Missing };
     }
     let path = dir.join(&d.file);
-    let Ok(meta) = std::fs::metadata(&path) else { return Held::Missing };
+    let meta = match std::fs::metadata(&path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Held::Missing,
+        Err(e) => return Held::Unreadable(e.to_string()),
+    };
+    // (kept under its name only once it was all there and its hash the manifest's: another size is another file)
     if meta.len() != d.bytes {
-        return Held::Missing;
+        return Held::Changed;
     }
     let when = meta.modified().ok();
     let checked = CHECKED.get_or_init(Default::default);
     let known = checked.lock().ok().and_then(|c| c.get(&path).cloned());
     let ok = match known {
         Some((len, at, sha, ok)) if len == meta.len() && at == when && sha == d.sha256 => ok,
-        _ => {
-            // (a file that cannot be read through is not the one fetched, as far as is known)
-            let ok = hashed_so_far(&path).is_ok_and(|(h, _)| hex(h) == d.sha256);
-            if let Ok(mut c) = checked.lock() {
-                c.insert(path, (meta.len(), when, d.sha256.clone(), ok));
+        _ => match hashed_so_far(&path) {
+            Ok((h, _)) => {
+                let ok = hex(h) == d.sha256;
+                if let Ok(mut c) = checked.lock() {
+                    c.insert(path, (meta.len(), when, d.sha256.clone(), ok));
+                }
+                ok
             }
-            ok
-        }
+            // (not read: nothing known of it - nothing kept, and read again the next time)
+            Err(e) => return Held::Unreadable(e.to_string()),
+        },
     };
     if ok { Held::Whole } else { Held::Changed }
 }
@@ -430,8 +441,10 @@ pub struct FilesState {
     pub folder: String,
     pub missing: Vec<String>,
     pub bytes: u64,
-    /// Of those missing, the ones there at their size whose SHA-256 is not the manifest's (`Held::Changed`).
+    /// Of those missing, the ones there that are not as fetched: not their size, or their SHA-256 not the manifest's (`Held::Changed`).
     pub changed: Vec<String>,
+    /// Those there that could not be read through, each with why ("model.pth: ..."): neither missing nor changed - not fetched over.
+    pub unreadable: Vec<String>,
 }
 
 /// How far a plugin's files have come: bytes had, of all of those fetched.
@@ -479,8 +492,16 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Op
         missing: missing.iter().map(|d| d.file.clone()).collect(),
         bytes: missing.iter().map(|d| d.bytes).sum(),
         changed: downloads.iter().zip(&stand).filter(|(d, h)| **h == Held::Changed && missing.iter().any(|m| m.file == d.file)).map(|(d, _)| d.file.clone()).collect(),
+        unreadable: downloads
+            .iter()
+            .zip(&stand)
+            .filter_map(|(d, h)| match h {
+                Held::Unreadable(why) => Some(format!("{}: {why}", d.file)),
+                _ => None,
+            })
+            .collect(),
     };
-    let wanted: Vec<&Download> = downloads.iter().zip(&stand).filter(|(_, h)| **h != Held::Whole).map(|(d, _)| d).collect();
+    let wanted: Vec<&Download> = downloads.iter().zip(&stand).filter(|(_, h)| matches!(h, Held::Missing | Held::Changed)).map(|(d, _)| d).collect();
     if !fetch || wanted.is_empty() {
         return Ok(state(&wanted));
     }
@@ -667,7 +688,7 @@ mod tests {
 
     /// The files not kept as they were fetched (`held`): as `plugin_files` finds them.
     fn missing<'a>(dir: &Path, downloads: &'a [Download]) -> Vec<&'a Download> {
-        downloads.iter().filter(|d| held(dir, d) != Held::Whole).collect()
+        downloads.iter().filter(|d| matches!(held(dir, d), Held::Missing | Held::Changed)).collect()
     }
 
     fn sha(bytes: &[u8]) -> String {
@@ -959,9 +980,27 @@ mod tests {
         f.set_modified(at + std::time::Duration::from_secs(10)).unwrap();
         drop(f);
         assert_eq!(held(dir.path(), &d), Held::Whole);
-        // (another size: missing, not changed - it is fetched again, as one cut short is)
+        // (another size: changed too - one cut short is kept as model.bin.part, never under its name)
         std::fs::write(&path, b"weights").unwrap();
-        assert_eq!(held(dir.path(), &d), Held::Missing);
+        assert_eq!(held(dir.path(), &d), Held::Changed);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn says_a_kept_file_it_could_not_read_is_unreadable_never_changed_and_reads_it_again_next_time() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = Scratch::new();
+        let body = b"weights all there".to_vec();
+        let d = Download { file: "held.bin".into(), url: "https://h/held.bin".into(), sha256: sha(&body), bytes: body.len() as u64, ..Default::default() };
+        let path = dir.path().join("held.bin");
+        std::fs::write(&path, &body).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        // (not readable: why said, and not among those fetched again)
+        assert!(matches!(held(dir.path(), &d), Held::Unreadable(why) if !why.is_empty()));
+        assert!(missing(dir.path(), std::slice::from_ref(&d)).is_empty());
+        // (readable again, its size and time as they were: read through, not taken from before)
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(held(dir.path(), &d), Held::Whole);
     }
 
     #[test]
@@ -1017,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_not_its_size_is_still_missing() {
+    fn a_file_not_its_size_is_fetched_again_but_asked_about_as_changed() {
         let dir = Scratch::new();
         let d = |file: &str, bytes| Download { file: file.into(), url: "https://h/m".into(), sha256: sha(b"12345"), bytes, ..Default::default() };
         std::fs::write(dir.path().join("whole"), b"12345").unwrap();
@@ -1025,6 +1064,9 @@ mod tests {
         let all = [d("whole", 5), d("short", 5), d("none", 5)];
         let left: Vec<&str> = missing(dir.path(), &all).iter().map(|d| d.file.as_str()).collect();
         assert_eq!(left, ["short", "none"]);
+        // (one not its size is there, but not as fetched: changed, asked about before it is fetched over)
+        assert_eq!(held(dir.path(), &all[1]), Held::Changed);
+        assert_eq!(held(dir.path(), &all[2]), Held::Missing);
     }
 
     /// A server of one body, at `/f`, for as many requests as asked: the
