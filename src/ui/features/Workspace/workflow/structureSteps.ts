@@ -11,7 +11,7 @@ import type { Entry } from "../../../../lib/entry";
 import { tag } from "../../../../lib/nodes/tag";
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
-import { speciesTyped, withSpecies } from "../../../../lib/steps/species";
+import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
 import { entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -50,9 +50,10 @@ export function taggedSet(entries: readonly SetEntry[], holds: Holds3D, name: st
 
 /** *Species* (lib/steps `withSpecies`): each entry with its charge and multiplicity set; one whose electrons cannot have them, or a skeleton, out of *Failed* with the reason. */
 export function speciesSet(entries: readonly SetEntry[], holds: Holds3D, charge: string, multiplicity: string): Outcome3D {
+  // (what it still needs, as its card says it: one that does not read, or neither given)
+  const needs = speciesNeeds(charge, multiplicity);
   const typed = speciesTyped(charge, multiplicity);
-  if ("why" in typed) return { ok: false, said: typed.why };
-  if (typed.given.charge == null && typed.given.multiplicity == null) return { ok: false, said: "Give a charge, a multiplicity, or both" };
+  if (needs != null || "why" in typed) return { ok: false, said: needs ?? "" };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   // (what each entry set no longer holds, worked out for the species it had: said, never dropped unsaid)

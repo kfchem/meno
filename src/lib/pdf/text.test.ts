@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, findIn, letterAt, letterNear, lineAt, linesOf, marksBetween, pageTextFrom, pageTextOf, placeAt, searchable, textBetween, wordAt, wordBoxesBetween, wordsBetween, type PageText } from "./text";
+import { blockOf, findIn, letterAt, letterInBand, letterNear, lineAt, linesOf, marksBetween, pageTextFrom, pageTextOf, placeAt, searchable, textBetween, wordAt, wordBoxesBetween, wordsBetween, type PageText } from "./text";
 
 /** A page of lines as PDFium reads them: each letter 6 points wide, each line 12 tall, 14 apart, starting where it is given (72, else); its ends "\r\n" with no box. */
 function page(lines: (string | [string, number])[]): PageText {
@@ -155,5 +155,49 @@ describe("words copied from a PDF", () => {
 
   it("join a word PDFium broke at a line's end, as a search reads it", () => {
     expect(textBetween(p, 0, p.codes.length)).toBe("Rotational barriers of the hy-\ndroxyl group were conformational, as found.");
+  });
+});
+
+describe("a press in a table of coordinates", () => {
+  // (rows as a paper's supporting information sets them: 12 points tall, 6.5 apart - more than a letter's reach - in two halves side by side)
+  const rows = ["C    0.000000   -0.420000    0.000000", "C    1.270000    0.420000    0.000000", "H    1.270000    0.970000    0.890000"];
+  const table = (() => {
+    let text = "";
+    const boxes: ([number, number, number, number] | null)[] = [];
+    rows.forEach((row, r) => {
+      for (const x0 of [60, 320]) {
+        [...row].forEach((ch, k) => {
+          text += ch;
+          boxes.push(ch === " " ? null : [x0 + k * 6, 100 + r * 18.5, x0 + 6 + k * 6, 112 + r * 18.5]);
+        });
+        text += "\r\n";
+        boxes.push(null, null);
+      }
+    });
+    return pageTextFrom(text, boxes);
+  })();
+  const gap = 100 + 12 + 6.5 / 2;
+
+  it("in the white between two rows is on one of them: words, not a box", () => {
+    expect(letterNear(table, 60 + 6 * 10, gap)).toBeNull();
+    const hit = letterInBand(table, 60 + 6 * 10, gap);
+    expect(hit).not.toBeNull();
+    expect([hit!.line.y0, hit!.line.y1]).toEqual([100, 112]);
+  });
+
+  it("in the white between a row's numbers, or just left of its first column, is on that row", () => {
+    expect(letterInBand(table, 60 + 6 * 2 + 3, 106)?.line.x0).toBe(60);
+    expect(letterInBand(table, 52, 125)?.line.y0).toBe(118.5);
+  });
+
+  it("is on the half of the table it is nearer: never one row's letters for the other half's", () => {
+    expect(letterInBand(table, 330, 106)?.line.x0).toBe(320);
+    expect(letterInBand(table, 70, 106)?.line.x0).toBe(60);
+  });
+
+  it("is on no line far from every row: there, a box is drawn", () => {
+    expect(letterInBand(table, 60, 40)).toBeNull();
+    expect(letterInBand(table, 10, 106)).toBeNull();
+    expect(letterInBand(table, 60, 100 + 2 * 18.5 + 12 + 13)).toBeNull();
   });
 });

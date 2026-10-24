@@ -1,7 +1,7 @@
 # The maintainer's rulings on Meno's window, tabs, menus, page objects and
 # files, each turned into a step and a shot or a film - to run again on every
 # release candidate (bug hunt C, 2026-10-13; the 2D drawing's are
-# conformance-2d.ps1). It is run in two parts, each with -Guide: first
+# conformance-2d.ps1). It is run in two parts: first
 # with CONFORMANCE_PART=first from an emptied settings.json - a first run,
 # which ends as its one tab is closed and Meno goes - then with
 # CONFORMANCE_PART=rest, Meno started again on the settings the first part
@@ -9,10 +9,10 @@
 # Run in one (no CONFORMANCE_PART), Meno is started again between them -
 # which the system may not let come to the front. What each must show:
 #
-# - "guide-first": the first-run guide's card, low in the middle.
-# - "guide-escape": Escape is Skip - the card gone.
-# - "update-after-guide": the question about keeping Meno up to date comes
-#   once the guide is closed, not over it (declined with Escape).
+# - "first-start": the page alone - no guide opens of itself (Getting
+#   started's is shown only when asked, from Settings, Plugins).
+# - "update-asked": the question about keeping Meno up to date, a moment
+#   after (declined with Escape).
 # - "chrome": no buttons on the canvas, no logo menu; along the top the
 #   tabs, +, the network's globe, Save and Settings - Save beside Settings.
 # - "menu-bar" (a shot of the screen's menu bar, Meno in front): Meno's
@@ -86,14 +86,9 @@ $Part = if ($env:CONFORMANCE_PART) { $env:CONFORMANCE_PART } else { "all" }
 if ($Part -ne "rest") {
 Start-Meno
 Start-Sleep -Milliseconds 1500
-Save-Step "guide-first"
-Send-MenoKey Escape
-Start-Sleep -Milliseconds 700
-Save-Step "guide-escape"
-# (where Escape does not skip it, Skip does, so that the rest can run)
-Invoke-MenoClick -X 1390 -Y 1391
-Start-Sleep -Milliseconds 3800
-Save-Step "update-after-guide"
+Save-Step "first-start"
+Start-Sleep -Milliseconds 3000
+Save-Step "update-asked"
 Set-MenoWindow
 Send-MenoKey Escape
 Start-Sleep -Milliseconds 800

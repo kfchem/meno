@@ -13,6 +13,8 @@ import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import type { LostText, PdfFind, PdfItem, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
+import StructuresTableBody from "./workflow/StructuresTableBody";
+import { readAsTable } from "./workflow/entries";
 import { setName } from "./workflow/doers";
 import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
@@ -23,7 +25,8 @@ import { pageUnder, pointOn } from "../../../lib/pdf/column";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
 import { dragStructure, sayWhy } from "./components/structureDrag";
-import { letterAt, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
+import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
+import { pressOn } from "../../../lib/pdf/press";
 import { goToFound, runFind, stepFound } from "./components/pdfFind";
 import { FOUND_COLOR } from "./components/pdfMarks";
 import { placeBefore, selects } from "./utils/pdfSelection";
@@ -80,7 +83,9 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   const sets = useEditor((s) => s.sets);
   const setsRead = useEditor((s) => s.setsRead);
   const tableId = useEditor((s) => s.setTableShown);
-  const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && b.collection)), [sets, setsRead]);
+  // (molecules in 3D a set holds off the page; or structures drawn, on the page and off it)
+  const page = useEditorStore();
+  const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && readAsTable(page.getState(), b))), [sets, setsRead, page]);
   const table = tables.find((b) => b.id === tableId);
   const pdf = table ? undefined : read.find((p) => p.id === pdfShownId);
   const shown = pdf || table ? undefined : texts.find((t) => t.id === shownId);
@@ -311,7 +316,7 @@ function Column({
           )}
         </AnimatePresence>
         {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
-        {table && <SetTableBody key={`set-${table.id}`} set={table} />}
+        {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">
             <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
@@ -712,7 +717,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const link = linkUnder(e);
       const t = q?.on ? lettersOf(q.page) : null;
       const onStructure = !!q?.on && !!store.getState().pdfStructureLit;
-      el.style.cursor = link && followsLink(e) ? "pointer" : onStructure ? "grab" : q && t && letterNear(t, q.x, q.y) != null ? "text" : "";
+      el.style.cursor = link && followsLink(e) ? "pointer" : onStructure ? "grab" : q && t && (letterNear(t, q.x, q.y) ?? letterInBand(t, q.x, q.y)) != null ? "text" : "";
       el.title = link ? linkHint(link) : "";
     };
     const onModifier = (e: KeyboardEvent) => {
@@ -763,13 +768,24 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         carrying = { x: e.clientX, y: e.clientY, carried: false };
         return;
       }
-      const letter = t ? letterNear(t, q.x, q.y) : null;
+      // (Shift: the selection drawn on from where it was begun, to here - on this page or another)
+      if (t && clicks.n === 1 && e.shiftKey && selects(sel) && sel.id === id) {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        drawing = { unit: "letter", first: [sel.anchor, sel.anchor], x: e.clientX, y: e.clientY, moved: true };
+        store.getState().setPdfSel({ id, anchor: sel.anchor, focus: { page: q.page, at: placeAt(t, q.x, q.y) } });
+        return;
+      }
       // in a figure, or where there are no words: a box drawn as the pointer goes - in a figure, let go where it
-      // was pressed, the figure's (two clicks and three are words', its labels' too)
+      // was pressed, the figure's (two clicks and three are words', its labels' too; and a line of text in it, a
+      // table's row, is words' at once)
       const sha = shaOf();
       const figures = q.on && sha ? figuresHad(sha, q.page, () => reader.redraw()) : null;
       const fig = figures ? figureAt(figures, q.x, q.y) : null;
-      if (q.on && clicks.n === 1 && (fig || letter == null)) {
+      // (on a letter, beside one, or in the white between the rows of a table - a line's band - words; lib/pdf/press)
+      const pressed = pressOn(t, fig, q.x, q.y);
+      const letter = pressed.begins === "words" ? pressed.letter : t ? letterNear(t, q.x, q.y) : null;
+      if (q.on && clicks.n === 1 && pressed.begins === "box") {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
         drawing = null;

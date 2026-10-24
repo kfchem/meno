@@ -9,11 +9,12 @@ import { numberText } from "../../../../lib/calc/results";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
-import { conditionsIn, conditionText } from "../../../../lib/nodes/filter";
+import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
+import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
-import { speciesTyped } from "../../../../lib/steps/species";
+import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
 import { listsReadAs, readLists } from "./enumerate";
-import { groupsReadAs, positionIds } from "./substituents";
+import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind, ValueKind };
@@ -97,6 +98,8 @@ export type KindInfo = {
   others?: readonly StepExit[];
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
+  /** What it still needs of its options before it can run, where it cannot as they are: said on its card where *Ready* would be (`needsOf`), as its run would refuse. */
+  needs?: (values: Record<string, string | number | boolean>) => string | undefined;
   /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
   whole?: true;
 };
@@ -197,6 +200,7 @@ export const KINDS: readonly KindInfo[] = [
       },
     ],
     how: (v) => filterHow(String(v.conditions ?? ""), v.match === "any" ? "any" : "all"),
+    needs: (v) => filterNeeds(String(v.conditions ?? "")),
   },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
@@ -319,8 +323,9 @@ export const KINDS: readonly KindInfo[] = [
         return `${positions} position${positions === 1 ? "" : "s"} \u00d7 ${groups} group${groups === 1 ? "" : "s"}, ${v.combine === "together" ? "together" : "one at a time"}`;
       }
       const { lists } = readLists(String(v.lists ?? ""));
-      return lists.size ? [...lists].map(([n, o]) => `R${n} \u00b7 ${o.length}`).join(", ") : "No lists yet";
+      return lists.size ? [...lists].map(([n, o]) => `R${n} \u00b7 ${o.length}`).join(", ") : NO_LISTS;
     },
+    needs: (v) => enumerateNeeds(v),
   },
   {
     kind: "chart",
@@ -369,7 +374,8 @@ export const KINDS: readonly KindInfo[] = [
     runs: "entries",
     made: "Tagged",
     options: [{ id: "name", label: "Name", type: "text", default: "" }],
-    how: (v) => (String(v.name ?? "").trim() ? `Each its own ${String(v.name).trim()}` : "Name the tag"),
+    how: (v) => tagNeeds(String(v.name ?? "")) ?? `Each its own ${String(v.name).trim()}`,
+    needs: (v) => tagNeeds(String(v.name ?? "")),
   },
   {
     // (each entry's charge and multiplicity set - one left blank as each has it - those whose electrons cannot have them out of Failed, saying why)
@@ -386,6 +392,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "multiplicity", label: "Multiplicity (blank: each entry's own)", type: "text", default: "" },
     ],
     how: (v) => speciesHow(String(v.charge ?? ""), String(v.multiplicity ?? "")),
+    needs: (v) => speciesNeeds(String(v.charge ?? ""), String(v.multiplicity ?? "")),
   },
   {
     // (the entries, in the set's order, as one entry - a complex - each part where it stands; none of a part's properties carried, each named)
@@ -409,8 +416,32 @@ export const KINDS: readonly KindInfo[] = [
     made: "Measured",
     options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
     how: (v) => measureHow(String(v.measurements ?? "")),
+    needs: (v) => {
+      const typed = measurementsTyped(String(v.measurements ?? ""));
+      return "why" in typed ? typed.why : undefined;
+    },
   },
 ];
+
+/** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
+const NO_LISTS = "No lists yet";
+
+/**
+ * What an Enumerate step still needs of its options before it can run - as
+ * its run would say it, of its options alone (its template is its input's,
+ * looked at as it runs): by R groups, lists - and each read, no R listed
+ * twice, none empty (enumerate `readLists`); by substituents, positions
+ * chosen, and groups, each read (substituents `readGroups`). Nothing, where
+ * its options are all there.
+ */
+export function enumerateNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  if (v.way === "substituents") {
+    if (!positionIds(String(v.positions ?? "")).length) return NO_POSITIONS;
+    return readGroups(String(v.groups ?? "")).problems[0];
+  }
+  const { lists, problems } = readLists(String(v.lists ?? ""));
+  return lists.size ? problems[0] : NO_LISTS;
+}
 
 /** A level of an energy diagram by the name *Levels* shows it by, where it gives one (lib/energyDiagram `levelsTyped`); as it is named, else. */
 function shownAs(levels: string, name: string): string {
@@ -419,10 +450,10 @@ function shownAs(levels: string, name: string): string {
 
 /** How a Species step does its work, in a line: what it sets, and what it leaves as each entry has it. */
 export function speciesHow(charge: string, multiplicity: string): string {
+  const needs = speciesNeeds(charge, multiplicity);
   const typed = speciesTyped(charge, multiplicity);
-  if ("why" in typed) return typed.why;
+  if (needs != null || "why" in typed) return needs ?? "";
   const { charge: c, multiplicity: m } = typed.given;
-  if (c == null && m == null) return "Give a charge, a multiplicity, or both";
   // (one left blank stays as each entry has it - the one its electrons take, where it was never given: lib/steps species)
   const said = [c != null ? `charge ${c > 0 ? `+${c}` : c}` : "its own charge", m != null ? `multiplicity ${m}` : "its own multiplicity"];
   return said.join(", ").replace(/^./, (x) => x.toUpperCase());
@@ -436,13 +467,18 @@ export function measureHow(text: string): string {
 
 /** How a Filter step does its work, in a line: its conditions as read, and whether all or any - or why they do not read, or that there are none. */
 export function filterHow(text: string, match: "all" | "any"): string {
+  const needs = filterNeeds(text);
   const read = conditionsIn(text);
-  if ("why" in read) return read.why;
-  if (!read.conditions.length) return "No conditions yet";
+  if (needs != null || "why" in read) return needs ?? "";
   return read.conditions.map(conditionText).join(match === "any" ? " or " : " and ");
 }
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
+/** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
+export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
+  const info = kindInfo(s.kind);
+  return info.needs?.(optionsOf(info.options ?? [], s.options));
+};
 
 /** Whether a step of `kind` takes a set that holds `holds`. */
 export const takes = (kind: StepKind, holds: ValueKind): boolean => takenBy(kindInfo(kind).takes, holds);

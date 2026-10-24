@@ -84,7 +84,9 @@ Numbers that change in place are tabular (`tabular-nums`).
   structure lifted from a PDF, a picture or words in flight)
   `filter: drop-shadow(var(--meno-lift))`; nothing else.
 - **Over the page**: a card's ground is `bg-white/95`, so the drawing
-  shows faintly beneath.
+  shows faintly beneath. A card's foot that stays while its rows scroll
+  (its buttons) is on solid `bg-white`, parted from them by `border-t
+  border-gh-line`, so that nothing shows through it.
 
 ## Highlights
 
@@ -154,7 +156,10 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   `accel-base`.
 - **Checkbox**: a 14 px square, `rounded-[3px] border-gh-line`, ticked
   on `accel-base`.
-- **Switch**: as Settings draws them, on in `accel-base`.
+- **Switch** (a setting turned on or off at once): a pill `h-6 w-11
+  rounded-full`, `bg-gh-line` off, `accel-base` on, its white knob
+  sliding; `accel-accent` on only where being on refuses something
+  (working offline).
 
 Each is reachable by keyboard and shows focus with an `accel-base` border.
 
@@ -168,7 +173,8 @@ OK* or says what to change and why, rule by rule. A lint rule
 be caught by reading the code: a native select, radio or checkbox outside
 `src/ui/controls`, and a colour written out - a literal that is only a
 colour, one in a CSS place (after `:`, `(`, `,` or `[`), `rgb(…)`,
-`hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`.
+`hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`; and a
+switch drawn in place (`role="switch"`) outside `src/ui/controls`.
 
 ## Not yet
 
@@ -180,10 +186,8 @@ places than its count passes, and the test says to lower the count, so
 that it comes down on purpose (a file at none leaves the list). When the look
 rules were set (2026-10-23):
 
-- **Native controls**: 16, in 9 files - the options form (the Render
-  card's Look, Shape and Molecules pull-downs and its radios), the
-  options rows, the style editor, the protonation card, Settings (roles,
-  files), the coordinates card, hiding hydrogens, saving an abbreviation.
+- **Native controls**: none since the shared controls replaced the 16
+  there were; the list stays, empty, so that one cannot come back.
 - **Colours written out**: 155, in 69 files. Many are a drawing's own
   ink (black and white on the 2D canvas), a ribbon's or code's palette, or
   a colour set's swatches, to be moved beside the drawing's colours; the

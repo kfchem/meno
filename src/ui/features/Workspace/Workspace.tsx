@@ -37,6 +37,7 @@ import {
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
+import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
@@ -44,7 +45,7 @@ import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
-import { structureFromSmiles } from "./chem/fromSmiles";
+import { stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
 import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
@@ -215,7 +216,8 @@ import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
-import { heldOwn, holdsOwn } from "./workflow/entries";
+import { heldOwn, holdsOf, holdsOwn } from "./workflow/entries";
+import { setStructures } from "./workflow/run";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -1167,10 +1169,10 @@ function WorkspaceContent({
       if (menuTargetGone(menu, s)) setMenu(null);
     });
   }, [menu, store]);
-  // the selection as a box would take it, where it holds whole structures or molecules in 3D
+  // the selection as a box would take it, where it holds whole structures or molecules in 3D - round its labels as they are drawn, as Workflow2D shows it
   const selectionAsSet = () => {
     const st = store.getState();
-    return selectionFrame(st.model, st.sel.atoms, st.molecules3d, st.sel3d, style3dOf(store.getState()), st.turns3d, st.frames3d);
+    return selectionFrame(st.model, st.sel.atoms, st.molecules3d, st.sel3d, style3dOf(store.getState()), st.turns3d, st.frames3d, labelReachOf(store));
   };
   // a box's tab or a step's card right-clicked (Workflow2D): its menu, there
   const workflowMenu = useEditor((s) => s.workflowMenu);
@@ -1854,7 +1856,10 @@ function WorkspaceContent({
             onSmiles={async (smiles) => {
               // (the plugin's drawing says what the SMILES does; the engine draws it - there, selected, as a paste is;
               // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
-              putDownSmiles(store, quickAdd, await structureFromSmiles(smiles, style));
+              const read = await structureFromSmiles(smiles, style);
+              // (and the stereo it leaves open, said as a paste of it says it)
+              const said = stereoOpenSaid(read.stereoOpen);
+              if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
             }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;
@@ -2061,8 +2066,10 @@ function WorkspaceContent({
           } : undefined}
           onOpenAsTable={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
-            const set = store.getState().sets.find((b) => b.id === menu.id);
-            return set?.collection ? () => store.getState().readSetTable(set.id) : undefined;
+            const st = store.getState();
+            const set = st.sets.find((b) => b.id === menu.id);
+            // (molecules in 3D it holds off the page; or structures drawn, any - on the page and off it, all read)
+            return set && (set.collection || (holdsOf(st, set) === "structures" && setStructures(st, set).length)) ? () => st.readSetTable(set.id) : undefined;
           })()}
           setHoldsOwn={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;

@@ -8,6 +8,7 @@ import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
 import { askOf, remembered, renderOptions, type Kind } from "./renderOptions";
 import { useInFront } from "../../../layouts/inFront";
+import { escapeLeft } from "../../../controls/keys";
 
 /**
  * Render, asked before it begins (docs/RENDER.md): a picture or a film;
@@ -53,8 +54,9 @@ export default function RenderCard({
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront) return;
+    // (not an Escape one of its lists has had, closing it)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (!escapeLeft(e)) return;
       e.preventDefault();
       onCancel();
     };
@@ -93,7 +95,7 @@ export default function RenderCard({
             aria-checked={k === kind}
             onClick={() => setKind(k)}
             className={`rounded-md border px-2.5 py-1 text-xs transition-colors duration-150 ease-meno ${
-              k === kind ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gray-100"
+              k === kind ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"
             }`}
           >
             {k === "picture" ? "Picture" : "Film"}
@@ -109,12 +111,16 @@ export default function RenderCard({
           <OptionsForm options={theirs} values={theirValues} onChange={setChosenTheirs} context={values} />
         </section>
       )}
-      {/* (kept in view at the card's foot, however many options there are above) */}
-      <div className="sticky -bottom-3 -mx-3 -mb-3 flex justify-end gap-2 bg-white/95 px-3 pb-3 pt-2">
-        <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
+      {/* (kept in view at the card's foot, however many options there are above: on its own ground, parted from them by a line, so that none shows through it) */}
+      <div className="sticky -bottom-3 -mx-3 -mb-3 flex justify-end gap-2 border-t border-gh-line bg-white px-3 pb-3 pt-3">
+        <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 outline-none hover:bg-gh-base focus-visible:border-accel-base focus-visible:ring-2 focus-visible:ring-accel-lightbase">
           Cancel
         </button>
-        <button ref={renderRef} onClick={go} className="rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 hover:brightness-95">
+        <button
+          ref={renderRef}
+          onClick={go}
+          className="rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 outline-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-accel-base/40"
+        >
           Render
         </button>
       </div>

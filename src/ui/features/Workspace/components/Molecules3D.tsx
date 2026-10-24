@@ -133,6 +133,9 @@ type Going = Exclude<Gesture, { kind: "press" }>;
  */
 export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const molecules = useEditor((s) => s.molecules3d);
+  // (those a set holds on the page: their notes kept short, within their room under its name)
+  const sets = useEditor((s) => s.sets);
+  const inSets = useMemo(() => new Set(sets.flatMap((b) => (b.members ?? []).flatMap((m) => ("molecule" in m ? [m.molecule] : [])))), [sets]);
   const turns = useEditor((s) => s.turns3d);
   const rising = useEditor((s) => s.rising3d);
   const overlay = useEditor((s) => s.overlay3d);
@@ -786,6 +789,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             holding={hold?.id === m.id ? hold : null}
             following={active?.kind === "move" && active.group.includes(m.id)}
             framesOpen={hovered?.id === m.id || sel3d.has(m.id)}
+            inSet={inSets.has(m.id)}
             onFrame={(f) => store.getState().setFrame3d(m.id, f)}
             // (from its mark: it, and those selected with it - each about its own place)
             onMagnify={(k, gesture) => {

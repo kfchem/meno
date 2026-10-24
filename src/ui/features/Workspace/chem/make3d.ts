@@ -27,7 +27,8 @@ import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 import { undrawnHydrogens } from "./drawing";
-import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
+import { greatest, least } from "../../../../lib/chem/lists";
+import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
@@ -107,19 +108,40 @@ function nameOf(a: Model["atoms"][number]): string {
  */
 export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
   if (!madeAny) return "One atom alone has no 3D structure.";
+  return `${bareNames(bare)} ${bare.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
+}
+
+/** Bare atoms named, in a list: "Na+", "Na+ and Cl−", "Na+, Cl− and Ca2+". */
+export function bareNames(bare: Model["atoms"]): string {
   const names = bare.map(nameOf);
-  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
-  return `${list} ${names.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+}
+
+/**
+ * Whether a part is one a step on structures drawn is asked about, as it is
+ * drawn: any that stands for a molecule (`standsForMolecule`), and a lone
+ * atom of an element besides - Na+, Cl-, a lone metal, which has no 3D
+ * structure but is part of what was drawn: a salt's counter-ion one of its
+ * parts, counted in its weight. A label of nothing known alone has no
+ * element to give.
+ */
+export function asDrawn(part: Model): boolean {
+  if (standsForMolecule(part)) return true;
+  const [a] = part.atoms;
+  return part.atoms.length === 1 && !a.abbrev && isElementSymbol(a.el);
 }
 
 /** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
-export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
+export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
   return fragmentsHolding(model, atoms)
     .map((ids) => partOf(model, ids))
-    .filter(standsForMolecule)
+    .filter(keep)
     .map((part) => {
-      // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound)
-      const asked = etaBound(part);
+      // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound. A bare atom - Na+, a
+      //  lone metal - as Meno counts it, with no hydrogens, which a reader would add to a lone Na: its valence written,
+      //  none, where the drawing sets none of its own)
+      const bare = !standsForMolecule(part);
+      const asked = etaBound(bare ? { ...part, atoms: part.atoms.map((a) => ({ ...a, valence: a.valence ?? 0 })) } : part);
       const index = molIndex(asked);
       const molblock = chemMolblock(asked);
       const centres = centresIn(molblock);
@@ -132,6 +154,11 @@ export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
         part,
       };
     });
+}
+
+/** The parts of a structure drawn, as a step on structures drawn is asked about them (`asDrawn`): a bare atom's too. */
+export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
+  return blocksOf(model, atoms, asDrawn);
 }
 
 /** What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, and how many stereoisomers they make. */
@@ -297,11 +324,16 @@ export function turnedOver(m: Omit<Molecule3D, "id" | "at">, model: Model, style
   return { turn, start, reach, flat, height: solid.reach[lookOf(m)] };
 }
 
-/** Where a drawn structure is on the page: its atoms' box, a little round them. */
+/**
+ * Where a drawn structure is on the page: its ink's box - its bonds and its
+ * labels' letters (OH hangs right of its O), not only its atoms' centres
+ * (utils/importers `drawnBox`) - with no room round it: what keeps clear of
+ * it adds its own (docs/LOOK.md, *Room*).
+ */
 export function boxOf(part: Model): Box {
-  const pad = 0.4 * NOMINAL_BOND_LENGTH;
-  const b = boundsOf(part.atoms) ?? { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
-  return { x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad };
+  if (!part.atoms.length) return { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  const b = drawnBox(part);
+  return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
 }
 
 const inside = (b: Box, view: Box) => b.x0 >= view.x0 && b.x1 <= view.x1 && b.y0 >= view.y0 && b.y1 <= view.y1;
@@ -420,9 +452,11 @@ export function takenOnPage(
 ): Box[] {
   const skip = new Set(except);
   const around = new Map<number, number[]>();
+  const bondsOn = new Map<number, Model["bonds"]>();
   for (const b of page.model.bonds) {
     around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
     around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
+    for (const id of [b.a, b.b]) bondsOn.set(id, [...(bondsOn.get(id) ?? []), b]);
   }
   const byId = new Map(page.model.atoms.map((a) => [a.id, a]));
   const seen = new Set<number>();
@@ -442,7 +476,8 @@ export function takenOnPage(
         todo.push(n);
       }
     }
-    boxes.push(boxOf({ atoms: part, bonds: [] }));
+    // (with its bonds, which decide where its labels' letters go)
+    boxes.push(boxOf({ atoms: part, bonds: [...new Set(part.flatMap((x) => bondsOn.get(x.id) ?? []))] }));
   }
   const pad = 0.4 * NOMINAL_BOND_LENGTH;
   for (const r of page.arrows) {

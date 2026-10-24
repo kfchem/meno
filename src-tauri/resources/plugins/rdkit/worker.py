@@ -712,9 +712,28 @@ def op_open_stereo(m):
 def op_stereo_left_open(m):
     """Only which stereocentres and double bonds a structure leaves open, by
     index: none of `open_stereo`'s trying each stereoisomer in 3D - quick,
-    as a step that marks what is left open asks it of many (*Generate*)."""
-    atoms, bonds = open_stereo(read(m["molblock"]))
-    return {"atoms": atoms, "bonds": bonds}
+    as a step that marks what is left open asks it of many (*Generate*).
+    With the open double bonds that run on into one another (`cumulated`,
+    each run by its bonds' indices): one element each - an allene's axis,
+    where the run is of two or four, and cis or trans, where of three -
+    never as many as its bonds."""
+    mol = read(m["molblock"])
+    atoms, bonds = open_stereo(mol)
+    return {"atoms": atoms, "bonds": bonds, "cumulated": cumulated_runs(mol, open_cumulenes(mol, bonds))}
+
+
+def cumulated_runs(mol, bonds):
+    """The double bonds `bonds` (by index, all cumulated) as the runs they make, each run's bonds in order of index:
+    two that share an atom are of one run."""
+    runs = []
+    for i in sorted(bonds):
+        b = mol.GetBondWithIdx(i)
+        ends = {b.GetBeginAtomIdx(), b.GetEndAtomIdx()}
+        joined = [r for r in runs if any(ends & {mol.GetBondWithIdx(j).GetBeginAtomIdx(), mol.GetBondWithIdx(j).GetEndAtomIdx()} for j in r)]
+        for r in joined:
+            runs.remove(r)
+        runs.append(sorted({i, *[j for r in joined for j in r]}))
+    return sorted(runs)
 
 
 # What FindPotentialStereo calls each kind of element, as Meno's configurations name them.
@@ -2536,8 +2555,20 @@ def step_descriptors(entries, options):
         if problem != Chem.SanitizeFlags.SANITIZE_NONE:
             out.append({"aside": f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "kind": "valence"})
             continue
-        out.append({"as": "drawn", "properties": {name: {"value": round(float(f(mol)), 4) if unit != "none" or name == "logp" else int(f(mol)), "unit": unit, "method": how} for name, unit, how, f in DESCRIPTORS}})
+        # (a lone atom or ion - Na+, Cl-, a lone metal: one atom, no bond, no hydrogen - has no logP of its own: Crippen's
+        #  is a sum over atoms typed by what they are bonded to, and gives every lone ion one type's value. Left out, and
+        #  said so; its weight and the rest, as for any)
+        lone = mol.GetNumAtoms() == 1 and mol.GetAtomWithIdx(0).GetTotalNumHs() == 0
+        given = [d for d in DESCRIPTORS if not (lone and d[0] in UNDEFINED_ALONE)]
+        properties = {name: {"value": round(float(f(mol)), 4) if unit != "none" or name == "logp" else int(f(mol)), "unit": unit, "method": how} for name, unit, how, f in given}
+        if lone:
+            properties["not_given"] = {"value": f"{', '.join(UNDEFINED_ALONE)}: not defined for a lone ion", "unit": "none", "method": "what Descriptors leaves out of a lone atom or ion"}
+        out.append({"as": "drawn", "properties": properties})
     return {"structures": out}
+
+
+#: The descriptors not defined for a lone atom or ion: Wildman-Crippen logP, a sum over atoms typed by their bonds.
+UNDEFINED_ALONE = ("logp",)
 
 
 #: The steps on structures drawn, by kind.

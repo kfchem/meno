@@ -10,10 +10,20 @@ import { entries as count, type NodeOutcome } from "./base";
 
 export type TagOptions = { name: string };
 
+/**
+ * What a Tag step still needs before it can run, its name as typed: a name -
+ * or nothing, where it has one. What its card says where it would say
+ * *Ready*, and why its run is refused.
+ */
+export function tagNeeds(name: string): string | undefined {
+  return name.trim() ? undefined : "Name the tag";
+}
+
 /** *Tag* on `entries`: *done*, each with its ID under `name`, in the order they came. */
 export function tag(entries: readonly Entry[], options: TagOptions): NodeOutcome<"done"> {
+  const needs = tagNeeds(options.name);
+  if (needs) return { ok: false, said: needs };
   const name = options.name.trim();
-  if (!name) return { ok: false, said: "The tag needs a name" };
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const taken = entries.filter((e) => e.properties[name]);
   if (taken.length) return { ok: false, said: `${count(taken.length)} already ${taken.length === 1 ? "has" : "have"} ${name}: give the tag another name` };

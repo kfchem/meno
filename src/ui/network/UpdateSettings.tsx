@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import { revoke, useNetwork } from "../../lib/net/network";
 import {
   checkForUpdate,
@@ -9,6 +8,7 @@ import {
   useUpdate,
   type UpdateState,
 } from "../../lib/update";
+import Switch from "../controls/Switch";
 
 const when = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -50,24 +50,7 @@ export default function UpdateSettings() {
             nothing goes out while Meno works offline.
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={allowed}
-          aria-label="Keep Meno up to date"
-          disabled={!usable}
-          onClick={() => void (allowed ? revoke(UPDATE_PURPOSE) : keepUpToDate())}
-          className={clsx(
-            "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50",
-            allowed ? "bg-accel-accent" : "bg-gh-line",
-          )}
-        >
-          <span
-            className={clsx(
-              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
-              allowed ? "left-[1.375rem]" : "left-0.5",
-            )}
-          />
-        </button>
+        <Switch on={allowed} label="Keep Meno up to date" disabled={!usable} onChange={() => void (allowed ? revoke(UPDATE_PURPOSE) : keepUpToDate())} />
       </div>
       <div className="flex items-center gap-3">
         <p className="flex-1 text-xs text-gh-gray" aria-live="polite">
