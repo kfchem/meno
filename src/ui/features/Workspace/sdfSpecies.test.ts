@@ -165,6 +165,7 @@ describe("a molecule in 3D's properties, written to an SD file", () => {
     expect(sdf({ ...two, properties: [p(1)] })).not.toContain("> <nll>");
     const drawn = (m: Omit<Molecule3D, "id">) => ({ atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: [m] }) as unknown as Drawn;
     expect(propertiesSaid(drawn({ ...two, title: "water+", properties: [{ ...p(1), mw: { value: 18, unit: "g/mol", status: "computed" } }] }))).toEqual(["2 properties could not be written for water+: they are not one for each frame."]);
+    expect(propertiesSaid(drawn({ ...two, title: "water+", properties: [p(1)] }))).toEqual(["1 property could not be written for water+: it is not one for each frame."]);
     expect(propertiesSaid(drawn(two))).toEqual([]);
   });
 

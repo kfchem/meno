@@ -453,7 +453,7 @@ export function propertiesSaid(drawn: Drawn): string[] {
     const names = new Set(m.properties.flatMap((r) => Object.keys(r ?? {})));
     if (!names.size) continue;
     const who = m.title || (m.name ? stem(m.name) : "a molecule in 3D");
-    said.push(`${names.size} ${names.size === 1 ? "property" : "properties"} could not be written for ${who}: they are not one for each frame.`);
+    said.push(`${names.size} ${names.size === 1 ? "property" : "properties"} could not be written for ${who}: ${names.size === 1 ? "it is" : "they are"} not one for each frame.`);
   }
   const { loose } = recordDrawings(drawn);
   for (const r of setRecordsOf(drawn, loose)) clashes(r.record.properties);
