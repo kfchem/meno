@@ -168,7 +168,14 @@ in 3D, arrows, text - and is made of three things:
 They are page items, as an arrow or a molecule in 3D is: they lie on the
 page, at the page's scale, zoom and pan with it, and are saved with it.
 Fit (Ctrl/Cmd+1) takes them in: each set's frame and each step's card,
-closed. Their words, and the chips on the page, go below 75 % (*How it
+closed; each wire as far as it bends out past them - one going back to a
+step on the left loops out either side; and what is drawn over the page
+in HTML - each molecule's frames chip, which may be wider than its set,
+and its notes over it (2026-10-24; components/FitToContent2D, utils/
+fitExtent). A chip is as large as the page draws it at any zoom, so where
+it lies now is where it lies after; the notes are drawn as large as the
+page only between three quarters and half as large again, so how much of
+it they take is worked out at the zoom the fit comes to. Their words, and the chips on the page, go below 75 % (*How it
 looks*): a card then shows its icon and its state's icon alone, a set
 its frame and what it holds.
 
@@ -1653,6 +1660,16 @@ Then, of the leftovers the maintainer chose:
   plugin and given back as the output form's `populations`, which a
   conformer set takes as its molecule's shares - what its chip shows -
   in place of Boltzmann's at room temperature from the energies alone.
+- **How CREST took conformers as one, as its run printed it**
+  (2026-10-24): the thresholds CREGEN prints with its sorting - its RMSD
+  threshold (Å), its rotational-constant threshold (a relative
+  difference), its population threshold and its energy window (kcal/mol),
+  each the last value the run printed - are said on the conformer set's
+  frames chip, under *Same conformer (CREGEN)*: never as asked, never a
+  default. One it does not print is not said (CREST 2.12 prints no pair
+  energy threshold). A search's results are of its run, so the conformer
+  set keeps them; a job run on each conformer keeps its own with that
+  conformer, never with the set.
 - **Each conformer's degeneracy, as CREST finds it** (2026-10-13): the
   number of its rotamers alike, from the same table (`degen`), given back
   as the output form's `degeneracies` and kept with the molecule
@@ -2108,8 +2125,11 @@ structure and its geometry, in 2D, so the record holds the rest
 (`DrawnRecord`, `store/types`):
 
 - `from`: the entries it was made from, by id, where they have one. A
-  generated structure names its seed's; a template drawn on the page has
-  no id, so an Enumerate product names none.
+  generated structure names its seed's, and an Enumerate product its
+  template's - a template a step gave; one drawn on the page has no id, so
+  its products name none. Each also carries the values of the one it was
+  made from as that one's (`made_from.nll`), never as its own, so that a
+  Filter on a parent's value reaches what was made from it.
 - `properties`: by name, each a `Property` as lib/entry has it, with its
   value, its unit from Meno's units table or "none", its status, and what
   worked it out. Enumerate's `number` and `made.how` are kept here, and so

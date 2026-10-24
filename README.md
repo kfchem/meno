@@ -59,13 +59,15 @@ image cannot update itself.
 
 ### Updates
 
-The first time it starts, Meno asks whether it may keep itself up to date. If
-you agree, it looks for a new version as it starts and every few hours,
+The first time you do something in Meno - put a structure down, open a file,
+open Settings - it then asks whether it may keep itself up to date. If you
+agree, it looks for a new version as it starts and every few hours,
 downloads it in the background and installs it when you quit. *Restart now*
 in the notice installs it at once. On Windows it waits while calculation jobs
 are waiting or running, because installing would stop them: it goes in when
 you quit with none. You can turn this on or off at any time in Settings,
-Network, under *Keep Meno up to date*.
+Network, under *Keep Meno up to date*, and there too whether each look shows
+its notice.
 
 Meno connects to nothing without asking first, and shows every connection as
 it is made. Click the globe at the top of the window to work offline: then
