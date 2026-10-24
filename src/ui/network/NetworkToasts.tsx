@@ -20,7 +20,7 @@ import {
   type NetTask,
 } from "../../lib/net/network";
 import { useAppSettings } from "../../lib/settings/appSettings";
-import { noticeShown } from "../../lib/update";
+import { noticeShown, useUpdate, useUpdateDownloads } from "../../lib/update";
 
 /** How long a finished task, or a refusal, stays in view. */
 const LINGER_MS = 6000;
@@ -38,6 +38,9 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
   const dismissNotice = useNotices((s) => s.dismiss);
   const tasks = useNetwork((s) => s.tasks);
   const updateNotice = useAppSettings((s) => s.updates.notice);
+  // (what tells a look from a download: read again as it changes)
+  const updatePhase = useUpdate((u) => u?.phase);
+  const downloads = useUpdateDownloads((d) => d.tasks);
   const connections = useNetwork((s) => s.connections);
   const [now, setNow] = useState(() => Date.now());
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
@@ -58,7 +61,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       // the user's own code shows only once it reaches out
       if (task.purpose === "python-code" && conns.length === 0) continue;
       // (a look for a newer Meno, where its notice was turned off: kept in the record, not shown)
-      if (!noticeShown(task.purpose, updateNotice)) continue;
+      if (!noticeShown(task, updateNotice)) continue;
       const active = Math.max(
         task.ended ?? now,
         ...conns.map((c) => c.ended ?? now),
@@ -79,7 +82,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       .filter((c) => !dismissed.has(c.key))
       .sort((a, b) => a.at - b.at)
       .slice(-4);
-  }, [tasks, connections, now, dismissed, talk.since, talk.ended, updateNotice]);
+  }, [tasks, connections, now, dismissed, talk.since, talk.ended, updateNotice, updatePhase, downloads]);
 
   // tick while anything is in view, so finished cards leave on time
   useEffect(() => {

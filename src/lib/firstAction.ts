@@ -43,7 +43,7 @@ export function afterFirstAction(run: () => void, busy: () => boolean, changes: 
   let beat: ReturnType<typeof setTimeout> | null = null;
   let ran = false;
   const look = () => {
-    if (ran || beat || !useFirstAction.getState().done || busy()) return;
+    if (ran || beat || !useFirstAction.getState().done) return;
     beat = setTimeout(() => {
       beat = null;
       if (ran) return;

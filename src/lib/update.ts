@@ -15,7 +15,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
-import { askToConnect, useNetwork, type ConsentRequest } from "./net/network";
+import { askToConnect, useNetwork, type ConsentRequest, type NetTask } from "./net/network";
 import { useAppSettings } from "./settings/appSettings";
 import { useGuide } from "./plugins/guides";
 import { afterFirstAction } from "./firstAction";
@@ -73,12 +73,31 @@ export const UPDATE_CONSENT: ConsentRequest = {
 };
 
 /**
+ * The update's network tasks that came to download a newer Meno, by id. A
+ * look and the download it leads to are one task (src-tauri/src/update.rs,
+ * `look`): the task is a download once the updater says it is downloading.
+ */
+export const useUpdateDownloads = create<{ tasks: string[] }>(() => ({ tasks: [] }));
+
+// (the update's task running as the download begins: a download from then on, its notice shown from its first byte)
+useUpdate.subscribe((u, was) => {
+  if (u?.phase !== "downloading" || was?.phase === "downloading") return;
+  const running = Object.values(useNetwork.getState().tasks).filter((t) => t.purpose === UPDATE_PURPOSE && !t.ended);
+  if (running.length) useUpdateDownloads.setState((d) => ({ tasks: [...new Set([...d.tasks, ...running.map((t) => t.id)])] }));
+});
+
+/**
  * Whether a task's notice shows in the corner (ui/network/NetworkToasts):
  * always, but a look for a newer Meno's where the user turned that off -
- * the one notice that can be. The record keeps the look either way.
+ * the one notice that can be. A look that finds a newer Meno and downloads
+ * it shows its notice from the download's start: only the look itself is
+ * hidden. The record keeps every look either way.
  */
-export function noticeShown(purpose: string, updateNotice: boolean): boolean {
-  return updateNotice || purpose !== UPDATE_PURPOSE;
+export function noticeShown(task: Pick<NetTask, "id" | "purpose" | "ended">, updateNotice: boolean): boolean {
+  if (updateNotice || task.purpose !== UPDATE_PURPOSE) return true;
+  // (the update downloading now, this task still running: the download, whether or not it was seen to begin)
+  if (!task.ended && useUpdate.getState()?.phase === "downloading") return true;
+  return useUpdateDownloads.getState().tasks.includes(task.id);
 }
 
 /** Whether Meno may look now: online, and allowed to. */
@@ -142,8 +161,11 @@ export function startUpdates(): () => void {
       const settings = useAppSettings.getState();
       const net = useNetwork.getState();
       if (net.offline || net.granted.includes(UPDATE_PURPOSE) || settings.updates.asked) return;
-      settings.setUpdates({ ...settings.updates, asked: true });
-      void askToConnect(UPDATE_CONSENT);
+      // (kept as asked once answered - yes or not now: a question left open as Meno quits is asked again, after the next run's first action)
+      void askToConnect(UPDATE_CONSENT).then(() => {
+        const now = useAppSettings.getState();
+        now.setUpdates({ ...now.updates, asked: true });
+      });
     };
     // (not in the middle of what the user is doing - the pointer held - nor over a guide being gone through)
     let pressed = false;
