@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ensurePyEnv, pyEnvReady, removePyEnv } from "../pyEnv";
-import { manifestOf, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { anyPluginById, manifestOf, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
 import type { ReaderClient, Reader } from "./client";
@@ -21,7 +21,7 @@ import { stopJobsAndWait } from "../jobs";
  * there, and runs in the app (./builtin). The kinds a plugin brings are
  * registered while it is added, and only then (lib/io/kinds).
  */
-export type ReaderState = "absent" | "adding" | "added" | "removing";
+export type ReaderState = "absent" | "waiting" | "adding" | "added" | "removing";
 
 export const useReaders = create<{
   /** Each reader's, by id; unknown until looked at. */
@@ -57,9 +57,10 @@ export async function addedReaders(plugins: readonly (ReaderPlugin | Plugin)[] =
       continue;
     }
     const here = useReaders.getState().state[p.id];
-    if (here === "adding" || here === "removing") continue;
+    if (here === "waiting" || here === "adding" || here === "removing") continue;
     const ready = runs(p) ? await pyEnvReady(p.profile) : !useAppSettings.getState().plugins.removed.includes(p.id);
-    setState(p.id, ready ? "added" : "absent");
+    // (one not added keeps what went wrong as it was last added: said until it is added again, never taken away by looking)
+    setState(p.id, ready ? "added" : "absent", ready ? undefined : useReaders.getState().problem[p.id]);
     if (ready) added.add(p.id);
   }
   return added;
@@ -72,7 +73,21 @@ function markTakenAway(p: Plugin, away: boolean) {
   settings.setPlugins({ ...settings.plugins, removed: away ? [...removed, p.id] : removed });
 }
 
-/** Adds a plugin: sets its environment up, asking first whether it may download - one that runs nothing, at once. */
+/**
+ * The set-ups asked for, one after another in the order asked: each waits
+ * (`waiting`) until the one before it has ended, done or not - as several
+ * set up at once share uv's Python and its cache, and on Windows a file
+ * one holds is a failure of another's.
+ */
+let setUps: Promise<unknown> = Promise.resolve();
+
+/**
+ * Adds a plugin: sets its environment up, asking first whether it may
+ * download - after any set-up asked for before it (`setUps`); one that runs
+ * nothing, at once. Asked again while it waits or is being set up, nothing
+ * more. Where it is not added, why is said on it (`problem`) until it is
+ * asked for again.
+ */
 export async function addPlugin(p: Plugin): Promise<void> {
   if (!forThisSystem(p)) throw new Error(`${p.name} is not made for this system.`);
   if (!runs(p)) {
@@ -80,15 +95,34 @@ export async function addPlugin(p: Plugin): Promise<void> {
     setState(p.id, "added");
     return;
   }
-  setState(p.id, "adding");
-  try {
-    await ensurePyEnv(p.profile);
-    markTakenAway(p, false);
-    setState(p.id, "added");
-  } catch (e) {
-    setState(p.id, "absent", e instanceof Error ? e.message : String(e));
-    throw e;
-  }
+  const here = useReaders.getState().state[p.id];
+  if (here === "waiting" || here === "adding") return;
+  setState(p.id, "waiting");
+  const turn = setUps.then(async () => {
+    setState(p.id, "adding");
+    try {
+      await ensurePyEnv(p.profile);
+      markTakenAway(p, false);
+      setState(p.id, "added");
+    } catch (e) {
+      setState(p.id, "absent", `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
+    }
+  });
+  setUps = turn.catch(() => undefined);
+  return turn;
+}
+
+/** The plugin whose set-up runs now, where one does: what one waiting waits for. */
+export function settingUp(now: Record<string, ReaderState> = useReaders.getState().state): string | undefined {
+  return Object.keys(now).find((id) => now[id] === "adding");
+}
+
+/** What a plugin waiting to be set up says: whose set-up it waits for - "Waiting for <its name>'s set-up…". */
+export function waitingSaid(now: Record<string, ReaderState>): string {
+  const running = settingUp(now);
+  const name = running ? (anyPluginById(running)?.name ?? running) : null;
+  return name ? `Waiting for ${name}'s set-up…` : "Waiting…";
 }
 
 /**

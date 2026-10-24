@@ -5,7 +5,7 @@ import { CheckIcon } from "@heroicons/react/24/outline";
 import { DURATION, EASE, FADE } from "../theme/motion";
 import { closeGuide, keyOnGuide, nextStep, shownStep, useGuide } from "../../lib/plugins/guides";
 import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
-import { addPlugin, useReaders } from "../../lib/calc/workers";
+import { addPlugin, useReaders, waitingSaid } from "../../lib/calc/workers";
 import { forThisSystem } from "../../lib/plugins/here";
 import type { GuidePlace } from "../../lib/plugins/guide";
 import { placeCard, waitsUnseen, type Box } from "./place";
@@ -155,6 +155,8 @@ function Suggested({ guide, ids }: { guide: Plugin; ids: readonly string[] }) {
                   </span>
                 ) : state === "adding" ? (
                   <span className="text-xs text-gh-gray">Adding…</span>
+                ) : state === "waiting" ? (
+                  <span className="text-xs text-gh-gray">{waitingSaid(states)}</span>
                 ) : (
                   <button
                     onClick={() => void addPlugin(p).catch(() => undefined)}
