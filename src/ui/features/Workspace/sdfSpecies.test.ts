@@ -169,6 +169,19 @@ describe("a molecule in 3D's properties, written to an SD file", () => {
     expect(propertiesSaid(drawn(two))).toEqual([]);
   });
 
+  it("leaves a table out - a conformer's vibrations, past an SD file's 200-character line - and says so, counted", () => {
+    const vibrations = (f: number) => ({ value: { table: { columns: [{ name: "frequency", unit: "cm-1" as const }], rows: Array.from({ length: 60 }, (_, k) => [f + 10.123456 * k]) } }, unit: "none" as const, status: "computed" as const });
+    const tabled = { ...two, title: "water+", properties: [{ ...p(1), vibrations: vibrations(-50) }, { ...p(2), vibrations: vibrations(100) }] };
+    const text = sdf(tabled);
+    expect(text).not.toContain("vibrations");
+    expect(text.split("\n").every((l) => l.length <= 200)).toBe(true);
+    const [first, second] = text.split("$$$$\n");
+    expect(first).toContain(item("nll", "1"));
+    expect(second).toContain(item("nll", "2"));
+    const drawn = { atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: [tabled] } as unknown as Drawn;
+    expect(propertiesSaid(drawn)).toEqual(['2 properties not written, "vibrations": an SD file does not hold a table.']);
+  });
+
   it("writes one named as an item of Meno's own under its name and \"(property)\": read back, the species stays as given", () => {
     // (the radical cation, a property named "Charge" on it - 0, a model's guess, say - and one "Energy" in Eh)
     const named = cation({ properties: [{ Charge: { value: 0, unit: "none", status: "computed" }, Energy: { value: -1, unit: "Eh", status: "computed" } }] });

@@ -28,7 +28,7 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
 import type { Property } from "../../../lib/entry";
-import { recordNow, recordNumber } from "./workflow/entries";
+import { imaginaryOf, recordNow, recordNumber } from "./workflow/entries";
 import { partsOf } from "./workflow/parts";
 import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
@@ -279,16 +279,23 @@ function speciesData(m: Carried3D, i: number, skeleton: boolean): string {
 }
 
 /**
- * A frame's imaginary frequencies as an SD file's data item, in cm-1 as its
- * calculation gave them (workflow/entries `imaginaryOf`): each, where it was
- * judged to have any; "none", where its vibrations were worked out and it
- * has none; left out where they were not worked out - never "none" for not known.
+ * A frame's imaginary frequencies as an SD file's data item, in cm-1, as
+ * a step's entry reads them (workflow/entries `imaginaryOf`): those its
+ * calculation judged; else, where its vibrations were worked out - the
+ * molecule's calculation's, of its last frame, or those a conformer
+ * carries as its frame's property - those they list as negative, "none"
+ * where they list none; left out where they were not worked out - never
+ * "none" for not known.
  */
 function imaginaryData(m: Carried3D, i: number, n: number): string {
-  const own = m.imaginary?.length === n ? m.imaginary[i] : i === n - 1 ? m.calc?.imaginary : undefined;
-  if (own?.length) return `> <${SD_IMAGINARY}>\n${own.join(" ")}\n\n`;
-  const computed = i === n - 1 && m.imaginary?.length !== n && m.calc?.results?.some((r) => r.on === "list" && r.id === "vibrations");
-  return computed ? `> <${SD_IMAGINARY}>\nnone\n\n` : "";
+  const perFrame = m.imaginary?.length === n;
+  const found = imaginaryOf({
+    imaginary: (perFrame ? m.imaginary![i] : i === n - 1 ? m.calc?.imaginary : undefined) ?? undefined,
+    calc: i === n - 1 && !perFrame ? m.calc : undefined,
+    properties: m.properties?.length === n ? m.properties[i] : undefined,
+  });
+  if (found === "not computed") return "";
+  return `> <${SD_IMAGINARY}>\n${found.length ? found.join(" ") : "none"}\n\n`;
 }
 
 /**
@@ -412,17 +419,22 @@ function propertyLabel(name: string, p: Property): string {
   return MENO_ITEMS.has(label) ? `${label} (property)` : label;
 }
 
+/** A property whose value is a table - a conformer's vibrations: one an SD file's data item does not hold, a line of it being 200 characters at most (`propertyItems`). */
+const isTable = (p: Property) => typeof p.value === "object" && "table" in p.value;
+
 /**
  * Properties as an SD file's data items, each under its own name: a number
  * worked out with its unit beside it as the page shows it ("mw (g/mol)");
  * one not worked out saying why in place of a value, under its bare name, so
  * that no reader takes a value for one; one named as an item Meno writes of
- * its own, under that name and "(property)" (`propertyLabel`). A structure
- * drawn's record writes them so (`recordData`), and a molecule in 3D each
- * frame's.
+ * its own, under that name and "(property)" (`propertyLabel`). A table is
+ * left out (`isTable`), and said (`propertiesSaid`): a frame's imaginary
+ * frequencies have their own item. A structure drawn's record writes them
+ * so (`recordData`), and a molecule in 3D each frame's.
  */
 function propertyItems(properties: Record<string, Property>): string {
   return Object.entries(properties)
+    .filter(([, p]) => !isTable(p))
     .map(([name, p]) => {
       const st = p.status;
       return dataItem(propertyLabel(name, p), st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
@@ -434,14 +446,21 @@ function propertyItems(properties: Record<string, Property>): string {
  * What an SD file of `drawn` says of the properties it holds, as it is
  * written (`structureFileText`): of each molecule in 3D whose properties
  * are not one for each frame, that they could not be written - none of
- * them is; and the properties written under "(property)", their names
- * being Meno's own items. None where there is nothing to say.
+ * them is; the tables left out (`isTable`), counted, with their names;
+ * and the properties written under "(property)", their names being Meno's
+ * own items. None where there is nothing to say.
  */
 export function propertiesSaid(drawn: Drawn): string[] {
   const said: string[] = [];
   const clashed = new Set<string>();
+  const tables = { count: 0, names: new Set<string>() };
   const clashes = (properties: Record<string, Property> | undefined) => {
-    for (const [name, p] of Object.entries(properties ?? {})) if (MENO_ITEMS.has(labelOf(name, p))) clashed.add(propertyLabel(name, p));
+    for (const [name, p] of Object.entries(properties ?? {})) {
+      if (isTable(p)) {
+        tables.count += 1;
+        tables.names.add(name);
+      } else if (MENO_ITEMS.has(labelOf(name, p))) clashed.add(propertyLabel(name, p));
+    }
   };
   for (const m of drawn.molecules3d ?? []) {
     if (!m.properties?.length) continue;
@@ -457,10 +476,13 @@ export function propertiesSaid(drawn: Drawn): string[] {
   }
   const { loose } = recordDrawings(drawn);
   for (const r of setRecordsOf(drawn, loose)) clashes(r.record.properties);
+  const listed = (labels: string[]) => (labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0]);
+  if (tables.count) {
+    const names = listed([...tables.names].map((l) => `"${l}"`));
+    said.push(`${tables.count} ${tables.count === 1 ? "property" : "properties"} not written, ${names}: an SD file does not hold a table.`);
+  }
   if (clashed.size) {
-    const labels = [...clashed].map((l) => `"${l}"`);
-    const listed = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0];
-    said.push(`${clashed.size} ${clashed.size === 1 ? "property" : "properties"} written as ${listed}: ${clashed.size === 1 ? "its name is one of" : "their names are"} Meno's own items.`);
+    said.push(`${clashed.size} ${clashed.size === 1 ? "property" : "properties"} written as ${listed([...clashed].map((l) => `"${l}"`))}: ${clashed.size === 1 ? "its name is one of" : "their names are"} Meno's own items.`);
   }
   return said;
 }
