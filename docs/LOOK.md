@@ -35,7 +35,9 @@ shots, and is checked against this page (*The look check*, below).
    over it - notes, chips, cards, a set's words - never show the browser's
    own text selection: they are `select-none`, and a selection that reaches
    there all the same is let go. What is selected there is Meno's own
-   selection. Text fields, and the words in the column, stay selectable.
+   selection. Text fields, and the words in the column, stay selectable;
+   on the canvas, only what a chemist copies - a step card's failure, its
+   program's line, a run's line (`COPYABLE`, with `select-text`).
 
 ## Colours
 
@@ -86,6 +88,10 @@ Numbers that change in place are tabular (`tabular-nums`).
 - **Corners**: `rounded-md` (6 px) for controls, menus, chips and toasts;
   `rounded-lg` (8 px) for cards and dialogs; `rounded-full` for a dot, a
   switch, a pill. Not the bare `rounded` (4 px).
+- **A box on the page** (a shape the drawing holds, not the interface's):
+  its corners, rounded, are a fifth of a bond round (*Box around these*,
+  *Corners…* > *Rounded*), so that they scale with the drawing; never
+  more than 18% of its shorter side.
 - **Lines**: 1 px, `border-gh-line`; a separator `my-1 border-t
   border-gh-line`.
 - **Shadows**: `shadow-lg` for what floats over the page (menus, cards,

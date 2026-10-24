@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { selectionReaches } from "./useKeepUnselected";
+import { COPYABLE, selectionReaches } from "./useKeepUnselected";
 
 /** A place on the page: the canvas's, or one beside it - the column's. */
 const canvas = { contains: (n: never) => (n as unknown as string).startsWith("canvas") };
@@ -19,6 +19,23 @@ describe("the page's text selection kept off the canvas and what lies over it", 
     expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/field", focusNode: "canvas/field" }, canvas, true)).toBe(false);
     expect(selectionReaches({ isCollapsed: true, anchorNode: "canvas/note", focusNode: "canvas/note" }, canvas, false)).toBe(false);
     expect(selectionReaches(null, canvas, false)).toBe(false);
+  });
+
+  it("leaves one wholly in words that can be copied - a step's failure, a program's line - and still lets go of one reaching the canvas elsewhere", () => {
+    const copyable = (n: unknown) => String(n).startsWith("canvas/failure");
+    expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/failure/a", focusNode: "canvas/failure/b" }, canvas, false, copyable)).toBe(false);
+    expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/failure/a", focusNode: "canvas/note" }, canvas, false, copyable)).toBe(true);
+    expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/note", focusNode: "canvas/note" }, canvas, false, copyable)).toBe(true);
+    // (the flag, read off an element or the words in it: by closest())
+    const flagged = { closest: (q: string) => (q === "[data-copyable]" ? {} : null) };
+    const words = { parentElement: flagged };
+    expect(selectionReaches({ isCollapsed: false, anchorNode: words, focusNode: flagged }, { contains: () => true }, false)).toBe(false);
+    expect(COPYABLE).toEqual({ "data-copyable": "" });
+  });
+
+  it("flags a step card's failure, its program's line and a run's line as words to copy, and nothing else there", () => {
+    const card = readFileSync(join(process.cwd(), "src/ui/features/Workspace/workflow/StepCard.tsx"), "utf8");
+    expect(card.match(/\{\.\.\.(?:\(line\.tone === "text-accel-accent" \? )?COPYABLE/g)?.length).toBe(3);
   });
 
   it("is watched on the canvas, which with what lies over it - the page's HTML, the cards above the guide - is not the page's to select", () => {

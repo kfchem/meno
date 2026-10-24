@@ -233,7 +233,7 @@ import InkWriting from "./components/InkWriting";
 import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
-import { roundedPt, roundestOf } from "../../../lib/chem/shapes";
+import { roundedOfBondPt, roundedPt, roundestOf } from "../../../lib/chem/shapes";
 import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
 import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
@@ -1988,6 +1988,7 @@ function WorkspaceContent({
                 key={`${cornersCard.x},${cornersCard.y}`}
                 now={sh.radius ?? 0}
                 most={roundestOf(sh.x1 - sh.x0, sh.y1 - sh.y0) / pointPx}
+                rounded={roundedOfBondPt(pointPx)}
                 onCorners={(pt) => store.getState().updateShape(sh.id, { radius: pt })}
                 x={cornersCard.x}
                 y={cornersCard.y}

@@ -11,6 +11,7 @@
  * Everything is in the page's units; a line's width is in points, as the
  * drawing's labels' size is, `pointPx` page units to the point.
  */
+import { NOMINAL_BOND_LENGTH } from "./acs";
 import type { Vec2 } from "./layout2d";
 
 export type ShapeKind = "rect" | "ellipse" | "line";
@@ -70,9 +71,19 @@ export function bondLinePtOf(o: { lineWidthPx: number; pointPx?: number }): numb
   return o.pointPx ? o.lineWidthPx / o.pointPx : BOND_LINE_PT;
 }
 
-/** Rounded corners as *Box around these* draws them, in points; and at most this share of the shorter side. */
-export const ROUNDED_PT = 9;
+/**
+ * Rounded corners as *Box around these* draws them and *Corners…* gives
+ * them as *Rounded*, in bonds' lengths: a fifth of one (the maintainer,
+ * 2026-10-24: 9 points, near two thirds of a bond, was far too round) -
+ * and at most this share of the shorter side.
+ */
+export const ROUNDED_OF_BOND = 0.2;
 export const ROUNDED_SHARE = 0.18;
+
+/** Rounded corners (`ROUNDED_OF_BOND`), in points, in a drawing whose point is `pointPx` page units. */
+export function roundedOfBondPt(pointPx: number): number {
+  return (ROUNDED_OF_BOND * NOMINAL_BOND_LENGTH) / pointPx;
+}
 /** The points round a corner - at least, and at most, a corner rounded more taking more, one about each half point of its radius - and round an ellipse. */
 const ARC_STEPS: readonly [number, number] = [8, 48];
 const ELLIPSE_STEPS = 72;
@@ -86,9 +97,9 @@ export function cornerRadius(s: ShapeGeometry, pointPx: number): number {
   return Math.min(Math.max(0, s.radius * pointPx), roundestOf(s.x1 - s.x0, s.y1 - s.y0));
 }
 
-/** Rounded corners for a box `w` by `h` page units, in points, as *Box around these* and rounded rectangles before 2026-10-19 had them: 9 points, less in a small box. */
+/** Rounded corners for a box `w` by `h` page units, in points, as *Box around these* has them: a fifth of a bond, less in a small box. */
 export function roundedPt(w: number, h: number, pointPx: number): number {
-  return Math.min(Math.min(w, h) * ROUNDED_SHARE, ROUNDED_PT * pointPx) / pointPx;
+  return Math.min(Math.min(w, h) * ROUNDED_SHARE, ROUNDED_OF_BOND * NOMINAL_BOND_LENGTH) / pointPx;
 }
 
 /** A box's middle. */
