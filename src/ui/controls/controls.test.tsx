@@ -231,8 +231,19 @@ describe("Meno's own controls, as they first show", () => {
     expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
     expect(html.match(/tabindex="0"/g)).toHaveLength(1);
     expect(html).toMatch(/aria-checked="true" tabindex="0"/);
-    expect(html).toContain("border-accel-base");
+    expect(html).toContain("stroke-accel-base");
     expect(html).not.toContain('type="radio"');
+  });
+
+  it("a radio's ring and dot, and a checkbox's box, drawn as shapes - round and square at any scale, not boxes whose sides round apart", () => {
+    const radio = renderToString(<RadioGroup label="Shape" value="balls" options={LOOKS.slice(0, 1)} onChange={() => {}} />);
+    expect(radio).toMatch(/<svg[^>]*viewBox="0 0 14 14"[^>]*class="h-3\.5 w-3\.5 shrink-0/);
+    expect(radio).toMatch(/<circle cx="7" cy="7" r="6\.5"/);
+    expect(radio).toMatch(/<circle cx="7" cy="7" r="3"/);
+    expect(radio).not.toMatch(/h-1\.5 w-1\.5 rounded-full/);
+    const box = renderToString(<Checkbox checked onChange={() => {}} label="Place it" />);
+    expect(box).toMatch(/<svg[^>]*viewBox="0 0 14 14"[^>]*class="h-3\.5 w-3\.5 shrink-0/);
+    expect(box).toMatch(/<rect x="0\.5" y="0\.5" width="13" height="13" rx="2\.5"/);
   });
 
   it("a radio group with nothing chosen: its first the stop of Tab", () => {
@@ -245,12 +256,13 @@ describe("Meno's own controls, as they first show", () => {
     const on = renderToString(<Checkbox checked onChange={() => {}}>Show these atoms as the label here</Checkbox>);
     expect(on).toContain('role="checkbox"');
     expect(on).toContain('aria-checked="true"');
-    expect(on).toContain("bg-accel-base");
-    expect(renderToString(<Checkbox checked tone="attention" onChange={() => {}} label="I understand" />)).toContain("bg-accel-accent");
+    expect(on).toContain("fill-accel-base");
+    expect(renderToString(<Checkbox checked tone="attention" onChange={() => {}} label="I understand" />)).toContain("fill-accel-accent");
     const off = renderToString(<Checkbox checked={false} onChange={() => {}} label="Place it" />);
     expect(off).toContain('aria-checked="false"');
     expect(off).toContain('aria-label="Place it"');
-    expect(off).not.toContain("bg-accel-base");
+    expect(off).not.toContain("fill-accel-base");
+    expect(off).toContain("fill-white");
     expect(off).not.toContain('type="checkbox"');
   });
 });

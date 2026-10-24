@@ -41,18 +41,33 @@ export default function Checkbox({
       onKeyDown={checkboxKey}
       className={clsx("group inline-flex items-center gap-2 text-left outline-none disabled:opacity-50", className)}
     >
-      <span
+      {/* (drawn as a square, not a bordered box: square at any scale - 14 px is 17.5 device pixels at 125%, its width and height rounded apart) */}
+      <svg
         aria-hidden
-        className={clsx(
-          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border transition-colors duration-150 ease-meno",
-          checked ? (tone === "attention" ? "border-accel-accent bg-accel-accent" : "border-accel-base bg-accel-base") : "border-gh-line bg-white group-hover:border-gh-gray",
-          "group-focus-visible:ring-2 group-focus-visible:ring-accel-lightbase",
-        )}
+        viewBox="0 0 14 14"
+        className="h-3.5 w-3.5 shrink-0 overflow-visible rounded-[3px] group-focus-visible:ring-2 group-focus-visible:ring-accel-lightbase"
       >
-        <svg viewBox="0 0 12 12" className={clsx("h-2.5 w-2.5 text-accel-white transition-opacity duration-150 ease-meno", checked ? "opacity-100" : "opacity-0")}>
-          <path d="M2.5 6.2l2.3 2.3 4.7-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
+        <rect
+          x={0.5}
+          y={0.5}
+          width={13}
+          height={13}
+          rx={2.5}
+          strokeWidth={1}
+          className={clsx(
+            "transition-colors duration-150 ease-meno",
+            checked ? (tone === "attention" ? "fill-accel-accent stroke-accel-accent" : "fill-accel-base stroke-accel-base") : "fill-white stroke-gh-line group-hover:stroke-gh-gray",
+          )}
+        />
+        <path
+          d="M4.08 7.17l1.92 1.92 3.92-4.17"
+          fill="none"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={clsx("stroke-accel-white transition-opacity duration-150 ease-meno", checked ? "opacity-100" : "opacity-0")}
+        />
+      </svg>
       {children}
     </button>
   );
