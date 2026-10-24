@@ -29,6 +29,7 @@ import {
   coveredLength,
   labelSpot,
   notesOf,
+  plainNoteOf,
   populations,
   sharesOf,
   sharesWithheld,
@@ -63,6 +64,19 @@ describe("a molecule in 3D as it is drawn", () => {
     expect(notes(ethane())).toEqual([]);
     expect(notes({ ...ethane(), atomsLeftOut: 1 })).toEqual(["1 atom left out"]);
     expect(notes({ ...ethane(), atomsLeftOut: 3 })).toEqual(["3 atoms left out"]);
+  });
+
+  it("tells the note that only says how it is - its converged points the entries - from those that say what is wrong", () => {
+    const ethaneAt = (k: number) => [10, 5, 1 + k, 11.5, 5, 1 + k];
+    const opt = (more: Partial<Molecule3D>): Molecule3D => ({ ...ethane(), frames: [ethaneAt(1), ethaneAt(2), ethaneAt(3)], ...more });
+    // (an optimisation that converged: its last point the entry - said, plainly)
+    const done = opt({ entryFrames: [3] });
+    expect(plainNoteOf(done)).toBe("1 of 4 frames is an entry (the converged one)");
+    expect(notesOf(done, solidOf(done, STYLE_3D), "primary")).toContain("1 of 4 frames is an entry (the converged one)");
+    // (one that did not, or whose frames none is an entry: what is wrong, never plain)
+    expect(plainNoteOf(opt({ entryFrames: [3], notConverged: true }))).toBeNull();
+    expect(plainNoteOf(opt({ entryFrames: [], noEntryWhy: "unstated" }))).toBeNull();
+    expect(plainNoteOf(ethane())).toBeNull();
   });
 
   it("is laid about its centre, a bond of 1.5 Å as long as a drawn one", () => {

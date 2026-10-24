@@ -1208,6 +1208,19 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
 }
 
 /**
+ * Of a molecule's notes (`notesOf`), the one that only says how it is, no
+ * problem: an optimisation or scan whose entries are its converged points,
+ * the last among them ("1 of 5 frames is an entry (the converged one)") -
+ * said in the page's own grey, as an edit's origin is, where the rest say
+ * what is wrong; none where it ended unconverged, or none of its frames is
+ * an entry.
+ */
+export function plainNoteOf(m: Molecule3D): string | null {
+  if (!m.entryFrames?.length || m.notConverged || m.noEntryWhy) return null;
+  return entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy, lastUnfinished(m));
+}
+
+/**
  * What a picture of a molecule says over it, as the canvas does
  * (`notesOf`): each `size` high, one over another, centred over its
  * highest atom - or ribbon - on a white ground as a measurement's value is.

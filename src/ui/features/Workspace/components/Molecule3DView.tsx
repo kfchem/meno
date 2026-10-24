@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -11,7 +12,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -191,6 +192,8 @@ export type Molecule3DViewProps = {
   following: boolean;
   /** It is pointed at or selected: a single geometry's chip is seen then (Frames3D, which a click opens). */
   framesOpen: boolean;
+  /** One of a set's: its notes kept short, within its room under the set's name (`NoteMark`). */
+  inSet?: boolean;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
   hoveredMeasure: number | null;
@@ -402,8 +405,16 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // go with it)
   const seenOf = (...atoms: number[]) => seenShare(hidden, atoms, fill.current);
   // what it says of itself, as it is drawn now, and in either look
-  const notesNow = useMemo(() => notesOf(m, solid, look), [m, solid, look]);
-  const notesEver = useMemo(() => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])], [m, solid]);
+  // (its notes - the one that says only how it is in grey, the rest as what is wrong. In a set, where molecules stand close
+  //  under its name: that one left to its frames chip, which says its frames; the rest one short line, all of them as it
+  //  is pointed at or selected - never over the set's name or a molecule beside it)
+  const plain = useMemo(() => plainNoteOf(m), [m]);
+  const notesNow = useMemo(() => notesOf(m, solid, look).filter((t) => !(props.inSet && t === plain)), [m, solid, look, props.inSet, plain]);
+  const notesEver = useMemo(
+    () => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])].filter((t) => !(props.inSet && t === plain)),
+    [m, solid, props.inSet, plain],
+  );
+  const notesShort = !!props.inSet && !props.framesOpen;
   // (a bond to an atom a look leaves out is let go with it: whether either look leaves any out)
   const leaves = useMemo(() => hidden.primary.includes(1) || hidden.secondary.includes(1), [hidden]);
   const swell = useRef(new Map<number, { v: number; vel: number; to: number }>());
@@ -2030,7 +2041,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(0.75, var(--page, 1), 1.5))`, transformOrigin: "50% 100%" }}
             >
               {notesEver.map((text) => (
-                <NoteMark key={text} text={text} on={notesNow.includes(text)} />
+                <NoteMark
+                  key={text}
+                  text={notesShort && text === notesNow[0] && notesNow.length > 1 ? `${text} +${notesNow.length - 1}` : text}
+                  title={notesNow.join("\n")}
+                  on={notesNow.includes(text) && (!notesShort || text === notesNow[0])}
+                  plain={text === plain}
+                  short={notesShort}
+                />
               ))}
             </div>
           </PageHtml>
@@ -2130,7 +2148,7 @@ function placePiece(mesh: THREE.InstancedMesh, k: number, a: THREE.Vector3, b: T
  * 2026-10-10 and 2026-10-11). It comes and goes as the molecule goes over
  * to a look it says it in or not, folding away.
  */
-function NoteMark({ text, on }: { text: string; on: boolean }) {
+function NoteMark({ text, title, on, plain, short }: { text: string; title?: string; on: boolean; plain?: boolean; short?: boolean }) {
   return (
     <div
       // (as wide as it says: in a chip of no width of its own, the fold would cut it off)
@@ -2140,8 +2158,15 @@ function NoteMark({ text, on }: { text: string; on: boolean }) {
     >
       <div className="overflow-hidden">
         <div
-          data-note
-          className="mt-1 whitespace-nowrap rounded-full border border-accel-accent/50 bg-accel-lightaccent/90 px-2 text-[11px] leading-[20px] font-medium text-accel-accent shadow-sm"
+          data-note={plain ? "plain" : ""}
+          title={short ? title : undefined}
+          className={clsx(
+            "mt-1 whitespace-nowrap rounded-full border px-2 text-[11px] leading-[20px] shadow-sm",
+            // (one that only says how it is in the page's grey, as an edit's origin is; one that says what is wrong in the accent)
+            plain ? "border-gh-line bg-white/90 text-gh-gray" : "border-accel-accent/50 bg-accel-lightaccent/90 font-medium text-accel-accent",
+            // (in a set, short: within its own room, the rest of it pointed at)
+            short && "max-w-[9rem] truncate",
+          )}
         >
           {text}
         </div>
