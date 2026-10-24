@@ -250,6 +250,17 @@ describe("a conformer search", () => {
     expect(made[0].calc).toMatchObject({ program: "RDKit" });
   });
 
+  it("keeps a search's results - of its run, how it took conformers as one - with the conformer set; a job per conformer's, with none", () => {
+    const rmsd = { id: "search.rmsd", on: "molecule", group: "Same conformer", label: "RMSD threshold", value: 0.125, unit: "Å" };
+    const out = { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], [0, 0, 0.1, 0, 0.7, 0.6, 0, -0.7, 0.6]], energies: [-1, -0.99], results: [rmsd] };
+    const made = conformersWorked(WATER, out, ["crest 3.0"]);
+    if (isFailure(made)) throw new Error(made.why);
+    const [m] = resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "conformers").molecules;
+    expect(m.calc?.results?.map((r) => [r.id, r.on === "molecule" ? r.value : null])).toEqual([["search.rmsd", 0.125]]);
+    // (the same conformers, each a job of its own: what the first's found is of it alone, not the compound's)
+    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "frequencies").molecules[0].calc?.results).toBeUndefined();
+  });
+
   it("keeps the program's own populations, where it gives one for each conformer", () => {
     const out = { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], [0, 0, 0.1, 0, 0.7, 0.6, 0, -0.7, 0.6]], energies: [-1, -0.99], populations: [0.7, 0.3] };
     const made = conformersWorked(WATER, out, []);

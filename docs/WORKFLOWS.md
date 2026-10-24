@@ -1627,6 +1627,16 @@ Then, of the leftovers the maintainer chose:
   plugin and given back as the output form's `populations`, which a
   conformer set takes as its molecule's shares - what its chip shows -
   in place of Boltzmann's at room temperature from the energies alone.
+- **How CREST took conformers as one, as its run printed it**
+  (2026-10-24): the thresholds CREGEN prints with its sorting - its RMSD
+  threshold (Å), its rotational-constant threshold (a relative
+  difference), its population threshold and its energy window (kcal/mol),
+  each the last value the run printed - are said on the conformer set's
+  frames chip, under *Same conformer (CREGEN)*: never as asked, never a
+  default. One it does not print is not said (CREST 2.12 prints no pair
+  energy threshold). A search's results are of its run, so the conformer
+  set keeps them; a job run on each conformer keeps its own with that
+  conformer, never with the set.
 - **Each conformer's degeneracy, as CREST finds it** (2026-10-13): the
   number of its rotamers alike, from the same table (`degen`), given back
   as the output form's `degeneracies` and kept with the molecule

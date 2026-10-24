@@ -293,3 +293,28 @@ describe("what several readers found in one output", () => {
     expect((output.results as { id: string }[]).map((r) => r.id)).toEqual(["charges.mulliken", "vibrations"]);
   });
 });
+
+describe("how a conformer search took conformers as one, as its program said it", () => {
+  it("keeps CREGEN's thresholds, as the CREST plugin reads them from its run, as the molecule's results", () => {
+    const out: ReaderOutput = {
+      schema: 1,
+      program: "CREST",
+      version: "2.12",
+      method: "iMTD-GC, GFN2-xTB",
+      atoms: ["O", "H", "H"],
+      frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0]],
+      energies: [-5.07],
+      results: [
+        { id: "cregen.rmsd", group: "Same conformer (CREGEN)", label: "RMSD threshold", on: "molecule", value: 0.125, unit: "Å" },
+        { id: "cregen.bconst", group: "Same conformer (CREGEN)", label: "Rotational-constant threshold (relative)", on: "molecule", value: 0.01 },
+        { id: "cregen.ewin", group: "Same conformer (CREGEN)", label: "Energy window", on: "molecule", value: 6, unit: "kcal/mol" },
+      ],
+    } as ReaderOutput;
+    const calc = calcOf(out, ["crest 0.1.0"]);
+    expect(calc.results?.map((r) => [r.group, r.label, r.on === "molecule" ? r.value : null, "unit" in r ? r.unit : undefined])).toEqual([
+      ["Same conformer (CREGEN)", "RMSD threshold", 0.125, "Å"],
+      ["Same conformer (CREGEN)", "Rotational-constant threshold (relative)", 0.01, undefined],
+      ["Same conformer (CREGEN)", "Energy window", 6, "kcal/mol"],
+    ]);
+  });
+});
