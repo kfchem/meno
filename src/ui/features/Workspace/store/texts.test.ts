@@ -45,6 +45,18 @@ describe("the texts a workspace holds", () => {
     expect([state().textShown, state().pdfShown]).toEqual([log, null]);
   });
 
+  it("give way, with a PDF read in the column, to a set's table asked for there: the one asked for last shown", () => {
+    const { state } = editor();
+    state().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [[595, 842]] }], { x: 0, y: 0 });
+    state().readPdf(state().pdfs[0].id);
+    state().readSetTable(5);
+    expect([state().setTableShown, state().pdfShown, state().textsOpen]).toEqual([5, null, true]);
+    state().readPdf(state().pdfs[0].id);
+    expect([state().setTableShown, state().pdfShown]).toEqual([null, state().pdfs[0].id]);
+    state().showSetTable(5);
+    expect([state().setTableShown, state().pdfShown]).toEqual([5, null]);
+  });
+
   it("are held with their lines ended \"\\n\", however their files ended them", () => {
     const { state } = editor();
     state().addTexts([{ name: "w.inp", text: "! B3LYP\r\n\r\n* xyz 0 1\r\nO 0 0 0\r*\r\n" }]);
