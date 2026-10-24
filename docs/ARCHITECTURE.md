@@ -1421,7 +1421,14 @@ host they fetch from. Each line is made together with the hosts it names
 `py_env_setup_pixi`) and with the fetch of its files (`plugin_files`): the
 proxy lets each reach those alone (net.rs). Another test reads the hosts
 back from every consent's words and checks they are the ones its task is
-kept to, both ways. A reader
+kept to, both ways. The proxy carries a connection both ways until both have
+ended, and ends it where nothing came either way for two minutes (`carry`):
+a download's client says nothing for minutes while the file comes to it,
+and until 0.1.18 that way alone was ended after two minutes of its own
+silence, the host told the client was done - every download longer than
+that cut short. The record says how each connection ended ("the server
+closed it", "the connection to the client broke", "nothing came either way
+for 120 s"), and a task that failed, why. A reader
 plugin says it is made so by `environment: "pixi"` in its manifest; its record of being set up is
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
