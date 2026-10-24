@@ -6,7 +6,7 @@
  * configuration never chosen for it; and the search is the one *3D structures* makes,
  * with the options chosen in Settings, Chemistry, on its 3D card.
  */
-import { recordWhy } from "../workflow/entries";
+import { openWhy, stereoOpenCount } from "./slices/stepRuns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 
@@ -328,7 +328,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all$/) });
     const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
     expect(failed.made?.holds).toBe("structures");
-    expect((failed.members ?? []).map((m) => ("structure" in m ? recordWhy(m.record) : null))).toEqual(Array(3).fill("1 stereocentre not specified: put Stereoisomers before Conformers"));
+    expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: "1 stereocentre not specified: put Stereoisomers before Conformers" }));
   });
 
   it("sets aside, in its Failed exit, one whose stereo is left open and one it could not make, each as it came - its record with it - and makes the others", async () => {
@@ -341,8 +341,9 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
     expect(failed.made?.holds).toBe("structures");
     // (the one left open, and the one the stand-in cannot make - each as it came, its record with it, saying why; the water, made, not among them)
+    // (failed, each: no result to stand on - a table says so, "state = finished" leaves it)
     const records = (failed.members ?? []).map((m) => ("structure" in m ? m.record : undefined));
-    expect(records.map(recordWhy).sort()).toEqual(["1 double bond not specified: put Stereoisomers before Conformers", "could not be made in 3D"]);
+    expect(records.map((r) => (r?.status && typeof r.status === "object" && "failed" in r.status ? r.status.failed : null)).sort()).toEqual(["1 double bond not specified: put Stereoisomers before Conformers", "could not be made in 3D"]);
     for (const r of records) expect(r?.properties).toEqual({ nll });
     // (and it can be wired on: into Stereoisomers, which takes structures drawn)
     const stereo = st().addStep("stereoisomers", "rdkit", 400, 0);
@@ -385,5 +386,36 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(partsLeft(3, "Na+ and Cl\u2212", 0)).toBe("structure 3: its Na+ and Cl\u2212 left out");
     expect(partsLeft(1, undefined, 1)).toBe("structure 1: its 1 other part left out");
     expect(partsLeft(2, "Cl\u2212", 2)).toBe("structure 2: its Cl\u2212 and 2 other parts left out");
+  });
+});
+
+describe("the stereo a structure leaves open, counted once each", () => {
+  /** A MOL block of `bonds` between carbons: each [a, b, order], from atom 1. */
+  const molblock = (atoms: number, bonds: [number, number, number][]) =>
+    [
+      "",
+      "  hand-written",
+      "",
+      `${String(atoms).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...Array.from({ length: atoms }, (_, i) => `${(1.5 * i).toFixed(4).padStart(10)}    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...bonds.map(([a, b, o]) => `${String(a).padStart(3)}${String(b).padStart(3)}${String(o).padStart(3)}  0`),
+      "M  END",
+    ].join("\n");
+
+  it("takes an allene's cumulated bonds, named among its double bonds too, as one axis - never as double bonds and axes both", () => {
+    // (penta-2,3-diene, CC=C=CC: bonds 1 and 2 double, cumulated, both named among the bonds left open)
+    const allene = molblock(5, [[1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1]]);
+    expect(stereoOpenCount({ atoms: [], bonds: [1, 2], cumulenes: [1, 2] }, allene)).toEqual({ centres: 0, bonds: 0, axes: 1 });
+    expect(openWhy(stereoOpenCount({ atoms: [], bonds: [1, 2], cumulenes: [1, 2] }, allene))).toBe("1 axis not specified: put Stereoisomers before Conformers");
+  });
+
+  it("takes a cumulene of three as one double bond, two allenes apart as two axes, and a plain double bond beside them as one", () => {
+    const triene = molblock(6, [[1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 2], [5, 6, 1]]);
+    expect(stereoOpenCount({ atoms: [], bonds: [1, 2, 3], cumulenes: [1, 2, 3] }, triene)).toEqual({ centres: 0, bonds: 1, axes: 0 });
+    // (two allenes and a double bond, each apart: CC=C=CC-CC=C=CC-CC=CC)
+    const many = molblock(14, [[1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1], [5, 6, 1], [6, 7, 1], [7, 8, 2], [8, 9, 2], [9, 10, 1], [10, 11, 1], [11, 12, 1], [12, 13, 2], [13, 14, 1]]);
+    const open = { atoms: [3], bonds: [1, 2, 6, 7, 11], cumulenes: [1, 2, 6, 7] };
+    expect(stereoOpenCount(open, many)).toEqual({ centres: 1, bonds: 1, axes: 2 });
+    expect(openWhy(stereoOpenCount(open, many))).toBe("1 stereocentre, 1 double bond and 2 axes not specified: put Stereoisomers before Conformers");
   });
 });

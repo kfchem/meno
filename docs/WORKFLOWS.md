@@ -1563,9 +1563,13 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   (*structure 3 of 4 leaves stereo open: draw it, wedges and all*). Each
   structure drawn that is not made - its stereo left open, one atom alone,
   or one that could not be made - goes to the step's *Failed* exit as it
-  came, its record with it, saying why ("1 double bond not specified: put
-  Stereoisomers before Conformers"; 2026-10-24): there it can be
-  followed, and wired on, into *Stereoisomers* above all. Where none is
+  came, its record with it, failed - no result to stand on, so a table
+  says so, a chart refuses it and "state = finished" leaves it - saying
+  why ("1 double bond not specified: put Stereoisomers before
+  Conformers"; what it was set aside for before kept beside it, "earlier:
+  ..."; 2026-10-24): there it can be followed, and wired on, into
+  *Stereoisomers* above all. Its open stereo is counted once each: an
+  allene's cumulated bonds one axis, a cumulene of three one double bond. Where none is
   made, the step makes none and sets them all aside so. Until 2026-10-22
   the first stereoisomer was made without a word; until 2026-10-24 those
   not made were in no set, said on the line alone.
