@@ -108,7 +108,7 @@ describe("a Filter step", () => {
     const bad = runStep(filtering([water([{ nll: nll(1) }])], "mw < 500 furlongs"), 2, W);
     expect(ran(bad)).toMatchObject({ ok: false, said: '"mw < 500 furlongs": furlongs is no unit Meno knows' });
     const none = runStep(filtering([water([{ nll: nll(1) }])], ""), 2, W);
-    expect(ran(none)).toMatchObject({ ok: false, said: "No condition to filter by" });
+    expect(ran(none)).toMatchObject({ ok: false, said: "No conditions yet" });
   });
 
   it("refuses a condition on a name that is Meno's own and an entry's too - never reads it as either - and filters on others as given", () => {

@@ -98,7 +98,7 @@ function stateLine(
   now: number,
   missing?: string,
 ): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
-  // (a program installed separately that is found nowhere, or too old: said where Ready would be)
+  // (a program installed separately that is found nowhere, or too old, or what its options still need: said where Ready would be)
   if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: missing, tone: "text-gh-gray" };
   switch (state) {
     case "no-input":
@@ -142,7 +142,7 @@ export type StepCardProps = {
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
-  /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
+  /** Why it cannot run as it is, said where *Ready* would be (doers `notReadyFor`): a program installed separately it runs, found nowhere or too old ("ORCA not found") - its *Run* opens Settings, Plugins, to locate it - or what it still needs of its options ("Give a charge, a multiplicity, or both"). */
   missing?: string;
   /** A wire just let go on it that it does not take: why, in plain words (flow `wireRefusal`), said where its state is. */
   refused?: string;
@@ -181,6 +181,8 @@ export type StepCardProps = {
  */
 export default function StepCard(p: StepCardProps) {
   const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  // (what it does and how, under its name - its kind alone where its state line says the same: what it still needs, said once)
+  const summary = [p.info.name, p.how && p.how !== line.text ? p.how : ""].filter(Boolean).join(" \u00b7 ");
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
   // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
   const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
@@ -213,8 +215,8 @@ export default function StepCard(p: StepCardProps) {
             </span>
             <span className="h-5 truncate text-[13px] font-medium leading-5 text-gh-black">{p.who}</span>
             <span />
-            <span className="text-[11px] leading-4 text-gh-gray line-clamp-2" title={[p.info.name, p.how].filter(Boolean).join(" \u00b7 ")}>
-              {[p.info.name, p.how].filter(Boolean).join(" \u00b7 ")}
+            <span className="text-[11px] leading-4 text-gh-gray line-clamp-2" title={summary}>
+              {summary}
             </span>
             <span className={clsx("mt-1.5 flex h-4 items-center transition-colors duration-200 ease-meno", line.tone)}>
               {line.Icon && <line.Icon className={clsx("h-3.5 w-3.5", line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}

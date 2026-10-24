@@ -2,16 +2,11 @@ import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { useInFront } from "../../layouts/inFront";
 import { chargeText } from "../../../lib/chem/molecule";
-import type { Site } from "../../../lib/chem/protonation";
-import { keptAsDictionary, protonatedSpecies, type Protonation } from "./chem/protonate";
+import { formName, keptAsDictionary, protonatedSpecies, siteName, type Protonation } from "./chem/protonate";
+import Select from "../../controls/Select";
+import { escapeLeft } from "../../controls/keys";
 
 const SPINS = ["", "singlet", "doublet", "triplet", "quartet"];
-
-/** A site as its row names it: what it is, and the atoms whose hydrogens it moves - "Carboxyl O4, O5", "Thiazole nitrogen N3". */
-const siteName = (p: Protonation, s: Site) => `${s.title} ${s.changing.map((k) => p.labels[k]).join(", ")}`;
-
-/** A form as its option says it: what it is, its charge, where its hydrogens are - "Imidazole - H on N3". */
-const formName = (f: Site["forms"][number]) => `${f.name}${f.charge ? ` (${chargeText(f.charge)})` : ""} - ${f.where}`;
 
 /**
  * How a molecule without its hydrogens is protonated, chosen by the chemist
@@ -44,8 +39,9 @@ export default function ProtonationCard({
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront || busy) return;
+    // (not an Escape one of its lists has had, closing it)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (escapeLeft(e)) onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -105,36 +101,26 @@ export default function ProtonationCard({
             <span className="w-36 shrink-0 truncate text-xs" title={siteName(p, s)}>
               {siteName(p, s)}
             </span>
-            <select
-              aria-label={siteName(p, s)}
-              value={forms[k] ?? ""}
-              onChange={(e) => setForms((was) => was.map((f, j) => (j === k ? (e.target.value === "" ? null : Number(e.target.value)) : f)))}
-              className="flex-1 min-w-0 h-7 rounded-md border border-gh-line bg-white px-1.5 text-xs outline-none focus:border-accel-base"
-            >
-              {forms[k] == null && <option value="">Choose…</option>}
-              {s.forms.map((f, j) => (
-                <option key={j} value={j}>
-                  {formName(f)}
-                </option>
-              ))}
-            </select>
+            <Select
+              label={siteName(p, s)}
+              value={forms[k] == null ? null : String(forms[k])}
+              placeholder="Choose…"
+              options={s.forms.map((f, j) => ({ value: String(j), label: formName(f) }))}
+              onChange={(v) => setForms((was) => was.map((f, j) => (j === k ? Number(v) : f)))}
+              className="flex-1"
+            />
           </label>
         ))}
         {charged.map((o) => (
           <label key={`atom-${o.atom}`} className="flex items-center gap-2 py-1" onMouseEnter={() => onMark([p.atoms[o.atom]])} onMouseLeave={() => onMark(null)}>
             <span className="w-36 shrink-0 truncate text-xs">Atom {o.label}</span>
-            <select
-              aria-label={`Atom ${o.label}`}
-              value={charges.get(o.atom)}
-              onChange={(e) => setCharges((was) => new Map(was).set(o.atom, Number(e.target.value)))}
-              className="flex-1 min-w-0 h-7 rounded-md border border-gh-line bg-white px-1.5 text-xs outline-none focus:border-accel-base"
-            >
-              {o.charges.map((c) => (
-                <option key={c} value={c}>
-                  {c ? `Charge ${chargeText(c)}` : "No charge"}
-                </option>
-              ))}
-            </select>
+            <Select
+              label={`Atom ${o.label}`}
+              value={String(charges.get(o.atom))}
+              options={o.charges.map((c) => ({ value: String(c), label: c ? `Charge ${chargeText(c)}` : "No charge" }))}
+              onChange={(v) => setCharges((was) => new Map(was).set(o.atom, Number(v)))}
+              className="flex-1"
+            />
             <button
               aria-label={`Leave ${o.label} as it was`}
               onClick={(e) => {
@@ -152,22 +138,17 @@ export default function ProtonationCard({
           </label>
         ))}
         {unchanged.length > 0 && (
-          <select
-            aria-label="Charge another atom"
-            value=""
-            onChange={(e) => {
-              const o = p.others.find((x) => x.atom === Number(e.target.value));
+          <Select
+            label="Charge another atom"
+            value={null}
+            placeholder="Charge another atom…"
+            options={unchanged.map((o) => ({ value: String(o.atom), label: o.label }))}
+            onChange={(v) => {
+              const o = p.others.find((x) => x.atom === Number(v));
               if (o) setCharges((was) => new Map(was).set(o.atom, o.now));
             }}
-            className="mt-1 h-7 rounded-md border border-dashed border-gh-line bg-white px-1.5 text-xs text-gh-gray outline-none focus:border-accel-base"
-          >
-            <option value="">Charge another atom…</option>
-            {unchanged.map((o) => (
-              <option key={o.atom} value={o.atom}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            className="mt-1 self-start border-dashed"
+          />
         )}
       </div>
       <p className="mt-2 text-xs" aria-live="polite">

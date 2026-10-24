@@ -12,6 +12,7 @@
  * changed, and why is said.
  */
 import { create } from "zustand";
+import { chargeText } from "../../../../lib/chem/molecule";
 import { chemWorker } from "../../../../lib/roles/worker";
 import { componentsNamed } from "../../../../lib/net/components";
 import { hydrogensFromComponent, type GivenHydrogen, type ResidueAtom } from "../../../../lib/chem/ccdHydrogens";
@@ -103,6 +104,12 @@ export function protonationOf(m: Molecule3D, atom: number | null): Protonation |
     dictionary: !!m.biopolymer && by === "dictionary",
   };
 }
+
+/** A site as its row names it: what it is, and the atoms whose hydrogens it moves - "Carboxyl O4, O5", "Thiazole nitrogen N3". */
+export const siteName = (p: Protonation, s: Site) => `${s.title} ${s.changing.map((k) => p.labels[k]).join(", ")}`;
+
+/** A form as its choice says it: what it is, its charge, where its hydrogens are - "Imidazole - H on N3". */
+export const formName = (f: Site["forms"][number]) => `${f.name}${f.charge ? ` (${chargeText(f.charge)})` : ""} - ${f.where}`;
 
 /** The charge and spin multiplicity a part would have, protonated as chosen - or why it cannot be. */
 export function protonatedSpecies(p: Protonation, chosen: Chosen): { charge: number; multiplicity: number } | { why: string } {

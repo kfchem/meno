@@ -42,7 +42,7 @@ describe("Tag, as a step", () => {
     expect(o.kept.map((e) => e.properties?.start.value)).toEqual(["start-1", "start-2"]);
     expect(o.kept.map((e) => e.energy)).toEqual([-76.4, -76.4]);
     expect(o.aside).toEqual([]);
-    expect(runMeno("tag", [water(1)], "molecules", { name: " " })).toEqual({ ok: false, said: "The tag needs a name" });
+    expect(runMeno("tag", [water(1)], "molecules", { name: " " })).toEqual({ ok: false, said: "Name the tag" });
   });
 });
 

@@ -78,6 +78,23 @@ fn names(flavor: &str) -> &'static [&'static str] {
     }
 }
 
+/// What a kind is read from on this platform, in order: the names it is
+/// written under (`names`), then those it is only ever read from - a MOL
+/// file under the type name "com.mdli.molfile", and a SMILES (the `smiles`
+/// kind, never written) under "org.opensmiles.smiles". What Meno writes is
+/// left as it was: only `names`.
+fn read_names(flavor: &str) -> Vec<&'static str> {
+    #[allow(unused_mut)]
+    let mut out = names(flavor).to_vec();
+    #[cfg(target_os = "macos")]
+    out.extend_from_slice(match flavor {
+        "mol" => &["com.mdli.molfile"][..],
+        "smiles" => &["org.opensmiles.smiles"][..],
+        _ => &[][..],
+    });
+    out
+}
+
 /// A MOL file as MDLCT has it: each line after a byte giving its length,
 /// with no line ends. (Windows only; tested everywhere.)
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -278,7 +295,7 @@ fn read_from(board: Board, flavors: &[String]) -> Result<Option<ClipItem>, Strin
                 return Ok(Some(ClipItem { flavor: flavor.clone(), text: Some(text), base64: None }));
             }
         }
-        for name in names(flavor) {
+        for name in read_names(flavor) {
             if let Some(bytes) = platform::read(board, name)? {
                 let (text, base64) = if is_binary(flavor) {
                     (None, Some(STANDARD.encode(&bytes)))
@@ -620,6 +637,21 @@ mod tests {
         // (a photograph is read, binary, and never written)
         assert!(is_binary("jpeg"));
         assert!(!WRITTEN.contains(&"jpeg"));
+    }
+
+    #[test]
+    fn a_mol_file_and_a_smiles_are_read_under_their_type_names_as_well_and_never_written_so() {
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(read_names("mol"), ["chemical/x-mdl-molfile", "com.mdli.molfile"]);
+            assert_eq!(read_names("smiles"), ["org.opensmiles.smiles"]);
+            // (written as before: the names a copy is put under are unchanged, and a SMILES is never written)
+            assert_eq!(names("mol"), ["chemical/x-mdl-molfile"]);
+            assert!(names("smiles").is_empty());
+            assert!(!WRITTEN.contains(&"smiles"));
+        }
+        assert!(read_names("nonsense").is_empty());
+        assert!(!is_binary("smiles"));
     }
 
     #[test]
