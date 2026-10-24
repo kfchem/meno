@@ -16,7 +16,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf } from "../../chem/fromSmiles";
+import { drawingOf, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -24,7 +24,6 @@ import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
 import { partOf } from "../../chem/cleanUp";
-import { readMolfile } from "../../../../../lib/chem/ctfile";
 import { compoundLetter, frameXyz, framesOf, MADE_FROM, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
@@ -94,40 +93,9 @@ export function stereoOpen(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
 }
 
-/**
- * How much of a structure's stereo is left open, by one rule (as #619's
- * `stereoOpenOf` counts it, to be called in its place once that is on
- * main): its stereocentres; its double bonds that are in no cumulated run;
- * and of each cumulated run - its bonds, as `cumulenes` names them among
- * `bonds`, joined by the atoms they share in `molblock` - one axis where it
- * is even, an allene's, one double bond where it is odd, a cumulene's.
- */
-export function stereoOpenCount(open: { atoms: readonly number[]; bonds: readonly number[]; cumulenes?: readonly number[] }, molblock: string): { centres: number; bonds: number; axes: number } {
-  const mol = readMolfile(molblock);
-  const cumulated = [...new Set(open.cumulenes ?? [])];
-  const ends = (b: number) => (mol?.bonds[b] ? [mol.bonds[b].a1, mol.bonds[b].a2] : []);
-  // (the runs: bonds of `cumulated` that share an atom, one run)
-  const runs: number[][] = [];
-  for (const b of cumulated) {
-    const touching = runs.filter((r) => r.some((c) => ends(c).some((a) => ends(b).includes(a))));
-    const merged = [b, ...touching.flat()];
-    for (const r of touching) runs.splice(runs.indexOf(r), 1);
-    runs.push(merged);
-  }
-  const inRuns = new Set(cumulated);
-  return {
-    centres: open.atoms.length,
-    bonds: open.bonds.filter((b) => !inRuns.has(b)).length + runs.filter((r) => r.length % 2 === 1).length,
-    axes: runs.filter((r) => r.length % 2 === 0).length,
-  };
-}
-
-/** Why a structure drawn was not made in 3D, as its record in the Failed exit says it: its stereo left open - so many centres, double bonds and axes, counted once each (`stereoOpenCount`) - to be given it first. */
-export function openWhy(open: { centres: number; bonds: number; axes: number }): string {
-  const count = (n: number, one: string, many: string) => (n ? [`${n} ${n === 1 ? one : many}`] : []);
-  const parts = [...count(open.centres, "stereocentre", "stereocentres"), ...count(open.bonds, "double bond", "double bonds"), ...count(open.axes, "axis", "axes")];
-  const said = parts.length > 2 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts.length ? parts.join(" and ") : "its stereo";
-  return `${said} not specified: put Stereoisomers before Conformers`;
+/** Why a structure drawn was not made in 3D, as its record in the Failed exit says it: its stereo left open - so many centres, double bonds and axes, counted once each (`stereoOpenOf`) - to be given it first. */
+export function openWhy(open: StereoOpen | undefined): string {
+  return `${stereoOpenSaid(open) ?? "its stereo not specified"}: put Stereoisomers before Conformers`;
 }
 /** Why a structure drawn was not made in 3D: one atom alone, or what could not be made. */
 export const BARE_WHY = "one atom alone has no 3D structure";
@@ -592,7 +560,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const unset = left.atoms.length + left.bonds.length > 0;
           if (unset && (left.isomers > 1 || (left.cumulenes?.length ?? 0) > 0)) {
             open.push(place + 1);
-            asideAs(openWhy(stereoOpenCount(left, block.molblock)));
+            asideAs(openWhy(stereoOpenOf(left)));
             continue;
           }
           if (unset && left.free) free.push(place + 1);

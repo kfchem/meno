@@ -6,7 +6,8 @@
  * configuration never chosen for it; and the search is the one *3D structures* makes,
  * with the options chosen in Settings, Chemistry, on its 3D card.
  */
-import { openWhy, stereoOpenCount } from "./slices/stepRuns";
+import { openWhy } from "./slices/stepRuns";
+import { stereoOpenOf } from "../chem/fromSmiles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 
@@ -17,7 +18,7 @@ const asked: { molblock: string; options: Record<string, unknown> }[] = [];
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
  * stereo open, by what they hold - methanol, or every one.
  */
-const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; cumulenes?: number[]; free?: boolean } };
+const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; cumulenes?: number[]; cumulated?: number[][]; free?: boolean } };
 /** Whether a molblock is methanol's, C and O. */
 const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
 /** What a held request is let go with: the worker stopped. */
@@ -43,7 +44,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
         // (what a structure's drawing leaves open: a stereocentre, here, where it is said to)
         if (op === "open_stereo") {
           const open = worker.open === "all" || (worker.open === "methanol" && methanol(readMolfile(payload.molblock)!));
-          return open ? { atoms: [0], bonds: [], isomers: 2, cumulenes: [], free: false, ...worker.openAs } : { atoms: [], bonds: [], isomers: 1, cumulenes: [], free: false };
+          return open ? { atoms: [0], bonds: [], isomers: 2, cumulenes: [], cumulated: [], free: false, ...worker.openAs } : { atoms: [], bonds: [], isomers: 1, cumulenes: [], free: false };
         }
         if (op !== "conformers") throw new Error(`no ${op} here`);
         asked.push(payload);
@@ -390,32 +391,21 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
 });
 
 describe("the stereo a structure leaves open, counted once each", () => {
-  /** A MOL block of `bonds` between carbons: each [a, b, order], from atom 1. */
-  const molblock = (atoms: number, bonds: [number, number, number][]) =>
-    [
-      "",
-      "  hand-written",
-      "",
-      `${String(atoms).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
-      ...Array.from({ length: atoms }, (_, i) => `${(1.5 * i).toFixed(4).padStart(10)}    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0`),
-      ...bonds.map(([a, b, o]) => `${String(a).padStart(3)}${String(b).padStart(3)}${String(o).padStart(3)}  0`),
-      "M  END",
-    ].join("\n");
-
-  it("takes an allene's cumulated bonds, named among its double bonds too, as one axis - never as double bonds and axes both", () => {
-    // (penta-2,3-diene, CC=C=CC: bonds 1 and 2 double, cumulated, both named among the bonds left open)
-    const allene = molblock(5, [[1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1]]);
-    expect(stereoOpenCount({ atoms: [], bonds: [1, 2], cumulenes: [1, 2] }, allene)).toEqual({ centres: 0, bonds: 0, axes: 1 });
-    expect(openWhy(stereoOpenCount({ atoms: [], bonds: [1, 2], cumulenes: [1, 2] }, allene))).toBe("1 axis not specified: put Stereoisomers before Conformers");
+  it("says an allene's cumulated bonds, named among its double bonds too, as one axis - never as double bonds and axes both", () => {
+    // (penta-2,3-diene, CC=C=CC: bonds 1 and 2 double, cumulated, both named among the bonds left open - one run)
+    expect(openWhy(stereoOpenOf({ atoms: [], bonds: [1, 2], cumulated: [[1, 2]] }))).toBe("1 axis not specified: put Stereoisomers before Conformers");
   });
 
-  it("takes a cumulene of three as one double bond, two allenes apart as two axes, and a plain double bond beside them as one", () => {
-    const triene = molblock(6, [[1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 2], [5, 6, 1]]);
-    expect(stereoOpenCount({ atoms: [], bonds: [1, 2, 3], cumulenes: [1, 2, 3] }, triene)).toEqual({ centres: 0, bonds: 1, axes: 0 });
-    // (two allenes and a double bond, each apart: CC=C=CC-CC=C=CC-CC=CC)
-    const many = molblock(14, [[1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1], [5, 6, 1], [6, 7, 1], [7, 8, 2], [8, 9, 2], [9, 10, 1], [10, 11, 1], [11, 12, 1], [12, 13, 2], [13, 14, 1]]);
-    const open = { atoms: [3], bonds: [1, 2, 6, 7, 11], cumulenes: [1, 2, 6, 7] };
-    expect(stereoOpenCount(open, many)).toEqual({ centres: 1, bonds: 1, axes: 2 });
-    expect(openWhy(stereoOpenCount(open, many))).toBe("1 stereocentre, 1 double bond and 2 axes not specified: put Stereoisomers before Conformers");
+  it("says a cumulene of three as one double bond, two allenes apart as two axes, and a plain double bond beside them as one", () => {
+    expect(openWhy(stereoOpenOf({ atoms: [], bonds: [1, 2, 3], cumulated: [[1, 2, 3]] }))).toBe("1 double bond not specified: put Stereoisomers before Conformers");
+    expect(openWhy(stereoOpenOf({ atoms: [3], bonds: [1, 2, 6, 7, 11], cumulated: [[1, 2], [6, 7]] }))).toBe("1 stereocentre, 1 double bond and 2 axes not specified: put Stereoisomers before Conformers");
+  });
+
+  it("says the record of an allene drawn without its axis as one axis open", async () => {
+    worker.open = "methanol";
+    worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1, cumulenes: [0, 1], cumulated: [[0, 1]] };
+    const { step, st } = await searched();
+    const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+    expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toContainEqual({ failed: "1 axis not specified: put Stereoisomers before Conformers" });
   });
 });

@@ -699,14 +699,16 @@ def op_open_stereo(m):
     double bonds, and how many stereoisomers they make that can be made in
     3D - none of those that `like` (see `kept`) gives a configuration. With
     the open double bonds that are cumulated (`cumulenes`: an allene's
-    axis, whose stereoisomers are not counted), and whether none of the
-    stereoisomers embeds with its stereo held (`free`)."""
+    axis, whose stereoisomers are not counted) - and the runs they make
+    (`cumulated`, as `stereo_left_open` gives them) - and whether none of
+    the stereoisomers embeds with its stereo held (`free`)."""
     mol = kept(read(m["molblock"]), m.get("like"))
     atoms, bonds = open_stereo(mol)
     if not (atoms or bonds):
-        return {"atoms": atoms, "bonds": bonds, "isomers": 1, "cumulenes": [], "free": False}
+        return {"atoms": atoms, "bonds": bonds, "isomers": 1, "cumulenes": [], "cumulated": [], "free": False}
     made = embeddable(mol)
-    return {"atoms": atoms, "bonds": bonds, "isomers": max(len(made), 1), "cumulenes": open_cumulenes(mol, bonds), "free": not made}
+    cumulenes = open_cumulenes(mol, bonds)
+    return {"atoms": atoms, "bonds": bonds, "isomers": max(len(made), 1), "cumulenes": cumulenes, "cumulated": cumulated_runs(mol, cumulenes), "free": not made}
 
 
 def op_stereo_left_open(m):
