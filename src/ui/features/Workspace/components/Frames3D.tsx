@@ -8,6 +8,7 @@ import { barsAbove } from "../utils/barsAbove";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 import { imaginaryWords } from "../../../../lib/calc/output";
+import { PORTS_Z } from "../workflow/look";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -59,12 +60,31 @@ const absolute = (e: number) => valueText(e, { quantity: "energy" });
  * the canvas (`area`), over its molecule, and goes back down as it shuts.
  */
 export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
+  // (opened, above every other thing on the page - its neighbours' chips, their notes - never under them)
+  const [opened, setOpened] = useState(false);
+  const { onOpened } = props;
+  const said = useCallback(
+    (o: boolean) => {
+      setOpened(o);
+      onOpened?.(o);
+    },
+    [onOpened],
+  );
   return (
-    <PageHtml zIndexRange={[30, 20]}>
-      <FramesChip {...props} />
+    <PageHtml zIndexRange={opened ? OPENED_Z : [30, 20]}>
+      <FramesChip {...props} onOpened={said} />
     </PageHtml>
   );
 }
+
+/**
+ * Where an opened chip lies among what is on the page: over the rest of the
+ * page's chips and notes (at most 40), and over the workflow's ports
+ * (`PORTS_Z`) - as a step's card opened is, the ports under it not drawn -
+ * so that nothing under it shows through it. A press on it is its own; one
+ * anywhere else shuts it.
+ */
+const OPENED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
 
 /** Words begun with a capital, as a label is. */
 const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -92,6 +112,7 @@ export function FramesChip({
   marksUnread,
   warnings,
   imaginary,
+  onOpened,
 }: {
   count: number;
   frame: number;
@@ -137,6 +158,8 @@ export function FramesChip({
   warnings?: readonly Warning[];
   /** The imaginary frequencies each frame's calculation judged it has, in cm-1 (null, none): the one told's said on it - a mark that it is no minimum. */
   imaginary?: readonly (readonly number[] | null)[];
+  /** Told as it is opened by a click, and as it shuts: its molecule takes it clear of its set (Molecule3DView), and it goes above the rest. */
+  onOpened?: (opened: boolean) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -169,6 +192,9 @@ export function FramesChip({
   }, [opened]);
   // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
   const reading = opened;
+  useEffect(() => {
+    onOpened?.(opened);
+  }, [opened, onOpened]);
   // (each above the lowest of those that finished alone: one that failed is no bar's zero, and has none of its own)
   const bars = energies ? barsAbove(energies, failed, marksUnread) : null;
   const above = bars?.above;
@@ -303,7 +329,8 @@ export function FramesChip({
         <div className="relative">
           <div
             ref={chipEl}
-            className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
+            // (shut, it lets the page show through a little; open, nothing shows through it - what lies under it would read as part of it)
+            className={`rounded-2xl border border-gh-line shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity,background-color] duration-200 ease-out ${full || reading ? "bg-white" : "bg-white/85 backdrop-blur"}`}
             style={{
               opacity: shown ? (full ? 1 : 0.75) : 0,
               pointerEvents: shown ? "auto" : "none",
@@ -315,6 +342,10 @@ export function FramesChip({
               style={{ gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
             >
               <div className="overflow-hidden flex flex-col items-center" style={{ width }}>
+                {/* (what the bars are, named over them) */}
+                {above && !single && (
+                  <div className="mt-1 mb-0.5 self-start text-[10px] leading-[14px] text-gh-gray">Energy above the lowest, each {conformers ? "conformer" : "frame"}</div>
+                )}
                 {above && !single && (
                   <Energies
                     above={above}
@@ -461,7 +492,9 @@ function Energies({
       width={width}
       height={BARS}
       data-cursor="sideways"
-      className="mt-1.5 block touch-none"
+      className="block touch-none"
+      // (bars' edges on whole device pixels, however the page is zoomed - never soft; a profile stays smooth)
+      shapeRendering={bars ? "crispEdges" : undefined}
       role="img"
       aria-label="Energy of each frame"
       onPointerDown={(e) => {
@@ -510,7 +543,6 @@ function Energies({
               y={BARS - heightOf(e)}
               width={Math.max(1, step - Math.min(2, step * 0.4))}
               height={heightOf(e)}
-              rx={Math.min(1.5, step / 4)}
               className="transition-[fill] duration-150"
               fill={i === frame ? "rgb(49, 118, 137)" : i === pointed ? "rgb(140, 172, 184)" : "rgb(207, 222, 229)"}
             />

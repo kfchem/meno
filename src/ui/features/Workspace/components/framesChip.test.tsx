@@ -10,6 +10,18 @@ const none = () => {};
 const slider = (html: string) => /grid-template-rows:\s*1fr/.test(html);
 
 describe("a frames chip - a molecule's frames, or a stack's", () => {
+  it("names its bars, draws their edges on whole device pixels, and lets the page show through it only shut", () => {
+    const kcal = (e: number) => e / 627.509474;
+    const set = renderToString(<FramesChip count={2} frame={0} energies={[0, kcal(0.6)]} open={false} onFrame={none} conformers />);
+    expect(set).toContain("Energy above the lowest, each <!-- -->conformer");
+    expect(set).toContain('shape-rendering="crispEdges"');
+    expect(set).toContain("bg-white/85");
+    // (a run of frames: each frame's; and a long one drawn as a profile, smooth)
+    expect(renderToString(<FramesChip count={4} frame={0} energies={[0, 0.001, 0.002, 0.003]} open={false} onFrame={none} />)).toContain("each <!-- -->frame");
+    const many = Array.from({ length: 150 }, (_, i) => i * 1e-4);
+    expect(renderToString(<FramesChip count={150} frame={0} energies={many} open={false} onFrame={none} />)).not.toContain("crispEdges");
+  });
+
   it("is shut as its molecule is pointed at or selected: it opens on a click (the maintainer, 2026-10-13)", () => {
     expect(slider(renderToString(<FramesChip count={5} frame={2} open={false} onFrame={none} />))).toBe(false);
     expect(slider(renderToString(<FramesChip count={5} frame={2} open onFrame={none} />))).toBe(false);

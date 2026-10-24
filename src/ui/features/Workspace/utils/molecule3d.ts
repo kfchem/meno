@@ -1256,3 +1256,13 @@ export function notePictureMarks(m: Carried3D, style: Style3D, size: number, eye
     color: HIDDEN_MARK_COLOUR,
   }));
 }
+
+/**
+ * Where a molecule's frames chip hangs from, on the page (y, up): just below
+ * its lowest atom as seen (`lowest`) - or, opened by a click, from the foot
+ * of the set it is in (`setFoot`) where that is lower: clear of the set, over
+ * none of its other molecules and their chips.
+ */
+export function framesChipAt(lowest: number, setFoot?: number): number {
+  return setFoot != null && Number.isFinite(setFoot) ? Math.min(lowest, setFoot) : lowest;
+}

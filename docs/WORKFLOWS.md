@@ -198,7 +198,13 @@ As Meno's own things look (decided: 15), not as the figures here do:
   about 8 px, they fade out, as a set's name and count do and a card's
   words; what opens for a moment - a card on pointing, a menu, Quick Add -
   stays the screen's size. The R and S beside atoms are the drawing's, not
-  chips.
+  chips. A frames chip opened by a click (2026-10-24) goes down, eased,
+  from the foot of the set its molecule is in - over none of the set's
+  other molecules and their chips - and back up as it shuts; opened, it
+  lies over all else on the page, the workflow's ports too, and nothing
+  shows through it (shut, the page shows through a little). Its bars are
+  named over them (*Energy above the lowest, each conformer*), their
+  edges on whole device pixels.
 
 Everything comes and goes as Meno's things do (theme/motion): a set, a
 step and a wire fade in where they are put; a state changes its words
