@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { emptyWorkspaceDocument, setFigureChecked } from "../document";
 import { figureNotePlaces, figureNotesKey, figureNotesOf, figureNoteText, figureNoteTitle, type NotePlaces } from "./figureNotes";
-import { atomAs } from "./figures";
+import { atomAs, bondAs } from "./figures";
 
 const SHA = "a".repeat(64);
 /** Two structures: an ethanol read from page 3 of a PDF, its O marked unsure, and a methane drawn by hand. */
@@ -91,5 +91,30 @@ describe("the note over a structure read from a figure", () => {
     // (gone: let go)
     figureNotePlaces(m, [], held);
     expect(held.size).toBe(0);
+  });
+
+  it("are worked out again when an unsure bond is changed in any way its mark looks at - how it is shown, which way its stereo points - its count going down", () => {
+    const m = model();
+    const marked: Model = { ...m, bonds: m.bonds.map((b) => (b.id === 4 ? { ...b, stereo: "up" as const, unsure: { said: ["Drawn as a wedge"], as: bondAs({ ...b, stereo: "up" }) } } : b)) };
+    expect(figureNotesOf(marked).map((n) => n.unsure)).toEqual([2]);
+    for (const edit of [{ display: "bold" as const }, { stereoOrient: "reverse" as const }]) {
+      const edited: Model = { ...marked, bonds: marked.bonds.map((b) => (b.id === 4 ? { ...b, ...edit } : b)) };
+      expect(figureNotesKey(edited)).not.toBe(figureNotesKey(marked));
+      expect(figureNotesOf(edited).map((n) => n.unsure)).toEqual([1]);
+    }
+    // (and an unsure atom whose bonds change so its mark goes: the O's bond made double)
+    const o: Model = { ...m, bonds: m.bonds.map((b) => (b.id === 5 ? { ...b, order: 2 as const } : b)) };
+    expect(figureNotesKey(o)).not.toBe(figureNotesKey(m));
+    expect(figureNotesOf(o).map((n) => n.unsure)).toEqual([0]);
+  });
+
+  it("are worked out again when a bond among atoms drawn by hand is put elsewhere: which atoms are the structure's, then, changed", () => {
+    const m = model();
+    // (two atoms drawn by hand bonded, then that bond put from one of them to the ethanol's O)
+    const apart: Model = { atoms: [...m.atoms, { id: 11, x: 11.5, y: 0, r: 0.9, el: "C" }], bonds: [...m.bonds, { id: 12, a: 10, b: 11, order: 1 }] };
+    const joined: Model = { ...apart, bonds: apart.bonds.map((b) => (b.id === 12 ? { ...b, a: 3, b: 10 } : b)) };
+    expect(figureNotesKey(joined)).not.toBe(figureNotesKey(apart));
+    expect(figureNotesOf(apart).map((n) => [...n.atoms].sort((a, b) => a - b))).toEqual([[1, 2, 3]]);
+    expect(figureNotesOf(joined).map((n) => [...n.atoms].sort((a, b) => a - b))).toEqual([[1, 2, 3, 10]]);
   });
 });

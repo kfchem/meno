@@ -1540,7 +1540,7 @@ words are: by itself, not by a box drawn round it.
 - **Joined to another**: a structure stays noted while any atom of it read from a figure is not said to be checked - a checked one bonded to an unchecked one leaves the unchecked one's note - and its count of unsure parts, and where it was read from, are of the unchecked atoms.
 - **When it comes**: once the structure has landed, not while it is carried out of the PDF, fading in.
 - **Copied**: a noted structure copied and pasted in Meno keeps its note - it is still from the figure - and one said to be checked stays checked (`seen` goes with its atoms in Meno's own record); pasted into another program, it carries neither.
-- **Its cost**: the notes are worked out again only when what they depend on changes - which atoms were read from a figure, which are checked or marked unsure, and their bonds - and where each stands only for a structure that moved or changed: dragging one structure moves only its own note, never at each frame for all.
+- **Its cost**: the notes are worked out again only when what they depend on changes - which atoms each bond joins, which atoms were read from a figure and which of those are checked, and whether each marked part is still as it was read (as its dashed ring is) - and where each stands only for a structure that moved or changed: dragging one structure moves only its own note, never at each frame for all.
 - **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):

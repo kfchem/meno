@@ -8,7 +8,7 @@ import { structuresOf } from "../../../../lib/chem/magnified2d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { drawnBox } from "../../../../utils/importers";
 import type { Model } from "../store/types";
-import { readMarks } from "./figures";
+import { atomAs, bondAs, readMarks } from "./figures";
 
 /** A structure read from a figure and not yet said to be checked: its atoms, where it was read from, and how many of its parts are still marked unsure. */
 export type FigureNote = { atoms: ReadonlySet<number>; sha256: string; page?: number; unsure: number };
@@ -35,21 +35,27 @@ export function figureNotesOf(model: Model): FigureNote[] {
 }
 
 /**
- * What `figureNotesOf` depends on, as a key: the drawing's size, and each
- * atom read from a figure - checked or not, marked unsure or not - with its
- * bonds. Unchanged, the notes are as they were: an atom dragged, a label
- * typed elsewhere, nothing of them changed, they are not worked out again.
+ * What `figureNotesOf` depends on, as a key: every bond's ends (which atoms
+ * make a structure), each atom read from a figure - checked or not - and,
+ * of each atom and bond that has a mark, whether it is still as it was read
+ * (just what `readMarks` compares). Unchanged, the notes are as they were:
+ * an atom dragged, a label typed elsewhere, nothing of them changed, they
+ * are not worked out again.
  */
 export function figureNotesKey(model: Model): string {
-  const seen = new Set<number>();
-  const parts: string[] = [`${model.atoms.length}:${model.bonds.length}`];
-  for (const a of model.atoms) {
-    if (!a.seen) continue;
-    seen.add(a.id);
-    parts.push(`${a.id}${a.seen.checked ? "c" : ""}${a.unsure ? `u${a.unsure.as}|${a.el}|${a.charge ?? 0}` : ""}`);
+  const parts: string[] = [`${model.atoms.length}`];
+  // (the bonds round each atom with a mark, only: what its mark is compared with)
+  const round = new Map<number, Model["bonds"]>();
+  for (const a of model.atoms) if (a.unsure) round.set(a.id, []);
+  for (const b of model.bonds) {
+    parts.push(`${b.id}:${b.a}:${b.b}${b.unsure ? (b.unsure.as === bondAs(b) ? "u" : "x") : ""}`);
+    round.get(b.a)?.push(b);
+    round.get(b.b)?.push(b);
   }
-  if (!seen.size) return parts[0];
-  for (const b of model.bonds) if (seen.has(b.a) || seen.has(b.b)) parts.push(`${b.id}:${b.a}:${b.b}:${b.order}:${b.stereo ?? ""}${b.unsure ? `u${b.unsure.as}` : ""}`);
+  for (const a of model.atoms) {
+    if (!a.seen && !a.unsure) continue;
+    parts.push(`a${a.id}${a.seen ? (a.seen.checked ? "c" : "s") : ""}${a.unsure ? (a.unsure.as === atomAs(a, round.get(a.id) ?? []) ? "u" : "x") : ""}`);
+  }
   return parts.join(",");
 }
 
