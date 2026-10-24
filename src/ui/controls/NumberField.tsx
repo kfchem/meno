@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { DURATION, EASE } from "../theme/motion";
-import { numberDraft, numberField, rangeSaid, type NumberEvent } from "./number";
+import { numberDraft, numberField, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
 
 /** How long a refused number's field is marked, the number it went back to fading in. */
 const REFUSED_MS = 1600;
@@ -49,9 +49,21 @@ export default function NumberField({
   const go = (e: NumberEvent) => {
     const next = numberField({ ...draft, value }, e, range);
     setDraft(next);
-    if (next.value !== value) onChange(next.value);
+    if (!Object.is(next.value, value)) onChange(next.value);
     if (next.refused) field.current?.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: DURATION.base * 1000, easing: `cubic-bezier(${EASE.join(",")})` });
   };
+  // (gone while being typed in - its card or menu closed: what was typed set as leaving it sets it. WebView2 says the field
+  // was left as it goes, WebKit not always: so that both set it alike)
+  const last = useRef({ draft, value, onChange, range });
+  last.current = { draft, value, onChange, range };
+  useEffect(
+    () => () => {
+      const { draft: d, value: v, onChange: set, range: r } = last.current;
+      const n = setAsItGoes({ ...d, value: v }, typing.current, r);
+      if (n != null) set(n);
+    },
+    [],
+  );
   return (
     <input
       ref={field}

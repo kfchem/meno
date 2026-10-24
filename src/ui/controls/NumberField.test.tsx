@@ -3,7 +3,7 @@ import { renderToString } from "react-dom/server";
 import type { Option } from "../../lib/options";
 import OptionRows from "../options/OptionRows";
 import OptionsForm from "../options/OptionsForm";
-import { numberDraft, numberField, rangeSaid, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
+import { numberDraft, numberField, rangeSaid, setAsItGoes, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
 
 // Vitest runs in Node, with no page to mount on: the field's keys as the
 // steps they make (number.ts), and the forms as the server's renderer writes them.
@@ -42,6 +42,36 @@ describe("Meno's own number field", () => {
     expect(after(100, [{ kind: "step", by: 1 }]).value).toBe(100);
     expect(after(0.2, [{ kind: "step", by: 1 }], { step: 0.1 }).value).toBe(0.3);
     expect(after(25, [{ kind: "typed", text: "30" }, { kind: "step", by: -1 }]).value).toBe(29);
+  });
+
+  it("steps a number with places of its own by the step, keeping them, where the option says no step (1 is taken)", () => {
+    expect(after(0.25, [{ kind: "step", by: 1 }], {}).value).toBe(1.25);
+    expect(after(2.5, [{ kind: "step", by: 1 }], {}).value).toBe(3.5);
+    expect(after(2.5, [{ kind: "step", by: -1 }], {}).value).toBe(1.5);
+    expect(after(0, [{ kind: "typed", text: "0.125" }, { kind: "step", by: 1 }], {}).value).toBe(1.125);
+  });
+
+  it("sets what was typed as it goes while typed in (its card closed), as leaving it would - and nothing where nothing was typed, or nothing it takes", () => {
+    expect(setAsItGoes({ text: "35", value: 25, refused: false }, true, { min: 1 })).toBe(35);
+    expect(setAsItGoes({ text: "35", value: 25, refused: false }, false, { min: 1 })).toBeNull();
+    expect(setAsItGoes({ text: "25", value: 25, refused: false }, true, { min: 1 })).toBeNull();
+    expect(setAsItGoes({ text: "", value: 25, refused: false }, true, { min: 1 })).toBeNull();
+  });
+
+  it("reads only a number as typed: no thousands' comma, no 0x or 0b, no word; an exponent and a decimal comma are read", () => {
+    for (const t of ["1,000", "0x10", "0b11", "Infinity", "1 2", "1..2", "e3", ".", "-"]) expect(typedNumber(t), t).toBeNaN();
+    expect(typedNumber("1e3")).toBe(1000);
+    expect(typedNumber("2,5")).toBe(2.5);
+    expect(typedNumber(" \u22123.5 ")).toBe(-3.5);
+    expect(typedNumber(".5")).toBe(0.5);
+    // (refused, it goes back as any number it does not take does)
+    expect(after(25, [{ kind: "typed", text: "1,000" }, { kind: "commit" }], {})).toEqual({ text: "25", value: 25, refused: true });
+  });
+
+  it("shows nothing for no number - never NaN - and steps from the least it takes", () => {
+    expect(numberDraft(NaN).text).toBe("");
+    expect(after(NaN, [{ kind: "commit" }], {}).refused).toBe(false);
+    expect(after(NaN, [{ kind: "step", by: 1 }], { min: 4 }).value).toBe(5);
   });
 
   it("says what it takes", () => {

@@ -129,8 +129,13 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         doc.edit("change calculation", (d) => wf.updateStep(d, id, { kind, options }));
         return;
       }
-      // (the step's alone: the defaults are Settings', and stay as they are)
-      if (patch.options) doc.edit("change options", (d) => wf.updateStep(d, id, { options: patch.options }));
+      // (the step's alone: the defaults are Settings', and stay as they are - one undo step for a run of changes to the same
+      // option, close together: a number stepped by an arrow key held down, as typing is)
+      if (patch.options) {
+        const options = patch.options;
+        const changed = Object.keys(options).filter((k) => options[k] !== step.options?.[k]).sort().join(",");
+        doc.edit("change options", (d) => wf.updateStep(d, id, { options }), { coalesceKey: `step-options:${id}:${changed}` });
+      }
     },
     /** An atom clicked while a step's atoms are chosen on the drawing (`choosingAtoms`): taken into that option, or out of it - an edit of the step's options, undone as one. */
     chooseAtom: (atom: number) => {
