@@ -299,18 +299,25 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
 /**
  * Whether a structure read is a line of words - "R2 = SPh", "PG = Boc", "t-BuNH2·BH3" - its signs read as bonds: every atom a
  * label, all on one line, each bond level - and an "=" read as a double bond with a label at an end that names no element nor
- * group (R2, PG, Ar, X), or a label that reads as nothing (an italic t). Its labels, in order along the line, where it is one;
+ * group (R2, PG, Ar, X), or a label that reads as nothing (an italic t) or is a legend's term (a lone small letter, a bare
+ * number: "n = 1"). Its labels, in order along the line, where it is one;
  * else null. A molecule written so - O=C=O, Me3Si-C≡C-SiMe3, Ph-N=N-Ph, Cl-Hg-Cl - is none.
  */
 function lineOfWords(f: FigureRead): string | null {
-  if (f.atoms.length < 2 || f.atoms.some((a) => !a.label)) return null;
+  if (f.atoms.length < 2) return null;
   const level = (p: number, q: number) => Math.abs(p - q) <= 0.2 * f.bond;
   if (!f.atoms.every((a) => level(a.y, f.atoms[0].y)) || !f.bonds.every((b) => level(f.atoms[b.a].y, f.atoms[b.b].y))) return null;
+  const named = () => [...f.atoms].sort((p, q) => p.x - q.x).flatMap((a) => (a.label ? [`"${a.label}"`] : [])).join(", ");
+  // (a legend's term - a lone small letter, a bare number - its "=" read as a bond to whatever stands beside it: "n = 1", its 1
+  //  a compound's number, its = a double bond to nothing)
+  if (f.atoms.some((a) => a.label && /^([a-z]|\d+)$/.test(a.label))) return named();
+  if (f.atoms.some((a) => !a.label)) return null;
   const read = f.atoms.map((a) => readDrawnLabel(a.label!, figureLabels));
-  // (an element, or a group Meno knows the structure of: not R2, PG, Ar - the names of a kind of group)
-  const chemical = (i: number) => read[i].read && (isElementSymbol(read[i].el) || abbreviationStructure(read[i].el) != null);
+  // (an element, or a group Meno knows the structure of: not R2, PG - the names of a kind of group - nor Ar by an "=", the aryl
+  // group's name there, argon taking no double bond)
+  const chemical = (i: number) => read[i].read && f.atoms[i].label !== "Ar" && (isElementSymbol(read[i].el) || abbreviationStructure(read[i].el) != null);
   const odd = read.some((r) => !r.read) || f.bonds.some((b) => b.order > 1 && (!chemical(b.a) || !chemical(b.b)));
-  return odd ? [...f.atoms].sort((p, q) => p.x - q.x).map((a) => `"${a.label}"`).join(", ") : null;
+  return odd ? named() : null;
 }
 
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */

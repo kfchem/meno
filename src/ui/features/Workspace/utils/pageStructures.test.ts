@@ -205,11 +205,14 @@ describe("a line of words, its signs read as bonds", () => {
     expect(out.some((o) => o.startsWith("It is a line of words"))).toBe(true);
   });
 
-  it("refuses \"PG = Boc\" and \"LG = SEt\": a name of a kind of group at an end of the =", () => {
-    for (const [l, r] of [["PG", "Boc"], ["LG", "SEt"]]) {
+  it("refuses \"PG = Boc\", \"LG = SEt\", \"Ar = Ph\" and \"n = 1\": a name of a kind of group, or a legend's term, at an end of the =", () => {
+    for (const [l, r] of [["PG", "Boc"], ["LG", "SEt"], ["Ar", "Ph"]]) {
       const out = reads([stroke([114, 298.6], [124, 298.6]), stroke([114, 301.4], [124, 301.4])], [...word(l, 100), ...word(r, 126)]);
       expect(out).toContain(`It is a line of words ("${l}", "${r}"), not a structure drawn, so none of it is taken.`);
     }
+    // ("n = 1": its 1 taken for a compound's number, its = for a double bond from the n to nothing - a legend all the same)
+    const n = reads([stroke([108, 298.6], [118, 298.6]), stroke([108, 301.4], [118, 301.4])], [...word("n", 100), ...word("1", 120)]);
+    expect(n).toContain('It is a line of words ("n"), not a structure drawn, so none of it is taken.');
   });
 
   /** A molecule written on one line: its labels, each with the bonds after it - single, double, triple - as strokes beside each other. */

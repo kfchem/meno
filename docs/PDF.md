@@ -1539,8 +1539,10 @@ words are: by itself, not by a box drawn round it.
 - a line of words read as a structure - its signs taken for bonds, "R2 =
   SPh", "PG = Boc", "t-BuNH2·BH3": every atom a label, all on one line,
   each bond level, with an "=" read as a double bond beside a label that
-  names no element nor group (R2, PG, Ar, X), or a label that reads as
-  nothing - is refused, as a line of words, its labels named. A molecule
+  names no element nor group (R2, PG, X; Ar there the aryl group, argon
+  taking no double bond), or a label that reads as nothing, or a legend's
+  term - a lone small letter, a bare number: "n = 1" - is refused, as a
+  line of words, its labels named. A molecule
   written so - O=C=O, Me3Si-C≡C-SiMe3, Ph-N=N-Ph - is read;
 - where each lies is its bonds and its labels' boxes, on the page;
 - the pointer takes the nearest within a third of a bond of one of its
