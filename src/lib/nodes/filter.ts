@@ -94,9 +94,24 @@ function counted(whys: readonly string[]): string {
 /** A number as it is said back: to as many places as it needs, at most 6 after the point. */
 const trim = (v: number) => String(Number(v.toFixed(6)));
 
+/** What a Filter with no conditions says: on its card, where it would say *Ready*, and as its run is refused. */
+const NO_CONDITIONS = "No conditions yet";
+
+/**
+ * What a Filter step still needs before it can run, its conditions as
+ * typed: a line that does not read, said as `conditionsIn` says it; or
+ * none at all - or nothing, where they read. What its card says where it
+ * would say *Ready*, and why its run is refused.
+ */
+export function filterNeeds(text: string): string | undefined {
+  const read = conditionsIn(text);
+  if ("why" in read) return read.why;
+  return read.conditions.length ? undefined : NO_CONDITIONS;
+}
+
 /** *Filter* on `entries`: *kept*, those that meet the conditions, in the order they came; *rest*, the others, each saying why. */
 export function filter(entries: readonly Entry[], options: FilterOptions): NodeOutcome<"kept" | "rest"> {
-  if (!options.conditions.length) return { ok: false, said: "No condition to filter by" };
+  if (!options.conditions.length) return { ok: false, said: NO_CONDITIONS };
   for (const c of options.conditions) {
     const bad = badCondition(c);
     if (bad) return { ok: false, said: bad };
