@@ -12,12 +12,12 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
-import { diagramOf, diagramSaid, levelNamer, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
 import { asideExit, exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
@@ -28,6 +28,7 @@ import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
+import { diagramNeeds } from "./diagramOptions";
 import type { Table } from "../../../../lib/table";
 
 /**
@@ -95,7 +96,8 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
 /**
  * Why a step cannot run as things are, whoever does it: the step before it
  * failed this time; nothing comes into it; what does is not what it takes;
- * nothing added does it. None, where it can.
+ * nothing added does it; what it comes to needs of its options (an Energy
+ * diagram's reference: diagramOptions `diagramNeeds`). None, where it can.
  */
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
@@ -120,6 +122,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
+  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
 }
 
@@ -182,11 +185,36 @@ function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key:
   if (joined && !connects) return setRan(keepRun(doc, step), step.id, said(false, "Connects holds no table"));
   const o = step.options ?? {};
   const text = (v: unknown) => (typeof v === "string" ? v : undefined);
-  const d = diagramOf(levels, { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}) }, connects ?? undefined);
+  const d = diagramOf(
+    levels,
+    { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}), ...(text(o.levels) ? { levels: text(o.levels) } : {}) },
+    connects ?? undefined,
+    rowCompounds(levels, seen.entries),
+  );
   if ("why" in d) return setRan(keepRun(doc, step), step.id, said(false, d.why));
   // (each level with the imaginary frequencies of the entry it stands at: said, not judged)
   const withFrequencies = { ...d, levels: d.levels.map((l) => ({ ...l, lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) } })) };
   return setRan(placeChart(keepRun(doc, step), step, withFrequencies), step.id, said(true, diagramSaid(d)));
+}
+
+/**
+ * What each row of molecules seen as a table is, as an energy diagram's
+ * level sums it (lib/energyDiagram `RowCompound`): its compound - its
+ * constitution (the table's), and the charge and spin in use, given or as
+ * its atoms say them (`entryOfSet`) - its atoms' elements, and its charge.
+ */
+function rowCompounds(table: Table, entries: readonly SetEntry[]): RowCompound[] {
+  const at = table.columns.findIndex((c) => c.name === "constitution");
+  return entries.map((e, k) => {
+    const species = entryOfSet(e, String(k)).species;
+    const charge = species?.charge ?? e.atoms.reduce((n, a) => n + (a.charge ?? 0), 0);
+    return {
+      key: `${String(table.rows[k][at])}|${charge}|${species?.multiplicity ?? ""}`,
+      elements: e.atoms.map((a) => a.el),
+      charge,
+      ...(species ? { multiplicity: species.multiplicity } : {}),
+    };
+  });
 }
 
 /** `doc` with a chart a step made in its result set: the set it made before - emptied of what it held - or one made to the right of it, as large as a chart is drawn. */
