@@ -188,13 +188,13 @@ describe("a wire a step does not take", () => {
   it("says, of compounds of one conformer each, that a window or shares over them do nothing", () => {
     const { doc, set } = setOf(1);
     const entries = setEntries(setMolecules(doc, doc.sets!.find((b) => b.id === set)!), "conformers");
-    expect(runMeno("energy-window", entries, "conformers", { window: 3 }).said).toBe("2 of 2 kept \u00b7 each compound has one conformer");
+    expect(runMeno("energy-window", entries, "conformers", { window: 3 }).said).toBe("2 of 2 kept, on electronic energies \u00b7 each compound has one conformer");
     expect(runMeno("populations", entries, "conformers", { temperature: 298.15 }).said).toBe("2 compounds at 298.15 K, from electronic energies \u00b7 each compound has one conformer");
-    expect(runMeno("energy-window", entries.slice(0, 1), "conformers", { window: 3 }).said).toBe("1 of 1 kept \u00b7 the compound has one conformer");
+    expect(runMeno("energy-window", entries.slice(0, 1), "conformers", { window: 3 }).said).toBe("1 of 1 kept, on electronic energies \u00b7 the compound has one conformer");
     // (one of two with one: it says how many)
     const mixed = setEntries(setMolecules(setOf(2).doc, setOf(2).doc.sets![0]), "conformers").slice(1);
-    expect(runMeno("energy-window", mixed, "conformers", { window: 3 }).said).toBe("3 of 3 kept \u00b7 1 compound has one conformer");
-    expect(runMeno("energy-window", setEntries(setMolecules(setOf(2).doc, setOf(2).doc.sets![0]), "conformers"), "conformers", { window: 3 }).said).toBe("4 of 4 kept");
+    expect(runMeno("energy-window", mixed, "conformers", { window: 3 }).said).toBe("3 of 3 kept, on electronic energies \u00b7 1 compound has one conformer");
+    expect(runMeno("energy-window", setEntries(setMolecules(setOf(2).doc, setOf(2).doc.sets![0]), "conformers"), "conformers", { window: 3 }).said).toBe("4 of 4 kept, on electronic energies");
   });
 
   it("says why of a set that is no conformer set, and of a loop", () => {

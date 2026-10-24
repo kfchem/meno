@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { compoundLetter, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -836,8 +836,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
     const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
-    // (each conformer's properties, as it came - an empty map where it had none)
-    const properties = g.some((e) => e.properties) ? g.map((e) => e.properties ?? {}) : undefined;
+    // (each conformer's properties, as it came, and what its own calculation read - its free energy, its vibrations - which
+    //  the molecule's one calculation below cannot keep for each (entries `calcProperties`): an empty map where it had none)
+    const carried = g.map((e) => ({ ...e.properties, ...calcProperties(e) }));
+    const properties = carried.some((p) => Object.keys(p).length) ? carried : undefined;
     // (what the calculation was, where a program worked them out - each conformer's results its own, not the
     //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set

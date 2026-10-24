@@ -13,7 +13,7 @@ import { isotopeMass } from "../../../../lib/chem/isotopes";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
-import type { SetEntry } from "./entries";
+import { withoutCarried, type SetEntry } from "./entries";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
 import type { StepKind } from "./kinds";
@@ -296,9 +296,11 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * gives back (entries `SetEntry.calc`, `keep`); nor its marks - why it
  * failed, its imaginary frequencies, that its marks did not read - which
  * were of the geometry it came with: the new calculation's own output
- * marks it again, or does not.
+ * marks it again, or does not. Nor what it carries of a calculation - a
+ * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
+ * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => entry;
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
 /**
  * An entry as a job worked it out (lib/calc/output): its last geometry and
