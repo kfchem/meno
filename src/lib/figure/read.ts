@@ -10,7 +10,7 @@
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
 import { ELEMENTS } from "../chem/elements";
-import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
+import { narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
  * An atom read: where it lies on the page, its label as drawn - none for a
@@ -1039,7 +1039,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   });
   // words at no bond's end but by the structure, with a charge - written, or drawn in a ring beside them: ions,
   // standing alone; several set in a row (K+ K+ K+) each by the one before
-  const placed = atoms.length ? boxOf(atoms) : null;
+  // (measured from their ink - their labels' boxes, not only their middles - as Meno sets a salt's pieces apart, ink to ink)
+  const placed = atoms.length ? boxOfBoxes(atoms.map((a): Box => a.box ?? [a.x, a.y, a.x, a.y])) : null;
   // (an H right by an atom's label - set under an N - is that label's, never an ion; an element's ion set close is still one)
   const labels = atoms.flatMap((a) => (a.box ? [a.box] : []));
   const byLabel = (w: Word) => /^H\d*[+-]/.test(labelText(w)) && labels.some((b) => fromBox(centre(w.box), b) < 0.6 * bond);
