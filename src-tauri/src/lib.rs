@@ -438,10 +438,10 @@ async fn py_env_setup_uv(
     task.route(&mut cmd1);
     let mut child1 = cmd1.spawn().map_err(|e| format!("spawn uv venv: {}", e))?;
     pipe_logs(&app, child1.stdout.take().unwrap(), "uv:log");
-    pipe_logs(&app, child1.stderr.take().unwrap(), "uv:err");
+    let said1 = pipe_said(&app, child1.stderr.take().unwrap(), "uv:err");
     let st1 = waited(child1).await?;
     if !st1.success() {
-        return Err("uv venv failed".into());
+        return Err(failed_saying("uv venv failed", said1));
     }
 
     // 2) uv pip install --python <venv_py> -r requirements.lock --upgrade --no-deps
@@ -466,10 +466,10 @@ async fn py_env_setup_uv(
     task.route(&mut cmd2);
     let mut child2 = cmd2.spawn().map_err(|e| format!("spawn uv pip: {}", e))?;
     pipe_logs(&app, child2.stdout.take().unwrap(), "uv:log");
-    pipe_logs(&app, child2.stderr.take().unwrap(), "uv:err");
+    let said2 = pipe_said(&app, child2.stderr.take().unwrap(), "uv:err");
     let st2 = waited(child2).await?;
     if !st2.success() {
-        return Err("uv pip install failed".into());
+        return Err(failed_saying("uv pip install failed", said2));
     }
     task.finish(true);
     Ok(())
@@ -504,9 +504,9 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
     task.route(&mut install);
     let mut child = install.spawn().map_err(|e| format!("spawn pixi install: {e}"))?;
     pipe_logs(&app, child.stdout.take().unwrap(), "uv:log");
-    pipe_logs(&app, child.stderr.take().unwrap(), "uv:err");
+    let said = pipe_said(&app, child.stderr.take().unwrap(), "uv:err");
     if !waited(child).await?.success() {
-        return Err("pixi install failed".into());
+        return Err(failed_saying("pixi install failed", said));
     }
 
     let mut hook = pixienv::activation_command(&pixi, &data, &manifest);
@@ -517,10 +517,15 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
         .map_err(|e| e.to_string())?
         .map_err(|e| format!("spawn pixi shell-hook: {e}"))?;
     if !out.status.success() {
-        for line in String::from_utf8_lossy(&out.stderr).lines() {
-            let _ = app.emit("uv:err", line.to_string());
+        let said: Vec<String> = String::from_utf8_lossy(&out.stderr).lines().map(str::to_string).collect();
+        for line in &said {
+            let _ = app.emit("uv:err", line.clone());
         }
-        return Err("pixi shell-hook failed".into());
+        let said: Vec<String> = said.into_iter().filter(|l| !l.trim().is_empty()).collect();
+        let last = &said[said.len().saturating_sub(SAID_MOST)..];
+        let text = said_text("pixi shell-hook failed", last);
+        logfile::logged!("{text}");
+        return Err(text);
     }
     let activation = pixienv::read_activation(&String::from_utf8_lossy(&out.stdout))?;
     let text = serde_json::to_string_pretty(&activation).map_err(|e| e.to_string())?;
@@ -550,6 +555,71 @@ fn pipe_logs<R: Read + Send + 'static>(app: &AppHandle, stream: R, ch: &'static 
             let _ = app2.emit(ch, s);
         });
     });
+}
+
+/// How many of the last lines a set-up's program said are kept for its failure (`failed_saying`).
+const SAID_MOST: usize = 6;
+/// The most of one such line kept, in characters.
+const SAID_LINE_MOST: usize = 300;
+
+/// The last lines a program says on a stream, as they come (`SAID_MOST`), and the thread reading them.
+struct Said {
+    lines: Arc<Mutex<std::collections::VecDeque<String>>>,
+    reading: std::thread::JoinHandle<()>,
+}
+
+/// `pipe_logs`, keeping the last lines said besides: what a set-up that
+/// fails says it failed of (`failed_saying`), where its program's own
+/// words would otherwise go only to the page, and be lost.
+fn pipe_said<R: Read + Send + 'static>(app: &AppHandle, stream: R, ch: &'static str) -> Said {
+    let app2 = app.clone();
+    let lines = Arc::new(Mutex::new(std::collections::VecDeque::new()));
+    let kept = lines.clone();
+    let reading = std::thread::spawn(move || {
+        each_line(stream, |s| {
+            let _ = app2.emit(ch, s.clone());
+            if s.trim().is_empty() {
+                return;
+            }
+            let mut k = kept.lock().unwrap_or_else(PoisonError::into_inner);
+            if k.len() == SAID_MOST {
+                k.pop_front();
+            }
+            k.push_back(s);
+        });
+    });
+    Said { lines, reading }
+}
+
+/// A set-up's program failed, in words: what failed, and the last it said
+/// (`said_text`) - the same written to Meno's log, where it is found again.
+fn failed_saying(what: &str, said: Said) -> String {
+    // (the program has ended: its stream ends, and the last of it is read)
+    let _ = said.reading.join();
+    let lines: Vec<String> = said.lines.lock().unwrap_or_else(PoisonError::into_inner).iter().cloned().collect();
+    let text = said_text(what, &lines);
+    logfile::logged!("{text}");
+    text
+}
+
+/// What failed, and the lines said before it, each cut to `SAID_LINE_MOST`, joined: "uv pip install failed: error: ... / Caused by: ...".
+fn said_text(what: &str, lines: &[String]) -> String {
+    let cut: Vec<String> = lines
+        .iter()
+        .map(|l| {
+            let l = l.trim();
+            if l.chars().count() > SAID_LINE_MOST {
+                format!("{}…", l.chars().take(SAID_LINE_MOST).collect::<String>())
+            } else {
+                l.to_string()
+            }
+        })
+        .collect();
+    if cut.is_empty() {
+        what.to_string()
+    } else {
+        format!("{what}: {}", cut.join(" / "))
+    }
 }
 
 /// Each line `stream` says, as text, until it ends: one not UTF-8 read as
@@ -1124,6 +1194,15 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn a_set_up_that_fails_says_the_last_its_program_said() {
+        assert_eq!(said_text("uv pip install failed", &[]), "uv pip install failed");
+        let lines = ["error: Failed to install: torch-2.5.1".to_string(), "  Caused by: Access is denied. (os error 5)".to_string()];
+        assert_eq!(said_text("uv pip install failed", &lines), "uv pip install failed: error: Failed to install: torch-2.5.1 / Caused by: Access is denied. (os error 5)");
+        let long = "x".repeat(SAID_LINE_MOST + 10);
+        assert_eq!(said_text("uv venv failed", &[long]), format!("uv venv failed: {}…", "x".repeat(SAID_LINE_MOST)));
+    }
 
     #[test]
     fn tells_a_hashed_lock() {

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -72,6 +72,8 @@ pub struct Task {
     pub ended: Option<u64>,
     /// "done" or "failed" once ended.
     pub outcome: Option<String>,
+    /// Why it failed, where it said: "model.bin stopped after 422.0 MB of 1134.3 MB (the server ended it early)".
+    pub reason: Option<String>,
 }
 
 /// One connection, or one refused.
@@ -91,6 +93,7 @@ pub struct Connection {
     pub received: u64,
     /// "open", "done", "failed" or "blocked".
     pub outcome: String,
+    /// Why it was blocked, or how it ended (`Ended`): "the server closed it", "nothing came either way for 120 s".
     pub reason: Option<String>,
 }
 
@@ -170,6 +173,7 @@ impl Net {
             started: now_ms(),
             ended: None,
             outcome: None,
+            reason: None,
         };
         let token = uuid::Uuid::new_v4().simple().to_string();
         self.0.tasks.lock().unwrap().insert(token.clone(), task.clone());
@@ -182,12 +186,13 @@ impl Net {
         })
     }
 
-    fn end(&self, token: &str, outcome: &str) {
+    fn end(&self, token: &str, outcome: &str, reason: Option<&str>) {
         let Some(mut task) = self.0.tasks.lock().unwrap().remove(token) else {
             return;
         };
         task.ended = Some(now_ms());
         task.outcome = Some(outcome.into());
+        task.reason = reason.map(str::to_string);
         self.emit("net:task", &task);
         self.write_log(&serde_json::json!({ "task": task }));
     }
@@ -376,7 +381,13 @@ impl TaskHandle {
     }
 
     pub fn finish(mut self, ok: bool) {
-        self.net.end(&self.token, if ok { "done" } else { "failed" });
+        self.net.end(&self.token, if ok { "done" } else { "failed" }, None);
+        self.ended = true;
+    }
+
+    /// Ended as failed, saying why: kept in the network's record, where it is found again.
+    pub fn fail(mut self, why: &str) {
+        self.net.end(&self.token, "failed", Some(why));
         self.ended = true;
     }
 }
@@ -384,7 +395,7 @@ impl TaskHandle {
 impl Drop for TaskHandle {
     fn drop(&mut self) {
         if !self.ended {
-            self.net.end(&self.token, "failed");
+            self.net.end(&self.token, "failed", None);
         }
     }
 }
@@ -588,53 +599,113 @@ impl Net {
     }
 
     /// Carries the connection both ways, counting, and telling the window
-    /// how it goes twice a second.
+    /// how it goes twice a second - and, ended, how (`Ended`).
     async fn pipe(&self, client: TcpStream, upstream: TcpStream, mut c: Connection) {
         let sent = Arc::new(AtomicU64::new(0));
         let received = Arc::new(AtomicU64::new(0));
-        let (cr, cw) = client.into_split();
-        let (ur, uw) = upstream.into_split();
-        let up = tokio::spawn(copy(cr, uw, sent.clone()));
-        let down = tokio::spawn(copy(ur, cw, received.clone()));
-        let done = async {
-            let _ = tokio::join!(up, down);
-        };
+        let done = carry(client, upstream, sent.clone(), received.clone(), IDLE);
         tokio::pin!(done);
-        loop {
+        let ended = loop {
             tokio::select! {
-                _ = &mut done => break,
+                ended = &mut done => break ended,
                 _ = tokio::time::sleep(Duration::from_millis(500)) => {
                     c.sent = sent.load(Ordering::Relaxed);
                     c.received = received.load(Ordering::Relaxed);
                     self.record(&c);
                 }
             }
-        }
+        };
         c.sent = sent.load(Ordering::Relaxed);
         c.received = received.load(Ordering::Relaxed);
         c.outcome = "done".into();
+        c.reason = Some(ended.said(IDLE));
         c.ended = Some(now_ms());
         self.record(&c);
     }
+}
+
+/// How one way of a connection ended: the other end closed it, it broke,
+/// or nothing came either way for the idle time.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Ended {
+    Closed,
+    Broke,
+    Idle,
+}
+
+/// How a connection ended, as the first of its two ways to end ended (`carry`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct HowEnded {
+    /// The way from the host (true), or to it (false).
+    from_host: bool,
+    how: Ended,
+}
+
+impl HowEnded {
+    /// In words, for the network's record: "the server closed it", "the client closed it", "nothing came either way for 120 s".
+    fn said(self, idle: Duration) -> String {
+        let who = if self.from_host { "the server" } else { "the client" };
+        match self.how {
+            Ended::Closed => format!("{who} closed it"),
+            Ended::Broke => format!("the connection to {who} broke"),
+            Ended::Idle => format!("nothing came either way for {} s", idle.as_secs()),
+        }
+    }
+}
+
+/// A connection carried both ways, counting: until each way has ended. A
+/// way waits as long as the other still moves - a download's client says
+/// nothing for minutes while the file comes to it, and that is no idle
+/// connection: until 0.1.18 that way was ended after `IDLE` of its own
+/// silence, the host told the client was done, and a large download cut
+/// short after two minutes. Ended where nothing came either way for `idle`.
+async fn carry(client: TcpStream, upstream: TcpStream, sent: Arc<AtomicU64>, received: Arc<AtomicU64>, idle: Duration) -> HowEnded {
+    let (cr, cw) = client.into_split();
+    let (ur, uw) = upstream.into_split();
+    let start = Instant::now();
+    let moved = Arc::new(AtomicU64::new(0));
+    let up = tokio::spawn(copy(cr, uw, sent, moved.clone(), start, idle));
+    let down = tokio::spawn(copy(ur, cw, received, moved, start, idle));
+    tokio::pin!(up, down);
+    // (the first way to end says how the connection ended; the other is waited for)
+    let first = tokio::select! {
+        u = &mut up => { let _ = (&mut down).await; HowEnded { from_host: false, how: u.unwrap_or(Ended::Broke) } }
+        d = &mut down => { let _ = (&mut up).await; HowEnded { from_host: true, how: d.unwrap_or(Ended::Broke) } }
+    };
+    first
 }
 
 async fn copy(
     mut from: tokio::net::tcp::OwnedReadHalf,
     mut to: tokio::net::tcp::OwnedWriteHalf,
     count: Arc<AtomicU64>,
-) {
+    moved: Arc<AtomicU64>,
+    start: Instant,
+    idle: Duration,
+) -> Ended {
     let mut buf = vec![0u8; 16 * 1024];
-    loop {
-        let n = match tokio::time::timeout(IDLE, from.read(&mut buf)).await {
+    let ended = loop {
+        let n = match tokio::time::timeout(idle, from.read(&mut buf)).await {
             Ok(Ok(n)) if n > 0 => n,
-            _ => break,
+            Ok(Ok(_)) => break Ended::Closed,
+            Ok(Err(_)) => break Ended::Broke,
+            // (quiet this way: idle only where the other way has been quiet as long)
+            Err(_) => {
+                let last = Duration::from_millis(moved.load(Ordering::Relaxed));
+                if start.elapsed().saturating_sub(last) < idle {
+                    continue;
+                }
+                break Ended::Idle;
+            }
         };
         if to.write_all(&buf[..n]).await.is_err() {
-            break;
+            break Ended::Broke;
         }
         count.fetch_add(n as u64, Ordering::Relaxed);
-    }
+        moved.store(start.elapsed().as_millis() as u64, Ordering::Relaxed);
+    };
     let _ = to.shutdown().await;
+    ended
 }
 
 // --- Commands --------------------------------------------------------------
@@ -696,6 +767,59 @@ fn append(path: &Path, line: &str, most: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two ends of one connection on this computer: the one accepted, and the one that connected.
+    async fn pair() -> (TcpStream, TcpStream) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (connected, accepted) = tokio::join!(TcpStream::connect(addr), listener.accept());
+        (accepted.unwrap().0, connected.unwrap())
+    }
+
+    #[tokio::test]
+    async fn carries_a_download_on_while_the_client_says_nothing_past_the_idle_time() {
+        // (the client asks, then says nothing; the host sends a piece every 100 ms for over a second - past an idle time of
+        //  300 ms on the client's way many times: all of it comes, and the host is never told the client is done)
+        let idle = Duration::from_millis(300);
+        let (client_in, mut client) = pair().await;
+        let (mut host, host_out) = pair().await;
+        let (sent, received) = (Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)));
+        let carried = tokio::spawn(carry(client_in, host_out, sent.clone(), received.clone(), idle));
+        client.write_all(b"GET").await.unwrap();
+        let mut asked = [0u8; 3];
+        host.read_exact(&mut asked).await.unwrap();
+        let hosting = tokio::spawn(async move {
+            for _ in 0..12 {
+                host.write_all(&[7u8; 1000]).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                // (nothing from the client - and no end of it either - all the while)
+                let mut b = [0u8; 1];
+                assert!(tokio::time::timeout(Duration::from_millis(1), host.read(&mut b)).await.is_err(), "the host was told the client was done");
+            }
+            host.shutdown().await.unwrap();
+        });
+        let mut got = Vec::new();
+        client.read_to_end(&mut got).await.unwrap();
+        hosting.await.unwrap();
+        drop(client);
+        assert_eq!(got.len(), 12_000);
+        let how = carried.await.unwrap();
+        assert_eq!(how, HowEnded { from_host: true, how: Ended::Closed });
+        assert_eq!(how.said(IDLE), "the server closed it");
+        assert_eq!((sent.load(Ordering::Relaxed), received.load(Ordering::Relaxed)), (3, 12_000));
+    }
+
+    #[tokio::test]
+    async fn ends_a_connection_nothing_comes_by_either_way_for_the_idle_time() {
+        let idle = Duration::from_millis(200);
+        let (client_in, _client) = pair().await;
+        let (_host, host_out) = pair().await;
+        let started = Instant::now();
+        let how = carry(client_in, host_out, Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)), idle).await;
+        assert_eq!(how.how, Ended::Idle);
+        assert!(started.elapsed() >= idle && started.elapsed() < Duration::from_secs(3));
+        assert_eq!(how.said(Duration::from_secs(120)), "nothing came either way for 120 s");
+    }
 
     #[test]
     fn reads_where_a_request_goes_and_whose_it_is() {
@@ -859,7 +983,7 @@ mod tests {
         // another where it is named, and that one alone
         assert!(host_named(&hosts, "example.org", Some(8443)));
         assert!(!host_named(&hosts, "example.org", Some(443)) && !host_named(&hosts, "example.org", Some(80)));
-        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, hosts: Some(hosts) };
+        let task = Task { id: "t".into(), purpose: "python-env:test".into(), label: "Testing".into(), started: 0, ended: None, outcome: None, reason: None, hosts: Some(hosts) };
         assert_eq!(task.refuses("pypi.org", 443), None);
         assert_eq!(task.refuses("pypi.org", 80), Some("not a port its consent named"));
         assert_eq!(task.refuses("example.com", 443), Some("not a host its consent named"));
