@@ -12,7 +12,7 @@ import { tag } from "../../../../lib/nodes/tag";
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -28,7 +28,12 @@ const DROPPABLE: readonly [keyof SetEntry, string][] = [
   ["mirror", "mirror image"],
   ["stereo", "stereo"],
 ];
-const droppedFrom = (was: SetEntry, now: SetEntry) => DROPPABLE.filter(([k]) => was[k] != null && now[k] == null).map(([, word]) => word);
+/** Whether an entry carries anything of a calculation as its own properties (entries `CALC_CARRIED`): a conformer's free energy, its vibrations. */
+const carries = (e: SetEntry) => CALC_CARRIED.some((k) => e.properties?.[k]);
+const droppedFrom = (was: SetEntry, now: SetEntry) => [
+  ...DROPPABLE.filter(([k]) => was[k] != null && now[k] == null).map(([, word]) => word),
+  ...(carries(was) && !carries(now) ? ["thermochemistry"] : []),
+];
 
 /** Each entry given back as a step's entry, as it was placed (its compound and number) and from what it was. */
 function backEach(entries: readonly SetEntry[], made: readonly Entry[]): SetEntry[] {
@@ -79,7 +84,7 @@ function speciesSaid(set: number, dropped: readonly string[][], failed: number):
   const said = [`${plural(set, "entry", "entries")} set`];
   const some = dropped.filter((d) => d.length);
   if (some.length) {
-    const words = DROPPABLE.map(([, w]) => w).filter((w) => some.some((d) => d.includes(w)));
+    const words = [...DROPPABLE.map(([, w]) => w), "thermochemistry"].filter((w) => some.some((d) => d.includes(w)));
     const why = words.length === 1 && words[0] !== "imaginary frequencies" ? "it was for the other species" : "they were for the other species";
     const was = words.length === 1 && words[0] !== "imaginary frequencies" ? "was" : "were";
     said.push(

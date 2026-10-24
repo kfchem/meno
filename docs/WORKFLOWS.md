@@ -599,8 +599,40 @@ beside its edge - being drawn over all of it.
 - **Populations**: the same entries, with their populations;
 - where compounds have one conformer each, so that a window or shares
   over them do nothing, *Energy window* and *Populations* say so after
-  their line: "2 of 2 kept · each compound has one conformer", or "1
-  compound has one conformer" where others have more (2026-10-22);
+  their line: "2 of 2 kept, on electronic energies · each compound has
+  one conformer", or "1 compound has one conformer" where others have
+  more (2026-10-22);
+- **Which energy** *Energy window* and *Populations* are on (2026-10-24):
+  the free energy G where every entry has one and each compound's were
+  worked out alike - the same temperature, pressure, solvent, program,
+  method, basis and thermal treatment - and, for *Populations*, at the
+  temperature it is asked; else the electronic energy. The line says
+  which: "3 of 5 kept, on free energies (G, 298.15 K)", "1 compound at
+  298.15 K, from free energies (G)"; where any entry had a G but it was
+  not taken, why not: "from electronic energies (not free energies: a #2
+  has none)", "(... a #1's G is at 298.15 K, not 350 K)", "(... compound
+  a's differ in method: GFN2-xTB (a #1) and GFN1-xTB (a #3))". A G given
+  with nothing of how it was worked out - no temperature, program,
+  method - is said so: "on free energies (G), conditions not stated". On free
+  energies a window refuses a saddle point, as Populations does: its G is
+  no minimum's;
+- **A conformer set keeps each conformer's thermochemistry**
+  (2026-10-24): *Frequencies* on a conformer set runs a job for each, and
+  each conformer keeps what its own job read - its free energy, enthalpy,
+  zero-point energy and correction (`thermo.*`), each at its geometry, by
+  what, at the temperature and solvation the program said, and its
+  vibrations' frequencies - as its frame's properties: the molecule keeps
+  one calculation, not each frame's. Its imaginary frequencies are kept
+  frame by frame, a frame whose vibrations were worked out and has none
+  "none", one never worked out "not computed"; where the program judged
+  none imaginary but its table lists a negative frequency, that one is
+  said - a table with one never reads as none. A program step on them
+  later reads them again, or drops them, and a step that changes the
+  structure or its charge or spin drops them (*Species* says so: "their
+  thermochemistry was dropped"): never carried onto another geometry or
+  species. (Until 2026-10-24 a conformer set dropped them: a Frequencies
+  step on one gave nothing downstream.) The modes' displacements stay
+  with a molecule of one geometry's calculation, not each frame's;
 - **As conformers**: the same entries, as a conformer set.
 
 They are calculation results as Meno knows them: the frames chip,
@@ -724,7 +756,8 @@ anew, whole. Shares a *Populations* step worked out are always shown: it
 says at what temperature, and they are of what it was given - given a
 part, it says that too, for they are not the compound's populations ("1
 compound at 298.15 K, from electronic energies · shares over the 5
-conformers given, part of a search"). (Until
+conformers given, part of a search"), and which energy (*Which energy*,
+above). (Until
 2026-10-21 Meno showed shares worked out again over what these steps
 kept.)
 
@@ -1900,8 +1933,8 @@ them again*; the maintainer's rulings of 2026-10-22):
   imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
   (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
   not converged alone before). *Energy window* refuses one that failed or
-  whose marks did not read the same; a saddle point's mark would refuse it
-  where the window is on free energies, which it is not yet. *Choose one*,
+  whose marks did not read the same, and, where the window is on free
+  energies, a saddle point too (2026-10-24). *Choose one*,
   choosing the lowest, and *Duplicates*, ranking by energy which copy it
   keeps, refuse as Populations does; *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
@@ -2597,8 +2630,10 @@ molecules of one geometry - which a step that works on entries refuses
 - **Relative to** the level its option names, none named the first - in
   kcal/mol, written to a tenth, signed.
 - **Which energy**: an option naming the quantity, as the entries carry it
-  - their electronic energy ("energy") until free energies and enthalpies
-  are read. The levels are seen as a table (*Molecules seen as a table*),
+  - their electronic energy ("energy"), or a free energy
+  ("thermo.free-energy", ΔG) or enthalpy ("thermo.enthalpy", ΔH) a
+  Frequencies step read - of a conformer set too, each conformer's its
+  own (2026-10-24). The levels are seen as a table (*Molecules seen as a table*),
   where a column never holds values worked out differently: **every
   level's energy is that one quantity, by one method, at one set of
   conditions, or there is no diagram**, and the step says which levels

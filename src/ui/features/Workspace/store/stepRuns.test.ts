@@ -1119,7 +1119,7 @@ describe("running a workflow's steps", () => {
     await st().runFrom(a);
     expect([a, b, c].map((id) => st().steps.find((s) => s.id === id)!.ran?.ok)).toEqual([true, true, true]);
     // (Populations on what the window kept: the conformer 5 kcal/mol up set aside)
-    expect(st().steps.find((s) => s.id === b)!.ran!.said).toBe("2 of 3 kept");
+    expect(st().steps.find((s) => s.id === b)!.ran!.said).toBe("2 of 3 kept, on electronic energies");
   });
 
   it("asks first which stereoisomer each entry is, for As conformers and Populations - every conformer its own - and its entries carry it", async () => {
@@ -1197,19 +1197,19 @@ describe("running a workflow's steps", () => {
     st().updateStep(b, { options: { window: 0.5 } });
     await st().runStep(b);
     const step = () => st().steps.find((s) => s.id === b)!;
-    expect(step().ran!.said).toBe("1 of 3 kept");
+    expect(step().ran!.said).toBe("1 of 3 kept, on electronic energies");
     expect(step().runs).toHaveLength(1);
     expect(step().runs![0]).toMatchObject({ options: { window: 3 }, kind: "energy-window" });
     expect(step().runs![0].results!.holds).toBe("conformers");
     // shown again: its results back in the set, the later run kept in its place
     st().showRun(b, 0);
-    expect(step().ran!.said).toBe("2 of 3 kept");
+    expect(step().ran!.said).toBe("2 of 3 kept, on electronic energies");
     expect(step().runs![0].options).toEqual({ window: 0.5 });
     // (and what it set aside then back in its second exit's set)
     expect(countOf(st(), resultOf(st(), b, "rest")!).entries).toBe(1);
     expect(doc.history().undoLabel).toBe("show run");
     doc.undo();
-    expect(step().ran!.said).toBe("1 of 3 kept");
+    expect(step().ran!.said).toBe("1 of 3 kept, on electronic energies");
   });
 });
 
