@@ -213,8 +213,8 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // an SD file: the drawing, each record of a stack of drawings a record of
   // its own, titled as its file titled it, and each molecule in 3D a record of its own,
   // in 3D - the frame it shows, where its file had it, or each of its
-  // frames, numbered, with its energy where it is known - each frame with
-  // the bonds it has
+  // frames, numbered, with its energy where it is known and what else was
+  // found of it - each frame with the bonds it has
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
     const name = m.name ? stem(m.name) : title;
     // (each frame's energy, where it is known: the frame shown's too)
@@ -229,7 +229,9 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
         (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") +
         (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "") +
         speciesData(m, i, skeleton) +
-        imaginaryData(m, i, n)
+        imaginaryData(m, i, n) +
+        // (and what was found of it besides - a model's, a descriptor's, what it was made from - each under its own name, as a structure drawn's record writes them)
+        (m.properties?.length === n ? propertyItems(m.properties[i]) : "")
       );
     };
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
@@ -383,16 +385,30 @@ function valueData(v: Property["value"]): string {
  * a step set aside or failed keeps it, beside its State saying so.
  */
 function recordData(r: DrawnRecord): string {
-  const item = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
   const s = r.status;
-  const state = s == null ? [] : s === "done" ? [item("State", "finished")] : "failed" in s ? [item("State", "failed"), item("Failed", s.failed)] : [item("State", "set aside"), item("Set aside", s.aside)];
-  const props = Object.entries(r.properties ?? {}).map(([name, p]) => {
-    const st = p.status;
-    // (its unit beside its name only where it is a number worked out: one not worked out has no value its unit is of)
-    const label = st === "computed" && typeof p.value === "number" && p.unit !== "none" ? `${name} (${p.unit})` : name;
-    return item(label, st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
-  });
-  return [...state, ...(r.stale ? [item("Stale", r.stale)] : []), ...(r.from?.length ? [item("From", r.from.join(" "))] : []), ...props].join("");
+  const state = s == null ? [] : s === "done" ? [dataItem("State", "finished")] : "failed" in s ? [dataItem("State", "failed"), dataItem("Failed", s.failed)] : [dataItem("State", "set aside"), dataItem("Set aside", s.aside)];
+  return [...state, ...(r.stale ? [dataItem("Stale", r.stale)] : []), ...(r.from?.length ? [dataItem("From", r.from.join(" "))] : [])].join("") + propertyItems(r.properties ?? {});
+}
+
+/** One SD data item: its name and its lines as an SD file can hold them. */
+const dataItem = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
+
+/**
+ * Properties as an SD file's data items, each under its own name: a number
+ * worked out with its unit beside it as the page shows it ("mw (g/mol)");
+ * one not worked out saying why in place of a value, under its bare name, so
+ * that no reader takes a value for one. A structure drawn's record writes
+ * them so (`recordData`), and a molecule in 3D each frame's.
+ */
+function propertyItems(properties: Record<string, Property>): string {
+  return Object.entries(properties)
+    .map(([name, p]) => {
+      const st = p.status;
+      // (its unit beside its name only where it is a number worked out: one not worked out has no value its unit is of)
+      const label = st === "computed" && typeof p.value === "number" && p.unit !== "none" ? `${name} (${p.unit})` : name;
+      return dataItem(label, st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
+    })
+    .join("");
 }
 
 /**

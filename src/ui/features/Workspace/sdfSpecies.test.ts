@@ -146,3 +146,22 @@ describe("a molecule in 3D's imaginary frequencies, written to an SD file", () =
     expect(sdf(cation())).not.toContain("Imaginary");
   });
 });
+
+describe("a molecule in 3D's properties, written to an SD file", () => {
+  const p = (v: number) => ({ nll: { value: v, unit: "none" as const, status: "computed" as const } });
+  const two = cation({ frames: [ATOMS.flatMap((a) => [a.x, a.y + 0.01, a.z])], energies: [-75.9, -75.8], properties: [p(1), p(2)] });
+
+  it("writes each frame's own, after what Meno says of it", () => {
+    const [first, second] = sdf(two).split("$$$$\n");
+    expect(first).toContain(item("Multiplicity", "2") + item("nll", "1"));
+    expect(second).toContain(item("nll", "2"));
+    // (the frame shown alone: its own)
+    const shown = structureFileText({ atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: [{ ...two, frame: 1 }] } as unknown as Drawn, "/x/w.sdf");
+    expect(shown).toContain(item("nll", "2"));
+    expect(shown).not.toContain(item("nll", "1"));
+  });
+
+  it("writes none where they are not one for each frame: never one frame's beside another's", () => {
+    expect(sdf({ ...two, properties: [p(1)] })).not.toContain("> <nll>");
+  });
+});

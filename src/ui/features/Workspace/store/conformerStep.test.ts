@@ -77,7 +77,8 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
-import type { Atom, DrawnRecord } from "./types";
+import type { Atom, Drawn, DrawnRecord } from "./types";
+import { structureFileText } from "../fileActions";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
@@ -167,6 +168,26 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
       [[1, "g/mol"]],
       [[3, "g/mol"]],
     ]);
+  });
+
+  it("writes what was worked out of each structure drawn into an SD file with each of its conformers, as its record says it", async () => {
+    const record = (v: number): DrawnRecord => ({
+      properties: {
+        nll: { value: v, unit: "none", status: "computed" },
+        mw: { value: 18.015 + v, unit: "g/mol", status: "computed" },
+        logp: { value: 0, unit: "none", status: { notApplicable: "not defined for a lone ion" } },
+        "made_from.nll": { value: 40 + v, unit: "none", status: "computed" },
+      },
+    });
+    const { st } = await searched(undefined, [record(1), record(2), record(3)]);
+    const made = st().molecules3d.filter((m) => m.conformerSet);
+    const text = structureFileText({ atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: made } as unknown as Drawn, "/x/w.sdf", { frames: "all" });
+    const records = text.split("$$$$\n").filter(Boolean);
+    expect(records).toHaveLength(2);
+    // (each conformer's own structure's values, the number worked out with its unit, the one not worked out saying why)
+    expect(records[0]).toContain("> <nll>\n1\n\n> <mw (g/mol)>\n19.015\n\n> <logp>\nnot applicable: not defined for a lone ion\n\n> <made_from.nll>\n41\n\n");
+    expect(records[1]).toContain("> <nll>\n3\n\n");
+    expect(records[1]).not.toContain("> <nll>\n1\n");
   });
 
   it("makes the others where one cannot be made, and says which by its place - never in the library's words", async () => {
