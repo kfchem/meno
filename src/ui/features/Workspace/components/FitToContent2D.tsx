@@ -26,6 +26,7 @@ import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { schemeExtent } from "../utils/schemeExtent";
 import { partsBounds } from "../workflow/parts";
 import { joined, notesOnPage, screenToPage, wiresExtent, type PageBox } from "../utils/fitExtent";
+import { usePageHtmlLayer } from "./coverLayer";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 
 export default function FitToContent2D({
@@ -53,6 +54,8 @@ export default function FitToContent2D({
   const store = useEditorStore();
   const style = useDrawingStyle();
   const { camera, size, invalidate, gl } = useThree();
+  // (where this canvas's HTML is drawn: its own chips and notes, never another tab's kept alive)
+  const htmlLayer = usePageHtmlLayer();
   // Fit only when asked (the trigger): opening, adding or dropping a
   // structure asks, and so does the fit button. Drawing never does - the
   // first bond on an empty canvas is drawn where it was put, at the zoom
@@ -165,7 +168,7 @@ export default function FitToContent2D({
     // any zoom (utils/pageScale), so where it lies now is where it lies after the fit (utils/fitExtent). The canvas's camera
     // looks straight down; one that does not, none taken.
     const straight = (cam as THREE.Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera;
-    const doc = gl.domElement.ownerDocument;
+    const doc = htmlLayer?.current ?? gl.domElement.parentElement ?? gl.domElement;
     const now = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 };
     const canvasBox = gl.domElement.getBoundingClientRect();
     const chips = straight ? screenToPage([...doc.querySelectorAll(".meno-page-chip")].map((el) => el.getBoundingClientRect()), now, canvasBox) : null;
@@ -260,6 +263,7 @@ export default function FitToContent2D({
     size.height,
     invalidate,
     gl,
+    htmlLayer,
     paddingPx,
     trigger,
     autoFitSuspended,
