@@ -39,17 +39,11 @@ executable - `-KeepOpen` leaves the app running to poke at by hand, and
 `-Width`/`-Height` change the window size the scenarios are written against -
 if you change it, the coordinates in them no longer mean anything.
 
-**The guides a fresh install shows.** The first-run guide (the
-`getting-started` plugin) lies over the middle of the canvas and takes
-clicks, and it would come back on every run where `settings.json` is put
-back afterwards. So `Start-Meno` counts it as shown before it starts the
-app: it adds its id to `plugins.guided` in the app's `settings.json` and
-leaves the rest of the file as it is. `-Guide` skips that, to see the
-guide itself. Back up `settings.json` before a run and put that copy back
-after it, as before: the copy is the one without the change, so the guide
-is still to come in the real settings. The file is
-`~/Library/Application Support/Meno/settings.json` on a Mac and
-`%APPDATA%\Meno\settings.json` on Windows.
+**Settings.** No guide opens of itself (a plugin's guide is shown only
+when asked, from Settings, *Plugins*), so nothing lies over the canvas at
+a first start. Back up `settings.json` before a run and put that copy back
+after it. The file is `~/Library/Application Support/Meno/settings.json`
+on a Mac and `%APPDATA%\Meno\settings.json` on Windows.
 
 ## What it needs
 

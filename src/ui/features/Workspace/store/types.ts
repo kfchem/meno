@@ -963,6 +963,8 @@ export type Drawn = Model & {
   cycles?: Cycle[];
   /** What the copy held that could not be read, and was left out (utils/readNotes): said as it is pasted. */
   leftOut?: LeftOut;
+  /** Of what is exported, the structures each set selected holds off the page, by the set's id (`WorkflowSet.drawnCollection`): written with it, after those it shows - holding is for the page only. */
+  held?: Record<number, DrawnModel[]>;
 };
 
 export type EditorState = {

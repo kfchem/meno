@@ -31,6 +31,7 @@ import { shownModel } from "../utils/stacks";
 import { withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
 import { COLUMN_WIDTH, columnOf, shownPdf, shownText } from "../utils/texts";
+import { readAsTable } from "../workflow/entries";
 
 // Re-export types for backward compatibility
 export * from "./types";
@@ -261,7 +262,8 @@ export function connectStoreToDocument(
       const texts = shownText(columnOf(prev.texts, prev.textsLost), columnOf(mirrored.texts, mirrored.textsLost), prev.textShown);
       const pdf = shownPdf(prev.pdfs, mirrored.pdfs, prev.pdfShown, texts);
       // (and the sets read as tables, of those still there holding their own - one shown giving way to a text or a PDF come)
-      const stillRead = prev.setsRead.filter((id) => (mirrored.sets ?? []).some((b) => b.id === id && b.collection));
+      const page = { ...prev, ...mirrored };
+      const stillRead = prev.setsRead.filter((id) => (mirrored.sets ?? []).some((b) => b.id === id && readAsTable(page, b)));
       const setsRead = stillRead.length === prev.setsRead.length ? prev.setsRead : stillRead;
       const setTableShown =
         texts.open || pdf.open || prev.setTableShown == null ? null : setsRead.includes(prev.setTableShown) ? prev.setTableShown : (setsRead[setsRead.length - 1] ?? null);

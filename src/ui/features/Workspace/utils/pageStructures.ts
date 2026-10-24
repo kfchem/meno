@@ -13,7 +13,8 @@ import type { PageObject } from "../../../../lib/pdf/figures";
 import type { FigureRead } from "../../../../lib/figure/read";
 import type { GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Model } from "../store/types";
-import { modelOf, schemeDrawn, type FigureResult, type Unread } from "./figures";
+import { readDrawnLabel } from "../../../../lib/figure/structure";
+import { figureLabels, modelOf, schemeDrawn, type FigureResult, type Unread } from "./figures";
 
 type Point = { x: number; y: number };
 
@@ -89,8 +90,29 @@ function boxRound(points: readonly Point[], boxes: readonly Box[]): Box {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-/** The atoms of a figure read, in its structures: each atom's structure's place, by atom - lone labelled atoms near one joining it, and none that is one line with no label, or a lone atom by no structure. */
-function structuresIn(f: FigureRead): number[][] {
+/** An atom's charge as a figure read has it: its label's, and one drawn by it in a ring. */
+function chargeOf(a: FigureRead["atoms"][number]): number {
+  const label = a.label ? readDrawnLabel(a.label, figureLabels) : null;
+  return (label?.read ? (label.charge ?? 0) : 0) + (a.marked ?? 0);
+}
+
+/** Whether segments p-q and r-s cross. */
+function crosses(p: Point, q: Point, r: Point, s: Point): boolean {
+  const side = (a: Point, b: Point, c: Point) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+  return side(p, q, r) * side(p, q, s) < 0 && side(r, s, p) * side(r, s, q) < 0;
+}
+
+/** What of a scheme lies between its structures, in the figure read's own points: its arrows' pieces, and its "+" signs. */
+export type Apart = { segments: readonly [Point, Point][]; pluses: readonly Point[] };
+
+/**
+ * The atoms of a figure read, in its structures: each atom's structure's place, by atom - none that is one line with no label,
+ * nor a lone labelled atom by no structure. A lone labelled atom is the structure's it lies by, within LONE_JOINS bonds, with
+ * no arrow nor "+" between them (`apart`): an ion (Na+, Cl-) where the ions so by it make it neutral - the structure carrying
+ * their charge the other way, an ammonium's Cl-, a carboxylate's Na+ - and else its own: never a neutral molecule's, nor
+ * across a scheme.
+ */
+function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }): number[][] {
   const up = f.atoms.map((_, i) => i);
   const top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i])));
   for (const b of f.bonds) up[top(b.a)] = top(b.b);
@@ -102,18 +124,48 @@ function structuresIn(f: FigureRead): number[][] {
     groups.set(r, [...(groups.get(r) ?? []), i]);
   });
   const found = [...groups.values()];
-  // (a lone atom with a label - an ion, a lone metal - with the structure it lies by, or on its own)
+  // (nothing of the scheme between two points: no arrow's piece across the way, no "+" within half a bond of it)
+  const clear = (p: Point, q: Point) => !apart.segments.some(([r, s]) => crosses(p, q, r, s)) && !apart.pluses.some((c) => toSegment(c, p, q) < 0.5 * f.bond);
+  // (each lone labelled atom by the structure nearest it, the way clear; those by each, nearest first)
+  const by = new Map<number[], { i: number; d: number }[]>();
+  const alone: number[] = [];
+  // (the box round the figure's bonds: a lone label within it, or within LONE_JOINS bonds of a structure, may be an ion of its
+  // own; one further out - a word of a caption or a table, "Na+" - is words, as any other is)
+  const xs = [...bonded].map((i) => f.atoms[i].x);
+  const ys = [...bonded].map((i) => f.atoms[i].y);
+  const drawn = (p: Point) => xs.length > 0 && p.x >= Math.min(...xs) && p.x <= Math.max(...xs) && p.y >= Math.min(...ys) && p.y <= Math.max(...ys);
   f.atoms.forEach((a, i) => {
     if (bonded.has(i) || !a.label) return;
     let best: number[] | null = null;
     let near = LONE_JOINS * f.bond;
+    let candidate = drawn(a);
     for (const g of found) {
-      const d = Math.min(...g.map((j) => dist(a, f.atoms[j])));
-      if (d <= near) [best, near] = [g, d];
+      const j = g.reduce((m, k) => (dist(a, f.atoms[k]) < dist(a, f.atoms[m]) ? k : m), g[0]);
+      const d = dist(a, f.atoms[j]);
+      if (d <= LONE_JOINS * f.bond) candidate = true;
+      if (d <= near && clear(a, f.atoms[j])) [best, near] = [g, d];
     }
-    // (one by no structure is words, not a structure of its own: a "DP4+" in a figure, a lone H)
-    if (best) best.push(i);
+    if (best) by.set(best, [...(by.get(best) ?? []), { i, d: near }]);
+    else if (candidate) alone.push(i);
   });
+  // (taken nearest first while each brings its charge the structure's way back to naught - neutral, or none taken)
+  for (const [g, near] of by) {
+    let left = g.reduce((t, i) => t + chargeOf(f.atoms[i]), 0);
+    const taken: number[] = [];
+    for (const { i } of near.sort((p, q) => p.d - q.d)) {
+      const c = chargeOf(f.atoms[i]);
+      // (a label with no charge - a lone metal - its, as it lies by it)
+      if (!c) g.push(i);
+      else if (Math.sign(c) === -Math.sign(left) && Math.abs(c) <= Math.abs(left)) {
+        taken.push(i);
+        left += c;
+      } else alone.push(i);
+    }
+    if (left === 0) g.push(...taken);
+    else alone.push(...taken);
+  }
+  // (an ion by a structure taken by none is its own; any other lone label is words, not a structure: a "DP4+" in a figure, a lone H)
+  for (const i of alone) if (chargeOf(f.atoms[i])) found.push([i]);
   // (nor is one line with no label at either end: a chart's tick, a table's rule, a bracket's piece - no structure is that)
   const bondsOf = (g: number[]) => f.bonds.filter((b) => g.includes(b.a)).length;
   return found.filter((g) => bondsOf(g) > 1 || g.some((i) => f.atoms[i].label)).map((g) => g.sort((p, q) => p - q));
@@ -198,12 +250,19 @@ export function figureOn(given: FigureDrawn, figure: number, sha256: string, pag
   };
   // (what was drawn as words, by the letters of each: words lying within a structure are part of it not read)
   const words = read.words.map((w) => ({ c: w.text, box: w.box }));
-  return { structures: structuresHere(read.figure, back, figure, sha256, page, words).map((st) => besideChecked(atEndChecked(st, read.figure, read.words, back), beside, read.figure.bond)), marks };
+  const apart: Apart = {
+    segments: read.arrows.flatMap((a) => {
+      const path = [a.tail, ...a.corners, a.point];
+      return path.slice(1).map((p, i): [Point, Point] => [path[i], p]);
+    }),
+    pluses: read.pluses,
+  };
+  return { structures: structuresHere(read.figure, back, figure, sha256, page, words, apart).map((st) => besideChecked(atEndChecked(st, read.figure, read.words, back), beside, read.figure.bond)), marks };
 }
 
 /** The structures of a figure read - each refused where letters of the figure no atom took, or words it read, lie within it. */
-function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number, sha256: string, page: number, words: readonly Pick<FigureLetter, "c" | "box">[]): PageStructure[] {
-  return structuresIn(f).map((ids, k): PageStructure => {
+function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number, sha256: string, page: number, words: readonly Pick<FigureLetter, "c" | "box">[], apart?: Apart): PageStructure[] {
+  return structuresIn(f, apart).map((ids, k): PageStructure => {
     const at = new Map(ids.map((i, j) => [i, j]));
     const atoms = ids.map((i) => back(f.atoms[i]));
     const mine = f.bonds.filter((b) => at.has(b.a));

@@ -70,7 +70,7 @@ class Seeds(unittest.TestCase):
         # (its parts, charges and isotopes as drawn: what it is, the general steps say)
         for smiles in ["C[NH3+].[Cl-]", "C[N+](C)(C)C", "[13CH3]O", "C[CH2]"]:
             self.assertEqual(Chem.MolToSmiles(self.worker.seed_of(entry(smiles))), Chem.MolToSmiles(Chem.MolFromSmiles(smiles)), smiles)
-        self.assertEqual(self.worker.seed_of({"molblocks": []}), "it has no atoms")
+        self.assertEqual(self.worker.seed_of({"molblocks": []}), "it is a label of no element")
         self.assertEqual(self.worker.seed_of({"molblocks": ["not a block"]}), "a part RDKit cannot read")
 
     def test_says_where_its_database_is_not(self):
@@ -126,7 +126,7 @@ class Generate(unittest.TestCase):
         none = self.made("grow", [{"molblocks": ["not a block"]}, {"molblocks": []}])
         self.assertEqual(none["outputs"], [])
         self.assertEqual(none["said"], "No seed could be read")
-        self.assertEqual(none["seeds"], [{"place": 0, "why": "a part RDKit cannot read"}, {"place": 1, "why": "it has no atoms"}])
+        self.assertEqual(none["seeds"], [{"place": 0, "why": "a part RDKit cannot read"}, {"place": 1, "why": "it is a label of no element"}])
 
     def test_refuses_an_option_outside_what_it_may_be_never_running_another(self):
         for options, said in [

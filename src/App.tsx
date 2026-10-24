@@ -42,7 +42,7 @@ import { textOf } from "./lib/io/text";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
-import { showGuidesDue, useGuide } from "./lib/plugins/guides";
+import { useGuide } from "./lib/plugins/guides";
 import GuideCard from "./ui/guide/GuideCard";
 import { computerResources, fileNow, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
@@ -148,8 +148,6 @@ export default function App() {
       await startNetwork();
       await loadAppSettings();
       await applyNetworkSettings(useAppSettings.getState().network);
-      // a plugin's guide not shown yet - Getting started's, the first time Meno opens (lib/plugins/guides)
-      showGuidesDue();
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
     })();

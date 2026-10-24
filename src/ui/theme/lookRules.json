@@ -8,6 +8,10 @@
     {
       "selector": "JSXOpeningElement[name.name='input']:has(JSXAttribute[name.name='type'][value.value=/^(radio|checkbox)$/])",
       "message": "A native radio or checkbox: use RadioGroup or Checkbox from src/ui/controls (docs/LOOK.md)."
+    },
+    {
+      "selector": "JSXAttribute[name.name='role'][value.value='switch']",
+      "message": "A switch drawn in place: use Switch from src/ui/controls (docs/LOOK.md)."
     }
   ],
   "colourLiterals": [
@@ -88,7 +92,6 @@
       "src/ui/features/Workspace/hooks/useCanvasSetup.ts": 1,
       "src/ui/features/Workspace/presenting/PresentLayer.tsx": 1,
       "src/ui/features/Workspace/presenting/Presenter.tsx": 2,
-      "src/ui/features/Workspace/render/RenderCard.tsx": 2,
       "src/ui/features/Workspace/render/renderScene.ts": 3,
       "src/ui/features/Workspace/utils/atomNumbers.ts": 1,
       "src/ui/features/Workspace/utils/glyphShapes.ts": 1,

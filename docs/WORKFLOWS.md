@@ -284,7 +284,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
-| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
+| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
 | Combine | a link | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
@@ -1575,6 +1575,13 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   - Not seen: a metal's centre (square-planar platinum) and an axis of
     hindered rotation (a biaryl's); they are made as the embedding places
     them.
+- **A lone atom or ion is not made, and said so** (2026-10-23): one atom
+  alone has no 3D structure, as on the canvas (*structure 2 of 3 left
+  out: one atom alone has no 3D structure*); where every one is, the
+  step fails, saying so. A structure made of its parts makes its first
+  molecule, and names what it left out (*structure 3: its Cl− left
+  out*, a salt's counter-ion; *its 1 other part left out*). Until then
+  each was passed by without a word.
 
 Decided while building it, for the maintainer to confirm:
 
@@ -2129,6 +2136,52 @@ All of it is optional. A structure the chemist drew has none.
   said as the file opens (FILE-IO.md, *What does not read*). A record left
   with nothing is none.
 
+
+### A structures set as a table (2026-10-23)
+
+A set of structures drawn - *Generate*'s, and *Check structures*',
+*Stereoisomers*', *Descriptors*' and *Filter*'s after it, *Enumerate*'s,
+or the chemist's own - opens as a table in the column, as a set of
+molecules in 3D does: *Open as a table* on its menu (workflow
+`structuresTable`, `StructuresTableBody`).
+
+- **Every structure it holds is a row**: those on the page and those it
+  holds off it (`drawnCollection`), all of them, in the step's order - the
+  page's first, as a step after it takes them (`setStructures`). A set
+  that shows 50 of 120 has 120 rows.
+- **Its columns**: its place (#); its SMILES as the step that made it
+  gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
+  where any did; its SMILES as Meno writes it from the drawing (`SMILES
+  (drawing, constitution only)`: Kekulé, a label of no element as `*`,
+  no `@` or `/`). Meno reads the drawing's stereo - wedged centres, cis
+  and trans, axes (lib/layout `readStereo`, as a structure's identity
+  does) - but does not write it in this SMILES yet: where a drawing
+  carries any, or wedges that do not read, its row says so in *stereo in
+  the drawing* ("stereo drawn, not written here"). The two SMILES are
+  never mixed in one column, and two enantiomers never read alike
+  unsaid.
+  Then its state - "finished", "failed: <why>", or "edited
+  since: its properties were for the structure before the edit", never
+  finished then (`drawnAsEntry`, the record's `stale`); why it was set
+  aside, where any was; then each value its record holds, under its own
+  name, a number's with its unit - those of the structure it was made
+  from as named (`made_from.nll`), an *Enumerate*'s `number` and
+  `made.how` among them. A value no column can hold, or one with no
+  value, is counted in its head, as for molecules (lib/table
+  `moleculesAsTable`).
+- **A failed structure's values**: one worked out correctly on the
+  structure is still true, and is shown as it is, its state carrying the
+  failure. One the failed step was to give says so in its cell - "not
+  worked out: <why>" (or "not applicable: <why>") - never blank, never a
+  number; a column of its own where no row has it worked out. A chart
+  takes a failed row as no result.
+- **Sorted by any column**, its name pressed, once up and again down; #
+  back to the step's order. Those with no value there - none, or not
+  worked out - come last either way. As many rows as there are drawn only where
+  they are seen.
+- **One conversion** (`structuresAsTable`, of the entries a step takes):
+  the table Chart is to take structures by too, each row's id and what it
+  is (`what`: "structure 3 of 120") kept for its points.
 
 ### Enumerate: R groups (as built, 2026-10-22)
 

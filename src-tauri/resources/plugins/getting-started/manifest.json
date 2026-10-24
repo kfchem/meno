@@ -2,7 +2,7 @@
   "id": "getting-started",
   "name": "Getting started",
   "version": "1.0.0",
-  "description": "Shows the first steps in Meno when it first opens, and suggests plugins to add - for a file no plugin added reads, too.",
+  "description": "The first steps in Meno, shown from Settings when asked, and plugins to add - for a file no plugin added reads, too.",
   "licence": "Apache-2.0",
   "homepage": "https://kfchem.github.io/meno",
   "guide": [

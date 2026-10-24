@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { layoutOptionsFor, MENO } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -60,6 +61,29 @@ describe("a lone atom made in 3D", () => {
     expect(methane.atoms).toEqual([1]);
     expect(methane.molblock).toContain("V3000");
     expect(blocksOf(lone("Na", 1), [1])).toEqual([]);
+  });
+
+  it("is a part of a structure drawn as a step on structures drawn is asked about it, where it is an element's - with no hydrogens a reader would add", () => {
+    // (Na+, Cl-, a lone metal: each a block of its own, its valence written as none - a lone Na read as NaH otherwise)
+    for (const [el, charge] of [["Na", 1], ["Cl", -1], ["Fe", 0], ["Ca", 2]] as const) {
+      const [block, ...more] = drawnBlocksOf(lone(el, charge), [1]);
+      expect(more, el).toEqual([]);
+      expect(block.molblock, el).toMatch(new RegExp(`M {2}V30 1 ${el} 0\\.0000 0\\.0000 0 0${charge ? ` CHG=${charge}` : ""} VAL=-1\\n`));
+    }
+    // (one that stands for a molecule as before - HCl - and a label of nothing known, none)
+    expect(drawnBlocksOf(lone("Cl"), [1])[0].molblock).not.toContain("VAL=");
+    expect(drawnBlocksOf(lone("R"), [1])).toEqual([]);
+    // (a salt drawn as its ions: each a part, the cation's and the anion's)
+    const salt: Model = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C" },
+        { id: 2, x: 1.5, y: 0, r: 0.9, el: "N", charge: 1 },
+        { id: 3, x: 4, y: 0, r: 0.9, el: "Cl", charge: -1 },
+      ],
+      bonds: [{ id: 11, a: 1, b: 2, order: 1 }],
+    };
+    expect(drawnBlocksOf(salt, [1, 2, 3]).map((b) => b.atoms)).toEqual([[1, 2], [3]]);
+    expect(blocksOf(salt, [1, 2, 3]).map((b) => b.atoms)).toEqual([[1, 2]]);
   });
 
   it("is told of, where bare: by itself alone, and named beside others made", () => {
@@ -273,9 +297,13 @@ describe("takenOnPage", () => {
     const boxes = takenOnPage({ model: model as never, arrows: [{ id: 1, x: 5, y: 5, angle: 0, length: 4 } as never], pluses: [{ id: 1, x: 5, y: -5 } as never] }, [1, 2], [solid]);
     // (the drawing it was made from left out; the other two structures, the arrow, the "+" and the molecule)
     expect(boxes).toHaveLength(5);
+    // (each structure as far as its ink: the C-C its bond, from atom to atom, half its line's width round it - no room added; the lone carbon its letters, CH4, written to the right of it)
+    const half = layoutOptionsFor(MENO, NOMINAL_BOND_LENGTH, { units: "world" }).lineWidthPx / 2;
+    for (const [got, want] of [[boxes[0].x0, 10 - half], [boxes[0].x1, 11.5 + half], [boxes[0].y0, -half], [boxes[0].y1, half]]) expect(got).toBeCloseTo(want, 9);
+    expect(boxes[1].x0).toBeLessThan(20);
+    expect(boxes[1].x1 - 20).toBeGreaterThan(NOMINAL_BOND_LENGTH / 2);
+    // (an arrow and a "+" kept as they were)
     const pad = 0.4 * NOMINAL_BOND_LENGTH;
-    expect(boxes[0]).toEqual({ x0: 10 - pad, x1: 11.5 + pad, y0: -pad, y1: pad });
-    expect(boxes[1]).toEqual({ x0: 20 - pad, x1: 20 + pad, y0: -pad, y1: pad });
     expect(boxes[2].x0).toBeCloseTo(3 - pad);
     expect(boxes[2].x1).toBeCloseTo(7 + pad);
     expect(boxes[4]).toBe(solid);

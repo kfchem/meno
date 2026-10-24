@@ -35,7 +35,7 @@ describe("the settings file", () => {
       options: { "write:sdf": { version: "V3000", frames: "all" }, export: { kind: "sdf" } },
       abbreviations: [{ label: "Mmt", name: "4-methoxytrityl", smiles: "*C(c1ccccc1)(c1ccccc1)c1ccc(OC)cc1", also: ["MMTr"] }],
       files: { read: { orca: "cclib" }, also: { orca: ["pyscf"] } },
-      plugins: { removed: ["rdkit"], roles: { smiles: "rdkit" }, programs: { "orca:orca": "/Applications/orca_6_1_0/orca" }, guided: ["getting-started"] },
+      plugins: { removed: ["rdkit"], roles: { smiles: "rdkit" }, programs: { "orca:orca": "/Applications/orca_6_1_0/orca" } },
       pictures: { dpi: 1200 as const },
       pointer: { wheelUp: "out" as const },
       canvas: { resolution: "display" as const },
@@ -90,15 +90,14 @@ describe("the settings file", () => {
     expect(
       acceptAppSettings({ options: { "write:mol": { version: "V3000", scale: 2, x: null, "a b": 1 }, "Bad Role": { a: 1 }, export: "sdf" } }).options,
     ).toEqual({ "write:mol": { version: "V3000", scale: 2 } });
-    // the plugins taken away, the roles chosen - roles Meno defines - and the guides shown: ids only
-    const plugins = { removed: ["rdkit", "rdkit", "Not An Id", 3], roles: { smiles: "rdkit", checks: 4, "no-such-role": "rdkit" }, guided: ["getting-started", "getting-started", 5] };
+    // the plugins taken away and the roles chosen - roles Meno defines: ids only; what no longer is kept (guides shown, before they were shown only when asked) dropped
+    const plugins = { removed: ["rdkit", "rdkit", "Not An Id", 3], roles: { smiles: "rdkit", checks: 4, "no-such-role": "rdkit" }, guided: ["getting-started"] };
     expect(acceptAppSettings({ plugins }).plugins).toEqual({
       removed: ["rdkit"],
       roles: { smiles: "rdkit" },
       programs: {},
-      guided: ["getting-started"],
     });
-    expect(acceptAppSettings({}).plugins).toEqual({ removed: [], roles: {}, programs: {}, guided: [] });
+    expect(acceptAppSettings({}).plugins).toEqual({ removed: [], roles: {}, programs: {} });
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });

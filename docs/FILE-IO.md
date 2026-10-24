@@ -80,7 +80,23 @@ set is (docs/WORKFLOWS.md). Each molecule is bonded by distance, its bonds'
 orders unknown, as an XYZ file's; its chip says its name always, with its
 energy where a note gives one in hartrees, and a click on it opens what
 the text says of it - its charge and multiplicity and its notes (*In the
-text*).
+text*). Its energy is an electronic energy a note names as one - E (or
+E_SCF, Etot, E_tot, E_el, E_elec), "SCF Done: E(...)", Energy, or the
+electronic, total, SCF, final or final single-point energy, after "=" or ":",
+and ORCA's "FINAL SINGLE POINT ENERGY" line - in hartrees, said after
+it or in its bracket, or not said where the bracket names a method. A
+bracket after the name says a method (its basis after a "/":
+RB3LYP/6-31G(d), CCSD(T), B3LYP-D3(BJ)/def2-TZVP) or a unit, nothing
+else: one with a space or a "+", a word of another quantity or a part
+of one (ZPE, corr, thermal, solv, rel, gCP, CP, vdW, BSSE, XC, ...), a
+dispersion correction alone (D3) or a lone
+T, G, H or S is no electronic energy's. Its name is kept with it
+("E(MP2)") as what its energies are, and is what worked its energy out
+wherever its energy is read - a set's table, a diagram's ΔE - so that
+energies named otherwise are never set against it. Any other quantity -
+a zero-point energy, a correction, a free energy, an enthalpy, a sum of
+them - is a note only, never its energy; and where two notes give two
+that differ, it is given none, and says why.
 
 - **Where from.** Pasted on the page, where nothing else on the clipboard
   reads as a structure (the card offers *Paste as text* as well, to put
@@ -114,7 +130,11 @@ text*).
   table's heads before it say it is one.
 - **A structure's own**: its name, the line before its atoms nearest them
   that names something - not a note, a table's heads or numbers alone; its
-  charge and multiplicity ("0 1", "0,1"); its count of atoms, said ("52
+  charge and multiplicity, on a line of their own ("0 1", "0,1") or said in
+  words, on one line or two ("Charge = 1 Multiplicity = 2", "charge: -1",
+  "spin multiplicity: 1") - never two numbers at the end of a title ("TS 2
+  1", "Conformer 12 3"), unless the text's lines' ends were made spaces and
+  they stand right before its first atom; its count of atoms, said ("52
   atoms") or set alone as an XYZ file sets it; and its notes, lines of
   energies, frequencies or its method ("E = -1234.5678 Hartree", "SCF
   Done", "Imaginary frequencies: 1") - those written after a structure's
@@ -128,6 +148,16 @@ text*).
   where together they bond as one and no atom of either stands where one
   of the other does: two structures each about the origin stand in each
   other's place.
+- **Said, never guessed** (2026-10-23). The lines among a structure's atoms
+  that are none of them - a page's number, a running head, a table's heads
+  set again on the next page, a caption - are left out and listed on the
+  card under it (*3 lines not read: S12 · Supporting Information S13 ·
+  Atom X Y Z*). A line among them that looks like an atom's but does not
+  read as one (an element and two numbers, a number with a letter in it),
+  or one that names a charge or multiplicity that does not read, keeps the
+  structure from being placed: the card names the line, and it cannot be
+  ticked. So a molecule split over two pages comes out as one, its
+  table's heads on the second page left out, and nothing is half-read.
 - **Bohr**: where the text says so ("bohr", "a.u.", "atomic units",
   "Units=Bohr"), the lengths are turned into ångströms (CODATA 2018), and
   the card says so - but not where atomic units are said of an energy only
@@ -708,6 +738,30 @@ As this part of step 5 was built (#155, from main beside step 3):
     page shows them: a trajectory's bonds, found from distances, form and
     break as its frames go. A copy's MOL file, a PDB file and what a
     plugin's writer is given are the same.
+  - **An SD file of a workflow's structures drawn** - a set selected,
+    with the records it carries of them (a step's products, what was
+    worked out of them) - has a record for each, titled with its number,
+    its record after it as data items: `State` (finished, failed or set
+    aside) and `Failed` or `Set aside`, why; `Stale` where the structure
+    was edited since its values were worked out (none of them written
+    then); `From`, what it was made from; and each property under its own
+    name - a number worked out with its unit beside it as the page shows
+    it (`mw (g/mol)`) - its number, `made.how`, the values of what it was
+    made from (`made_from.nll`) among them: a number with every digit it
+    is held to; one not worked out saying why in place of a value, under
+    its bare name. A value worked out of the structure as it is is written
+    whatever a later step did, beside its `State`: a step on structures
+    drawn answers for a structure whole, and one it set aside or failed
+    is given none of its values. A text value's lines never end its item
+    nor begin another: a blank line is written as one space, and one
+    beginning `>` or `$$$$` with a space before it. Every structure a set
+    holds is written - those it shows, then those it holds off the page,
+    in its order: holding is for the page alone - of a set selected, and,
+    nothing selected, of every set on the canvas. The rest of what is
+    drawn is one record, as before. A MOL or RXN file, one molfile, holds
+    no records: what a set holds off the page is not written there, and
+    Export says so ("N structures this set holds off the page were not
+    written; export the set as SD to write them all").
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
     and in attributes alike, and what XML cannot hold at all (the controls
