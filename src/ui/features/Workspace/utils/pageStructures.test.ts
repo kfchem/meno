@@ -252,6 +252,66 @@ describe("a structure the page's figures may have cut in two", () => {
   });
 });
 
+describe("a line of words, its signs read as bonds", () => {
+  type P = [number, number];
+  const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+  const word = (text: string, x: number, y = 300) => [...text].map((c, i) => ({ c, box: [x + i * 6, y - 3.6, x + 5.5 + i * 6, y + 3.6] as [number, number, number, number], at: [x + i * 6, y + 3.6] as [number, number], size: 10 }));
+  // (a chain beside, so that the figure has a bond's length to go by)
+  const chain = [stroke([100, 360], [112.5, 352.8], [125, 360], [137.5, 352.8])];
+  const reads = (paths: FigureDrawn["paths"], letters: FigureDrawn["letters"]) => structuresOf({ paths: [...chain, ...paths], letters, pictures: [] }, 0, "pdf", 0, []).map((st) => ("none" in st.read ? st.read.none : "whole"));
+
+  it("refuses \"R2 = SPh\" - its = read as a double bond between two labels on one line - saying it is a line of words", () => {
+    const out = reads([stroke([114, 298.6], [124, 298.6]), stroke([114, 301.4], [124, 301.4])], [...word("R2", 100), ...word("SPh", 126)]);
+    expect(out).toContain('It is a line of words ("R2", "SPh"), not a structure drawn, so none of it is taken.');
+  });
+
+  it("refuses a line whose sign joins a label that reads as nothing - an italic t read as f before a hyphen", () => {
+    const out = reads([stroke([106, 300], [113, 300])], [...word("f", 100), ...word("BuNH2", 115)]);
+    expect(out.some((o) => o.startsWith("It is a line of words"))).toBe(true);
+  });
+
+  it("refuses \"PG = Boc\", \"LG = SEt\", \"Ar = Ph\" and \"n = 1\": a name of a kind of group, or a legend's term, at an end of the =", () => {
+    for (const [l, r] of [["PG", "Boc"], ["LG", "SEt"], ["Ar", "Ph"]]) {
+      const out = reads([stroke([114, 298.6], [124, 298.6]), stroke([114, 301.4], [124, 301.4])], [...word(l, 100), ...word(r, 126)]);
+      expect(out).toContain(`It is a line of words ("${l}", "${r}"), not a structure drawn, so none of it is taken.`);
+    }
+    // ("n = 1": its 1 taken for a compound's number, its = for a double bond from the n to nothing - a legend all the same)
+    const n = reads([stroke([108, 298.6], [118, 298.6]), stroke([108, 301.4], [118, 301.4])], [...word("n", 100), ...word("1", 120)]);
+    expect(n).toContain('It is a line of words ("n"), not a structure drawn, so none of it is taken.');
+  });
+
+  /** A molecule written on one line: its labels, each with the bonds after it - single, double, triple - as strokes beside each other. */
+  const written = (parts: [string, number][]) => {
+    const paths: FigureDrawn["paths"] = [];
+    const letters: FigureDrawn["letters"] = [];
+    let x = 100;
+    for (const [label, order] of parts) {
+      letters.push(...word(label, x));
+      x += label.length * 6 + 2;
+      if (order) {
+        for (let k = 0; k < order; k++) paths.push(stroke([x, 300 + (k - (order - 1) / 2) * 2.4], [x + 10, 300 + (k - (order - 1) / 2) * 2.4]));
+        x += 12;
+      }
+    }
+    return reads(paths, letters);
+  };
+
+  it("but reads molecules written on one line, their labels all elements or groups - O=C=O, S=C=S, MeC≡CMe, Me3SiC≡CSiMe3, PhN=NPh, N≡N, MeC≡N, HC≡CH, Cl-Hg-Cl", () => {
+    const molecules: [string, number][][] = [
+      [["O", 2], ["C", 2], ["O", 0]],
+      [["S", 2], ["C", 2], ["S", 0]],
+      [["H3C", 1], ["C", 3], ["C", 1], ["CH3", 0]],
+      [["Me3Si", 1], ["C", 3], ["C", 1], ["SiMe3", 0]],
+      [["Ph", 1], ["N", 2], ["N", 1], ["Ph", 0]],
+      [["N", 3], ["N", 0]],
+      [["CH3", 1], ["C", 3], ["N", 0]],
+      [["HC", 3], ["CH", 0]],
+      [["Cl", 1], ["Hg", 1], ["Cl", 0]],
+    ];
+    for (const m of molecules) expect([m.map((p) => p[0]).join(""), written(m)]).toEqual([m.map((p) => p[0]).join(""), ["whole", "whole"]]);
+  });
+});
+
 describe("every structure on a page", () => {
   const drawn = camphor as unknown as FigureDrawn;
   const [whole] = structuresOf(drawn, 0, "pdf", 0, []);
