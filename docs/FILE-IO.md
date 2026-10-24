@@ -744,7 +744,14 @@ As this part of step 5 was built (#155, from main beside step 3):
     own name, as a structure drawn's record writes its properties (below):
     a number worked out with its unit beside its name (`mw (g/mol)`), one
     not worked out saying why in place of a value. None where the molecule
-    does not hold them one for each frame. They are written only: opened
+    does not hold them one for each frame, and the export says so ("2
+    properties could not be written for ...: they are not one for each
+    frame"). A property named as one of Meno's own items (`Charge`,
+    `Multiplicity`, `Energy (Eh)`, `Failed`, `Imaginary frequencies
+    (cm-1)`, and a record's `State`, `Set aside`, `Stale`, `From`) is
+    written under that name and "(property)", here and in a structure
+    drawn's record, and the export says so: read back, a second `Charge`
+    would be taken for the species. They are written only: opened
     again, an SD file's items other than `Charge` and `Multiplicity` are
     not read back into a molecule in 3D.
     Opened again, an SD file's `Charge` and `Multiplicity` are what a

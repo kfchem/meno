@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { calcOf } from "../../../lib/calc/output";
 import { checkedStructures, readStructures } from "../../../lib/io/structures";
 import { addMolecule3d, emptyWorkspaceDocument } from "./document";
-import { structureFileText } from "./fileActions";
+import { propertiesSaid, structureFileText } from "./fileActions";
 import type { Drawn, Molecule3D } from "./store/types";
 import { itemsNotTakenSaid } from "./utils/io";
 import { entryOfSet, setEntries } from "./workflow/entries";
@@ -161,7 +161,23 @@ describe("a molecule in 3D's properties, written to an SD file", () => {
     expect(shown).not.toContain(item("nll", "1"));
   });
 
-  it("writes none where they are not one for each frame: never one frame's beside another's", () => {
+  it("writes none where they are not one for each frame: never one frame's beside another's - and says so", () => {
     expect(sdf({ ...two, properties: [p(1)] })).not.toContain("> <nll>");
+    const drawn = (m: Omit<Molecule3D, "id">) => ({ atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: [m] }) as unknown as Drawn;
+    expect(propertiesSaid(drawn({ ...two, title: "water+", properties: [{ ...p(1), mw: { value: 18, unit: "g/mol", status: "computed" } }] }))).toEqual(["2 properties could not be written for water+: they are not one for each frame."]);
+    expect(propertiesSaid(drawn(two))).toEqual([]);
+  });
+
+  it("writes one named as an item of Meno's own under its name and \"(property)\": read back, the species stays as given", () => {
+    // (the radical cation, a property named "Charge" on it - 0, a model's guess, say - and one "Energy" in Eh)
+    const named = cation({ properties: [{ Charge: { value: 0, unit: "none", status: "computed" }, Energy: { value: -1, unit: "Eh", status: "computed" } }] });
+    const text = sdf(named);
+    expect(text.match(/^> <Charge>$/gm)).toHaveLength(1);
+    expect(text).toContain(item("Charge (property)", "0") + item("Energy (Eh) (property)", "-1"));
+    const { species, read } = speciesRead(text);
+    expect(species).toEqual({ charge: 1, multiplicity: 2, from: { charge: "given", multiplicity: "given" } });
+    expect(read.itemsNotTaken).toBeUndefined();
+    const drawn = { atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: [named] } as unknown as Drawn;
+    expect(propertiesSaid(drawn)).toEqual(['2 properties written as "Charge (property)" and "Energy (Eh) (property)": their names are Meno\'s own items.']);
   });
 });

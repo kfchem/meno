@@ -394,21 +394,75 @@ function recordData(r: DrawnRecord): string {
 const dataItem = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
 
 /**
+ * The names of the data items Meno writes of its own - a structure drawn's
+ * record's and a molecule in 3D's frame's - which no property is written
+ * under: read back, a second `Charge` would be taken for the species.
+ */
+export const MENO_ITEMS: ReadonlySet<string> = new Set(["State", "Failed", "Set aside", "Stale", "From", "Energy (Eh)", SD_CHARGE, SD_MULTIPLICITY, SD_IMAGINARY]);
+
+/** The name a property would be written under: its name, a number worked out with its unit beside it. */
+function labelOf(name: string, p: Property): string {
+  // (its unit beside its name only where it is a number worked out: one not worked out has no value its unit is of)
+  return itemName(p.status === "computed" && typeof p.value === "number" && p.unit !== "none" ? `${name} (${p.unit})` : name);
+}
+
+/** What a property is written under (`labelOf`), with "(property)" after it where that is one of Meno's own items (`MENO_ITEMS`). */
+function propertyLabel(name: string, p: Property): string {
+  const label = labelOf(name, p);
+  return MENO_ITEMS.has(label) ? `${label} (property)` : label;
+}
+
+/**
  * Properties as an SD file's data items, each under its own name: a number
  * worked out with its unit beside it as the page shows it ("mw (g/mol)");
  * one not worked out saying why in place of a value, under its bare name, so
- * that no reader takes a value for one. A structure drawn's record writes
- * them so (`recordData`), and a molecule in 3D each frame's.
+ * that no reader takes a value for one; one named as an item Meno writes of
+ * its own, under that name and "(property)" (`propertyLabel`). A structure
+ * drawn's record writes them so (`recordData`), and a molecule in 3D each
+ * frame's.
  */
 function propertyItems(properties: Record<string, Property>): string {
   return Object.entries(properties)
     .map(([name, p]) => {
       const st = p.status;
-      // (its unit beside its name only where it is a number worked out: one not worked out has no value its unit is of)
-      const label = st === "computed" && typeof p.value === "number" && p.unit !== "none" ? `${name} (${p.unit})` : name;
-      return dataItem(label, st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
+      return dataItem(propertyLabel(name, p), st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
     })
     .join("");
+}
+
+/**
+ * What an SD file of `drawn` says of the properties it holds, as it is
+ * written (`structureFileText`): of each molecule in 3D whose properties
+ * are not one for each frame, that they could not be written - none of
+ * them is; and the properties written under "(property)", their names
+ * being Meno's own items. None where there is nothing to say.
+ */
+export function propertiesSaid(drawn: Drawn): string[] {
+  const said: string[] = [];
+  const clashed = new Set<string>();
+  const clashes = (properties: Record<string, Property> | undefined) => {
+    for (const [name, p] of Object.entries(properties ?? {})) if (MENO_ITEMS.has(labelOf(name, p))) clashed.add(propertyLabel(name, p));
+  };
+  for (const m of drawn.molecules3d ?? []) {
+    if (!m.properties?.length) continue;
+    const n = 1 + (m.frames?.length ?? 0);
+    if (m.properties.length === n) {
+      m.properties.forEach(clashes);
+      continue;
+    }
+    const names = new Set(m.properties.flatMap((r) => Object.keys(r ?? {})));
+    if (!names.size) continue;
+    const who = m.title || (m.name ? stem(m.name) : "a molecule in 3D");
+    said.push(`${names.size} ${names.size === 1 ? "property" : "properties"} could not be written for ${who}: they are not one for each frame.`);
+  }
+  const { loose } = recordDrawings(drawn);
+  for (const r of setRecordsOf(drawn, loose)) clashes(r.record.properties);
+  if (clashed.size) {
+    const labels = [...clashed].map((l) => `"${l}"`);
+    const listed = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0];
+    said.push(`${clashed.size} ${clashed.size === 1 ? "property" : "properties"} written as ${listed}: ${clashed.size === 1 ? "its name is one of" : "their names are"} Meno's own items.`);
+  }
+  return said;
 }
 
 /**
@@ -877,6 +931,9 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         // (a MOL or RXN file - one molfile - cannot hold a set's records: what it holds off the page, said not written)
         const notWritten = kind === "mol" || kind === "rxn" ? heldNotWritten(drawn) : null;
         if (notWritten) useNotices.getState().show({ id: `held-not-written ${path}`, title: "Part of the set not written", text: notWritten });
+        // (an SD file: the properties it could not write, or wrote under another name, said)
+        const properties = kind === "sdf" ? propertiesSaid(drawn) : [];
+        if (properties.length) useNotices.getState().show({ id: `properties-said ${path}`, title: "Properties in the SD file", text: properties.join(" ") });
       }),
     [attempt, store],
   );
