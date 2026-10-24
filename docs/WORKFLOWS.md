@@ -2075,8 +2075,11 @@ structure and its geometry, in 2D, so the record holds the rest
 (`DrawnRecord`, `store/types`):
 
 - `from`: the entries it was made from, by id, where they have one. A
-  generated structure names its seed's; a template drawn on the page has
-  no id, so an Enumerate product names none.
+  generated structure names its seed's, and an Enumerate product its
+  template's - a template a step gave; one drawn on the page has no id, so
+  its products name none. Each also carries the values of the one it was
+  made from as that one's (`made_from.nll`), never as its own, so that a
+  Filter on a parent's value reaches what was made from it.
 - `properties`: by name, each a `Property` as lib/entry has it, with its
   value, its unit from Meno's units table or "none", its status, and what
   worked it out. Enumerate's `number` and `made.how` are kept here, and so
