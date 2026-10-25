@@ -1,5 +1,6 @@
 import { MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
 import Checkbox from "../controls/Checkbox";
+import NumberField from "../controls/NumberField";
 import RadioGroup from "../controls/Radio";
 import Select from "../controls/Select";
 
@@ -112,19 +113,19 @@ export default function OptionsForm({
           ) : (
             <label className="block">
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
+              {/* (a number and its unit both within the card: the field narrows to leave the unit room) */}
               <span className="flex items-center gap-1.5">
-                <input
-                  type={o.type === "number" ? "number" : "text"}
-                  value={String(values[o.id] ?? "")}
-                  {...(o.type === "number" ? { min: o.min, max: o.max, step: o.step } : {})}
-                  onChange={(e) => {
-                    if (o.type !== "number") return set(o.id, e.target.value);
-                    const n = Number(e.target.value);
-                    if (e.target.value !== "" && Number.isFinite(n)) set(o.id, n);
-                  }}
-                  className="h-7 w-full max-w-[12rem] rounded-md border border-gh-line bg-white px-2 text-sm text-gh-black"
-                />
-                {o.type === "number" && o.unit && <span className="text-xs text-gh-gray">{o.unit}</span>}
+                {o.type === "number" ? (
+                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} onChange={(n) => set(o.id, n)} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
+                ) : (
+                  <input
+                    type="text"
+                    value={String(values[o.id] ?? "")}
+                    onChange={(e) => set(o.id, e.target.value)}
+                    className="h-7 w-full max-w-[12rem] rounded-md border border-gh-line bg-white px-2 text-sm text-gh-black"
+                  />
+                )}
+                {o.type === "number" && o.unit && <span className="shrink-0 whitespace-nowrap text-xs text-gh-gray">{o.unit}</span>}
               </span>
             </label>
           )}

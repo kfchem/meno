@@ -12,6 +12,10 @@
     {
       "selector": "JSXAttribute[name.name='role'][value.value='switch']",
       "message": "A switch drawn in place: use Switch from src/ui/controls (docs/LOOK.md)."
+    },
+    {
+      "selector": "JSXOpeningElement[name.name='input'] JSXAttribute[name.name='type'] Literal[value='number']",
+      "message": "A native number field: use NumberField from src/ui/controls (docs/LOOK.md)."
     }
   ],
   "colourLiterals": [

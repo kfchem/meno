@@ -160,6 +160,12 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   rounded-full`, `bg-gh-line` off, `accel-base` on, its white knob
   sliding; `accel-accent` on only where being on refuses something
   (working offline).
+- **Number field**: a text field `h-7 rounded-md border border-gh-line
+  bg-white px-2 text-right tabular-nums`, no browser steppers (up and down
+  step it). It holds whatever is typed until Enter or leaving it, so a
+  digit can be taken out and another typed; a number it does not take
+  goes back to the last good one, fading in, the border a moment
+  `accel-accent`.
 
 Each is reachable by keyboard and shows focus with an `accel-base` border.
 
@@ -174,7 +180,8 @@ be caught by reading the code: a native select, radio or checkbox outside
 `src/ui/controls`, and a colour written out - a literal that is only a
 colour, one in a CSS place (after `:`, `(`, `,` or `[`), `rgb(…)`,
 `hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`; and a
-switch drawn in place (`role="switch"`) outside `src/ui/controls`.
+switch drawn in place (`role="switch"`) outside `src/ui/controls`; and a
+native number field (`type="number"`) outside it.
 
 ## Not yet
 
