@@ -253,7 +253,10 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
       const pts = rounded(kept.corners, WIRE_ROOM, DENSE);
       if (over(pts) === 0 && lengthOf(pts) * 0.8 <= lengthOf(shape)) return { pts, way: kept.side, corners: kept.corners };
     }
-    return { pts: shape, way: "plain", ...(back ? { corners: back.corners } : {}) };
+    // (coming back - round what it leaves and comes into - said as the side it passes them: so that the next frame keeps that side, and does
+    //  not, taking it for the curve, try the shortest side again - over something now, as like as not - and so flip from one to the other
+    //  frame by frame)
+    return back ? { pts: shape, way: back.side, corners: back.corners } : { pts: shape, way: "plain" };
   }
   // (every level it may cross at, gone round all it would cross - the shortest first, by its corners, and no further than the first clear of all,
   //  and of the side it passed before; where none is clear, again with what any of them crosses then, twice at most)

@@ -464,6 +464,42 @@ describe("a wire dragged past what it goes round", () => {
   }, 30000);
 });
 
+describe("a wire not on a card being dragged", () => {
+  it("coming back round above all, keeps its way: a card dragged 60 px past it, a pixel at a time, changes its way once at most", () => {
+    // (from the desk's drag sweep, in page pixels: a set's line back up into a card far to its left, round above the page's frames;
+    //  the card being dragged lies under where the line goes up, a bond and more off)
+    const f = ([x0, x1, y0, y1]: number[]): Frame => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX });
+    const page = [
+      [79.17, 231.21, 459.68, 607.77],
+      [509.67, 748.95, 100.29, 305.33],
+      [317.62, 428.79, 325.3, 495.38],
+      [302.02, 407.52, -54.75, 119.97],
+      [673.66, 823.14, 493.26, 685.34],
+      [877.78, 1096.02, 288.42, 477.46],
+      [879.73, 1087.73, 594.52, 670.52],
+      [38.12, 246.12, 140.44, 216.44],
+    ].map(f);
+    const [from, to] = [page[4], page[7]];
+    const p = { x: 823.1423637457192 * PX, y: 589.300738000311 * PX };
+    const q = { x: 38.11577826272696 * PX, y: 188.43528756685555 * PX };
+    let was: WireWay | undefined;
+    let before: { x: number; y: number }[] | null = null;
+    let [ways, jumps] = [0, 0];
+    for (let dx = 0; dx <= 60; dx++) {
+      const card = { ...page[6], x0: page[6].x0 + dx * PX, x1: page[6].x1 + dx * PX };
+      const all = page.map((g, i) => (i === 6 ? card : g));
+      const r = wireRoute(p, q, { from, to }, nearWire(p, q, { from, to }, all), was);
+      if (was && r.way !== was) ways++;
+      // (a change seen: more than 12 px from where it was)
+      if (before && apart(r.pts, before) / PX > 12) jumps++;
+      was = r.way;
+      before = r.pts;
+    }
+    expect(ways).toBeLessThanOrEqual(1);
+    expect(jumps).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("a page's wires, worked out again", () => {
   it("only where a wire or something near it moved - 50 wires on a page of 100 sets and 50 cards, keyed in well under a frame", () => {
     // (100 sets in a grid, 50 steps' cards beside them, and 50 wires each from a set into a card)
