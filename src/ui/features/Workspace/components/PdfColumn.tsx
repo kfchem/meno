@@ -28,8 +28,7 @@ import { columnWidthFor } from "../utils/texts";
 import { viewBesideColumn } from "./coverLayer";
 import { setViewGoal, viewGoalOf } from "./viewGoal";
 import { pagesInView } from "../../../../lib/pdf/column";
-import { textHad } from "../../../../lib/pdf/text";
-import { figuresHad } from "../../../../lib/pdf/figures";
+import { readForgotten, readWhenIdle } from "./pageReads";
 import { BASE, levelFor, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures } from "./pdfPictures";
 import { pickedStructure } from "../utils/pdfStructures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
@@ -100,6 +99,9 @@ export default function PdfColumn() {
   if (open && shown != null) last.current = shown;
   const drawn = open && shown != null ? shown : cover > 0.5 ? last.current : null;
   const pdf = pdfs.find((p) => p.id === drawn) ?? null;
+  // (a PDF gone from the column - shut, or another read there: its pages read again, should it come back)
+  const drawnSha = pdf?.sha256;
+  useEffect(() => (drawnSha ? () => readForgotten(drawnSha) : undefined), [drawnSha]);
   // (a text read, where no PDF is: likewise, as the column shuts on it)
   const texts = useEditor((s) => s.texts);
   const textShown = useEditor((s) => s.textShown);
@@ -390,9 +392,6 @@ function ColumnPass({
     let asked = false;
     for (const i of pagesInView(l, top, tall)) {
       const p = l.pages[i];
-      // (its letters, and its figures, ready for a press on them)
-      textHad(pdf.sha256, i);
-      figuresHad(pdf.sha256, i);
       const part = {
         x0: (left - p.x) / l.scale,
         x1: (left + reader.width - p.x) / l.scale,
@@ -403,6 +402,8 @@ function ColumnPass({
       // (while it scrolls, the level each page has - or, new in view, the quick one - not drawn finer till it stops)
       const level = moving ? (clock.current.levels.get(i) ?? quick) : pics.levelNow(pdf.sha256, i, pdf.pages[i], part, want, now);
       clock.current.levels.set(i, level);
+      // (its letters and figures, ready for a press on them: read once it is shown - the column still, its tiles come - in idle time, never holding up its turn)
+      if (!moving && (!level || pics.allCome(pdf.sha256, i, pdf.pages[i], level, part, now))) readWhenIdle(pdf.sha256, i);
       if (!level) continue;
       // (the column's own come first, nearest its middle)
       const mid = { x: left + reader.width / 2, y: top + tall / 2 };
