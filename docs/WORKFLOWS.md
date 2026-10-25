@@ -2005,7 +2005,12 @@ page could not be read after one run.
     `withExits`).
   - **A wire goes round** (look `wireRoute`). Going on to the right it
     is a curve, running on across all the way, never back out over what
-    is beside its ends. Where its input lies less than half a bond to the
+    is beside its ends - but where it falls or rises more than twice as
+    far as it goes across, it is no curve, whose long middle would run
+    slanting and bowed: it goes across, straight up or down halfway to
+    its input, and across into it, only its two turns rounded, so that
+    its long run is straight, and wires out of one port share it (*A lane
+    of its own*). Where its input lies less than half a bond to the
     right of where it leaves (`WIRE_TURNS`), or to the left of it, or the
     curve would cross another set or card, or come within half a bond of
     one away from its ends, it goes round them all: out a bond to the
@@ -2017,7 +2022,25 @@ page could not be read after one run.
     between it and its end, where that leaves half a bond either side or
     the frame lies across the line in or out. Of these, the way over
     least, then the shortest; where every way is over something, each is
-    tried again round that too. Inside another set or card it never goes,
+    tried again round that too, and of those the one over least as far
+    along it - to within half a bond, ways over alike - then the shortest:
+    where every way must pass a gap narrower than a bond beside a frame,
+    the way down past all and back is no less over than the way straight
+    in, only longer (where one of its ends lies within half a bond of
+    another frame, frames laid over each other, by how many of its points
+    are over, as before). It never goes out past both its ends and
+    back again round nothing (look `doublesBack`): where the way chosen
+    would - every way passing too near something, as a gap of less than a
+    bond between a card and the set beside it - it goes straight across
+    at the level of the one end or the other instead, where that runs on
+    one way across and passes over no more (measured along it, not by
+    its points). Nor does it turn more than it must: where that straight
+    way - down where it leaves and in level, or across and down a bond
+    before its input - is as clear and no longer by its corners, it takes
+    that, two bends, not a jog to a bond before its input, nor down,
+    across and down again. Gone straight, it keeps that way while dragged
+    as it keeps a side: until it is no longer clear, or the way round is a
+    fifth shorter. Inside another set or card it never goes,
     however near its ends. Its turns are a bond wide, on the page, so they
     are arcs at any zoom; two turns closer than that both shrink alike.
     It keeps half a bond from every other frame's line (docs/LOOK.md,
@@ -2025,7 +2048,11 @@ page could not be read after one run.
     going round to the curve, a wire changes shape once, and the drawing
     eases that (`DURATION.move`). Into a card that names its inputs, a
     wire comes in level for as long as the input's name, under it.
-  - **A lane of its own** (look `wireLanes`). Wires going round that
+  - **A lane of its own** (look `wireLanes`). Wires out of one port are
+    one signal: where they run on one another - the way out of the port
+    they share - they are one run, a bus, moved together and never put in
+    lanes apart, and they part where their ways do, with no step. Wires
+    out of different ports going round that
     would run on one another - up or down, or across, within half a bond
     of each other along the same stretch - are moved apart into lanes half
     a bond apart (`WIRE_LANE`, the room from a frame), as near where they ran as that
@@ -2048,10 +2075,17 @@ page could not be read after one run.
   - **It keeps its way** while that is still clear: the side it passed
     what it goes round, unless the other side has become a fifth shorter.
     A card dragged past a set makes its wire change way twice at most.
+    That is kept only while a card or a set is dragged: let go, every wire
+    is worked out anew, and one moved by an undo is worked out as if new.
     Placement keeps clear of the same routes, and a change of way on the
     page is eased, never a jump: its ends stay on their ports while it
     eases, only the rest moving (look `wireToward`), and a wire dragged by
-    its card is not eased at all (`shapeMoved`).
+    its card is not eased at all (`shapeMoved`). What is drawn is worked
+    out as it is drawn, from where the wire is to be then (look
+    `WireEasing`), not set aside for the next frame: an update set aside
+    can wait behind a drag's on a slower machine, all the drag long, and
+    the wire would be drawn where its ports were. Its ends are on its
+    ports at every frame, however slow the frames.
   - **Only what moved is worked out again.** Each wire looks at the sets
     and cards near it (`nearWire`), and is keyed by its ends and those
     (`wireKey`): a drag works out again only the wires whose key changed.
