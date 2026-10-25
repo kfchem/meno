@@ -383,7 +383,7 @@ describe("a wire never runs on past its ends and back", () => {
     expect(doublesBack(r.corners!, [card, energies, failed])).toBe(false);
   });
 
-  it("from a card beside a set under a bond off, to its two sets below and right: each in at a level between, never below all and back", () => {
+  it("from a card beside a set under a bond off, to its two sets below and right: each down and in, never below all and back", () => {
     // (in page pixels: the card, a set to its right 47 px off reaching above and below it, the card's first set below, its second right of that)
     const f = (x0: number, x1: number, y0: number, y1: number): Frame => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX });
     const card = f(0, 208, -76, 0);
@@ -397,6 +397,8 @@ describe("a wire never runs on past its ends and back", () => {
       const r = wireRoute(p, q, { from: card, to }, nearWire(p, q, { from: card, to }, all));
       // (never lower than the set it goes into: every way passes the gap beside the card alike, and the shorter is taken)
       expect(Math.min(...r.pts.map((pt) => pt.y))).toBeGreaterThanOrEqual(to.y0 - 1e-9);
+      // (and turning no more than it must: down and in, two bends - not a jog to a bond before its input, nor down, across and down again)
+      expect(r.corners!.length).toBe(4);
     }
   });
 
@@ -566,7 +568,7 @@ describe("a wire dragged by its card, as drawn", () => {
 });
 
 describe("a wire dragged past what it goes round", () => {
-  it("keeps the way it went while that is still clear: a card dragged in 2 px steps past a set changes its wire's way at most twice", () => {
+  it("keeps the way it went while that is still clear: a card dragged in 2 px steps past a set changes its wire's way at most three times", () => {
     // (a set, a step's card well to its right, and another set between them; the card dragged from well above that set to well below it)
     const from: Frame = { x0: 0, x1: 10, y0: -10, y1: 0 };
     const block: Frame = { x0: 16, x1: 26, y0: -12, y1: 2 };
@@ -588,7 +590,8 @@ describe("a wire dragged past what it goes round", () => {
       return changes;
     };
     const [kept, unkept] = [ways(true), ways(false)];
-    expect(kept).toBeLessThanOrEqual(2);
+    // (straight in at its input's level where that is clear, round above the set, round below it, and straight in again: never back)
+    expect(kept).toBeLessThanOrEqual(3);
     expect(kept).toBeLessThanOrEqual(unkept);
   }, 30000);
 });

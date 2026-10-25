@@ -2021,7 +2021,13 @@ page could not be read after one run.
     bond between a card and the set beside it - it goes straight across
     at the level of the one end or the other instead, where that runs on
     one way across and passes over no more (measured along it, not by
-    its points). Inside another set or card it never goes,
+    its points). Nor does it turn more than it must: where that straight
+    way - down where it leaves and in level, or across and down a bond
+    before its input - is as clear and no longer by its corners, it takes
+    that, two bends, not a jog to a bond before its input, nor down,
+    across and down again. Gone straight, it keeps that way while dragged
+    as it keeps a side: until it is no longer clear, or the way round is a
+    fifth shorter. Inside another set or card it never goes,
     however near its ends. Its turns are a bond wide, on the page, so they
     are arcs at any zoom; two turns closer than that both shrink alike.
     It keeps half a bond from every other frame's line (docs/LOOK.md,
@@ -2029,7 +2035,11 @@ page could not be read after one run.
     going round to the curve, a wire changes shape once, and the drawing
     eases that (`DURATION.move`). Into a card that names its inputs, a
     wire comes in level for as long as the input's name, under it.
-  - **A lane of its own** (look `wireLanes`). Wires going round that
+  - **A lane of its own** (look `wireLanes`). Wires out of one port are
+    one signal: where they run on one another - the way out of the port
+    they share - they are one run, a bus, moved together and never put in
+    lanes apart, and they part where their ways do, with no step. Wires
+    out of different ports going round that
     would run on one another - up or down, or across, within half a bond
     of each other along the same stretch - are moved apart into lanes half
     a bond apart (`WIRE_LANE`, the room from a frame), as near where they ran as that
