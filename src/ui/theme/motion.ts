@@ -5,6 +5,8 @@
  * what belongs together moves together, in the same time and the same way.
  */
 
+import type { CSSProperties } from "react";
+
 /** How long things take, in seconds. */
 export const DURATION = {
   /** A colour, a highlight, a hover. */
@@ -17,6 +19,13 @@ export const DURATION = {
 
 /** The easing of all of it: quick out of the start, settling gently (CSS's `--ease-meno`). */
 export const EASE: [number, number, number, number] = [0.2, 0.8, 0.2, 1];
+
+/**
+ * A CSS transition's time and curve for what opens and shuts in place - a
+ * card's width, its rows' height, a chevron's turn: `DURATION.base` on
+ * `EASE`, so that what grows together grows together.
+ */
+export const EASED: CSSProperties = { transitionDuration: `${DURATION.base * 1000}ms`, transitionTimingFunction: "var(--ease-meno)" };
 
 /**
  * The easing of something going out of view - a menu closing, a card or a
