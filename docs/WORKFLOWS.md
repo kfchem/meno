@@ -2082,6 +2082,20 @@ page could not be read after one run.
     A card dragged past a set makes its wire change way twice at most.
     That is kept only while a card or a set is dragged: let go, every wire
     is worked out anew, and one moved by an undo is worked out as if new.
+    A wire coming back, round what it leaves and comes into, is kept as
+    the side it passes them too, not as the curve: once taken for the
+    curve, it tried the shortest side again the next frame, over the card
+    being dragged, and flipped between the two frame by frame (the desk's
+    drag sweep: one wire 60 times in 60 one-pixel steps). What a wire has
+    to go round is found from the way it would go now, whichever side it
+    passed before - else each side, kept, finds others in its way than the
+    other does, and wins each other frame. And a way kept, a side or the
+    way straight across, stays while it passes within half a bond of a
+    frame for less than half a bond along it: a frame's room grazed by a
+    point for a pixel of a drag does not send it the other way and back.
+    Within a drag, a wire not on the card changes its way only where the
+    way it kept is no longer clear, or the other has become a fifth
+    shorter, and never back the frame after.
     Placement keeps clear of the same routes, and a change of way on the
     page is eased, never a jump: its ends stay on their ports while it
     eases, only the rest moving (look `wireToward`), and a wire dragged by

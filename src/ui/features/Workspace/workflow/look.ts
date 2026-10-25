@@ -218,7 +218,9 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   // (how far it keeps from them, past where it meets them: none where it goes inside one)
   const outside = (f: Side, pt: Pt) => (within(f, pt) ? 0 : Math.hypot(Math.max(f.x0 - pt.x, 0, pt.x - f.x1), Math.max(f.y0 - pt.y, 0, pt.y - f.y1)));
   // (going on, the curve; coming back - or too near to turn - round what it leaves and comes into)
-  const back = q.x - p.x < WIRE_TURNS ? roundWay(p, q, ends, wasSide) : undefined;
+  // (the side it passed before set aside: what it has to go round is found from the way it would go now, the same whichever side it
+  //  passed before - else each side, kept, would find others in its way than the other does, and each frame take the other side)
+  const back = q.x - p.x < WIRE_TURNS ? roundWay(p, q, ends) : undefined;
   // (going on, but steeply - up or down more than twice as far as across - not the curve, whose long middle would run slanting and bowed:
   //  across, straight up or down halfway to its input, and across into it, only its two turns rounded)
   const steep = !back && Math.abs(q.y - p.y) > 2 * (q.x - p.x) ? turnsOf([p, { x: (p.x + q.x) / 2, y: p.y }, { x: (p.x + q.x) / 2, y: q.y }, q]) : undefined;
@@ -289,7 +291,7 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
       const o = overAlong(z.pts);
       const take = back
         ? o < least || (o === least && lengthOf(z.pts) < lengthOf(best.pts))
-        : z.corners!.length < bends && (clear ? over(z.pts) === 0 : o <= along + BETWEEN) && lengthOf(z.corners!) <= long * by + 1e-9;
+        : z.corners!.length < bends && (clear && was !== "straight" ? over(z.pts) === 0 : o <= along + BETWEEN) && lengthOf(z.corners!) <= long * by + 1e-9;
       if (take) [best, least, bends] = [z, o, z.corners!.length];
     }
     return best;
@@ -297,15 +299,18 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   if (!crossed.length) {
     // (the curve clear: kept, unless it went round before and still can, no more than a fifth longer)
     if (was === "straight") {
-      const kept = straightWays().find((z) => over(z.pts) === 0 && lengthOf(z.pts) * 0.8 <= lengthOf(shape));
+      const kept = straightWays().find((z) => overAlong(z.pts) <= BETWEEN && lengthOf(z.pts) * 0.8 <= lengthOf(shape));
       if (kept) return kept;
     }
     if (wasSide) {
       const kept = roundWay(p, q, ends, wasSide, touchedBefore(others, p, q));
       const pts = rounded(kept.corners, WIRE_ROOM, DENSE);
-      if (over(pts) === 0 && lengthOf(pts) * 0.8 <= lengthOf(shape)) return straight({ pts, way: kept.side, corners: kept.corners });
+      if (overAlong(pts) <= BETWEEN && lengthOf(pts) * 0.8 <= lengthOf(shape)) return straight({ pts, way: kept.side, corners: kept.corners });
     }
-    return back ? straight({ pts: shape, way: "plain", corners: back.corners }) : { pts: shape, way: "plain", ...(steep ? { corners: steep } : {}) };
+    // (coming back - round what it leaves and comes into - said as the side it passes them: so that the next frame keeps that side, and does
+    //  not, taking it for the curve, try the shortest side again - over something now, as like as not - and so flip from one to the other
+    //  frame by frame)
+    return back ? straight({ pts: shape, way: back.side, corners: back.corners }) : { pts: shape, way: "plain", ...(steep ? { corners: steep } : {}) };
   }
   // (every level it may cross at, gone round all it would cross - the shortest first, by its corners, and no further than the first clear of all,
   //  and of the side it passed before; where none is clear, again with what any of them crosses then, twice at most)

@@ -631,6 +631,73 @@ describe("a wire dragged past what it goes round", () => {
   }, 30000);
 });
 
+describe("a wire not on a card being dragged", () => {
+  // (pages from the desk's drag sweep, in page pixels: frames; which is the card dragged; the wire's set and card; where it leaves and comes in)
+  const pages = [
+    {
+      // (a set's line back up into a card far to its left, round above the page's frames; the card dragged lies under where it goes up)
+      fs: [
+        [79.17, 231.21, 459.68, 607.77],
+        [509.67, 748.95, 100.29, 305.33],
+        [317.62, 428.79, 325.3, 495.38],
+        [302.02, 407.52, -54.75, 119.97],
+        [673.66, 823.14, 493.26, 685.34],
+        [877.78, 1096.02, 288.42, 477.46],
+        [879.73, 1087.73, 594.52, 670.52],
+        [38.12, 246.12, 140.44, 216.44],
+      ],
+      c0: 6,
+      from: 4,
+      to: 7,
+      p: [823.1423637457192, 589.300738000311],
+      q: [38.11577826272696, 188.43528756685555],
+    },
+    {
+      // (a set's line back into a card to its left, every way round over something; above or below, each kept, found others in its way)
+      fs: [
+        [762.82, 858.03, 145.43, 327.97],
+        [714.47, 815.38, 429.34, 497.74],
+        [556.44, 708.01, 137.97, 323.91],
+        [708.67, 904.97, -51.01, 38.83],
+        [54.71, 183.45, 321.25, 411.35],
+        [354.98, 562.98, 433.01, 509.01],
+        [405.43, 613.43, 617.25, 693.25],
+        [125.23, 333.23, 73.19, 149.19],
+        [53.08, 261.08, 621.21, 697.21],
+      ],
+      c0: 5,
+      from: 2,
+      to: 7,
+      p: [708.0139452265576, 230.93977138400078],
+      q: [125.23247133940458, 121.19130953494461],
+    },
+  ];
+  it("coming back round what is in its way, keeps its way: a card dragged 60 px past it, a pixel at a time, changes its way once at most", () => {
+    const f = ([x0, x1, y0, y1]: number[]): Frame => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX });
+    for (const pg of pages) {
+      const page = pg.fs.map(f);
+      const [from, to] = [page[pg.from], page[pg.to]];
+      const p = { x: pg.p[0] * PX, y: pg.p[1] * PX };
+      const q = { x: pg.q[0] * PX, y: pg.q[1] * PX };
+      let was: WireWay | undefined;
+      let before: { x: number; y: number }[] | null = null;
+      let [ways, jumps] = [0, 0];
+      for (let dx = 0; dx <= 60; dx++) {
+        const card = { ...page[pg.c0], x0: page[pg.c0].x0 + dx * PX, x1: page[pg.c0].x1 + dx * PX };
+        const all = page.map((g, i) => (i === pg.c0 ? card : g));
+        const r = wireRoute(p, q, { from, to }, nearWire(p, q, { from, to }, all), was);
+        if (was && r.way !== was) ways++;
+        // (a change seen: more than 12 px from where it was)
+        if (before && apart(r.pts, before) / PX > 12) jumps++;
+        was = r.way;
+        before = r.pts;
+      }
+      expect(ways).toBeLessThanOrEqual(1);
+      expect(jumps).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe("a page's wires, worked out again", () => {
   it("only where a wire or something near it moved - 50 wires on a page of 100 sets and 50 cards, keyed in well under a frame", () => {
     // (100 sets in a grid, 50 steps' cards beside them, and 50 wires each from a set into a card)
