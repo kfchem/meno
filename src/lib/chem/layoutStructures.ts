@@ -1,5 +1,5 @@
 import { isName, nameBox } from "../layout/names";
-import { layoutMolecule, type Atom, type Bond, type Layout, type LayoutOptions, type TextItem } from "./layout2d";
+import { layoutMolecule, type Atom, type Bond, type Circle, type Layout, type LayoutOptions, type TextItem, type Vec2 } from "./layout2d";
 
 /**
  * A drawing laid out a structure at a time: what `layoutMolecule` makes of
@@ -17,6 +17,12 @@ import { layoutMolecule, type Atom, type Bond, type Layout, type LayoutOptions, 
  * meet - and alone elsewhere, where nothing of one can change the other.
  * A bracket (an S-group) may take in several structures, and is numbered
  * across the drawing: a drawing with one is laid out whole.
+ *
+ * While a gesture is under way (`moving`), a structure only carried - turned
+ * by a selection's handle, dragged - each of its atoms where the same turn
+ * and shift take it, nothing else of it changed, is not laid out again: its
+ * last layout is carried with it, each label kept upright beside its atom
+ * (`carriedLayout`). Once the gesture ends, it is laid out again, once.
  */
 export function layoutByStructure(
   atoms: Atom[],
@@ -26,6 +32,7 @@ export function layoutByStructure(
   kept: StructureLayouts,
   /** What else the layout reads, as it changes: the typefaces' letters, the abbreviations known. */
   given: readonly unknown[] = [],
+  moving = false,
 ): Layout {
   const now = [opts, zoom, ...given];
   if (now.length !== kept.given.length || now.some((v, i) => v !== kept.given[i])) {
@@ -54,7 +61,15 @@ export function layoutByStructure(
     // (shown magnified: laid out in the style so many times over - a zoomed copy of it)
     const k = atoms[part.atoms[0]].magnified ?? 1;
     let it = was.get(key);
-    if (!it || !sameAs(it, part, atoms, bonds)) {
+    // (carried while a gesture lasts, from the structure as it was last laid out)
+    const motion = it && moving && it.atoms.length === part.atoms.length && sameBonds(it, part, bonds) ? rigidMotion(it.base?.atoms ?? it.atoms, part.atoms.map((i) => atoms[i])) : null;
+    if (it && !moving && it.base) it = undefined;
+    if (it && motion && !sameAs(it, part, atoms, bonds)) {
+      const base = it.base ?? { atoms: it.atoms, layout: it.layout };
+      const now = part.atoms.map((i) => atoms[i]);
+      const layout = carriedLayout(base.layout, base.atoms, now, motion);
+      it = { atoms: now, bonds: it.bonds, at: part.atoms, layout, texts: placed(layout.texts, part.atoms), base };
+    } else if (!it || !sameAs(it, part, atoms, bonds)) {
       part.atoms.forEach((i, k) => (local[i] = k));
       const layout = layoutMolecule(
         part.atoms.map((i) => atoms[i]),
@@ -144,10 +159,100 @@ export function structureLayouts(): StructureLayouts {
  * objects), its atoms' places in the drawing, its layout, and the layout's
  * texts with their atoms by those places.
  */
-type Laid = { atoms: Atom[]; bonds: Bond[]; at: number[]; layout: Layout; texts: TextItem[] };
+type Laid = {
+  atoms: Atom[];
+  bonds: Bond[];
+  at: number[];
+  layout: Layout;
+  texts: TextItem[];
+  /** Carried while a gesture lasts: the structure as it was last laid out, and that layout (`carriedLayout`). */
+  base?: { atoms: Atom[]; layout: Layout };
+};
 
 /** Atoms and bonds, by their places in the drawing, laid out together. */
 type Part = { atoms: number[]; bonds: number[] };
+
+function sameBonds(it: Laid, part: Part, bonds: Bond[]): boolean {
+  if (it.bonds.length !== part.bonds.length) return false;
+  for (let k = 0; k < part.bonds.length; k++) if (it.bonds[k] !== bonds[part.bonds[k]]) return false;
+  return true;
+}
+
+/** A turn by an angle (its cosine and sine) about the origin, then a shift. */
+type Motion = { cos: number; sin: number; dx: number; dy: number };
+
+/**
+ * How atoms stand to how they stood, where they were only carried: each the
+ * same but for its place, and each place where one turn and one shift take
+ * it - to a millionth of the structure's size. None otherwise.
+ */
+export function rigidMotion(was: readonly Atom[], now: readonly Atom[]): Motion | null {
+  if (!was.length || was.length !== now.length) return null;
+  for (let k = 0; k < was.length; k++) {
+    const a = was[k] as Record<string, unknown>;
+    const b = now[k] as Record<string, unknown>;
+    if (a === b) continue;
+    for (const key in a) if (key !== "x" && key !== "y" && a[key] !== b[key]) return null;
+    for (const key in b) if (key !== "x" && key !== "y" && !(key in a)) return null;
+  }
+  // (the turn from the atom farthest from the first: the surest line through them)
+  let far = 0;
+  let reach = 0;
+  for (let k = 1; k < was.length; k++) {
+    const d = Math.hypot(was[k].x - was[0].x, was[k].y - was[0].y);
+    if (d > reach) [far, reach] = [k, d];
+  }
+  const angle =
+    reach > 0 ? Math.atan2(now[far].y - now[0].y, now[far].x - now[0].x) - Math.atan2(was[far].y - was[0].y, was[far].x - was[0].x) : 0;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = now[0].x - (was[0].x * cos - was[0].y * sin);
+  const dy = now[0].y - (was[0].x * sin + was[0].y * cos);
+  const tol = 1e-6 * Math.max(reach, 1);
+  for (let k = 0; k < was.length; k++) {
+    if (Math.abs(was[k].x * cos - was[k].y * sin + dx - now[k].x) > tol || Math.abs(was[k].x * sin + was[k].y * cos + dy - now[k].y) > tol) return null;
+  }
+  return { cos, sin, dx, dy };
+}
+
+/**
+ * A structure's layout carried as its atoms were (`rigidMotion`): its
+ * lines, shapes, rings and fills turned and shifted with it; each label,
+ * and each charge set beside an atom, shifted with its atom and kept
+ * upright, as the page's letters are. Laid out again, a label may stand
+ * otherwise - on the other side of its atom - once the gesture ends.
+ */
+export function carriedLayout(layout: Layout, was: readonly Atom[], now: readonly Atom[], m: Motion): Layout {
+  const pt = (p: Vec2): Vec2 => ({ x: p.x * m.cos - p.y * m.sin + m.dx, y: p.x * m.sin + p.y * m.cos + m.dy });
+  const pts = (ps: Vec2[]) => ps.map(pt);
+  const turn = Math.atan2(m.sin, m.cos);
+  const circle = (c: Circle): Circle => ({ ...c, c: pt(c.c), ...(c.angle != null || turn !== 0 ? { angle: (c.angle ?? 0) + turn } : {}) });
+  const texts = layout.texts.map((t) => {
+    const i = t.beside ? t.markOf : t.atom;
+    if (i == null || !was[i] || !now[i]) return { ...t, ...pt(t) };
+    return { ...t, x: t.x + now[i].x - was[i].x, y: t.y + now[i].y - was[i].y };
+  });
+  const lines = layout.lines.map((l) => {
+    const a = pt({ x: l.x1, y: l.y1 });
+    const b = pt({ x: l.x2, y: l.y2 });
+    return { ...l, x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+  });
+  // (its bounds: those of its marks, carried, and of its labels, moved)
+  const corners = [layout.bounds.min, layout.bounds.max, { x: layout.bounds.min.x, y: layout.bounds.max.y }, { x: layout.bounds.max.x, y: layout.bounds.min.y }].map(pt);
+  const xs = corners.map((c) => c.x);
+  const ys = corners.map((c) => c.y);
+  return {
+    ...layout,
+    ...(layout.under ? { under: layout.under.map((u) => ({ ...u, points: pts(u.points) })) } : {}),
+    ...(layout.curves ? { curves: layout.curves.map((c) => ({ ...c, points: pts(c.points) })) } : {}),
+    lines,
+    polys: layout.polys.map((p) => ({ ...p, points: pts(p.points) })),
+    texts,
+    circles: layout.circles.map(circle),
+    fills: layout.fills.map(circle),
+    bounds: { min: { x: Math.min(...xs), y: Math.min(...ys) }, max: { x: Math.max(...xs), y: Math.max(...ys) } },
+  };
+}
 
 function sameAs(it: Laid, part: Part, atoms: Atom[], bonds: Bond[]): boolean {
   if (it.atoms.length !== part.atoms.length || it.bonds.length !== part.bonds.length) return false;

@@ -240,12 +240,18 @@ Taken on 2026-10-03:
   - **A drawing and its 3D structure.** Turning the 3D structure leaves
     the drawing as drawn. Hovering an atom in one lights the same atom in
     the other. *Turn like the drawing* is in the menu.
-  - **The selection's handle turns molecules in 3D** (agreed 2026-10-03):
-    - selected alone, as one body about their common centre, in 3D - as a
-      drag on one turns it - so that molecules placed together, a complex
-      say, stay as they are to one another. That moves them, so it is one
-      undo step, and the undo puts their turns back too. Afterwards each
-      stands as high as the turn left it, the whole resting on the page;
+  - **The selection's handle turns molecules in 3D** (agreed 2026-10-03;
+    in the page's plane since 2026-10-24, the maintainer: the handle turns
+    round, so it turns them round, as it does a drawing):
+    - selected alone, in the page's plane about the line of sight, in
+      steps of 15 degrees or freely after a pause, as a drawing turns:
+      several as one body about their common middle - so that molecules
+      placed together, a complex say, stay as they are to one another -
+      which moves them; one about its own centre, where it stands. Either
+      is one undo step, the undo putting their turns back too, and Escape
+      lets it go. (Until 2026-10-24 the handle turned them in 3D, as a
+      drag on one does - and on a touch screen seemed to do nothing.) A
+      drag on a molecule itself still turns it in 3D;
     - selected with a drawing, everything in the page's plane, the
       molecules carried round and turned with it;
     - with Shift, each molecule about its own centre, the drawing staying.

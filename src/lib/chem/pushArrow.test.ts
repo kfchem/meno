@@ -53,6 +53,19 @@ describe("an electron-pushing arrow Meno lays", () => {
     expect(s.end.x).toBeLessThan(0);
   });
 
+  it("lays the same curve however much else the drawing holds far from it: only what is near it is weighed", () => {
+    // (an SN2 as above, then the same with a thousand bonds, labels and atoms laid out far away)
+    const c: PushEndAt = { atom: { x: 0, y: 0 }, clear: () => 0.12, bonds: [{ x: 1, y: 0 }], losing: [{ x: 1, y: 0 }] };
+    const scene: PushScene = { segments: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], boxes: [{ min: { x: -0.3, y: 0.4 }, max: { x: 0.3, y: 0.7 } }], atoms: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: -2, y: 0 }] };
+    const far = Array.from({ length: 1000 }, (_, k) => ({ x: 40 + (k % 40), y: -30 + Math.floor(k / 40) }));
+    const crowded: PushScene = {
+      segments: [...scene.segments, ...far.map((p) => [p, { x: p.x + 1, y: p.y }] as const)],
+      boxes: [...scene.boxes, ...far.map((p) => ({ min: p, max: { x: p.x + 0.4, y: p.y + 0.3 } }))],
+      atoms: [...scene.atoms, ...far],
+    };
+    for (const from of [bare(-2, 0, true), bare(3.2, 0, true), bare(-1.5, 1.4)]) expect(pushShape(from, c, undefined, crowded, m)).toEqual(pushShape(from, c, undefined, scene, m));
+  });
+
   it("is a curve, never a line, and bends one way only", () => {
     const s = pushShape(bare(0, 0, true), bare(2.5, 0), undefined, empty, m)!;
     expect(rise(s)).toBeGreaterThan(0.15);

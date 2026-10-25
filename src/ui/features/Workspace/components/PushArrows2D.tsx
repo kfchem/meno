@@ -4,11 +4,11 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { bendThrough, endBase, pointAt, pushMeasures, pushOutlines, type PushShape } from "../../../../lib/chem/pushArrow";
 import { COLORS } from "../../../theme/colors";
-import { TAU, follow } from "../../../theme/motion";
+import { DURATION, EASE, TAU, eased, follow } from "../../../theme/motion";
 import { DOUBLE_CLICK_MS } from "../constants";
-import { useEditor, useEditorStore } from "../store";
+import { useEditor, useEditorStore, type PushArrow } from "../store";
 import { pageAt } from "../utils/page";
-import { laidKey, pushShapes, pushTargetAt } from "../utils/pushes";
+import { carriedShapes, endPlaces, laidKey, pushShapes, pushTargetAt } from "../utils/pushes";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
@@ -53,6 +53,12 @@ function useKept<T>(value: T, key: string): T {
   return kept.current.value;
 }
 
+/** A curve a share `u` of the way from `a` to `b`: each control point and each dot so far along, as an arrow settles (both with as many dots). */
+function settledShape(a: PushShape, b: PushShape, u: number): PushShape {
+  const at = (p: P, q: P): P => ({ x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u });
+  return { start: at(a.start, b.start), c1: at(a.c1, b.c1), c2: at(a.c2, b.c2), end: at(a.end, b.end), dots: b.dots.map((d, i) => ({ ...d, c: at(a.dots[i].c, d.c) })) };
+}
+
 export default function PushArrows2D() {
   const pushes = useEditor((s) => s.pushes);
   const hoveredPush = useEditor((s) => s.hoveredPush);
@@ -65,24 +71,77 @@ export default function PushArrows2D() {
   // an end being drawn out: where the pointer is
   const [moving, setMoving] = useState<{ of: number; end: "from" | "to"; at: P } | null>(null);
   // (laid out again only as what they are laid by changes - not as the drawing is laid out again the same, at each frame of a zoom)
+  // (a press held - a selection moved or turned: arrows carried with what they are drawn on, laid out again once it is let go)
+  const held = useEditor((s) => s.panHold.active);
+  const laidAt = useRef<{ shapes: ReturnType<typeof pushShapes>; at: Map<number, P> } | null>(null);
   const laidOn = useKept(layout, pushes.length ? laidKey(layout) : "");
-  const shapes = useMemo(
-    () => pushShapes(pushes, atoms, bonds, laidOn, opts, opts.fontPx, m, moving ?? undefined),
-    [pushes, atoms, bonds, laidOn, opts, m, moving],
-  );
-  // (one mesh for each colour they are drawn in: the bonds' ink, unless an arrow is given its own)
+  // (let go: from the curves carried to those laid now - `settle`)
+  const settle = useRef<{ t0: number; from: Map<number, PushShape> } | null>(null);
+  const shownLast = useRef<readonly { push: PushArrow; shape: PushShape }[]>([]);
+  const wasHeld = useRef(held);
+  const shapes = useMemo(() => {
+    const last = laidAt.current;
+    const carried = held && !moving && last && last.shapes.length === pushes.length && last.shapes.every((x, i) => x.push === pushes[i]) ? carriedShapes(last.shapes, last.at, atoms, bonds) : null;
+    const letGo = wasHeld.current && !held;
+    wasHeld.current = held;
+    if (carried) return carried;
+    const out = pushShapes(pushes, atoms, bonds, laidOn, opts, opts.fontPx, m, moving ?? undefined);
+    laidAt.current = { shapes: out, at: endPlaces(pushes, atoms, bonds) };
+    if (letGo && shownLast.current.length) settle.current = { t0: performance.now(), from: new Map(shownLast.current.map((x) => [x.push.id, x.shape])) };
+    return out;
+  }, [pushes, atoms, bonds, laidOn, opts, m, moving, held]);
+  // (settling, a frame at a time: each curve from where it was carried to where it is laid now, eased - or, where it
+  // has not as many dots, the one fading out as the other comes in)
+  const [settleTick, setSettleTick] = useState(0);
+  useFrame(() => {
+    const st = settle.current;
+    if (!st) return;
+    if (performance.now() - st.t0 >= DURATION.move * 1000) settle.current = null;
+    setSettleTick((t) => t + 1);
+    invalidate();
+  });
+  const shown = useMemo(() => {
+    const st = settle.current;
+    const u = st ? eased(EASE, Math.min(1, (performance.now() - st.t0) / (DURATION.move * 1000))) : 1;
+    const going: { push: PushArrow; shape: PushShape }[] = [];
+    const coming = new Set<number>();
+    const now = shapes.map((x) => {
+      const was = st?.from.get(x.push.id);
+      if (!was || u >= 1) return x;
+      if (was.dots.length !== x.shape.dots.length) {
+        going.push({ push: x.push, shape: was });
+        coming.add(x.push.id);
+        return x;
+      }
+      return { ...x, shape: settledShape(was, x.shape, u) };
+    });
+    return { now, going, coming, u };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- settleTick: a frame of the way
+  }, [shapes, settleTick]);
+  shownLast.current = shown.now;
+  // (one mesh for each colour they are drawn in: the bonds' ink, unless an arrow is given its own - and, settling, one for
+  // those fading out and one for those coming in, each as opaque as it has come)
   const ink = opts.bondColor ?? "black";
   const drawn = useMemo(() => {
-    const byColour = new Map<string, typeof shapes>();
-    for (const one of shapes) byColour.set(one.push.color ?? ink, [...(byColour.get(one.push.color ?? ink) ?? []), one]);
-    return [...byColour].map(([color, these]) => ({
-      color,
-      geometry: shapesGeometry(
-        these.flatMap(({ push, shape }) => pushOutlines(shape, !!push.half, m)),
-        these.flatMap(({ shape }) => shape.dots),
-      ),
-    }));
-  }, [shapes, m, ink]);
+    const meshes = (these: readonly { push: PushArrow; shape: PushShape }[], opacity: number, kind: string) => {
+      const byColour = new Map<string, (typeof these)[number][]>();
+      for (const one of these) byColour.set(one.push.color ?? ink, [...(byColour.get(one.push.color ?? ink) ?? []), one]);
+      return [...byColour].map(([color, them]) => ({
+        key: `${kind}:${color}`,
+        color,
+        opacity,
+        geometry: shapesGeometry(
+          them.flatMap(({ push, shape }) => pushOutlines(shape, !!push.half, m)),
+          them.flatMap(({ shape }) => shape.dots),
+        ),
+      }));
+    };
+    return [
+      ...meshes(shown.now.filter((x) => !shown.coming.has(x.push.id)), 1, "laid"),
+      ...meshes(shown.now.filter((x) => shown.coming.has(x.push.id)), shown.u, "coming"),
+      ...meshes(shown.going, 1 - shown.u, "going"),
+    ];
+  }, [shown, m, ink]);
   useEffect(() => () => drawn.forEach((d) => d.geometry.dispose()), [drawn]);
 
   const toWorld = (cx: number, cy: number): P => {
@@ -183,9 +242,9 @@ export default function PushArrows2D() {
   const k = HANDLE_PX / Math.max(useDrawnZoom((z) => (lit ? z : 1)), 1e-6);
   return (
     <group>
-      {drawn.map(({ color, geometry }) => (
-        <mesh key={color} geometry={geometry} renderOrder={21} frustumCulled={false} raycast={() => {}}>
-          <meshBasicMaterial color={color} toneMapped={false} depthTest={false} depthWrite={false} transparent side={THREE.DoubleSide} />
+      {drawn.map(({ key, color, opacity, geometry }) => (
+        <mesh key={key} geometry={geometry} renderOrder={21} frustumCulled={false} raycast={() => {}}>
+          <meshBasicMaterial color={color} opacity={opacity} toneMapped={false} depthTest={false} depthWrite={false} transparent side={THREE.DoubleSide} />
         </mesh>
       ))}
       {shapes.map(({ push, shape }) => (
