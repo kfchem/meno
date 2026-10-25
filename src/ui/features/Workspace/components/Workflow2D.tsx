@@ -15,12 +15,12 @@ import { positionMarks } from "../workflow/substituents";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
-import { labelReach, selectionFrame } from "../workflow/selectionSet";
+import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { wordsTooSmall } from "../utils/pageScale";
+import { standInShown, wordsShown, wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
@@ -506,6 +506,8 @@ export default function Workflow2D() {
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+    layer.current?.style.setProperty("--words", wordsShown(z).toFixed(3));
+    layer.current?.style.setProperty("--stand-in", standInShown(z).toFixed(3));
     portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
   });
 
@@ -855,12 +857,13 @@ export default function Workflow2D() {
     return "plain";
   };
 
-  // the selection, where it holds whole structures or molecules in 3D: the frame an input set would take, round its labels as they are drawn
+  // the selection, where it holds whole structures or molecules in 3D: the frame an input set would take, round its labels as they are drawn -
+  // none where any of it lies in a set already: a port there is the set's, shown as the set is
   const drawing = useDrawnLayout();
   const labels = useMemo(() => labelReach(drawing.layout, drawing.atoms, drawing.opts), [drawing.layout, drawing.atoms, drawing.opts]);
   const asSet = useMemo(
-    () => selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels),
-    [sel, sel3d, model, molecules3d, style3d, turns3d, frames3d, labels],
+    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, sets) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
+    [sel, sel3d, model, molecules3d, pictures, sets, style3d, turns3d, frames3d, labels],
   );
 
   /** The selection made a set, an input, and a wire drawn out of it. */

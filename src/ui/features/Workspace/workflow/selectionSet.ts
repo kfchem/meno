@@ -9,7 +9,7 @@ import type { Style3D } from "../../../../lib/chem/style3d";
 import { labelBox, labelSetOf, pxToWorld, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
 import type { Model, Molecule3D, Turn3D } from "../store/types";
 import { lookOf, poseOf, seenBounds, sharesOf, solidOf } from "../utils/molecule3d";
-import { framesOf, structuresOf, type Frame } from "./entries";
+import { framesOf, inside, placesOf, structuresOf, type Frame, type Page } from "./entries";
 import { SET_PAD, SET_TOP, CHIP, CHIP_CHAR, CHIP_SIDES } from "./look";
 import { greatest, least } from "../../../../lib/chem/lists";
 
@@ -104,4 +104,18 @@ export function selectionFrame(
   }
   if (!xs.length) return null;
   return { x0: least(xs), x1: greatest(xs), y0: least(ys), y1: greatest(ys) + SET_TOP - SET_PAD };
+}
+
+/**
+ * Whether any of the selection - a structure drawn, wholly or in part, or
+ * a molecule in 3D - lies in one of `sets` (its middle inside its frame,
+ * as a set holds it: entries `lyingIn`): it is in a set already, whose
+ * port is that set's, shown as the set is pointed at or chosen; the
+ * selection takes no port of its own there.
+ */
+export function selectionInSet(page: Page, atoms: ReadonlySet<number>, sel3d: ReadonlySet<number>, sets: readonly Frame[]): boolean {
+  if (!sets.length || (!atoms.size && !sel3d.size)) return false;
+  const places = placesOf(page);
+  const at = [...places.structures.filter((s) => s.ids.some((id) => atoms.has(id))).map((s) => s.at), ...[...sel3d].flatMap((id) => places.molecules.get(id) ?? [])];
+  return at.some((pt) => sets.some((f) => inside(f, pt)));
 }

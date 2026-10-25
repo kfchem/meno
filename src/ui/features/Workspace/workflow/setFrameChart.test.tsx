@@ -47,10 +47,12 @@ describe("a set holding a chart, at a zoom too small to read its words", () => {
       const far = frame(set(c), true);
       // (what it draws, the same at both: three points, or three levels' bars)
       expect([near.match(mark)?.length, far.match(mark)?.length]).toEqual([3, 3]);
-      // (its body shown, faded out at neither; its words faded at the small zoom alone)
+      // (its body shown, faded with the zoom at neither; its words, each, faded with the zoom - utils/pageScale `wordsShown` - by the page,
+      //  not left out at once)
       const body = (html: string) => html.match(/class="absolute overflow-hidden[^"]*"/)![0];
-      expect([body(near).includes("opacity-0"), body(far).includes("opacity-0")]).toEqual([false, false]);
-      expect([near.includes("[&amp;&gt;span]:opacity-0"), far.includes("[&amp;&gt;span]:opacity-0")]).toEqual([false, true]);
+      expect([body(near).includes("meno-words"), body(far).includes("meno-words")]).toEqual([false, false]);
+      expect([near.includes("meno-words-each"), far.includes("meno-words-each")]).toEqual([true, true]);
+      expect(far).not.toContain("opacity-0");
     }
   });
 
@@ -66,6 +68,6 @@ describe("a set holding a chart, at a zoom too small to read its words", () => {
   it("leaves a table out whole, as before: its words are all it is", () => {
     const table = { columns: [{ name: "x", kind: "number" as const, unit: "none" as const }], rows: [[1]], unread: [], left: [] };
     const far = frame({ id: 1, x0: 0, x1: 12, y0: 0, y1: 9, table }, true);
-    expect(far.match(/class="absolute overflow-hidden[^"]*"/)![0]).toContain("opacity-0");
+    expect(far.match(/class="[^"]*absolute overflow-hidden[^"]*"/)![0]).toContain("meno-words");
   });
 });
