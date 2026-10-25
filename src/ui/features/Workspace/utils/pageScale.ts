@@ -4,7 +4,17 @@
  * page draws them - a page pixel at the zoom a canvas opens at is a pixel on
  * the screen - and their words go where they would be too small to read.
  */
+import type { CSSProperties } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+
+/**
+ * What makes a chip as large as the page draws it (`--page`, components/
+ * PageScale): laid out at that size - its letters set at it - not drawn at
+ * one size and scaled after by a transform, which the Mac's WebView draws
+ * once and magnifies, its words soft up close (found 2026-10-25). Its
+ * lengths, its widths measured, stay in page pixels.
+ */
+export const PAGE_SIZED: CSSProperties = { zoom: "var(--page, 1)" };
 
 /** A page pixel, in world units: a bond is 48 of them, as a canvas opens in ACS 1996 style. */
 export const PAGE_PX = NOMINAL_BOND_LENGTH / 48;

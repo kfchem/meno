@@ -1,4 +1,5 @@
 import PageHtml from "./PageHtml";
+import { PAGE_SIZED } from "../utils/pageScale";
 import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
@@ -335,7 +336,7 @@ export function FramesChip({
       ref={root}
       className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
       // (the pointer goes through it but for what it shows: a chip hidden keeps its size, and would hide what lies under it - a set's port, a step's card)
-      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0", pointerEvents: "none" }}
+      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px))`, pointerEvents: "none" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
         else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);
@@ -346,6 +347,7 @@ export function FramesChip({
         setPointed(null);
       }}
     >
+      <div className="flex flex-col items-center" style={PAGE_SIZED}>
       {(!single || about || title) && (
         <div className="relative">
           <div
@@ -455,6 +457,7 @@ export function FramesChip({
         </div>
       )}
       {below && <div style={{ pointerEvents: "auto" }}>{below}</div>}
+      </div>
     </div>
   );
 }

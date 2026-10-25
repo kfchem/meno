@@ -1599,7 +1599,12 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
 - **Chips on the page** (*How it looks*): drawn at the page's scale -
   `--page`, set on the layer the page's HTML is drawn in each time the
   zoom changes - from where each hangs, and faded out below 75 %, with
-  the sets' names and the cards' words (`utils/pageScale`).
+  the sets' names and the cards' words (`utils/pageScale`). Each is laid
+  out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
+  they are seen at - not drawn at one size and scaled by a transform,
+  which the Mac's WebView magnifies soft up close (2026-10-25; so the
+  frames chip, *Make again*, a measurement's value and the notes over a
+  molecule or a figure).
 - **Quick Add** opens where it will stay as a panel opens below its row -
   its calculations, or the field a SMILES is typed in: its side is chosen
   once, for its largest, and it is held by its top left corner, so that
