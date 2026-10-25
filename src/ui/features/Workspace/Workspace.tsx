@@ -2958,7 +2958,7 @@ function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () =
       {suggest.map((id) => {
         const p = anyPluginById(id);
         if (!p) return null;
-        const adding = states[id] === "adding";
+        const adding = states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}
