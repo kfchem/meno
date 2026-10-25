@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey, doublesBack, WireEasing } from "./look";
+import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey, doublesBack, WireEasing, wireLanes } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -402,6 +402,25 @@ describe("a wire never runs on past its ends and back", () => {
     }
   });
 
+  it("from one port to a set near and one far below: each straight down and in, on one trunk - not two long slanting curves side by side", () => {
+    // (as the maintainer's page, in page pixels: a card, its first set 87 px right and below it, its second 65 px right and far below)
+    const f = (x0: number, x1: number, y0: number, y1: number): Frame => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX });
+    const card = f(0, 208, -76, 0);
+    const near = f(295, 631, -419, -127);
+    const far = f(273, 488, -888, -658);
+    const routes = [near, far].map((to) => {
+      const p = stepGives({ x: 0, y: 0 });
+      const q = setTakes(to);
+      return wireRoute(p, q, { from: card, to }, nearWire(p, q, { from: card, to }, [card, near, far]));
+    });
+    // (each across, straight down, and across in: two turns)
+    for (const r of routes) expect(r.corners!.length).toBe(4);
+    // (in lanes: the two runs down one, where the nearer the port was)
+    const [a, b] = wireLanes(routes.map((r) => r.corners!), [card, near, far]);
+    expect(a[1].x).toBe(b[1].x);
+    expect(a[1].x).toBe(routes[1].corners![1].x);
+  });
+
   it("is told: a turn out past both ends round nothing, not one round a frame, nor a way on one way across", () => {
     const pt = (x: number, y: number) => ({ x, y });
     // (down past both ends, a step left, up into the other: round nothing - and round a frame lying within the turn)
@@ -415,7 +434,7 @@ describe("a wire never runs on past its ends and back", () => {
     expect(doublesBack([pt(0, 0), pt(2, 0), pt(2, -2), pt(1, -2), pt(1, -4), pt(3, -4)], [])).toBe(false);
   });
 
-  it("on random pages, frames as near as a quarter bond: none of 300 pages' wires turns out past both its ends round nothing", () => {
+  it("on random pages, frames as near as a quarter bond: none of 300 pages' wires turns out past both its ends round nothing, and every run is straight", () => {
     // (seeded: 3 to 6 sets, 2 to 4 cards, a quarter bond apart at least; each card wired from a set, and to a set of its own)
     let a = 21;
     const rnd = () => {
@@ -427,6 +446,20 @@ describe("a wire never runs on past its ends and back", () => {
     let wires = 0;
     let round = 0;
     const back: string[] = [];
+    const slanting: string[] = [];
+    // (a wire as drawn - through as many points as at 100 % - straight but at its turns: each step of it up or down, or across, but
+    //  within a bond of a corner, where it is rounded; and none falling more than twice as far as it goes across left a curve)
+    const straight = (p: { x: number; y: number }, q: { x: number; y: number }, r: { pts: { x: number; y: number }[]; corners?: { x: number; y: number }[] }) => {
+      if (!r.corners) return Math.abs(q.y - p.y) <= 2 * (q.x - p.x);
+      const turns = r.corners.slice(1, -1);
+      const pts = byTurn(r.pts, pointsFor(r.pts, 1 / PX));
+      return pts.every((a, i) => {
+        const b = pts[i + 1];
+        if (!b || Math.abs(a.x - b.x) < 1e-9 || Math.abs(a.y - b.y) < 1e-9) return true;
+        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        return turns.some((c) => Math.hypot(m.x - c.x, m.y - c.y) <= WIRE_ROOM * Math.SQRT2);
+      });
+    };
     for (let page = 0; page < 300; page++) {
       const frames: Frame[] = [];
       const fits = (f: Frame) => !frames.some((g) => f.x0 < g.x1 + 12 * PX && g.x0 < f.x1 + 12 * PX && f.y0 < g.y1 + 12 * PX && g.y0 < f.y1 + 12 * PX);
@@ -459,11 +492,13 @@ describe("a wire never runs on past its ends and back", () => {
           wires++;
           if (r.corners) round++;
           if (r.corners && doublesBack(r.corners, frames)) back.push(`page ${page}`);
+          if (!straight(p, q, r)) slanting.push(`page ${page}`);
         }
       });
     }
     expect(round).toBeGreaterThan(1000);
     expect(back).toEqual([]);
+    expect(slanting).toEqual([]);
     expect(wires).toBeGreaterThan(1300);
   }, 60000);
 });

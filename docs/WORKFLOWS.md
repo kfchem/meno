@@ -1997,7 +1997,12 @@ page could not be read after one run.
     `withExits`).
   - **A wire goes round** (look `wireRoute`). Going on to the right it
     is a curve, running on across all the way, never back out over what
-    is beside its ends. Where its input lies less than half a bond to the
+    is beside its ends - but where it falls or rises more than twice as
+    far as it goes across, it is no curve, whose long middle would run
+    slanting and bowed: it goes across, straight up or down halfway to
+    its input, and across into it, only its two turns rounded, so that
+    its long run is straight, and wires out of one port share it (*A lane
+    of its own*). Where its input lies less than half a bond to the
     right of where it leaves (`WIRE_TURNS`), or to the left of it, or the
     curve would cross another set or card, or come within half a bond of
     one away from its ends, it goes round them all: out a bond to the

@@ -219,7 +219,10 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   const outside = (f: Side, pt: Pt) => (within(f, pt) ? 0 : Math.hypot(Math.max(f.x0 - pt.x, 0, pt.x - f.x1), Math.max(f.y0 - pt.y, 0, pt.y - f.y1)));
   // (going on, the curve; coming back - or too near to turn - round what it leaves and comes into)
   const back = q.x - p.x < WIRE_TURNS ? roundWay(p, q, ends, wasSide) : undefined;
-  const shape = back ? rounded(back.corners, WIRE_ROOM, DENSE) : curve;
+  // (going on, but steeply - up or down more than twice as far as across - not the curve, whose long middle would run slanting and bowed:
+  //  across, straight up or down halfway to its input, and across into it, only its two turns rounded)
+  const steep = !back && Math.abs(q.y - p.y) > 2 * (q.x - p.x) ? turnsOf([p, { x: (p.x + q.x) / 2, y: p.y }, { x: (p.x + q.x) / 2, y: q.y }, q]) : undefined;
+  const shape = back ? rounded(back.corners, WIRE_ROOM, DENSE) : steep ? rounded(steep, WIRE_ROOM, DENSE) : curve;
   const others = around.filter((f) => !same(f, ends.from) && !same(f, ends.to));
   // (each grown by half a bond once, not for every point it is looked at for)
   const grown = new Map(others.map((f) => [f, near(f)]));
@@ -302,7 +305,7 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
       const pts = rounded(kept.corners, WIRE_ROOM, DENSE);
       if (over(pts) === 0 && lengthOf(pts) * 0.8 <= lengthOf(shape)) return straight({ pts, way: kept.side, corners: kept.corners });
     }
-    return back ? straight({ pts: shape, way: "plain", corners: back.corners }) : { pts: shape, way: "plain" };
+    return back ? straight({ pts: shape, way: "plain", corners: back.corners }) : { pts: shape, way: "plain", ...(steep ? { corners: steep } : {}) };
   }
   // (every level it may cross at, gone round all it would cross - the shortest first, by its corners, and no further than the first clear of all,
   //  and of the side it passed before; where none is clear, again with what any of them crosses then, twice at most)
@@ -674,6 +677,8 @@ type Run = {
   hi: number;
   /** How far to the side it may be moved: none, for a run into one of its wire's ends. */
   room: [number, number];
+  /** How far it may be moved and its wire keep its way - halfway to the corners either side - frames aside: onto a bus (`wireLanes`). */
+  span: [number, number];
   /** The order it takes in a lane among others: the less, the further to the left, or down. */
   order: number;
 };
@@ -726,6 +731,7 @@ export function wireLanes(ways: readonly (readonly Pt[])[], frames: readonly Sid
       //  sooner, than another turning the other way, to its side before the other to the other's: measured from far off, `FAR`)
       const order = turn0 * (FAR + along(first)) + turn1 * (FAR - along(last));
       let room: [number, number] = [pos, pos];
+      let span: [number, number] = [pos, pos];
       if (!fixed) {
         // (half a bond clear of every frame along it, and no more than halfway to the corners either side)
         let [lo, hi] = [-Infinity, Infinity];
@@ -736,13 +742,14 @@ export function wireLanes(ways: readonly (readonly Pt[])[], frames: readonly Sid
           else if (g0 - BETWEEN >= pos) hi = Math.min(hi, g0 - BETWEEN);
           else [lo, hi] = [Math.max(lo, pos), Math.min(hi, pos)];
         }
+        span = [-Infinity, Infinity];
         for (const o of [side(before!), side(after!)]) {
-          if (o < pos) lo = Math.max(lo, (o + pos) / 2);
-          else hi = Math.min(hi, (o + pos) / 2);
+          if (o < pos) [lo, span[0]] = [Math.max(lo, (o + pos) / 2), Math.max(span[0], (o + pos) / 2)];
+          else [hi, span[1]] = [Math.min(hi, (o + pos) / 2), Math.min(span[1], (o + pos) / 2)];
         }
         room = [lo, hi];
       }
-      runs.push({ wire: w, at: i, dir, was: pos, pos, lo: along(first), hi: along(last), room, order });
+      runs.push({ wire: w, at: i, dir, was: pos, pos, lo: along(first), hi: along(last), room, span, order });
     }
   });
   // (wires out of one port are one signal: where their runs lie on one another - the way out of the port they share - those are one run,
@@ -750,10 +757,20 @@ export function wireLanes(ways: readonly (readonly Pt[])[], frames: readonly Sid
   //  Lanes part wires out of different ports)
   const port = (w: number) => wires[w][0];
   const samePort = (a: number, b: number) => Math.hypot(port(a).x - port(b).x, port(a).y - port(b).y) < 1e-9;
+  //  Those within a lane of one another, out of one port along the same stretch, are drawn onto one: the one nearest the port, where the
+  //  others keep their ways moved there - however near the frames beside the port, which that one is as near)
   const leaderOf = new Map<Run, Run>();
-  for (const r of runs) {
-    const lead = runs.find((o) => o !== r && !leaderOf.has(o) && o.dir === r.dir && o.wire !== r.wire && samePort(o.wire, r.wire) && Math.abs(o.pos - r.pos) < 1e-9 && Math.min(o.hi, r.hi) > Math.max(o.lo, r.lo));
-    if (!lead || leaderOf.has(r) || runs.indexOf(lead) > runs.indexOf(r)) continue;
+  const leaders = new Set<Run>();
+  const portSide = (r: Run) => Math.abs(r.pos - (r.dir === "v" ? port(r.wire).x : port(r.wire).y));
+  for (const r of [...runs].sort((a, b) => portSide(a) - portSide(b))) {
+    if (leaders.has(r)) continue;
+    const lead = [...leaders].find(
+      (o) => o.dir === r.dir && o.wire !== r.wire && samePort(o.wire, r.wire) && Math.abs(o.pos - r.pos) < WIRE_LANE - 1e-9 && r.span[0] <= o.pos + 1e-9 && o.pos <= r.span[1] + 1e-9 && Math.min(o.hi, r.hi) > Math.max(o.lo, r.lo),
+    );
+    if (!lead) {
+      leaders.add(r);
+      continue;
+    }
     leaderOf.set(r, lead);
     [lead.lo, lead.hi] = [Math.min(lead.lo, r.lo), Math.max(lead.hi, r.hi)];
     lead.room = [Math.max(lead.room[0], r.room[0]), Math.min(lead.room[1], r.room[1])];
