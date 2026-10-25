@@ -88,8 +88,7 @@ function FigureNote2D({ shown }: { shown: Shown }) {
         <div
           className="meno-fade-in"
           style={{
-            transform: "translate(-50%, -100%) scale(clamp(0.75, var(--page, 1), 1.5))",
-            transformOrigin: "50% 100%",
+            transform: "translate(-50%, -100%)",
             opacity: leaving == null ? 1 : 0,
             transition: `opacity ${DURATION.base * 1000}ms var(--ease-meno-leave)`,
             // (where it came from, said quietly: never in the pointer's way)
@@ -99,6 +98,8 @@ function FigureNote2D({ shown }: { shown: Shown }) {
           onPointerDown={(e) => e.button === 2 && e.stopPropagation()}
           title={title}
         >
+          {/* (as large as the page draws it, between three quarters and half as large again: laid out at that size, its words crisp - utils/pageScale `PAGE_SIZED`) */}
+          <div style={{ zoom: "clamp(0.75, var(--page, 1), 1.5)" }}>
           {quiet ? (
             far ? null : <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteSource(from, note.page)}</div>
           ) : far ? (
@@ -106,6 +107,7 @@ function FigureNote2D({ shown }: { shown: Shown }) {
           ) : (
             <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteText(note.unsure)}</div>
           )}
+          </div>
         </div>
       </PageHtml>
     </group>

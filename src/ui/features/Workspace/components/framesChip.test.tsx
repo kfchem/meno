@@ -12,6 +12,12 @@ const none = () => {};
 const slider = (html: string) => /grid-template-rows:\s*1fr/.test(html);
 
 describe("a frames chip - a molecule's frames, or a stack's", () => {
+  it("is as large as the page draws it by its layout (zoom), never by a scale after, which the Mac's WebView magnifies soft", () => {
+    const html = renderToString(<FramesChip count={2} frame={0} energies={[0, 0.001]} open={false} onFrame={none} conformers />);
+    expect(html).toContain("zoom:var(--page, 1)");
+    expect(html).not.toMatch(/scale\(var\(--page/);
+  });
+
   it("names its bars, draws their edges on whole device pixels, and lets the page show through it only shut", () => {
     const kcal = (e: number) => e / 627.509474;
     const set = renderToString(<FramesChip count={2} frame={0} energies={[0, kcal(0.6)]} open={false} onFrame={none} conformers />);

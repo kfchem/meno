@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { PAGE_SIZED } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -1905,7 +1906,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 Delete key) */}
             <PageHtml center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
               {/* (as large as the page draws it: a chip on the page) */}
-              <div className="meno-page-chip" style={{ transform: "scale(var(--page, 1))" }}>
+              <div className="meno-page-chip" style={PAGE_SIZED}>
                 <div
                   ref={(el) => {
                     const l = labels.current.get(x.id) ?? { anchor: null, el: null };
@@ -2027,10 +2028,12 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <PageHtml zIndexRange={[30, 20]}>
               <div
                 className="meno-page-chip meno-control-chip flex flex-col items-center"
-                style={{ transform: "translate(-50%, calc(10px * var(--page, 1))) scale(var(--page, 1))", transformOrigin: "50% 0" }}
+                style={{ transform: "translate(-50%, calc(10px * var(--page, 1)))" }}
               >
-                {m.edited && <Edited from={m.edited.from} />}
-                {props.onRemake && <Changed onRemake={props.onRemake} />}
+                <div className="flex flex-col items-center" style={PAGE_SIZED}>
+                  {m.edited && <Edited from={m.edited.from} />}
+                  {props.onRemake && <Changed onRemake={props.onRemake} />}
+                </div>
               </div>
             </PageHtml>
           )}
@@ -2060,8 +2063,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <div
               className="flex flex-col items-center"
               data-fit-notes={MARK_GAP_PX}
-              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most}))`, transformOrigin: "50% 100%" }}
+              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
             >
+              <div className="flex flex-col items-center" style={{ zoom: `clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})` }}>
               {notesEver.map((text) => (
                 <NoteMark
                   key={text}
@@ -2072,6 +2076,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                   short={notesShort}
                 />
               ))}
+              </div>
             </div>
           </PageHtml>
         </group>
