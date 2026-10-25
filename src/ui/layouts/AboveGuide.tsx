@@ -55,9 +55,9 @@ export default function AboveGuide({ over, shown, measureKey = "", children }: {
   }, [over, measure, shown, measureKey]);
   if (typeof document === "undefined") return null;
   return createPortal(
-    // (it lets clicks through to the canvas under it; what is in it takes its own)
+    // (it lets clicks through to the canvas under it; what is in it takes its own - and, as what is over the canvas, no text of it selected by the page)
     <div
-      className="fixed pointer-events-none [&>*]:pointer-events-auto"
+      className="fixed select-none pointer-events-none [&>*]:pointer-events-auto"
       style={{ zIndex: ABOVE_GUIDE_LAYER, ...(box && shown ? box : { display: "none" }) }}
     >
       {children}

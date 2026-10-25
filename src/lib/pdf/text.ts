@@ -64,7 +64,7 @@ export function textOf(sha256: string, page: number): Promise<PageText> {
 }
 
 /** A page's letters, if they have come - asked for, the first time, and `came` called once they have. */
-export function textHad(sha256: string, page: number, came: () => void = () => {}): PageText | null {
+export function textHad(sha256: string, page: number, came: () => void = () => {}, failed: () => void = () => {}): PageText | null {
   const key = `${sha256}:${page}`;
   const h = had.get(key);
   if (h && h !== "asked") return h;
@@ -72,7 +72,10 @@ export function textHad(sha256: string, page: number, came: () => void = () => {
     had.set(key, "asked");
     textOf(sha256, page)
       .then(() => came())
-      .catch(() => had.delete(key));
+      .catch(() => {
+        had.delete(key);
+        failed();
+      });
   }
   return null;
 }

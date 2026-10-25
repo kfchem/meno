@@ -430,7 +430,17 @@ molecule in 3D or a picture.
   `dragsSelection`); an atom that is not selected, or is selected alone,
   moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
-  freely after a pause - one undo step.
+  freely after a pause - one undo step. While it turns, or a selection is
+  dragged, each frame only draws: a structure only carried keeps its
+  layout, turned and moved with it, its labels upright beside their atoms,
+  and electron-pushing arrows on it are carried likewise; each is laid out
+  again once, as it is let go (found on a Surface, 2026-10-24: a turn was
+  choppy). Let go, nothing jumps: a label set otherwise now - OH become HO
+  - goes over as the one carried fades out by its atom and the one set now
+  fades in, together (`DURATION.quick`); an arrow eases from the curve
+  carried to the one laid now (`DURATION.move`), or, not drawn with as
+  many dots, the one fades out as the other comes in. A frame that would put the selection where it already is - a
+  step of 15 degrees held, a drag held on a guide - puts nothing.
 - The keys that act on what is under the pointer act on the selection
   instead, once there is one: Delete or Backspace deletes it,
   Ctrl/⌘+Shift+K cleans up every structure it is in, and + or - steps the
@@ -996,6 +1006,12 @@ All hover-based, as above.
     labels, the bonds' lines - not as the drawing is laid out again the
     same at each frame of a zoom; and what takes the pointer round each,
     unseen until the pointer is on it, is not drawn until it is lit.
+  - Laying one out weighs only what lies near the curves it could take -
+    the bonds, labels and atoms within reach of them - never the whole
+    drawing, and stops weighing a curve once it is worse than one found:
+    the same curve, at a cost that grows with what is near it (2026-10-24:
+    on a Surface, drawing one, moving a structure with them and zooming
+    were choppy on a large drawing).
   - Anchored: it is kept by the atoms and bonds it leaves and reaches, not
     by where it was drawn, so it goes with them as they are moved, turned,
     turned over (bent to its other side, as a mirror shows it) and cleaned
@@ -1238,9 +1254,11 @@ All hover-based, as above.
        between the number and °C. DCC, DCM, DCE and dCTP have no number
        before them and stay.
     2. **Minus.** A hyphen at a word's start - the words' start, after a
-       space or an opening bracket - is a minus sign (U+2212) as soon as a
-       digit is typed after it: -78 is −78, (-20 °C) (−20 °C). Hyphens
-       within words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6.
+       space, an opening bracket or a comma - is a minus sign (U+2212) as
+       soon as a digit is typed after it: -78 is −78, (-20 °C) (−20 °C),
+       LDA,-78 LDA,−78 (and its comma then spaced, 5). Hyphens within
+       words stay: 2-propanol, N-methyl, t-BuOK, 18-crown-6, 3-pentanone;
+       so does a range's, between two numbers (3).
     3. **Ranges.** A number, one hyphen and a number, a word of its own,
        have an en dash (U+2013) once the word has ended - a space or a
        bracket after it, or the words kept; a stop or a comma only once
@@ -1256,7 +1274,8 @@ All hover-based, as above.
     5. **Commas.** A comma typed straight before a word gets one space
        after it once that word has ended (the maintainer, 2026-10-17):
        Pd(OAc)2,PPh3 is Pd(OAc)2, PPh3, rt,12 h rt, 12 h, and a
-       temperature after it is written as ever (DMF,80dc is DMF, 80 °C).
+       temperature after it is written as ever (DMF,80dc is DMF, 80 °C) -
+       a negative one too (LDA,-78dc is LDA, −78 °C).
        Not where the comma is part of a name, joining two locants - digits
        maybe with a letter, or a capital letter alone, either maybe
        primed: 1,2-DCE, 2,6-lutidine, 2,2,6,6-tetramethyl-, 1',2', 4a,8a,

@@ -1527,30 +1527,41 @@ words are: by itself, not by a box drawn round it.
 - **A structure in a scheme is taken alone.** The whole scheme, its arrows
   and words with it, is still taken by a box and *Read as structure*.
 - **A picture**, not lines, is still taken by a box, as before.
-- **Never read in part.** A structure with letters or words inside it that
-  no atom took is refused, with why, and nothing of it is put down. An atom
-  the reader is unsure of comes marked as such, as *Read as structure* marks
-  one.
+- **What is read is taken; the rest is marked** (the maintainer, 2026-10-24,
+  reversing "never read in part"). A structure with letters inside it that no
+  atom took, words at an open end of a bond not read as its label, or words
+  or lines of the page outside its figure lying by it, is taken still: the
+  atom nearest what is not read marked unsure, saying what lies there
+  ('"OTBS" lies at this end, not read as its label.'), so its note counts it
+  and the chemist puts it right. A label not read stays an atom, its words as
+  written, marked unsure: nothing is dropped. A piece of three heavy atoms
+  or fewer that would be so marked is refused still, as before, with why -
+  most likely a cut-off bit of a drawing, or none (the maintainer,
+  2026-10-24); a small molecule read whole (MeOH, CO2, a lone ion) is taken
+  as ever. And what is no structure - a line of words, a chart - is refused,
+  with why.
 - In the column first. The PDF on the page, whose presses move the view,
   comes later.
 
-**Read from a figure** (`utils/figureNotes`, `components/FigureNotes2D`; the look as LOOK set it, 2026-10-24): every structure taken from a figure - picked out of a PDF, or read from a box of it or a picture - carries a note over it, calm and small, until the chemist says it was checked:
-- **What it says**: "Read from a figure: check it", and, while parts of it are still marked unsure (the dashed rings), how many: "Read from a figure: check it · 2 parts unsure". Where the pointer is on it: "From <file>, p. <page>, read as drawn there. Check it against the figure; right-click it to say it was checked." How it was read is never said.
+**Read from a figure** (`utils/figureNotes`, `components/FigureNotes2D`; the look as LOOK set it, 2026-10-24; shown only while parts are unsure, the maintainer, 2026-10-24): every structure taken from a figure - picked out of a PDF, or read from a box of it or a picture - keeps where it came from with its atoms (`seen`), saved with the workspace. While parts of it are still marked unsure, and it is not said to be checked, it carries a note over it, calm and small; else where it came from is said quietly - with the pointer on the structure, and in its menu:
+- **What it says**: "Read from a figure: check it · 2 parts unsure" - how many parts are still marked unsure (the dashed rings). Where the pointer is on the note: "From <file>, p. <page>, read as drawn there. Check it against the figure; right-click it to say it was checked." How it was read is never said.
 - **How it looks**: as the 3D molecules' grey notes ("Edited from …"), never the accent, no icon; centred over the structure's ink, its labels and all, half a bond off; scaled with the page within 0.75 to 1.5, and a 6-pixel grey dot in its place where a bond is under 12 pixels on the screen, the same words where the pointer is on it.
-- **When it goes**: not when the structure is edited - putting one part right does not make the rest so; each part's dashed ring goes as that part is changed, as before. *Checked against the figure*, in the structure's menu (a right-click on the note gives the same menu), says it was checked: one step to undo, kept with its atoms (`seen.checked`) and saved with the workspace; the note fades over `DURATION.base`, as what leaves does.
-- **Joined to another**: a structure stays noted while any atom of it read from a figure is not said to be checked - a checked one bonded to an unchecked one leaves the unchecked one's note - and its count of unsure parts, and where it was read from, are of the unchecked atoms.
+- **When it goes**: when no part of it is marked unsure any longer - each part's dashed ring goes as that part is changed - or when *Checked against the figure*, in the structure's menu (a right-click on the note gives the same menu), says it was checked: one step to undo, kept with its atoms (`seen.checked`) and saved with the workspace; the note fades over `DURATION.base`, as what leaves does, and the dashed rings of its parts with it - drawn only on what is not said to be checked, as they are counted (`readMarksShown`); they stay in the drawing, so undoing the check brings both back.
+- **Where it came from, quietly**: with the pointer on an atom or a bond of a structure read from a figure and showing no note - none of it unsure, or all of it said to be checked - the same grey pill says "From <file>, p. <page>" where the note would stand, fading in and out, never in the pointer's way (and nothing where a bond is under 12 pixels on the screen). Its menu has the same words, greyed, over *Checked against the figure* (that item only while it is not said to be checked).
+- **Joined to another**: a structure stays unchecked while any atom of it read from a figure is not said to be checked - a checked one bonded to an unchecked one leaves the unchecked one's note - and its count of unsure parts, and where it was read from, are of the unchecked atoms.
 - **When it comes**: once the structure has landed, not while it is carried out of the PDF, fading in.
 - **Copied**: a noted structure copied and pasted in Meno keeps its note - it is still from the figure - and one said to be checked stays checked (`seen` goes with its atoms in Meno's own record); pasted into another program, it carries neither.
 - **Its cost**: the notes are worked out again only when what they depend on changes - which atoms each bond joins, which atoms were read from a figure and which of those are checked, and whether each marked part is still as it was read (as its dashed ring is) - and where each stands only for a structure that moved or changed: dragging one structure moves only its own note, never at each frame for all.
 - **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
+- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - in idle time, one page at a time, and its figures worked out in idle time once its parts have come (`lib/core/idle`): never with its turn. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
 - a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
 - dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;
 - clicked, it is picked; ⌘-click (Ctrl-click on Windows) adds it to those picked or takes it out, as everywhere in Meno, and Shift-click does the same, structures having no range between them (in words, Shift-click still draws the selection on, onto another page too); a link under a structure is not followed, the structure taken first; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
-- one not read whole is never carried: a press says why, where the chemistry's notices are said.
+- one refused - a line of words - is never carried: a press says why, where the chemistry's notices are said; one taken with parts not read is carried, those marked.
 
 **A structure, and where it lies** (`utils/pageStructures`):
 - each figure of the page is read as *Read as structure* reads one (the

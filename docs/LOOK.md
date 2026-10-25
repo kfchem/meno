@@ -31,6 +31,13 @@ shots, and is checked against this page (*The look check*, below).
    below.
 5. **Room round what is shown.** Ink never touches a frame's line or its
    neighbour's ink (*Room*).
+6. **Nothing on the canvas is the page's text.** The canvas and what lies
+   over it - notes, chips, cards, a set's words - never show the browser's
+   own text selection: they are `select-none`, and a selection that reaches
+   there all the same is let go. What is selected there is Meno's own
+   selection. Text fields, and the words in the column, stay selectable;
+   on the canvas, only what a chemist copies - a step card's failure, its
+   program's line, a run's line (`COPYABLE`, with `select-text`).
 
 ## Colours
 
@@ -74,9 +81,17 @@ Numbers that change in place are tabular (`tabular-nums`).
   an input. A menu's row is `h-8` (32 px).
 - **Padding**: a control `px-2` (a button `px-2.5` or `px-3`); a menu's
   row `px-3`; a card `p-3`; a dialog `p-5`; a menu `py-1`.
+- **A card's insets** are the same on both sides: what is in it - a
+  list, a field and its unit, the buttons at its foot - ends on one edge
+  on the right, inside the card's padding, however narrow the card (a
+  step's card is 208 px).
 - **Corners**: `rounded-md` (6 px) for controls, menus, chips and toasts;
   `rounded-lg` (8 px) for cards and dialogs; `rounded-full` for a dot, a
   switch, a pill. Not the bare `rounded` (4 px).
+- **A box on the page** (a shape the drawing holds, not the interface's):
+  its corners, rounded, are a fifth of a bond round (*Box around these*,
+  *Corners…* > *Rounded*), so that they scale with the drawing; never
+  more than 18% of its shorter side.
 - **Lines**: 1 px, `border-gh-line`; a separator `my-1 border-t
   border-gh-line`.
 - **Shadows**: `shadow-lg` for what floats over the page (menus, cards,
@@ -152,14 +167,24 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   `bg-white hover:bg-gh-base`.
 - **Choice of cards** (a look, a format, each a picture or a word with a
   note): the chosen one `border-accel-base bg-accel-lightbase`.
-- **Radio**: a 14 px circle, `border-gh-line`, the chosen one's dot
+- **Radio**: a 14 px circle, `gh-line`, the chosen one's dot
   `accel-base`.
-- **Checkbox**: a 14 px square, `rounded-[3px] border-gh-line`, ticked
-  on `accel-base`.
+- **Checkbox**: a 14 px square, its corners 2.5 px round, `gh-line`,
+  ticked on `accel-base`.
+- A small round or square mark (a radio's ring and dot, a checkbox's box)
+  is drawn as an SVG shape, not a bordered box with rounded corners: a box
+  14 px across is 17.5 device pixels at 125%, and its width and height
+  round apart, a circle seen as a stadium.
 - **Switch** (a setting turned on or off at once): a pill `h-6 w-11
   rounded-full`, `bg-gh-line` off, `accel-base` on, its white knob
   sliding; `accel-accent` on only where being on refuses something
   (working offline).
+- **Number field**: a text field `h-7 rounded-md border border-gh-line
+  bg-white px-2 text-right tabular-nums`, no browser steppers (up and down
+  step it). It holds whatever is typed until Enter or leaving it, so a
+  digit can be taken out and another typed; a number it does not take
+  goes back to the last good one, fading in, the border a moment
+  `accel-accent`.
 
 Each is reachable by keyboard and shows focus with an `accel-base` border.
 
@@ -174,7 +199,8 @@ be caught by reading the code: a native select, radio or checkbox outside
 `src/ui/controls`, and a colour written out - a literal that is only a
 colour, one in a CSS place (after `:`, `(`, `,` or `[`), `rgb(…)`,
 `hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`; and a
-switch drawn in place (`role="switch"`) outside `src/ui/controls`.
+switch drawn in place (`role="switch"`) outside `src/ui/controls`; and a
+native number field (`type="number"`) outside it.
 
 ## Not yet
 

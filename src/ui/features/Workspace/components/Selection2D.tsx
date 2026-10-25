@@ -18,7 +18,7 @@ import { cycleTurned } from "../../../../lib/chem/cycle";
 import { strokesBounds, strokeTurned } from "../../../../lib/chem/ink";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { style3dOf, useStyle3D } from "../style3d";
-import { lookOf, poseOf, seenBounds, solidOf, standingHeight, turnedInPlane, turnedTogether, type Turning3D } from "../utils/molecule3d";
+import { lookOf, poseOf, seenBounds, solidOf, standingHeight, turnedInPlane, type Turning3D } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -103,11 +103,11 @@ function selectionExtent(
  *   drag (a double-click there opens Quick Add); with Alt (Option) held,
  *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
- *   of 15 degrees, or freely after a pause. Molecules in 3D selected alone
- *   it turns as one body, in 3D - as a drag on a molecule turns it - about
- *   their common centre; selected with the drawing, they are carried round
- *   in its plane and turned with it. With Shift, each molecule turns about
- *   its own centre instead, and the drawing stays.
+ *   of 15 degrees, or freely after a pause. Molecules in 3D it turns in the
+ *   page's plane, about the line of sight, as it turns the drawing: alone,
+ *   several as one body about their common middle, one about its own
+ *   centre; selected with the drawing, carried round with it. With Shift,
+ *   each molecule turns about its own centre instead, and the drawing stays.
  */
 export default function Selection2D() {
   const { model, sel, boxSelect } = useEditor();
@@ -379,11 +379,15 @@ export default function Selection2D() {
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
     selectionMoving.active = true;
+    // (the angle last put: a frame at the same angle - a step held - puts nothing, the drawing as it is)
+    let put = 0;
     const apply = () => {
       frame = null;
       const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
       const step = (TURN_STEP * Math.PI) / 180;
       const angle = free ? a : Math.round(a / step) * step;
+      if (angle === put) return;
+      put = angle;
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
       const marks =
@@ -449,55 +453,89 @@ export default function Selection2D() {
   };
 
   /**
-   * Molecules in 3D turned by the handle in space, as a drag on one turns
-   * it: as one body about their common centre - which moves them - or,
-   * `each`, every one about its own centre. Either is one undo step, which
-   * puts the turns back (a drag on a molecule itself turns only the view).
+   * Molecules in 3D turned by the handle in the page's plane - about the
+   * line of sight, as it turns a drawing - in steps of 15 degrees, or
+   * freely after a pause: several as one body about their common middle,
+   * which carries them round; one, or each with Shift, about its own
+   * centre, where it stands. Either is one undo step, and Escape puts them
+   * back. (Turned out of the plane, by a drag on a molecule itself, they
+   * turn as a drag says; the handle, which turns round, turns them round.)
    */
   const turnInSpace = (e: PointerEvent, molecules: Molecule3D[], each: boolean) => {
     const st = store.getState();
     const from = molecules.map(turningOf(st.turns3d, style3dOf(store.getState())));
     const turnsBefore = Object.fromEntries(molecules.map((m) => [m.id, st.turns3d[m.id]]));
     const inPlace = each || from.length === 1;
+    const place = selectionExtent(st.model, st.sel.atoms, st.molecules3d, st.sel3d, st.turns3d, st.frames3d, style3dOf(store.getState()), eyeOf(camera)?.z);
+    if (!place) return;
+    const about = place.mid;
     let went = false;
     const gesture = `turn-3d-${performance.now()}`;
-    const q = new THREE.Quaternion();
-    setHeld(selectionExtent(st.model, st.sel.atoms, st.molecules3d, st.sel3d, st.turns3d, st.frames3d, style3dOf(store.getState()), eyeOf(camera)?.z));
-    let last = { x: e.clientX, y: e.clientY };
+    setHeld(place);
+    const p0 = toWorld(e.clientX, e.clientY);
+    const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
+    let last = p0;
+    let free = false;
+    let pause: number | null = null;
     let frame: number | null = null;
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
+    let put = 0;
     const apply = () => {
       frame = null;
+      const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
+      const step = (TURN_STEP * Math.PI) / 180;
+      const angle = free ? a : Math.round(a / step) * step;
+      if (angle === put) return;
+      put = angle;
       went = true;
       const s = store.getState();
       if (inPlace) {
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle);
         for (const m of from) {
           const t = q.clone().multiply(m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion()).normalize();
           s.setTurn3d(m.id, [t.x, t.y, t.z, t.w]);
         }
-      } else s.turnMolecules3d(turnedTogether(from, q), gesture);
+      } else s.turnMolecules3d(turnedInPlane(from, about, angle), gesture);
       invalidate();
     };
     const onMove = (ev: PointerEvent) => {
-      const dx = ev.clientX - last.x;
-      const dy = ev.clientY - last.y;
-      last = { x: ev.clientX, y: ev.clientY };
-      const len = Math.hypot(dx, dy);
-      if (len === 0) return;
-      // (a drag to the right turns the near side right; down turns it down)
-      const angle = (style3dOf(store.getState()).turnPerHalfWidth * len) / Math.max(gl.domElement.clientWidth / 2, 1);
-      q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(dy, dx, 0).normalize(), angle)).normalize();
+      last = toWorld(ev.clientX, ev.clientY);
       if (frame == null) frame = window.requestAnimationFrame(apply);
+      if (pause != null) window.clearTimeout(pause);
+      pause = window.setTimeout(() => {
+        free = true;
+        apply();
+      }, FREE_MS);
+    };
+    const done = () => {
+      if (pause != null) window.clearTimeout(pause);
+      if (frame != null) window.cancelAnimationFrame(frame);
+      pause = frame = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
+      setHeld(null);
+    };
+    // Escape lets it go: each turned as it was
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      done();
+      const s = store.getState();
+      s.endPanHold(e.pointerId);
+      if (!inPlace) s.dropTurnMolecules3d(gesture, turnsBefore);
+      // (one never turned: as it stood - no turn is no turn at all)
+      else for (const m of from) s.setTurn3d(m.id, m.turn ?? [0, 0, 0, 1]);
+      invalidate();
     };
     const onUp = (ev: PointerEvent) => {
       if (frame != null) {
         window.cancelAnimationFrame(frame);
         apply();
       }
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp, true);
-      setHeld(null);
+      done();
       const s = store.getState();
       s.endPanHold(ev.pointerId);
       s.suppressDoubleClick(DOUBLE_CLICK_MS);
@@ -505,6 +543,7 @@ export default function Selection2D() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
   };
 
   // --- coming and going ------------------------------------------------------

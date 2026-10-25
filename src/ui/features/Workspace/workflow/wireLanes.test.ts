@@ -18,6 +18,18 @@ describe("wires moved into lanes", () => {
     expect([na[1].y, na[2].y]).toEqual([a[1].y, a[2].y]);
   });
 
+  it("two wires out of one port, down one way: one signal - left as they ran, a bus, never a lane apart, nor a step where they part", () => {
+    // (both out of (0, 10): the one in at y -10, the other on down to -20)
+    const a = down(10, { x: 0, y: 10 }, { x: 20, y: -10 });
+    const b = down(10, { x: 0, y: 10 }, { x: 20, y: -20 });
+    expect(wireLanes([a, b], [])).toEqual([a, b]);
+    // (a third, out of another port, down beside them: a lane off the bus, which moves as one - its two runs where each other's are)
+    const c = down(10, { x: 0, y: 8 }, { x: 20, y: -14 });
+    const [na, nb, nc] = wireLanes([a, b, c], []);
+    expect(xOfRun(na)).toBe(xOfRun(nb));
+    expect(Math.abs(xOfRun(nc) - xOfRun(na))).toBeCloseTo(WIRE_LANE, 9);
+  });
+
   it("orders the lanes so that the wires do not cross: one turning off to a side the nearer it, the later it turns in, or the sooner out", () => {
     // (both in from the left and out to the right: a in higher and out sooner - b in lower and out later)
     const a = down(10, { x: 0, y: 10 }, { x: 20, y: -6 });

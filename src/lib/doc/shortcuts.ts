@@ -135,7 +135,8 @@ function isDocumentTextField(target: unknown): boolean {
   return el?.tagName?.toUpperCase() === "TEXTAREA" || el?.dataset?.textField != null;
 }
 
-function isTextTarget(target: unknown): boolean {
+/** A field that takes typed words: an input, a text area, words being written on the page. */
+export function isTextTarget(target: unknown): boolean {
   return isNativeEditingTarget(target) || isDocumentTextField(target);
 }
 

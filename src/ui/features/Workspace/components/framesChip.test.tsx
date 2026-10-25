@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { FramesChip } from "./Frames3D";
+import { ResultGroups } from "./PointedCard3D";
 import { unitsHeld } from "../../../../lib/calc/results";
 import { barsAbove, FAILURES_ASTRAY } from "../utils/barsAbove";
 
@@ -11,6 +12,12 @@ const none = () => {};
 const slider = (html: string) => /grid-template-rows:\s*1fr/.test(html);
 
 describe("a frames chip - a molecule's frames, or a stack's", () => {
+  it("is as large as the page draws it by its layout (zoom), never by a scale after, which the Mac's WebView magnifies soft", () => {
+    const html = renderToString(<FramesChip count={2} frame={0} energies={[0, 0.001]} open={false} onFrame={none} conformers />);
+    expect(html).toContain("zoom:var(--page, 1)");
+    expect(html).not.toMatch(/scale\(var\(--page/);
+  });
+
   it("names its bars, draws their edges on whole device pixels, and lets the page show through it only shut", () => {
     const kcal = (e: number) => e / 627.509474;
     const set = renderToString(<FramesChip count={2} frame={0} energies={[0, kcal(0.6)]} open={false} onFrame={none} conformers />);
@@ -63,6 +70,33 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain("3<!-- --> / <!-- -->60");
     expect(html).toContain("aspirin");
     expect(html).toContain("cursor-pointer");
+  });
+
+  it("keeps how it was made shut under its name, a chevron to open it - the rest of what it says shown as it was", () => {
+    const html = renderToString(
+      <ResultGroups
+        groups={[
+          { group: "Energies", rows: [{ label: "Total", text: "-1 Eh" }] },
+          { group: "How it was made", rows: [{ label: "Method", text: "ETKDG v3 + MMFF94" }], folded: true },
+        ]}
+      />,
+    );
+    // (a button of its own, shut; its rows under it laid out but shut - no browser disclosure)
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*How it was made<\/button>/);
+    expect(html).toMatch(/grid-template-rows:\s*0fr[^"]*opacity:\s*0/);
+    expect(html).not.toContain("<details");
+    // (a group not folded: its name and rows as they were, no button)
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).toContain('<div class="text-[10px] text-gh-gray">Energies</div>');
+  });
+
+  it("eases its width and its rows' height in one time and one curve, and measures what its details say whole - never as squeezed by its own width", () => {
+    const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
+    const html = renderToString(<FramesChip count={3} frame={0} energies={[0, 0.001, 0.002]} open={false} onFrame={none} made={made} conformers />);
+    // (the chip's width, its bars' rows, its details' rows and the fold: each 160 ms on Meno's curve, none other)
+    expect(html.match(/transition-duration:160ms;transition-timing-function:var\(--ease-meno\)/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(html).not.toMatch(/duration-200|ease-out/);
+    expect(html).toMatch(/class="w-max max-w-\[20rem\] shrink-0/);
   });
 
   it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {

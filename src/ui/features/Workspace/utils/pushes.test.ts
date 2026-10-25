@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addPush, appendModel, deleteParts, emptyWorkspaceDocument, relayout, removePush, replaceModel, turnPushesOver, updatePush, type WorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
 import { partToCopy, readRecord, recordText } from "./copyPaste";
-import { hasLonePair, partAt, pushShapes, pushTargetAt, tailOf } from "./pushes";
+import { carriedShapes, endPlaces, hasLonePair, partAt, pushShapes, pushTargetAt, tailOf } from "./pushes";
 import { layoutMolecule } from "../../../../lib/chem/layout2d";
 import { pushMeasures } from "../../../../lib/chem/pushArrow";
 import { styleOf, DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
@@ -112,6 +112,29 @@ describe("where an arrow being drawn goes", () => {
     expect(tailOf({ el: "N" }, {})).toBe("pair");
     expect(tailOf({ el: "C", charge: -1, radical: 1 }, { half: true })).toBe("radical");
     expect(tailOf({ el: "C", charge: -1, radical: 1 }, {})).toBe("charge");
+  });
+
+  it("carries arrows with their atoms while a gesture turns them, and lays them out again where only one end moved", () => {
+    const style = styleOf(DEFAULT_STYLE_CHOICE);
+    const B = NOMINAL_BOND_LENGTH;
+    const atoms = model.atoms.map((a) => ({ id: a.id, el: a.el, x: (a.x / L) * B, y: (a.y / L) * B, ...(a.charge ? { charge: a.charge } : {}) }));
+    const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+    const opts = editorLayoutOptions(style, { minLinePx: 0, paddingPx: 4 });
+    const layout = layoutMolecule(atoms, layoutBonds(model.bonds, index), opts, (style.bondLengthPt * 96) / 72 / B);
+    const m = pushMeasures(style, B);
+    const pushes = [{ id: 1, from: { atom: 1 }, to: { atom: 2 } }];
+    const laid = pushShapes(pushes, atoms, model.bonds, layout, opts, opts.fontPx, m);
+    const was = endPlaces(pushes, atoms, model.bonds);
+    // (all of it turned a quarter round and moved)
+    const turned = atoms.map((a) => ({ ...a, x: -a.y + 5, y: a.x + 1 }));
+    const carried = carriedShapes(laid, was, turned, model.bonds)!;
+    const q = (p: { x: number; y: number }) => ({ x: -p.y + 5, y: p.x + 1 });
+    for (const k of ["start", "c1", "c2", "end"] as const) {
+      expect(carried[0].shape[k].x).toBeCloseTo(q(laid[0].shape[k]).x, 9);
+      expect(carried[0].shape[k].y).toBeCloseTo(q(laid[0].shape[k]).y, 9);
+    }
+    // (one end's atom moved, the other not: not carried)
+    expect(carriedShapes(laid, was, atoms.map((a) => (a.id === 2 ? { ...a, x: a.x + 1 } : a)), model.bonds)).toBeNull();
   });
 
   it("draws an anion's arrow from beside its charge's mark, with no lone pair's dots", () => {

@@ -416,8 +416,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
-  /** The structure right-clicked read from a figure and not yet said to be checked against it (utils/figureNotes): said so. */
-  figure?: { run: () => void };
+  /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
+  figure?: { from: string; run?: () => void };
   /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
   numbers?: { items: { name: string; run: () => void }[]; kinds: { name: string; checked: boolean; run: () => void }[] };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
@@ -918,7 +918,7 @@ export default function PartMenu({
             : []),
           ...stereoItem,
           { name: "Select this structure", keys: "", run: onSelectStructure },
-          ...(figure ? [{ name: "Checked against the figure", keys: "", run: figure.run, divider: true }] : []),
+          ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
           ...stackItem,
           ...magnifyItems,
         ];

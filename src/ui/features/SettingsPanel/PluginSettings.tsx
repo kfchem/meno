@@ -5,7 +5,7 @@ import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
 import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, REFUSED, runs, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { showGuide } from "../../../lib/plugins/guides";
-import { addedReaders, addPlugin, removePlugin, useReaders } from "../../../lib/calc/workers";
+import { addedReaders, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
@@ -47,6 +47,8 @@ export default function PluginSettings() {
 /** A plugin: what it is and does, whether it is added, and the button that adds it or takes it away. */
 function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: string; problem?: string }) {
   const [busy, setBusy] = useState(false);
+  // (whose set-up one waiting waits for: set-ups run one at a time, lib/calc/workers)
+  const waiting = useReaders((s) => (state === "waiting" ? waitingSaid(s.state) : ""));
   // (its jobs that wait or run, as taking it away was asked: stopped only once the chemist says so)
   const [live, setLive] = useState<readonly Job[] | null>(null);
   const run = (job: (p: AnyPlugin) => Promise<void>) => {
@@ -75,15 +77,17 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
       ? "Checking its files…"
       : state === "added"
         ? "Added"
-        : state === "adding"
-          ? share != null && share < 1
-            ? `Adding… ${Math.floor(share * 100)}%`
-            : "Adding…"
-          : state === "removing"
-            ? "Removing…"
-            : state === "absent"
-              ? "Not added"
-              : "";
+        : state === "waiting"
+          ? waiting
+          : state === "adding"
+            ? share != null && share < 1
+              ? `Adding… ${Math.floor(share * 100)}%`
+              : "Adding…"
+            : state === "removing"
+              ? "Removing…"
+              : state === "absent"
+                ? "Not added"
+                : "";
   const refused = REFUSED.filter((r) => r.plugin === p.id);
   // (the kinds it reads by the names it gives them, or Meno's)
   const named = (id: string) => manifestOf(p.id)?.kinds.find((k) => k.id === id)?.name ?? kindById(id)?.name ?? id;
@@ -124,6 +128,15 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         <span key={status} className="text-xs text-gh-gray meno-fade-in">
           {status}
         </span>
+        {state === "waiting" && runs(p) && (
+          // (taken out of the line, where the set-up before it holds it)
+          <button
+            onClick={() => skipSetUp(p)}
+            className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base"
+          >
+            Skip
+          </button>
+        )}
         {state === "absent" && !forThisSystem(p) ? (
           <span className="max-w-[10rem] text-right text-xs text-gh-gray">For {p.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only</span>
         ) : (state === "added" || state === "absent") && (

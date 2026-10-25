@@ -12,6 +12,7 @@ import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
 import { CARD_H, CARD_W, PORT_STEP, portDown, PX } from "./look";
 import { clock } from "./programs";
+import { COPYABLE } from "../hooks/useKeepUnselected";
 
 /**
  * A port's look (docs/WORKFLOWS.md, *How it looks*): as it is; or, while a
@@ -202,14 +203,15 @@ export default function StepCard(p: StepCardProps) {
         className={`rounded-xl bg-white shadow-sm ${p.selected ? "border-accel-base" : "border-gh-line"}`}
         style={{ borderWidth: HAIR, borderStyle: "solid", cursor: "default" }}
       >
-        {p.compact ? (
-          <div className="flex items-center justify-center gap-3 text-gh-black" style={{ height: CARD_H / PX }}>
+        {/* (its words, and its icons alone large where they are too small to read: one over the other, the words fading out with the zoom and
+            then the icons in - utils/pageScale `wordsShown`, `standInShown` - never one put for the other at once, nor both seen at once) */}
+        <div className="grid">
+          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: CARD_H / PX }} aria-hidden={!p.compact}>
             <StepGlyph icon={p.info.icon} size={28} />
             {line.Icon && <line.Icon className={clsx("h-6 w-6 transition-colors duration-200 ease-meno", line.tone, line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
           </div>
-        ) : (
-          // (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports)
-          <div className="grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: CARD_H / PX }}>
+          {/* (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports) */}
+          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: CARD_H / PX }} aria-hidden={p.compact}>
             <span className="flex h-5 items-center text-gh-gray">
               <StepGlyph icon={p.info.icon} />
             </span>
@@ -221,13 +223,18 @@ export default function StepCard(p: StepCardProps) {
             <span className={clsx("mt-1.5 flex h-4 items-center transition-colors duration-200 ease-meno", line.tone)}>
               {line.Icon && <line.Icon className={clsx("h-3.5 w-3.5", line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
             </span>
-            <span className={clsx("mt-1.5 line-clamp-2 text-[11px] leading-4 transition-colors duration-200 ease-meno", line.tone)} title={[line.text, p.step.ran?.named].filter(Boolean).join("\n")}>
+            {/* (a failure's words - a program's own error among them - can be selected and copied: COPYABLE) */}
+            <span
+              {...(line.tone === "text-accel-accent" ? COPYABLE : {})}
+              className={clsx("mt-1.5 line-clamp-2 text-[11px] leading-4 transition-colors duration-200 ease-meno", line.tone, line.tone === "text-accel-accent" && "select-text")}
+              title={[line.text, p.step.ran?.named].filter(Boolean).join("\n")}
+            >
               {line.text}
             </span>
             {said && (
               <>
                 <span />
-                <span className="truncate font-mono text-[10px] leading-4 text-gh-gray" title={said}>
+                <span {...COPYABLE} className="truncate select-text font-mono text-[10px] leading-4 text-gh-gray" title={said}>
                   {said}
                 </span>
               </>
@@ -242,7 +249,7 @@ export default function StepCard(p: StepCardProps) {
               </>
             )}
           </div>
-        )}
+        </div>
         {/* (its options open and shut as a card does, never at a jump: the card grows and shrinks with them) */}
         <AnimatePresence initial={false}>
         {p.open && !p.compact && (
@@ -276,7 +283,7 @@ export default function StepCard(p: StepCardProps) {
                   {p.runs.map((r, i) => (
                     <div key={`${r.at}-${i}`} className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] leading-4 text-gh-black truncate" title={r.said}>
+                        <div {...COPYABLE} className="text-[11px] leading-4 text-gh-black truncate select-text" title={r.said}>
                           {`${r.name} \u00b7 ${r.said}`}
                         </div>
                         {r.how && <div className="text-[10px] leading-4 text-gh-gray truncate">{r.how}</div>}

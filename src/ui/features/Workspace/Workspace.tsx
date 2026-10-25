@@ -171,6 +171,7 @@ import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
+import { useKeepUnselected } from "./hooks/useKeepUnselected";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -223,7 +224,7 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import FigureNotes2D from "./components/FigureNotes2D";
-import { figureNotesOf } from "./utils/figureNotes";
+import { figureNoteSource, figureNotesOf, readMarksShown } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
@@ -232,7 +233,7 @@ import InkWriting from "./components/InkWriting";
 import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
-import { roundedPt, roundestOf } from "../../../lib/chem/shapes";
+import { roundedOfBondPt, roundedPt, roundestOf } from "../../../lib/chem/shapes";
 import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
 import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
@@ -391,7 +392,8 @@ function WorkspaceContent({
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
-  const readUnsure = useMemo(() => readMarks(model), [model]);
+  // (drawn only on what is not said to be checked: utils/figureNotes)
+  const readUnsure = useMemo(() => readMarksShown(model, readMarks(model)), [model]);
   const procedures = useAppSettings((s) => s.procedures);
   const chem = useChem();
   // (a plugin's files besides its packages, as they come while it is set up)
@@ -1474,6 +1476,8 @@ function WorkspaceContent({
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
   useDropZone(dropRef, dropZone);
+  // (no text of the page's selected on it or over it: Meno's own selection is what selects here)
+  useKeepUnselected(dropRef);
   // Render: a picture or a film of molecules in 3D, asked in a card over the canvas (docs/RENDER.md)
   const [rendering, setRendering] = useState<{ ids: number[]; motions: Motion[]; surfaces: boolean } | null>(null);
   const askRender = (ids: number[]) => {
@@ -1567,7 +1571,7 @@ function WorkspaceContent({
     <div
       ref={dropRef}
       data-guide="page"
-      className={`flex-1 min-w-0 h-full relative${fadeIn ? " meno-fade-in" : ""}`}
+      className={`flex-1 min-w-0 h-full relative select-none${fadeIn ? " meno-fade-in" : ""}`}
       onMouseDownCapture={handleMouseDownCapture}
       onMouseMove={handleWrapperMouseMove}
       onMouseLeave={handleWrapperMouseLeave}
@@ -1985,6 +1989,7 @@ function WorkspaceContent({
                 key={`${cornersCard.x},${cornersCard.y}`}
                 now={sh.radius ?? 0}
                 most={roundestOf(sh.x1 - sh.x0, sh.y1 - sh.y0) / pointPx}
+                rounded={roundedOfBondPt(pointPx)}
                 onCorners={(pt) => store.getState().updateShape(sh.id, { radius: pt })}
                 x={cornersCard.x}
                 y={cornersCard.y}
@@ -2371,13 +2376,15 @@ function WorkspaceContent({
             if (at != null) store.getState().selectStructure(at);
           }}
           figure={(() => {
-            // (its structure read from a figure, not yet said to be checked: saying so, one step - its note going)
+            // (its structure read from a figure: where it came from - and, not yet said to be checked, saying so, one step)
             const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
             if (at == null) return undefined;
-            const m = store.getState().model;
-            const atoms = fragmentOf(m, at);
-            const note = figureNotesOf(m).find((n) => n.atoms.has(at));
-            return note ? { run: () => store.getState().setFigureChecked([...atoms], true) } : undefined;
+            const st = store.getState();
+            const atoms = fragmentOf(st.model, at);
+            const note = figureNotesOf(st.model).find((n) => n.atoms.has(at));
+            if (!note) return undefined;
+            const from = st.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? st.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure";
+            return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
           stereo={(() => {
             const st = store.getState();
@@ -2951,7 +2958,7 @@ function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () =
       {suggest.map((id) => {
         const p = anyPluginById(id);
         if (!p) return null;
-        const adding = states[id] === "adding";
+        const adding = states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}

@@ -304,19 +304,23 @@ function along(c: Pick<PushShape, "start" | "c1" | "c2" | "end">, n: number): P[
 }
 
 function segmentsCross(a: P, b: P, c: P, d: P): boolean {
-  const o = (p: P, q: P, r: P) => Math.sign(cross(sub(q, p), sub(r, p)));
+  // (which side of p→q r is on: the sign of their cross product, worked out in place - called for every stretch of every curve tried)
+  const o = (p: P, q: P, r: P) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
   return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
 }
 
 /**
  * How badly a curve sits: each bond it crosses, each stretch of it inside a
  * label or close by an atom it neither leaves nor reaches, and how far it
- * wanders and turns more than it must.
+ * wanders and turns more than it must. Each of these only adds, so once it
+ * is past `limit` - worse than a curve already found - it says so there,
+ * not worked out to the end.
  */
-function fault(pts: readonly P[], scene: PushScene, ends: readonly P[], L: number): number {
+function fault(pts: readonly P[], scene: PushScene, ends: readonly P[], L: number, limit = Infinity): number {
   let f = 0;
   for (let i = 1; i < pts.length; i++)
     for (const [u, v] of scene.segments) if (segmentsCross(pts[i - 1], pts[i], u, v)) f += 6;
+  if (f > limit) return f;
   // (a label's ink and a little room round it)
   const pad = 0.12 * L;
   for (const p of pts) {
@@ -336,6 +340,7 @@ function fault(pts: readonly P[], scene: PushScene, ends: readonly P[], L: numbe
       const d = len(sub(p, a));
       if (d < 0.7 * L) f += 0.15 * (1 - d / (0.7 * L));
     }
+    if (f > limit) return f;
   }
   let length = 0;
   let turning = 0;
@@ -398,7 +403,8 @@ function laidCurve(from: PushEndAt, to: PushEndAt, scene: PushScene, L: number):
     ...("atom" in from ? (from.mark ? [from.atom] : []) : "bond" in from ? from.bond : from.gap),
     ...("atom" in to ? [] : "bond" in to ? to.bond : to.gap),
   ];
-  let best: { shape: PushShape; cost: number } | null = null;
+  // (each curve it could take, and what it costs besides how it sits - scored after, against what lies near them)
+  const tried: { shape: PushShape; pts: P[]; cost: number }[] = [];
   for (const s of starts)
     for (const e of ends) {
       const d = len(sub(e.at, s.at));
@@ -415,8 +421,7 @@ function laidCurve(from: PushEndAt, to: PushEndAt, scene: PushScene, L: number):
         ]) {
           const rise = Math.min(Math.max(k * d, 0.2 * L), 0.42 * L);
           const shape = { ...arcCurve(s.at, e.at, across, rise), dots: s.dots ?? [] };
-          const cost = s.cost + e.cost + fault(along(shape, 40), scene, atomsAt, L) + extra;
-          if (!best || cost < best.cost - 1e-9) best = { shape, cost };
+          tried.push({ shape, pts: along(shape, 40), cost: s.cost + e.cost + extra });
         }
         continue;
       }
@@ -434,11 +439,57 @@ function laidCurve(from: PushEndAt, to: PushEndAt, scene: PushScene, L: number):
         const h1 = Math.min(Math.max(k1 * d, 0.4 * L), 2.2 * L);
         const h2 = Math.min(Math.max(k2 * d, 0.32 * L), 1.4 * L);
         const shape = { start: s.at, c1: add(s.at, mul(s.heading, h1)), c2: sub(e.at, mul(e.heading, h2)), end: e.at, dots: s.dots ?? [] };
-        const cost = s.cost + e.cost + fault(along(shape, 40), scene, atomsAt, L) + extra;
-        if (!best || cost < best.cost - 1e-9) best = { shape, cost };
+        tried.push({ shape, pts: along(shape, 40), cost: s.cost + e.cost + extra });
       }
     }
+  // (what lies near any of them, once: nothing farther can count against one - `near`)
+  const nearAll = near(scene, boundsOf(tried.flatMap((t) => t.pts)), L);
+  let best: { shape: PushShape; cost: number } | null = null;
+  for (const t of tried) {
+    const cost: number = t.cost + fault(t.pts, near(nearAll, boundsOf(t.pts), L), atomsAt, L, best ? best.cost - t.cost : Infinity);
+    if (!best || cost < best.cost - 1e-9) best = { shape: t.shape, cost };
+  }
   return best?.shape ?? null;
+}
+
+/** The least box round points. */
+function boundsOf(pts: readonly P[]): { min: P; max: P } {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x;
+    if (p.y < y0) y0 = p.y;
+    if (p.x > x1) x1 = p.x;
+    if (p.y > y1) y1 = p.y;
+  }
+  return { min: { x: x0, y: y0 }, max: { x: x1, y: y1 } };
+}
+
+/**
+ * Of a scene, what could count against a curve within `box` (`fault`): a
+ * bond whose line reaches into it, a label whose box (and its room) does,
+ * an atom or a point of another arrow near enough to it - the farthest
+ * anything counts from is 0.7 of a bond. The rest cannot, so a curve is
+ * scored the same against this as against the whole drawing, at a cost
+ * that grows with what is near it, not with the drawing (found on a
+ * Surface, 2026-10-25: arrows drawn, moved or zoomed over a large drawing
+ * stuttered).
+ */
+function near(scene: PushScene, box: { min: P; max: P }, L: number): PushScene {
+  const r = 0.7 * L;
+  const x0 = box.min.x - r;
+  const y0 = box.min.y - r;
+  const x1 = box.max.x + r;
+  const y1 = box.max.y + r;
+  const inside = (p: P) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+  return {
+    segments: scene.segments.filter(([u, v]) => Math.max(u.x, v.x) >= x0 && Math.min(u.x, v.x) <= x1 && Math.max(u.y, v.y) >= y0 && Math.min(u.y, v.y) <= y1),
+    boxes: scene.boxes.filter((b) => b.max.x >= x0 && b.min.x <= x1 && b.max.y >= y0 && b.min.y <= y1),
+    atoms: scene.atoms.filter(inside),
+    ...(scene.arrows ? { arrows: scene.arrows.filter(inside) } : {}),
+  };
 }
 
 /**

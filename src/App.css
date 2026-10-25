@@ -188,14 +188,23 @@ body {
 /* A chip on the page - a molecule's frames chip, a measurement's value -
    grows and shrinks with the page, as its cards and sets do: drawn at the
    page's scale, `--page` (components/PageScale), from where it hangs; and
-   fades out where its words would be too small to read, as a step's card
-   shows its icons alone (utils/pageScale). */
+   fades out with the zoom where its words would be too small to read, as a
+   step's card fades to its icons alone (utils/pageScale `wordsShown`). */
 .meno-page-chip {
-  transition: opacity 150ms var(--ease-meno);
+  opacity: var(--words, 1);
 }
 [data-words-small] .meno-page-chip {
-  opacity: 0;
   pointer-events: none !important;
+}
+/* The words of the page's cards and sets, faded with the zoom as chips are
+   (`--words`); and what stands for them where they are gone, faded in once
+   they are (`--stand-in`): one after the other, never both at once. */
+.meno-words,
+.meno-words-each > span {
+  opacity: var(--words, 1);
+}
+.meno-words-gone {
+  opacity: var(--stand-in, 0);
 }
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
@@ -232,5 +241,14 @@ input[type="range"]::-moz-range-thumb {
     transition-property: color, background-color, border-color, box-shadow;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-meno);
+  }
+  /* A field's words are always selectable, in what is not (the canvas and
+     what lies over it, Workspace's select-none): WebKit would otherwise
+     carry that on into an input there. */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }

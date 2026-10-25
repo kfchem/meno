@@ -57,16 +57,27 @@ export default function RadioGroup<T extends string>({
             }}
             className="group flex items-center gap-2 py-0.5 text-sm text-gh-black outline-none"
           >
-            <span
+            {/* (drawn as circles, not a rounded box: round at any scale - a box 14 px across is 17.5 device pixels at 125%, its width and
+                height rounded apart, and the dot was seen as a stadium on Windows) */}
+            <svg
               aria-hidden
-              className={clsx(
-                "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border bg-white transition-colors duration-150 ease-meno",
-                on ? "border-accel-base" : "border-gh-line group-hover:border-gh-gray",
-                "group-focus-visible:ring-2 group-focus-visible:ring-accel-lightbase",
-              )}
+              viewBox="0 0 14 14"
+              className="h-3.5 w-3.5 shrink-0 overflow-visible rounded-full group-focus-visible:ring-2 group-focus-visible:ring-accel-lightbase"
             >
-              <span className={clsx("h-1.5 w-1.5 rounded-full bg-accel-base transition-transform duration-150 ease-meno", on ? "scale-100" : "scale-0")} />
-            </span>
+              <circle
+                cx={7}
+                cy={7}
+                r={6.5}
+                strokeWidth={1}
+                className={clsx("fill-white transition-colors duration-150 ease-meno", on ? "stroke-accel-base" : "stroke-gh-line group-hover:stroke-gh-gray")}
+              />
+              <circle
+                cx={7}
+                cy={7}
+                r={3}
+                className={clsx("origin-center fill-accel-base transition-transform duration-150 ease-meno [transform-box:fill-box]", on ? "scale-100" : "scale-0")}
+              />
+            </svg>
             {o.label}
           </button>
         );

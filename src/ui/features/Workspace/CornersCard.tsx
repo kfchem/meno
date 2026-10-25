@@ -2,7 +2,6 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { ROUNDED_PT } from "../../../lib/chem/shapes";
 
 /**
  * A card of corners where a right-click's menu was, for a rectangle
@@ -16,6 +15,7 @@ import { ROUNDED_PT } from "../../../lib/chem/shapes";
 export default function CornersCard({
   now,
   most,
+  rounded,
   onCorners,
   x,
   y,
@@ -26,6 +26,8 @@ export default function CornersCard({
   now: number;
   /** The most it can be, in points: half the rectangle's shorter side. */
   most: number;
+  /** *Rounded*, in points: a fifth of a bond (lib/chem/shapes `roundedOfBondPt`). */
+  rounded: number;
   onCorners: (pt: number) => void;
   x: number;
   y: number;
@@ -62,7 +64,7 @@ export default function CornersCard({
   const near = (a: number, b: number) => Math.abs(a - b) < 0.05;
   const choices = [
     { name: "Square", pt: 0 },
-    { name: "Rounded", pt: Math.min(ROUNDED_PT, most) },
+    { name: "Rounded", pt: Math.min(rounded, most) },
     { name: "Round ends", pt: most },
   ];
   const width = 300;
