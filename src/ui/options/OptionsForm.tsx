@@ -81,10 +81,11 @@ export default function OptionsForm({
   const field = (o: Option) => (
         <div key={o.id}>
           {o.type === "choice" && o.choices.length > MANY_CHOICES ? (
-            // (its name, pressed, opens it as the button does; only as wide as they are, so that a press beside them does not)
-            <label className="block w-fit max-w-full">
+            // (its name, pressed, opens it as the button does; only as wide as they are, so that a press beside them does not -
+            // at least 12rem, but never past the card's inset on the right: a step's card is narrower than that)
+            <label className="block w-fit min-w-[min(12rem,100%)] max-w-full">
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
-              <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} size="sm" className="w-fit min-w-[12rem] max-w-full" />
+              <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} size="sm" className="w-full" />
             </label>
           ) : o.type === "choice" ? (
             <RadioGroup label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} />
