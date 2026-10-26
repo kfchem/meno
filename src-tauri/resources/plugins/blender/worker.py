@@ -42,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.5.2"
+VERSION = "0.5.3"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
