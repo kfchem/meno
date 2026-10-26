@@ -3,6 +3,7 @@ import type { FigureDrawn } from "../../../../lib/figure/drawn";
 import aldol from "../../../../lib/figure/fixtures/aldol-rdkitrxn.json";
 import camphor from "../../../../lib/figure/fixtures/camphor-rdkitacs.json";
 import acetate from "../../../../lib/figure/fixtures/sodium-acetate-rdkit.json";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { schemeDrawn } from "./figures";
 import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
 import { centreWithin, figureOn, pageStructuresOf, structureAt, structuresOf, type PageStructure } from "./pageStructures";
@@ -648,4 +649,28 @@ describe("a label between a structure's two halves, as the page's objects have i
       expect(r.kinds.every((k) => k === "marked")).toBe(true);
     });
   }
+});
+
+describe("structures of one figure drawn at different sizes", () => {
+  type P = [number, number];
+  const stroke = (p: P, q: P) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", ...p], ["L", ...q]] }) as FigureDrawn["paths"][number];
+  /** A ring of six drawn about `c`, its bonds `l` long. */
+  const ring = (c: P, l: number) => {
+    const pts = Array.from({ length: 6 }, (_, i): P => [c[0] + l * Math.cos((Math.PI / 3) * i + Math.PI / 6), c[1] + l * Math.sin((Math.PI / 3) * i + Math.PI / 6)]);
+    return pts.map((p, i) => stroke(p, pts[(i + 1) % 6]));
+  };
+  const bondsOf = (s: PageStructure) => {
+    if ("none" in s.read) throw new Error(s.read.none);
+    const m = s.read.model;
+    const at = new Map(m.atoms.map((a) => [a.id, a]));
+    return m.bonds.map((b) => Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y));
+  };
+
+  it("are each taken with a bond as long as Meno draws one, not the figure's: a ring drawn small beside two drawn large comes in as large as they", () => {
+    // (two rings drawn with bonds of 14.4 points - the figure's bond - and one with bonds half as long, all in one figure)
+    const drawn: FigureDrawn = { paths: [...ring([100, 100], 14.4), ...ring([160, 100], 14.4), ...ring([215, 100], 7.2)], letters: [], pictures: [] };
+    const found = structuresOf(drawn, 0, "pdf", 0, []);
+    expect(found).toHaveLength(3);
+    for (const s of found) for (const l of bondsOf(s)) expect(l).toBeCloseTo(NOMINAL_BOND_LENGTH, 6);
+  });
 });

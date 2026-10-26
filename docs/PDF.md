@@ -1519,6 +1519,13 @@ words are: by itself, not by a box drawn round it.
   following the pointer, and let go on the canvas it is put down there:
   read from the lines, with its labels, wedges and charges, a bond as long
   as Meno draws one. Let go anywhere else, it goes back.
+- **Each structure is taken at its own scale**: the length most of its own
+  bonds are drawn at (those between two corners, where it has two or
+  more), not the figure's, so that one drawn smaller or larger than the
+  structures beside it comes in at the style's bond length too, wherever it
+  is let go and however far the canvas is zoomed. With too few bonds to
+  say, the figure's is used. A scheme taken whole by a box keeps one scale
+  for all of it, its structures' bonds the length most are drawn at.
 - **Clicked, it is selected**, and Shift adds another. Its right-click menu
   has *Put on the page* and *Copy*.
 - **Its own labels are its**: a press on a label's letters takes the

@@ -9,7 +9,7 @@ import { ELEMENTS } from "../chem/elements";
 import { AROMATIC_BOND, kekuleOrders } from "../chem/kekulize";
 import { chargeText, implicitHydrogens, mostBonds, type Radical } from "../chem/molecule";
 import { isMetal } from "../layout/perceive";
-import type { FigureRead } from "./read";
+import { bondLength, type FigureRead } from "./read";
 
 /** What a label reads as - an element, with its charge, or a label Meno keeps as a group's name - or null, where it reads as nothing. */
 export type LabelReader = (label: string) => { el: string; charge?: number; isotope?: number } | null;
@@ -74,14 +74,28 @@ const calledAs = (el: string) => (el === "C" ? "a carbon" : (NAMES.get(el) ?? `"
 const SHORT_END = 0.72;
 
 /**
+ * How long a bond of a structure read is drawn, in the page's points: the length most of its own bonds are drawn at - those
+ * between two corners, where it has two or more, its labels' bonds drawn to a label's middle - and not the figure's, whose
+ * other structures may be drawn larger or smaller; with too few bonds to say, the figure's.
+ */
+export function drawnBond(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number {
+  const bare = (i: number) => !read.atoms[i].label && !read.atoms[i].el;
+  const length = (b: FigureRead["bonds"][number]) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y);
+  const between = read.bonds.filter((b) => bare(b.a) && bare(b.b));
+  const lengths = (between.length >= 2 ? between : read.bonds).map(length);
+  return (lengths.length >= 2 ? bondLength(lengths) : 0) || read.bond;
+}
+
+/**
  * The structure a figure reads as: the page's points made Meno's units,
- * a bond as long as Meno draws one, its middle at naught (or `about`); a ring drawn
+ * a bond as long as Meno draws one (`drawnBond`), its middle at naught (or `about`); a ring drawn
  * with its circle given its double bonds. An atom whose label writes more
  * or fewer hydrogens than its bonds leave it is unsure, as is a label
  * nothing reads.
  */
 export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: number; y: number }): { atoms: StructureAtom[]; bonds: StructureBond[] } {
-  const k = read.bond ? NOMINAL_BOND_LENGTH / read.bond : 1;
+  const drawn = drawnBond(read);
+  const k = drawn ? NOMINAL_BOND_LENGTH / drawn : 1;
   const xs = read.atoms.map((a) => a.x);
   const ys = read.atoms.map((a) => a.y);
   // (its middle at naught - or `about`, the middle of the scheme it is in)
