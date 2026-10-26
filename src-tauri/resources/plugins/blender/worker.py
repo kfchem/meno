@@ -42,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.5.2"
+VERSION = "0.6.0"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
@@ -72,7 +72,9 @@ PILES = {"long", "short"}
 CLAYS = {"terracotta", "elements"}
 PORCELAINS = {"porcelain", "pearl"}
 # the film motions this plugin makes (the manifest's `motions`), each a script of its own beside the studio they share
-MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve"}
+MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter", "change-liquid"}
+# (its changes of molecules: one molecule becoming the next, piece by piece - each with the part they share beside it)
+CHANGE_SCRIPT = "change.py"
 MODES = {"once", "loop"}
 STUDIO_SCRIPT = "studio.py"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
@@ -172,6 +174,11 @@ def script_text(name=SCRIPT):
         return f.read()
 
 
+def motion_script(motion):
+    """A motion's own script: motion_<id>.py, a change's dash an underscore (motion_change_ring.py)."""
+    return f"motion_{motion.replace('-', '_')}.py"
+
+
 def op_prepare(m):
     if m.get("step") != "render":
         raise Refused(f"this plugin does no {m.get('step')!r}")
@@ -193,7 +200,8 @@ def op_prepare(m):
                 {"name": SCRIPT, "text": script_text()},
                 {"name": LOOKS_SCRIPT, "text": script_text(LOOKS_SCRIPT)},
                 # (a motion's script and the studio it is made in, where the film is one of this plugin's motions)
-                *([{"name": STUDIO_SCRIPT, "text": script_text(STUDIO_SCRIPT)}, {"name": f"motion_{settings['motion']}.py", "text": script_text(f"motion_{settings['motion']}.py")}] if "motion" in settings else []),
+                *([{"name": STUDIO_SCRIPT, "text": script_text(STUDIO_SCRIPT)}, {"name": motion_script(settings["motion"]), "text": script_text(motion_script(settings["motion"]))}] if "motion" in settings else []),
+                *([{"name": CHANGE_SCRIPT, "text": script_text(CHANGE_SCRIPT)}] if settings.get("motion", "").startswith("change-") else []),
                 {"name": SETTINGS, "text": json.dumps(settings, indent=1) + "\n"},
             ],
             "reads": [],

@@ -63,6 +63,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -632,6 +633,121 @@ def motion_film(s, meno, folder):
     return made + made[-2:0:-1] if cycle else made
 
 
+# The changes of molecules this plugin makes (manifest `motions`, "change-<id>"): a film in pieces, one for each molecule that
+# becomes the next, in the order Meno wrote them - Once to the last, Loop back to the first. Each piece is timed in a
+# length of its own; the film's length is shared out among them, and each played faster or slower to fit. The liquid is
+# made in stages: each molecule's melt, then each change between two melts' pools (`liquid_film`).
+CHANGE_NOMINAL = {"change-ring": 5.0, "change-scan": 5.0, "change-shatter": 5.0}
+LIQUID_MELT, LIQUID_REFORM = 8.0, 1.6
+
+
+def molecules_to_change(s, meno):
+    """The molecules a change is made of, and the changes - (from, to) - in the order the film plays them."""
+    mols = meno.get("molecules") or []
+    if len(mols) < 2:
+        raise SystemExit("render.py: a change of molecules needs two molecules or more, rendered together")
+    loop = s["mode"] == "loop"
+    return mols, [(i, (i + 1) % len(mols)) for i in range(len(mols) if loop else len(mols) - 1)], loop
+
+
+def change_piece(s, folder, cfg, script, progress, first):
+    """One piece of a change, in a Blender of its own: its studio (studio.py), the part changes share (change.py, where it
+    has a molecule to become) and its own script, which renders its frames into cfg's `out`. Those frames, in order."""
+    space = {"CFG": cfg, "__name__": "motion"}
+    with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
+        exec(compile(f.read(), "studio.py", "exec"), space)
+    scene = bpy.context.scene
+    gpu = s["device"] != "cpu" and gpu_ready()
+    scene.cycles.device = "GPU" if gpu else "CPU"
+    if first:
+        say("Rendering on the graphics processor" if gpu else ("Rendering on the processor" if s["device"] == "cpu" else FELL_BACK))
+        say("progress 0/100")
+    # (one bar for the whole film: its handlers again on each piece's Blender, made new by the studio)
+    bpy.app.handlers.render_pre.append(progress.begin_frame)
+    bpy.app.handlers.render_stats.append(progress.stats)
+    bpy.app.handlers.render_post.append(lambda *_: progress.frame_done())
+    for name in (["change.py"] if "next" in cfg else []) + [script]:
+        with open(os.path.join(folder, name), encoding="utf-8") as f:
+            exec(compile(f.read(), name, "exec"), space)
+    made = sorted(glob.glob(os.path.join(cfg["out"], "f_*.png")))
+    if len(made) != cfg["frames"]:
+        raise SystemExit(f"render.py: Blender rendered {len(made)} of {cfg['frames']} frames of a change")
+    return made
+
+
+def piece_settings(s, frames, nominal, out):
+    white = s["background"] in ("white", "transparent")
+    return {"seconds": frames / s["fps"], "nominal": nominal, "frames": frames, "fps": s["fps"], "mode": "once", "stand": True,
+            "width": s["width"], "height": s["height"], "percent": 100, "samples": s["samples"], "noise": 0.01,
+            "bg": "white" if white else "dark", "out": out}
+
+
+def share(total, parts):
+    """`total` frames shared among `parts`, the first ones a frame more where they do not divide."""
+    return [total // parts + (1 if k < total % parts else 0) for k in range(parts)]
+
+
+def change_film(s, meno, folder):
+    """A change of molecules: each piece, A becoming B, made after the piece before, the camera running on through them all.
+    The frames, in the order the film plays them."""
+    if s["motion"] == "change-liquid":
+        return liquid_film(s, meno, folder)
+    mols, pairs, loop = molecules_to_change(s, meno)
+    total = s["frames"]
+    if total < 2 * len(pairs):
+        raise SystemExit(f"render.py: {total} frames are too few for {len(pairs)} changes")
+    progress = Progress(total)
+    made, start = [], 0
+    for k, ((i, j), n) in enumerate(zip(pairs, share(total, len(pairs)))):
+        cfg = {**piece_settings(s, n, CHANGE_NOMINAL[s["motion"]], os.path.join(folder, "frames", f"piece-{k + 1:02d}")),
+               "molecules": [mols[i]], "next": mols[j], "loop": loop, "t_offset": start / s["fps"], "t_total": total / s["fps"]}
+        made += change_piece(s, folder, cfg, "motion_change_" + s["motion"][len("change-"):] + ".py", progress, k == 0)
+        start += n
+    progress.end()
+    return made
+
+
+def reach(mol):
+    """How far a molecule reaches across the floor from its heavy atoms' middle, in ångströms (Meno's x and z)."""
+    heavy = [a["p"] for a in mol["atoms"] if a["el"] != "H"] or [a["p"] for a in mol["atoms"]]
+    cx, cz = sum(p[0] for p in heavy) / len(heavy), sum(p[2] for p in heavy) / len(heavy)
+    return max(math.hypot(a["p"][0] - cx, a["p"][2] - cz) for a in mol["atoms"])
+
+
+def liquid_film(s, meno, folder):
+    """The liquid change: each molecule's melt rendered once (its pool kept), each change between two pools after; the film
+    plays a molecule's melt forward as it changes away, backward as it is changed into - the first melt from its first
+    frame, each one after from its second, so that no frame is shown twice."""
+    mols, pairs, loop = molecules_to_change(s, meno)
+    changes = len(pairs)
+    # (each change: A's melt, the reform, B's melt backward - in the lengths the liquid takes, 8 s, 1.6 s and 8 s)
+    per = s["frames"] / changes
+    melt = max(2, int(round(per * LIQUID_MELT / (2 * LIQUID_MELT + LIQUID_REFORM))))
+    reform = max(1, int(round(per)) - 2 * melt)
+    progress = Progress(len(mols) * melt + changes * reform)
+    widest = max(reach(m) for m in mols)
+    melts, first = [], True
+    for i, mol in enumerate(mols):
+        out = os.path.join(folder, "frames", f"melt-{i + 1:02d}")
+        cfg = {**piece_settings(s, melt, LIQUID_MELT, out), "molecules": [mol], "stage": "melt", "reach": widest, "bg": "white",
+               "cache": os.path.join(folder, "cache", f"melt-{i + 1:02d}"), "pool": os.path.join(out, "pool.npz")}
+        os.makedirs(cfg["cache"], exist_ok=True)
+        melts.append(change_piece(s, folder, cfg, "motion_change_liquid.py", progress, first))
+        first = False
+        shutil.rmtree(cfg["cache"], ignore_errors=True)
+    made = []
+    for k, (i, j) in enumerate(pairs):
+        out = os.path.join(folder, "frames", f"reform-{k + 1:02d}")
+        cfg = {**piece_settings(s, reform, LIQUID_REFORM, out), "molecules": [mols[i]], "stage": "reform", "reach": widest, "bg": "white",
+               "pools": [os.path.join(folder, "frames", f"melt-{i + 1:02d}", "pool.npz"), os.path.join(folder, "frames", f"melt-{j + 1:02d}", "pool.npz")]}
+        made += melts[i] if k == 0 else melts[i][1:]
+        made += change_piece(s, folder, cfg, "motion_change_liquid.py", progress, False)
+        # (a Loop's last change comes back to the first molecule, whose first frame begins the film again: not shown twice)
+        made += melts[j][:0:-1] if loop and k == changes - 1 else melts[j][::-1]
+    progress.end()
+    return made
+
+
 def main():
     s = settings_of()
     folder = os.getcwd()
@@ -639,6 +755,10 @@ def main():
     with open(scene_path, encoding="utf-8") as f:
         gltf = json.load(f)
     meno = (gltf.get("scenes") or [{}])[0].get("extras", {}).get("meno", {})
+    if s.get("motion", "").startswith("change-"):
+        assemble(change_film(s, meno, folder), s, folder)
+        say(f"Rendered {s['out']}")
+        return
     if s.get("motion"):
         assemble(motion_film(s, meno, folder), s, folder)
         say(f"Rendered {s['out']}")
