@@ -100,11 +100,11 @@ export function untangledKeeping(
         if (ring ? Math.hypot(dx, dy) > MOST_SLID + 1e-9 : dx !== 0 || dy !== 0) return false;
         return group.every((a) => Math.abs(pos.get(a)!.x - start.get(a)!.x - dx) < 1e-9 && Math.abs(pos.get(a)!.y - start.get(a)!.y - dy) < 1e-9);
       });
-    // (and no atom's bonds left narrower than they may be, where they were not)
-    const atoms = piece.filter((a) => mol.neighbours[a].length > 1);
-    const narrowestOf = (pos: Map<number, Point>, a: number) => narrowest(pos.get(a)!, mol.neighbours[a].map((b) => pos.get(b)!));
-    const least = new Map(atoms.map((a) => [a, angleFloor(doubled(mol, a), narrowestOf(start, a))]));
-    const wide = (pos: Map<number, Point>) => atoms.every((a) => narrowestOf(pos, a) >= least.get(a)!);
+    // (and no two of an atom's bonds next to each other left narrower than
+    // they may be, where they were not: each pair by its own angle - an atom
+    // with a ring's narrow corner keeps its wide angles wide)
+    const kept = piece.map((a) => anglesHeld(start, a, mol.neighbours[a], doubled(mol, a)));
+    const wide = (pos: Map<number, Point>) => kept.every((held) => held(pos));
     const score = (pos: Map<number, Point>) => (held(pos) && arranged(pos) && wide(pos) ? benchmark(pos) : Infinity);
     const { pos } = untangle(mol, piece, start, benchmark(start), score, (side) => side.some(still));
     for (const a of piece) out[a] = { x: pos.get(a)!.x * bond, y: pos.get(a)!.y * bond };
@@ -136,12 +136,31 @@ function keptTogether(mol: Molecule, kept: readonly number[]): number[][] {
   return groups;
 }
 
-/** The narrowest angle between two of an atom's bonds, at `at`, to `ends`. */
-function narrowest(at: Point, ends: readonly Point[]): number {
-  const turns = ends.map((e) => Math.atan2(e.y - at.y, e.x - at.x)).sort((p, q) => p - q);
-  let least = 2 * Math.PI - (turns[turns.length - 1] - turns[0]);
-  for (let i = 1; i < turns.length; i++) least = Math.min(least, turns[i] - turns[i - 1]);
-  return least;
+/**
+ * Whether an atom's bonds are left as wide as they may be, from where they
+ * were (`start`): each two next to each other round it at `angleFloor` of
+ * their own angle or wider - not the atom's narrowest alone, which would let
+ * a ring's narrow corner stand for its wide angles too.
+ */
+export function anglesHeld(start: ReadonlyMap<number, Point>, a: number, ns: readonly number[], double: boolean): (pos: ReadonlyMap<number, Point>) => boolean {
+  const pairs = besideEachOther(start, a, ns).map(([v, w]) => ({ v, w, least: angleFloor(double, between(start, a, v, w)) }));
+  return (pos) => pairs.every((p) => between(pos, a, p.v, p.w) >= p.least);
+}
+
+/** An atom's neighbours next to each other round it, as `at` has them: each pair once. */
+function besideEachOther(at: ReadonlyMap<number, Point>, a: number, ns: readonly number[]): [number, number][] {
+  if (ns.length < 2) return [];
+  const o = at.get(a)!;
+  const round = [...ns].sort((p, q) => Math.atan2(at.get(p)!.y - o.y, at.get(p)!.x - o.x) - Math.atan2(at.get(q)!.y - o.y, at.get(q)!.x - o.x));
+  return ns.length === 2 ? [[round[0], round[1]]] : round.map((v, i) => [v, round[(i + 1) % round.length]]);
+}
+
+/** The angle between two of an atom's bonds, in radians, 0 to pi. */
+function between(at: ReadonlyMap<number, Point>, a: number, v: number, w: number): number {
+  const o = at.get(a)!;
+  const p = at.get(v)!;
+  const q = at.get(w)!;
+  return Math.abs(Math.atan2((p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x), (p.x - o.x) * (q.x - o.x) + (p.y - o.y) * (q.y - o.y)));
 }
 
 /** Whether an atom has a double bond. */

@@ -1027,9 +1027,11 @@ longer. Only moves that keep the arrangement are taken:
   bond drawn longer - its shape and its turn kept - by at most 0.6 of a
   bond; anything else kept as drawn does not move at all (the maintainer,
   2026-10-27);
-- no turn leaves two of an atom's bonds closer than 100 degrees, or 110 at
-  an atom with a double bond, where they were not already (the maintainer,
-  2026-10-27: angles near the style's, never squeezed to clear the way);
+- no turn leaves two of an atom's bonds next to each other closer than 100
+  degrees, or 110 at an atom with a double bond, where that pair was not
+  already - each pair by its own angle, so a ring's narrow corner leaves
+  the wide angles at its atom wide (the maintainer, 2026-10-27: angles near
+  the style's, never squeezed to clear the way);
 - no atom's neighbour ends on the other side of another from where the
   regular drawing has it - a substituent across its bond, a chain's turn
   the other way. That is where the drawing has it, the regulariser seeing

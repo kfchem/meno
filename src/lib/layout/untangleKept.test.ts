@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Point } from "./geometry";
 import type { LayoutInput } from "./perceive";
-import { angleFloor, untangledKeeping } from "./untangleKept";
+import { angleFloor, anglesHeld, untangledKeeping } from "./untangleKept";
 
 const B = 1.8;
 /** Atoms at `at`, in bonds, bonded as `bonds` says, all carbons. */
@@ -81,6 +81,72 @@ describe("a drawing made regular, its parts in each other's way, cleared keeping
     for (const i of [5, 6, 7]) expect(ringOnly[i]).toEqual(places[i]);
     expect(far(ringOnly[8], ringOnly[6])).toBeGreaterThan(0.45);
     expect(sides(input, ringOnly)).toEqual(sides(input, places));
+  });
+
+  it("keeps each pair of an atom's bonds as wide as it may be - a ring's narrow corner leaves its wide angles wide", () => {
+    // small rings - their corners 60 and 90 degrees - with zigzag chains on them, their turns either way, many crowded:
+    // every pair of bonds next to each other at every atom at 100 degrees or more after, 110 at a double bond's
+    // atom, or as wide as it was
+    let seed = 12345;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const pairAngles = (input: LayoutInput, at: readonly Point[]) => {
+      const next = at.map((): number[] => []);
+      for (const b of input.bonds) {
+        next[b.a].push(b.b);
+        next[b.b].push(b.a);
+      }
+      return next.flatMap((ns, u) => {
+        if (ns.length < 2) return [];
+        const t = ns.map((n) => ({ n, a: Math.atan2(at[n].y - at[u].y, at[n].x - at[u].x) })).sort((p, q) => p.a - q.a);
+        const pairs = ns.length === 2 ? [[t[0], t[1]]] : t.map((v, i) => [v, t[(i + 1) % t.length]]);
+        return pairs.map(([v, w]) => {
+          const d = Math.abs(v.a - w.a);
+          return { key: `${u}:${Math.min(v.n, w.n)},${Math.max(v.n, w.n)}`, angle: Math.min(d, 2 * Math.PI - d), u };
+        });
+      });
+    };
+    let squeezedBefore = 0;
+    for (let k = 0; k < 60; k++) {
+      const n = 3 + (k % 2);
+      const at: [number, number][] = [];
+      const bonds: [number, number][] = [];
+      const r = 1 / (2 * Math.sin(Math.PI / n));
+      for (let i = 0; i < n; i++) at.push([r * Math.cos((2 * Math.PI * i) / n), r * Math.sin((2 * Math.PI * i) / n)]);
+      for (let i = 0; i < n; i++) bonds.push([i, (i + 1) % n]);
+      // a chain from each of two ring atoms, straight out, then zigzag, its turns either way at random
+      for (const from of [0, 1]) {
+        let prev = from;
+        let heading = (2 * Math.PI * from) / n;
+        let p = at[from];
+        for (let j = 0; j < 4 + (k % 3); j++) {
+          const q: [number, number] = [p[0] + Math.cos(heading), p[1] + Math.sin(heading)];
+          at.push(q);
+          bonds.push([prev, at.length - 1]);
+          prev = at.length - 1;
+          p = q;
+          heading += (rand() < 0.5 ? 1 : -1) * (Math.PI / 3);
+        }
+      }
+      const { input, places } = drawing(at, bonds);
+      const was = new Map(pairAngles(input, places).map((x) => [x.key, x.angle]));
+      const out = untangledKeeping(input, places, places, B);
+      for (const x of pairAngles(input, out)) {
+        const before = was.get(x.key);
+        if (before == null) continue;
+        const floor = Math.min((100 * Math.PI) / 180, before);
+        if (x.angle < floor - 1e-6) squeezedBefore++;
+      }
+    }
+    expect(squeezedBefore).toBe(0);
+    // (an atom at a ring's narrow corner - 60 degrees - and a chain on it 150 degrees from either ring bond: the
+    // chain may not be turned in to 90 degrees of one, though the corner is narrower still; out to 120, it may)
+    const deg = (d: number) => (d * Math.PI) / 180;
+    const ray = (d: number) => ({ x: Math.cos(deg(d)), y: Math.sin(deg(d)) });
+    const start = new Map([[0, { x: 0, y: 0 }], [1, ray(150)], [2, ray(210)], [3, ray(0)]]);
+    const held = anglesHeld(start, 0, [1, 2, 3], false);
+    expect(held(start)).toBe(true);
+    expect(held(new Map([...start, [3, ray(60)]]))).toBe(false);
+    expect(held(new Map([...start, [3, ray(30)]]))).toBe(true);
   });
 
   it("bends nothing drawn in line - a triple bond's neighbours - to clear what is in the way", () => {
