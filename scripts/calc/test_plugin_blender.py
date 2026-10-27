@@ -460,6 +460,32 @@ class MotionsRender(unittest.TestCase):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
         self.assertEqual(why, "render.py: a change of molecules needs two molecules or more, rendered together")
 
+    def test_a_portrait_film_keeps_a_tall_molecule_whole(self):
+        # (a chain standing up the canvas, in a frame twice as tall as wide: Blender's Auto would put the sensor across the
+        # height, and the studio's framing - which takes it across the width - would cut the chain's ends off at the top and
+        # the bottom. The frame's top and bottom rows: paper, not carbon)
+        chain = {"atoms": [{"el": "C", "p": [0.6 * (i % 2), 1.3 * i - 7.0, 0.0]} for i in range(12)],
+                 "bonds": [{"a": i, "b": i + 1, "order": 1} for i in range(11)]}
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [chain]}}}]}
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 2, "fps": 30, "motion": "pulse"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            probe = ("import bpy, numpy as np\n"
+                     "im = bpy.data.images.load('frames/f_0002.png'); W, H = im.size\n"
+                     "x = np.empty(W * H * 4, np.float32); im.pixels.foreach_get(x); x = x.reshape(H, W, 4)[..., :3].mean(axis=2)\n"
+                     "print('EDGES', float(x[:3].min()), float(x[-3:].min()), float(x.min()))\n")
+            look = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", probe], cwd=d, capture_output=True, text=True, timeout=300)
+            bottom, top, darkest = (float(v) for v in re.search(r"^EDGES (\S+) (\S+) (\S+)$", look.stdout, re.M).groups())
+            # (the chain is in the frame, dark; its rows nearest the frame's edges are the paper's, as light as it is)
+            self.assertLess(darkest, 0.3)
+            self.assertGreater(min(top, bottom), 0.6, (top, bottom, darkest))
+
     def test_a_cycle_renders_half_and_plays_it_back(self):
         # (assemble loops as a cycle: 6 frames played, 4 rendered - forward, then back)
         self.assertEqual(self.film("assemble", "black", "loop", frames=6), 4)

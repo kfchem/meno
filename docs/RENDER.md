@@ -357,7 +357,8 @@ uv, no package), and the script Blender runs, `render.py`.
   4 cm an ångström - a product on a table - as the canvas shows them, in
   the motions' own finish (each element's colour under a clear coat;
   carbon near black): a perspective camera with an 85 mm lens and depth of
-  field, motion blur, a finishing compositor. The Look and its parts are
+  field - its sensor across the frame's width, a portrait film's too, so
+  that a tall molecule is framed whole - motion blur, a finishing compositor. The Look and its parts are
   not used for them: a motion has its own. The Background choice picks
   the studio: **White** (or Transparent, a film having none) the white
   studio - a paper sweep the camera sees, lit only by a soft source above
