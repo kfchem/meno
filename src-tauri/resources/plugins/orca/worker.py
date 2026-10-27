@@ -230,12 +230,29 @@ def why_of(log):
     return lines[-1] if lines else "ORCA said nothing"
 
 
+def ended_well(log):
+    """Whether ORCA says it ended well: "ORCA TERMINATED NORMALLY", and nowhere "error termination". Its exit code is no
+    word on it: ORCA 6.1.1 exits 0 where it stopped at its start-up with "ORCA finished by error termination in Startup"
+    (a parallel run, its MPI not there) - read as done, it would hand on as worked out what it never touched."""
+    return "ORCA TERMINATED NORMALLY" in log and not re.search(r"error termination", log, re.I)
+
+
+def not_ended_why(log, ended):
+    """Why a job is not read: ORCA's own words where it said it ended by an error, or where its runner saw it fail; where
+    it ended (exit 0) saying neither that nor that it terminated normally, that plainly, with the last thing it said."""
+    if ended != "done" or re.search(r"error termination", log, re.I):
+        return why_of(log)
+    lines = [line.strip() for line in log.splitlines() if line.strip()]
+    return "ORCA's log does not say it ended normally" + (f"; it last said: {lines[-1]}" if lines else "")
+
+
 def op_collect(m):
     step = m.get("step")
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
-    if m.get("ended") != "done":
-        return {"why": why_of(m.get("log") or "")}
+    log = m.get("log") or ""
+    if m.get("ended") != "done" or not ended_well(log):
+        return {"why": not_ended_why(log, m.get("ended"))}
     # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}
