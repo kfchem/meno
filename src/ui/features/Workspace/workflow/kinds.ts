@@ -12,6 +12,7 @@ import { renderOptions } from "../render/renderOptions";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
+import { atomsFromOne } from "../../../../lib/steps/compareBonding";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
@@ -40,7 +41,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -421,6 +422,102 @@ export const KINDS: readonly KindInfo[] = [
       return "why" in typed ? typed.why : undefined;
     },
   },
+  {
+    // (two sets of one kind made one, First's then Second's - all, or one of each value of a property - the rest out of the second exit, each naming the one kept)
+    kind: "merge",
+    name: "Merge",
+    icon: "merge",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Merged",
+    inputs: [
+      { id: "first", name: "First", takes: ["molecules", "conformers"] },
+      { id: "second", name: "Second", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "The rest", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "keep",
+        label: "Keep",
+        type: "choice",
+        choices: [
+          { value: "all", label: "All" },
+          { value: "one", label: "One of each" },
+        ],
+        default: "all",
+      },
+      { id: "property", label: "Of each", type: "text", default: "", when: { id: "keep", in: ["one"] } },
+    ],
+    how: (v) => (v.keep === "one" ? (String(v.property ?? "").trim() ? `First's, then Second's: one of each ${String(v.property).trim()}` : "Name the property to keep one of each") : "First's, then Second's: all"),
+    needs: (v) => (v.keep === "one" && !String(v.property ?? "").trim() ? "Name the property to keep one of each" : undefined),
+  },
+  {
+    // (each geometry given a bonding entry's bonds and charges - each with each, or paired on a property - those that cannot be out of the second exit, saying why)
+    kind: "rebond",
+    name: "Re-bond",
+    icon: "rebond",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Re-bonded",
+    inputs: [
+      { id: "geometry", name: "Geometry", takes: ["molecules", "conformers"] },
+      { id: "bonding", name: "Bonding", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Not re-bonded", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "pairs",
+        label: "Pairs",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each with each" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "each",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+    ],
+    how: (v) => (v.pairs === "property" ? (String(v.property ?? "").trim() ? `Paired on ${String(v.property).trim()}` : "Name the property to pair them on") : "Each geometry with each bonding"),
+    needs: (v) => (v.pairs === "property" && !String(v.property ?? "").trim() ? "Name the property to pair them on" : undefined),
+  },
+  {
+    // (whether each geometry is bonded as its reference - paired on a property, or against each, the match named - the same out of the first exit, the rest with their differences out of the second)
+    kind: "compare-bonding",
+    name: "Compare bonding",
+    icon: "compare",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Same",
+    inputs: [
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Different", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "each",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      { id: "writes", label: "The match as", type: "text", default: "matches", when: { id: "reference", in: ["each"] } },
+      { id: "from", label: "Its value of (blank: its number)", type: "text", default: "", when: { id: "reference", in: ["each"] } },
+      { id: "rs", label: "R or S too", type: "switch", default: false },
+      { id: "ez", label: "E or Z too", type: "switch", default: false },
+      { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
+      { id: "elements", label: "Pass over elements", type: "text", default: "" },
+    ],
+    how: (v) => compareHow(v),
+    needs: (v) => compareNeeds(v),
+  },
 ];
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
@@ -575,4 +672,21 @@ export const readsAsTable = (kind: StepKind, port: string): boolean => {
 export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
   return exits.find((e) => e.id === exit) ?? exits[0];
+}
+
+/** What *Compare bonding* still needs of its options before it can run: a property to pair on, or to write the match as; atoms that read. */
+export function compareNeeds(v: OptionValues): string | undefined {
+  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
+  if (v.reference !== "property" && !String(v.writes ?? "matches").trim()) return "Name the property the match is written as";
+  const atoms = atomsFromOne(String(v.atoms ?? ""));
+  return "why" in atoms ? atoms.why : undefined;
+}
+
+/** *Compare bonding*'s line: against what, and what it compares besides bonds. */
+export function compareHow(v: OptionValues): string {
+  const needs = compareNeeds(v);
+  if (needs) return needs;
+  const against = v.reference === "property" ? `Against the reference of the same ${String(v.property).trim()}` : `Against each reference, the match as ${String(v.writes ?? "matches").trim()}`;
+  const also = [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean);
+  return also.length ? `${against}; ${also.join(" and ")} too` : against;
 }

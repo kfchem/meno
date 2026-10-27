@@ -1,5 +1,7 @@
 import {
   AdjustmentsHorizontalIcon,
+  ArrowPathIcon,
+  ArrowsPointingInIcon,
   ArrowsRightLeftIcon,
   ArrowTrendingDownIcon,
   Bars3CenterLeftIcon,
@@ -15,6 +17,7 @@ import {
   PresentationChartLineIcon,
   QueueListIcon,
   RectangleGroupIcon,
+  ScaleIcon,
   SignalIcon,
   SparklesIcon,
   Square2StackIcon,
@@ -50,6 +53,9 @@ const ICONS: Record<StepIcon, Icon> = {
   charge: PlusCircleIcon,
   link: LinkIcon,
   span: ArrowsRightLeftIcon,
+  merge: ArrowsPointingInIcon,
+  rebond: ArrowPathIcon,
+  compare: ScaleIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */
