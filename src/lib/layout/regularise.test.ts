@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { drawnAsChair, regularised, type DrawnAtom, type DrawnBond } from "./regularise";
+import { closedUp, drawnAsChair, regularised, type DrawnAtom, type DrawnBond } from "./regularise";
 import stilbene from "./fixtures/stilbene-sheared.json";
 
 const L = 1.8;
@@ -157,5 +157,19 @@ describe("a structure as drawn, made regular with its arrangement kept", () => {
     }
     // (E as drawn: the two rings on opposite sides of the double bond)
     expect(side(p, 6, 7, 8) * side(p, 7, 6, 5)).toBe(side(stilbene.atoms, 6, 7, 8) * side(stilbene.atoms, 7, 6, 5));
+  });
+
+  it("clearing what is in the way is not taken where it closes a group up on its neighbour: a chain's corner from a third of a turn to 75 deg, or 95", () => {
+    // (a carbon of three bonds, a chain's: made regular, 120 deg between each; cleared, one turned in to 75 deg)
+    const placed = [C(0, 0), C(L, 0), C(-L / 2, (L * Math.sqrt(3)) / 2), C(-L / 2, (-L * Math.sqrt(3)) / 2)];
+    const turnedIn = (deg: number) => C(L * Math.cos((deg * Math.PI) / 180), L * Math.sin((deg * Math.PI) / 180));
+    const mol = { neighbours: [[1, 2, 3], [0], [0], [0]], ringBonds: new Set<string>() };
+    expect(closedUp([placed[0], placed[1], turnedIn(75), placed[3]], placed, mol)).toBe(true);
+    // (an acyl chloride's carbon, its Cl turned in to 95 deg from the N)
+    expect(closedUp([placed[0], placed[1], turnedIn(95), placed[3]], placed, mol)).toBe(true);
+    // (turned only a little: taken)
+    expect(closedUp([placed[0], placed[1], turnedIn(110), placed[3]], placed, mol)).toBe(false);
+    // (nothing moved there: nothing closed up)
+    expect(closedUp(placed, placed, mol)).toBe(false);
   });
 });

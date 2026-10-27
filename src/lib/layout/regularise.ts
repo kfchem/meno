@@ -11,8 +11,9 @@
  * a bridged system and a cage are drawings in perspective, kept as drawn
  * (the maintainer, 2026-10-27), and the bonds out of them too. Crowded, or
  * crossing what the drawing does not cross, it is cleared, its arrangement
- * kept (untangleKept); still so - or with two bonds at an atom narrower than
- * Meno draws any (`NARROWEST`) - it is none, and left as drawn. Pure.
+ * kept (untangleKept), unless that closes up a group on its neighbour
+ * (`closedUp`); still so - or with two bonds at an atom narrower than Meno
+ * draws any (`NARROWEST`) - it is none, and left as drawn. Pure.
  */
 import { layoutFlat } from "./engine";
 import { ringSystemVariants } from "./ringSystem";
@@ -340,10 +341,33 @@ export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBo
   const kept = new Set([...asDrawn].flatMap((k) => mol.systems[k].atoms));
   const input = { atoms: atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: bonds.map((b) => ({ a: b.a, b: b.b, order: Math.round(b.order) || 1 })) };
   const cleared = untangledKeeping(input, placed, drawnP, bond, (i) => kept.has(i));
-  const still = inTheWay(cleared, drawnP, bonds, bond) ?? (narrowed(cleared, drawnP, mol) ? "narrow" : null);
+  const still = inTheWay(cleared, drawnP, bonds, bond) ?? (narrowed(cleared, drawnP, mol) || closedUp(cleared, placed, mol) ? "narrow" : null);
   if (!still) return cleared;
   why?.(still);
   return null;
+}
+
+/**
+ * How narrow two bonds at an atom, not both a ring's, may be closed up by clearing what is in the way, where they were wider
+ * made regular: a third of a turn less a little. Narrower - a group turned in on its neighbour - the clearing is not taken.
+ */
+const CLOSED_UP = 100 * (Math.PI / 180);
+
+/** Whether clearing (`cleared`, from `placed`) closes two bonds at an atom it moved, or by one it moved, past `CLOSED_UP`. */
+export function closedUp(cleared: readonly Point[], placed: readonly Point[], mol: Pick<Molecule, "neighbours" | "ringBonds">): boolean {
+  const moved = (i: number) => Math.hypot(cleared[i].x - placed[i].x, cleared[i].y - placed[i].y) > 1e-6;
+  const inRing = (u: number, v: number) => mol.ringBonds.has(u < v ? `${u},${v}` : `${v},${u}`);
+  return mol.neighbours.some((ns, u) => {
+    if (!moved(u) && !ns.some(moved)) return false;
+    return ns.some((v, i) =>
+      ns.some((w, j) => {
+        if (j <= i || (inRing(u, v) && inRing(u, w))) return false;
+        const now = apart(angleOf(cleared[u], cleared[v]), angleOf(cleared[u], cleared[w]));
+        const was = apart(angleOf(placed[u], placed[v]), angleOf(placed[u], placed[w]));
+        return now < CLOSED_UP && was >= CLOSED_UP;
+      }),
+    );
+  });
 }
 
 /** Whether two bonds at an atom come out narrower than `NARROWEST` where the drawing has them wider. */
