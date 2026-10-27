@@ -53,10 +53,15 @@ const CHECK_SAID_AFTER_MS = 300;
  * Where a plugin's files stand - each read through for its SHA-256, once a
  * launch, which a model's weights take a while to be: said, where it takes
  * more than a moment (`useCheckingFiles`); or, given the hosts the consent
- * to fetch them named - all the fetch may reach - fetched.
+ * to fetch them named - all the fetch may reach - fetched. Asked only
+ * whether they are there (`through` false: whether a plugin is added, as
+ * each is asked at launch), none is read: whether each is there, at its
+ * size, at once - one changed at its own size is found as the plugin is
+ * used, when they are read through (src-tauri/src/plugfiles.rs `there`).
  */
-async function filesOf(plugin: PythonPlugin, hosts?: readonly string[]): Promise<FilesState> {
+async function filesOf(plugin: PythonPlugin, hosts?: readonly string[], through = true): Promise<FilesState> {
   if (hosts) return invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: true, hosts });
+  if (!through) return invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: false, through: false });
   const said = setTimeout(() => useCheckingFiles.setState({ [plugin.id]: plugin.name }), CHECK_SAID_AFTER_MS);
   try {
     return await invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: false, hosts });
@@ -196,7 +201,8 @@ async function baseInfo(
   };
 }
 
-type EnvOptions = { lockPath?: string; pythonVersion?: string };
+/** `through` false: its files' SHA-256 not read, only whether each is there (`filesOf`). */
+type EnvOptions = { lockPath?: string; pythonVersion?: string; through?: boolean };
 
 /** Where a profile's environment stands, and whether it needs setting up. */
 async function envState(profile: PyProfile, opts?: EnvOptions) {
@@ -245,7 +251,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
     stamp.py !== info.pythonVersion;
   // (a plugin's files besides, each there whole)
   const files = setUpFiles(plugin);
-  const filesNow = plugin && files.length > 0 ? await filesOf(plugin) : null;
+  const filesNow = plugin && files.length > 0 ? await filesOf(plugin, undefined, opts?.through ?? true) : null;
   const needFiles = !!filesNow?.missing.length;
   // (those there whose SHA-256 is not the one Meno carries: said, and asked again before they are fetched anew)
   const changed = filesNow?.changed ?? [];
@@ -259,11 +265,14 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
 
 /**
  * Whether a profile's environment is set up as its lock file now says - so
- * that using it needs nothing downloaded. Sets nothing up, and asks nothing.
+ * that using it needs nothing downloaded. Sets nothing up, and asks nothing;
+ * its files are looked for, not read through - as Meno asks it of every
+ * plugin at launch - and are read through as it is used (`ensurePyEnv`).
  */
 export async function pyEnvReady(profile: PyProfile): Promise<boolean> {
   try {
-    const state = await envState(profile);
+    // (its files there, not read through: asked of every plugin at launch - they are read as it is used, by ensurePyEnv)
+    const state = await envState(profile, { through: false });
     return !state.needSetup && !state.needFiles;
   } catch {
     return false;
