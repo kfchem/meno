@@ -5,6 +5,7 @@ import {
   buildAllPrimitives,
   BOND_SEEN_LEAST,
   buildBondPrimitives,
+  FEWEST_HASHES,
   joinsAtAtoms,
   buildTextLabels,
   implicitHydrogens,
@@ -938,7 +939,7 @@ describe("a label must not change how a bond is drawn", () => {
   const spacing = (hashes: { at: number }[]) =>
     hashes.slice(1).map((h, i) => h.at - hashes[i].at);
 
-  it("spaces a hashed wedge's hashes evenly, never closer than the hash spacing", () => {
+  it("spaces a hashed wedge's hashes evenly, never closer than the hash spacing - but a short one's three, a line width clear, where the style asks", () => {
     const o = opts();
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
     const plain = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, deg).polys);
@@ -946,14 +947,31 @@ describe("a label must not change how a bond is drawn", () => {
       buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys,
     );
     // the bond to a labelled atom is shorter, so it carries fewer hashes -
-    // each set evenly spaced, and never closer than the hash spacing
+    // each set evenly spaced, and never closer than the hash spacing: a
+    // journal's style, as its specification has it, two
     expect(labelled.length).toBeLessThan(plain.length);
+    expect(labelled).toHaveLength(2);
     for (const gaps of [spacing(plain), spacing(labelled)]) {
       for (const g of gaps) {
         expect(g).toBeCloseTo(gaps[0], 9);
         expect(g).toBeGreaterThanOrEqual(o.hashSpacingPx - 1e-9);
       }
     }
+    // a style asking for three at least (Meno's): two read as a pair of
+    // lines, so three, closer, still a line width clear of each other - and
+    // a longer one as it was
+    const three = opts({ fewestHashes: FEWEST_HASHES });
+    expect(hashesOf(buildBondPrimitives(pair("C"), bond, three, ZOOM, deg).polys)).toEqual(plain);
+    const short = hashesOf(buildBondPrimitives(pair("O"), bond, three, ZOOM, deg).polys);
+    expect(short).toHaveLength(3);
+    for (const g of spacing(short)) {
+      expect(g).toBeCloseTo(spacing(short)[0], 9);
+      expect(g).toBeLessThan(o.hashSpacingPx);
+      expect(g).toBeGreaterThanOrEqual(2 * o.lineWidthPx - 1e-9);
+    }
+    // (with no room for three so, as many as there is room for)
+    const tight = opts({ fewestHashes: FEWEST_HASHES, lineWidthPx: o.hashSpacingPx * 0.9 });
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
   it("keeps the wave of a wavy bond the same length", () => {
@@ -1448,14 +1466,21 @@ describe("bold, hashed, dashed and dative bonds", () => {
     }
   });
 
-  it("rounds a bold bond's free end into a half circle when ends are round", () => {
+  it("rounds a bold bond's free end's corners as a line's end is, not into a half circle, when ends are round", () => {
     const o = opts({ joinStyle: "round" });
     const { polys } = buildBondPrimitives(pair, one({ display: "bold" }), o, ZOOM, deg);
     const far = polys[0].points.filter((p) => p.x > L - o.boldWidthPx!);
+    // its end flat, square across the bar but for a corner of half a line's
+    // width at each side, every point within the rectangle so rounded
+    const half = o.boldWidthPx! / 2;
+    const r = o.lineWidthPx / 2;
+    const flat = far.filter((p) => Math.abs(p.x - L) < 1e-9).map((p) => p.y);
+    expect(Math.max(...flat)).toBeCloseTo(half - r, 9);
+    expect(Math.min(...flat)).toBeCloseTo(-(half - r), 9);
     for (const p of far) {
-      expect(Math.hypot(p.x - (L - o.boldWidthPx! / 2), p.y)).toBeLessThanOrEqual(
-        o.boldWidthPx! / 2 + 1e-9,
-      );
+      expect(p.x).toBeLessThanOrEqual(L + 1e-9);
+      expect(Math.abs(p.y)).toBeLessThanOrEqual(half + 1e-9);
+      if (p.x > L - r && Math.abs(p.y) > half - r) expect(Math.hypot(p.x - (L - r), Math.abs(p.y) - (half - r))).toBeLessThanOrEqual(r + 1e-9);
     }
   });
 
