@@ -1025,9 +1025,11 @@ longer. Only moves that keep the arrangement are taken:
 - no ring's atom moves, nor any atom the caller keeps as drawn (a chair's),
   by any move: a turn, or a bond drawn longer, which moves all beyond it;
 - no atom's neighbour ends on the other side of another from where the
-  drawing has it - a substituent across its bond, a chain's turn the other
-  way - or from where the regular drawing has it: a pair drawn near in
-  line set to one side, a triple bond's neighbours put in line, held so;
+  regular drawing has it - a substituent across its bond, a chain's turn
+  the other way. That is where the drawing has it, the regulariser seeing
+  to that, but for a pair drawn near in line and set to one side (held so),
+  a triple bond's neighbours put in line (held in line), and an unsure
+  atom put by the bonds about it;
 - the engine's own rule holds: the drawing never ends with more bonds
   crossing than it began with.
 

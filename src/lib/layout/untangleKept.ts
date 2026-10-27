@@ -7,9 +7,10 @@
  * the arrangement as drawn. No ring is turned or moved, nor anything the
  * caller keeps as drawn (a chair's atoms); and no move is taken that puts a
  * neighbour of any atom on the other side of another - a substituent across
- * its bond, a chain's turn the other way - from where the drawing has it,
- * or from where the regular drawing has it: a pair drawn near in line and
- * set to one side, a triple bond's neighbours put in line, held so.
+ * its bond, a chain's turn the other way - from where the regular drawing
+ * has it, which is where the drawing has it (the caller's to see to), but
+ * for a pair drawn near in line and set to one side, held so, and a triple
+ * bond's neighbours put in line, held in line.
  * Atoms only move: what is drawn on each bond is the caller's, and stays.
  * Pure.
  */
@@ -46,26 +47,24 @@ function sidesOf(mol: Molecule, at: readonly Point[], inLine = false): [number, 
 
 /**
  * `placed` - a drawing made regular, `bond` its bond length - with its
- * parts cleared out of each other's way, keeping the arrangement `drawn`
- * gives (see above); the atoms `kept` says are as drawn are not moved, nor
- * any ring's. Where nothing is in the way, nothing can be moved so, or
- * `placed` does not keep `drawn`'s arrangement itself, `placed` as it is.
- * Whether what is left is clear enough is the caller's to judge.
+ * parts cleared out of each other's way, keeping the arrangement it has
+ * (see above; the drawing's own, `_drawn`, is not read); the atoms `kept`
+ * says are as drawn are not moved, nor any ring's. Where nothing is in the
+ * way, or nothing can be moved so, `placed` as it is. Whether what is left
+ * is clear enough is the caller's to judge.
  */
 export function untangledKeeping(
   input: LayoutInput,
   placed: readonly Point[],
-  drawn: readonly Point[],
+  _drawn: readonly Point[],
   bond: number,
   kept: (atom: number) => boolean = () => false,
 ): Point[] {
   const mol = perceive(input);
-  // (each side the regular drawing gives - a pair drawn near in line set to
-  // one side, a triple bond's put in line, held so - and each the drawing
-  // gives, but where the regular drawing has put a pair in line)
-  const regular = sidesOf(mol, placed, true);
-  const inLine = new Set(regular.filter((t) => t[3] === 0).map(([u, v, w]) => `${u},${v},${w}`));
-  const sides = [...regular, ...sidesOf(mol, drawn).filter(([u, v, w]) => !inLine.has(`${u},${v},${w}`))];
+  // (each side the regular drawing gives - a pair in line, held in line:
+  // where the drawing has a pair the other way round, an unsure atom's put
+  // by the bonds about it, say, the regular drawing is the one kept to)
+  const sides = sidesOf(mol, placed, true);
   const still = (a: number) => mol.systemOf[a] >= 0 || kept(a);
   const out = placed.map((p) => ({ x: p.x, y: p.y }));
   for (const piece of mol.pieces) {
@@ -82,7 +81,6 @@ export function untangledKeeping(
     const pinned = piece.filter(still);
     const unmoved = (pos: Map<number, Point>) => pinned.every((a) => pos.get(a)!.x === start.get(a)!.x && pos.get(a)!.y === start.get(a)!.y);
     const score = (pos: Map<number, Point>) => (unmoved(pos) && arranged(pos) ? benchmark(pos) : Infinity);
-    if (!arranged(start)) continue;
     const { pos } = untangle(mol, piece, start, benchmark(start), score, (side) => side.some(still));
     for (const a of piece) out[a] = { x: pos.get(a)!.x * bond, y: pos.get(a)!.y * bond };
   }
