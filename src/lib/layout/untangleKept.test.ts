@@ -43,6 +43,10 @@ describe("a drawing made regular, its parts in each other's way, cleared keeping
     const kept = untangledKeeping(input, places, places, B, (a) => a === 8);
     expect(kept[8]).toEqual(places[8]);
     expect(far(kept[8], kept[6])).toBeGreaterThan(0.45);
+    // (a drawing with a pair the other way round - an unsure atom's, put by the bonds about it - cleared all the same, as made regular)
+    const drawn = places.map((p, i) => (i === 2 ? { x: Math.cos(Math.PI / 4) * B, y: Math.sin(Math.PI / 4) * B } : p));
+    expect(sides(input, drawn)).not.toEqual(sides(input, places));
+    expect(untangledKeeping(input, places, drawn, B)).toEqual(out);
   });
 
   it("turns no ring off where it is fitted: what is in its way is moved instead", () => {
