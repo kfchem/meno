@@ -431,6 +431,10 @@ def studio_white(key=1.0, rim=1.0):
 # --- camera ----------------------------------------------------------------------------
 
 CAM = bpy.data.cameras.new("cam"); CAM.lens = CFG.get("lens", 85); CAM.sensor_width = 36
+# (the sensor across the frame's width, whatever its shape: the framing here takes the width's field as the lens and the
+# sensor give it, the height's as the frame's shape makes it - Blender's own Auto puts the sensor across the longer side,
+# the height of a portrait film, which would cut a tall molecule's ends; a landscape film is as it was)
+CAM.sensor_fit = "HORIZONTAL"
 CAM.clip_start = 0.05; CAM.clip_end = 50
 CAMOB = bpy.data.objects.new("cam", CAM); sc.collection.objects.link(CAMOB); sc.camera = CAMOB
 FOCUS = bpy.data.objects.new("focus", None); sc.collection.objects.link(FOCUS)
