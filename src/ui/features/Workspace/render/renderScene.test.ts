@@ -76,6 +76,30 @@ describe("molecules in 3D written as a scene to render", () => {
     expect(gw.xmag / gw.ymag).toBeCloseTo(16 / 9, 4);
   });
 
+  it("makes a film's width and height even - a video's encoder refuses an odd side - its frame in the shape of its pixels", () => {
+    const film = (width: number, shape: RenderAsk["shape"]) => renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width, shape, motion: "turn", seconds: 1, fps: 10 });
+    for (const [width, shape, size] of [
+      [360, "16:9", [360, 202]],
+      [1000, "16:9", [1000, 562]],
+      [1904, "16:9", [1904, 1072]],
+      [1001, "4:3", [1002, 752]],
+    ] as const) {
+      const r = film(width, shape);
+      expect([r.width, r.height]).toEqual(size);
+    }
+    // (a fitted shape too: ethene's own, whatever it is, comes out even - and its frame is exactly its pixels' shape)
+    for (const width of [360, 1000, 999]) {
+      const r = film(width, "fit");
+      expect([r.width % 2, r.height % 2]).toEqual([0, 0]);
+      const cam = parse(r.gltf).cameras[0].orthographic;
+      expect(cam.xmag / cam.ymag).toBeCloseTo(r.width / r.height, 9);
+      expect((r.page.maxX - r.page.minX) / (r.page.maxY - r.page.minY)).toBeCloseTo(r.width / r.height, 9);
+    }
+    // (a picture keeps its own size, odd or not)
+    const still = renderScene([{ m: ethene() }], STYLE_3D, { ...PICTURE, width: 1001, shape: "16:9" });
+    expect([still.width, still.height]).toEqual([1001, 563]);
+  });
+
   it("lights it as the canvas does: its key light, and the light all round said besides", () => {
     const g = parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf);
     expect(g.extensions.KHR_lights_punctual.lights[0]).toMatchObject({ type: "directional", intensity: STYLE_3D.keyLight });
