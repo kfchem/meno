@@ -210,6 +210,35 @@ class Collect(unittest.TestCase):
         self.assertEqual(said["result"], {"why": "Error: script failed, file: 'render.py', exiting."})
 
 
+class RenderScriptNames(unittest.TestCase):
+    """render.py runs only in Blender, so a name it never defines fails only there, at the line that uses it - on a computer
+    whose path through it no test here takes (a motion's film where no graphics processor can be used, say)."""
+
+    def test_render_py_uses_no_name_it_never_defines(self):
+        import ast
+        import builtins
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        defined = set(dir(builtins)) | {"__file__"}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                defined.add(node.name)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                defined |= {(a.asname or a.name).split(".")[0] for a in node.names}
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                defined.add(node.id)
+            elif isinstance(node, ast.arg):
+                defined.add(node.arg)
+            elif isinstance(node, ast.ExceptHandler) and node.name:
+                defined.add(node.name)
+        used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        self.assertEqual(sorted(used - defined), [])
+
+    def test_its_fallback_lines_are_those_the_worker_reads(self):
+        src = (FOLDER / "render.py").read_text(encoding="utf-8")
+        self.assertIn(f"FELL_BACK = {worker.FELL_BACK!r}".replace("'", '"'), src)
+        self.assertIn(f"FASTER = {worker.FASTER!r}".replace("'", '"'), src)
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
