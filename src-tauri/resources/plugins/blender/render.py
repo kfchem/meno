@@ -318,18 +318,24 @@ def use_gpu(scene, s):
     return _DECIDED[0]
 
 
+# (what the log says where the graphics processor was asked for, or left to choose, and Blender has none it can use - or the
+# processor timed faster: the worker reads these lines to say so on the card, worker.py's FELL_BACK and FASTER)
+FELL_BACK = "Rendering on the processor (no graphics processor Blender can use)"
+FASTER = "Rendering on the processor (the faster one here)"
+
+
 def decide_gpu(scene, s):
     device = s["device"]
     if device == "cpu":
         say("Rendering on the processor")
         return False
     if not gpu_ready():
-        say("Rendering on the processor (no graphics processor Blender can use)")
+        say(FELL_BACK)
         return False
     if device == "auto":
         scene.render.engine = "CYCLES"
         if not faster_is_gpu(scene, s):
-            say("Rendering on the processor (the faster one here)")
+            say(FASTER)
             return False
     say("Rendering on the graphics processor")
     return True
