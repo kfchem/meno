@@ -590,8 +590,14 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
   else h = w / ratio;
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cy = (bounds.minY + bounds.maxY) / 2;
-  const width = Math.max(16, Math.round(ask.width));
-  const height = Math.max(16, Math.round(width / ratio));
+  // (a film's width and height each the nearest even number: its video, H.264 in 4:2:0, keeps colour for each 2x2 pixels,
+  // and an encoder refuses an odd side - 360 px at 16:9 would be 203 high. A picture keeps its own)
+  const even = (n: number) => (film ? 2 * Math.round(n / 2) : Math.round(n));
+  const width = Math.max(16, even(ask.width));
+  const height = Math.max(16, even(width / ratio));
+  // (the frame in the shape of its pixels, as rounded: grown, never cut, so that nothing is stretched or lost)
+  if (width / height > w / h) w = h * (width / height);
+  else h = w * (height / width);
 
   // the camera straight above, looking down, as the canvas's - orthographic
   const above = bounds.maxZ + 1;

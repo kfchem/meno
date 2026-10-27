@@ -210,6 +210,35 @@ class Collect(unittest.TestCase):
         self.assertEqual(said["result"], {"why": "Error: script failed, file: 'render.py', exiting."})
 
 
+class RenderScriptNames(unittest.TestCase):
+    """render.py runs only in Blender, so a name it never defines fails only there, at the line that uses it - on a computer
+    whose path through it no test here takes (a motion's film where no graphics processor can be used, say)."""
+
+    def test_render_py_uses_no_name_it_never_defines(self):
+        import ast
+        import builtins
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        defined = set(dir(builtins)) | {"__file__"}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                defined.add(node.name)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                defined |= {(a.asname or a.name).split(".")[0] for a in node.names}
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                defined.add(node.id)
+            elif isinstance(node, ast.arg):
+                defined.add(node.arg)
+            elif isinstance(node, ast.ExceptHandler) and node.name:
+                defined.add(node.name)
+        used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        self.assertEqual(sorted(used - defined), [])
+
+    def test_its_fallback_lines_are_those_the_worker_reads(self):
+        src = (FOLDER / "render.py").read_text(encoding="utf-8")
+        self.assertIn(f"FELL_BACK = {worker.FELL_BACK!r}".replace("'", '"'), src)
+        self.assertIn(f"FASTER = {worker.FASTER!r}".replace("'", '"'), src)
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
@@ -545,6 +574,33 @@ class Renders(unittest.TestCase):
             self.assertIn("as timed before", second)
             expected = "Rendering on the graphics processor" if entry["device"] == "gpu" else "Rendering on the processor (the faster one here)"
             self.assertIn(expected, second)
+
+    def test_a_motion_s_film_left_to_choose_takes_the_faster_as_timed(self):
+        # (a picture times the two and keeps the faster; that kept, a motion's film on the same computer takes it - here the
+        # processor, as if it were the faster - and says so, as the card reads it: never the graphics processor for being there)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k, tempfile.TemporaryDirectory() as m:
+            cache = os.path.join(k, "device-probe.json")
+            first = self.run_job(d, {"device": "auto"}, cache)
+            if "no graphics processor Blender can use" in first:
+                self.skipTest("no graphics processor here to time against the processor")
+            kept = json.load(open(cache))
+            json.dump({key: {**v, "device": "cpu"} for key, v in kept.items()}, open(cache, "w"))
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [METHYLAMINE]}}}]}
+            (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 2, "fps": 30, "motion": "pulse"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "auto"})
+            job = said["result"]["jobs"][0]
+            files = {f["name"]: f["text"] for f in job["files"]}
+            files["render.json"] = json.dumps({**json.loads(files["render.json"]), "probe_file": cache})
+            for name, text in files.items():
+                (pathlib.Path(m) / name).write_text(text, encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=m, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            self.assertIn("as timed before", run.stdout)
+            self.assertIn(worker.FASTER, run.stdout)
+            self.assertNotIn("Rendering on the graphics processor", run.stdout)
+            said = ask("collect", step="render", entries=[entry], options={}, files={}, log=run.stdout, ended="done")
+            self.assertEqual(said["result"]["note"], "Rendered on the processor")
 
     def test_the_processor_choice_never_times_and_says_so(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:

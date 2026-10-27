@@ -21,7 +21,7 @@ import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
-import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
+import { drawnBond, readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
@@ -229,7 +229,9 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
  */
 export function schemeOf(read: SchemeRead, about: { x: number; y: number }): ImportedScheme | null {
   if (!read.arrows.length && !read.pluses.length && !read.words.length) return null;
-  const k = read.bond ? NOMINAL_BOND_LENGTH / read.bond : 1;
+  // (at the scale its structures are taken at: lib/figure/structure `drawnBond`)
+  const bond = read.figure.atoms.length ? drawnBond(read.figure) : read.bond;
+  const k = bond ? NOMINAL_BOND_LENGTH / bond : 1;
   const to = (p: { x: number; y: number }) => ({ x: (p.x - about.x) * k, y: -(p.y - about.y) * k });
   const arrows = read.arrows.map((a) => {
     const from = to(a.tail);

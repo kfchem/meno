@@ -32,7 +32,10 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
   - a film's length in seconds - a vibration's made whole periods of 1.2 s,
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
-    or square;
+    or square - a film's width and height each made the nearest even
+    number, as its video needs (H.264 keeps colour for each 2x2 pixels:
+    360 px at 16:9 is 360 by 202), and its frame on the page given that
+    shape exactly, grown, never cut;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
     outlined. **The looks are the renderer's**: the card offers the
@@ -371,8 +374,11 @@ uv, no package), and the script Blender runs, `render.py`.
   so the seam does not show. Each motion is timed in a length of its own
   (Reveal 7 s, Pulse 6, Assemble 8, Scan 7, Dissolve 7) and a film of
   another length plays it all, faster or slower; a loop is timed in the
-  film's length. A motion renders on the graphics processor wherever
-  Blender has one, unless the processor is asked for.
+  film's length. A motion chooses where it renders as a picture does
+  (*Where it renders*): on Automatic, the faster here, as timed once and
+  kept - never the graphics processor only for being there, which on a
+  computer whose graphics processor is slower than its processor (an
+  integrated one, say) renders slower.
 - **Its changes of molecules** (2026-10-26; the films lane's patterns,
   each approved by the maintainer from its films of 2026-10-19 to 10-23):
   a film of two molecules or more rendered together, each becoming the
