@@ -951,6 +951,14 @@ molecules in 3D.
   again. A workspace opened in a style of its own - someone else's, or
   saved in another - is never asked for that alone: only a change made in
   Settings while it is open asks (`styleOffer.ts`, `SettingsStyleAsk`).
+- **Taken from its Styles card** (the maintainer, 2026-10-27). Wherever a
+  workspace's styles differ from Settings' - its drawing style, or its 3D
+  styles in their roles - its *Styles…* card shows *Use Settings' styles*
+  under its words, coming and going eased as they differ or not. It does
+  what *Apply to this workspace* does: those that differ taken as one step
+  to undo, eased. A workspace opened in another style is offered it too:
+  the card is opened to change its styles (`settingsDiffer`,
+  `DocumentStylePanel`).
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the
