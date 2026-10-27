@@ -663,10 +663,18 @@ def change_piece(s, folder, cfg, script, progress, first):
     with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
         exec(compile(f.read(), "studio.py", "exec"), space)
     scene = bpy.context.scene
-    # (where it renders: decided once for the film, as a picture's is - and said in the log, which the card reads)
-    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
+    # (where it renders: decided once for the film, as a picture's is - and said in the log, which the card reads. The studio
+    # has reset Blender to its factory settings, its Cycles preferences with it: the graphics processor's devices are
+    # enabled again in every piece, or a later piece would render on the processor, saying it was not)
+    gpu = use_gpu(scene, s)
+    if gpu:
+        gpu_ready()
+    scene.cycles.device = "GPU" if gpu else "CPU"
     if first:
         say("progress 0/100")
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    on = gpu and any(d.use and d.type != "CPU" for d in prefs.devices)
+    say(f"Change {cfg['piece']} of {cfg['pieces']}: on the {'graphics processor' if on else 'processor'}")
     # (one bar for the whole film: its handlers again on each piece's Blender, made new by the studio)
     bpy.app.handlers.render_pre.append(progress.begin_frame)
     bpy.app.handlers.render_stats.append(progress.stats)
@@ -705,7 +713,8 @@ def change_film(s, meno, folder):
     made, start = [], 0
     for k, ((i, j), n) in enumerate(zip(pairs, share(total, len(pairs)))):
         cfg = {**piece_settings(s, n, CHANGE_NOMINAL[s["motion"]], os.path.join(folder, "frames", f"piece-{k + 1:02d}")),
-               "molecules": [mols[i]], "next": mols[j], "loop": loop, "t_offset": start / s["fps"], "t_total": total / s["fps"]}
+               "molecules": [mols[i]], "next": mols[j], "loop": loop, "t_offset": start / s["fps"], "t_total": total / s["fps"],
+               "piece": k + 1, "pieces": len(pairs)}
         made += change_piece(s, folder, cfg, "motion_change_" + s["motion"][len("change-"):] + ".py", progress, k == 0)
         start += n
     progress.end()
@@ -735,7 +744,8 @@ def liquid_film(s, meno, folder):
     for i, mol in enumerate(mols):
         out = os.path.join(folder, "frames", f"melt-{i + 1:02d}")
         cfg = {**piece_settings(s, melt, LIQUID_MELT, out), "molecules": [mol], "stage": "melt", "reach": widest, "bg": "white",
-               "cache": os.path.join(folder, "cache", f"melt-{i + 1:02d}"), "pool": os.path.join(out, "pool.npz")}
+               "cache": os.path.join(folder, "cache", f"melt-{i + 1:02d}"), "pool": os.path.join(out, "pool.npz"),
+               "piece": i + 1, "pieces": len(mols) + changes}
         os.makedirs(cfg["cache"], exist_ok=True)
         melts.append(change_piece(s, folder, cfg, "motion_change_liquid.py", progress, first))
         first = False
@@ -744,7 +754,8 @@ def liquid_film(s, meno, folder):
     for k, (i, j) in enumerate(pairs):
         out = os.path.join(folder, "frames", f"reform-{k + 1:02d}")
         cfg = {**piece_settings(s, reform, LIQUID_REFORM, out), "molecules": [mols[i]], "stage": "reform", "reach": widest, "bg": "white",
-               "pools": [os.path.join(folder, "frames", f"melt-{i + 1:02d}", "pool.npz"), os.path.join(folder, "frames", f"melt-{j + 1:02d}", "pool.npz")]}
+               "pools": [os.path.join(folder, "frames", f"melt-{i + 1:02d}", "pool.npz"), os.path.join(folder, "frames", f"melt-{j + 1:02d}", "pool.npz")],
+               "piece": len(mols) + k + 1, "pieces": len(mols) + changes}
         made += melts[i] if k == 0 else melts[i][1:]
         made += change_piece(s, folder, cfg, "motion_change_liquid.py", progress, False)
         # (a Loop's last change comes back to the first molecule, whose first frame begins the film again: not shown twice)
