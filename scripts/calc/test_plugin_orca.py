@@ -160,7 +160,8 @@ class Collect(unittest.TestCase):
         startup = "%pal nprocs 4 end\nsh: mpirun: command not found\nORCA finished by error termination in Startup\nCalling Command: mpirun -np 4 orca_startup_mpi input.int.tmp input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
         self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=startup, ended="done"), {"why": "ORCA finished by error termination in Startup"})
         # (nor one that never says it ended - cut off, though its runner saw it end)
-        self.assertIn("why", ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="FINAL SINGLE POINT ENERGY -76.4\n", ended="done"))
+        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="FINAL SINGLE POINT ENERGY -76.4\n", ended="done"), {"why": "ORCA's log does not say it ended normally; it last said: FINAL SINGLE POINT ENERGY -76.4"})
+        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="", ended="done"), {"why": "ORCA's log does not say it ended normally"})
         # (one that terminated normally: read by Meno's readers, as before)
         normal = "FINAL SINGLE POINT ENERGY -76.4\n                             ****ORCA TERMINATED NORMALLY****\nTOTAL RUN TIME: 0 days 0 hours 0 minutes 1 seconds\n"
         self.assertIn("read", ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=normal, ended="done"))
