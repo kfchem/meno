@@ -230,12 +230,20 @@ def why_of(log):
     return lines[-1] if lines else "ORCA said nothing"
 
 
+def ended_well(log):
+    """Whether ORCA says it ended well: "ORCA TERMINATED NORMALLY", and nowhere "error termination". Its exit code is no
+    word on it: ORCA 6.1.1 exits 0 where it stopped at its start-up with "ORCA finished by error termination in Startup"
+    (a parallel run, its MPI not there) - read as done, it would hand on as worked out what it never touched."""
+    return "ORCA TERMINATED NORMALLY" in log and not re.search(r"error termination", log, re.I)
+
+
 def op_collect(m):
     step = m.get("step")
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
-    if m.get("ended") != "done":
-        return {"why": why_of(m.get("log") or "")}
+    log = m.get("log") or ""
+    if m.get("ended") != "done" or not ended_well(log):
+        return {"why": why_of(log)}
     # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}
