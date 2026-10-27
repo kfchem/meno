@@ -209,15 +209,6 @@ function directions(placed: readonly number[], drawnAt: readonly number[], linea
     if (apart(out, drawnAt[0]) <= MOST_TURNED) return [out];
   }
   const set = standard();
-  // (out of a ring: its bisector, whatever way the bond is drawn - never a twelfth of a turn off a ring's bond)
-  if (set && inRing && placed.length >= 2) {
-    const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
-    const order = drawnAt.map((_, i) => i).sort((p, q) => from(drawnAt[p]) - from(drawnAt[q]));
-    const ideal = [...set].sort((p, q) => from(p) - from(q));
-    const out: number[] = new Array(n);
-    order.forEach((i, k) => (out[i] = ideal[k]));
-    return out;
-  }
   if (set) {
     // (matched in the order round the atom, from its first placed bond)
     const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
@@ -238,6 +229,18 @@ function directions(placed: readonly number[], drawnAt: readonly number[], linea
     out.push(snapped);
   }
   return out;
+}
+
+/** The bisector of the widest gap between some directions out of an atom: the way out of a ring at one of its atoms. */
+function bisectorOf(ways: readonly number[]): number | null {
+  if (ways.length < 2) return null;
+  const sorted = [...ways].sort((p, q) => p - q);
+  let gap = { at: 0, size: -1 };
+  sorted.forEach((a, i) => {
+    const next = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + 2 * Math.PI;
+    if (next - a > gap.size) gap = { at: a, size: next - a };
+  });
+  return gap.at + gap.size / 2;
 }
 
 function crosses(p: Point, q: Point, r: Point, s: Point): boolean {
@@ -312,8 +315,9 @@ export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBo
         const fit = fits[s]!;
         const q = fit.get(v)!;
         const ring = mol.neighbours[v].filter((x) => fit.has(x)).map((x) => angleOf(q, fit.get(x)!));
-        const out1 = asDrawn.has(s) ? null : directions(ring, [angleOf(q, at)], false, true);
-        const r = out1 ? turn(angleOf(p, at) - out1[0]) : 0;
+        // (its bisector there as fitted, turned to the bond: never matched to a way drawn, which is in another frame)
+        const out1 = asDrawn.has(s) ? null : bisectorOf(ring);
+        const r = out1 == null ? 0 : turn(angleOf(p, at) - out1);
         for (const [i, f] of fit) {
           const d = { x: f.x - q.x, y: f.y - q.y };
           put(i, { x: p.x + d.x * Math.cos(r) - d.y * Math.sin(r), y: p.y + d.x * Math.sin(r) + d.y * Math.cos(r) });
