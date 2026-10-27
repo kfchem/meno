@@ -6,12 +6,13 @@ import { WORDS_SIZE_RANGE, WORDS_SIZES, WORDS_SPACING_RANGE, WORDS_SPACINGS } fr
 import { LABEL_TYPEFACES } from "../../../lib/chem/styleFields";
 import TypefacePicker from "../StyleEditor/TypefacePicker";
 import { useEditor } from "./store";
+import { WORDS_CARD } from "./utils/cardBeside";
 
 const ROUND = (v: number) => String(Math.round(v * 100) / 100);
 
 /**
- * A card of how words on the page are set, where a right-click's menu was
- * (docs/EDITOR-2D.md, *Text*): their size - the labels' own, none of their
+ * A card of how words on the page are set, opened from their menu
+ * (docs/EDITOR-2D.md, *Text*), beside them, clear of them: their size - the labels' own, none of their
  * own, a talk's text, a heading and a title, each named with its points,
  * and any other typed in points; how far apart their lines are - single,
  * 1.15, one and a half, double, or any other typed; and their typeface -
@@ -86,8 +87,7 @@ export default function WordsCard({
     onLines(v === 1 ? null : v);
     setSpaced(ROUND(v));
   };
-  const width = 320;
-  const height = 196;
+  const { width, height } = WORDS_CARD;
   const chip = (on: boolean) =>
     `h-7 px-2 rounded-md border text-xs transition-colors duration-150 ease-meno ${on ? "border-accel-base text-accel-base bg-accel-lightbase/40" : "border-gh-line hover:bg-gh-base"}`;
   const field = (ok: boolean) =>

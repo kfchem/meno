@@ -83,6 +83,7 @@ import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import WordsCard from "./WordsCard";
+import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
@@ -1473,6 +1474,17 @@ function WorkspaceContent({
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
   };
+  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
+  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
+    const a = clientToWorld(0, 0);
+    const b = clientToWorld(100, 100);
+    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
+    const kx = 100 / (b.x - a.x);
+    const ky = 100 / (a.y - b.y);
+    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
+    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
+    return cardBeside(target, WORDS_CARD, menu.within);
+  };
   // (their lines as far apart as asked - single, none of their own)
   const spaceWords = (id: number, lines: number | null) => {
     const st = store.getState();
@@ -2154,7 +2166,7 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onFont: () => setWordsCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
+              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),

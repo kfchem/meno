@@ -1365,7 +1365,9 @@ All hover-based, as above.
     in place of a slide program's): words on the page with a size of
     their own, letters marked, and lists.
     - *A size of their own*, in points as the drawing's labels are: their
-      menu's *Font…* shows a card of *Label* (the drawing's labels' size,
+      menu's *Font…* shows a card - beside them, clear of them, so that
+      what it changes is seen changing (to their right, else below, to
+      their left or above) - of *Label* (the drawing's labels' size,
       10 points in ACS 1996's style, as words have had), *Text* 14,
       *Heading* 20 and *Title* 28 - the one they have ringed - and any
       other typed, 4 to 288 points, given with Enter. While they are
