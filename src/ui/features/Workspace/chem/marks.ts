@@ -658,12 +658,24 @@ export function stereoPictureItems(o: {
     bond: NOMINAL_BOND_LENGTH,
     fixed,
   });
-  return places.map((p) => {
-    const [letter, axis] = stereoParts(p.text);
-    const runs: TextRun[] = [...(parentheses ? [{ text: "(" }] : []), { text: letter, italic: true }, ...(axis ? [{ text: axis, sub: true }] : []), ...(parentheses ? [{ text: ")" }] : [])];
-    // (its middle where the canvas puts it: a text is placed by its first letter's middle)
-    const w = runsWidth(runs, size, set);
-    const first = runsWidth([runs[0]], size, set);
-    return { x: p.x - w / 2 + first / 2, y: p.y, text: runs.map((r) => r.text).join(""), fontPx: size, runs, anchorRun: 0, ownSize: true, ...(opts.labelColor ? { color: opts.labelColor } : {}) };
-  });
+  return places.map((p) => stereoTextItem(p, size, opts));
+}
+
+/**
+ * One of R, S, E and Z as a text, its middle at `p`, `size` large: the letter
+ * in italics, an axis's a smaller and lower, in parentheses where the style
+ * says so, in the labels' colour. What the canvas draws (ChemMarks2D) and a
+ * picture of the drawing (`stereoPictureItems`) both: the same ink. `width`
+ * measures it at `size`; the canvas gives the size the drawing's labels are
+ * set at and measured in, where that is not the page's (`fontPx`).
+ */
+export function stereoTextItem(p: { x: number; y: number; text: string }, size: number, opts: LayoutOptions, fontPx = size): TextItem {
+  const set = labelSetOf(opts);
+  const parentheses = !!opts.stereoParentheses;
+  const [letter, axis] = stereoParts(p.text);
+  const runs: TextRun[] = [...(parentheses ? [{ text: "(" }] : []), { text: letter, italic: true }, ...(axis ? [{ text: axis, sub: true }] : []), ...(parentheses ? [{ text: ")" }] : [])];
+  // (its middle where the canvas puts it: a text is placed by its first letter's middle)
+  const w = runsWidth(runs, size, set);
+  const first = runsWidth([runs[0]], size, set);
+  return { x: p.x - w / 2 + first / 2, y: p.y, text: runs.map((r) => r.text).join(""), fontPx, runs, anchorRun: 0, ownSize: true, ...(opts.labelColor ? { color: opts.labelColor } : {}) };
 }
