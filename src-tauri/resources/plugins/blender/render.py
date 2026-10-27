@@ -663,10 +663,9 @@ def change_piece(s, folder, cfg, script, progress, first):
     with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
         exec(compile(f.read(), "studio.py", "exec"), space)
     scene = bpy.context.scene
-    gpu = s["device"] != "cpu" and gpu_ready()
-    scene.cycles.device = "GPU" if gpu else "CPU"
+    # (where it renders: decided once for the film, as a picture's is - and said in the log, which the card reads)
+    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
     if first:
-        say("Rendering on the graphics processor" if gpu else ("Rendering on the processor" if s["device"] == "cpu" else FELL_BACK))
         say("progress 0/100")
     # (one bar for the whole film: its handlers again on each piece's Blender, made new by the studio)
     bpy.app.handlers.render_pre.append(progress.begin_frame)

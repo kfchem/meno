@@ -578,29 +578,32 @@ class Renders(unittest.TestCase):
     def test_a_motion_s_film_left_to_choose_takes_the_faster_as_timed(self):
         # (a picture times the two and keeps the faster; that kept, a motion's film on the same computer takes it - here the
         # processor, as if it were the faster - and says so, as the card reads it: never the graphics processor for being there)
-        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k, tempfile.TemporaryDirectory() as m:
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:
             cache = os.path.join(k, "device-probe.json")
             first = self.run_job(d, {"device": "auto"}, cache)
             if "no graphics processor Blender can use" in first:
                 self.skipTest("no graphics processor here to time against the processor")
             kept = json.load(open(cache))
             json.dump({key: {**v, "device": "cpu"} for key, v in kept.items()}, open(cache, "w"))
-            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [METHYLAMINE]}}}]}
-            (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 2, "fps": 30, "motion": "pulse"}
-            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "auto"})
-            job = said["result"]["jobs"][0]
-            files = {f["name"]: f["text"] for f in job["files"]}
-            files["render.json"] = json.dumps({**json.loads(files["render.json"]), "probe_file": cache})
-            for name, text in files.items():
-                (pathlib.Path(m) / name).write_text(text, encoding="utf-8")
-            run = subprocess.run([blender(), *job["args"]], cwd=m, capture_output=True, text=True, timeout=900)
-            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
-            self.assertIn("as timed before", run.stdout)
-            self.assertIn(worker.FASTER, run.stdout)
-            self.assertNotIn("Rendering on the graphics processor", run.stdout)
-            said = ask("collect", step="render", entries=[entry], options={}, files={}, log=run.stdout, ended="done")
-            self.assertEqual(said["result"]["note"], "Rendered on the processor")
+            # (a motion of one molecule, and a change of molecules - each of its pieces in a Blender of its own)
+            for motion, molecules in (("pulse", [METHYLAMINE]), ("change-ring", [METHYLAMINE, METHANOL])):
+                with self.subTest(motion=motion), tempfile.TemporaryDirectory() as m:
+                    scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": molecules}}}]}
+                    (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+                    entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 2, "fps": 30, "motion": motion}
+                    said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "auto"})
+                    job = said["result"]["jobs"][0]
+                    files = {f["name"]: f["text"] for f in job["files"]}
+                    files["render.json"] = json.dumps({**json.loads(files["render.json"]), "probe_file": cache})
+                    for name, text in files.items():
+                        (pathlib.Path(m) / name).write_text(text, encoding="utf-8")
+                    run = subprocess.run([blender(), *job["args"]], cwd=m, capture_output=True, text=True, timeout=900)
+                    self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+                    self.assertIn("as timed before", run.stdout)
+                    self.assertIn(worker.FASTER, run.stdout)
+                    self.assertNotIn("Rendering on the graphics processor", run.stdout)
+                    said = ask("collect", step="render", entries=[entry], options={}, files={}, log=run.stdout, ended="done")
+                    self.assertEqual(said["result"]["note"], "Rendered on the processor")
 
     def test_the_processor_choice_never_times_and_says_so(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:
