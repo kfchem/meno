@@ -11,9 +11,10 @@
  * a bridged system and a cage are drawings in perspective, kept as drawn
  * (the maintainer, 2026-10-27), and the bonds out of them too. Crowded, or
  * crossing what the drawing does not cross, it is cleared, its arrangement
- * kept (untangleKept), unless that closes up a group on its neighbour
- * (`closedUp`); still so - or with two bonds at an atom narrower than Meno
- * draws any (`NARROWEST`) - it is none, and left as drawn. Pure.
+ * kept (untangleKept); still so - or with two bonds at an atom narrower
+ * than Meno draws any (`NARROWEST`), or a group closed up on its neighbour
+ * where the drawing has it open (`closedUp`) - it is none, and left as
+ * drawn. Pure.
  */
 import { layoutFlat } from "./engine";
 import { ringSystemVariants } from "./ringSystem";
@@ -204,12 +205,16 @@ function directions(placed: readonly number[], drawnAt: readonly number[], linea
     if (d === 4) return [ref + 90 * DEG, ref + 180 * DEG, ref + 270 * DEG];
     return null;
   };
-  // (a chain's atom with one bond out: the way it turns as drawn, a third of a turn round)
-  if (!inRing && placed.length === 1 && n === 1 && !linear) {
-    const out = [ref + 120 * DEG, ref - 120 * DEG].sort((p, q) => apart(p, drawnAt[0]) - apart(q, drawnAt[0]))[0];
-    if (apart(out, drawnAt[0]) <= MOST_TURNED) return [out];
+  // (a chain's atom with one bond out: the way it turns as drawn, a third of a turn round - or straight on, where it is linear)
+  if (!inRing && placed.length === 1 && n === 1) {
+    return linear ? [ref + Math.PI] : [[ref + 120 * DEG, ref - 120 * DEG].sort((p, q) => apart(p, drawnAt[0]) - apart(q, drawnAt[0]))[0]];
   }
   const set = standard();
+  // (a chain's atom of three bonds: a third of a turn apart, in the order round it they are drawn in, however skewed they are)
+  if (set && !inRing && placed.length === 1 && n === 2) {
+    const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
+    return from(drawnAt[0]) <= from(drawnAt[1]) ? [set[0], set[1]] : [set[1], set[0]];
+  }
   if (set) {
     // (matched in the order round the atom, from its first placed bond)
     const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
@@ -336,34 +341,34 @@ export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBo
   if (placed.some((p) => !p)) return null;
   const drawnP = atoms.map((a) => ({ x: a.x, y: a.y }));
   const wrong = inTheWay(placed, drawnP, bonds, bond);
-  if (!wrong) return narrowed(placed, drawnP, mol) ? (why?.("narrow"), null) : placed;
+  if (!wrong) return narrowed(placed, drawnP, mol) || closedUp(placed, drawnP, mol) ? (why?.("narrow"), null) : placed;
   // (crowded, or crossing: cleared, its arrangement kept - its rings, those kept as drawn and the rest, where they are - else as drawn)
   const kept = new Set([...asDrawn].flatMap((k) => mol.systems[k].atoms));
   const input = { atoms: atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: bonds.map((b) => ({ a: b.a, b: b.b, order: Math.round(b.order) || 1 })) };
   const cleared = untangledKeeping(input, placed, drawnP, bond, (i) => kept.has(i));
-  const still = inTheWay(cleared, drawnP, bonds, bond) ?? (narrowed(cleared, drawnP, mol) || closedUp(cleared, placed, mol) ? "narrow" : null);
+  const still = inTheWay(cleared, drawnP, bonds, bond) ?? (narrowed(cleared, drawnP, mol) || closedUp(cleared, drawnP, mol) ? "narrow" : null);
   if (!still) return cleared;
   why?.(still);
   return null;
 }
 
 /**
- * How narrow two bonds at an atom, not both a ring's, may be closed up by clearing what is in the way, where they were wider
- * made regular: a third of a turn less a little. Narrower - a group turned in on its neighbour - the clearing is not taken.
+ * How narrow two bonds at an atom of two or three bonds, not both a ring's, may come out where the drawing has them wider: a
+ * third of a turn less a little. Narrower - a group turned in on its neighbour - it is left as drawn. Not at an atom of four
+ * bonds, whose standard is a cross, nor between two groups on one ring atom, whose standard is 60 deg.
  */
 const CLOSED_UP = 100 * (Math.PI / 180);
 
-/** Whether clearing (`cleared`, from `placed`) closes two bonds at an atom it moved, or by one it moved, past `CLOSED_UP`. */
-export function closedUp(cleared: readonly Point[], placed: readonly Point[], mol: Pick<Molecule, "neighbours" | "ringBonds">): boolean {
-  const moved = (i: number) => Math.hypot(cleared[i].x - placed[i].x, cleared[i].y - placed[i].y) > 1e-6;
+/** Whether a result (`placed`) closes two bonds at an atom past `CLOSED_UP` that the drawing (`drawn`) has wider. */
+export function closedUp(placed: readonly Point[], drawn: readonly Point[], mol: Pick<Molecule, "neighbours" | "ringBonds">): boolean {
   const inRing = (u: number, v: number) => mol.ringBonds.has(u < v ? `${u},${v}` : `${v},${u}`);
   return mol.neighbours.some((ns, u) => {
-    if (!moved(u) && !ns.some(moved)) return false;
+    if (ns.length < 2 || ns.length > 3) return false;
     return ns.some((v, i) =>
       ns.some((w, j) => {
         if (j <= i || (inRing(u, v) && inRing(u, w))) return false;
-        const now = apart(angleOf(cleared[u], cleared[v]), angleOf(cleared[u], cleared[w]));
-        const was = apart(angleOf(placed[u], placed[v]), angleOf(placed[u], placed[w]));
+        const now = apart(angleOf(placed[u], placed[v]), angleOf(placed[u], placed[w]));
+        const was = apart(angleOf(drawn[u], drawn[v]), angleOf(drawn[u], drawn[w]));
         return now < CLOSED_UP && was >= CLOSED_UP;
       }),
     );

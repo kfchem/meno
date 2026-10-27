@@ -159,17 +159,35 @@ describe("a structure as drawn, made regular with its arrangement kept", () => {
     expect(side(p, 6, 7, 8) * side(p, 7, 6, 5)).toBe(side(stilbene.atoms, 6, 7, 8) * side(stilbene.atoms, 7, 6, 5));
   });
 
-  it("clearing what is in the way is not taken where it closes a group up on its neighbour: a chain's corner from a third of a turn to 75 deg, or 95", () => {
-    // (a carbon of three bonds, a chain's: made regular, 120 deg between each; cleared, one turned in to 75 deg)
-    const placed = [C(0, 0), C(L, 0), C(-L / 2, (L * Math.sqrt(3)) / 2), C(-L / 2, (-L * Math.sqrt(3)) / 2)];
+  it("a result that closes a group up on its neighbour, where the drawing has it open, is caught: a chain's corner at 75 deg, or 95, drawn at 120", () => {
+    // (a carbon of three bonds, a chain's: drawn 120 deg between each; one come out turned in)
+    const drawn = [C(0, 0), C(L, 0), C(-L / 2, (L * Math.sqrt(3)) / 2), C(-L / 2, (-L * Math.sqrt(3)) / 2)];
     const turnedIn = (deg: number) => C(L * Math.cos((deg * Math.PI) / 180), L * Math.sin((deg * Math.PI) / 180));
     const mol = { neighbours: [[1, 2, 3], [0], [0], [0]], ringBonds: new Set<string>() };
-    expect(closedUp([placed[0], placed[1], turnedIn(75), placed[3]], placed, mol)).toBe(true);
-    // (an acyl chloride's carbon, its Cl turned in to 95 deg from the N)
-    expect(closedUp([placed[0], placed[1], turnedIn(95), placed[3]], placed, mol)).toBe(true);
-    // (turned only a little: taken)
-    expect(closedUp([placed[0], placed[1], turnedIn(110), placed[3]], placed, mol)).toBe(false);
-    // (nothing moved there: nothing closed up)
-    expect(closedUp(placed, placed, mol)).toBe(false);
+    expect(closedUp([drawn[0], drawn[1], turnedIn(75), drawn[3]], drawn, mol)).toBe(true);
+    expect(closedUp([drawn[0], drawn[1], turnedIn(95), drawn[3]], drawn, mol)).toBe(true);
+    // (turned only a little, or drawn as narrow: not)
+    expect(closedUp([drawn[0], drawn[1], turnedIn(110), drawn[3]], drawn, mol)).toBe(false);
+    expect(closedUp([drawn[0], drawn[1], turnedIn(95), drawn[3]], [drawn[0], drawn[1], turnedIn(90), drawn[3]], mol)).toBe(false);
+    // (an atom of four bonds - its standard a cross, 90 deg - is not held to it)
+    const four = { neighbours: [[1, 2, 3, 4], [0], [0], [0], [0]], ringBonds: new Set<string>() };
+    expect(closedUp([C(0, 0), C(L, 0), C(0, L), C(-L, 0), C(0, -L)], [C(0, 0), C(L, 0), turnedIn(120), turnedIn(200), turnedIn(290)], four)).toBe(false);
+  });
+
+  it("a chain's atom of three bonds drawn skewed - an acyl chloride's carbon at 90 and 150 deg - comes out a third of a turn apart, each on its side", () => {
+    // (N, then the carbon, its Cl drawn 90 deg from the N and its O 150 deg the other way round)
+    const at = (deg: number, r = L) => C(r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180));
+    const drawn = [C(0, 0), at(70), { ...at(70 + 90 + 180, L), el: "Cl" }, { ...at(70 - 150 + 180, L), el: "O" }].map((a, i) => (i < 2 ? a : { ...a, x: a.x + drawnAt1().x, y: a.y + drawnAt1().y }));
+    function drawnAt1() {
+      return at(70);
+    }
+    drawn[0] = { ...drawn[0], el: "N" };
+    const bonds = [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 1, b: 3, order: 2 }];
+    const p = regularised(drawn, bonds, L)!;
+    expect(p).not.toBeNull();
+    expect(angleAt(p, 0, 1, 2)).toBeCloseTo(120, 4);
+    expect(angleAt(p, 0, 1, 3)).toBeCloseTo(120, 4);
+    expect(side(p, 0, 1, 2)).toBe(side(drawn, 0, 1, 2));
+    expect(side(p, 0, 1, 3)).toBe(side(drawn, 0, 1, 3));
   });
 });
