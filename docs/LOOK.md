@@ -38,6 +38,17 @@ shots, and is checked against this page (*The look check*, below).
    selection. Text fields, and the words in the column, stay selectable;
    on the canvas, only what a chemist copies - a step card's failure, its
    program's line, a run's line (`COPYABLE`, with `select-text`).
+7. **On the page, WebGL draws; HTML is for what a person handles** (the
+   maintainer, 2026-10-27). What sits on the page and moves with it - a
+   mark, a label, a note, a frame, R/S - is drawn by WebGL, with the page,
+   so it never lags a pan or fades apart from it. HTML over the page is
+   kept for controls (a button, a slider, a field, a handle to drag) and
+   for words a person may copy (`COPYABLE`). A thing with both draws its
+   ink in WebGL and lays only its control over it in HTML, and only while
+   it can be used - a measure's field while it is being edited, a tip
+   while it is pointed at. The valence and "either way" boxes and R/S, in
+   2D and beside a molecule in 3D, are drawn so (`MarkBoxes2D`, `Texts2D`,
+   `StereoInk3D`); the rest of the page's HTML moves over in turn.
 
 ## Colours
 
