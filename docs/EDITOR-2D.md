@@ -603,7 +603,11 @@ Both go together, because both touch every layer.
   bonds; whether implicit hydrogens and terminal carbons are written; rings
   as circles or as Kekulé structures; colour, bold and italic.
 - **Hashes at a fixed spacing.** A longer hashed bond gets more hashes, not
-  wider gaps (PR #33).
+  wider gaps (PR #33). A short one - a hashed wedge to a label - still gets
+  three, closer together but a line width clear, where three fit: two read
+  as a pair of lines (the maintainer, 2026-10-24).
+- **A bold bond's free end** is square, its corners rounded as a line's end
+  is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
   wavy: a plain bold bond, a bold dashed bond, a thin dashed bond, and a
   dative (coordinate) bond. A wedge, hashes or a wavy line belong to a

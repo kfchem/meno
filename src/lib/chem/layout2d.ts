@@ -1894,11 +1894,12 @@ function buildWedgeTriangle(
 /**
  * A bold bond, as ACS 1996 draws it: a bar `half` either side of the line,
  * each end a broad end cut along the bonds continuing from its atom, as a
- * wedge's wide end is. Round ends round its free corners by half its width,
- * so an end that meets nothing is a half circle - but for one another of a
- * ring in perspective's shapes is broad at (`square1`, `square2`): that end
- * stays square, the outer corner between the two filled after
- * (perspectiveCorners).
+ * wedge's wide end is. Round ends round its free corners as a line's end is
+ * rounded, by half a line's width, so an end that meets nothing is a
+ * rectangle's with rounded corners, not a half circle (the maintainer,
+ * 2026-10-24) - but for one another of a ring in perspective's shapes is
+ * broad at (`square1`, `square2`): that end stays square, the outer corner
+ * between the two filled after (perspectiveCorners).
  */
 function buildBoldBar(
   p1: Vec2,
@@ -1922,9 +1923,17 @@ function buildBoldBar(
   const points = [...end1.points, ...end2.points];
   const soften = [...end1.soften.map((v) => v && !square1), ...end2.soften.map((v) => v && !square2)];
   return {
-    points: round ? roundPolyCorners(points, half, soften) : points,
+    points: round ? roundPolyCorners(points, lineHalf, soften) : points,
   };
 }
+
+/**
+ * The fewest hashes a hashed bond or wedge is drawn with, room allowing (the
+ * maintainer, 2026-10-24): two read as a pair of lines - an equals sign - and
+ * three are the fewest that read as a row along the bond, a wedge's
+ * widening from hash to hash.
+ */
+const FEWEST_HASHES = 3;
 
 /**
  * The hashes of a hashed wedge, from `narrow` (the stereocentre) along `dir`,
@@ -1935,7 +1944,9 @@ function buildBoldBar(
  * `wideHalf` at `end`, and each hash the part of it one line width deep - a trapezoid, its ends following the
  * outline. The first hash sits flush with `start` and the last with `end`,
  * and as many lie between as fit at least the hash spacing apart, spread
- * evenly. Round ends make each hash a line with a cap at either end instead,
+ * evenly - but never fewer than `FEWEST_HASHES` where that many fit a line
+ * width clear of each other: a short one, to a label, still reads as
+ * hashed. Round ends make each hash a line with a cap at either end instead,
  * reaching across the outline as far as the trapezoid does at its middle.
  */
 function buildHashes(
@@ -1957,8 +1968,9 @@ function buildHashes(
   const depth = Math.min(lineWidth, end - from);
   const first = from + depth / 2;
   const last = end - depth / 2;
-  const count =
-    spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
+  const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
+  const fit = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  const count = Math.max(spaced, Math.min(FEWEST_HASHES, fit));
   // half the outline's width, a distance `at` from the narrow atom
   const halfAt = (at: number) =>
     Math.max(0, startHalf + (wideHalf - startHalf) * ((at - from) / (end - from)));
