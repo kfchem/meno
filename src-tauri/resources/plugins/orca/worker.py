@@ -193,11 +193,12 @@ def memory_of(options, cores):
     return maxcore * processes if maxcore else None
 
 
-#: ORCA's keywords for the xTB methods it runs through the xtb program, not its own: the ORCA 6.1 manual's simple
-#: input keywords for extended tight-binding (section 3.5.2, Extended Tight-Binding: GFN0-xTB, GFN-xTB, GFN2-xTB).
+#: ORCA's keywords for the xTB methods it runs through the xtb program, not its own: the ORCA 6.1 manual, 3.5.2
+#: Extended Tight-Binding: GFN0-xTB, GFN-xTB, GFN2-xTB, its simple input keywords
+#: (https://www.faccts.de/docs/orca/6.1/manual/contents/modelchemistries/semiempirical.html#extended-tight-binding-gfn0-xtb-gfn-xtb-gfn2-xtb).
 #: ORCA 6.1.1 on macOS stops on each without the program ("otool_xtb not available ... Please set the XTBEXE
-#: environment variable"). Its native ones (section 3.5.3: NATIVE-XTB2, NATIVE-GFN2-XTB and the rest) run in ORCA
-#: itself, and need none.
+#: environment variable"; 1.2.4 How do I install the xtb module?). Its native ones (3.5.3 Native GFN-xTB and
+#: GFN2-xTB: NATIVE-XTB2, NATIVE-GFN2-XTB and the rest) run in ORCA itself, and need none.
 XTB_KEYWORDS = {"XTB", "XTB0", "GFN0-XTB", "XTB1", "GFN1-XTB", "XTB2", "GFN2-XTB", "XTBFF", "GFN-FF"}
 
 
