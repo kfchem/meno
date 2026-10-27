@@ -51,13 +51,14 @@ function slower<T>(small: T, large: T, run: (x: T) => void): number {
   return least[1] / least[0];
 }
 
-// a methyl on a wedge from a CH with two more carbons, and apart from them
-// an ethane
+// a methyl on a wedge from a CH with two more carbons, drawn as a Y (as a
+// T, its two carbons in line, it would state no configuration: IUPAC 2006,
+// ST-1.2.12), and apart from them an ethane
 const model: Model = {
   atoms: [
     atom(1, 0, 0),
-    atom(2, 1, 0),
-    atom(3, -1, 0),
+    atom(2, 0.866, -0.5),
+    atom(3, -0.866, -0.5),
     atom(4, 0, 1),
     atom(5, 10, 0),
     atom(6, 11, 0),

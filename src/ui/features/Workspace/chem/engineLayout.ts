@@ -99,7 +99,7 @@ export function layoutJob(part: Model): LayoutJob {
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
-        "(drawn crossed, or on an atom with a lone pair), so nothing was moved",
+        "(drawn crossed, with two of its bonds in line or on top of each other, or on an atom with a lone pair), so nothing was moved",
     );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own
@@ -320,7 +320,11 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   const change: Relayout = { atoms, bonds: dropped.size ? bonds.filter((b) => !dropped.has(b.id)) : bonds, added, removed, ...(eta.length ? { eta } : {}) };
   if (style) roomForLabels(part, change, style);
   if (style && posed.length) allylLinesSeen(part, change, style, posed);
-  if (!saysTheSame(part, change)) {
+  const differs = stereoDiffers(part, change, job);
+  if (differs === "gained") {
+    throw new Error("laid out, the structure would show a configuration its drawing does not state - a double bond drawn straight on, say - so nothing was moved");
+  }
+  if (differs) {
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");
   }
   return change;
@@ -520,22 +524,41 @@ function drawnAs(m: Model, style: DrawingStyle) {
   return layoutMolecule(atoms, bonds, editorLayoutOptions(style, { minLinePx: 0 }), (style.bondLengthPt * 96) / 72 / NOMINAL_BOND_LENGTH);
 }
 
-/** Whether `part`, changed as `change` has it, shows the stereochemistry it shows now. */
-function saysTheSame(part: Model, change: Relayout): boolean {
+/**
+ * Whether `part`, changed as `change` has it, shows other stereochemistry
+ * than it shows now: "changed" where a configuration it shows is lost or
+ * turned, "gained" where it would show one its drawing does not state - a
+ * centre, a double bond or an axis drawn so that it says none (readStereo)
+ * and not asked of the engine by `job` - which would be the layout's
+ * choice, not the structure's; null where it shows the same.
+ */
+function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed" | "gained" | null {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
+  // (what the engine was asked to show - the drawing's own, or a SMILES's given in its place - by atom id: not gained)
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const askedCentres = new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : [])));
+  const askedDoubles = new Set(job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])));
+  const askedAxes = new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]])));
+  // (and only where it was drawn: atoms not yet placed - all on one point, a SMILES's before it is laid out - state nothing to keep)
+  const place = new Map(part.atoms.map((a) => [a.id, a]));
+  const drawnApart = (...ids: number[]) => ids.some((id) => ids.some((other) => Math.hypot(place.get(id)!.x - place.get(other)!.x, place.get(id)!.y - place.get(other)!.y) > 1e-6));
   const before = stereoOf(part);
   const now = stereoOf(relayout(doc, change).model);
   for (const [c, t] of before.centres) {
     const u = now.centres.get(c);
-    if (!u || !sameConfiguration(t, u)) return false;
+    if (!u || !sameConfiguration(t, u)) return "changed";
   }
   for (const [key, d] of before.doubles) {
     const e = now.doubles.get(key);
     // (read against the other group on an end, the reading turns)
-    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return false;
+    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
   }
-  for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return false;
-  return true;
+  for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return "changed";
+  const ends = (key: string) => key.split(",").map(Number);
+  for (const [c, t] of now.centres) if (!before.centres.has(c) && !askedCentres.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
+  for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !askedDoubles.has(key) && drawnApart(...ends(key))) return "gained";
+  for (const key of now.axes.keys()) if (!before.axes.has(key) && !askedAxes.has(key) && drawnApart(...ends(key))) return "gained";
+  return null;
 }
 
 /**
