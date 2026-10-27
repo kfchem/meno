@@ -99,11 +99,19 @@ const CaptionWords = memo(function CaptionWords({ c, set, selected, hovered }: {
   const toLines = c.lines ?? 1;
   const [lines, setLines] = useState(toLines);
   const shown = lines === toLines ? c : { ...c, lines };
-  const laid = useMemo<Laid>(
-    () => ({ c: shown, fs, ...wordsSet(shown, opts, set, { x: 0, y: 0 }) }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fonts: set again as its typeface's letters come in
-    [shown, fs, opts, set, fonts],
+  // (a box given a width, not over an arrow, keeps its top as its lines ease: where its top is to be, as they will be)
+  const ending = useMemo(
+    () => (lines !== toLines && c.width && c.arrow == null ? wordsSet(c, opts, set, { x: 0, y: 0 }).halfH : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fonts: as `laid`
+    [lines === toLines, c, opts, set, fonts],
   );
+  // (the lift in the words' own places, not in where they are drawn: the words drawn a frame or two after they are given - WholeTexts2D - go with it)
+  const laid = useMemo<Laid>(() => {
+    const at = wordsSet(shown, opts, set, { x: 0, y: 0 });
+    const lift = ending != null ? ending - at.halfH : 0;
+    return { c: shown, fs, ...at, ...(lift ? { items: at.items.map((t) => ({ ...t, y: t.y + lift })) } : {}) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fonts: set again as its typeface's letters come in
+  }, [shown, fs, opts, set, fonts, ending]);
   // its typeface changed: the words in the one it had fading out as those in its new one fade in (TAU.quick)
   const [face, setFace] = useState(c.font);
   const [going, setGoing] = useState<{ font: string | undefined; items: readonly TextItem[] } | null>(null);
