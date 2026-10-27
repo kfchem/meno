@@ -8,6 +8,7 @@ import {
   CloudIcon,
   CpuChipIcon,
   CursorArrowRaysIcon,
+  FilmIcon,
   FunnelIcon,
   LinkIcon,
   PhotoIcon,
@@ -50,6 +51,7 @@ const ICONS: Record<StepIcon, Icon> = {
   charge: PlusCircleIcon,
   link: LinkIcon,
   span: ArrowsRightLeftIcon,
+  film: FilmIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

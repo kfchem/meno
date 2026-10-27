@@ -771,7 +771,7 @@ export const MARKS_UNREAD = "its frames' marks could not be read, so whether it 
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
   (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
 
-export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
+export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers", frames?: (m: Molecule3D) => readonly number[]): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
     const n = framesOf(m);
@@ -792,8 +792,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
-    // (a path: its last frame alone; an opened optimisation or scan, the frames it converged on)
-    const taken = m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
+    // (those asked for - Take frames' - else a path's last frame alone; an opened optimisation or scan, the frames it converged on)
+    const taken = frames ? frames(m) : m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
     for (const f of taken) {
       const xyz = frameXyz(m, f);
       const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });

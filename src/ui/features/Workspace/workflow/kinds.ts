@@ -9,6 +9,7 @@ import { numberText } from "../../../../lib/calc/results";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
+import { takeFramesHow, type Which } from "./takeFrames";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
@@ -40,7 +41,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "film";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -201,6 +202,33 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => filterHow(String(v.conditions ?? ""), v.match === "any" ? "any" : "all"),
     needs: (v) => filterNeeds(String(v.conditions ?? "")),
+  },
+  {
+    // (from molecules with frames - a path, an optimisation's way down, a scan - the frames asked for, each a molecule of its one geometry)
+    kind: "take-frames",
+    name: "Take frames",
+    icon: "film",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Frames",
+    options: [
+      {
+        id: "which",
+        label: "Take",
+        type: "choice",
+        choices: [
+          { value: "highest", label: "The highest in energy" },
+          { value: "first", label: "The first" },
+          { value: "last", label: "The last" },
+          { value: "entry", label: "Its entry frame" },
+          { value: "around", label: "The highest, and either side" },
+        ],
+        default: "highest",
+      },
+      { id: "either", label: "Either side", type: "number", default: 1, min: 1, step: 1, when: { id: "which", in: ["around"] } },
+    ],
+    how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1)),
   },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
