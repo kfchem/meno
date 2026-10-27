@@ -613,8 +613,13 @@ function drawnAs(m: Model, style: DrawingStyle) {
 /** Whether `part`, changed as `change` has it, shows the stereochemistry it shows now. */
 function saysTheSame(part: Model, change: Relayout): boolean {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
-  const before = stereoOf(part);
-  const now = stereoOf(relayout(doc, change).model);
+  return sameStereo(part, relayout(doc, change).model);
+}
+
+/** Whether a drawing `after` shows the stereochemistry `before` shows: its centres, double bonds and axes, by atom id. */
+export function sameStereo(was: Model, after: Model): boolean {
+  const before = stereoOf(was);
+  const now = stereoOf(after);
   for (const [c, t] of before.centres) {
     const u = now.centres.get(c);
     if (!u || !sameConfiguration(t, u)) return false;
