@@ -152,6 +152,10 @@ words, a width they break into lines at, and how their lines lie.
   14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
   *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
   down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
+  over the drawing style's. Unset, single and the drawing's labels'
+  typeface.
 - **Letters marked**: bold, italic, a colour, superscript and subscript
   (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd with + and
   with = (the keys that give + and =, wherever a keyboard has them). The words stay plain text; the marks are kept beside them as

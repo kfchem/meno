@@ -69,9 +69,13 @@ export function createCaptionsSlice(doc: DocumentStore<WorkspaceDocument>, set: 
               ? "align text"
               : patch.size !== undefined
                 ? "size text"
-                : patch.marks !== undefined
-                  ? "mark text"
-                  : "move text",
+                : patch.font !== undefined
+                  ? "change typeface"
+                  : patch.lines !== undefined
+                    ? "change line spacing"
+                    : patch.marks !== undefined
+                      ? "mark text"
+                      : "move text",
         (d) => ops.updateCaption(d, id, patch),
         {
           ...(gesture ? gestureStep(`caption:${id}:${gesture}`) : {}),
