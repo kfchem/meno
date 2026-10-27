@@ -523,6 +523,21 @@ def render(scene, s, folder):
     return made
 
 
+def strip_runs(frames):
+    """The frames a film plays, as the sequencer's image strips take them: a strip reads all its files from one folder - its
+    first file's - so each run of frames from one folder is a strip of its own, (folder, the files' names, the film frame it
+    starts at). A change's pieces each have their own folder, their files the same names (f_0001.png...), and a melt is
+    played backward as well as forward: never one strip for them all, which would play the first folder's throughout."""
+    runs = []
+    for k, f in enumerate(frames):
+        d, name = os.path.split(f)
+        if runs and runs[-1][0] == d:
+            runs[-1][1].append(name)
+        else:
+            runs.append((d, [name], k + 1))
+    return runs
+
+
 def assemble(frames, s, folder):
     """
     The frames rendered, put over the background asked for - in the
@@ -554,10 +569,11 @@ def assemble(frames, s, folder):
     strips = made.sequence_editor_create().strips
     under = strips.new_effect(name="Background", type="COLOR", channel=1, frame_start=1, length=len(frames))
     under.color = BACKGROUNDS[background]
-    over = strips.new_image(name="Rendered", filepath=frames[0], channel=2, frame_start=1)
-    for f in frames[1:]:
-        over.elements.append(os.path.basename(f))
-    over.blend_type = "ALPHA_OVER"
+    for k, (d, names, start) in enumerate(strip_runs(frames)):
+        over = strips.new_image(name=f"Rendered {k + 1}", filepath=os.path.join(d, names[0]), channel=2, frame_start=start)
+        for name in names[1:]:
+            over.elements.append(name)
+        over.blend_type = "ALPHA_OVER"
     image = made.render.image_settings
     if s["film"]:
         image.media_type = "VIDEO"
