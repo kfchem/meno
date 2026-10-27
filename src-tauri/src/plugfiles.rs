@@ -253,6 +253,31 @@ pub fn held(dir: &Path, d: &Download) -> Held {
 }
 
 
+/// How file `d` stands in `dir` as far as can be told without reading it through (`held`): not there; another size;
+/// else as this launch last read it, or - not read yet - as it was kept, whole. Whether a plugin is added is asked so,
+/// at launch, of every plugin; its files are read through for their SHA-256 when it is used (`held`), and one changed
+/// at its own size is found then.
+pub fn there(dir: &Path, d: &Download) -> Held {
+    if d.unpack.is_some() {
+        return held(dir, d);
+    }
+    let path = dir.join(&d.file);
+    let meta = match std::fs::metadata(&path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Held::Missing,
+        Err(e) => return Held::Unreadable(e.to_string()),
+    };
+    if meta.len() != d.bytes {
+        return Held::Changed;
+    }
+    let when = meta.modified().ok();
+    let known = CHECKED.get_or_init(Default::default).lock().ok().and_then(|c| c.get(&path).cloned());
+    match known {
+        Some((len, at, sha, false)) if len == meta.len() && at == when && sha == d.sha256 => Held::Changed,
+        _ => Held::Whole,
+    }
+}
+
 /// The files a plugin needs as it is set up: those for this computer.
 pub fn needed(downloads: &[Download]) -> Vec<Download> {
     downloads.iter().filter(|d| for_here(d)).cloned().collect()
@@ -471,7 +496,7 @@ fn manifest_of(app: &AppHandle, id: &str) -> Result<Value, String> {
 /// said as they come (`plugin-files:progress`); an archive unpacked, and
 /// thrown away.
 #[tauri::command]
-pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Option<Vec<String>>) -> Result<FilesState, String> {
+pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Option<Vec<String>>, through: Option<bool>) -> Result<FilesState, String> {
     if !crate::plugin_id_ok(&plugin) {
         return Err(format!("not a plugin's id: {plugin}"));
     }
@@ -480,10 +505,12 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Op
     let pixi = manifest.get("environment").and_then(Value::as_str) == Some("pixi");
     let data = crate::local_data_dir(&app)?;
     let dir = folder(&data, &plugin, pixi);
-    // (each file's SHA-256 read through, where it is, off the async runtime: a model's weights take a while)
+    // (each file's SHA-256 read through, where it is, off the async runtime: a model's weights take a while - unless
+    // only whether it is there is asked, as whether the plugin is added is, at launch: `there`. Fetching reads through)
+    let through = fetch || through.unwrap_or(true);
     let stand = {
         let (dir, downloads) = (dir.clone(), downloads.clone());
-        tauri::async_runtime::spawn_blocking(move || downloads.iter().map(|d| held(&dir, d)).collect::<Vec<_>>())
+        tauri::async_runtime::spawn_blocking(move || downloads.iter().map(|d| if through { held(&dir, d) } else { there(&dir, d) }).collect::<Vec<_>>())
             .await
             .map_err(|e| format!("checking {plugin}'s files: {e}"))?
     };
@@ -1082,6 +1109,24 @@ mod tests {
         // (another size: changed too - one cut short is kept as its part, never under its name)
         std::fs::write(&path, b"weights").unwrap();
         assert_eq!(held(dir.path(), &d), Held::Changed);
+    }
+
+    #[test]
+    fn asks_whether_a_kept_file_is_there_without_reading_it_and_finds_one_changed_at_its_size_when_it_is_read() {
+        let dir = Scratch::new();
+        let body = b"weights for there".to_vec();
+        let d = Download { file: "there.bin".into(), url: "https://h/there.bin".into(), sha256: sha(&body), bytes: body.len() as u64, ..Default::default() };
+        let path = dir.path().join("there.bin");
+        assert_eq!(there(dir.path(), &d), Held::Missing);
+        // (other bytes at its size, never read this launch: there, as far as can be told without reading it)
+        std::fs::write(&path, b"weights for therf").unwrap();
+        assert_eq!(there(dir.path(), &d), Held::Whole);
+        // (read through as it is used: changed - and from then on said so without reading it again)
+        assert_eq!(held(dir.path(), &d), Held::Changed);
+        assert_eq!(there(dir.path(), &d), Held::Changed);
+        // (another size: changed, unread)
+        std::fs::write(&path, b"short").unwrap();
+        assert_eq!(there(dir.path(), &d), Held::Changed);
     }
 
     #[cfg(unix)]
