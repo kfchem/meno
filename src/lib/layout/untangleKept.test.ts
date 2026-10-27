@@ -59,6 +59,25 @@ describe("a drawing made regular, its parts in each other's way, cleared keeping
     for (const i of [8, 9, 10]) expect(out[i]).toEqual(places[i]);
     expect(far(out[8], out[6])).toBeGreaterThan(0.45);
     expect(sides(input, out)).toEqual(sides(input, places));
+    // (the other branch kept as drawn, the ring alone could clear it - by a turn, or a bond drawn longer: it is left as it is)
+    expect(untangledKeeping(input, places, places, B, (a) => a === 5 || a === 6 || a === 7)).toEqual(places);
+    expect(untangledKeeping(input, places, places, B, (a) => a >= 5 && a <= 8)).toEqual(places);
+  });
+
+  it("bends nothing drawn in line - a triple bond's neighbours - to clear what is in the way", () => {
+    // pent-2-ynyl and a pentyl on one carbon, the pentyl's end on the pentynyl's; all but the pentynyl's end kept as drawn
+    const c: [number, number] = [0, 0];
+    const a5 = dir(c, 60);
+    const a6 = dir(a5, 0);
+    const a7 = dir(a6, 0);
+    const a8 = dir(a7, 0);
+    const { input, places } = drawing([c, [1, 0], [2, 0], [3, 0], [4, 0], a5, a6, a7, a8, dir(a8, 300)], [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [8, 9]]);
+    input.bonds[2].order = 3;
+    expect(far(places[9], places[4])).toBeLessThan(1e-9);
+    const out = untangledKeeping(input, places, places, B, (a) => a !== 4);
+    expect(far(out[9], out[4])).toBeGreaterThan(0.45);
+    const along = (u: number, v: number, w: number) => Math.abs((out[v].x - out[u].x) * (out[w].y - out[u].y) - (out[v].y - out[u].y) * (out[w].x - out[u].x)) / (far(out[u], out[v]) * far(out[u], out[w]) * B * B);
+    expect(along(3, 2, 4)).toBeLessThan(1e-9);
   });
 
   it("leaves a chain curled on itself, which only a turn the other way would clear, as it is", () => {

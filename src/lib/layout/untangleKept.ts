@@ -7,7 +7,9 @@
  * the arrangement as drawn. No ring is turned or moved, nor anything the
  * caller keeps as drawn (a chair's atoms); and no move is taken that puts a
  * neighbour of any atom on the other side of another - a substituent across
- * its bond, a chain's turn the other way - from where the drawing has it.
+ * its bond, a chain's turn the other way - from where the drawing has it,
+ * or from where the regular drawing has it: a pair drawn near in line and
+ * set to one side, a triple bond's neighbours put in line, held so.
  * Atoms only move: what is drawn on each bond is the caller's, and stays.
  * Pure.
  */
@@ -15,7 +17,7 @@ import { scorer, untangle } from "./engine";
 import type { Point } from "./geometry";
 import { perceive, type LayoutInput, type Molecule } from "./perceive";
 
-/** How near a straight line, as a sine, two of an atom's bonds drawn may be and have no side to keep. */
+/** How near a straight line, as a sine, two of an atom's bonds may be and count as in line. */
 const STRAIGHT = Math.sin((10 * Math.PI) / 180);
 
 /** Which way round `w` lies from `v` about `u`: -1, 1, or 0 for along its line. */
@@ -28,15 +30,15 @@ function sideOf(u: Point, v: Point, w: Point): number {
   return Math.abs(s) < STRAIGHT ? 0 : Math.sign(s);
 }
 
-/** Every side the drawing gives: about each atom, each pair of its neighbours not drawn in line, and which way round they are. */
-function sidesOf(mol: Molecule, at: readonly Point[]): [number, number, number, number][] {
+/** Every side a drawing gives: about each atom, each pair of its neighbours and which way round they are - or, `inLine`, 0 for those in line. */
+function sidesOf(mol: Molecule, at: readonly Point[], inLine = false): [number, number, number, number][] {
   const sides: [number, number, number, number][] = [];
   mol.neighbours.forEach((ns, u) => {
     for (const v of ns)
       for (const w of ns) {
         if (v === w) continue;
         const s = sideOf(at[u], at[v], at[w]);
-        if (s) sides.push([u, v, w, s]);
+        if (s || inLine) sides.push([u, v, w, s]);
       }
   });
   return sides;
@@ -46,9 +48,9 @@ function sidesOf(mol: Molecule, at: readonly Point[]): [number, number, number, 
  * `placed` - a drawing made regular, `bond` its bond length - with its
  * parts cleared out of each other's way, keeping the arrangement `drawn`
  * gives (see above); the atoms `kept` says are as drawn are not moved, nor
- * any ring's. Where nothing is in the way, or nothing can be moved so,
- * `placed` itself. Whether what is left is clear enough is the caller's to
- * judge.
+ * any ring's. Where nothing is in the way, nothing can be moved so, or
+ * `placed` does not keep `drawn`'s arrangement itself, `placed` as it is.
+ * Whether what is left is clear enough is the caller's to judge.
  */
 export function untangledKeeping(
   input: LayoutInput,
@@ -58,9 +60,12 @@ export function untangledKeeping(
   kept: (atom: number) => boolean = () => false,
 ): Point[] {
   const mol = perceive(input);
-  // (the sides the drawing gives that the regular drawing keeps: one it set in line, or that was, is not held to)
-  const now = new Set(sidesOf(mol, placed).map((s) => s.join()));
-  const sides = sidesOf(mol, drawn).filter((s) => now.has(s.join()));
+  // (each side the regular drawing gives - a pair drawn near in line set to
+  // one side, a triple bond's put in line, held so - and each the drawing
+  // gives, but where the regular drawing has put a pair in line)
+  const regular = sidesOf(mol, placed, true);
+  const inLine = new Set(regular.filter((t) => t[3] === 0).map(([u, v, w]) => `${u},${v},${w}`));
+  const sides = [...regular, ...sidesOf(mol, drawn).filter(([u, v, w]) => !inLine.has(`${u},${v},${w}`))];
   const still = (a: number) => mol.systemOf[a] >= 0 || kept(a);
   const out = placed.map((p) => ({ x: p.x, y: p.y }));
   for (const piece of mol.pieces) {
@@ -71,7 +76,13 @@ export function untangledKeeping(
     const mine = sides.filter(([u]) => inPiece.has(u));
     const arranged = (pos: Map<number, Point>) => mine.every(([u, v, w, s]) => sideOf(pos.get(u)!, pos.get(v)!, pos.get(w)!) === s);
     const benchmark = scorer(mol, piece);
-    const score = (pos: Map<number, Point>) => (arranged(pos) ? benchmark(pos) : Infinity);
+    // (each move judged by where it leaves the atoms - a turn, a bond drawn
+    // longer, whatever the engine tries - and none taken that moves a ring's
+    // atom or a kept one; `fixed` only spares the turns that would)
+    const pinned = piece.filter(still);
+    const unmoved = (pos: Map<number, Point>) => pinned.every((a) => pos.get(a)!.x === start.get(a)!.x && pos.get(a)!.y === start.get(a)!.y);
+    const score = (pos: Map<number, Point>) => (unmoved(pos) && arranged(pos) ? benchmark(pos) : Infinity);
+    if (!arranged(start)) continue;
     const { pos } = untangle(mol, piece, start, benchmark(start), score, (side) => side.some(still));
     for (const a of piece) out[a] = { x: pos.get(a)!.x * bond, y: pos.get(a)!.y * bond };
   }

@@ -1022,10 +1022,12 @@ its parts in each other's way, `untangledKeeping` (`untangleKept.ts`) clears
 them as the engine clears its own (`untangle`): a branch turned off its
 angle, a little and then more, and at last the bond it hangs from drawn
 longer. Only moves that keep the arrangement are taken:
-- no ring's atom moves, nor any atom the caller keeps as drawn (a chair's);
+- no ring's atom moves, nor any atom the caller keeps as drawn (a chair's),
+  by any move: a turn, or a bond drawn longer, which moves all beyond it;
 - no atom's neighbour ends on the other side of another from where the
   drawing has it - a substituent across its bond, a chain's turn the other
-  way;
+  way - or from where the regular drawing has it: a pair drawn near in
+  line set to one side, a triple bond's neighbours put in line, held so;
 - the engine's own rule holds: the drawing never ends with more bonds
   crossing than it began with.
 
