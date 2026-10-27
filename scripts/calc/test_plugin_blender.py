@@ -239,6 +239,42 @@ class RenderScriptNames(unittest.TestCase):
         self.assertIn(f"FASTER = {worker.FASTER!r}".replace("'", '"'), src)
 
 
+class FilmStrips(unittest.TestCase):
+    """How the frames a film plays become the sequencer's image strips (render.py `strip_runs`): a strip reads every file from
+    its first file's folder, so each run from one folder is a strip of its own."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "strip_runs")
+        ns = {"os": os}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), "render.py", "exec"), ns)
+        cls.runs = staticmethod(ns["strip_runs"])
+
+    def test_every_film_frame_is_its_own_file_across_folders_of_the_same_names(self):
+        # (a liquid change of three molecules, Once: melt 1 forward, reform 1, melt 2 backward, melt 2 forward from its second,
+        # reform 2, melt 3 backward - three folders holding the very same names, one of them played twice and reversed)
+        d = lambda name: os.path.join("job", "frames", name)
+        f = lambda folder, n: os.path.join(d(folder), f"f_{n:04d}.png")
+        frames = ([f("melt-01", n) for n in (1, 2, 3)] + [f("reform-01", n) for n in (1, 2)] + [f("melt-02", n) for n in (3, 2, 1)]
+                  + [f("melt-02", n) for n in (2, 3)] + [f("reform-02", n) for n in (1, 2)] + [f("melt-03", n) for n in (3, 2, 1)])
+        runs = self.runs(frames)
+        # (each film frame, as its strip plays it: its strip's folder, the name at its place in the strip)
+        played = []
+        for folder, names, start in runs:
+            self.assertEqual(start, len(played) + 1)
+            played += [os.path.join(folder, name) for name in names]
+        self.assertEqual(played, frames)
+        # (one run for melt 2 played backward then forward: one folder, its names in the order played)
+        self.assertEqual([(os.path.basename(r[0]), r[1]) for r in runs][2], ("melt-02", ["f_0003.png", "f_0002.png", "f_0001.png", "f_0002.png", "f_0003.png"]))
+        self.assertEqual(len(runs), 5)
+
+    def test_a_film_of_one_folder_is_one_strip(self):
+        frames = [os.path.join("job", "frames", f"f_{n:04d}.png") for n in (1, 2, 3, 2)]
+        self.assertEqual(self.runs(frames), [(os.path.join("job", "frames"), ["f_0001.png", "f_0002.png", "f_0003.png", "f_0002.png"], 1)])
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
