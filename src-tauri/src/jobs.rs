@@ -1610,6 +1610,18 @@ pub fn link_needed(dir: &Path, needed: &[(String, PathBuf)]) -> Result<(), Strin
     Ok(())
 }
 
+/// A job made (`make_job`) and given each program it needs (`link_needed`) -
+/// or, where one cannot be given it, no job at all: its folder taken away
+/// again, never left as one to run without what it needs.
+pub fn make_needing_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
+    let (id, dir) = make_job(root, spec, files)?;
+    if let Err(e) = link_needed(&dir, needed) {
+        let _ = fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    Ok((id, dir))
+}
+
 /// What a job's log says from byte `from` on - at most `most` bytes, never
 /// ending inside a character - and where that ends.
 pub fn read_log(dir: &Path, from: u64, most: u64) -> (String, u64) {
@@ -2272,9 +2284,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         needs: payload.needs.clone(),
         given: vec![],
     };
-    let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
     // (each program it needs, linked in its work folder: a link there is never listed, kept or saved - keptjobs `kept_files`)
-    link_needed(&dir, &needed)?;
+    let (id, dir) = make_needing_job(&jobs_root(&app)?, &spec, &payload.files, &needed)?;
     // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
     let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
     let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
@@ -4216,6 +4227,36 @@ mod tests {
         let kept = crate::keptjobs::kept_files(&dir);
         assert!(kept.iter().any(|f| f.name == "work/input.txt"));
         assert!(kept.iter().all(|f| !f.name.contains("tool")), "{:?}", kept.iter().map(|f| &f.name).collect::<Vec<_>>());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_job_that_cannot_be_given_what_it_needs_leaves_no_folder() {
+        let root = temp();
+        let spec = JobSpec {
+            plugin: "test".into(),
+            name: "shell".into(),
+            program: "/bin/sh".into(),
+            args: vec![],
+            stdin: None,
+            env: BTreeMap::new(),
+            cores: 1,
+            memory: 0,
+            created: now_ms(),
+            label: None,
+            key: None,
+            then: vec![],
+            needs: vec![],
+            given: vec![],
+        };
+        // (a file of its own under the needed program's name: the link cannot be made)
+        let err = make_needing_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())]).unwrap_err();
+        assert!(err.contains("tool could not be given to the job"), "{err}");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        // (where it can be, a job, with its link)
+        let (_, dir) = make_needing_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())]).unwrap();
+        assert!(fs::symlink_metadata(dir.join(WORK).join("tool")).unwrap().file_type().is_symlink());
         let _ = fs::remove_dir_all(&root);
     }
 
