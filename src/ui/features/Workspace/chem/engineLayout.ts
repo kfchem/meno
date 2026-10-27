@@ -33,8 +33,6 @@ export type LayoutJob = {
   input: LayoutInput;
   /** The model atom each of the input's atoms is - but the stars the engine is given for rings bound atom by atom, after them. */
   ids: number[];
-  /** The bonds from a metal to each atom of a ring bound so, by their atoms' ids (`pairKey`): not the engine's, which has a star for them. */
-  loose?: Set<string>;
   /** Each ring or chain bound so: its metal and its atoms, by id - made one bond to its centre as it is laid out. */
   bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
@@ -178,16 +176,15 @@ export function layoutJob(part: Model): LayoutJob {
     atoms.push({ el: "*", hs: 0, pi: r.ring });
     bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
   }
-  const loose = new Set(bound.flatMap((r) => r.ring.map((a) => pairKey(ids[a], ids[r.metal]))));
   const systems = bound.map((r) => ({ metal: ids[r.metal], atoms: r.ring.map((a) => ids[a]) }));
-  return { input: { ...input, atoms, bonds }, ids, folded, loose, bound: systems };
+  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems };
 }
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
 
 /**
  * The engine's layout of `job` as edits to `model`: the part where it was
- * - its middle kept - but laid out afresh, at the drawing's own bond length;
+ * - its middle kept - but laid out afresh, at the style's bond length;
  * its wedges, and only those, the ones the engine draws; each H the engine
  * draws the centre's own, where it had one, and new where not; the rest of
  * its H taken away. Given the drawing's `style`, a bond from a label to one
@@ -200,24 +197,12 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
   const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
-  // at the drawing's own bond length: each bond as drawn against as the
-  // engine has it (a bond to a metal longer, a ring in perspective's
-  // shorter, in both), the middle one of those
+  // at the style's bond length, whatever the drawing's was - a structure put
+  // down too large or too small, read from a figure at a wrong scale, comes
+  // to the workspace's one style (the maintainer, 2026-10-27): the engine's
+  // bond is 1
   const indexOf = new Map(ids.map((id, i) => [id, i]));
-  const lengths = part.bonds
-    .filter((b) => !job.loose?.has(pairKey(b.a, b.b)))
-    .map((b) => {
-      const p = byId.get(b.a);
-      const q = byId.get(b.b);
-      const u = indexOf.get(b.a);
-      const v = indexOf.get(b.b);
-      if (!p || !q || u == null || v == null) return 0;
-      const engine = Math.hypot(laid.x[u] - laid.x[v], laid.y[u] - laid.y[v]);
-      return engine > 0.3 ? Math.hypot(p.x - q.x, p.y - q.y) / engine : 0;
-    })
-    .filter((l) => l > 0)
-    .sort((p, q) => p - q);
-  const k = lengths[lengths.length >> 1] || NOMINAL_BOND_LENGTH;
+  const k = NOMINAL_BOND_LENGTH;
   const was = ids.map((id) => byId.get(id)!);
   const mid = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / (xs.length || 1);
   const ox = mid(was.map((a) => a.x));

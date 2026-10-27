@@ -879,7 +879,11 @@ All hover-based, as above.
   its button, or the structure under the pointer with Ctrl/Cmd+Shift+K, as
   one undo step; the structures a selection is in, PR #66. Since the layout engine,
   4a, it is the engine's drawing - turned the way the structure is usually
-  drawn, not the way it was - each structure where it was.)
+  drawn, not the way it was - each structure where it was. It is drawn at
+  the style's bond length, whatever length it was drawn at, so a structure
+  put down too large or too small comes right; one shown magnified stays
+  as magnified, at the style's length at its true size. The maintainer,
+  2026-10-27.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
