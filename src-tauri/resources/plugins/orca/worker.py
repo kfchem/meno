@@ -193,6 +193,20 @@ def memory_of(options, cores):
     return maxcore * processes if maxcore else None
 
 
+#: ORCA's keywords for the xTB methods it runs through the xtb program, not its own: the ORCA 6.1 manual's simple
+#: input keywords for extended tight-binding (section 3.5.2, Extended Tight-Binding: GFN0-xTB, GFN-xTB, GFN2-xTB).
+#: ORCA 6.1.1 on macOS stops on each without the program ("otool_xtb not available ... Please set the XTBEXE
+#: environment variable"). Its native ones (section 3.5.3: NATIVE-XTB2, NATIVE-GFN2-XTB and the rest) run in ORCA
+#: itself, and need none.
+XTB_KEYWORDS = {"XTB", "XTB0", "GFN0-XTB", "XTB1", "GFN1-XTB", "XTB2", "GFN2-XTB", "XTBFF", "GFN-FF"}
+
+
+def needs_xtb(options):
+    """Whether a job runs an xTB method through the xtb program: one of its keywords in the method or the keywords."""
+    said = f"{options.get('method', '')} {options.get('keywords', '')}"
+    return any(word.upper() in XTB_KEYWORDS for word in said.split())
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
@@ -208,6 +222,8 @@ def op_prepare(m):
             **({"then": [TO_MOLDEN]} if keep else {}),
             "reads": [WAVEFUNCTION] if keep else [],
             **({"memory": memory} if memory else {}),
+            # (the xTB plugin's xtb, where an xTB method runs through it: Meno gives it as manifest.json's `needs` says)
+            **({"needs": ["xtb"]} if needs_xtb(options) else {}),
         })
     if not jobs:
         raise Refused("nothing came in")
