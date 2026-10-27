@@ -8,6 +8,7 @@ import { PRESS_WIDENED, structureAt, structuresOf, type PageStructure } from "..
 import { dragStructure, inRow, movedTo, picksAfter, setStructureSay, togglesPick } from "./structureDrag";
 import { setCanvasPlace } from "./wordsDrag";
 import { pdfRoom } from "../../../../lib/pdf/layout";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { marksOn, shadesNow } from "./pdfMarks";
 import { PICKED_POINTED_SHADE, POINTED_SHADE, SELECTION_SHADE } from "./selectionShade";
 
@@ -29,6 +30,30 @@ const model = (s: PageStructure) => {
 };
 
 describe("structures picked from a PDF, in the editor", () => {
+  it("put down on the canvas at any zoom, come in at the style's bond length, at their true size: none shown magnified", () => {
+    const canvas = {} as HTMLElement;
+    const doc = globalThis.document as unknown as { elementFromPoint: (x: number, y: number) => unknown };
+    const was = doc.elementFromPoint;
+    doc.elementFromPoint = () => canvas;
+    try {
+      for (const px of [2, 10, 37.5]) {
+        const store = editor();
+        // (the canvas under every point of the window, `px` pixels to a unit of the page, far from the PDF)
+        setCanvasPlace(store, { canvas: () => canvas, worldAt: (x, y) => ({ x: 1000 + x / px, y: 1000 - y / px }) });
+        dragStructure(store, { id: 1, sha256: "a".repeat(64) }, 0, ring, { x: ring.box[0] + 1, y: ring.box[1] + 1 }, { ...screen, pxPerPoint: px / 4 });
+        window.dispatchEvent(Object.assign(new Event("pointerup"), { clientX: 50, clientY: 50 }));
+        const { atoms, bonds } = store.getState().model;
+        expect(atoms.length).toBe(model(ring).atoms.length);
+        const at = new Map(atoms.map((a) => [a.id, a]));
+        const lengths = bonds.map((b) => Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y)).sort((a, b) => a - b);
+        expect(lengths[Math.floor(lengths.length / 2)]).toBeCloseTo(NOMINAL_BOND_LENGTH, 4);
+        expect(atoms.filter((a) => a.magnified != null)).toEqual([]);
+      }
+    } finally {
+      doc.elementFromPoint = was;
+    }
+  });
+
   it("are one selection with words selected and a box drawn: picking them lets those go, and those let them go", () => {
     const store = editor();
     const pick = { id: 1, page: 0, figure: [0, 0, 100, 100] as [number, number, number, number], key: "0:0" };
