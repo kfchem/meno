@@ -99,7 +99,7 @@ export function layoutJob(part: Model): LayoutJob {
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
-        "(drawn crossed, or on an atom with a lone pair), so nothing was moved",
+        "(drawn crossed, with two of its bonds in line or on top of each other, or on an atom with a lone pair), so nothing was moved",
     );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own
@@ -326,7 +326,11 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   if (overlapsMade(part, change).length) {
     throw new Error("the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved");
   }
-  if (!saysTheSame(part, change)) {
+  const differs = stereoDiffers(part, change, job);
+  if (differs === "gained") {
+    throw new Error("laid out, the structure would show a configuration its drawing does not state - a double bond drawn straight on, say - so nothing was moved");
+  }
+  if (differs) {
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");
   }
   return change;
@@ -610,27 +614,60 @@ function drawnAs(m: Model, style: DrawingStyle) {
   return layoutMolecule(atoms, bonds, editorLayoutOptions(style, { minLinePx: 0 }), (style.bondLengthPt * 96) / 72 / NOMINAL_BOND_LENGTH);
 }
 
-/** Whether `part`, changed as `change` has it, shows the stereochemistry it shows now. */
-function saysTheSame(part: Model, change: Relayout): boolean {
+/**
+ * Whether `part`, changed as `change` has it, shows other stereochemistry
+ * than it shows now (`stereoChange`), what the engine was asked to show by
+ * `job` - the drawing's own, or a SMILES's given in its place - not
+ * counted as gained.
+ */
+function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed" | "gained" | null {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
-  return sameStereo(part, relayout(doc, change).model);
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  return stereoChange(part, relayout(doc, change).model, {
+    centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
+    doubles: new Set(job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : []))),
+    axes: new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]]))),
+  });
 }
 
-/** Whether a drawing `after` shows the stereochemistry `before` shows: its centres, double bonds and axes, by atom id. */
+/**
+ * Whether a drawing `after` shows the stereochemistry `was` shows - its
+ * centres, double bonds and axes, by atom id - and none `was` does not
+ * state (`stereoChange`).
+ */
 export function sameStereo(was: Model, after: Model): boolean {
+  return stereoChange(was, after) === null;
+}
+
+/**
+ * How a drawing `after` differs in stereochemistry from `was`, by atom id:
+ * "changed" where a configuration `was` shows is lost or turned, "gained"
+ * where `after` shows one `was` does not state - a centre, a double bond or
+ * an axis drawn so that it says none (readStereo), and not in `asked` -
+ * which would be the layout's choice, not the structure's; null where it
+ * shows the same. Only where `was` is drawn: atoms not yet placed - all on
+ * one point, a SMILES's before it is laid out - state nothing to keep.
+ */
+function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
+  const place = new Map(was.atoms.map((a) => [a.id, a]));
+  const drawnApart = (...ids: number[]) => ids.some((id) => ids.some((other) => Math.hypot(place.get(id)!.x - place.get(other)!.x, place.get(id)!.y - place.get(other)!.y) > 1e-6));
   const before = stereoOf(was);
   const now = stereoOf(after);
   for (const [c, t] of before.centres) {
     const u = now.centres.get(c);
-    if (!u || !sameConfiguration(t, u)) return false;
+    if (!u || !sameConfiguration(t, u)) return "changed";
   }
   for (const [key, d] of before.doubles) {
     const e = now.doubles.get(key);
     // (read against the other group on an end, the reading turns)
-    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return false;
+    if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
   }
-  for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return false;
-  return true;
+  for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return "changed";
+  const ends = (key: string) => key.split(",").map(Number).filter((id) => place.has(id));
+  for (const [c, t] of now.centres) if (!before.centres.has(c) && !asked?.centres.has(c) && place.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
+  for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !asked?.doubles.has(key) && drawnApart(...ends(key))) return "gained";
+  for (const key of now.axes.keys()) if (!before.axes.has(key) && !asked?.axes.has(key) && drawnApart(...ends(key))) return "gained";
+  return null;
 }
 
 /**

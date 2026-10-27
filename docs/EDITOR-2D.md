@@ -1488,6 +1488,21 @@ lipids each have their own way of being drawn, which it should know.
      a SMILES was refused, 2026-10-13). A chain of three cumulated double
      bonds (hexa-2,3,4-triene) does have a cis or trans across it, end to
      end; that is not read, before or after Clean-up.
+   - **A configuration the drawing does not state is not drawn in** (the
+     maintainer, 2026-10-27). Read by IUPAC's recommendations (Brecher,
+     Pure Appl. Chem. 78, 1897, 2006), with "linear" within 10 degrees of
+     a straight line (ST-0.1), a drawing states no configuration at a
+     centre with three bonds and its H left out whose two bonds are in
+     line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
+     with a group straight on from it (ST-4.4, the linear drawing of a
+     double bond whose configuration is not given). Clean-up would draw
+     one or the other configuration there, so it refuses: a wedge on such
+     a centre as a wedge it cannot carry, and a double bond so drawn
+     because the new drawing would state a configuration the old one did
+     not (`lib/layout/drawn.ts#IN_LINE`). A structure not yet drawn - its
+     atoms all on one point, as a SMILES's are before it is laid out - is
+     not held to this: it is laid out as before, a double bond whose
+     configuration the SMILES does not give drawn one way or the other.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
