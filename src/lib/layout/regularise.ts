@@ -11,7 +11,8 @@
  * a bridged system and a cage are drawings in perspective, kept as drawn
  * (the maintainer, 2026-10-27), and the bonds out of them too. Crowded, or
  * crossing what the drawing does not cross, it is cleared, its arrangement
- * kept (untangleKept); still so, it is none, and left as drawn. Pure.
+ * kept (untangleKept); still so - or with two bonds at an atom narrower than
+ * Meno draws any (`NARROWEST`) - it is none, and left as drawn. Pure.
  */
 import { layoutFlat } from "./engine";
 import { ringSystemVariants } from "./ringSystem";
@@ -23,9 +24,18 @@ export type DrawnAtom = { x: number; y: number; el: string; charge?: number; uns
 /** A bond as drawn; `stereo`, a wedge or a hash. */
 export type DrawnBond = { a: number; b: number; order: number; stereo?: boolean };
 
-/** How far from where it is drawn an atom may be put, in bonds; and the turn of a bond that moves its far end as far. */
+/**
+ * How far a chain's bond set at a standard angle may move its far end from the way it is drawn, in bonds - as the turn that
+ * moves it so far - before the nearest twelfth of a turn is taken instead. It bounds each bond's turn, not where an atom
+ * ends up: a ring drawn unevenly is the regular one however far off it is drawn (the maintainer, 2026-10-27).
+ */
 export const MOST_MOVED = 0.5;
 const MOST_TURNED = 2 * Math.asin(MOST_MOVED / 2);
+/**
+ * The narrowest two bonds at an atom may come out at, made regular: the narrowest Meno draws is 60 deg, a three-membered
+ * ring's, or two groups on one ring atom. Narrower, where the drawing has them wider, it is none.
+ */
+const NARROWEST = 55 * (Math.PI / 180);
 /** How near two atoms not bonded may come, in bonds. */
 const NEAREST = 0.45;
 const DEG = Math.PI / 180;
@@ -199,6 +209,15 @@ function directions(placed: readonly number[], drawnAt: readonly number[], linea
     if (apart(out, drawnAt[0]) <= MOST_TURNED) return [out];
   }
   const set = standard();
+  // (out of a ring: its bisector, whatever way the bond is drawn - never a twelfth of a turn off a ring's bond)
+  if (set && inRing && placed.length >= 2) {
+    const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
+    const order = drawnAt.map((_, i) => i).sort((p, q) => from(drawnAt[p]) - from(drawnAt[q]));
+    const ideal = [...set].sort((p, q) => from(p) - from(q));
+    const out: number[] = new Array(n);
+    order.forEach((i, k) => (out[i] = ideal[k]));
+    return out;
+  }
   if (set) {
     // (matched in the order round the atom, from its first placed bond)
     const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
@@ -234,7 +253,7 @@ function crosses(p: Point, q: Point, r: Point, s: Point): boolean {
  * Where each atom of a structure as drawn goes, made regular with its arrangement kept (see above), every bond `bond`
  * long; each of its pieces - a salt's ions - about where it is drawn. None, where it cannot be so made: it is left as drawn.
  */
-export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], bond: number, why?: (none: "crowded" | "crossing" | "no way") => void): Point[] | null {
+export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], bond: number, why?: (none: "crowded" | "crossing" | "narrow" | "no way") => void): Point[] | null {
   if (!atoms.length || !bonds.length) return null;
   const mol = perceive({ atoms: atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: bonds.map((b) => ({ a: b.a, b: b.b, order: Math.round(b.order) || 1 })) });
   const fits = mol.systems.map((_, k) => fitted(mol, k, atoms, bond));
@@ -312,19 +331,28 @@ export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBo
   if (placed.some((p) => !p)) return null;
   const drawnP = atoms.map((a) => ({ x: a.x, y: a.y }));
   const wrong = inTheWay(placed, drawnP, bonds, bond);
-  if (!wrong) return placed;
+  if (!wrong) return narrowed(placed, drawnP, mol) ? (why?.("narrow"), null) : placed;
   // (crowded, or crossing: cleared, its arrangement kept - its rings, those kept as drawn and the rest, where they are - else as drawn)
   const kept = new Set([...asDrawn].flatMap((k) => mol.systems[k].atoms));
   const input = { atoms: atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: bonds.map((b) => ({ a: b.a, b: b.b, order: Math.round(b.order) || 1 })) };
   const cleared = untangledKeeping(input, placed, drawnP, bond, (i) => kept.has(i));
-  const still = inTheWay(cleared, drawnP, bonds, bond);
+  const still = inTheWay(cleared, drawnP, bonds, bond) ?? (narrowed(cleared, drawnP, mol) ? "narrow" : null);
   if (!still) return cleared;
   why?.(still);
   return null;
 }
 
+/** Whether two bonds at an atom come out narrower than `NARROWEST` where the drawing has them wider. */
+function narrowed(placed: readonly Point[], drawn: readonly Point[], mol: Molecule): boolean {
+  return mol.neighbours.some((ns, u) =>
+    ns.some((v, i) =>
+      ns.some((w, j) => j > i && apart(angleOf(placed[u], placed[v]), angleOf(placed[u], placed[w])) < NARROWEST && apart(angleOf(drawn[u], drawn[v]), angleOf(drawn[u], drawn[w])) >= NARROWEST),
+    ),
+  );
+}
+
 /** What is in the way where a drawing is made regular: two atoms put on each other, or bonds crossing that the drawing does not cross. */
-function inTheWay(placed: readonly Point[], drawn: readonly Point[], bonds: readonly DrawnBond[], bond: number): "crowded" | "crossing" | null {
+function inTheWay(placed: readonly Point[], drawn: readonly Point[], bonds: readonly DrawnBond[], bond: number): "crowded" | "crossing" | "narrow" | null {
   const bonded = new Set(bonds.map((b) => (b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`)));
   for (let i = 0; i < placed.length; i++)
     for (let j = i + 1; j < placed.length; j++) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { drawnAsChair, regularised, type DrawnAtom, type DrawnBond } from "./regularise";
+import stilbene from "./fixtures/stilbene-sheared.json";
 
 const L = 1.8;
 const C = (x: number, y: number, more: Partial<DrawnAtom> = {}): DrawnAtom => ({ x, y, el: "C", ...more });
@@ -143,5 +144,18 @@ describe("a structure as drawn, made regular with its arrangement kept", () => {
     const at = (i: number) => Math.atan2(p[i].y - p[0].y, p[i].x - p[0].x);
     expect(Math.abs(Math.abs(at(1) - at(3)) - Math.PI)).toBeGreaterThan(5 * (Math.PI / 180));
     for (const l of lengths(p, bonds)) expect(l).toBeCloseTo(L, 6);
+  });
+
+  it("an E-stilbene drawn sheared comes out regular, each phenyl met along its bisector, every angle a third of a turn (the correctness lane's case)", () => {
+    const p = regularised(stilbene.atoms, stilbene.bonds, L)!;
+    expect(p).not.toBeNull();
+    for (const l of lengths(p, stilbene.bonds)) expect(l).toBeCloseTo(L, 4);
+    const around = (u: number) => stilbene.bonds.flatMap((b) => (b.a === u ? [b.b] : b.b === u ? [b.a] : []));
+    for (let u = 0; u < p.length; u++) {
+      const ns = around(u);
+      for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) expect(angleAt(p, ns[i], u, ns[j])).toBeCloseTo(120, 2);
+    }
+    // (E as drawn: the two rings on opposite sides of the double bond)
+    expect(side(p, 6, 7, 8) * side(p, 7, 6, 5)).toBe(side(stilbene.atoms, 6, 7, 8) * side(stilbene.atoms, 7, 6, 5));
   });
 });
