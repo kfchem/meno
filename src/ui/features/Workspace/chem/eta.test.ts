@@ -479,7 +479,7 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
     for (const s of seen) expect(s).toBeCloseTo(0.7, 3);
   });
 
-  it("in (allyl)PdCl(PMe3) drawn at a longer bond, the metal's line seen as long, in the drawing's own bond", async () => {
+  it("in (allyl)PdCl(PMe3) drawn at a longer bond, laid out at the style's, the metal's line seen as long", async () => {
     const d = drawing();
     const pd = d.atom("Pd", 0, 0);
     d.bond(pd, d.atom("Cl", -1.2, -0.9));
@@ -500,7 +500,7 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
     const [b] = etaOf(laid);
     const [e1, mid, e2] = allylChain(b, laid.bonds)!.map((id) => at.get(id)!);
     const bond = Math.hypot(mid.x - e1.x, mid.y - e1.y);
-    expect(bond / L).toBeGreaterThan(1.3);
+    expect(bond / L).toBeCloseTo(1, 1);
     const middle = allylCurve(e1, mid, e2, opts.doubleOffsetPx).middle;
     const line = lay.lines.find((l) => Math.abs(Math.hypot(l.x2 - middle.x, l.y2 - middle.y) - margin) < 1e-6)!;
     expect(Math.hypot(line.x2 - line.x1, line.y2 - line.y1) / bond).toBeCloseTo(0.7, 2);
