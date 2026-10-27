@@ -49,4 +49,11 @@ describe("a mark's box as WebGL draws it", () => {
     expect(marks.match(/<PageHtml/g)).toHaveLength(1);
     expect(marks).toMatch(/\{pointed && \(\s+<PageHtml/);
   });
+
+  it("draws R, S, E and Z beside a molecule in 3D by WebGL too, placed frame by frame: no HTML for them", () => {
+    const view = readFileSync(join(process.cwd(), "src/ui/features/Workspace/components/Molecule3DView.tsx"), "utf8");
+    expect(view).toContain("<StereoInk3D");
+    expect(view).toContain("ink.place(spot, font, opacity)");
+    expect(view).not.toContain("StereoText");
+  });
 });

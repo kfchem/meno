@@ -46,9 +46,9 @@ shots, and is checked against this page (*The look check*, below).
    for words a person may copy (`COPYABLE`). A thing with both draws its
    ink in WebGL and lays only its control over it in HTML, and only while
    it can be used - a measure's field while it is being edited, a tip
-   while it is pointed at. The valence and "either way" boxes and R/S in
-   2D are drawn so (`MarkBoxes2D`, `Texts2D`); the rest of the page's HTML
-   moves over in turn.
+   while it is pointed at. The valence and "either way" boxes and R/S, in
+   2D and beside a molecule in 3D, are drawn so (`MarkBoxes2D`, `Texts2D`,
+   `StereoInk3D`); the rest of the page's HTML moves over in turn.
 
 ## Colours
 

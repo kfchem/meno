@@ -12,6 +12,8 @@ export const COLORS = {
   attention: "#cd4560",
   // Meno's own colour (--color-accel-base): what is the workspace's, not the drawing's - slides' frames
   base: "#317689",
+  // R, S, E and Z beside a molecule in 3D (--color-accel-blue; StereoInk3D)
+  stereo3d: "#1d4ed8",
 
   // Base drawing colors (kept here for centralization)
   bond: "#000000",
