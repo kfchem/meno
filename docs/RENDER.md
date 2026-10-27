@@ -32,7 +32,10 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
   - a film's length in seconds - a vibration's made whole periods of 1.2 s,
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
-    or square;
+    or square - a film's width and height each made the nearest even
+    number, as its video needs (H.264 keeps colour for each 2x2 pixels:
+    360 px at 16:9 is 360 by 202), and its frame on the page given that
+    shape exactly, grown, never cut;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
     outlined. **The looks are the renderer's**: the card offers the
