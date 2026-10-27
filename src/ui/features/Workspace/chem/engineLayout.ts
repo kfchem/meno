@@ -320,6 +320,12 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   const change: Relayout = { atoms, bonds: dropped.size ? bonds.filter((b) => !dropped.has(b.id)) : bonds, added, removed, ...(eta.length ? { eta } : {}) };
   if (style) roomForLabels(part, change, style);
   if (style && posed.length) allylLinesSeen(part, change, style, posed);
+  // (and never a layout with two atoms on each other, or an atom on a bond,
+  // where the drawing had none: a picture that misstates the structure - a
+  // bond hidden under another, its wedge with it - is worse than the old one)
+  if (overlapsMade(part, change).length) {
+    throw new Error("the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved");
+  }
   const differs = stereoDiffers(part, change, job);
   if (differs === "gained") {
     throw new Error("laid out, the structure would show a configuration its drawing does not state - a double bond drawn straight on, say - so nothing was moved");
@@ -328,6 +334,90 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");
   }
   return change;
+}
+
+/**
+ * How near, as a share of a drawing's bond, two atoms are taken to be on
+ * each other, or an atom on a bond. Atoms not bonded sit half a bond and
+ * more apart in any drawing the engine makes - a ring's across, a crowded
+ * branch's - so a tenth of a bond is no drawing's spacing, only atoms laid
+ * on each other (as the engine's first placement of a bridged ring system
+ * with a large ring could leave them, 2026-10-27).
+ */
+export const ON_EACH_OTHER = 0.1;
+
+/**
+ * What `change` puts on each other in `part` that the drawing did not:
+ * each two atoms closer than ON_EACH_OTHER of a bond ("a|b"), and each atom
+ * that close to a bond it is not an end of, along its middle ("a@b-c") - by
+ * ids, an H the change adds by its place among `added`, negative. Stars of
+ * haptic bonds, and haptic bonds, are left out: they lie over their pi
+ * systems by design.
+ */
+export function overlapsMade(part: Model, change: Relayout): string[] {
+  const gone = new Set(change.removed ?? []);
+  const unbonded = new Set((change.eta ?? []).flatMap((e) => e.bonds));
+  const star = new Set(part.atoms.filter((a) => a.el === "*").map((a) => a.id));
+  const was = new Map(part.atoms.filter((a) => !star.has(a.id)).map((a) => [a.id, { x: a.x, y: a.y }]));
+  const now = new Map([...was].filter(([id]) => !gone.has(id)));
+  for (const a of change.atoms) if (now.has(a.id)) now.set(a.id, { x: a.x, y: a.y });
+  (change.added ?? []).forEach((h, i) => now.set(-1 - i, { x: h.x, y: h.y }));
+  const plain = part.bonds.filter((b) => !b.endpoints?.length && !star.has(b.a) && !star.has(b.b));
+  const bondsWere = plain.map((b) => [b.a, b.b] as const);
+  const bondsNow = [
+    ...plain.filter((b) => !gone.has(b.a) && !gone.has(b.b) && !unbonded.has(b.id)).map((b) => [b.a, b.b] as const),
+    ...(change.added ?? []).map((h, i) => [h.on, -1 - i] as const),
+  ];
+  const before = new Set(onEachOther(was, bondsWere));
+  return onEachOther(now, bondsNow).filter((k) => !before.has(k));
+}
+
+/** Atoms on each other, and atoms on bonds, in a drawing (overlapsMade): within ON_EACH_OTHER of its own middle bond. */
+function onEachOther(at: Map<number, { x: number; y: number }>, bonds: readonly (readonly [number, number])[]): string[] {
+  const lengths = bonds
+    .map(([a, b]) => (at.has(a) && at.has(b) ? Math.hypot(at.get(a)!.x - at.get(b)!.x, at.get(a)!.y - at.get(b)!.y) : 0))
+    .filter((l) => l > 0)
+    .sort((p, q) => p - q);
+  const bond = lengths[lengths.length >> 1] || NOMINAL_BOND_LENGTH;
+  const near = ON_EACH_OTHER * bond;
+  // (atoms by cells a bond wide: each looked for only near where it is)
+  const cell = (v: number) => Math.floor(v / bond);
+  const grid = new Map<string, number[]>();
+  for (const [id, p] of at) {
+    const key = `${cell(p.x)},${cell(p.y)}`;
+    const here = grid.get(key);
+    if (here) here.push(id);
+    else grid.set(key, [id]);
+  }
+  const within = (x0: number, y0: number, x1: number, y1: number) => {
+    const found: number[] = [];
+    for (let cx = cell(x0); cx <= cell(x1); cx++) for (let cy = cell(y0); cy <= cell(y1); cy++) found.push(...(grid.get(`${cx},${cy}`) ?? []));
+    return found;
+  };
+  const out: string[] = [];
+  for (const [id, p] of at)
+    for (const other of within(p.x - near, p.y - near, p.x + near, p.y + near)) {
+      if (other <= id) continue;
+      const q = at.get(other)!;
+      if (Math.hypot(p.x - q.x, p.y - q.y) < near) out.push(`${id}|${other}`);
+    }
+  for (const [a, b] of bonds) {
+    const p = at.get(a);
+    const q = at.get(b);
+    if (!p || !q) continue;
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) continue;
+    for (const id of within(Math.min(p.x, q.x) - near, Math.min(p.y, q.y) - near, Math.max(p.x, q.x) + near, Math.max(p.y, q.y) + near)) {
+      if (id === a || id === b) continue;
+      const r = at.get(id)!;
+      const along = ((r.x - p.x) * dx + (r.y - p.y) * dy) / len;
+      if (along < near || len - along < near) continue;
+      if (Math.abs((r.x - p.x) * dy - (r.y - p.y) * dx) / len < near) out.push(`${id}@${Math.min(a, b)}-${Math.max(a, b)}`);
+    }
+  }
+  return out;
 }
 
 /**
@@ -526,24 +616,43 @@ function drawnAs(m: Model, style: DrawingStyle) {
 
 /**
  * Whether `part`, changed as `change` has it, shows other stereochemistry
- * than it shows now: "changed" where a configuration it shows is lost or
- * turned, "gained" where it would show one its drawing does not state - a
- * centre, a double bond or an axis drawn so that it says none (readStereo)
- * and not asked of the engine by `job` - which would be the layout's
- * choice, not the structure's; null where it shows the same.
+ * than it shows now (`stereoChange`), what the engine was asked to show by
+ * `job` - the drawing's own, or a SMILES's given in its place - not
+ * counted as gained.
  */
 function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed" | "gained" | null {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
-  // (what the engine was asked to show - the drawing's own, or a SMILES's given in its place - by atom id: not gained)
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
-  const askedCentres = new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : [])));
-  const askedDoubles = new Set(job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])));
-  const askedAxes = new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]])));
-  // (and only where it was drawn: atoms not yet placed - all on one point, a SMILES's before it is laid out - state nothing to keep)
-  const place = new Map(part.atoms.map((a) => [a.id, a]));
+  return stereoChange(part, relayout(doc, change).model, {
+    centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
+    doubles: new Set(job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : []))),
+    axes: new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]]))),
+  });
+}
+
+/**
+ * Whether a drawing `after` shows the stereochemistry `was` shows - its
+ * centres, double bonds and axes, by atom id - and none `was` does not
+ * state (`stereoChange`).
+ */
+export function sameStereo(was: Model, after: Model): boolean {
+  return stereoChange(was, after) === null;
+}
+
+/**
+ * How a drawing `after` differs in stereochemistry from `was`, by atom id:
+ * "changed" where a configuration `was` shows is lost or turned, "gained"
+ * where `after` shows one `was` does not state - a centre, a double bond or
+ * an axis drawn so that it says none (readStereo), and not in `asked` -
+ * which would be the layout's choice, not the structure's; null where it
+ * shows the same. Only where `was` is drawn: atoms not yet placed - all on
+ * one point, a SMILES's before it is laid out - state nothing to keep.
+ */
+function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
+  const place = new Map(was.atoms.map((a) => [a.id, a]));
   const drawnApart = (...ids: number[]) => ids.some((id) => ids.some((other) => Math.hypot(place.get(id)!.x - place.get(other)!.x, place.get(id)!.y - place.get(other)!.y) > 1e-6));
-  const before = stereoOf(part);
-  const now = stereoOf(relayout(doc, change).model);
+  const before = stereoOf(was);
+  const now = stereoOf(after);
   for (const [c, t] of before.centres) {
     const u = now.centres.get(c);
     if (!u || !sameConfiguration(t, u)) return "changed";
@@ -554,10 +663,10 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
     if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
   }
   for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return "changed";
-  const ends = (key: string) => key.split(",").map(Number);
-  for (const [c, t] of now.centres) if (!before.centres.has(c) && !askedCentres.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
-  for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !askedDoubles.has(key) && drawnApart(...ends(key))) return "gained";
-  for (const key of now.axes.keys()) if (!before.axes.has(key) && !askedAxes.has(key) && drawnApart(...ends(key))) return "gained";
+  const ends = (key: string) => key.split(",").map(Number).filter((id) => place.has(id));
+  for (const [c, t] of now.centres) if (!before.centres.has(c) && !asked?.centres.has(c) && place.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
+  for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !asked?.doubles.has(key) && drawnApart(...ends(key))) return "gained";
+  for (const key of now.axes.keys()) if (!before.axes.has(key) && !asked?.axes.has(key) && drawnApart(...ends(key))) return "gained";
   return null;
 }
 

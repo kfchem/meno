@@ -11,6 +11,7 @@ import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } f
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
 import { cleanUp, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partOf } from "./cleanUp";
+import { overlapsMade } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
 import { MENO } from "../../../../lib/chem/style";
@@ -248,6 +249,36 @@ describe("cleanUp", () => {
     const [r, t] = [centroid(drawn, ids(11)), centroid(after, ids(11))];
     expect(t.x).toBeCloseTo(r.x, 6);
     expect(t.y).toBeCloseTo(r.y, 6);
+  });
+
+  it("never puts one atom on another or on a bond where the drawing had none: it refuses, and moves nothing", async () => {
+    // a tetrahydropyran bridged 2,5 by a long chain (made up): the engine's
+    // first placement of such a system can lay the chain's first carbon on
+    // the ring's O. Drawn round a circle - no atom on another, none on a bond
+    const input = fromSmiles("C1CCCCC2CCC(CO2)CCCCCCCC1");
+    const n = input.atoms.length;
+    const R = (n * NOMINAL_BOND_LENGTH) / (2 * Math.PI);
+    const drawn: Model = {
+      atoms: input.atoms.map((a, i) => atom(i + 1, R * Math.cos((2 * Math.PI * i) / n), R * Math.sin((2 * Math.PI * i) / n), a.el)),
+      bonds: input.bonds.map((b, i) => ({ id: 100 + i, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 })),
+    };
+    expect(overlapsMade({ atoms: [], bonds: [] }, { atoms: [], bonds: [] })).toEqual([]);
+    for (const around of [null, 1]) {
+      const { store } = canvas(drawn);
+      const settled = await cleanUp(store, around).then(
+        () => "laid out",
+        (e: Error) => e.message,
+      );
+      const after = store.getState().model;
+      if (settled === "laid out") {
+        // (laid out, it has none of its atoms on each other or on a bond)
+        const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
+        expect(overlapsMade(drawn, moved)).toEqual([]);
+      } else {
+        expect(settled).toMatch(/one atom on another or on a bond, so nothing was moved/);
+        expect(after).toEqual(drawn);
+      }
+    }
   });
 
   it("lays out only the structure an atom is in, when asked about one", async () => {
