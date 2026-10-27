@@ -41,6 +41,8 @@ const NARROWEST = 55 * (Math.PI / 180);
 /** How near two atoms not bonded may come, in bonds. */
 const NEAREST = 0.45;
 const DEG = Math.PI / 180;
+/** How near straight a double bond's end must be drawn to be taken as drawn straight: its way round not given. */
+const STRAIGHT = 165 * DEG;
 
 const angleOf = (p: Point, q: Point) => Math.atan2(q.y - p.y, q.x - p.x);
 const turn = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -175,12 +177,12 @@ function fittedAs(mol: Molecule, sys: Molecule["systems"][number], variant: numb
  * out of a ring along the bisector of its ring bonds - each matched to a drawn bond in the order round the atom they are
  * drawn in; where those are turned too far from the drawing, the nearest twelfth of a turn to each. None where even that is.
  */
-function directions(placed: readonly number[], drawnAt: readonly number[], linear: boolean, inRing: boolean): number[] | null {
+function directions(placed: readonly number[], drawnAt: readonly number[], linear: boolean, inRing: boolean, held: { stereo?: boolean; doubleEnd?: boolean } = {}): number[] | null {
   const n = drawnAt.length;
   if (!n) return [];
   // (an atom first placed, nothing about it yet: its first bond as drawn, the rest round it)
   if (!placed.length) {
-    const rest = directions([drawnAt[0]], drawnAt.slice(1), linear, inRing);
+    const rest = directions([drawnAt[0]], drawnAt.slice(1), linear, inRing, held);
     return rest && [drawnAt[0], ...rest];
   }
   const ref = placed[0];
@@ -205,13 +207,18 @@ function directions(placed: readonly number[], drawnAt: readonly number[], linea
     if (d === 4) return [ref + 90 * DEG, ref + 180 * DEG, ref + 270 * DEG];
     return null;
   };
-  // (a chain's atom with one bond out: the way it turns as drawn, a third of a turn round - or straight on, where it is linear)
+  // (a chain's atom with one bond out: the way it turns as drawn, a third of a turn round - or straight on, where it is linear,
+  // or where it is a double bond's end drawn straight, which says no way round; at a stereocentre, only so where it is drawn near
+  // enough, a wedge read by where its neighbours lie)
   if (!inRing && placed.length === 1 && n === 1) {
-    return linear ? [ref + Math.PI] : [[ref + 120 * DEG, ref - 120 * DEG].sort((p, q) => apart(p, drawnAt[0]) - apart(q, drawnAt[0]))[0]];
+    if (linear || (held.doubleEnd && apart(drawnAt[0], ref) >= STRAIGHT)) return [ref + Math.PI];
+    const out = [ref + 120 * DEG, ref - 120 * DEG].sort((p, q) => apart(p, drawnAt[0]) - apart(q, drawnAt[0]))[0];
+    if (!held.stereo || apart(out, drawnAt[0]) <= MOST_TURNED) return [out];
   }
   const set = standard();
-  // (a chain's atom of three bonds: a third of a turn apart, in the order round it they are drawn in, however skewed they are)
-  if (set && !inRing && placed.length === 1 && n === 2) {
+  // (a chain's atom of three bonds: a third of a turn apart, in the order round it they are drawn in, however skewed they are -
+  // but a stereocentre's only where they are drawn near enough)
+  if (set && !held.stereo && !inRing && placed.length === 1 && n === 2) {
     const from = (a: number) => (turn(a - ref) + 2 * Math.PI) % (2 * Math.PI);
     return from(drawnAt[0]) <= from(drawnAt[1]) ? [set[0], set[1]] : [set[1], set[0]];
   }
@@ -300,7 +307,8 @@ export function regularised(atoms: readonly DrawnAtom[], bonds: readonly DrawnBo
       const placed = mol.neighbours[u].filter((v) => out[v]).map((v) => angleOf(at, out[v]!));
       const drawnAt = next.map((v) => angleOf(atoms[u], atoms[v]));
       // (out of a chair, each the way it is drawn: axial and equatorial as drawn)
-      let ways = asDrawn.has(mol.systemOf[u]) || free(u) ? drawnAt : directions(placed, drawnAt, linearAt(u), mol.systemOf[u] >= 0);
+      const held = { stereo: stereoAt.has(u), doubleEnd: mol.neighbours[u].some((v) => order(u, v) === 2) };
+      let ways = asDrawn.has(mol.systemOf[u]) || free(u) ? drawnAt : directions(placed, drawnAt, linearAt(u), mol.systemOf[u] >= 0, held);
       if (!ways) {
         why?.("no way");
         return null;

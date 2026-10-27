@@ -8,7 +8,7 @@ const lengths = (p: { x: number; y: number }[], bonds: readonly DrawnBond[]) => 
 const angleAt = (p: { x: number; y: number }[], a: number, at: number, b: number) => {
   const u = { x: p[a].x - p[at].x, y: p[a].y - p[at].y };
   const v = { x: p[b].x - p[at].x, y: p[b].y - p[at].y };
-  return (Math.acos((u.x * v.x + u.y * v.y) / Math.hypot(u.x, u.y) / Math.hypot(v.x, v.y)) * 180) / Math.PI;
+  return (Math.acos(Math.max(-1, Math.min(1, (u.x * v.x + u.y * v.y) / Math.hypot(u.x, u.y) / Math.hypot(v.x, v.y)))) * 180) / Math.PI;
 };
 const side = (p: { x: number; y: number }[], a: number, b: number, c: number) => Math.sign((p[b].x - p[a].x) * (p[c].y - p[a].y) - (p[b].y - p[a].y) * (p[c].x - p[a].x));
 const ringOf = (n: number): DrawnBond[] => Array.from({ length: n }, (_, i) => ({ a: i, b: (i + 1) % n, order: 1 }));
@@ -189,5 +189,15 @@ describe("a structure as drawn, made regular with its arrangement kept", () => {
     expect(angleAt(p, 0, 1, 3)).toBeCloseTo(120, 4);
     expect(side(p, 0, 1, 2)).toBe(side(drawn, 0, 1, 2));
     expect(side(p, 0, 1, 3)).toBe(side(drawn, 0, 1, 3));
+  });
+
+  it("a double bond's end drawn straight - its way round not given - stays straight, and gains no E or Z", () => {
+    // (CH3-CH=CH-CH3 drawn with its ends nearly in line with the double bond)
+    const drawn = [C(0, 0.1), C(L, 0), C(2 * L, 0), C(3 * L, -0.1)];
+    const bonds = [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 2 }, { a: 2, b: 3, order: 1 }];
+    const p = regularised(drawn, bonds, L)!;
+    expect(p).not.toBeNull();
+    expect(angleAt(p, 0, 1, 2)).toBeCloseTo(180, 4);
+    expect(angleAt(p, 1, 2, 3)).toBeCloseTo(180, 4);
   });
 });
