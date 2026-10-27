@@ -374,8 +374,11 @@ uv, no package), and the script Blender runs, `render.py`.
   so the seam does not show. Each motion is timed in a length of its own
   (Reveal 7 s, Pulse 6, Assemble 8, Scan 7, Dissolve 7) and a film of
   another length plays it all, faster or slower; a loop is timed in the
-  film's length. A motion renders on the graphics processor wherever
-  Blender has one, unless the processor is asked for.
+  film's length. A motion chooses where it renders as a picture does
+  (*Where it renders*): on Automatic, the faster here, as timed once and
+  kept - never the graphics processor only for being there, which on a
+  computer whose graphics processor is slower than its processor (an
+  integrated one, say) renders slower.
 - **Where it renders** (2026-10-16, the maintainer): a three-way choice,
   *Render on*: **Automatic (the faster one)**, the default; **Graphics
   processor**; **Processor**. Automatic times the two once on this

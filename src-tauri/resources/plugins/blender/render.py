@@ -298,7 +298,8 @@ def faster_is_gpu(scene, s):
     chosen = "gpu" if gpu < cpu else "cpu"
     say(f"Processor {cpu:.1f} s, graphics processor {gpu:.1f} s: the {'graphics processor' if chosen == 'gpu' else 'processor'} is faster")
     if path:
-        known[key] = {"device": chosen, "cpu": round(cpu, 2), "gpu": round(gpu, 2)}
+        # (the times kept to a tenth of a millisecond: a small picture's can take less than a hundredth of a second)
+        known[key] = {"device": chosen, "cpu": round(cpu, 4), "gpu": round(gpu, 4)}
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
@@ -619,10 +620,9 @@ def motion_film(s, meno, folder):
     with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
         exec(compile(f.read(), "studio.py", "exec"), space)
     scene = bpy.context.scene
-    # (where it renders, now that the studio has reset Blender: the graphics processor, unless asked for the processor or none)
-    gpu = s["device"] != "cpu" and gpu_ready()
-    scene.cycles.device = "GPU" if gpu else "CPU"
-    say("Rendering on the graphics processor" if gpu else ("Rendering on the processor" if s["device"] == "cpu" else FELL_BACK))
+    # (where it renders, now that the studio has reset Blender: decided as a picture's is - asked for, or, left to choose, the
+    # faster here, as timed once and kept - and said in the log, which the card reads)
+    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
     progress = Progress(n)
     bpy.app.handlers.render_pre.append(progress.begin_frame)
     bpy.app.handlers.render_stats.append(progress.stats)
