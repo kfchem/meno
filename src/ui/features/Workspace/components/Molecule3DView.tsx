@@ -21,7 +21,8 @@ import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
 import Frames3D from "./Frames3D";
 import { STACK_SWAP_MS } from "../utils/stacks";
 import Overlay3D from "./Overlay3D";
-import StereoText from "./StereoText";
+import StereoInk3D, { type StereoInk } from "./StereoInk3D";
+import type { LayoutOptions } from "../../../../lib/chem/layout2d";
 import { calcLine } from "../../../../lib/calc/output";
 import { isMarked, pairValue, resultsOn, valueText } from "../../../../lib/calc/results";
 import { cardGroupsOf } from "../../../../lib/calc/sources";
@@ -117,8 +118,6 @@ const ATOM_SWELL = 1.1;
  * A stereocentre's label: where it stands before it is first placed, the
  * white round its letters, and the room between it and its atom's ball.
  */
-const STEREO_OFFSET = "translate(0.95em, -0.95em)";
-const STEREO_HALO = "0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff";
 /** How quickly the numbers on the balls come and go, in seconds. */
 const NUMBERS_TAU = 0.08;
 /** The most atoms a molecule has for its numbers to be placed clear of the balls in front: past it, each in its ball's middle. */
@@ -221,7 +220,7 @@ export type Molecule3DViewProps = {
    * page or on the screen; in its typeface; in parentheses or not; and how
    * far off its ball, as a share of the drawing's label size.
    */
-  stereoFont: { size: number; units: "world" | "px"; family: string; parentheses: boolean; gap: number };
+  stereoFont: { size: number; units: "world" | "px"; family: string; parentheses: boolean; gap: number; opts?: LayoutOptions };
   /** The numbers shown on its atoms: of what kind, and on which (utils/atomNumbers); none, none. */
   atomNumbers?: AtomNumbersShown | null;
   onRisen?: () => void;
@@ -541,7 +540,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const stereoFades = useRef(new Map<string, LabelFade>());
   // (frames waited for the labels shown together to be there)
   const stereoWaited = useRef(0);
-  const stereoAnchors = useRef(new Map<string, { anchor: THREE.Group | null; el: HTMLDivElement | null }>());
+  const stereoAnchors = useRef(new Map<string, { anchor: THREE.Group | null; ink: StereoInk | null }>());
   // (where each stereo label stands about its atom as last drawn, which it glides on from: spotFollowed)
   const stereoSpots = useRef(new Map<string, SpotAbout>());
   useEffect(() => {
@@ -1460,7 +1459,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       // label's element is made a frame or so after the label is asked for)
       const allThere = stereoNow.current.every(({ item }) => {
         const l = stereoAnchors.current.get(item.key);
-        return !!l?.anchor?.parent && !!l.el;
+        return !!l?.anchor?.parent && !!l.ink;
       });
       if (allThere) stereoWaited.current = 0;
       else if (stereoWaited.current++ < STEREO_WAIT_FRAMES) moving = true;
@@ -1472,12 +1471,13 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         for (const i of mark.atoms) at.add(v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
         at.divideScalar(mark.atoms.length);
         const parent = l.anchor.parent;
-        if (!l.el || !parent) continue;
+        const ink = l.ink;
+        if (!ink || !parent) continue;
         // (faded in, or out - in the same time either way, eased)
         let fade = stereoFades.current.get(mark.key);
         if (!fade) stereoFades.current.set(mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
         if (fadeStep(fade, leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
-        l.el.style.opacity = String(risen.current * fade.v * seenAtZoom);
+        const opacity = risen.current * fade.v * seenAtZoom;
         parent.updateWorldMatrix(true, false);
         if (!balls) {
           balls = [];
@@ -1510,8 +1510,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         // (the next keeps a little way off it, not just clear: two side by
         // side read as one, and as either atom's)
         placedLabels.push({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
-        l.el.style.transform = `translate(${(spot.x - o.x).toFixed(1)}px, ${(spot.y - o.y).toFixed(1)}px)`;
-        l.el.style.fontSize = `${font.toFixed(1)}px`;
+        ink.place(spot, font, opacity);
       }
     }
     // (the fades of those gone, forgotten)
@@ -1957,24 +1956,22 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           <group
             key={mark.key}
             ref={(g) => {
-              const l = stereoAnchors.current.get(mark.key) ?? { anchor: null, el: null };
+              const l = stereoAnchors.current.get(mark.key) ?? { anchor: null, ink: null };
               l.anchor = g;
               stereoAnchors.current.set(mark.key, l);
             }}
           >
-            <PageHtml center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
-              <div
-                ref={(el) => {
-                  const l = stereoAnchors.current.get(mark.key) ?? { anchor: null, el: null };
-                  l.el = el;
+            {props.stereoFont.opts && (
+              <StereoInk3D
+                text={mark.text}
+                opts={props.stereoFont.opts}
+                ink={(ink) => {
+                  const l = stereoAnchors.current.get(mark.key) ?? { anchor: null, ink: null };
+                  l.ink = ink;
                   stereoAnchors.current.set(mark.key, l);
                 }}
-                className="pointer-events-none select-none whitespace-nowrap text-accel-blue text-[12px] leading-none"
-                style={{ opacity: 0, transform: STEREO_OFFSET, textShadow: STEREO_HALO, fontFamily: props.stereoFont.family }}
-              >
-                <StereoText cip={mark.text} parentheses={props.stereoFont.parentheses} />
-              </div>
-            </PageHtml>
+              />
+            )}
           </group>
         ))}
       </group>

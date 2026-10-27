@@ -96,6 +96,29 @@ const HAIR = 0.2;
  */
 const LONE_PAIR_CENTRES = new Set(["S", "Se", "Te", "P", "As", "Sb"]);
 
+/**
+ * How near two bonds' directions are taken to be one line, either way - in
+ * line, or on top of each other: 10 degrees. IUPAC 2006 (Brecher, Pure Appl.
+ * Chem. 78, 1897), ST-0.1: "linear" is "forming an angle between 170° and
+ * 190°", and "two bonds that look nearly collinear should be treated as
+ * exactly collinear". Drawn so, a centre's bonds state no configuration -
+ * two of three in line are a T (ST-1.2.12: "T-shaped configurations rather
+ * than tetrahedral ones"), two on top of each other cannot be told apart -
+ * and a double bond's group straight on from it states neither cis nor
+ * trans (ST-4.4, the linear depiction of a double bond of unspecified
+ * configuration).
+ */
+export const IN_LINE = (10 * Math.PI) / 180;
+
+/** How far apart two directions are, 0 to pi. */
+const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u)));
+
+/** Whether a centre drawn flat with three bonds, its H left out, has two of them in line or on top of each other (`IN_LINE`). */
+function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y: number }[]): boolean {
+  const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
+  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || apart(u, w) > Math.PI - IN_LINE)));
+}
+
 export function readStereo(
   atoms: readonly DrawnAtom[],
   bonds: readonly DrawnBond[],
@@ -123,8 +146,11 @@ export function readStereo(
       if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
       const wedged = around.some((n) => lift(c, n) !== 0);
       if (!wedged && !atom.centre) return;
+      const inSpace = atom.centre && atom.z != null;
+      // (drawn flat, its H left out, two of its bonds in line or on top of each other: no configuration stated)
+      if (!inSpace && atom.hs === 1 && twoInLine(atom, around.map((n) => atoms[n]))) return;
       const order = atom.hs ? [...around, -1] : around;
-      const volume = atom.centre && atom.z != null ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
+      const volume = inSpace ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
       const v =
         volume ||
         drawnVolume(
@@ -161,8 +187,11 @@ export function readStereo(
   bonds.forEach((bond, i) => {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
     const { a, b } = bond;
-    const ra = neighbours[a].find((n) => n !== b);
-    const rb = neighbours[b].find((n) => n !== a);
+    // (each end's group read off the bond's line: one straight on from it, within IN_LINE, states neither cis nor trans)
+    const straightOn = (end: number, other: number, n: number) =>
+      apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
+    const ra = neighbours[a].find((n) => n !== b && !straightOn(a, b, n));
+    const rb = neighbours[b].find((n) => n !== a && !straightOn(b, a, n));
     if (ra == null || rb == null || inSmallRing(neighbours, a, b)) return;
     // (an end with a second double bond, or a triple one - an azide's
     // middle N, an allene's middle C - is straight through, and the bond

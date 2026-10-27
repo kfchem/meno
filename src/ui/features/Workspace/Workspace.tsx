@@ -3,6 +3,7 @@ import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
+import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
@@ -81,7 +82,8 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import SizeCard from "./SizeCard";
+import WordsCard from "./WordsCard";
+import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
@@ -127,7 +129,7 @@ import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { cleanUp, fragmentOf } from "./chem/cleanUp";
@@ -201,7 +203,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
@@ -517,7 +519,9 @@ function WorkspaceContent({
         });
         for (const block of blocks) {
           if (stopped) return;
-          const isomersMade = await conformersOf(chem, block, isomers, options);
+          // (within the window Settings gives: a workflow's conformer step keeps every one - make3d withinWindow)
+          const window3d = useAppSettings.getState().chemistry.window3d ?? WINDOW_3D;
+          const isomersMade = (await conformersOf(chem, block, isomers, options)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -684,7 +688,7 @@ function WorkspaceContent({
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
+  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -968,7 +972,7 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setSizeCard(null);
+    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1460,7 +1464,7 @@ function WorkspaceContent({
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
   const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
-  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
+  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "font" | "lines" | "marks">>): { y?: number } => {
     if (!c.width || c.arrow != null) return {};
     const set = labelSetOf(layoutOpts);
     const top = c.y + wordsSet(c, layoutOpts, set).halfH;
@@ -1472,6 +1476,30 @@ function WorkspaceContent({
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
   };
+  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
+  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
+    const a = clientToWorld(0, 0);
+    const b = clientToWorld(100, 100);
+    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
+    const kx = 100 / (b.x - a.x);
+    const ky = 100 / (a.y - b.y);
+    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
+    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
+    return cardBeside(target, WORDS_CARD, menu.within);
+  };
+  // (their lines as far apart as asked - single, none of their own)
+  const spaceWords = (id: number, lines: number | null) => {
+    const st = store.getState();
+    const c = st.captions.find((x) => x.id === id);
+    if (c) st.updateCaption(id, { lines, ...keepTop(c, { lines: lines ?? undefined }) });
+  };
+  // (in a typeface of their own - none, the drawing's - once its letters are read: set in it at once, not in another first)
+  const faceWords = (id: number, font: string | null) =>
+    void typefaceRead(font ?? style.fontFamily).then(() => {
+      const st = store.getState();
+      const c = st.captions.find((x) => x.id === id);
+      if (c) st.updateCaption(id, { font, ...keepTop(c, { font: font ?? undefined }) });
+    });
   const [startZoom] = useState(() => startingZoom(style));
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
@@ -1965,16 +1993,19 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {sizeCard && (
-          <SizeCard
-            key={`${sizeCard.x},${sizeCard.y}`}
-            now={store.getState().captions.find((c) => c.id === sizeCard.id)?.size ?? null}
+        {wordsCard && (
+          <WordsCard
+            key={`${wordsCard.x},${wordsCard.y}`}
+            id={wordsCard.id}
             label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            onSize={(pt) => sizeWords(sizeCard.id, pt)}
-            x={sizeCard.x}
-            y={sizeCard.y}
-            within={sizeCard.within}
-            onClose={() => setSizeCard(null)}
+            drawing={style.fontFamily}
+            onSize={(pt) => sizeWords(wordsCard.id, pt)}
+            onLines={(lines) => spaceWords(wordsCard.id, lines)}
+            onFont={(font) => faceWords(wordsCard.id, font)}
+            x={wordsCard.x}
+            y={wordsCard.y}
+            within={wordsCard.within}
+            onClose={() => setWordsCard(null)}
           />
         )}
       </AnimatePresence>
@@ -2137,7 +2168,7 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onSize: () => setSizeCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
+              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),

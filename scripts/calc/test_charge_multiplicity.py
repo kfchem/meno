@@ -229,7 +229,7 @@ class Orca(unittest.TestCase):
     def test_what_it_reads_back_is_for_meno_s_readers_and_says_none_of_its_own(self):
         # (ORCA prints the charge and multiplicity it was given; Meno's readers read them from its output)
         for given in sets():
-            read = ask(orca, "collect", step="energy", entries=given, options={}, files={}, log="ORCA output", ended="done")["read"]
+            read = ask(orca, "collect", step="energy", entries=given, options={}, files={}, log="ORCA output\n****ORCA TERMINATED NORMALLY****\n", ended="done")["read"]
             self.assertEqual(len(read), len(given))
             self.assertTrue(all("charge" not in r and "multiplicity" not in r for r in read))
 

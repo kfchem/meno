@@ -140,6 +140,14 @@ type TextsProps = {
   arriving?: ReadonlySet<string>;
   /** How opaque all of them are, read at each frame: a label being written as it comes and goes (LabelTyping2D). */
   opacity?: { readonly current: number };
+  /** The typeface they are set in, where it is not the labels': words on the page given one of their own (Captions2D). */
+  family?: string;
+};
+
+/** How texts given `family` are set: as the labels are, in it. */
+const setIn = (opts: Parameters<typeof labelSetOf>[0], family: string | undefined) => {
+  const set = labelSetOf(opts);
+  return family ? { ...set, fontFamily: family } : set;
 };
 
 export function Texts2D(props: TextsProps) {
@@ -160,6 +168,7 @@ function EachText2D({
   onDrawn,
   keyOf,
   leaving,
+  family: own,
 }: TextsProps) {
   const { opts } = useDrawnLayout();
 
@@ -167,7 +176,7 @@ function EachText2D({
   // font the layout measures in is the one drawn with, so nothing needs
   // measuring here. Until the font is known nothing is drawn, rather than a
   // label in some other font that then jumps.
-  const family = opts.fontFamily ?? "Arial";
+  const family = own ?? opts.fontFamily ?? "Arial";
   // (a letter no typeface of Meno's has drawn as a white square - as the layout measured it: lib/chem/labelFonts `STAND_IN`)
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
   const font = useLabelFontUrl(family, fallback);
@@ -241,7 +250,7 @@ function EachText2D({
   const made = useRef<{ under: unknown[]; texts: WeakMap<TextItem, { key: string; label: ReactElement }> }>({ under: [], texts: new WeakMap() });
   const labels = useMemo(() => {
     if (font === null) return null;
-    const set = labelSetOf(opts);
+    const set = setIn(opts, own);
     const glyphs = labelFont(set.fontFamily);
     const fill = shadow || moved ? 0 : seen.current.level;
     const under = [opts, labelZoom, labelColor, font, moved, shadow, renderOrder, fill];
@@ -286,7 +295,7 @@ function EachText2D({
       return label;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
-  }, [items, opts, labelZoom, labelColor, font, moved, shadow, renderOrder]);
+  }, [items, opts, own, labelZoom, labelColor, font, moved, shadow, renderOrder]);
   if (font === null) return null;
   return <group ref={group}>{labels}</group>;
 }
@@ -297,9 +306,9 @@ function EachText2D({
  * while it is the same item, faded in as the font comes, told when drawn -
  * as `EachText2D` draws them one by one.
  */
-function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving, opacity }: TextsProps) {
+function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving, opacity, family: own }: TextsProps) {
   const { opts } = useDrawnLayout();
-  const family = opts.fontFamily ?? "Arial";
+  const family = own ?? opts.fontFamily ?? "Arial";
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
   const font = useLabelFontUrl(family, fallback);
   const seen = useRef<{ font: string | null; level: number }>({ font: null, level: 0 });
@@ -317,7 +326,7 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
   useLayoutEffect(() => {
     const b = batch;
     if (!b) return;
-    const set = labelSetOf(opts);
+    const set = setIn(opts, own);
     const glyphs = labelFont(set.fontFamily);
     // (what every label is drawn by: all of them set again where it changes)
     const now = [opts, labelZoom, labelColor, b];
@@ -343,7 +352,7 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
     b.keepOnly(keep);
     invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
-  }, [items, opts, labelZoom, labelColor, batch, invalidate]);
+  }, [items, opts, own, labelZoom, labelColor, batch, invalidate]);
   // (told once every letter is set - after the batch has set them)
   useLayoutEffect(() => {
     const b = batch;
@@ -431,6 +440,7 @@ export function WholeTexts2D({
   onDrawn,
   renderOrder,
   opacity,
+  family,
 }: {
   texts: readonly TextItem[];
   fadeIn?: boolean;
@@ -438,6 +448,8 @@ export function WholeTexts2D({
   renderOrder?: number;
   /** How opaque they are, read at each frame (Texts2D `opacity`). */
   opacity?: { readonly current: number };
+  /** Their own typeface, where it is not the labels' (Texts2D `family`). */
+  family?: string;
 }) {
   // (two sets, one shown and one being set - each set made anew, so that it waits in its own Suspense - and the latest, to be set next: textSets)
   const sets = useRef(noTextSets<readonly TextItem[]>());
@@ -461,7 +473,7 @@ export function WholeTexts2D({
         return (
           <Suspense key={i} fallback={null}>
             <group visible={i === s.front}>
-              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} opacity={opacity} />
+              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} opacity={opacity} family={family} />
             </group>
           </Suspense>
         );

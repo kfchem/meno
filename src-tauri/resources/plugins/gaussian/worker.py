@@ -333,11 +333,19 @@ def why_of(output):
     return f"Gaussian stopped without saying why, after: {lines[-1]}" if lines else "Gaussian said nothing"
 
 
+def ended_well(output):
+    """Whether Gaussian says it ended well: its last word on how it ended is "Normal termination" - never an "Error
+    termination" after it, nor none at all. Its exit code alone is not taken for it: a run done is read only where its
+    output says it is."""
+    ends = [line.strip() for line in (output or "").splitlines() if line.strip().startswith(("Normal termination", "Error termination"))]
+    return bool(ends) and ends[-1].startswith("Normal termination")
+
+
 def op_collect(m):
     if m.get("step") not in STEP_JOBS:
         raise Refused(f"this plugin does no {m.get('step')!r}")
     output = m.get("log") or ""
-    if m.get("ended") != "done" or not output.strip():
+    if m.get("ended") != "done" or not ended_well(output):
         return {"why": why_of(output)}
     # (its wavefunction, where it wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})

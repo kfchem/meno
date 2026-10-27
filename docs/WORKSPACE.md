@@ -491,6 +491,16 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, lowest
   first. Of two enantiomers, one is made as the other's mirror image, so
   the two have the same conformers and shares.
+- **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
+  lowest are kept; those above are set aside. The window is set in
+  Settings, *Chemistry*, under *3D*, and is said with how they were made
+  (*Energy window*, with how many it set aside). A force field can trap a
+  ring in a minimum far above the rest: the MMFF94 search of cyclooctane
+  finds two some 66 and 77 kcal/mol up, which nobody drawing a structure
+  asks for. Nothing else is filtered out of what the plugin gives. Without
+  energies, none is set aside, and that is said. A workflow's *Conformers*
+  step keeps every one; there, only an *Energy window* step sets any aside
+  ([WORKFLOWS.md](WORKFLOWS.md)).
 - **A metal's bonds hold** (2026-10-17). A bond drawn to a d- or f-block
   metal is embedded at its covalent length (Pyykkö's radii, as Meno's own)
   with the metal's ligands kept apart where that is sound (PLUGINS.md, *A
@@ -951,6 +961,14 @@ molecules in 3D.
   again. A workspace opened in a style of its own - someone else's, or
   saved in another - is never asked for that alone: only a change made in
   Settings while it is open asks (`styleOffer.ts`, `SettingsStyleAsk`).
+- **Taken from its Styles card** (the maintainer, 2026-10-27). Wherever a
+  workspace's styles differ from Settings' - its drawing style, or its 3D
+  styles in their roles - its *Styles…* card shows *Use Settings' styles*
+  under its words, coming and going eased as they differ or not. It does
+  what *Apply to this workspace* does: those that differ taken as one step
+  to undo, eased. A workspace opened in another style is offered it too:
+  the card is opened to change its styles (`settingsDiffer`,
+  `DocumentStylePanel`).
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the

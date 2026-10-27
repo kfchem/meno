@@ -4,7 +4,11 @@ import { selectedOf } from "./slices/selectionSlice";
 import { createWorkspaceDocument, isBlankDocument } from "../document";
 import { centredAt, readRecord, recordText, schemeAmong } from "../utils/copyPaste";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { drawingSvg, drawnOf } from "../fileActions";
+import { drawingLayout, drawingSvg, drawnOf } from "../fileActions";
+import { emfRecords, layoutEmf } from "../../../../lib/chem/emf";
+import { CAPTION_LINE, wordsSet } from "../../../../lib/chem/captions";
+import { editorLayoutOptions } from "../layoutOptions";
+import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { ACS_1996 } from "../../../../lib/chem/style";
 
 function editor() {
@@ -245,5 +249,68 @@ describe("words given a size of their own and letters marked (docs/EDITOR-2D.md,
     expect(big.attrs).toMatch(/font-weight="bold"/);
     expect(big.attrs).toMatch(/fill="#cd4560"/);
     expect(texts.find((t) => t.text === "ig")!.attrs).not.toMatch(/bold/);
+  });
+});
+
+describe("words given a line spacing and a typeface of their own (docs/EDITOR-2D.md, Text)", () => {
+  it("keep them - each one step, none again the drawing's - saved, copied and read back, what does not read left out", () => {
+    const { doc, state } = editor();
+    const id = state().addCaption("One\nTwo", 0, 0);
+    state().updateCaption(id, { lines: 1.5 });
+    expect(doc.history().undoLabel).toBe("change line spacing");
+    state().updateCaption(id, { font: "Georgia" });
+    expect(doc.history().undoLabel).toBe("change typeface");
+    expect(state().captions[0]).toMatchObject({ lines: 1.5, font: "Georgia" });
+    const back = readWorkspace(workspaceText(state()))!.drawn.captions![0];
+    expect(back).toMatchObject({ lines: 1.5, font: "Georgia" });
+    expect(readRecord(recordText({ atoms: [], bonds: [], captions: state().captions }))!.captions![0]).toMatchObject({ lines: 1.5, font: "Georgia" });
+    doc.undo();
+    expect("font" in state().captions[0]).toBe(false);
+    state().updateCaption(id, { lines: null });
+    expect("lines" in state().captions[0]).toBe(false);
+    // (single spacing is none of its own)
+    state().updateCaption(id, { lines: 1 });
+    expect("lines" in state().captions[0]).toBe(false);
+    // (a name no typeface has - markup in it - and a spacing out of reason: left out)
+    const odd = readRecord(JSON.stringify({ format: "meno-structure", version: 1, atoms: [], bonds: [], captions: [{ id: 1, x: 0, y: 0, text: "abc", font: 'Arial"/><script>', lines: 40 }, { id: 2, x: 0, y: 5, text: "d", font: "Times New Roman", lines: 2 }] }))!;
+    expect(odd.captions![0]).toEqual({ id: 1, x: 0, y: 0, text: "abc" });
+    expect(odd.captions![1]).toMatchObject({ font: "Times New Roman", lines: 2 });
+  });
+
+  it("are set with their lines as far apart as their spacing says, a box keeping its top", () => {
+    const opts = editorLayoutOptions(ACS_1996);
+    const set = labelSetOf(opts);
+    const ys = (lines?: number) => wordsSet({ text: "One\nTwo\nThree", x: 0, y: 0, lines }, opts, set).items.map((t) => t.y);
+    const single = ys();
+    expect(single[0] - single[1]).toBeCloseTo(opts.fontPx * CAPTION_LINE, 6);
+    const double = ys(2);
+    expect(double[0] - double[1]).toBeCloseTo(2 * opts.fontPx * CAPTION_LINE, 6);
+    expect(double[1] - double[2]).toBeCloseTo(2 * opts.fontPx * CAPTION_LINE, 6);
+    // (about its middle: the middle line where it was)
+    expect(double[1]).toBeCloseTo(single[1], 6);
+  });
+
+  it("are written in pictures in their own typeface, the rest in the drawing's", () => {
+    const captions = [{ id: 1, x: 0, y: 0, text: "Own", font: "Georgia" }, { id: 2, x: 0, y: -10, text: "Drawing" }];
+    const svg = drawingSvg({ atoms: [], bonds: [], captions }, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
+    const family = (text: string) => new RegExp(`<text[^>]*font-family="([^"]+)"[^>]*>${text}</text>`).exec(svg)?.[1] ?? "";
+    expect(family("Own")).toMatch(/^Georgia/);
+    expect(family("Drawing")).toMatch(/^Arial/);
+    // (EMF: a font of its own, by its name - EXTCREATEFONTINDIRECTW's face name)
+    const drawn = drawingLayout({ atoms: [], bonds: [], captions }, { aromaticEnabled: false, aromaticRings: {} }, ACS_1996);
+    const faces = emfRecords(layoutEmf(drawn.layout, drawn.opts).emf)!
+      .filter((r) => r.type === 82)
+      .map((r) => {
+        const v = new DataView(r.body.buffer, r.body.byteOffset, r.body.byteLength);
+        let name = "";
+        for (let i = 32; i < 96; i += 2) {
+          const u = v.getUint16(i, true);
+          if (!u) break;
+          name += String.fromCharCode(u);
+        }
+        return name;
+      });
+    expect(faces).toContain("Georgia");
+    expect(faces).toContain("Arial");
   });
 });

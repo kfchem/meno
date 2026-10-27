@@ -1,10 +1,8 @@
-import * as THREE from "three";
 import PageHtml from "./PageHtml";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
-  fontStack,
   labelBox,
   labelSetOf,
   type Atom as LAtom,
@@ -19,6 +17,7 @@ import {
   marksSeenAt,
   stereoPlaces,
   stereoTextEms,
+  stereoTextItem,
   valenceMessage,
   type ChemMarks,
 } from "../chem/marks";
@@ -26,8 +25,9 @@ import { useEditor } from "../store";
 import type { Model } from "../store/types";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
-import StereoText from "./StereoText";
 import { MarkHold } from "./MarkHold2D";
+import MarkBoxes2D from "./MarkBoxes2D";
+import { Texts2D } from "./Labels2D";
 import { usePageHtmlLayer } from "./coverLayer";
 import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
 
@@ -35,8 +35,10 @@ import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
 const NO_ATOMS = new Map<number, LAtom>();
 const NO_MODEL: Model = { atoms: [], bonds: [] };
 
-/** Marks sit over the drawing, and under the canvas's buttons and cards. */
+/** A mark's words sit over the drawing, and under the canvas's buttons and cards. */
 const Z_RANGE = [20, 10];
+/** R, S, E and Z over the drawing's bonds and labels, under the marks' boxes. */
+const STEREO_ORDER = 35;
 
 
 
@@ -47,9 +49,12 @@ const Z_RANGE = [20, 10];
  * R, S, E and Z beside stereocentres and double bonds, each placed clear of
  * the bonds and labels, and written as the drawing's labels are - in its
  * typeface and its colour, in italics, in parentheses if its style says
- * so. They are the editor's, laid over the drawing where it stands this
- * frame; a picture of the drawing has R, S, E and Z placed as here
- * (chem/marks `stereoPictureItems`, 2026-10-21), never the rings.
+ * so. They are the editor's, drawn by WebGL with the page - never lagging
+ * a pan or a zoom (the maintainer, 2026-10-27; docs/LOOK.md) - over the
+ * drawing where it stands this frame; only what a box says, while it is
+ * pointed at, is HTML. A picture of the drawing has R, S, E and Z placed
+ * and written as here (chem/marks `stereoPictureItems`, `stereoTextItem`,
+ * 2026-10-21), never the rings.
  */
 export default function ChemMarks2D({
   marks,
@@ -125,7 +130,6 @@ export default function ChemMarks2D({
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
-  const writing = { family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"), color: opts.labelColor ?? "#000000" };
 
   // R, S, E and Z, each placed clear of the bonds, the labels and the
   // marks placed before it
@@ -183,8 +187,9 @@ export default function ChemMarks2D({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fontPx, z: as far as they make markSize
   }, [marks, drawn, boxes, markSize, parentheses, labelFont, gap, fixed]);
 
-  // Each mark where it goes: a valence problem's box round its atom's label
-  // (or a ring round its atom), and the stereodescriptors.
+  // Each mark where it goes, in the page's units: a valence problem's box
+  // round its atom's label (or a ring round its atom), and the
+  // stereodescriptors.
   const boxesOf: { key: string; id: number; x: number; y: number; w: number; h: number; round: boolean; message: string; bond?: boolean; dashed?: boolean }[] = [];
   for (const [id, problem] of marks ? [...marks.valence] : []) {
     const a = at.get(id);
@@ -199,8 +204,8 @@ export default function ChemMarks2D({
       id,
       x: a.x + (r.right - r.left) / 2,
       y: a.y + (r.top - r.bottom) / 2,
-      w: (r.left + r.right) * z,
-      h: (r.top + r.bottom) * z,
+      w: r.left + r.right,
+      h: r.top + r.bottom,
       round: !box,
       // (read from a figure and unsure there too: said after - the one mark says both)
       message: [valenceMessage(a.el, problem), read?.atoms.get(id)].filter(Boolean).join(" "),
@@ -227,8 +232,8 @@ export default function ChemMarks2D({
       id,
       x: a.x + (r.right - r.left) / 2,
       y: a.y + (r.top - r.bottom) / 2,
-      w: (r.left + r.right) * z,
-      h: (r.top + r.bottom) * z,
+      w: r.left + r.right,
+      h: r.top + r.bottom,
       round: !box,
       message: said,
       dashed: true,
@@ -240,7 +245,7 @@ export default function ChemMarks2D({
     const p = b && at.get(b.a);
     const q = b && at.get(b.b);
     if (!p || !q) continue;
-    const d = 0.6 * labelFont * z;
+    const d = 0.6 * labelFont;
     boxesOf.push({
       key: `unsure-bond-${id}`,
       id,
@@ -259,44 +264,30 @@ export default function ChemMarks2D({
   const valenceShown = usePresence(boxesOf, (m) => m.key);
   const stereoShown = usePresence(marks ? stereo : [], (m) => m.key);
 
-  // R, S, E and Z, all in one layer over the canvas, each moved to where its
-  // point is seen as the view moves: a layer of its own for each - its own
-  // root, moved by its own frame callback - made a structure of thousands
-  // of stereocentres take seconds to show them. Each sits where a layer of
-  // its own put it: its middle on its point (as Html's `center` does).
-  const camera = useThree((s) => s.camera);
-  const size = useThree((s) => s.size);
-  const markEls = useRef(new Map<string, HTMLDivElement>());
-  const shownNow = useRef(stereoShown);
-  shownNow.current = stereoShown;
-  const seenFrom = useRef("");
-  const seen = (x: number, y: number) => {
-    const v = new THREE.Vector3(x, y, 0).project(camera);
-    return [v.x * (size.width / 2) + size.width / 2, -(v.y * (size.height / 2)) + size.height / 2];
-  };
-  const placeOne = (el: HTMLDivElement, m: { x: number; y: number }, [ox, oy] = seen(0, 0)) => {
-    const [x, y] = seen(m.x, m.y);
-    el.style.transform = `translate3d(${x - ox}px,${y - oy}px,0) translate3d(-50%,-50%,0)`;
-  };
-  const placeAll = () => {
-    camera.updateMatrixWorld();
-    const origin = seen(0, 0);
-    for (const { key, item: m } of shownNow.current) {
-      const el = markEls.current.get(key);
-      if (el) placeOne(el, m, origin);
-    }
-  };
-  useFrame(() => {
-    // (only when the view has moved; what is shown changing is seen to below)
-    const view = `${camera.projectionMatrix.elements.join()},${camera.matrixWorld.elements.join()},${size.width},${size.height}`;
-    if (view === seenFrom.current) return;
-    seenFrom.current = view;
-    placeAll();
-  });
-  useEffect(() => {
-    placeAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- placeAll: the view as it is now
-  }, [stereoShown]);
+  // R, S, E and Z as texts on the page, each its middle where it is placed,
+  // as large as the drawing's labels times MARK_SCALE (or MARK_MIN_PX on the
+  // screen): set as a label is, in the units the labels are set in
+  const stereoKeys = stereoShown.map((s) => s.key);
+  const stereoTexts = useMemo(
+    () => stereoShown.map(({ item: m }) => stereoTextItem(m, fontPx / z, opts, opts.units === "px" ? fontPx : fontPx / z)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fontPx, z: as far as they make markSize
+    [stereoShown, markSize, opts],
+  );
+  const stereoLeaving = useMemo(() => new Set(stereoShown.filter((s) => s.leaving).map((s) => s.key)), [stereoShown]);
+  // (one new since the last set fades in; the rest are set again as they are, at once)
+  const stereoWere = useRef(new Set<string>());
+  const stereoArriving = useMemo(() => {
+    const now = new Set(stereoKeys.filter((k) => !stereoWere.current.has(k) && !stereoLeaving.has(k)));
+    stereoWere.current = new Set(stereoKeys);
+    return now;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stereoKeys: as stereoShown
+  }, [stereoShown, stereoLeaving]);
+  // (and, the view far out, faded with the zoom: marksSeenAt)
+  const stereoSeen = useRef(seenAtZoom);
+  stereoSeen.current = seenAtZoom;
+  const boxesLeaving = useMemo(() => new Set(valenceShown.filter((s) => s.leaving).map((s) => s.key)), [valenceShown]);
+  const boxesNow = useMemo(() => valenceShown.map(({ item }) => item), [valenceShown]);
+  const pointed = valenceShown.find(({ item: m, leaving }) => !leaving && (m.bond ? hoveredBond === m.id : hoveredAtom === m.id))?.item;
   if (!valenceShown.length && !stereoShown.length) return null;
 
   return (
@@ -319,43 +310,25 @@ export default function ChemMarks2D({
           />
         );
       })}
-      {valenceShown.map(({ key, item: m, leaving }) => (
-        <PageHtml key={key} position={[m.x, m.y, 0]} center zIndexRange={Z_RANGE} style={{ pointerEvents: "none" }}>
-          <div
-            role="img"
-            aria-label={m.message}
-            className={"relative border-[1.5px] border-accel-accent " + (m.dashed ? "border-dashed " : "bg-accel-accent/10 ") + (leaving ? "meno-fade-out" : "meno-fade-in")}
-            style={{ width: m.w, height: m.h, borderRadius: m.round ? "50%" : 3 }}
-          >
-            {(m.bond ? hoveredBond === m.id : hoveredAtom === m.id) && !leaving && (
-              <MarkTip text={m.message} room={room} />
-            )}
+      {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
+      {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
+      {pointed && (
+        <PageHtml key={`tip-${pointed.key}`} position={[pointed.x, pointed.y, 0]} center zIndexRange={Z_RANGE} style={{ pointerEvents: "none" }}>
+          <div role="img" aria-label={pointed.message} className="relative" style={{ width: pointed.w * z, height: pointed.h * z }}>
+            <MarkTip text={pointed.message} room={room} />
           </div>
         </PageHtml>
-      ))}
-      {stereoShown.length > 0 && (
-        <PageHtml position={[0, 0, 0]} zIndexRange={Z_RANGE} style={{ pointerEvents: "none" }}>
-          {stereoShown.map(({ key, item: m, leaving }) => (
-            <div
-              key={key}
-              ref={(el) => {
-                if (!el) {
-                  markEls.current.delete(key);
-                  return;
-                }
-                markEls.current.set(key, el);
-                // (put where it goes as it comes: this layer is drawn by
-                // a root of its own, after this one's effects have run)
-                placeOne(el, m);
-              }}
-              style={{ position: "absolute", top: 0, left: 0, transform: "translate3d(-50%,-50%,0)", opacity: seenAtZoom }}
-            >
-              <div className={leaving ? "meno-fade-out" : "meno-fade-in"}>
-                <StereoMark text={m.text} fontPx={fontPx} parentheses={parentheses} {...writing} />
-              </div>
-            </div>
-          ))}
-        </PageHtml>
+      )}
+      {stereoTexts.length > 0 && (
+        <Texts2D
+          texts={stereoTexts}
+          renderOrder={STEREO_ORDER}
+          fade={false}
+          keyOf={(_, i) => stereoKeys[i]}
+          leaving={stereoLeaving}
+          arriving={stereoArriving}
+          opacity={stereoSeen}
+        />
       )}
     </group>
   );
@@ -383,14 +356,5 @@ function MarkTip({ text, room }: { text: string; room: () => ScreenBox }) {
     >
       {text}
     </div>
-  );
-}
-
-/** A stereodescriptor as the drawing writes it (StereoText), in its typeface and colour. */
-function StereoMark({ text, fontPx, parentheses, family, color }: { text: string; fontPx: number; parentheses: boolean; family: string; color: string }) {
-  return (
-    <span className="whitespace-nowrap select-none" style={{ fontSize: fontPx, lineHeight: 1, fontFamily: family, color }}>
-      <StereoText cip={text} parentheses={parentheses} />
-    </span>
   );
 }

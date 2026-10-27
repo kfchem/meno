@@ -111,6 +111,9 @@ export default function TypefacePicker({
                   e.preventDefault();
                   pick(flat[active]);
                 } else if (e.key === "Escape") {
+                  // (the list closed, not what it is in: a card round it)
+                  e.preventDefault();
+                  e.stopPropagation();
                   setOpen(false);
                 }
               }}
