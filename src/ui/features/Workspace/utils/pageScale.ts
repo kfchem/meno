@@ -32,19 +32,33 @@ export const wordsTooSmall = (zoom: number) => pageScale(zoom) < WORDS_LEAST;
 
 /**
  * How far either side of `WORDS_LEAST` words and what stands for them
- * fade, as a factor of the scale: words out from `WORDS_LEAST` × 1.15 to
- * `WORDS_LEAST`, what stands for them - a step's card's large icons - in
- * from there to `WORDS_LEAST` / 1.15; about four notches of a mouse wheel
- * in all (each e^(40 px × 0.0016) = 1.066 times - PanZoom2D), so that they
- * come and go with the zoom, never at once, and never both at once.
+ * fade, as a factor of the scale: from `WORDS_LEAST` × 1.15 down to
+ * `WORDS_LEAST` / 1.15, about four notches of a mouse wheel in all (each
+ * e^(40 px × 0.0016) = 1.066 times - PanZoom2D), so that they come and go
+ * with the zoom, never at once. Words go out over the whole band as what
+ * stands for them - a step's card's large icons - comes in over the same
+ * band (the maintainer, 2026-10-25: a zoom stopped in the band's middle
+ * left a card all but empty, the words gone and the icons not yet come).
  */
 export const WORDS_FADE = 1.15;
 
 /** How far through `WORDS_FADE`'s band from `WORDS_LEAST` the scale is at `zoom`, evenly in the zoom's own steps: 1 at its top, 0 at `WORDS_LEAST`, -1 at its foot, beyond them as far. */
 const throughFade = (zoom: number) => Math.log(pageScale(zoom) / WORDS_LEAST) / Math.log(WORDS_FADE);
 
-/** How much of the words of chips and cards on the page is shown at `zoom`, 0 to 1: all where they read, none where they are too small, faded with the zoom between (`WORDS_FADE`'s upper half). */
-export const wordsShown = (zoom: number): number => Math.min(1, Math.max(0, throughFade(zoom)));
+/** How far down the band the scale is at `zoom`: 0 at its top and above, 1 at its foot and below. */
+const downFade = (zoom: number) => Math.min(1, Math.max(0, (1 - throughFade(zoom)) / 2));
 
-/** How much of what stands for those words where they are too small - a step's card's large icons - is shown at `zoom`, 0 to 1: none while any of the words are, coming in with the zoom after (`WORDS_FADE`'s lower half). */
-export const standInShown = (zoom: number): number => Math.min(1, Math.max(0, -throughFade(zoom)));
+/**
+ * How much of the words of chips and cards on the page is shown at `zoom`,
+ * 0 to 1: all where they read, none where they are too small, faded with
+ * the zoom between, over the whole of `WORDS_FADE`'s band. Words and what
+ * stands for them (`standInShown`) cross over as a power-keeping cross-fade
+ * does - a quarter turn's cosine and sine, the squares of the two always
+ * one - so that, laid one over the other, together they are never less than
+ * 0.91 there (1 - (1 - words)(1 - stand-in), least at the band's middle,
+ * where each is 0.71).
+ */
+export const wordsShown = (zoom: number): number => Math.cos((Math.PI / 2) * downFade(zoom));
+
+/** How much of what stands for those words where they are too small - a step's card's large icons - is shown at `zoom`, 0 to 1: none where the words read, all where they are too small, coming in over the band as the words go (`wordsShown`). */
+export const standInShown = (zoom: number): number => Math.sin((Math.PI / 2) * downFade(zoom));

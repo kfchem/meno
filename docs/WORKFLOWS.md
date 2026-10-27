@@ -2691,12 +2691,18 @@ each entry's number, then its energy).
   only its words fade out, as a set's name and count do. A table and a
   number, all words, fade out whole. All of these, and a step's card's
   words, fade with the zoom, not at once: from fully shown at 1.15 times
-  the least scale words are read at to gone at that scale, about two
+  the least scale words are read at to gone at 1/1.15 of it, about four
   notches of a mouse wheel (utils/pageScale `wordsShown`, `--words` on the
   page's layer), as a molecule's chips do. A step's card's large icons,
-  which stand for its words where they are gone, come in only after, from
-  that scale to 1/1.15 of it (`standInShown`, `--stand-in`): the two are
-  never seen at once.
+  which stand for its words where they are gone, come in over the same
+  band (`standInShown`, `--stand-in`), so that a zoom stopped anywhere in
+  it leaves the card plainly there (the maintainer, 2026-10-25: stopped in
+  the middle, a card had been all but empty, its words gone and its icons
+  not yet come). The two cross over as a power-keeping cross-fade does,
+  each a quarter turn's cosine or sine: laid one over the other, together
+  they are never less than 0.91 opaque, each 0.71 at the band's middle.
+  What is pressed on the words still stops at the least scale they are
+  read at, the band's middle (`wordsTooSmall`).
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`
