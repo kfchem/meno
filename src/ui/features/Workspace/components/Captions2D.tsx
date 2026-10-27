@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
-import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
+import { labelSetOf, type LabelSet, type TextItem } from "../../../../lib/chem/layout2d";
+import { useTypefaces } from "../../../fonts/typefaces";
 import { selectedOf } from "../store/slices/selectionSlice";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { COLORS } from "../../../theme/colors";
@@ -92,16 +93,78 @@ const CaptionWords = memo(function CaptionWords({ c, set, selected, hovered }: {
   const { opts } = useDrawnLayout();
   // (at its own size, or the labels'; its letters as they were marked)
   const fs = wordsFontPx(c, opts);
-  const laid = useMemo<Laid>(() => ({ c, fs, ...wordsSet(c, opts, set, { x: 0, y: 0 }) }), [c, fs, opts, set]);
+  // (in its own typeface, read as it is first wanted - set again as its letters come in - or the labels')
+  const fonts = useTypefaces(c.font ?? opts.fontFamily ?? "Arial");
+  // its lines as far apart as they are drawn now: eased to its own spacing as that changes (docs/EDITOR-2D.md, *Text*)
+  const toLines = c.lines ?? 1;
+  const [lines, setLines] = useState(toLines);
+  const shown = lines === toLines ? c : { ...c, lines };
+  const laid = useMemo<Laid>(
+    () => ({ c: shown, fs, ...wordsSet(shown, opts, set, { x: 0, y: 0 }) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fonts: set again as its typeface's letters come in
+    [shown, fs, opts, set, fonts],
+  );
+  // its typeface changed: the words in the one it had fading out as those in its new one fade in (TAU.quick)
+  const [face, setFace] = useState(c.font);
+  const [going, setGoing] = useState<{ font: string | undefined; items: readonly TextItem[] } | null>(null);
+  const last = useRef(laid.items);
+  const coming = useRef(1);
+  const leaving = useRef(0);
+  if (face !== c.font) {
+    setGoing({ font: face, items: last.current });
+    setFace(c.font);
+    coming.current = 0;
+    leaving.current = 1;
+  }
+  useLayoutEffect(() => {
+    last.current = laid.items;
+  });
   // (given back by what was written in their place: seen at once, as that was - else faded in, as they come)
   const [fadeIn] = useState(() => store.getState().captionLeft?.id !== c.id);
+  // (each typeface's words drawn by their own, kept as they were while they go: none of them set anew)
+  const faces = [...(going && going.font !== face ? [{ font: going.font, items: going.items, opacity: leaving }] : []), { font: face, items: laid.items, opacity: going ? coming : undefined }];
   return (
     <group position={[c.x, c.y, 0]}>
-      <WholeTexts2D texts={laid.items} fadeIn={fadeIn} onDrawn={() => store.getState().captionShown(c.id)} />
+      {faces.map((f) => (
+        <WholeTexts2D
+          key={f.font ?? ""}
+          texts={f.items}
+          family={f.font}
+          fadeIn={fadeIn}
+          opacity={f.opacity}
+          onDrawn={f.font === face ? () => store.getState().captionShown(c.id) : undefined}
+        />
+      ))}
       <CaptionHold laid={laid} selected={selected} hovered={hovered} />
+      {lines !== toLines && <Eased from={lines} to={toLines} onStep={setLines} />}
+      {going && (
+        <Eased
+          key={face ?? ""}
+          from={0}
+          to={1}
+          onStep={(k) => {
+            coming.current = k;
+            leaving.current = 1 - k;
+            if (k === 1) setGoing(null);
+          }}
+        />
+      )}
     </group>
   );
 });
+
+/** A number going from `from` to `to`, eased (TAU.quick): there only as long as it goes - `onStep` told each frame's, the last `to`. */
+function Eased({ from, to, onStep }: { from: number; to: number; onStep: (v: number) => void }) {
+  const invalidate = useThree((st) => st.invalidate);
+  const now = useRef(from);
+  useEffect(() => invalidate(), [to, invalidate]);
+  usePartFrame((_, dt) => {
+    now.current = Math.abs(now.current - to) < 0.005 * Math.max(1, Math.abs(to)) ? to : follow(now.current, to, Math.min(dt, 1 / 20), TAU.quick);
+    onStep(now.current);
+    invalidate();
+  });
+  return null;
+}
 
 /** Where a caption is taken hold of: the room round its words, lit while the pointer is on it, shaded while it is selected. */
 function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolean; hovered: boolean }) {

@@ -244,12 +244,12 @@ export default function PartMenu({
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
   /**
    * What the words right-clicked can do besides (docs/EDITOR-2D.md,
-   * *Text*): a size of their own, chosen on a card; all their letters bold,
+   * *Text*): a size, line spacing and typeface of their own, chosen on a card; all their letters bold,
    * in italics, raised or lowered - ticked where all are already; their
    * lines a list, or plain again.
    */
   words?: {
-    onSize: () => void;
+    onFont: () => void;
     bold: boolean;
     italic: boolean;
     list: boolean;
@@ -671,7 +671,7 @@ export default function PartMenu({
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
           ...(words
             ? [
-                { name: "Size…", keys: "", run: words.onSize, icon: MENU_ICONS.size },
+                { name: "Font…", keys: "", run: words.onFont, icon: MENU_ICONS.size },
                 { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
                 { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
                 { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },

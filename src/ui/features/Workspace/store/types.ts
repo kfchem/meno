@@ -232,15 +232,19 @@ export type Caption = {
   from?: WordsFrom;
   /** Its own size, in points; unset, the drawing's labels' (lib/chem/captions `wordsFontPx`). */
   size?: number;
+  /** Its own typeface, by name; unset, the drawing's labels' (lib/chem/captions `wordsLabelSet`). */
+  font?: string;
+  /** Its own line spacing, as a multiple of single spacing; unset, single (lib/chem/captions `wordsLineEms`). */
+  lines?: number;
   /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
   marks?: WordsMark[];
 };
 /**
  * A change to words on the page: written anew, moved, put over an arrow or
  * taken from one (`arrow` null), made as wide as something or as their
- * words (`width` null), laid otherwise, given a size of their own or the
- * labels' (`size` null), their letters marked otherwise (`marks`, none
- * for plain).
+ * words (`width` null), laid otherwise, given a size, a typeface or a line
+ * spacing of their own or the labels' (`size`, `font`, `lines` null),
+ * their letters marked otherwise (`marks`, none for plain).
  */
 export type CaptionPatch = {
   text?: string;
@@ -250,6 +254,8 @@ export type CaptionPatch = {
   width?: number | null;
   align?: "left" | "center" | "right" | "justify";
   size?: number | null;
+  font?: string | null;
+  lines?: number | null;
   marks?: WordsMark[];
 };
 /** Where words taken out of a PDF came from (docs/PDF.md, *Taking things out*): the PDF, by its SHA-256, and the places they ran between. */

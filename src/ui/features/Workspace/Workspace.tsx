@@ -3,6 +3,7 @@ import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
+import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
@@ -81,7 +82,7 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import SizeCard from "./SizeCard";
+import WordsCard from "./WordsCard";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
@@ -684,7 +685,7 @@ function WorkspaceContent({
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
+  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -968,7 +969,7 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setSizeCard(null);
+    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1460,7 +1461,7 @@ function WorkspaceContent({
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
   const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
-  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
+  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "font" | "lines" | "marks">>): { y?: number } => {
     if (!c.width || c.arrow != null) return {};
     const set = labelSetOf(layoutOpts);
     const top = c.y + wordsSet(c, layoutOpts, set).halfH;
@@ -1472,6 +1473,19 @@ function WorkspaceContent({
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
   };
+  // (their lines as far apart as asked - single, none of their own)
+  const spaceWords = (id: number, lines: number | null) => {
+    const st = store.getState();
+    const c = st.captions.find((x) => x.id === id);
+    if (c) st.updateCaption(id, { lines, ...keepTop(c, { lines: lines ?? undefined }) });
+  };
+  // (in a typeface of their own - none, the drawing's - once its letters are read: set in it at once, not in another first)
+  const faceWords = (id: number, font: string | null) =>
+    void typefaceRead(font ?? style.fontFamily).then(() => {
+      const st = store.getState();
+      const c = st.captions.find((x) => x.id === id);
+      if (c) st.updateCaption(id, { font, ...keepTop(c, { font: font ?? undefined }) });
+    });
   const [startZoom] = useState(() => startingZoom(style));
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
@@ -1965,16 +1979,19 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {sizeCard && (
-          <SizeCard
-            key={`${sizeCard.x},${sizeCard.y}`}
-            now={store.getState().captions.find((c) => c.id === sizeCard.id)?.size ?? null}
+        {wordsCard && (
+          <WordsCard
+            key={`${wordsCard.x},${wordsCard.y}`}
+            id={wordsCard.id}
             label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            onSize={(pt) => sizeWords(sizeCard.id, pt)}
-            x={sizeCard.x}
-            y={sizeCard.y}
-            within={sizeCard.within}
-            onClose={() => setSizeCard(null)}
+            drawing={style.fontFamily}
+            onSize={(pt) => sizeWords(wordsCard.id, pt)}
+            onLines={(lines) => spaceWords(wordsCard.id, lines)}
+            onFont={(font) => faceWords(wordsCard.id, font)}
+            x={wordsCard.x}
+            y={wordsCard.y}
+            within={wordsCard.within}
+            onClose={() => setWordsCard(null)}
           />
         )}
       </AnimatePresence>
@@ -2137,7 +2154,7 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onSize: () => setSizeCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
+              onFont: () => setWordsCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),

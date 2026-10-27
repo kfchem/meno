@@ -390,6 +390,11 @@ export type TextItem = {
    * words on the page given a size of their own (docs/EDITOR-2D.md, *Text*).
    */
   ownSize?: boolean;
+  /**
+   * Set in a typeface of its own, by name, in pictures too, not the
+   * labels': words on the page given one (docs/EDITOR-2D.md, *Text*).
+   */
+  family?: string;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -4823,7 +4828,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
-    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, set, svgColor(t.color, fill));
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
   s += img

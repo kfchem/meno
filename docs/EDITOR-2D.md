@@ -1365,7 +1365,7 @@ All hover-based, as above.
     in place of a slide program's): words on the page with a size of
     their own, letters marked, and lists.
     - *A size of their own*, in points as the drawing's labels are: their
-      menu's *Size…* shows a card of *Label* (the drawing's labels' size,
+      menu's *Font…* shows a card of *Label* (the drawing's labels' size,
       10 points in ACS 1996's style, as words have had), *Text* 14,
       *Heading* 20 and *Title* 28 - the one they have ringed - and any
       other typed, 4 to 288 points, given with Enter. While they are
@@ -1373,6 +1373,25 @@ All hover-based, as above.
       8 ... 28, 32, 36, 44 ... 96). One undo step; saved, copied and drawn
       so in pictures (SVG, EMF and PNG). Without one, they are the labels'
       size, as the drawing style says.
+    - *Line spacing of their own* (the maintainer, 2026-10-27), on the same
+      card: *1* (single, as words have had: 1.25 ems baseline to
+      baseline), *1.15*, *1.5* and *2*, the one they have ringed, or any
+      other typed, 0.5 to 4 times single, given with Enter. Their lines
+      move apart or together eased, and so on an undo; a box given a
+      width keeps its top. One undo step; saved, copied and drawn so in
+      pictures.
+    - *A typeface of their own* (the maintainer, 2026-10-27), on the same
+      card, picked as the drawing style's is (the same list: those that
+      come with Meno and stand for a journal's, then every one on this
+      computer, each shown in itself). It is theirs over the drawing
+      style's: the style changed, they keep it. The drawing's typeface,
+      first in the list, picked again, they follow the style once more.
+      Given once its letters are read, so that they are not drawn in
+      another first; the words in the typeface they had fade out as those
+      in the new one fade in. One undo step; saved, copied, and written so
+      in pictures (SVG and PNG by its name, EMF with its own font
+      records), laid out by the typeface's own widths. One that cannot be
+      had on a computer is drawn there in IBM Plex Sans, as a style's is.
     - *Letters marked*: bold, italic, a colour, raised or lowered (kcal
       mol⁻¹, ΔG‡, r²SCAN). While they are written, Ctrl/Cmd+B and +I set
       what is selected bold or in italics, Ctrl/Cmd with + raises it and
