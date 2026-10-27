@@ -5,6 +5,7 @@ import {
   buildAllPrimitives,
   BOND_SEEN_LEAST,
   buildBondPrimitives,
+  FEWEST_HASHES,
   joinsAtAtoms,
   buildTextLabels,
   implicitHydrogens,
@@ -938,7 +939,7 @@ describe("a label must not change how a bond is drawn", () => {
   const spacing = (hashes: { at: number }[]) =>
     hashes.slice(1).map((h, i) => h.at - hashes[i].at);
 
-  it("spaces a hashed wedge's hashes evenly, never closer than the hash spacing - but a short one's three, a line width clear", () => {
+  it("spaces a hashed wedge's hashes evenly, never closer than the hash spacing - but a short one's three, a line width clear, where the style asks", () => {
     const o = opts();
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
     const plain = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, deg).polys);
@@ -946,24 +947,31 @@ describe("a label must not change how a bond is drawn", () => {
       buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys,
     );
     // the bond to a labelled atom is shorter, so it carries fewer hashes -
-    // each set evenly spaced, and never closer than the hash spacing; but
-    // at the spacing it would carry two, which read as a pair of lines, so
-    // it carries three, closer, still a line width clear of each other
+    // each set evenly spaced, and never closer than the hash spacing: a
+    // journal's style, as its specification has it, two
     expect(labelled.length).toBeLessThan(plain.length);
-    expect(labelled).toHaveLength(3);
-    for (const g of spacing(plain)) {
-      expect(g).toBeCloseTo(spacing(plain)[0], 9);
-      expect(g).toBeGreaterThanOrEqual(o.hashSpacingPx - 1e-9);
+    expect(labelled).toHaveLength(2);
+    for (const gaps of [spacing(plain), spacing(labelled)]) {
+      for (const g of gaps) {
+        expect(g).toBeCloseTo(gaps[0], 9);
+        expect(g).toBeGreaterThanOrEqual(o.hashSpacingPx - 1e-9);
+      }
     }
-    for (const g of spacing(labelled)) {
-      expect(g).toBeCloseTo(spacing(labelled)[0], 9);
+    // a style asking for three at least (Meno's): two read as a pair of
+    // lines, so three, closer, still a line width clear of each other - and
+    // a longer one as it was
+    const three = opts({ fewestHashes: FEWEST_HASHES });
+    expect(hashesOf(buildBondPrimitives(pair("C"), bond, three, ZOOM, deg).polys)).toEqual(plain);
+    const short = hashesOf(buildBondPrimitives(pair("O"), bond, three, ZOOM, deg).polys);
+    expect(short).toHaveLength(3);
+    for (const g of spacing(short)) {
+      expect(g).toBeCloseTo(spacing(short)[0], 9);
       expect(g).toBeLessThan(o.hashSpacingPx);
       expect(g).toBeGreaterThanOrEqual(2 * o.lineWidthPx - 1e-9);
     }
     // (with no room for three so, as many as there is room for)
-    const tight = opts({ hashSpacingPx: o.hashSpacingPx, lineWidthPx: o.hashSpacingPx * 0.9 });
-    const few = hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys);
-    expect(few.length).toBeLessThan(3);
+    const tight = opts({ fewestHashes: FEWEST_HASHES, lineWidthPx: o.hashSpacingPx * 0.9 });
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
   it("keeps the wave of a wavy bond the same length", () => {

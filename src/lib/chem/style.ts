@@ -1,4 +1,4 @@
-import type { LayoutOptions } from "./layout2d";
+import { FEWEST_HASHES, type LayoutOptions } from "./layout2d";
 
 /**
  * How a structure is drawn: every width, spacing, size, angle and colour the
@@ -94,6 +94,13 @@ export type DrawingStyle = {
    * atom has no label; left unset, one hash interval.
    */
   hashStartOffset?: Length;
+  /**
+   * A short hashed bond or wedge - one to a label - drawn at the spacing
+   * ("spaced"), as a journal's specification has it, or with three hashes
+   * at least ("three"), closer, where they fit: Meno's own. A style saved
+   * without it is "spaced".
+   */
+  shortHashes?: "spaced" | "three";
   /** A dashed bond's dashes, and the least gap between two of them. */
   dashLength: Length;
   dashGap: Length;
@@ -363,6 +370,8 @@ export const MENO: DrawingStyle = {
   bondColor: "#141414",
   labelColor: "#141414",
   ends: "round",
+  // (a short hashed wedge still three hashes: the maintainer, 2026-10-27)
+  shortHashes: "three",
   fontFamily: "IBM Plex Sans",
   stereoDescriptors: "plain",
   stereoDescriptorGap: 0.15,
@@ -516,6 +525,7 @@ export function layoutOptionsFor(
     wedgeWidthPx: at(wedgeBroadEndOf(style)),
     hashSpacingPx: at(style.hashInterval),
     hashFirstGapPx: at(style.hashStartOffset ?? style.hashInterval),
+    ...(style.shortHashes === "three" ? { fewestHashes: FEWEST_HASHES } : {}),
     boldWidthPx: at(style.boldThickness),
     dashLengthPx: at(style.dashLength),
     dashGapPx: at(style.dashGap),
