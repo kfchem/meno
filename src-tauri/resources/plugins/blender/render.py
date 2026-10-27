@@ -657,16 +657,12 @@ def molecules_to_change(s, meno):
 
 
 def change_piece(s, folder, cfg, script, progress, first):
-    """One piece of a change, a scene made anew in the same Blender: its studio (studio.py), the part changes share (change.py,
-    where it has a molecule to become) and its own script, which renders its frames into cfg's `out`. Those frames, in order."""
+    """One piece of a change, in a Blender of its own: its studio (studio.py), the part changes share (change.py, where it
+    has a molecule to become) and its own script, which renders its frames into cfg's `out`. Those frames, in order."""
     space = {"CFG": cfg, "__name__": "motion"}
     with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
         exec(compile(f.read(), "studio.py", "exec"), space)
     scene = bpy.context.scene
-    # (no render data kept from one render to the next, as the studio keeps it within one scene: every piece is a scene made
-    # anew in the same Blender, and Cycles, keeping what it rendered before, could take the new piece's objects for the
-    # last one's - on Windows a later piece of the liquid showed the first molecule again, the reform a melt)
-    scene.render.use_persistent_data = False
     # (where it renders: decided once for the film, as a picture's is - and said in the log, which the card reads. The studio
     # has reset Blender to its factory settings, its Cycles preferences with it: the graphics processor's devices are
     # enabled again in every piece, or a later piece would render on the processor, saying it was not)
