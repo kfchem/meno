@@ -216,16 +216,20 @@ def electric_origin(data, text, program):
     return [float(v) for v in origin] if origin is not None and len(origin) == 3 else None
 
 
-def dipole(data, text, program, xyz):
+def dipole(data, text, program, xyz, printed=None):
     """The dipole moment, in debye: as the output has it where the molecule
-    is neutral. A charged molecule's depends on the point it is taken about,
-    so it is taken again about the centre of mass of the geometry it is of,
-    `xyz` (the last), and said to be - or left out where that cannot be
-    done."""
+    is neutral - as cclib read it, else as it was printed where cclib could
+    not read it (`printed`: ORCA's total alone, `orca_total_dipoles`). A
+    charged molecule's depends on the point it is taken about, so it is taken
+    again about the centre of mass of the geometry it is of, `xyz` (the
+    last), and said to be - or left out where that cannot be done."""
     moments = getattr(data, "moments", None)
-    if moments is None or len(moments) < 2 or len(moments[1]) != 3:
+    if moments is not None and len(moments) >= 2 and len(moments[1]) == 3:
+        vector = [float(v) for v in moments[1]]
+    elif printed is not None and len(printed) == 3:
+        vector = [float(v) for v in printed]
+    else:
         return []
-    vector = [float(v) for v in moments[1]]
     charge = int(data.charge) if has(data, "charge") else 0
     label = "Dipole moment"
     if charge:
@@ -438,6 +442,36 @@ def program_of(text):
     if re.search(r"^\s*\|\s+x\s+T\s+B\s+\|", head, re.M):
         return "xtb"
     return None
+
+
+# a dipole moment as ORCA prints it after an xTB run through the xtb program: its total alone, in atomic units, with no
+# electronic and nuclear contributions above it ("Total Dipole Moment    :     -0.54100       0.32700      -0.48700")
+ORCA_TOTAL_DIPOLE = re.compile(r"^Total Dipole Moment\s*:\s*([-+]?\d+\.\d*)\s+([-+]?\d+\.\d*)\s+([-+]?\d+\.\d*)\s*$")
+
+
+def orca_total_dipoles(text):
+    """ORCA's output with each DIPOLE MOMENT block that gives its total alone taken out - as ORCA prints one after an
+    xTB run through the xtb program, which cclib's ORCA parser, expecting electronic and nuclear contributions above
+    the total, cannot read - and the last such total, in debye, as printed (in atomic units: e bohr). Every other
+    block, and every other line, as it was: a block with its contributions is cclib's to read, as before. Nothing is
+    made up: a total that does not read is not taken, and its block is left as it was."""
+    lines = text.split("\n")
+    out, total = [], None
+    i = 0
+    while i < len(lines):
+        if lines[i].startswith("DIPOLE MOMENT") and i + 3 < len(lines) and lines[i + 1].startswith("-") and lines[i + 2].split() == ["X", "Y", "Z"]:
+            m = ORCA_TOTAL_DIPOLE.match(lines[i + 3])
+            if m:
+                total = [float(v) for v in m.groups()]
+                # (its title, rule, header and total, then what follows of it: a rule and its magnitudes)
+                j = i + 4
+                while j < len(lines) and (lines[j].strip().startswith("-") or lines[j].startswith("Magnitude")):
+                    j += 1
+                i = j
+                continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out), ([convertor(v, "ebohr", "Debye") for v in total] if total is not None else None)
 
 
 # ORCA's input, as its output echoes it: a line of the coordinate block - its element or Q, and the rest
@@ -687,8 +721,10 @@ def op_read(m):
         raise ValueError("nothing to read")
     program = program_of(text)
     ghosts = []
+    printed = None
     if program == "orca":
         text, ghosts = orca_for_cclib(text)
+        text, printed = orca_total_dipoles(text)
     elif program == "gaussian":
         ghosts = gaussian_ghosts(text)
     data, whole = readable(text, os.path.splitext(name)[1] or ".out")
@@ -716,7 +752,10 @@ def op_read(m):
     energies, unread = None, None
     if frames and not excited_path(data, len(frames)):
         if program == "orca":
-            energies, unread = orca_energies(text, len(frames), good)
+            # (as many as the SCF energies kept - or, where cclib read none at all, as an xTB run through the xtb program
+            #  has none it reads, and no SCF said it failed, one to each geometry, as ORCA states them)
+            fails = scf is not None and False in scf
+            energies, unread = orca_energies(text, len(frames), good if found or fails else len(frames))
         else:
             energies = frame_energies(data, len(frames))
     method, basis = orca_level(text, meta) if program == "orca" else (method_of(meta), meta.get("basis_set"))
@@ -753,7 +792,7 @@ def op_read(m):
         + path_said(data, text, len(frames))
         + energies_said(program, energies, unread)
         + molecule_wide(data)
-        + of_state(dipole(data, text, program, frames[-1] if frames else None), states[0])
+        + of_state(dipole(data, text, program, frames[-1] if frames else None, printed), states[0])
         + per_frame(data, len(frames))
         + of_state(per_atom(data, len(atoms)), states[1])
         + vibrations(data, len(atoms))
