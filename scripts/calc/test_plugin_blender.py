@@ -615,6 +615,26 @@ class Renders(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
             return run.stdout
 
+    def test_no_piece_of_a_change_renders_with_what_cycles_kept_from_the_piece_before(self):
+        # (every piece is a scene made anew in the same Blender: Cycles' persistent data, kept from one render to the next,
+        # could render a later piece as the one before - on Windows, a liquid change showed its first molecule throughout.
+        # Each piece's script reports the setting it renders with, as its first line)
+        for motion, mode, pieces in (("change-liquid", "once", 3), ("change-ring", "loop", 2)):
+            with self.subTest(motion=motion), tempfile.TemporaryDirectory() as m:
+                scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [METHYLAMINE, METHANOL]}}}]}
+                (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+                entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 4, "fps": 30, "motion": motion}
+                said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu", "mode": mode})
+                job = said["result"]["jobs"][0]
+                files = {f["name"]: f["text"] for f in job["files"]}
+                script = worker.motion_script(motion)
+                files[script] = "print('PERSISTENT', bpy.context.scene.render.use_persistent_data, flush=True)\n" + files[script]
+                for name, text in files.items():
+                    (pathlib.Path(m) / name).write_text(text, encoding="utf-8")
+                run = subprocess.run([blender(), *job["args"]], cwd=m, capture_output=True, text=True, timeout=900)
+                self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+                self.assertEqual(re.findall(r"^PERSISTENT (\w+)$", run.stdout, re.M), ["False"] * pieces)
+
     def test_every_piece_of_a_change_on_the_graphics_processor_has_its_devices(self):
         # (each piece's studio resets Blender, its Cycles preferences with it: the graphics processor's devices enabled again in
         # every piece - a later one on none would render on the processor, its log still saying the graphics processor)

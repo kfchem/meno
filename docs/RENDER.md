@@ -412,7 +412,9 @@ uv, no package), and the script Blender runs, `render.py`.
     before. Every molecule stands on the same floor, turned as the canvas
     shows it; the camera is one move through the whole film - turning one
     way (Once) or swinging and back (Loop) - so one piece's last frame is
-    the next one's first. Shaders that glow are not sampled as lights,
+    the next one's first. No piece renders with what Cycles kept from the one
+    before (its persistent data is off for each piece: a later piece could
+    otherwise be drawn as the earlier one). Shaders that glow are not sampled as lights,
     which would change how a molecule at rest is rendered between pieces.
   - Each change is timed in a length of its own (Ring, Scan and Shatter
     5 s; the liquid 8 s a melt and 1.6 s a reform), and the film's length
