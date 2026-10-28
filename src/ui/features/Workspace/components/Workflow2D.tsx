@@ -735,8 +735,20 @@ export default function Workflow2D() {
     store.getState().setWorkflowView({ workflowMenu: { kind, id, clientX: e.clientX, clientY: e.clientY } });
   };
 
-  // (a step open to its options is shut only by a double-click on its card: not by Escape, a press elsewhere or a zoom -
-  // the page is worked on, panned, zoomed and other cards opened, while its options stay open; workflow/cardOpen)
+  // a step open to its options: shut by a double-click on its card, its Close, or Escape - never by itself: not by a press
+  // elsewhere, a zoom, the selection, a run starting or ending; the page is worked on while its options are (workflow/cardOpen)
+  useEffect(() => {
+    if (openStep == null) return;
+    const shut = () => store.getState().setWorkflowView({ openStep: null });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      shut();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [openStep, store]);
 
   // a set chosen: let go by a press anywhere but its tab, or Escape
   useEffect(() => {
@@ -929,6 +941,7 @@ export default function Workflow2D() {
             compact={compact}
             selected={selFlow.steps.has(s.id)}
             open={openStep === s.id}
+            onClose={() => store.getState().setWorkflowView({ openStep: null, choosingAtoms: null })}
             inputs={inputsFor(s.kind, byOf(s)).map((p) => ({ id: p.id, name: p.name, look: portLook("take", { step: s.id, port: p.id }) }))}
             optionList={takes}
             options={optionsOf(takes, own)}

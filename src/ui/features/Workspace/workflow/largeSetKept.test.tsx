@@ -230,6 +230,7 @@ describe("a wire a step does not take", () => {
         onCardDown={() => {}}
         onContextMenu={() => {}}
         onHover={() => {}}
+        onClose={() => {}}
       />,
     );
     expect(html).toContain("It takes a conformer set, not molecules in 3D");

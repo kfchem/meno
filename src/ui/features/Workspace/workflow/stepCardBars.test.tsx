@@ -32,15 +32,16 @@ function card(compact: boolean): string {
       onCardDown={noop}
       onContextMenu={noop}
       onHover={noop}
+      onClose={noop}
     />,
   );
 }
 
 describe("a step's card open to its options", () => {
-  it("stays open zoomed out, its options' words then grey bars - and has no Close: only a double-click shuts it", () => {
+  it("stays open zoomed out, its options' words then grey bars - its Close there, as near", () => {
     const near = card(false);
     const far = card(true);
-    for (const html of [near, far]) expect(html).not.toMatch(/>Close</);
+    for (const html of [near, far]) expect(html).toMatch(/>Close</);
     expect(near).not.toContain("meno-barred");
     expect(far).toContain("meno-barred");
     // (its options there either way: the same words, unseen zoomed out)

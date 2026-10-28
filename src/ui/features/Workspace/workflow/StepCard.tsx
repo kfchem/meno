@@ -140,6 +140,8 @@ export type StepCardProps = {
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
+  /** Its options shut: by its Close, or Escape - as by a double-click on it; never by themselves, while the page is worked on. */
+  onClose: () => void;
   /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
@@ -312,6 +314,11 @@ export default function StepCard(p: StepCardProps) {
                 {p.drops && <div className="mt-1.5 text-[11px] leading-4 text-gh-gray">{`Running again drops ${p.drops} from this workspace`}</div>}
               </div>
             )}
+            <div className="mt-3 flex justify-end">
+              <button onClick={p.onClose} className="h-6 rounded-md border border-gh-line bg-white px-2 text-[11px] text-gh-black hover:bg-gh-base">
+                Close
+              </button>
+            </div>
           </TextBars>
           </motion.div>
         )}

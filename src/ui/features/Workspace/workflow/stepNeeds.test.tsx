@@ -40,6 +40,7 @@ function card(s: WorkflowStep): string {
       onCardDown={noop}
       onContextMenu={noop}
       onHover={noop}
+      onClose={noop}
     />,
   );
 }

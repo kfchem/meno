@@ -1,7 +1,9 @@
 /**
- * A step's card opened to its options by a click, and shut only by a
- * double-click on it (components/Workflow2D; the maintainer, 2026-10-28) -
- * not by a single click, a press elsewhere, Escape, or a zoom.
+ * A step's card opened to its options by a click, and shut by a double-click
+ * on it - or by what is pressed to shut it, its Close and Escape - and never
+ * by itself (components/Workflow2D; the maintainer, 2026-10-28): not by a
+ * single click on it, a press elsewhere, a zoom, the selection changing, or
+ * a run starting or ending.
  */
 
 /** How soon a second click on a step's card is the same double-click's, in milliseconds. */
