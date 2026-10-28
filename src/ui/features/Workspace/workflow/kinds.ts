@@ -6,7 +6,7 @@
  */
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
 import { numberText } from "../../../../lib/calc/results";
-import type { Option, OptionValues } from "../../../../lib/options";
+import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
@@ -499,7 +499,7 @@ export function madeName(kind: StepKind, options: readonly Option[], own: Record
   return kindInfo(kind).made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }
 
-/** How a step does its work, in a line: each option's value, a number with its unit, a choice by its name - one of none left out; or as `said` says it (a kind's `how`, where Meno does it). */
+/** How a step does its work, in a line: each option that applies (`shownOptions`) by its value, a number with its unit, a choice by its name - one of none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it). */
 export function howOf(
   options: readonly Option[],
   own: Record<string, string | number | boolean> | undefined,
@@ -507,10 +507,10 @@ export function howOf(
 ): string {
   const values = optionsOf(options, own);
   if (said) return said(values);
-  return options
+  return shownOptions(options, values)
     .flatMap((o) => {
       const v = values[o.id];
-      if (o.type === "number") return [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
+      if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "choice") return v === "none" ? [] : [o.choices.find((c) => c.value === v)?.label ?? String(v)];
       if (o.type === "switch") return v ? [o.label] : [];
       return v ? [String(v)] : [];

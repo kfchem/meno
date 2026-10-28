@@ -101,3 +101,14 @@ describe("options that apply to one choice only, and choices that fill in others
     expect(read[2].when).toBeUndefined();
   });
 });
+
+describe("a number that sets nothing", () => {
+  it("is read from a plugin's manifest where it is one, and not otherwise", () => {
+    const [memory, other] = acceptOptions([
+      { id: "maxcore", label: "Memory for each core", type: "number", default: 0, unset: 0, min: 0 },
+      { id: "cores", label: "Cores", type: "number", default: 4, unset: "none" },
+    ]);
+    expect(memory).toMatchObject({ id: "maxcore", type: "number", unset: 0 });
+    expect(other).not.toHaveProperty("unset");
+  });
+});

@@ -1,3 +1,4 @@
+import { acceptOptions } from "../../../../lib/options";
 import { describe, expect, it } from "vitest";
 import type { Property } from "../../../../lib/entry";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
@@ -127,6 +128,17 @@ describe("a Filter step", () => {
     expect(filterHow("nll < 30; mw <= 500", "any")).toBe("nll < 30 or mw \u2264 500");
     expect(filterHow("", "all")).toBe("No conditions yet");
     expect(filterHow("nll 30", "all")).toMatch(/compares nothing/);
+  });
+
+  it("says of a plugin's step only the options that apply - none that sets nothing", () => {
+    const options = acceptOptions([
+      { id: "method", label: "Method", type: "text", default: "B3LYP" },
+      { id: "solvation", label: "Solvation", type: "choice", choices: [{ value: "none", label: "None" }, { value: "SMD", label: "SMD" }], default: "none" },
+      { id: "solvent", label: "Solvent", type: "choice", when: { id: "solvation", in: ["SMD"] }, choices: [{ value: "water", label: "Water" }], default: "water" },
+      { id: "maxcore", label: "Memory for each core", type: "number", default: 0, unset: 0, unit: "MB" },
+    ]);
+    expect(howOf(options, { method: "NATIVE-XTB2" })).toBe("NATIVE-XTB2");
+    expect(howOf(options, { method: "B3LYP", solvation: "SMD", maxcore: 3000 })).toBe("B3LYP \u00b7 SMD \u00b7 Water \u00b7 3000 MB");
   });
 
   it("is run again when the properties of what comes in change", () => {
