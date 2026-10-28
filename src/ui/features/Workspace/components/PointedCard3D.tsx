@@ -57,7 +57,10 @@ function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number][
         style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", gridTemplateColumns: open ? "minmax(0, 1fr)" : "minmax(0, 0fr)", opacity: open ? 1 : 0 }}
       >
         <div className="overflow-hidden min-w-0">
-          <Rows rows={rows} />
+          {/* (laid out at its own width as it opens, and cut on the right until the card has widened to it - never squeezed, its words a letter a line) */}
+          <div className="w-max max-w-[18.75rem]">
+            <Rows rows={rows} />
+          </div>
         </div>
       </div>
     </>

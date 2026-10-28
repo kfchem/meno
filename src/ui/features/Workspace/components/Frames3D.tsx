@@ -446,7 +446,8 @@ export function FramesChip({
                 className="grid w-full transition-[grid-template-rows,opacity]"
                 style={{ ...EASED, gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
               >
-                <div className="overflow-hidden flex justify-center">
+                {/* (at the chip's left, what is past its right edge cut there as it widens: never centred, cut at both ends, ahead of the chip - LOOK, 2026-10-28) */}
+                <div className="overflow-hidden flex justify-start">
                   {/* (never shrunk to the chip as it widens: measured so, its width would follow the chip's, a frame behind, and the chip would creep after it) */}
                   <div ref={detailed} className="w-max max-w-[20rem] shrink-0 px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
                     <ResultGroups groups={details} />
