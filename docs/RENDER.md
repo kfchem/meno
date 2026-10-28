@@ -466,7 +466,8 @@ uv, no package), and the script Blender runs, `render.py`.
   the render says it). A film's line says it in hundredths of its length,
   *Rendering 37%...*.
 - **Why one failed** is what the render script said as it stopped
-  (`render.py: ...`) or what Python raised, as its traceback ends
+  (`render.py: ...`, said without the script's name, which means nothing
+  to the person) or what Python raised, as its traceback ends
   (`TypeError: ...`) - all of it, a message of several lines as one, up
   to what Blender says next (its progress, its own last words); else Blender's last line that says error; else its
   last. Never Blender's own last words, which say only that a script

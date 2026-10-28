@@ -181,7 +181,7 @@ class Collect(unittest.TestCase):
     def test_says_why_it_failed(self):
         log = "Blender 5.2.2\nRead blend\nError: Python: Traceback ...\nrender.py: the scene has no camera\nBlender quit\n"
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="failed")
-        self.assertEqual(said["result"], {"why": "render.py: the scene has no camera"})
+        self.assertEqual(said["result"], {"why": "The scene has no camera"})
 
     def test_says_what_python_raised_not_blenders_own_last_words(self):
         # (as Blender 5.2.2 ends a script that raised, and - after a large render - what it did not free)
@@ -534,12 +534,12 @@ class MotionsRender(unittest.TestCase):
     def test_a_film_shorter_than_its_motion_can_be_read_in_is_refused_saying_how_long_it_needs(self):
         # (however it was asked for: three molecules' liquid change, Once, in 5 s - each change needs 6 s)
         why = self.film("change-liquid", "white", frames=5, molecules=(METHYLAMINE, METHANOL, METHYLAMINE), fails=True)
-        self.assertEqual(why, "render.py: This film needs at least 12 s for 3 molecules")
-        self.assertEqual(self.film("assemble", "black", "loop", frames=6, fails=True), "render.py: This film needs at least 7 s")
+        self.assertEqual(why, "This film needs at least 12 s for 3 molecules")
+        self.assertEqual(self.film("assemble", "black", "loop", frames=6, fails=True), "This film needs at least 7 s")
 
     def test_a_change_of_one_molecule_says_it_needs_two(self):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
-        self.assertEqual(why, "render.py: a change of molecules needs two molecules or more, rendered together")
+        self.assertEqual(why, "A change of molecules needs two molecules or more, rendered together")
 
     def test_a_portrait_film_keeps_a_tall_molecule_whole(self):
         # (a chain standing up the canvas, in a frame twice as tall as wide: Blender's Auto would put the sensor across the
