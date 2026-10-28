@@ -171,7 +171,11 @@ molecules, or as many where the film loops back to the first (the role's
 `loopWhen` says when). The card's *Length* is bounded by it, and says so
 under it ("At least 12 s for 3 molecules"); a length chosen before that is
 shorter is raised to it, and the card says that instead. The longest it
-asks is 60 s, or the shortest where that is longer.
+asks is 60 s, or the shortest where that is longer. However a film is
+asked for - the card, a workflow's step, a saved or written ask - the
+Blender plugin refuses one shorter, by the same rule and from its own
+manifest's numbers, saying how long it needs to be ("This film needs at
+least 12 s for 3 molecules").
 
 ## Render as a step
 

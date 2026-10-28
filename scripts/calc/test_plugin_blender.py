@@ -14,6 +14,7 @@ at; elsewhere that test is skipped.
 
 import importlib.util
 import json
+import math
 import re
 import os
 import pathlib
@@ -275,6 +276,38 @@ class FilmStrips(unittest.TestCase):
         self.assertEqual(self.runs(frames), [(os.path.join("job", "frames"), ["f_0001.png", "f_0002.png", "f_0003.png", "f_0002.png"], 1)])
 
 
+class ShortestFilm(unittest.TestCase):
+    """How short a film of a motion can be (render.py `shortest_film`): the rule Meno's card keeps (renderOptions
+    `shortestFilm`), from the numbers the manifest says - and passed to render.py by the worker, from its manifest."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "shortest_film")
+        ns = {"math": math}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), "render.py", "exec"), ns)
+        cls.shortest = staticmethod(ns["shortest_film"])
+
+    def test_as_the_card_reckons_it(self):
+        # (the cases Meno's own test keeps: renderOptions.test.ts, "a film's shortest length")
+        self.assertEqual(self.shortest({"film": 4, "loop": 6}, 1, False), 4)
+        self.assertEqual(self.shortest({"film": 4, "loop": 6}, 1, True), 6)
+        self.assertEqual(self.shortest({"change": 6}, 3, False), 12)
+        self.assertEqual(self.shortest({"change": 6}, 3, True), 18)
+        self.assertEqual(self.shortest({"change": 6}, 11, False), 60)
+        self.assertEqual(self.shortest({"film": 1, "change": 2.5}, 3, False), 6)
+        self.assertEqual(self.shortest({"film": 1, "change": 2.5}, 2, False), 4)
+        self.assertEqual(self.shortest({}, 3, False), 1)
+
+    def test_the_worker_passes_each_motion_s_own_from_its_manifest(self):
+        m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
+        for x in m["roles"][0]["motions"]:
+            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 600, "fps": 30, "motion": x["id"]}], options={})
+            settings = json.loads(next(f["text"] for f in said["result"]["jobs"][0]["files"] if f["name"] == "render.json"))
+            self.assertEqual(settings["shortest"], x["shortest"], x["id"])
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
@@ -460,11 +493,12 @@ METHANOL = {"atoms": [{"el": "C", "p": [-0.7, 0.0, 0.0]}, {"el": "O", "p": [0.7,
 class MotionsRender(unittest.TestCase):
     """Each motion built and rendered, tiny: 64x36, 4 samples, a few frames - on the dark studio and the white, Once; and a cycle's Loop."""
 
-    def film(self, motion, background, mode="once", frames=4, molecules=(METHYLAMINE,), fails=False):
+    def film(self, motion, background, mode="once", frames=5, molecules=(METHYLAMINE,), fails=False):
         with tempfile.TemporaryDirectory() as d:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": list(molecules)}}}]}
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 30, "motion": motion}
+            # (a frame a second: each film as long as its motion's shortest, in a few frames)
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 1, "motion": motion}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": background, "mode": mode, "device": "cpu"})
             self.assertTrue(said["ok"], said)
             job = said["result"]["jobs"][0]
@@ -484,17 +518,24 @@ class MotionsRender(unittest.TestCase):
         for motion in sorted(m for m in worker.MOTIONS if not m.startswith("change-")):
             for background in ("black", "white"):
                 with self.subTest(motion=motion, background=background):
-                    self.assertEqual(self.film(motion, background), 4)
+                    self.assertEqual(self.film(motion, background), 5)
 
     def test_every_change_of_molecules_on_both_studios_once_and_as_a_loop(self):
         for motion in sorted(m for m in worker.MOTIONS if m.startswith("change-")):
-            for background, mode, frames in (("black", "once", 4), ("white", "loop", 6)):
+            liquid = motion == "change-liquid"
+            for background, mode, frames in (("black", "once", 7 if liquid else 4), ("white", "loop", 14 if liquid else 6)):
                 with self.subTest(motion=motion, background=background, mode=mode):
                     # (Once: one change, methylamine to methanol; Loop: and back - every frame rendered, in two pieces; the liquid
-                    # renders each molecule's melt once, played forward and backward, and a reform between: 2 melts of 2 frames
-                    # and a reform of 1 Once, 2 of 2 and 2 of 1 as a Loop)
+                    # renders each molecule's melt once, played forward and backward, and a reform between: 2 melts of 3 frames
+                    # and a reform of 1 Once, 2 of 3 and 2 of 1 as a Loop)
                     rendered = self.film(motion, background, mode, frames, molecules=(METHYLAMINE, METHANOL))
-                    self.assertEqual(rendered, {"once": 5, "loop": 6}[mode] if motion == "change-liquid" else frames)
+                    self.assertEqual(rendered, {"once": 7, "loop": 8}[mode] if liquid else frames)
+
+    def test_a_film_shorter_than_its_motion_can_be_read_in_is_refused_saying_how_long_it_needs(self):
+        # (however it was asked for: three molecules' liquid change, Once, in 5 s - each change needs 6 s)
+        why = self.film("change-liquid", "white", frames=5, molecules=(METHYLAMINE, METHANOL, METHYLAMINE), fails=True)
+        self.assertEqual(why, "render.py: This film needs at least 12 s for 3 molecules")
+        self.assertEqual(self.film("assemble", "black", "loop", frames=6, fails=True), "render.py: This film needs at least 7 s")
 
     def test_a_change_of_one_molecule_says_it_needs_two(self):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
@@ -509,7 +550,7 @@ class MotionsRender(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [chain]}}}]}
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 2, "fps": 30, "motion": "pulse"}
+            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 3, "fps": 1, "motion": "pulse"}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
@@ -527,8 +568,8 @@ class MotionsRender(unittest.TestCase):
             self.assertGreater(min(top, bottom), 0.6, (top, bottom, darkest))
 
     def test_a_cycle_renders_half_and_plays_it_back(self):
-        # (assemble loops as a cycle: 6 frames played, 4 rendered - forward, then back)
-        self.assertEqual(self.film("assemble", "black", "loop", frames=6), 4)
+        # (assemble loops as a cycle: 8 frames played, 5 rendered - forward, then back)
+        self.assertEqual(self.film("assemble", "black", "loop", frames=8), 5)
         # (pulse loops of itself: every frame rendered)
         self.assertEqual(self.film("pulse", "white", "loop", frames=6), 6)
 
@@ -669,7 +710,7 @@ class Renders(unittest.TestCase):
         with tempfile.TemporaryDirectory() as m:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": molecules}}}]}
             (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 4, "fps": 30, "motion": motion}
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 6, "fps": 1, "motion": motion}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": device, "mode": "loop"})
             job = said["result"]["jobs"][0]
             files = {f["name"]: f["text"] for f in job["files"]}
