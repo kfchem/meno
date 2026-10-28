@@ -180,7 +180,10 @@ export async function cleanUp(
     .map((ids) => partOf(model, ids))
     .filter((part) => part.bonds.length > 0);
   if (!parts.length) return; // nothing to lay out
-  const cleaned = await Promise.all(parts.map((part) => laidOutWithLabels(part, expanded)));
+  // (each on its own: one whose wedges cannot be kept, refused before it is laid out, named with the rest below)
+  const settled = await Promise.allSettled(parts.map((part) => laidOutWithLabels(part, expanded)));
+  const cleaned = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const unlaid = settled.flatMap((r, i) => (r.status === "rejected" ? [{ part: parts[i], why: r.reason instanceof Error ? r.reason.message : String(r.reason) }] : []));
   if (store.getState().model !== held) {
     throw new Error(
       "The structure changed while it was being cleaned up, so nothing was moved.",
@@ -214,7 +217,8 @@ export async function cleanUp(
       done.flatMap((t) => t.c.labels),
     );
   }
-  if (refused.length) throw new CleanUpRefused(refused.map((t) => ({ formula: partFormula(t.c.part), why: t.why! })), tried.length);
+  const left = [...unlaid, ...refused.map((t) => ({ part: t.c.part, why: t.why! }))];
+  if (left.length) throw new CleanUpRefused(left.map((l) => ({ formula: partFormula(l.part), why: l.why })), parts.length);
 }
 
 /**
@@ -227,7 +231,8 @@ export class CleanUpRefused extends Error {
     readonly refused: readonly { formula: string; why: string }[],
     readonly of: number,
   ) {
-    const each = refused.map((r) => `${r.formula}: ${r.why}`).join("; ");
+    // (of one among others laid out, not "nothing was moved": that one was left as it is)
+    const each = refused.map((r) => `${r.formula}: ${r.why.replace(/, so nothing was moved\.?$/, ", so it was left as it is")}`).join("; ");
     super(of === 1 ? `Clean-up left ${refused[0].formula} as drawn: ${refused[0].why}.` : `Clean-up left ${refused.length} of ${of} structures as drawn - ${each}.`);
     this.name = "CleanUpRefused";
   }
@@ -248,7 +253,9 @@ export function partFormula(part: Model): string {
     const h = implicitHydrogens(a.el, used.get(a.id) ?? 0, a.charge ?? 0, a.radical);
     for (let k = 0; k < h; k++) atoms.push({ el: "H" });
   }
-  return formulaOf(atoms);
+  // (and its charge, as a formula writes one: NH4+, SO4 2-)
+  const charge = part.atoms.reduce((t, a) => t + (a.charge ?? 0), 0);
+  return formulaOf(atoms) + (charge ? `${Math.abs(charge) > 1 ? ` ${Math.abs(charge)}` : ""}${charge > 0 ? "+" : "-"}` : "");
 }
 
 /**

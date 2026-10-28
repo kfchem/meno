@@ -309,6 +309,32 @@ describe("cleanUp", () => {
     }
   });
 
+  it("lays out the rest beside one whose wedges cannot be kept - drawn crossed - and names it, with its charge where it has one", async () => {
+    // a centre with a wedge and a hash in line, its other two bonds across: what Clean-up cannot keep; and a butane
+    const cross = [atom(1, 0, 0), atom(2, 1.8, 0), atom(3, -1.8, 0), atom(4, 0, 1.8), atom(5, 0, -1.8, "N")];
+    const crossBonds: Bond[] = [
+      { id: 11, a: 1, b: 2, order: 1, stereo: "up", stereoOrient: "principle" },
+      { id: 12, a: 1, b: 3, order: 1, stereo: "down", stereoOrient: "principle" },
+      { id: 13, a: 1, b: 4, order: 1 },
+      { id: 14, a: 1, b: 5, order: 1 },
+    ];
+    const butane = [0, 1, 2, 3].map((i) => atom(300 + i, 40 + i, i % 2 ? 0.6 : 0));
+    const butaneBonds: Bond[] = [0, 1, 2].map((i) => ({ id: 400 + i, a: 300 + i, b: 301 + i, order: 1 }));
+    const { store } = canvas({ atoms: [...cross, ...butane], bonds: [...crossBonds, ...butaneBonds] });
+    const refused = await cleanUp(store).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(refused).toBeInstanceOf(CleanUpRefused);
+    expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C4H11N: the wedges at C .*, so it was left as it is\.$/);
+    const after = store.getState().model;
+    for (const a of cross) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
+    const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);
+    expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+    // (a formula's charge: NH4+)
+    expect(partFormula({ atoms: [{ ...atom(1, 0, 0, "N"), charge: 1 }], bonds: [] })).toBe("H4N+");
+  });
+
   it("lays out only the structure an atom is in, when asked about one", async () => {
     const { store } = canvas(model);
     await cleanUp(store, 5);
