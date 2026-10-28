@@ -865,7 +865,7 @@ export function labelUnits(text: string): string[] {
 
 /**
  * A label as written when its bond comes in from the right: read outward
- * from the bond, each unit keeping its count (IUPAC GR-2.3) - OTBS as TBSO,
+ * from the bond, each unit keeping its count (IUPAC GR-2.3.3, GR-2.1.6) - OTBS as TBSO,
  * CO2Me as MeO2C, NHBoc as BocHN - and what parentheses hold the same way.
  */
 export function reversedLabel(text: string): string {
