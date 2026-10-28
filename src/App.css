@@ -206,6 +206,16 @@ body {
 .meno-words-gone {
   opacity: var(--stand-in, 0);
 }
+/* Words shown as grey bars where they are too small to read (workflow/TextBars): the words themselves unseen, faded out, and nothing pressed. */
+.meno-barred,
+.meno-barred * {
+  color: transparent !important;
+  transition: color 120ms var(--ease-meno);
+  pointer-events: none;
+}
+.meno-barred ::placeholder {
+  color: transparent !important;
+}
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
 [data-presenting] .meno-control-chip {

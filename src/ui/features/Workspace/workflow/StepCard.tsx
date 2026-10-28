@@ -1,3 +1,4 @@
+import TextBars from "./TextBars";
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -164,8 +165,6 @@ export type StepCardProps = {
   onShowRun: (index: number) => void;
   /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
   onKeepRun: (index: number, keep: boolean) => void;
-  /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
-  onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
@@ -252,7 +251,7 @@ export default function StepCard(p: StepCardProps) {
         </div>
         {/* (its options open and shut as a card does, never at a jump: the card grows and shrinks with them) */}
         <AnimatePresence initial={false}>
-        {p.open && !p.compact && (
+        {p.open && (
           <motion.div
             key="options"
             initial={{ height: 0, opacity: 0 }}
@@ -261,7 +260,8 @@ export default function StepCard(p: StepCardProps) {
             transition={{ duration: DURATION.base, ease: EASE }}
             style={{ overflow: "hidden" }}
           >
-          <div className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
+          {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
+          <TextBars on={p.compact} className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
             {p.kinds.length > 1 && (
               <div className="mb-3">
                 <OptionsForm
@@ -312,12 +312,7 @@ export default function StepCard(p: StepCardProps) {
                 {p.drops && <div className="mt-1.5 text-[11px] leading-4 text-gh-gray">{`Running again drops ${p.drops} from this workspace`}</div>}
               </div>
             )}
-            <div className="mt-3 flex justify-end">
-              <button onClick={p.onClose} className="h-6 rounded-md border border-gh-line bg-white px-2 text-[11px] text-gh-black hover:bg-gh-base">
-                Close
-              </button>
-            </div>
-          </div>
+          </TextBars>
           </motion.div>
         )}
         </AnimatePresence>

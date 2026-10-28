@@ -10,7 +10,7 @@ import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
-import { clickedOpen } from "../workflow/cardOpen";
+import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -403,8 +403,8 @@ export default function Workflow2D() {
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
   const choosingAtoms = useEditor((s) => s.choosingAtoms);
-  // (the step a click last opened, and when: a double-click's second click leaves it open)
-  const opened = useRef<{ step: number; at: number } | null>(null);
+  // (the step last clicked, when, and whether it was open then: a double-click on it, open, shuts it - workflow/cardOpen)
+  const clicked = useRef<CardClick | null>(null);
 
   // (the card just shut kept over the others while it shrinks back)
   const [shutting, setShutting] = useState<number | null>(null);
@@ -708,10 +708,9 @@ export default function Workflow2D() {
     const open = () => {
       const s = store.getState();
       const now = performance.now();
-      const next = clickedOpen(s.openStep, step.id, opened.current, now);
-      if (next === s.openStep) return;
-      if (next === step.id) opened.current = { step: step.id, at: now };
-      s.setWorkflowView({ openStep: next });
+      const next = clickedOpen(s.openStep, step.id, clicked.current, now);
+      clicked.current = { step: step.id, at: now, wasOpen: s.openStep === step.id };
+      if (next !== s.openStep) s.setWorkflowView(next == null ? { openStep: null, choosingAtoms: null } : { openStep: next });
     };
     if (asSelected(e, { step: step.id }, open)) return;
     const start = worldOf(e.clientX, e.clientY);
@@ -736,20 +735,8 @@ export default function Workflow2D() {
     store.getState().setWorkflowView({ workflowMenu: { kind, id, clientX: e.clientX, clientY: e.clientY } });
   };
 
-  // a step open to its options: shut by Escape, its Close, or its card pressed again - not by a press elsewhere:
-  // the page is worked on (panned, scrolled, other cards) while its options are
-  useEffect(() => {
-    if (openStep == null) return;
-    const shut = () => store.getState().setWorkflowView({ openStep: null });
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      shut();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [openStep, store]);
+  // (a step open to its options is shut only by a double-click on its card: not by Escape, a press elsewhere or a zoom -
+  // the page is worked on, panned, zoomed and other cards opened, while its options stay open; workflow/cardOpen)
 
   // a set chosen: let go by a press anywhere but its tab, or Escape
   useEffect(() => {
@@ -954,7 +941,6 @@ export default function Workflow2D() {
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}
-            onClose={() => store.getState().setWorkflowView({ openStep: null, choosingAtoms: null })}
             onCardDown={(e) => dragStep(e, s)}
             onContextMenu={menuOf("step", s.id)}
             onHover={(on) => (on ? hover({ hoveredStep: s.id }) : unhover("hoveredStep", s.id))}
