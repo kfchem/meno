@@ -159,6 +159,20 @@ make, then the declared ones; chosen, the entry says the motion's id
 bonds in its extras. The options that adjust a motion are the role's,
 each `when` it is chosen - Once or Loop among them.
 
+### How long a film can be
+
+A film is never asked shorter than its motion can be read in (the
+maintainer, 2026-10-28): each motion says its shortest - Meno's own
+(turning once round 3 s; through its frames, or in a vibration, 2 s), a
+renderer's in its manifest (`shortest`, docs/PLUGINS.md, *Motions*). A
+motion that changes one molecule into the next says each change's
+shortest, and Meno multiplies it by the changes - one fewer than the
+molecules, or as many where the film loops back to the first (the role's
+`loopWhen` says when). The card's *Length* is bounded by it, and says so
+under it ("At least 12 s for 3 molecules"); a length chosen before that is
+shorter is raised to it, and the card says that instead. The longest it
+asks is 60 s, or the shortest where that is longer.
+
 ## Render as a step
 
 **Render** is a kind of a workflow's step too (WORKFLOWS.md, *Kinds of

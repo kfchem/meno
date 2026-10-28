@@ -349,6 +349,10 @@ class Manifest(unittest.TestCase):
         # (Once or Loop is shown for its motions, and only for them)
         mode = next(o for o in m["roles"][0]["options"] if o["id"] == "mode")
         self.assertEqual(mode["when"], {"id": "motion", "in": declared})
+        # (each says how short a film of it can be; a change, each change's; and Loop is the mode's)
+        for x in m["roles"][0]["motions"]:
+            self.assertIn("change" if x["id"].startswith("change-") else "film", x.get("shortest", {}), x["id"])
+        self.assertEqual(m["roles"][0]["loopWhen"], {"id": "mode", "in": ["loop"]})
 
 
 class Motions(unittest.TestCase):

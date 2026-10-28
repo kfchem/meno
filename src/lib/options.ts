@@ -31,7 +31,17 @@ export type ChoiceOption = OptionBase & {
   choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
-export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known };
+export type NumberOption = OptionBase & {
+  type: "number";
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  from?: Known;
+  /** What bounds it, said under the field, where the label alone does not say it - Meno's own options' alone. */
+  note?: string;
+};
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
