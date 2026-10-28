@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- A XYZ file opened by Meno: Meno's sheet, its corner folded, its mark, and the format's short name on a band (Meno's own drawing). -->
+  <path d="M232 64h416l184 184v680a32 32 0 0 1-32 32H232a32 32 0 0 1-32-32V96a32 32 0 0 1 32-32z" fill="#ffffff" stroke="#c9d1d9" stroke-width="16" stroke-linejoin="round"/><path d="M648 64v152a32 32 0 0 0 32 32h152" fill="#eef1f4" stroke="#c9d1d9" stroke-width="16" stroke-linejoin="round"/>
+  <g transform="translate(424 230) scale(0.36)" fill="#317689"><path d="M172 328.5c0-38.9 31.3-70.5 70-70.5s70 31.6 70 70.5-31.3 70.5-70 70.5-70-31.6-70-70.5zM0 258.4C.4 115.5 108.8 0 242.3 0 375.7.2 483.8 116 484 258.9l-58.8.1C425 148.6 327.2 80.8 239 82.3 150.8 83.8 59.2 148.2 58.8 258.6z"/></g>
+  <rect x="200" y="560" width="632" height="250" rx="24" fill="#1a1f2b"/>
+  <path d="M445.6 766L410.2 766L373.4 704.4L372.7 704.4L336.4 766L303.2 766L355.2 683.7L305.6 605.5L341 605.5L375 662.5L375.7 662.5L410.2 605.5L443.3 605.5L393.2 683.7ZM507 766L507 703L452.1 605.5L486.1 605.5L523.1 673.3L523.6 673.3L559.7 605.5L592.8 605.5L537.6 702.8L537.6 766ZM724.1 766L603.9 766L603.9 738.9L686.9 632.4L608 632.4L608 605.5L721.9 605.5L721.9 632.6L638.6 739.1L724.1 739.1Z" fill="#ffffff"><title>XYZ</title></path>
+</svg>
