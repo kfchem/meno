@@ -1983,12 +1983,15 @@ function buildHashes(
   const first = from + depth / 2;
   const last = end - depth / 2;
   const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
-  // (more than the spacing gives: as many as fit, each a line width deep and a line width clear, from the root on)
+  // (more than the spacing gives: as many as fit, each a line width deep and a line width clear - from the first on, or,
+  // where the first would stand off the root - a bare atom's spacing - from the root on, never fewer that way)
   const base = Math.max(0, Math.min(root, from));
-  const fit = Math.floor((last - base) / (2 * lineWidth) + 1e-9);
+  const offRoot = from > base + 1e-9;
+  const fromFirst = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  const fit = offRoot ? Math.max(fromFirst, Math.floor((last - base) / (2 * lineWidth) + 1e-9)) : fromFirst;
   const count = Math.max(spaced, Math.min(fewest, fit));
-  // (where the first would stand off the root - a bare atom's spacing: at a label it is flush, and the rest even after it)
-  const even = count > spaced && from > base + 1e-9;
+  // (set from the root where it stands off it: at a label the first is flush, and the rest even after it)
+  const even = count > spaced && offRoot;
   // half the outline's width, a distance `at` from the narrow atom: from where the hashes start
   const o = even ? base : from;
   const halfAt = (at: number) =>
