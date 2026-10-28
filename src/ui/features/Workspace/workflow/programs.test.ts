@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
@@ -115,6 +115,12 @@ describe("the jobs a plugin prepares", () => {
       expect(readRefused({ ...raw, refused: bad }, 3)).toEqual([]);
       expect(readPrepared({ ...raw, refused: bad }, 3)).toBe("It prepared no job for some of what came in");
     }
+  });
+
+  it("say what the plugin says of how it prepared them, in a line of plain words - none where it says none", () => {
+    expect(readNote({ jobs: [job], note: "  frequencies computed\n numerically " })).toBe("frequencies computed numerically");
+    for (const raw of [{ jobs: [job] }, { jobs: [job], note: " " }, { jobs: [job], note: 3 }, null]) expect(readNote(raw)).toBeUndefined();
+    expect(readNote({ jobs: [job], note: "x".repeat(400) })?.length).toBe(300);
   });
 });
 

@@ -28,8 +28,9 @@ Multi-Process Modules", "Implicit Solvation Models"), and from nothing
 else:
 
 - a simple input line, begun by "!": the method and basis set, a
-  dispersion correction (D3BJ, D4), the run - SP, OPT or FREQ - and, for
-  implicit solvation, CPCM(solvent) or SMD(solvent). What is typed into
+  dispersion correction (D3BJ, D4), the run - SP, OPT or FREQ (NUMFREQ
+  at ORCA's own xTB, which has no analytic Hessian: said on the step's
+  line) - and, for implicit solvation, CPCM(solvent) or SMD(solvent). What is typed into
   it - the method, the basis set, the keywords - stays on that line, with
   no "#", which begins a comment, and no "%", which begins a block: the
   manual names a file or a program only in a block, in quotes (%MOInp
@@ -75,6 +76,17 @@ WAVEFUNCTION_KIND = "molden"
 KIND = "orca"
 
 RUNS = {"optimise": "OPT", "energy": "SP", "frequencies": "FREQ"}
+# ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
+# one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
+NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
+NUMERICAL = "NUMFREQ"
+# (said on the step's line, so that what was chosen for the chemist is never hidden)
+NUMERICAL_SAID = "frequencies computed numerically"
+
+
+def numerical(step, options):
+    """Whether a step's frequencies are asked for numerically: a Frequencies step at ORCA's own xTB."""
+    return step == "frequencies" and any(NATIVE_XTB.fullmatch(w) for w in str(options.get("method", "")).split())
 DISPERSIONS = {"none": "", "D3BJ": "D3BJ", "D4": "D4"}
 SOLVATIONS = {"none", "CPCM", "SMD"}
 # the solvents offered, as ORCA names them - one word each, for a simple input line
@@ -147,6 +159,8 @@ def orca_input(step, entry, options, cores):
     method = words(options.get("method", ""), "The method")
     if not method:
         raise Refused("there is no method")
+    if numerical(step, options):
+        run = NUMERICAL
     basis = words(options.get("basis", ""), "The basis set")
     dispersion = DISPERSIONS.get(options.get("dispersion", "none"))
     if dispersion is None:
@@ -211,7 +225,7 @@ def op_prepare(m):
         })
     if not jobs:
         raise Refused("nothing came in")
-    return {"jobs": jobs}
+    return {"jobs": jobs, **({"note": NUMERICAL_SAID} if numerical(step, options) else {})}
 
 
 def output_name(entry):
