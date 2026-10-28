@@ -542,8 +542,10 @@ function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: 
     const el = tab.current;
     const row = el?.parentElement;
     if (!chosen || !el || !row) return;
-    const left = el.offsetLeft - row.offsetLeft;
-    const right = left + el.offsetWidth;
+    // (by the boxes on screen, not offsetLeft: holds if anything between them is positioned)
+    const at = el.getBoundingClientRect();
+    const left = at.left - row.getBoundingClientRect().left - row.clientLeft + row.scrollLeft;
+    const right = left + at.width;
     const to = left < row.scrollLeft ? left - 4 : right > row.scrollLeft + row.clientWidth ? right - row.clientWidth + 4 : null;
     if (to != null) row.scrollTo({ left: Math.max(0, to), behavior: "smooth" });
   }, [chosen]);
