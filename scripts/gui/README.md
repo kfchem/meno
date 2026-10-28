@@ -104,7 +104,8 @@ available:
 
 | | |
 |---|---|
-| `Start-Meno` | start the app under test, sized and in front |
+| `Start-Meno [-HomeFolder]` | start the app under test, sized and in front; on a Mac, `-HomeFolder` starts it as if that folder were the user's home, in a profile of its own there - settings, plugins and all - which is how a run sees Meno as someone opening it for the first time |
+| `Find-MenoPart -Role -Name [-Within] [-TimeoutSec]` | a part of the window found by what Accessibility calls it, as a reader of the window sees it - `Find-MenoPart Button Settings`, or `-Within` the part it sits in, to tell two apart - in shot pixels: `X`, `Y`, `Width`, `Height` and its middle, `CX`, `CY`. Waited for, since the web view builds what Accessibility sees of its page only once asked; not there, the run stops and says what is. On a Mac only |
 | `Open-MenoFile -Path` | open a structure with Ctrl/Cmd+O: in place of the first tab's blank canvas, or in a tab of its own |
 | `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons, clicked where Quick Add is seen to stand in a shot (where it stands depends on the plugins added and procedures saved): `Chain` begins a chain at the point, `SMILES` opens its field, `Shapes` and `Calculations` theirs |
 | `Add-MenoSmiles -Smiles [-X -Y] [-WaitSec]` | a structure from a SMILES, by Quick Add, centred at the point (the middle of the canvas unless told), and let go of |

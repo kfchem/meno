@@ -275,6 +275,67 @@ public static class MacGui {
     } finally { CFRelease(sys); }
   }
 
+  public class Part {
+    public string Role; public string Name; public string Within;
+    public double X, Y, Width, Height;
+  }
+
+  [DllImport(CF)] static extern ulong CFGetTypeID(IntPtr o);
+  [DllImport(CF)] static extern ulong CFStringGetTypeID();
+
+  static string AxText(IntPtr e, string attr) {
+    IntPtr v;
+    if (AXUIElementCopyAttributeValue(e, Str(attr), out v) != 0 || v == IntPtr.Zero) return null;
+    try {
+      if (CFGetTypeID(v) != CFStringGetTypeID()) return null;
+      byte[] buf = new byte[2048];
+      if (!CFStringGetCString(v, buf, buf.Length, Utf8)) return null;
+      string s = System.Text.Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0)).Trim();
+      return s.Length == 0 ? null : s;
+    } finally { CFRelease(v); }
+  }
+
+  // The parts of an app's windows that Accessibility names, as a reader of
+  // the window sees them: each one's role (AXButton), its name (its title, or
+  // its description, or a text's words), the names of the parts it sits in,
+  // innermost first, and where it is, in global points. A web view builds
+  // this for its page the first time it is asked, so the first answer may
+  // be the window alone: ask again.
+  public static List<Part> Parts(int pid) {
+    var parts = new List<Part>();
+    IntPtr app = AXUIElementCreateApplication(pid);
+    try {
+      IntPtr wins;
+      if (AXUIElementCopyAttributeValue(app, Str("AXWindows"), out wins) != 0 || wins == IntPtr.Zero) return parts;
+      try {
+        long n = CFArrayGetCount(wins);
+        for (long i = 0; i < n; i++) Walk(CFArrayGetValueAtIndex(wins, i), new List<string>(), parts, 0);
+      } finally { CFRelease(wins); }
+    } finally { CFRelease(app); }
+    return parts;
+  }
+
+  static void Walk(IntPtr e, List<string> within, List<Part> parts, int depth) {
+    string role = AxText(e, "AXRole") ?? "";
+    string name = AxText(e, "AXTitle") ?? AxText(e, "AXDescription") ?? (role == "AXStaticText" ? AxText(e, "AXValue") : null);
+    if (name != null) {
+      CGPoint p; CGSize s;
+      if (ReadPoint(e, out p) && ReadSize(e, out s) && s.Width > 0 && s.Height > 0) {
+        var inner = new List<string>(within); inner.Reverse();
+        parts.Add(new Part { Role = role, Name = name, Within = string.Join("\n", inner), X = p.X, Y = p.Y, Width = s.Width, Height = s.Height });
+      }
+    }
+    if (depth > 80) return;
+    IntPtr kids;
+    if (AXUIElementCopyAttributeValue(e, Str("AXChildren"), out kids) != 0 || kids == IntPtr.Zero) return;
+    try {
+      if (name != null) within.Add(name);
+      long n = CFArrayGetCount(kids);
+      for (long i = 0; i < n; i++) Walk(CFArrayGetValueAtIndex(kids, i), within, parts, depth + 1);
+      if (name != null) within.RemoveAt(within.Count - 1);
+    } finally { CFRelease(kids); }
+  }
+
   // The process a process answers to - a web view's content process, the
   // app it draws for.
   public static int ResponsiblePid(int pid) {
@@ -445,10 +506,14 @@ function Start-MenoProcess {
       Start a build: an app bundle through Launch Services, the way it is
       started from the Finder, or a bare executable as it is.
     #>
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [string] $HomeFolder)
+    # (-HomeFolder: started as if that were the user's home - its settings, plugins and all in a profile of its own there)
+    $envArgs = if ($HomeFolder) { @("--env", "HOME=$HomeFolder") } else { @() }
     if ((Test-Path -PathType Container $Path) -and $Path.TrimEnd("/").EndsWith(".app")) {
-        & /usr/bin/open -n $Path
+        & /usr/bin/open -n @envArgs $Path
         if ($LASTEXITCODE -ne 0) { throw "open could not start '$Path'" }
+    } elseif ($HomeFolder) {
+        Start-Process -FilePath /usr/bin/env -ArgumentList "HOME=$HomeFolder", $Path | Out-Null
     } else {
         Start-Process -FilePath $Path | Out-Null
     }
@@ -695,6 +760,54 @@ function ConvertTo-Screen {
         throw "($X, $Y) is outside the window, which is $([int]($w.Width * $k))x$([int]($w.Height * $k)) in shot pixels"
     }
     return @{ X = $w.X + $X / $k; Y = $w.Y + $Y / $k }
+}
+
+function Find-MenoPart {
+    <#
+      .SYNOPSIS
+      A part of Meno's window found by what Accessibility calls it - its
+      role and its name, as a reader of the window sees them - not by where
+      it was last time.
+
+      .DESCRIPTION
+      -Within names a part it sits in, to tell apart two of the same name
+      (an Add in the row of one plugin, say). It comes back in pixels of the
+      window's shot, like every coordinate here: X, Y, Width, Height, and its
+      middle, CX and CY. It is waited for, up to -TimeoutSec: the web view
+      builds what Accessibility sees of its page only once asked, and a part
+      may be on its way in. Not there, or not the only one, the run stops,
+      saying what is there.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Role,
+        [Parameter(Mandatory)] [string] $Name,
+        [string] $Within,
+        [double] $TimeoutSec = 5
+    )
+    $axRole = if ($Role.StartsWith("AX")) { $Role } else { "AX$Role" }
+    $what = "$Role '$Name'$(if ($Within) { " in '$Within'" })"
+    $until = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
+    do {
+        $w = Get-WindowInfo
+        # (parts of the window alone, and in view: one scrolled out of it cannot be clicked)
+        $inView = @([MacGui]::Parts($script:MenoPid) | Where-Object {
+            $_.X -ge $w.X - 0.5 -and $_.Y -ge $w.Y - 0.5 -and $_.X + $_.Width -le $w.X + $w.Width + 0.5 -and $_.Y + $_.Height -le $w.Y + $w.Height + 0.5 })
+        $found = @($inView | Where-Object { $_.Role -eq $axRole -and $_.Name -eq $Name -and (-not $Within -or ($_.Within -split "`n") -contains $Within) })
+        if ($found.Count -gt 1) { throw "$($found.Count) parts are $what in Meno's window: tell them apart with -Within" }
+        if ($found.Count -eq 1) {
+            $k = Get-ShotScale
+            $p = $found[0]
+            $x = ($p.X - $w.X) * $k; $y = ($p.Y - $w.Y) * $k
+            return [pscustomobject]@{
+                X = [int][math]::Round($x); Y = [int][math]::Round($y)
+                Width = [int][math]::Round($p.Width * $k); Height = [int][math]::Round($p.Height * $k)
+                CX = [int][math]::Round($x + $p.Width * $k / 2); CY = [int][math]::Round($y + $p.Height * $k / 2)
+            }
+        }
+        Start-Sleep -Milliseconds 300
+    } while ([DateTime]::UtcNow -lt $until)
+    $there = ($inView | Where-Object { $_.Role -ne "AXStaticText" } | Select-Object -First 40 | ForEach-Object { "$($_.Role.Substring(2)) '$($_.Name)'" }) -join ", "
+    throw "no $what in Meno's window. There is: $there"
 }
 
 function Save-WindowShot {
@@ -1124,7 +1237,7 @@ function Wait-MenoSettled {
 
 Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
-    ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
+    ConvertTo-Screen, Find-MenoPart, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
     # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
     Find-SystemWindow, Find-WindowAt

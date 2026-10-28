@@ -89,14 +89,17 @@ function Start-Meno {
       .SYNOPSIS
       Start the app under test, and see off any copy already running: a
       second instance would put its window over the one being driven.
+      -HomeFolder starts it in a profile of its own (a Mac only): as if that
+      folder were the user's home, with its settings and plugins there.
     #>
+    param([string] $HomeFolder)
     Get-MenoApp | ForEach-Object {
         Write-Host "  closing a Meno that was already running (pid $($_.Id))"
         Close-MenoProcess -Process $_
     }
     Start-Sleep -Milliseconds 500
     Write-Host "  starting $Exe"
-    Start-MenoProcess -Path $Exe
+    if ($HomeFolder) { Start-MenoProcess -Path $Exe -HomeFolder $HomeFolder } else { Start-MenoProcess -Path $Exe }
     Get-MenoWindow -ProcessName Meno -TimeoutSec 40 | Out-Null
     Set-MenoWindow -Width $Width -Height $Height
     # The first paint lands a moment after the window does.
