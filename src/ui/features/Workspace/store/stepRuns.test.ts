@@ -1,3 +1,4 @@
+import { jobStateSaid } from "../utils/texts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job, JobAsk } from "../../../../lib/jobs";
 
@@ -652,6 +653,14 @@ describe("a step that runs a plugin's program", () => {
     // (kept with the workspace: its jobs and the one shown)
     const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
     expect(ws?.texts.find((t) => t.name === logs[0].name)?.of).toEqual({ step, jobs: ids, job: 2 });
+    // (how each ended, kept with its run: said in its chooser in a workspace reopened, none looked at there)
+    const ended = st().steps.find((x) => x.id === step)!.ran!;
+    expect(ended.states).toEqual(["failed", "failed", "failed"]);
+    const reopened = ws!.workflow!.steps.find((x) => x.id === step)!.ran!;
+    expect(reopened.states).toEqual(["failed", "failed", "failed"]);
+    expect(jobStateSaid(ids[1], {}, reopened)).toBe("failed");
+    // (looked at in this session: as last looked at)
+    expect(jobStateSaid(ids[1], { [ids[1]]: { state: "running" } }, reopened)).toBe("running");
     // (two chosen quickly, the first read late: the last chosen is the one shown)
     logDelay.set(ids[0], 50);
     const first = st().showStepLogJob(logs[0].id, 0);

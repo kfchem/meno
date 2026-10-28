@@ -4,6 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
+import type { JobState } from "../../../../lib/jobs";
 import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, SeriesCore, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import { numberIn, tableIn } from "../../../../lib/table";
@@ -130,6 +131,8 @@ function readSet(v: unknown): WorkflowSet | null {
 
 /** A job's id, as Meno makes them: a UUID. */
 // (a job's id, as Meno names one - its label, path-safe, and eight hex of its own (jobs.rs `job_id_ok`) - or as it did, a UUID)
+/** How a job may have ended, or stood, as a run's record says (lib/jobs `JobState`). */
+const JOB_STATES: readonly JobState[] = ["waiting", "running", "done", "failed", "stopped", "gone"];
 /** A job's id, as jobs are named (lib/jobs): what a file may name one by. */
 export const JOB = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 /** A file's name in a job's folder: inside it. */
@@ -154,6 +157,9 @@ function readRan(v: unknown): StepRan | undefined {
   const digests = (r as { gave?: unknown }).gave;
   const gave = keys && Array.isArray(digests) && digests.length === jobs.length && digests.every((g) => g === null || isJobKey(g)) ? (digests as (string | null)[]) : undefined;
   const options = optionsIn(r.options);
+  // (how each of several jobs ended, one for each: or none)
+  const told = (r as { states?: unknown }).states;
+  const states = jobs.length > 1 && Array.isArray(told) && told.length === jobs.length && told.every((x) => JOB_STATES.includes(x as JobState)) ? (told as JobState[]) : undefined;
   return {
     at: r.at,
     ok: r.ok,
@@ -164,6 +170,7 @@ function readRan(v: unknown): StepRan | undefined {
     ...(jobs.length ? { jobs } : {}),
     ...(keys ? { keys } : {}),
     ...(gave ? { gave } : {}),
+    ...(states ? { states } : {}),
     ...readAccounting(r),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),

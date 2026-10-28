@@ -17,7 +17,7 @@ import Select from "../../controls/Select";
 import StructuresTableBody from "./workflow/StructuresTableBody";
 import { readAsTable } from "./workflow/entries";
 import { setName } from "./workflow/doers";
-import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
+import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, jobStateSaid, lostSaid, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
@@ -225,6 +225,9 @@ function Column({
   const jobsSeen = useEditor((st) => st.jobsSeen);
   const logOf = shown?.of && "step" in shown.of ? shown.of : null;
   const logJobs = logOf?.jobs && logOf.jobs.length > 1 ? { jobs: logOf.jobs, job: logOf.job ?? 0 } : null;
+  // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
+  const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
+  const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
@@ -263,9 +266,10 @@ function Column({
           <Select
             label="Job"
             value={String(logJobs.job)}
-            options={logJobs.jobs.map((id, k) => ({ value: String(k), label: `Job ${k + 1} of ${logJobs.jobs.length}${jobsSeen[id]?.state ? ` · ${jobsSeen[id].state}` : ""}` }))}
+            options={logJobs.jobs.map((id, k) => ({ value: String(k), label: `Job ${k + 1} of ${logJobs.jobs.length}${jobState(id) ? ` · ${jobState(id)}` : ""}` }))}
             onChange={(v) => void store.getState().showStepLogJob(shown.id, Number(v))}
             className="shrink-0 max-w-[11rem]"
+            variant="quiet"
           />
         )}
         {shown && markdown && (

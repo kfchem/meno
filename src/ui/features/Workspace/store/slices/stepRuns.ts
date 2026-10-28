@@ -1,3 +1,4 @@
+import type { JobState } from "../../../../../lib/jobs";
 import type { StoreApi } from "zustand";
 import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -1260,7 +1261,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const ids = run.jobs.map((j) => j.id);
       // (the kind and options it ran as: the step's may have changed since)
       const kind = run.kind ?? step.kind;
-      const as = { kind, options: run.options };
+      // (and, of several jobs, how each ended: said of each in its log's chooser, the workspace reopened)
+      const as = { kind, options: run.options, ...(ids.length > 1 ? { states: records.map((r): JobState => r?.state ?? "gone") } : {}) };
       const close = () => doc.amend((x) => setRunning(x, id, undefined), { unsaved: true });
 
       // stopped - or every one gone without saying how it ended: nothing comes in. (Some gone - the computer restarted,

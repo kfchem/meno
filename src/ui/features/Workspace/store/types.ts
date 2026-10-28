@@ -827,6 +827,8 @@ export type StepRan = {
   keys?: string[];
   /** What each of `jobs` gave as it was read, as one digest (lib/jobs `jobDigest`) - none where it was not read: a job taken up again must give the same. */
   gave?: (string | null)[];
+  /** How each of `jobs` ended, as its record said as the run ended - where there were several: what its log's chooser says of each, the workspace reopened (TextColumn). */
+  states?: JobState[];
   /** Stopped on output Meno cannot account for: the jobs it could not, by id, and the run as it stood - for *Adopt* to take up again. */
   unaccounted?: string[];
   held?: StepRunning;
