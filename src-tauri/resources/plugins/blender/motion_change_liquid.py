@@ -396,7 +396,7 @@ else:
             ob.data.shape_keys.key_blocks["drop"].value = g; ob.data.shape_keys.key_blocks["drop"].keyframe_insert("value", frame=f)
             ob.data.shape_keys.key_blocks["tall"].value = max(0.0, wob) * g; ob.data.shape_keys.key_blocks["tall"].keyframe_insert("value", frame=f)
     # (the frames over which A fades out over B, about the swap: within the drop's hold, however few frames the reform has)
-    XF = max(2, min(CFG.get("dissolve", 6), int(round(N * (HOLD + 0.04)))))
+    XF = max(2, min(CFG.get("dissolve", 6), int(N * HOLD)))
     f0, f1 = F_SWAP - XF // 2, F_SWAP - XF // 2 + XF
     PA.hide_render = False; PA.keyframe_insert("hide_render", frame=1)
     PA.hide_render = True; PA.keyframe_insert("hide_render", frame=f1)
