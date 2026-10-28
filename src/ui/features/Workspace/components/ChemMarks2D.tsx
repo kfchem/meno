@@ -1,5 +1,5 @@
 import PageHtml from "./PageHtml";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
@@ -14,7 +14,7 @@ import {
   MARK_SCALE,
   MARKS_APART,
   STEREO_GAP,
-  marksSeenAt,
+  marksReadAt,
   stereoPlaces,
   stereoTextEms,
   stereoTextItem,
@@ -22,6 +22,7 @@ import {
   type ChemMarks,
 } from "../chem/marks";
 import { useEditor } from "../store";
+import { switchFade, switchStep, type SwitchFade } from "../utils/zoomSwitch";
 import type { Model } from "../store/types";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { usePresence } from "../../../theme/presence";
@@ -125,8 +126,9 @@ export default function ChemMarks2D({
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
   const fontPx = Math.max(MARK_MIN_PX, labelFont * MARK_SCALE * z);
-  // (and, the view far out, how far they are still seen: marksSeenAt)
-  const seenAtZoom = marksSeenAt(labelFont * MARK_SCALE * z);
+  // (and, the view far out, whether they are still seen: switched past their least size, not faded with the zoom - marksReadAt)
+  const marksRead = useRef(true);
+  marksRead.current = marksReadAt(marksRead.current, labelFont * MARK_SCALE * z);
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
@@ -282,9 +284,13 @@ export default function ChemMarks2D({
     return now;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stereoKeys: as stereoShown
   }, [stereoShown, stereoLeaving]);
-  // (and, the view far out, faded with the zoom: marksSeenAt)
-  const stereoSeen = useRef(seenAtZoom);
-  stereoSeen.current = seenAtZoom;
+  // (and, switched there, faded in or out over a short time: utils/zoomSwitch)
+  const seen = useRef<SwitchFade>(switchFade(marksRead.current));
+  const stereoSeen = useRef(seen.current.v);
+  useFrame((_, dt) => {
+    if (switchStep(seen.current, marksRead.current, Math.min(dt, 1 / 20))) invalidate();
+    stereoSeen.current = seen.current.v;
+  });
   const boxesLeaving = useMemo(() => new Set(valenceShown.filter((s) => s.leaving).map((s) => s.key)), [valenceShown]);
   const boxesNow = useMemo(() => valenceShown.map(({ item }) => item), [valenceShown]);
   const pointed = valenceShown.find(({ item: m, leaving }) => !leaving && (m.bond ? hoveredBond === m.id : hoveredAtom === m.id))?.item;
@@ -295,8 +301,8 @@ export default function ChemMarks2D({
       {/* each R, S, E and Z taken hold of on its letters, and moved by hand */}
       {stereoShown.map(({ key, item: m, leaving }) => {
         const base = from.get(key);
-        // (none to take hold of where it is mostly faded with the zoom)
-        if (leaving || !base || seenAtZoom < 0.5) return null;
+        // (none to take hold of where they are switched off with the zoom)
+        if (leaving || !base || !marksRead.current) return null;
         const id = Number(key.slice(key.indexOf("-") + 1));
         return (
           <MarkHold
