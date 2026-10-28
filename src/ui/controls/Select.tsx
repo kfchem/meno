@@ -90,9 +90,16 @@ export default function Select<T extends string>({
     list.current?.focus();
   }, [open]);
 
+  // (opened: the chosen row in the middle, those either side of it seen; moved through by the keys, only as far as it must)
+  const centred = useRef(false);
   useEffect(() => {
-    if (!open) return;
-    list.current?.querySelector<HTMLElement>(`[data-row="${lit}"]`)?.scrollIntoView({ block: "nearest" });
+    if (!open) {
+      centred.current = false;
+      return;
+    }
+    const row = list.current?.querySelector<HTMLElement>(`[data-row="${lit}"]`);
+    row?.scrollIntoView({ block: centred.current ? "nearest" : "center" });
+    centred.current = true;
   }, [open, lit]);
 
   useEffect(() => {
