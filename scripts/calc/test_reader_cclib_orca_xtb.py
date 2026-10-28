@@ -252,6 +252,8 @@ class TightBindingMethod(unittest.TestCase):
             ("! GFN-FF OPT", ("GFN-FF", "xtb")),
             ("! NATIVE-XTB2 NUMFREQ", ("GFN2-xTB", "orca")),
             ("! Native-GFN-xTB OPT", ("GFN1-xTB", "orca")),
+            ("! NATIVE-XTB OPT", ("GFN2-xTB", "orca")),
+            ("! NATIVE-XTB1", ("GFN1-xTB", "orca")),
         ]:
             self.assertEqual(self.method(line), said, line)
 

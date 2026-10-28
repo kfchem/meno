@@ -678,7 +678,7 @@ ORCA_XTB = {
     "XTB": ("GFN2-xTB", "xtb"), "XTB2": ("GFN2-xTB", "xtb"), "GFN2-XTB": ("GFN2-xTB", "xtb"),
     "XTBFF": ("GFN-FF", "xtb"), "GFN-FF": ("GFN-FF", "xtb"),
     "NATIVE-GFN-XTB": ("GFN1-xTB", "orca"), "NATIVE-GFN1-XTB": ("GFN1-xTB", "orca"), "NATIVE-XTB1": ("GFN1-xTB", "orca"),
-    "NATIVE-GFN2-XTB": ("GFN2-xTB", "orca"), "NATIVE-XTB2": ("GFN2-xTB", "orca"),
+    "NATIVE-XTB": ("GFN2-xTB", "orca"), "NATIVE-GFN2-XTB": ("GFN2-xTB", "orca"), "NATIVE-XTB2": ("GFN2-xTB", "orca"),
 }
 # who ran it, said beside the method
 ORCA_XTB_BY = {"xtb": "the xtb program, through ORCA", "orca": "ORCA itself (its native implementation)"}
