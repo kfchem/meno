@@ -45,7 +45,7 @@ export default function StackChips2D() {
  */
 function StackChip2D({ model, stack, records, index, title, atoms }: { model: Model; stack: number; records: number[]; index: number; title?: string; atoms: ReadonlySet<number> }) {
   const store = useEditorStore();
-  const { gl, invalidate } = useThree();
+  const { invalidate } = useThree();
   const open = useEditor((s) => {
     const { atomId, bondId } = s.hovered;
     if (atomId != null && atoms.has(atomId)) return true;
@@ -69,7 +69,7 @@ function StackChip2D({ model, stack, records, index, title, atoms }: { model: Mo
   });
   return (
     <group ref={group}>
-      <Frames3D count={records.length} frame={index} open={open} onFrame={(k) => store.getState().showRecord(stack, records[k])} area={gl.domElement} title={title} />
+      <Frames3D count={records.length} frame={index} open={open} onFrame={(k) => store.getState().showRecord(stack, records[k])} title={title} />
     </group>
   );
 }
