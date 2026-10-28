@@ -10,7 +10,7 @@ import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
-import { cleanUp, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partOf } from "./cleanUp";
+import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
 import { overlapsMade } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
@@ -278,6 +278,34 @@ describe("cleanUp", () => {
         expect(settled).toMatch(/one atom on another or on a bond, so nothing was moved/);
         expect(after).toEqual(drawn);
       }
+    }
+  });
+
+  it("lays out the rest when it must leave one structure as drawn, and names that one by its formula and why", async () => {
+    // the made-up bridged macrocycle drawn round a circle (the engine lays an atom on a bond there), and a butane
+    const input = fromSmiles("C1CCCCC2CCC(CO2)CCCCCCCC1");
+    const n = input.atoms.length;
+    const R = (n * NOMINAL_BOND_LENGTH) / (2 * Math.PI);
+    const ring = input.atoms.map((a, i) => atom(i + 1, R * Math.cos((2 * Math.PI * i) / n), R * Math.sin((2 * Math.PI * i) / n), a.el));
+    const ringBonds: Bond[] = input.bonds.map((b, i) => ({ id: 100 + i, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 }));
+    const butane = [0, 1, 2, 3].map((i) => atom(300 + i, 40 + i, i % 2 ? 0.6 : 0));
+    const butaneBonds: Bond[] = [0, 1, 2].map((i) => ({ id: 400 + i, a: 300 + i, b: 301 + i, order: 1 }));
+    const drawn: Model = { atoms: [...ring, ...butane], bonds: [...ringBonds, ...butaneBonds] };
+    expect(partFormula({ atoms: ring, bonds: ringBonds })).toBe("C18H34O");
+    const { store, doc } = canvas(drawn);
+    const refused = await cleanUp(store).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    const after = store.getState().model;
+    if (refused) {
+      expect(refused).toBeInstanceOf(CleanUpRefused);
+      expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C18H34O: .*one atom on another or on a bond/);
+      // (the macrocycle as drawn; the butane laid out, at the style's bond, in one step)
+      for (const a of ring) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
+      const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);
+      expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+      expect(doc.history().undoDepth).toBe(1);
     }
   });
 

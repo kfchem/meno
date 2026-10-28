@@ -891,7 +891,9 @@ All hover-based, as above.
   the style's bond length, whatever length it was drawn at, so a structure
   put down too large or too small comes right; one shown magnified stays
   as magnified, at the style's length at its true size. The maintainer,
-  2026-10-27.)
+  2026-10-27. A structure Clean-up cannot lay out - its stereochemistry not
+  kept, an atom put on another - is left as drawn and named by its formula
+  and why, the others laid out all the same, as one undo step.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
