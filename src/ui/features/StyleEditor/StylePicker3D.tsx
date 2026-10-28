@@ -110,13 +110,34 @@ export default function StylePicker3D({
       setDrag(null);
       setOver(null);
     };
+    // (the window left, its pointer's let-go lost, or Escape: a card carried goes back to where it came from, and a
+    // press not yet a drag is let go - opening nothing; the card never left stuck to the pointer, nor its hand)
+    const putBack = () => {
+      const p = pressed.current;
+      pressed.current = null;
+      if (!p || !drag) return;
+      flip.capture({ id: drag.id, box: new DOMRect(drag.x - drag.dx, drag.y - drag.dy, drag.w, drag.h) });
+      setDrag(null);
+      setOver(null);
+    };
+    const key = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape" || !pressed.current) return;
+      // (only the carry ends: not what the cards are on as well)
+      e.stopPropagation();
+      e.preventDefault();
+      putBack();
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
+    window.addEventListener("blur", putBack);
+    window.addEventListener("keydown", key, true);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      window.removeEventListener("blur", putBack);
+      window.removeEventListener("keydown", key, true);
     };
   });
 
