@@ -4813,11 +4813,34 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   for (const u of layout.under ?? []) {
     s += `<path d="${toSvgPath(u)}" fill="${xmlAttr(svgColor(u.color))}" stroke="none" />`;
   }
+  // (a line with a round cap at each end - a hash, a dash, a short bond - drawn as one line with round ends rather
+  // than a line and two discs: a disc anti-aliased apart from its line shows as a seam at a small size, a hash as
+  // a little x on a screen at its own pixels - the same shape either way)
+  const capKey = (x: number, y: number) => `${Math.round(x * 1e6)},${Math.round(y * 1e6)}`;
+  const caps = new Map<string, number[]>();
+  (layout.fills || []).forEach((c, i) => {
+    const k = capKey(c.c.x, c.c.y);
+    caps.set(k, [...(caps.get(k) ?? []), i]);
+  });
+  const capAt = (x: number, y: number, r: number, color: string | undefined) =>
+    (caps.get(capKey(x, y)) ?? []).find((i) => Math.abs(layout.fills![i].r - r) < 1e-9 * Math.max(1, r) && layout.fills![i].color === color);
+  const used = new Set<number>();
+  const rounded = new Set<number>();
+  layout.lines.forEach((l, i) => {
+    const r = toCoord(l.widthPx > 0 ? l.widthPx : 1) / 2;
+    const a = capAt(l.x1, l.y1, r, l.color);
+    const z = capAt(l.x2, l.y2, r, l.color);
+    if (a == null || z == null || a === z) return;
+    rounded.add(i);
+    used.add(a);
+    used.add(z);
+  });
   // filled join caps
-  for (const c of layout.fills || []) {
+  (layout.fills || []).forEach((c, i) => {
+    if (used.has(i)) return;
     s += `<circle cx="${c.c.x}" cy="${-c.c
       .y}" r="${c.r}" fill="${xmlAttr(svgColor(c.color, stroke))}" stroke="none" />`;
-  }
+  });
   for (const p of layout.polys) {
     s += `<path d="${toSvgPath(p)}" fill="${xmlAttr(svgColor(p.color, stroke))}" stroke="none" />`;
   }
@@ -4839,12 +4862,12 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
           ` fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`
         : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`;
   }
-  for (const l of layout.lines) {
+  layout.lines.forEach((l, i) => {
     const w = toCoord(l.widthPx > 0 ? l.widthPx : 1);
     s += `<line x1="${l.x1}" y1="${-l.y1}" x2="${l.x2}" y2="${-l.y2}"` +
-      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="butt"` +
+      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="${rounded.has(i) ? "round" : "butt"}"` +
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
-  }
+  });
   for (const t of layout.texts) {
     s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
   }
