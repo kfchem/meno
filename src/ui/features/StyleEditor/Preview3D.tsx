@@ -1,11 +1,10 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Role3D, Style3D } from "../../../lib/chem/style3d";
 import { setCursor } from "../../theme/cursors";
 import KeyLight3D from "../Workspace/components/KeyLight3D";
 import Molecule3DView from "../Workspace/components/Molecule3DView";
-import type { Turn3D } from "../Workspace/store/types";
 import { watchShaderErrors } from "../Workspace/utils/menoShader";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
@@ -21,6 +20,33 @@ const UPRIGHT = new THREE.Vector3(0, 1, 0);
 const IDLE = 0.2;
 /** How gently it takes up its own turn again once let go - by hand, or its coast ended - in seconds (eased, never a jump). */
 const IDLE_TAU = 0.8;
+/**
+ * How often its own turn is drawn, a second: at this speed under a pixel a frame either way, at half the cost of every
+ * frame the screen has (a turn by hand, and its coast, drawn at every one).
+ */
+const IDLE_FPS = 30;
+
+// (one clock for every sample turning on its own: each steps in the same moment, and all are drawn in one frame)
+const turning = new Set<(d: number) => void>();
+let clock: number | null = null;
+function onClock(step: (d: number) => void): () => void {
+  turning.add(step);
+  if (clock == null) {
+    let was = performance.now();
+    clock = window.setInterval(() => {
+      const now = performance.now();
+      const d = Math.min((now - was) / 1000, 1 / 20);
+      was = now;
+      for (const f of turning) f(d);
+    }, 1000 / IDLE_FPS);
+  }
+  return () => {
+    turning.delete(step);
+    if (turning.size || clock == null) return;
+    window.clearInterval(clock);
+    clock = null;
+  };
+}
 /** How far, in pixels, a press goes before it turns the sample: short of it, it is a click, which picks it (`onTap`). */
 const TURN_PX = 4;
 
@@ -99,7 +125,8 @@ function Framing({ style, look }: { style: Style3D; look: Role3D }) {
 
 /** The sample, turned by a drag as a molecule on the canvas is - at the speed, and with the coasting, the style sets. */
 function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: Role3D; onTap?: () => void; turnOn: "anywhere" | "molecule"; idle: boolean }) {
-  const [turn, setTurn] = useState<Turn3D>(SAMPLE_TURN);
+  // (how it is turned: read by the view as each frame is drawn - a turn, by hand or its own, draws the frame alone)
+  const turn = useRef(new THREE.Quaternion(...SAMPLE_TURN));
   const { gl, invalidate, camera, scene, raycaster } = useThree();
   const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
   const styleRef = useRef(style);
@@ -111,11 +138,14 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
   const own = useRef(1);
   // (seen: on the screen, and the window in front - drawn not a frame more while it is not)
   const seen = useRef(true);
-  const turnBy = (axis: THREE.Vector3, angle: number) =>
-    setTurn((was) => {
-      const q = new THREE.Quaternion(...was).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
-      return [q.x, q.y, q.z, q.w];
-    });
+
+  const turnBy = useCallback(
+    (axis: THREE.Vector3, angle: number) => {
+      turn.current.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
+      invalidate();
+    },
+    [invalidate],
+  );
 
   useEffect(() => {
     const dom = gl.domElement;
@@ -187,7 +217,7 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       dom.removeEventListener("pointerup", onUp);
       dom.removeEventListener("pointercancel", onUp);
     };
-  }, [gl, invalidate, camera, scene, raycaster, turnOn]);
+  }, [gl, invalidate, camera, scene, raycaster, turnOn, turnBy]);
 
   // seen or not: on the screen (an IntersectionObserver) and in a window in front; seen again, drawn again
   useEffect(() => {
@@ -211,18 +241,21 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     };
   }, [idle, gl, invalidate]);
 
-  // its own turn, slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again eased after
-  useFrame((_, dt) => {
-    if (!idle || !seen.current) return;
-    const d = Math.min(dt, 1 / 20);
-    if (held.current || spin.current) {
-      own.current = 0;
-      return;
-    }
-    own.current = 1 - (1 - own.current) * Math.exp(-d / IDLE_TAU);
-    turnBy(UPRIGHT, IDLE * own.current * d);
-    invalidate();
-  });
+  // its own turn, slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again
+  // eased after. Stepped by a clock of its own, not each frame: a step drawn asks for a frame, and the screen's every
+  // frame would be drawn again
+  useEffect(() => {
+    if (!idle) return;
+    return onClock((d) => {
+      if (!seen.current) return;
+      if (held.current || spin.current) {
+        own.current = 0;
+        return;
+      }
+      own.current = 1 - (1 - own.current) * Math.exp(-d / IDLE_TAU);
+      turnBy(UPRIGHT, IDLE * own.current * d);
+    });
+  }, [idle, turnBy]);
 
   // let go while turning, it turns on, slowing as the style says
   useFrame((_, dt) => {
@@ -240,7 +273,8 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       style={style}
       look={look}
       frame={0}
-      turn={turn}
+      turn={SAMPLE_TURN}
+      turning={turn}
       lit={0}
       selected={false}
       chosen={NONE}

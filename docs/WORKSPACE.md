@@ -1350,9 +1350,12 @@ space-filling side by side is better science than either alone.
   molecule, and only its name moved it). A slot's molecule turns by itself
   all the time, slowly - a turn in about half a minute, about the screen's
   upright - but while it is turned by hand or coasting from it, taking up
-  its own turn again eased after; nothing is drawn for it while the page is
-  out of sight. A card carried has the hand's pointer all the way, over the
-  other slot's molecule too. A press, or Enter,
+  its own turn again eased after; its own turn is drawn 30 times a second,
+  every slot in the same frame, and turning it - by hand or by itself -
+  draws only the frame, nothing round it; nothing is drawn for it while the
+  page is out of sight. A card carried has the hand's pointer all the way,
+  over the other slot's molecule too; the window left, or Escape, puts it
+  back where it came from. A press, or Enter,
   sets a style below; a right-click, or the menu key, offers Use as
   primary, Use as secondary, Duplicate, Export style… - and, for the user's
   own, Rename and Delete. A built-in style's changes are kept apart,
