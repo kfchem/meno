@@ -85,7 +85,11 @@ export async function drawingOf(molblock: string, style?: DrawingStyle): Promise
   const result = await processFileContent("drawing.mol", molblock);
   const drawn = editorModelOf(result.model);
   // (as it came, said why: put down, it is said - asCameSaid)
-  return laidOut(drawn, style).catch((e: unknown) => ({ ...drawn, asCame: e instanceof Error ? e.message : String(e) }));
+  return laidOut(drawn, style).catch((e: unknown) => {
+    // (kept for whoever looks: what the sentence said plainly leaves out)
+    console.warn("the structure is drawn as the plugin laid it out", e);
+    return { ...drawn, asCame: e instanceof Error ? e.message : String(e) };
+  });
 }
 
 /**
