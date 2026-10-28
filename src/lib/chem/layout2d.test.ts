@@ -964,6 +964,8 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("C"), bond, three, ZOOM, deg).polys)).toEqual(plain);
     const short = hashesOf(buildBondPrimitives(pair("O"), bond, three, ZOOM, deg).polys);
     expect(short).toHaveLength(3);
+    // (set at even steps from the narrow atom: the first as far from it as each from the next - the maintainer, 2026-10-28)
+    expect(short[0].at).toBeCloseTo(spacing(short)[0], 9);
     for (const g of spacing(short)) {
       expect(g).toBeCloseTo(spacing(short)[0], 9);
       expect(g).toBeLessThan(o.hashSpacingPx);
