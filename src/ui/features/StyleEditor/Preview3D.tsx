@@ -9,6 +9,7 @@ import type { Turn3D } from "../Workspace/store/types";
 import { watchShaderErrors } from "../Workspace/utils/menoShader";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
+import { markTurning } from "./sampleTurn";
 
 // --- Preview -------------------------------------------------------------------
 
@@ -26,9 +27,12 @@ const FRAMING_TAU = 0.12;
  * - turned by a drag, at the speed and with the coasting the style sets -
  * and double-clicked, to go over to the other look. A click - a press that
  * goes nowhere - is a click (`onTap`): a turn begins only once a press
- * has really moved.
+ * has really moved. `turnOn` "molecule": only a press on the molecule's
+ * atoms or bonds turns it - marked so (sampleTurn) - and any other press is
+ * left to what holds it: a style's card, moved by a drag (the maintainer,
+ * 2026-10-28); the pointer the turning one only over the molecule.
  */
-export default function Preview3D({ style, look, onDouble, onTap }: { style: Style3D; look: Role3D; onDouble?: () => void; onTap?: () => void }) {
+export default function Preview3D({ style, look, onDouble, onTap, turnOn = "anywhere" }: { style: Style3D; look: Role3D; onDouble?: () => void; onTap?: () => void; turnOn?: "anywhere" | "molecule" }) {
   // (far enough back for a molecule twice the size of its space-filling self)
   const far = useMemo(() => solidOf(SAMPLE_3D, style).reach.secondary * 16, [style]);
   return (
@@ -44,7 +48,7 @@ export default function Preview3D({ style, look, onDouble, onTap }: { style: Sty
       <ambientLight intensity={style.ambientLight} />
       <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
       <Framing style={style} look={look} />
-      <Turnable style={style} look={look} onTap={onTap} />
+      <Turnable style={style} look={look} onTap={onTap} turnOn={turnOn} />
     </Canvas>
   );
 }
@@ -73,9 +77,9 @@ function Framing({ style, look }: { style: Style3D; look: Role3D }) {
 }
 
 /** The sample, turned by a drag as a molecule on the canvas is - at the speed, and with the coasting, the style sets. */
-function Turnable({ style, look, onTap }: { style: Style3D; look: Role3D; onTap?: () => void }) {
+function Turnable({ style, look, onTap, turnOn }: { style: Style3D; look: Role3D; onTap?: () => void; turnOn: "anywhere" | "molecule" }) {
   const [turn, setTurn] = useState<Turn3D>(SAMPLE_TURN);
-  const { gl, invalidate } = useThree();
+  const { gl, invalidate, camera, scene, raycaster } = useThree();
   const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
   const styleRef = useRef(style);
   styleRef.current = style;
@@ -91,13 +95,25 @@ function Turnable({ style, look, onTap }: { style: Style3D; look: Role3D; onTap?
     const dom = gl.domElement;
     // (`moved`: gone far enough from where it was pressed to be a turn, not a click)
     let drag: { x: number; y: number; t: number; recent: { t: number; angle: number; dt: number }[]; axis: THREE.Vector3; from: { x: number; y: number }; moved: boolean } | null = null;
+    // (whether the pointer at `e` is on the molecule: its atoms or bonds, as the canvas would hit them)
+    const onMolecule = (e: PointerEvent) => {
+      const r = dom.getBoundingClientRect();
+      raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      return raycaster.intersectObjects(scene.children, true).length > 0;
+    };
+    const anywhere = turnOn === "anywhere";
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
+      // (on a card: a press off the molecule is the card's - moved by a drag, picked by a click)
+      if (!anywhere && !onMolecule(e)) return;
+      markTurning(e);
       dom.setPointerCapture(e.pointerId);
       spin.current = null;
       drag = { x: e.clientX, y: e.clientY, t: e.timeStamp, recent: [], axis: new THREE.Vector3(0, 1, 0), from: { x: e.clientX, y: e.clientY }, moved: false };
     };
     const onMove = (e: PointerEvent) => {
+      // (the turning pointer only where a press would turn it)
+      if (!drag && !anywhere) setCursor(dom, onMolecule(e) ? "turn" : null);
       if (!drag) return;
       if (!drag.moved) {
         if (Math.hypot(e.clientX - drag.from.x, e.clientY - drag.from.y) < TURN_PX) return;
@@ -128,10 +144,10 @@ function Turnable({ style, look, onTap }: { style: Style3D; look: Role3D; onTap?
       const speed = drag.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
       if (e.timeStamp - drag.t < 80 && speed > STILL) spin.current = { axis: drag.axis, speed };
       drag = null;
-      setCursor(dom, "turn");
+      setCursor(dom, anywhere || onMolecule(e) ? "turn" : null);
       invalidate();
     };
-    setCursor(dom, "turn");
+    if (anywhere) setCursor(dom, "turn");
     dom.addEventListener("pointerdown", onDown);
     dom.addEventListener("pointermove", onMove);
     dom.addEventListener("pointerup", onUp);
@@ -142,7 +158,7 @@ function Turnable({ style, look, onTap }: { style: Style3D; look: Role3D; onTap?
       dom.removeEventListener("pointerup", onUp);
       dom.removeEventListener("pointercancel", onUp);
     };
-  }, [gl, invalidate]);
+  }, [gl, invalidate, camera, scene, raycaster, turnOn]);
 
   // let go while turning, it turns on, slowing as the style says
   useFrame((_, dt) => {
