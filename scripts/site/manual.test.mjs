@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ASSETS, buildManual, cropAround, LANGUAGE_KEY, markSvg, parsePage, pickLanguage, readManual } from "./manual.mjs";
+import { ASSETS, buildManual, corners, cropAround, LANGUAGE_KEY, markSvg, parsePage, pickLanguage, readManual } from "./manual.mjs";
 
 const SOURCES = fileURLToPath(new URL("../../site/manual", import.meta.url));
 
@@ -219,7 +219,8 @@ describe("the how-to pages", () => {
     expect(markSvg({ kind: "click", x: 100, y: 100, w: 50, h: 20 }, size)).toContain('<g class="line"><rect x="92" y="92" width="66" height="36" rx="16"/></g>');
     expect(markSvg({ kind: "doubleclick", x: 100, y: 100, w: 50, h: 20 }, size).match(/<rect/g)).toHaveLength(4);
     expect(markSvg({ kind: "rightclick", x: 600, y: 400, w: 0, h: 0 }, size)).toContain('<circle cx="600" cy="400" r="30"/><circle cx="621" cy="379" r="9" class="dot"/>');
-    expect(markSvg({ kind: "trace", path: [[10, 10], [60, 40]] }, size)).toContain('<polyline points="10,10 60,40" marker-end="url(#head)"/>');
+    expect(markSvg({ kind: "trace", path: [[10, 10], [60, 40]] }, size)).toContain('<polyline points="10,10 60,40" marker-mid="url(#head)" marker-end="url(#head)"/>');
+    expect(corners([[0, 0], [25, 0], [50, 0], [50, 25], [50, 50]])).toEqual([[0, 0], [50, 0], [50, 50]]);
     expect(markSvg({ kind: "key", text: "Enter" }, size)).toBe("");
   });
 

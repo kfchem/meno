@@ -399,8 +399,9 @@ export function markSvg(mark, size) {
     }
     case "drag":
     case "trace": {
-      const points = mark.path.map(([x, y]) => `${x},${y}`).join(" ");
-      shape = `<circle cx="${mark.path[0][0]}" cy="${mark.path[0][1]}" r="10" class="dot"/><polyline points="${points}" marker-end="url(#head)"/>`;
+      const points = corners(mark.path).map(([x, y]) => `${x},${y}`).join(" ");
+      // (a head at each corner as well as at the end: a ring led back to where it began shows its way round)
+      shape = `<circle cx="${mark.path[0][0]}" cy="${mark.path[0][1]}" r="10" class="dot"/><polyline points="${points}" marker-mid="url(#head)" marker-end="url(#head)"/>`;
       break;
     }
     default:
@@ -429,6 +430,16 @@ export function cropAround(mark, size, share = 0.55) {
   const height = Math.round(size.height * k);
   const clamp = (v, most) => Math.max(0, Math.min(most, Math.round(v)));
   return { x: clamp((x0 + x1) / 2 - width / 2, size.width - width), y: clamp((y0 + y1) / 2 - height / 2, size.height - height), width, height };
+}
+
+/** A path's corners: the points along it where it turns, the points between them, on its way, left out. */
+export function corners(path) {
+  return path.filter((p, i) => {
+    if (i === 0 || i === path.length - 1) return true;
+    const [a, b] = [path[i - 1], path[i + 1]];
+    const turn = Math.abs(Math.atan2(b[1] - p[1], b[0] - p[0]) - Math.atan2(p[1] - a[1], p[0] - a[0]));
+    return Math.min(turn, 2 * Math.PI - turn) > 0.09;
+  });
 }
 
 /** A how-to page: what it makes, what it needs, and its steps - each a picture with its spot marked, and its words. */
