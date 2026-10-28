@@ -13,6 +13,7 @@ import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import type { LostText, PdfFind, PdfItem, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
+import Select from "../../controls/Select";
 import StructuresTableBody from "./workflow/StructuresTableBody";
 import { readAsTable } from "./workflow/entries";
 import { setName } from "./workflow/doers";
@@ -220,6 +221,10 @@ function Column({
   const setFilled = useEditor((s) => s.setColumnFilled);
   const [error, setError] = useState<string | null>(null);
   // (a Markdown text read formatted, or its source written)
+  // (the text shown, a step's log of several jobs: its jobs and the one it shows)
+  const jobsSeen = useEditor((st) => st.jobsSeen);
+  const logOf = shown?.of && "step" in shown.of ? shown.of : null;
+  const logJobs = logOf?.jobs && logOf.jobs.length > 1 ? { jobs: logOf.jobs, job: logOf.job ?? 0 } : null;
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
@@ -253,6 +258,16 @@ function Column({
             <Name key={`set-${b.id}`} name={setName(b, steps)} title={setName(b, steps)} chosen={b.id === table?.id} onShow={() => showSetTable(b.id)} onClose={() => stopReadingSetTable(b.id)} />
           ))}
         </div>
+        {/* (a step's log of several jobs: which of them it shows, chosen here - one tab for the step, not one for each job) */}
+        {shown && logJobs && (
+          <Select
+            label="Job"
+            value={String(logJobs.job)}
+            options={logJobs.jobs.map((id, k) => ({ value: String(k), label: `Job ${k + 1} of ${logJobs.jobs.length}${jobsSeen[id]?.state ? ` · ${jobsSeen[id].state}` : ""}` }))}
+            onChange={(v) => void store.getState().showStepLogJob(shown.id, Number(v))}
+            className="shrink-0 max-w-[11rem]"
+          />
+        )}
         {shown && markdown && (
           <button
             onClick={() => setShowsSource(store, shown.id, !source, shown.text)}

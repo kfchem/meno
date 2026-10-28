@@ -611,6 +611,45 @@ describe("a step that runs a plugin's program", () => {
     expect(ws?.texts.find((t) => t.name === log.name)?.of).toEqual({ step });
   });
 
+  it("shows the log of a step of several jobs in one text - the first, then another chosen - never a text for each", async () => {
+    const { st, step, doc } = editor();
+    // (three waters in its set: a job each)
+    for (const x of [-1.5, 1.5])
+      doc.edit("water", (d) =>
+        addMolecule3d(d, {
+          atoms: [
+            { el: "O", x: 0, y: 0, z: 0 },
+            { el: "H", x: 0, y: 0.76, z: 0.59 },
+            { el: "H", x: 0, y: -0.76, z: 0.59 },
+          ],
+          bonds: [
+            { a1: 0, a2: 1, order: 1 },
+            { a1: 0, a2: 2, order: 1 },
+          ],
+          at: { x, y: 0 },
+        }),
+      );
+    const ran = st().runStep(step);
+    for (let k = 0; k < 6; k++) await settle();
+    const ids = [...jobs.keys()];
+    expect(ids).toHaveLength(3);
+    ids.forEach((id, k) => Object.assign(jobs.get(id)!, { state: "failed", started: 1000, ended: 2000, code: 1, log: `job ${k + 1}\n` }));
+    await st().lookAtJobs();
+    await ran;
+    await st().showStepLog(step);
+    const logs = st().texts.filter((t) => t.name.endsWith("log"));
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ text: "job 1\n", of: { step, jobs: ids, job: 0 } });
+    await st().showStepLogJob(logs[0].id, 2);
+    expect(st().texts.find((t) => t.id === logs[0].id)).toMatchObject({ text: "job 3\n", of: { step, jobs: ids, job: 2 } });
+    // (shown again: the same text, still one)
+    await st().showStepLog(step);
+    expect(st().texts.filter((t) => t.name.endsWith("log"))).toHaveLength(1);
+    // (kept with the workspace: its jobs and the one shown)
+    const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
+    expect(ws?.texts.find((t) => t.name === logs[0].name)?.of).toEqual({ step, jobs: ids, job: 2 });
+  });
+
   it("is its plugin's: its calculation changed to another the plugin does, with the options it takes for that one, those they share kept - never to one it does not", () => {
     const { st, step } = editor();
     st().updateStep(step, { options: { method: "gfn1", solvent: "water", level: "tight" } });

@@ -1205,6 +1205,22 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return { ...(line ? { line } : {}), ...(progress ? { progress } : {}) };
   }
 
+  /**
+   * A step's log text showing the `k`th of its jobs: that job's log, written
+   * in it - no step to undo, as a log followed is - and followed while it
+   * runs; the others followed no more in it.
+   */
+  async function showLogJob(text: number, jobs: string[], k: number) {
+    const all = await wholeLog(jobs[k]);
+    const t = (doc.getState().texts ?? []).find((x) => x.id === text);
+    if (!t?.of || !("step" in t.of)) return;
+    const step = t.of.step;
+    doc.amend((x) => ops.setTextOf(ops.editText(x, text, all || "(Nothing yet)"), text, { step, ...(jobs.length > 1 ? { jobs, job: k } : {}) }), { unsaved: true });
+    for (const [job, at] of [...shown]) if (at === text) shown.delete(job);
+    const seen = get().jobsSeen[jobs[k]];
+    if (!seen || !finished(seen.state)) shown.set(jobs[k], text);
+  }
+
   /** The texts that show a job's log, followed: what it has said since, added - with no step to undo, and to be kept when the workspace is saved. */
   async function followShown() {
     for (const [job, text] of shown) {
@@ -1583,23 +1599,31 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (what the column shows as it is asked: a log come is shown by the store at once)
       const was = get();
       const showing = was.textsOpen && was.pdfShown == null ? was.textShown : null;
-      let last: number | null = null;
-      for (const [k, job] of jobs.entries()) {
-        const open = shown.get(job);
-        if (open != null && (doc.getState().texts ?? []).some((t) => t.id === open)) {
-          last ??= open;
-          continue;
-        }
-        const text = await wholeLog(job);
-        const made = ops.addTexts(doc.getState(), [{ name: `${name} log${jobs.length > 1 ? ` ${k + 1}` : ""}`, text: text || "(Nothing yet)", of: { step: id } }]);
+      // (one text for the step's log, whatever its jobs - several, a chooser of them in the column, the first shown: the maintainer, 2026-10-28)
+      const several = jobs.length > 1;
+      const open = (doc.getState().texts ?? []).find((t) => t.of && "step" in t.of && t.of.step === id && !t.at);
+      let last: number;
+      if (open) {
+        last = open.id;
+        const of = open.of as { step: number; jobs?: string[]; job?: number };
+        // (its jobs as they are now - run again since: the first shown; one job: its log as it is now)
+        if (!several || JSON.stringify(of.jobs) !== JSON.stringify(jobs)) await showLogJob(open.id, jobs, 0);
+      } else {
+        const text = await wholeLog(jobs[0]);
+        const made = ops.addTexts(doc.getState(), [{ name: `${name} log`, text: text || "(Nothing yet)", of: { step: id, ...(several ? { jobs, job: 0 } : {}) } }]);
         if (made.doc !== doc.getState()) doc.edit("open text", () => made.doc);
-        if (made.last != null) {
-          last ??= made.last;
-          if (step.running) shown.set(job, made.last);
-        }
+        if (made.last == null) return;
+        last = made.last;
+        if (step.running) shown.set(jobs[0], made.last);
       }
       // (rising out of its step into the column, where the column is not showing it already)
-      if (last != null) set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+      set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+    },
+    showStepLogJob: (text: number, k: number) => {
+      const t = (doc.getState().texts ?? []).find((x) => x.id === text);
+      const of = t?.of && "step" in t.of ? t.of : null;
+      if (!of?.jobs || k < 0 || k >= of.jobs.length || k === (of.job ?? 0)) return Promise.resolve();
+      return showLogJob(text, of.jobs, k);
     },
     showStepFiles: async (id: number) => {
       const step = stepOf(doc.getState(), id);

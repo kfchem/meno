@@ -416,8 +416,13 @@ export function keptNamedIn(text: string): KeptName[] {
 /** A workspace's JSON read, or null where `text` is not one this version reads. */
 /** What a saved text is the text of, as a file says: a step's id, or a molecule's place - anything else, nothing. */
 function textOfRead(v: unknown): { of?: TextOf } {
-  const o = v as { step?: unknown; molecule?: unknown } | null | undefined;
-  if (Number.isInteger(o?.step)) return { of: { step: o!.step as number } };
+  const o = v as { step?: unknown; molecule?: unknown; jobs?: unknown; job?: unknown } | null | undefined;
+  if (Number.isInteger(o?.step)) {
+    // (a step's log of several jobs: their ids - as jobs are named - and the one shown, where they read)
+    const jobs = Array.isArray(o!.jobs) && o!.jobs.length > 1 && o!.jobs.every((j) => typeof j === "string" && /^[A-Za-z0-9._-]{1,80}$/.test(j)) ? (o!.jobs as string[]) : null;
+    const job = jobs && Number.isInteger(o!.job) && (o!.job as number) >= 0 && (o!.job as number) < jobs.length ? (o!.job as number) : 0;
+    return { of: { step: o!.step as number, ...(jobs ? { jobs, job } : {}) } };
+  }
   if (Number.isInteger(o?.molecule) && (o!.molecule as number) >= 0) return { of: { molecule: o!.molecule as number } };
   return {};
 }

@@ -695,7 +695,8 @@ export type WorkspaceText = { id: number; name: string; text: string; path?: str
  */
 export type LostText = Omit<WorkspaceText, "text" | "path"> & { sha256: string };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
-export type TextOf = { step: number } | { molecule: number };
+/** What a text is the text of: a step - its log; where the step ran several jobs, all of them (`jobs`) and the one shown (`job`, its place among them) - or a molecule. */
+export type TextOf = { step: number; jobs?: string[]; job?: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
@@ -1690,6 +1691,8 @@ export type EditorState = {
   showRun: (id: number, index: number) => void;
   /** A step's logs opened in the column of texts, following its jobs while they run. */
   showStepLog: (id: number) => Promise<void>;
+  /** A step's log of several jobs (`TextOf.jobs`), by its text: showing the `k`th of them. */
+  showStepLogJob: (text: number, k: number) => Promise<void>;
   /** The folder of a step's last job shown where the system shows files. */
   /** A step's job's files shown - written back out first, where its folder is not on this computer: what is said of those not written back, if anything. */
   showStepFiles: (id: number) => Promise<string | null | void>;
