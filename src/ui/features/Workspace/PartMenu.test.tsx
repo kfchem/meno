@@ -191,28 +191,29 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
   });
   it("offers to set what is chosen, beside measuring it, where it can be set", () => {
     const t = target({ kind: "molecule3d", id: 1 });
-    expect(menu(t, { molecule3d: molecule3d({ onSetChosen: none }) }).listed).toEqual(["Measure angle", "Set angle…"]);
+    expect(menu(t, { molecule3d: molecule3d({ onSetChosen: none }) }).listed).toEqual(["Measure angle", "Set angle…", "Reset orientation"]);
     // (a torsion angle about a ring's bond cannot be set: measured only)
-    expect(menu(t, { molecule3d: molecule3d({ chosen: 4 }) }).listed).toEqual(["Measure torsion angle"]);
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 4 }) }).listed).toEqual(["Measure torsion angle", "Reset orientation"]);
   });
-  it("offers its other look, Reset orientation and Turn once, as icons", () => {
-    expect(menu(target({ kind: "molecule3d", id: 1 }), { molecule3d: molecule3d({ chosen: 0 }) }).icons).toEqual(
-      expect.arrayContaining(["Space-filling", "Reset orientation", "Turn once"]),
-    );
+  it("offers its other look and Turn once as icons, and Reset orientation in words", () => {
+    const m = menu(target({ kind: "molecule3d", id: 1 }), { molecule3d: molecule3d({ chosen: 0 }) });
+    expect(m.icons).toEqual(expect.arrayContaining(["Space-filling", "Turn once"]));
+    expect(m.icons).not.toContain("Reset orientation");
+    expect(m.listed[0]).toBe("Reset orientation");
   });
   it("offers what completes a file's molecule - its bond orders, its hydrogens - together, under a line", () => {
     const t = target({ kind: "molecule3d", id: 1 });
     const { listed, html } = menu(t, { molecule3d: molecule3d({ chosen: 0, onOrdersFromDictionary: none, onOrdersFromSmiles: none, onEstimateOrders: none, onAddHydrogens: none }) });
-    expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens…"]);
-    // (first in the list, under the icons' row and its line: no rule of its own)
-    expect(html).not.toContain('role="separator"');
+    expect(listed).toEqual(["Reset orientation", "Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens…"]);
+    // (after Reset orientation: one line, above the first of them)
+    expect(html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
     // (after another item: one line, above the first of them)
     const after = menu(t, { molecule3d: molecule3d({ chosen: 0, onTurnLikeDrawing: none, onOrdersFromDictionary: none, onOrdersFromSmiles: none }) }).html;
     expect(after).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
     expect(after).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
-    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Add hydrogens…"]);
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Reset orientation", "Add hydrogens…"]);
     // (a skeleton that has no hydrogens to add, said whole by the chemist)
-    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onWholeWithoutH: none }) }).listed).toEqual(["Complete without hydrogens"]);
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onWholeWithoutH: none }) }).listed).toEqual(["Reset orientation", "Complete without hydrogens"]);
   });
   it("offers its magnification, and back to its true size where it is not at it", () => {
     const t = target({ kind: "molecule3d", id: 1 });
