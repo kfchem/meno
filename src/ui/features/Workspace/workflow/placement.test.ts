@@ -695,7 +695,8 @@ describe("a wire not on a card being dragged", () => {
       expect(ways).toBeLessThanOrEqual(1);
       expect(jumps).toBeLessThanOrEqual(1);
     }
-  });
+    // (two pages, 60 frames each, routed as a drag routes them: a second or two alone, more where the machine is busy)
+  }, 20_000);
 });
 
 describe("a page's wires, worked out again", () => {

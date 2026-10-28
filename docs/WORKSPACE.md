@@ -229,7 +229,7 @@ Taken on 2026-10-03:
     the pointer swells a little on a spring. No frame: the maintainer
     asked for a highlight along the outline, in a modern way, rather than
     a rectangle round it.
-  - **Held still, a press selects the molecule** (0.32 s, as in 2D), the
+  - **Held still, a press selects the molecule** (a long press, as in 2D), the
     selection's outline spreading out from the atom pressed on as it is
     held; a drag from there moves it. A molecule selected moves when
     dragged, with all that is selected; one not selected turns. (Agreed
