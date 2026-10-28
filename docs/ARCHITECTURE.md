@@ -109,6 +109,8 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
                           Pages workflow (.github/workflows/pages.yml) writes the latest release
                           into it (scripts/site/release.mjs); scripts/site/wordmark.mjs draws the
                           wordmark; frames/ holds the app's pictures its story steps through
+  manual/                 the manual, in English and Japanese, built from its Markdown into the
+                          website by scripts/site/manual.mjs (docs/MANUAL.md)
 ```
 
 ## Tabs and views
