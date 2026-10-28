@@ -989,6 +989,23 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys));
   });
 
+  it("never stops short below what the style asks: three where it asks for three (or as many as reaching gives), and never none", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    for (let k = 10; k <= 100; k += 5) {
+      const d = (1.5 * k) / 100;
+      const atoms: Atom[] = [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: d, y: 0, el: "C" },
+      ];
+      for (const fewest of [undefined, FEWEST_HASHES]) {
+        const reach = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: fewest }), ZOOM, deg).polys);
+        const short = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: fewest, hashedWedgeShort: true }), ZOOM, deg).polys);
+        expect(short.length, `${k}% ${fewest ?? ""}`).toBeGreaterThanOrEqual(Math.min(reach.length, fewest ?? 1));
+        expect(short.length, `${k}%`).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("keeps the wave of a wavy bond the same length", () => {
     const o = opts();
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "wavy" };
