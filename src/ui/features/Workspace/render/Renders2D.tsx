@@ -84,7 +84,10 @@ function Placeholder({ r, onStop, onMove, perPx }: { r: Rendering; onStop: () =>
     const from = { cx: e.clientX, cy: e.clientY, x: r.at.x, y: r.at.y };
     const k = perPx();
     const move = (m: PointerEvent) => onMove(from.x + (m.clientX - from.cx) * k, from.y - (m.clientY - from.cy) * k);
+    // (the closed hand while it is carried)
+    el.style.cursor = "grabbing";
     const end = () => {
+      el.style.cursor = "grab";
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", end);
       el.removeEventListener("pointercancel", end);

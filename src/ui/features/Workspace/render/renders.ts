@@ -320,15 +320,15 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   }
 }
 
-/**
- * A render stopped: its job, where it has one - else it is not started - and its placeholder taken away. One that failed
- * is put away, its job's folder kept - its log, saying all Blender said - until Settings, Calculations, Jobs, clears it.
- */
 /** A render's frame moved to stand about (x, y), in the page's units: what it makes will land there (a drag on it, Renders2D). */
 export function moveRender(store: EditorStore, key: number, x: number, y: number): void {
   rendersOf(store).setState((s) => ({ list: s.list.map((r) => (r.key === key ? { ...r, at: { ...r.at, x, y } } : r)) }));
 }
 
+/**
+ * A render stopped: its job, where it has one - else it is not started - and its placeholder taken away. One that failed
+ * is put away, its job's folder kept - its log, saying all Blender said - until Settings, Calculations, Jobs, clears it.
+ */
 export function stopRender(store: EditorStore, key: number): void {
   const renders = rendersOf(store);
   const r = renders.getState().list.find((x) => x.key === key);
