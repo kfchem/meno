@@ -752,7 +752,8 @@ export type FrameMarks = { failed?: Failure | null; imaginary?: number[] | null;
 export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed" | "imaginary" | "marksUnread"> {
   return {
     ...(frames.some((f) => f.failed) ? { failed: frames.map((f) => f.failed ?? null) } : {}),
-    ...(frames.some((f) => f.imaginary?.length) ? { imaginary: frames.map((f) => (f.imaginary?.length ? f.imaginary : null)) } : {}),
+    // (each frame's as its calculation judged it - none, [], as well as some - null where none judged it)
+    ...(frames.some((f) => Array.isArray(f.imaginary)) ? { imaginary: frames.map((f) => (Array.isArray(f.imaginary) ? f.imaginary : null)) } : {}),
     ...(frames.some((f) => f.marksUnread) ? { marksUnread: true as const } : {}),
   };
 }
@@ -760,7 +761,7 @@ export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed
 /** A molecule's own marks of frame `f` of `n` (`FrameMarks`). */
 export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUnread">, f: number, n: number): FrameMarks => ({
   ...(m.failed?.length === n && m.failed[f] ? { failed: m.failed[f] } : {}),
-  ...(m.imaginary?.length === n && m.imaginary[f]?.length ? { imaginary: m.imaginary[f] } : {}),
+  ...(m.imaginary?.length === n && Array.isArray(m.imaginary[f]) ? { imaginary: m.imaginary[f]! } : {}),
   ...(m.marksUnread ? { marksUnread: true as const } : {}),
 });
 
@@ -968,7 +969,8 @@ export function freeEnergyOf(e: SetEntry): Property | undefined {
  * where they were not worked out.
  */
 export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties">): number[] | "not computed" {
-  if (e.imaginary?.length) return [...e.imaginary];
+  // (its calculation's verdict, none as well as some, before any table's)
+  if (Array.isArray(e.imaginary)) return [...e.imaginary];
   const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
   if (list && list.on === "list") {
     const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
