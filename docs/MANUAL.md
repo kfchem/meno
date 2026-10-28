@@ -92,11 +92,25 @@ The Pages workflow (`.github/workflows/pages.yml`) builds the website, then
 the manual into it (`_site/manual/`, in place of its sources), whenever
 `site/` or the build changes on main, and when a release is published.
 
-## Next
+## How do I...?
 
-"How do I...?" pages: a gallery of what Meno makes, each opening on the
-steps that make it, from the first click - one picture of the window a
-step, the spot to click marked, and one short sentence. The pictures and
-the places marked are to be recorded by the GUI harness (`scripts/gui`),
-from a scenario for each, so that they can be taken again whenever the
-window changes; the words stay in the manual's pages, in both languages.
+A gallery of what Meno makes (`/manual/<language>/how-to/`), each opening
+on the steps that make it, from the very first click: for each step its
+words, then a picture of the window with the spot marked - the ring Meno's
+own guides draw round a part - shown near the spot, its words readable, and
+opening out to the whole window when clicked.
+
+| | |
+|---|---|
+| `contents.json`, `howTo` | the pages, in the gallery's order |
+| `site/manual/how-to/<page>/en.md`, `ja.md` | the words: the title, a paragraph on what it makes, and the steps, numbered, each beginning with its `{#id}` |
+| `site/manual/how-to/<page>/steps.json`, `shots/` | the recording: each step's id, picture and mark, the result, what the page needs, and which Meno the pictures are of |
+| `scripts/gui/tutorials/<page>.ps1` | the script it is recorded from |
+
+The pictures and marks are never made by hand: they are recorded from the
+script by the GUI harness on a Mac, which finds each spot by the name the
+window gives it (`scripts/gui/README.md`, *Recording a how-to page*), and
+recorded again whenever the window changes. The words are written here, in
+both languages, and a recording never touches them. The build refuses words
+whose steps are not the recording's - the same ids, in the same order - and
+a recording whose pictures are not there.

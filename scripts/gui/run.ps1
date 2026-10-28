@@ -12,13 +12,19 @@ here.
 This needs a desktop: a logged-in session that is unlocked. It cannot run in
 CI, which is why nothing in the workflow calls it.
 
+With -Tutorial it records one of the manual's "How do I...?" pages instead
+(MenoTutorial.psm1): a script in tutorials/, its steps' shots and marks
+written into site/manual/how-to/<page>/, its window 1200x780 unless told.
+
 .EXAMPLE
 pwsh scripts/gui/run.ps1 -Scenario drag-atoms
 pwsh scripts/gui/run.ps1 -Scenario drag-atoms -Out .gui-runs/before
+pwsh scripts/gui/run.ps1 -Tutorial draw-3d
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [string] $Scenario,
+    [string] $Scenario,
+    [string] $Tutorial,
     [string] $Out,
     # What `npm run tauri build` last produced by default; point this at
     # another build to test that one instead.
@@ -39,21 +45,31 @@ Import-Module (Join-Path $PSScriptRoot $(if ($onMac) { "MenoGui.macOS.psm1" } el
 Import-Module (Join-Path $PSScriptRoot "MenoModes.psm1") -Force
 if (-not $Exe) { $Exe = Get-MenoBuild }
 
-$scenarioPath = Join-Path $PSScriptRoot "scenarios/$Scenario.ps1"
+if ([bool]$Scenario -eq [bool]$Tutorial) { throw "run a -Scenario or a -Tutorial" }
+$folder = if ($Tutorial) { "tutorials" } else { "scenarios" }
+$Scenario = if ($Tutorial) { $Tutorial } else { $Scenario }
+$scenarioPath = Join-Path $PSScriptRoot "$folder/$Scenario.ps1"
 if (-not (Test-Path $scenarioPath)) {
-    $have = (Get-ChildItem "$PSScriptRoot/scenarios" -Filter *.ps1 |
+    $have = (Get-ChildItem "$PSScriptRoot/$folder" -Filter *.ps1 |
         ForEach-Object { $_.BaseName }) -join ", "
-    throw "no scenario '$Scenario'. There is: $have"
+    throw "no $($folder.TrimEnd('s')) '$Scenario'. There is: $have"
 }
+# (a tutorial's window: its pictures are shown some 880 px wide, so the window is no bigger than its words stay readable at)
+if ($Tutorial -and -not $PSBoundParameters.ContainsKey("Width")) { $Width = 1200 }
+if ($Tutorial -and -not $PSBoundParameters.ContainsKey("Height")) { $Height = 780 }
 if (-not (Test-Path $Exe)) {
     throw "no app at '$Exe'. Build one with: npm run tauri build"
 }
 
 if (-not $Out) {
-    $Out = Join-Path (Resolve-Path "$PSScriptRoot/../..") ".gui-runs/$Scenario-$(Get-Date -Format yyyyMMdd-HHmmss)"
+    $Out = Join-Path (Resolve-Path "$PSScriptRoot/../..") ".gui-runs/$(if ($Tutorial) { 'tutorial-' })$Scenario-$(Get-Date -Format yyyyMMdd-HHmmss)"
 }
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
+if ($Tutorial) {
+    Import-Module (Join-Path $PSScriptRoot "MenoTutorial.psm1") -Force
+    Start-Tutorial -Raw $Out -Dest (Join-Path (Resolve-Path "$PSScriptRoot/../..") "site/manual/how-to/$Tutorial") -Version (Get-MenoVersion -Path $Exe)
+}
 
 $script:StepNo = 0
 $script:ShotFiles = @()
@@ -396,9 +412,10 @@ function Save-MenoFile {
     Wait-MenoSettled -TimeoutMs 8000 | Out-Null
 }
 
-Write-Host "scenario '$Scenario' -> $Out"
+Write-Host "$($folder.TrimEnd('s')) '$Scenario' -> $Out"
 try {
     . $scenarioPath
+    if ($Tutorial) { Complete-Tutorial }
     Write-Host "done: $($script:ShotFiles.Count) shots in $Out"
 } finally {
     if (-not $KeepOpen) {

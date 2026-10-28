@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ASSETS, buildManual, LANGUAGE_KEY, parsePage, pickLanguage, readManual } from "./manual.mjs";
+import { ASSETS, buildManual, cropAround, LANGUAGE_KEY, markSvg, parsePage, pickLanguage, readManual } from "./manual.mjs";
 
 const SOURCES = fileURLToPath(new URL("../../site/manual", import.meta.url));
 
@@ -149,6 +149,87 @@ describe("the manual's front door", () => {
     expect(door).toContain(`localStorage.getItem(${JSON.stringify(LANGUAGE_KEY)})`);
     expect(door).toContain('["one","two"].includes(page)');
     expect(door).toContain('<a class="btn" href="xx/" hreflang="xx" lang="xx" data-lang="xx">xx manual</a>');
+  });
+});
+
+/** A how-to page's recording and words, as `readManual` gives them. */
+function withHowTo(over = {}) {
+  const m = manual();
+  m.contents.howTo = ["film"];
+  const more = { howTo: "How do I?", howToLead: "Pick one.", needs: "Needs", stepCount: "{n} steps", pictures: "Pictures from Meno {version}." };
+  Object.assign(m.contents.words.en, more);
+  Object.assign(m.contents.words.xx, more);
+  const words = (title) => `# ${title}\n\nA film.\n\n1. {#settings} Click *Settings*.\n2. {#add} Press *Add*.\n`;
+  m.howTo = {
+    film: {
+      words: { en: words("Film"), xx: words("Le film") },
+      recorded: {
+        meno: "0.1.20",
+        size: { width: 2400, height: 1560 },
+        needs: ["Blender"],
+        steps: [
+          { id: "settings", shot: "01-settings.webp", mark: { kind: "click", x: 2328, y: 12, w: 56, h: 56 } },
+          { id: "add", shot: "02-add.webp", mark: { kind: "click", x: 2094, y: 740, w: 96, h: 58, near: [210, 698, 1980, 100] } },
+        ],
+        result: "result.webp",
+      },
+      shots: ["01-settings.webp", "02-add.webp", "result.webp"],
+    },
+    ...over,
+  };
+  return m;
+}
+
+describe("the how-to pages", () => {
+  it("are a gallery and a page for each, in every language, and their pictures once for all", () => {
+    const files = buildManual(withHowTo());
+    for (const path of ["en/how-to/index.html", "en/how-to/film/index.html", "xx/how-to/film/index.html"]) expect(files.has(path)).toBe(true);
+    expect(files.get("pictures/film/02-add.webp")).toEqual({ copy: "how-to/film/shots/02-add.webp" });
+    const gallery = files.get("en/how-to/index.html");
+    expect(gallery).toContain('<a href="./film/"><img src="../../pictures/film/result.webp"');
+    expect(gallery).toContain("<b>Film</b><span>2 steps</span>");
+  });
+
+  it("put each step's words over its picture, its spot marked, and say what they need and which Meno the pictures are of", () => {
+    const page = buildManual(withHowTo()).get("xx/how-to/film/index.html");
+    expect(page).toContain('<li id="add">\n  <p><span>Press <i>Add</i>.</span></p>');
+    expect(page).toContain('<img src="../../../pictures/film/02-add.webp"');
+    expect(page).toContain('<rect x="2086" y="732" width="112" height="74" rx="16"/>');
+    expect(page).toContain('<p class="needs"><span>Needs</span> <b>Blender</b></p>');
+    expect(page).toContain("Pictures from Meno 0.1.20.");
+  });
+
+  it("refuse words whose steps are not the recording's, and a recording whose pictures are not there", () => {
+    const off = withHowTo();
+    off.howTo.film.words.xx = "# Le film\n\nUn film.\n\n1. {#add} Add.\n2. {#settings} Settings.\n";
+    expect(() => buildManual(off)).toThrow(/how-to\/film\/xx\.md: its steps are not those recorded/);
+    const loose = withHowTo();
+    loose.howTo.film.words.en = "# Film\n\nA film.\n\n## More {#more}\n\n1. {#settings} S.\n2. {#add} A.\n";
+    expect(() => buildManual(loose)).toThrow(/a how-to page is its title, a paragraph on what it makes, and its steps/);
+    const lost = withHowTo();
+    lost.howTo.film.shots = ["01-settings.webp", "result.webp"];
+    expect(() => buildManual(lost)).toThrow(/how-to\/film\/shots\/02-add\.webp: missing/);
+    const unrecorded = withHowTo();
+    unrecorded.howTo.film.recorded = undefined;
+    expect(() => buildManual(unrecorded)).toThrow(/how-to\/film\/steps\.json: missing/);
+  });
+
+  it("mark a click with Meno's ring, a double click with two, a point with a circle, a drag with a path to its head", () => {
+    const size = { width: 2400, height: 1560 };
+    expect(markSvg({ kind: "click", x: 100, y: 100, w: 50, h: 20 }, size)).toContain('<g class="line"><rect x="92" y="92" width="66" height="36" rx="16"/></g>');
+    expect(markSvg({ kind: "doubleclick", x: 100, y: 100, w: 50, h: 20 }, size).match(/<rect/g)).toHaveLength(4);
+    expect(markSvg({ kind: "rightclick", x: 600, y: 400, w: 0, h: 0 }, size)).toContain('<circle cx="600" cy="400" r="30"/><circle cx="621" cy="379" r="9" class="dot"/>');
+    expect(markSvg({ kind: "trace", path: [[10, 10], [60, 40]] }, size)).toContain('<polyline points="10,10 60,40" marker-end="url(#head)"/>');
+    expect(markSvg({ kind: "key", text: "Enter" }, size)).toBe("");
+  });
+
+  it("show a step near its spot, with what tells where it is, in the window's proportions", () => {
+    const size = { width: 2400, height: 1560 };
+    expect(cropAround({ kind: "click", x: 2328, y: 12, w: 56, h: 56 }, size)).toEqual({ x: 1080, y: 0, width: 1320, height: 858 });
+    const wide = cropAround({ kind: "click", x: 2094, y: 740, w: 96, h: 58, near: [210, 698, 1980, 100] }, size);
+    expect(wide.x).toBeLessThanOrEqual(150);
+    expect(wide.width / wide.height).toBeCloseTo(2400 / 1560, 2);
+    expect(cropAround({ kind: "key", text: "Enter" }, size)).toEqual({ x: 0, y: 0, width: 2400, height: 1560 });
   });
 });
 

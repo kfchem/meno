@@ -150,6 +150,31 @@ Two things worth knowing:
   `MenoModes.psm1`'s, and `tests/modes.tests.ps1` checks it against the
   flags `src-tauri/src` defines. A new mode there wants its flag added.
 
+## Recording a how-to page
+
+`run.ps1 -Tutorial <page>` runs `tutorials/<page>.ps1` and records the
+manual's page of that name (docs/MANUAL.md, *How do I...?*): before each
+step, a shot of the window and where the step is done; after the last, the
+window as the page leaves it. They go into `site/manual/how-to/<page>/`:
+the shots as WebP (`cwebp`, from `brew install webp`) and `steps.json`.
+A shot the same as the one there is written the same, byte for byte, so a
+run that changes nothing changes nothing in git. The window is 1200x780
+points unless told otherwise. The verbs are MenoTutorial.psm1's:
+
+| | |
+|---|---|
+| `Set-Tutorial -Needs RDKit, Blender` | what the page says a reader needs |
+| `New-TutorialHome [-Ready]` | a home for `Start-Meno -HomeFolder`: empty - Meno as someone opening it the first time sees it - or, `-Ready`, a clone of the tutorial profile, a home named by `MENO_TUTORIAL_HOME` in which a Meno has had its plugins added, so every run starts from the same place and none changes it |
+| `Part Button "Add" -Row Blender [-Within] [-Reveal]` | a part of the window by its name (`Find-MenoPart`) |
+| `Point 1200 800` | a point of the window, for the drawing on the page |
+| `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`. `-NotDone` records a step the run must not take - Allow on a question about the network, which is the reader's to answer - and leaves it undone |
+| `Suspend-Steps`, `Resume-Steps` | steps done unrecorded, as the first thing in a new profile, or again after a change of profile |
+
+A part found `-Within` another (a dialog) or by its `-Row` keeps that one's
+place as well: the page shows the picture near the spot wide enough to take
+it in. A page's steps are its ids; its words, in `en.md` and `ja.md`, carry
+the same ids in the same order, or the website's build refuses them.
+
 ## What a platform module provides
 
 Besides the verbs above that come from it, `run.ps1` asks the module for:

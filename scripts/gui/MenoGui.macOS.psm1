@@ -770,44 +770,96 @@ function Find-MenoPart {
       it was last time.
 
       .DESCRIPTION
-      -Within names a part it sits in, to tell apart two of the same name
-      (an Add in the row of one plugin, say). It comes back in pixels of the
-      window's shot, like every coordinate here: X, Y, Width, Height, and its
-      middle, CX and CY. It is waited for, up to -TimeoutSec: the web view
-      builds what Accessibility sees of its page only once asked, and a part
-      may be on its way in. Not there, or not the only one, the run stops,
-      saying what is there.
+      Two of the same name are told apart by -Within, naming a part it sits
+      in, or by -Row, naming words in the row it is in: the one nearest them,
+      up or down (an Add, in the row of the plugin "Blender"); either, with
+      the part, comes back as Near, what tells where it is. -Reveal
+      scrolls the window towards it, with the wheel at the window's middle,
+      while it is out of view. It comes back in pixels of the window's shot,
+      like every coordinate here: X, Y, Width, Height, and its middle, CX and
+      CY. It is waited for, up to -TimeoutSec: the web view builds what
+      Accessibility sees of its page only once asked, and a part may be on
+      its way in. Not there, or not the only one, the run stops, saying what
+      is there.
     #>
     param(
         [Parameter(Mandatory)] [string] $Role,
         [Parameter(Mandatory)] [string] $Name,
         [string] $Within,
+        [string] $Row,
+        [switch] $Reveal,
         [double] $TimeoutSec = 5
     )
     $axRole = if ($Role.StartsWith("AX")) { $Role } else { "AX$Role" }
-    $what = "$Role '$Name'$(if ($Within) { " in '$Within'" })"
+    $what = "$Role '$Name'$(if ($Within) { " in '$Within'" })$(if ($Row) { " in the row of '$Row'" })"
+    $isIt = { param($p) $p.Role -eq $axRole -and $p.Name -eq $Name -and (-not $Within -or ($p.Within -split "`n") -contains $Within) }
+    $isRow = { param($p) $p.Role -eq "AXStaticText" -and ($p.Name -eq $Row -or $p.Name.StartsWith("$Row ")) }
     $until = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
+    $scrolls = 0
     do {
         $w = Get-WindowInfo
+        $all = @([MacGui]::Parts($script:MenoPid))
         # (parts of the window alone, and in view: one scrolled out of it cannot be clicked)
-        $inView = @([MacGui]::Parts($script:MenoPid) | Where-Object {
-            $_.X -ge $w.X - 0.5 -and $_.Y -ge $w.Y - 0.5 -and $_.X + $_.Width -le $w.X + $w.Width + 0.5 -and $_.Y + $_.Height -le $w.Y + $w.Height + 0.5 })
-        $found = @($inView | Where-Object { $_.Role -eq $axRole -and $_.Name -eq $Name -and (-not $Within -or ($_.Within -split "`n") -contains $Within) })
-        if ($found.Count -gt 1) { throw "$($found.Count) parts are $what in Meno's window: tell them apart with -Within" }
+        $shown = { param($p) $p.X -ge $w.X - 0.5 -and $p.Y -ge $w.Y - 0.5 -and $p.X + $p.Width -le $w.X + $w.Width + 0.5 -and $p.Y + $p.Height -le $w.Y + $w.Height + 0.5 }
+        $inView = @($all | Where-Object { & $shown $_ })
+        $found = @($inView | Where-Object { & $isIt $_ })
+        $label = $null
+        if ($Row) {
+            $label = $all | Where-Object { & $isRow $_ } | Select-Object -First 1
+            $found = @(if ($label -and (& $shown $label)) {
+                $mid = $label.Y + $label.Height / 2
+                $found | Sort-Object { [math]::Abs($_.Y + $_.Height / 2 - $mid) } | Select-Object -First 1
+            })
+        }
+        if ($found.Count -gt 1) { throw "$($found.Count) parts are $what in Meno's window: tell them apart with -Within or -Row" }
         if ($found.Count -eq 1) {
             $k = Get-ShotScale
             $p = $found[0]
             $x = ($p.X - $w.X) * $k; $y = ($p.Y - $w.Y) * $k
+            # (what tells where it is: the part it was found within, or its row's words, with it - for a picture of round about it)
+            $by = if ($Within) {
+                $inView | Where-Object { $_.Name -eq $Within -and $_.X -le $p.X -and $_.Y -le $p.Y -and $_.X + $_.Width -ge $p.X + $p.Width -and $_.Y + $_.Height -ge $p.Y + $p.Height } |
+                    Sort-Object { $_.Width * $_.Height } | Select-Object -First 1
+            } elseif ($Row) { $label } else { $null }
+            $near = $null
+            if ($by) {
+                $nx = [math]::Min($p.X, $by.X); $ny = [math]::Min($p.Y, $by.Y)
+                $near = [pscustomobject]@{
+                    X = [int][math]::Round(($nx - $w.X) * $k); Y = [int][math]::Round(($ny - $w.Y) * $k)
+                    Width = [int][math]::Round(([math]::Max($p.X + $p.Width, $by.X + $by.Width) - $nx) * $k)
+                    Height = [int][math]::Round(([math]::Max($p.Y + $p.Height, $by.Y + $by.Height) - $ny) * $k)
+                }
+            }
             return [pscustomobject]@{
                 X = [int][math]::Round($x); Y = [int][math]::Round($y)
                 Width = [int][math]::Round($p.Width * $k); Height = [int][math]::Round($p.Height * $k)
                 CX = [int][math]::Round($x + $p.Width * $k / 2); CY = [int][math]::Round($y + $p.Height * $k / 2)
+                Near = $near
             }
+        }
+        # out of view: towards it, a few notches at a time (a page scrolls down for a turn towards you)
+        $away = if ($Row) { $label } else { $all | Where-Object { & $isIt $_ } | Select-Object -First 1 }
+        if ($Reveal -and $away -and $scrolls -lt 40) {
+            $size = Get-ClientSize
+            $notches = if ($away.Y -gt $w.Y + $w.Height / 2) { -3 } else { 3 }
+            Invoke-MenoWheel -X ([int]($size.Width / 2)) -Y ([int]($size.Height / 2)) -Notches $notches
+            $scrolls++
+            $until = $until.AddMilliseconds(400)
+            Start-Sleep -Milliseconds 400
+            continue
         }
         Start-Sleep -Milliseconds 300
     } while ([DateTime]::UtcNow -lt $until)
     $there = ($inView | Where-Object { $_.Role -ne "AXStaticText" } | Select-Object -First 40 | ForEach-Object { "$($_.Role.Substring(2)) '$($_.Name)'" }) -join ", "
     throw "no $what in Meno's window. There is: $there"
+}
+
+function Get-MenoVersion {
+    # The version of a build: an app bundle's, as its Info.plist says it.
+    param([Parameter(Mandatory)] [string] $Path)
+    $plist = Join-Path $Path "Contents/Info.plist"
+    if (-not (Test-Path $plist)) { return "" }
+    return (& /usr/bin/plutil -extract CFBundleShortVersionString raw -o - $plist).Trim()
 }
 
 function Save-WindowShot {
@@ -1237,7 +1289,7 @@ function Wait-MenoSettled {
 
 Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
-    ConvertTo-Screen, Find-MenoPart, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
+    ConvertTo-Screen, Find-MenoPart, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
     # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
     Find-SystemWindow, Find-WindowAt
