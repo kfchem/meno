@@ -18,9 +18,33 @@ describe("a plugin's drawing that cannot be laid out", () => {
     // (made up: the bridged macrocycle the layout puts an atom of on a bond - #685's guard refuses it)
     const drawn = await drawingOf(roundMolblock("C1CCCCC2CCC(CO2)CCCCCCCC1"));
     expect(drawn.asCame).toMatch(/one atom on another or on a bond/);
-    expect(asCameSaid(drawn)).toBe("Drawn as it came: the structure could not be laid out without putting one atom on another or on a bond.");
+    expect(asCameSaid(drawn)).toBe("Drawn as it came: it could not be laid out without putting one atom on another.");
     // (and what goes onto the page carries none of it)
     expect("asCame" in withoutStereoOpen(drawn)).toBe(false);
+    // (a chiral sulfoxide, wedged at its S - pasted, drawn by no one crossed: said plainly, of its stereochemistry,
+    // never of how wedges are read)
+    const sulfoxide = [
+      "",
+      "  test",
+      "",
+      "  5  4  0  0  0  0  0  0  0  0999 V2000",
+      "    0.0000    0.0000    0.0000 S   0  0  0  0  0  0  0  0  0  0  0  0",
+      "    0.0000    1.5000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+      "    1.2990   -0.7500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+      "   -1.2990   -0.7500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+      "   -2.5981    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+      "  1  2  2  0",
+      "  1  3  1  1",
+      "  1  4  1  0",
+      "  4  5  1  0",
+      "M  END",
+      "",
+    ].join("\n");
+    // (until a stereocentre with a lone pair can be laid out - the Clean-up engine work)
+    const s = await drawingOf(sulfoxide);
+    expect(s.asCame).toBeDefined();
+    expect(asCameSaid(s)).toBe("Drawn as it came: it could not be laid out keeping its stereochemistry.");
+    expect(asCameSaid(s)).not.toMatch(/wedge|crossed|lone pair|Clean-up/);
     // (one laid out says nothing)
     expect(asCameSaid(await drawingOf(roundMolblock("CCCC")))).toBeNull();
   });

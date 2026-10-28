@@ -88,7 +88,14 @@ export async function drawingOf(molblock: string, style?: DrawingStyle): Promise
   return laidOut(drawn, style).catch((e: unknown) => ({ ...drawn, asCame: e instanceof Error ? e.message : String(e) }));
 }
 
-/** What to say of a structure drawn as it came, not laid out (`drawingOf`): none where it was laid out. */
+/**
+ * What to say of a structure drawn as it came, not laid out (`drawingOf`): one plain sentence of what kept it so -
+ * never how its wedges are read, nor of a drawing the person did not make (docs: no mechanism in what Meno says).
+ * None where it was laid out.
+ */
 export function asCameSaid(drawn: { asCame?: string }): string | null {
-  return drawn.asCame ? `Drawn as it came: ${drawn.asCame.replace(/, so nothing was moved\.?$/, "")}.` : null;
+  if (!drawn.asCame) return null;
+  if (/one atom on another|on a bond/.test(drawn.asCame)) return "Drawn as it came: it could not be laid out without putting one atom on another.";
+  if (/stereochemistry|configuration|wedge/.test(drawn.asCame)) return "Drawn as it came: it could not be laid out keeping its stereochemistry.";
+  return "Drawn as it came: it could not be laid out.";
 }
