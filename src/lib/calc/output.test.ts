@@ -59,8 +59,12 @@ describe("what a reader hands back", () => {
     expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm-1");
     expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm-1");
     expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
-    // (judged none, or not numbers below 0: no mark)
-    for (const imaginary of [[], [382.63], [Number.NaN], null]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
+    // (judged none: kept as none, apart from not judged - and read back so)
+    const none = calcOf({ ...water, imaginary: [] }, ["xtb 6.7.1"]);
+    expect(none.imaginary).toEqual([]);
+    expect(readCalc(JSON.parse(JSON.stringify(none)), 3, 2)).toEqual(none);
+    // (not numbers below 0, or not judged: no mark)
+    for (const imaginary of [[382.63], [Number.NaN], null, undefined]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
   });
 
   it("says an adopted output is one first, and reads back as it was - when with it", () => {

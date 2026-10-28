@@ -962,22 +962,23 @@ export function freeEnergyOf(e: SetEntry): Property | undefined {
 }
 
 /**
- * An entry's imaginary frequencies (cm-1): as its calculation judged them;
- * else, where its vibrations were worked out - its calculation's, or those
- * it carries (`calcProperties`) - those the table lists as negative, none
- * where it lists none: a table with one never reads as none; "not computed"
- * where they were not worked out.
+ * An entry's imaginary frequencies (cm-1): as its calculation judged them,
+ * where it judged some; else, where its vibrations were worked out - its
+ * calculation's, or those it carries (`calcProperties`) - those the table
+ * lists as negative, none where it lists none: a table with one never reads
+ * as none; else none, where its calculation judged none with no table read
+ * beside it; "not computed" where none was worked out or judged.
  */
 export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties">): number[] | "not computed" {
-  // (its calculation's verdict, none as well as some, before any table's)
-  if (Array.isArray(e.imaginary)) return [...e.imaginary];
+  if (e.imaginary?.length) return [...e.imaginary];
   const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
   if (list && list.on === "list") {
     const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
     return k < 0 ? [] : list.rows.map((r) => r.cells[k]).filter((f): f is number => typeof f === "number" && f < 0);
   }
   const table = e.properties?.vibrations?.value;
-  if (!e.properties?.vibrations) return "not computed";
+  // (none read: its calculation's verdict of none, where it gave one)
+  if (!e.properties?.vibrations) return Array.isArray(e.imaginary) ? [] : "not computed";
   const rows = typeof table === "object" && table && "table" in table ? table.table.rows : [];
   return rows.map((r) => r[0]).filter((f): f is number => typeof f === "number" && f < 0);
 }
