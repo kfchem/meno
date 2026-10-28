@@ -30,7 +30,12 @@ function Rows({ rows }: { rows: CardGroups[number]["rows"] }) {
   );
 }
 
-/** A group shut under its name, opened and shut by it - eased, its chevron turning - never by the card it is on. */
+/**
+ * A group shut under its name, opened and shut by it - eased, its chevron
+ * turning - never by the card it is on. Shut, its rows take no room either
+ * way: the card is as wide as what it shows, and grows wider as well as
+ * taller as they open (the maintainer, 2026-10-28).
+ */
 function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number]["rows"] }) {
   const [open, setOpen] = useState(false);
   return (
@@ -47,8 +52,11 @@ function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number][
         <ChevronRightIcon className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-90" : ""}`} style={EASED} strokeWidth={2.5} />
         {group}
       </button>
-      <div className="grid transition-[grid-template-rows,opacity]" style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}>
-        <div className="overflow-hidden">
+      <div
+        className="grid transition-[grid-template-rows,grid-template-columns,opacity]"
+        style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", gridTemplateColumns: open ? "minmax(0, 1fr)" : "minmax(0, 0fr)", opacity: open ? 1 : 0 }}
+      >
+        <div className="overflow-hidden min-w-0">
           <Rows rows={rows} />
         </div>
       </div>

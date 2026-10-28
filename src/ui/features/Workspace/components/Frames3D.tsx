@@ -358,7 +358,8 @@ export function FramesChip({
               ...EASED,
               opacity: shown ? (full ? 1 : 0.75) : 0,
               pointerEvents: shown ? "auto" : "none",
-              width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
+              // (as wide as what it shows, and no wider: the details' own room either side is the chip's)
+              width: Math.max((full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE, reading && details.length > 0 ? detailsWidth : 0),
             }}
           >
             <div
