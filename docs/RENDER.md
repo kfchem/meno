@@ -411,6 +411,11 @@ uv, no package), and the script Blender runs, `render.py`.
     Every melt ends with the camera where every reform stays: at the
     least distance from which the whole of the liquid's domain - sized for
     the widest molecule - is in the frame, so no pool is ever cut.
+    A molecule pours at most the liquid that lies freely on the paper (a
+    pool of the liquid's own depth over the middle of the domain, reckoned
+    on the solver's grid): a large one swells less as it heats and pours
+    for fewer frames, so its pool spreads clear of the domain's walls
+    rather than piling against them (2026-10-28, the maintainer).
   - Each piece is made in a Blender of its own - the studio, the part the
     changes share (`change.py`) and the change's script - after the one
     before. Every molecule stands on the same floor, turned as the canvas
@@ -423,7 +428,9 @@ uv, no package), and the script Blender runs, `render.py`.
   - Each change is timed in a length of its own (Ring, Scan and Shatter
     5 s; the liquid 8 s a melt and 1.6 s a reform), and the film's length
     is shared out among the pieces, each played faster or slower to fit -
-    a liquid's simulation too.
+    a liquid's simulation too. A liquid's reform takes at least a second
+    where the change has the frames for it, the melts sharing the rest:
+    shorter, a pool would snap into its drop.
 - **Where it renders** (2026-10-16, the maintainer): a three-way choice,
   *Render on*: **Automatic (the faster one)**, the default; **Graphics
   processor**; **Processor**. Automatic times the two once on this

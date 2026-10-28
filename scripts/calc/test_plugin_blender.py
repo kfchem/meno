@@ -275,6 +275,38 @@ class FilmStrips(unittest.TestCase):
         self.assertEqual(self.runs(frames), [(os.path.join("job", "frames"), ["f_0001.png", "f_0002.png", "f_0003.png", "f_0002.png"], 1)])
 
 
+class LiquidShare(unittest.TestCase):
+    """How a liquid film's frames are shared among its melts and reforms (render.py `liquid_share`)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        names = lambda n: {getattr(e, "id", None) for t in n.targets for e in (t.elts if isinstance(t, ast.Tuple) else [t])}
+        # (the function, and the liquid's lengths it shares by)
+        keep = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name == "liquid_share")
+                or (isinstance(n, ast.Assign) and names(n) & {"LIQUID_MELT", "REFORM_LEAST"})]
+        ns = {}
+        exec(compile(ast.Module(body=keep, type_ignores=[]), "render.py", "exec"), ns)
+        cls.share = staticmethod(ns["liquid_share"])
+
+    def test_a_reform_takes_a_second_where_the_change_has_the_frames(self):
+        # (6 s of three molecules, Once, at 30 frames a second: two changes of 90 frames - the reform a second, not 8 frames)
+        self.assertEqual(self.share(180, 2, 30), (30, 30))
+        # (a long change keeps the liquid's own lengths: 20 s of one change, 600 frames)
+        melt, reform = self.share(600, 1, 30)
+        self.assertEqual(2 * melt + reform, 600)
+        self.assertGreater(reform, 30)
+
+    def test_every_change_plays_all_its_frames_however_few(self):
+        for frames, changes in ((4, 1), (6, 2), (20, 1), (34, 1), (61, 3)):
+            with self.subTest(frames=frames, changes=changes):
+                melt, reform = self.share(frames, changes, 30)
+                self.assertGreaterEqual(melt, 2)
+                self.assertGreaterEqual(reform, 1)
+                self.assertEqual(2 * melt + reform, max(round(frames / changes), 5))
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
@@ -491,6 +523,59 @@ class MotionsRender(unittest.TestCase):
                     # and a reform of 1 Once, 2 of 2 and 2 of 1 as a Loop)
                     rendered = self.film(motion, background, mode, frames, molecules=(METHYLAMINE, METHANOL))
                     self.assertEqual(rendered, {"once": 5, "loop": 6}[mode] if motion == "change-liquid" else frames)
+
+    def test_a_large_molecules_liquid_lies_freely_clear_of_the_walls(self):
+        # (a lump of 121 carbons on a diamond lattice, an ellipsoid 16 x 10 x 8 angstroms: swollen as a small molecule is, its
+        # liquid would fill the domain and pile against its walls. Its pour is held to what lies freely on the paper, and its
+        # kept pool keeps clear of the walls)
+        import itertools, math
+        a0, cell = 3.567, [(0, 0, 0), (0, .5, .5), (.5, 0, .5), (.5, .5, 0), (.25, .25, .25), (.25, .75, .75), (.75, .25, .75), (.75, .75, .25)]
+        pts = [p for i, j, k in itertools.product(range(-4, 5), repeat=3) for b in cell
+               for p in [((i + b[0]) * a0, (j + b[1]) * a0, (k + b[2]) * a0)] if (p[0] / 8) ** 2 + (p[1] / 5) ** 2 + (p[2] / 4) ** 2 <= 1]
+        lump = {"atoms": [{"el": "C", "p": list(p)} for p in pts],
+                "bonds": [{"a": x, "b": y, "order": 1} for x, y in itertools.combinations(range(len(pts)), 2) if math.dist(pts[x], pts[y]) < 1.6]}
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [lump, METHANOL]}}}]}
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 120, "fps": 30, "motion": "change-liquid"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 1, "background": "white", "device": "cpu"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=1800)
+            self.assertEqual(run.returncode, 0, run.stdout[-3000:] + run.stderr[-2000:])
+        asked, poured, free = (float(v) for v in re.search(r"^POUR (\S+) L asked, (\S+) L poured, (\S+) L lie freely", run.stdout, re.M).groups())
+        self.assertGreater(asked, free)
+        self.assertLessEqual(poured, free)
+        width, depth = (float(v) for v in re.search(r"^POOL reaches (\S+) of the domain's half-width, (\S+) of its half-depth", run.stdout, re.M).groups())
+        self.assertLess(max(width, depth), 0.82, (width, depth))
+
+    def test_a_small_molecules_melt_never_shows_the_liquids_domain(self):
+        # (methanol melting in a domain sized for a much wider molecule: its top band holds no atom, so nothing is poured on
+        # the melt's first frame of liquid - the liquid is shown only once something is, or the solver's whole domain, which
+        # the camera framing methanol is inside, fills the frame with gold. Every frame's corners: the paper's grey-white)
+        chain = {"atoms": [{"el": "C", "p": [1.5 * i - 6.0, 0.0, 0.0]} for i in range(9)], "bonds": [{"a": i, "b": i + 1, "order": 1} for i in range(8)]}
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [METHANOL, chain]}}}]}
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 80, "fps": 30, "motion": "change-liquid"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 1, "background": "white", "device": "cpu"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=1800)
+            self.assertEqual(run.returncode, 0, run.stdout[-3000:] + run.stderr[-2000:])
+            probe = ("import bpy, glob, numpy as np\n"
+                     "for p in sorted(glob.glob('frames/melt-01/f_*.png')):\n"
+                     "    im = bpy.data.images.load(p); W, H = im.size\n"
+                     "    x = np.empty(W * H * 4, np.float32); im.pixels.foreach_get(x); x = x.reshape(H, W, 4)\n"
+                     "    c = np.stack([x[:3, :3], x[:3, -3:], x[-3:, :3], x[-3:, -3:]])[..., :3].reshape(-1, 3)\n"
+                     "    print('CORNERS', p, float((c[:, 0] - c[:, 2]).max()))\n")
+            look = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", probe], cwd=d, capture_output=True, text=True, timeout=300)
+        tints = {m[0]: float(m[1]) for m in re.findall(r"^CORNERS (\S+) (\S+)$", look.stdout, re.M)}
+        self.assertGreater(len(tints), 10)
+        # (the paper is neutral; gold is far warmer, its red well above its blue)
+        self.assertLess(max(tints.values()), 0.12, {k: v for k, v in tints.items() if v >= 0.12})
 
     def test_a_change_of_one_molecule_says_it_needs_two(self):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
