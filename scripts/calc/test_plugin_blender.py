@@ -210,6 +210,71 @@ class Collect(unittest.TestCase):
         self.assertEqual(said["result"], {"why": "Error: script failed, file: 'render.py', exiting."})
 
 
+class RenderScriptNames(unittest.TestCase):
+    """render.py runs only in Blender, so a name it never defines fails only there, at the line that uses it - on a computer
+    whose path through it no test here takes (a motion's film where no graphics processor can be used, say)."""
+
+    def test_render_py_uses_no_name_it_never_defines(self):
+        import ast
+        import builtins
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        defined = set(dir(builtins)) | {"__file__"}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                defined.add(node.name)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                defined |= {(a.asname or a.name).split(".")[0] for a in node.names}
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                defined.add(node.id)
+            elif isinstance(node, ast.arg):
+                defined.add(node.arg)
+            elif isinstance(node, ast.ExceptHandler) and node.name:
+                defined.add(node.name)
+        used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+        self.assertEqual(sorted(used - defined), [])
+
+    def test_its_fallback_lines_are_those_the_worker_reads(self):
+        src = (FOLDER / "render.py").read_text(encoding="utf-8")
+        self.assertIn(f"FELL_BACK = {worker.FELL_BACK!r}".replace("'", '"'), src)
+        self.assertIn(f"FASTER = {worker.FASTER!r}".replace("'", '"'), src)
+
+
+class FilmStrips(unittest.TestCase):
+    """How the frames a film plays become the sequencer's image strips (render.py `strip_runs`): a strip reads every file from
+    its first file's folder, so each run from one folder is a strip of its own."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "strip_runs")
+        ns = {"os": os}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), "render.py", "exec"), ns)
+        cls.runs = staticmethod(ns["strip_runs"])
+
+    def test_every_film_frame_is_its_own_file_across_folders_of_the_same_names(self):
+        # (a liquid change of three molecules, Once: melt 1 forward, reform 1, melt 2 backward, melt 2 forward from its second,
+        # reform 2, melt 3 backward - three folders holding the very same names, one of them played twice and reversed)
+        d = lambda name: os.path.join("job", "frames", name)
+        f = lambda folder, n: os.path.join(d(folder), f"f_{n:04d}.png")
+        frames = ([f("melt-01", n) for n in (1, 2, 3)] + [f("reform-01", n) for n in (1, 2)] + [f("melt-02", n) for n in (3, 2, 1)]
+                  + [f("melt-02", n) for n in (2, 3)] + [f("reform-02", n) for n in (1, 2)] + [f("melt-03", n) for n in (3, 2, 1)])
+        runs = self.runs(frames)
+        # (each film frame, as its strip plays it: its strip's folder, the name at its place in the strip)
+        played = []
+        for folder, names, start in runs:
+            self.assertEqual(start, len(played) + 1)
+            played += [os.path.join(folder, name) for name in names]
+        self.assertEqual(played, frames)
+        # (one run for melt 2 played backward then forward: one folder, its names in the order played)
+        self.assertEqual([(os.path.basename(r[0]), r[1]) for r in runs][2], ("melt-02", ["f_0003.png", "f_0002.png", "f_0001.png", "f_0002.png", "f_0003.png"]))
+        self.assertEqual(len(runs), 5)
+
+    def test_a_film_of_one_folder_is_one_strip(self):
+        frames = [os.path.join("job", "frames", f"f_{n:04d}.png") for n in (1, 2, 3, 2)]
+        self.assertEqual(self.runs(frames), [(os.path.join("job", "frames"), ["f_0001.png", "f_0002.png", "f_0003.png", "f_0002.png"], 1)])
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
@@ -278,8 +343,9 @@ class Manifest(unittest.TestCase):
         declared = [x["id"] for x in m["roles"][0]["motions"]]
         self.assertEqual(set(declared), worker.MOTIONS)
         for mid in declared:
-            self.assertTrue((FOLDER / f"motion_{mid}.py").read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), mid)
-        self.assertTrue((FOLDER / "studio.py").read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"))
+            self.assertTrue((FOLDER / worker.motion_script(mid)).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), mid)
+        for shared in ("studio.py", "change.py"):
+            self.assertTrue((FOLDER / shared).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), shared)
         # (Once or Loop is shown for its motions, and only for them)
         mode = next(o for o in m["roles"][0]["options"] if o["id"] == "mode")
         self.assertEqual(mode["when"], {"id": "motion", "in": declared})
@@ -297,6 +363,15 @@ class Motions(unittest.TestCase):
         self.assertNotIn("motion_scan.py", files)
         settings = json.loads(files["render.json"])
         self.assertEqual((settings["motion"], settings["mode"], settings["out"]), ("pulse", "loop", "film.mp4"))
+
+    def test_a_change_of_molecules_carries_the_part_changes_share(self):
+        said = ask("prepare", step="render", entries=[{**self.FILM, "motion": "change-ring"}], options={})
+        files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
+        self.assertEqual(files["motion_change_ring.py"], (FOLDER / "motion_change_ring.py").read_text(encoding="utf-8"))
+        self.assertEqual(files["change.py"], (FOLDER / "change.py").read_text(encoding="utf-8"))
+        # (a motion of one molecule carries no such part)
+        said = ask("prepare", step="render", entries=[self.FILM], options={})
+        self.assertNotIn("change.py", {f["name"] for f in said["result"]["jobs"][0]["files"]})
 
     def test_meno_s_own_motions_carry_none(self):
         said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 60, "fps": 30}], options={"mode": "loop"})
@@ -371,13 +446,19 @@ METHYLAMINE = {"atoms": [{"el": "C", "p": [-0.7, 0.0, 0.0]}, {"el": "N", "p": [0
                "bonds": [{"a": 0, "b": 1, "order": 1}, {"a": 0, "b": 2, "order": 1}, {"a": 0, "b": 3, "order": 1}, {"a": 0, "b": 4, "order": 1}, {"a": 1, "b": 5, "order": 1}, {"a": 1, "b": 6, "order": 1}]}
 
 
+# and another, for a change of molecules: methanol (C, O and four H)
+METHANOL = {"atoms": [{"el": "C", "p": [-0.7, 0.0, 0.0]}, {"el": "O", "p": [0.7, 0.0, 0.0]}, {"el": "H", "p": [-1.1, 1.0, 0.0]},
+                      {"el": "H", "p": [-1.1, -0.5, 0.87]}, {"el": "H", "p": [-1.1, -0.5, -0.87]}, {"el": "H", "p": [1.05, 0.9, 0.0]}],
+            "bonds": [{"a": 0, "b": 1, "order": 1}, {"a": 0, "b": 2, "order": 1}, {"a": 0, "b": 3, "order": 1}, {"a": 0, "b": 4, "order": 1}, {"a": 1, "b": 5, "order": 1}]}
+
+
 @unittest.skipUnless(blender(), "Blender is not installed here")
 class MotionsRender(unittest.TestCase):
     """Each motion built and rendered, tiny: 64x36, 4 samples, a few frames - on the dark studio and the white, Once; and a cycle's Loop."""
 
-    def film(self, motion, background, mode="once", frames=4):
+    def film(self, motion, background, mode="once", frames=4, molecules=(METHYLAMINE,), fails=False):
         with tempfile.TemporaryDirectory() as d:
-            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [METHYLAMINE]}}}]}
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": list(molecules)}}}]}
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
             entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 30, "motion": motion}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": background, "mode": mode, "device": "cpu"})
@@ -386,17 +467,60 @@ class MotionsRender(unittest.TestCase):
             for f in job["files"]:
                 (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
             run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=900)
+            if fails:
+                self.assertNotEqual(run.returncode, 0)
+                return worker.why_of(run.stdout + run.stderr)
             self.assertEqual(run.returncode, 0, run.stdout[-3000:] + run.stderr[-2000:])
             self.assertIn("progress 100/100", run.stdout)
             mp4 = (pathlib.Path(d) / "film.mp4").read_bytes()
             self.assertEqual(mp4[4:8], b"ftyp")
-            return len(list((pathlib.Path(d) / "frames").glob("f_*.png")))
+            return len(list((pathlib.Path(d) / "frames").glob("**/f_*.png")))
 
     def test_every_motion_on_both_studios(self):
-        for motion in sorted(worker.MOTIONS):
+        for motion in sorted(m for m in worker.MOTIONS if not m.startswith("change-")):
             for background in ("black", "white"):
                 with self.subTest(motion=motion, background=background):
                     self.assertEqual(self.film(motion, background), 4)
+
+    def test_every_change_of_molecules_on_both_studios_once_and_as_a_loop(self):
+        for motion in sorted(m for m in worker.MOTIONS if m.startswith("change-")):
+            for background, mode, frames in (("black", "once", 4), ("white", "loop", 6)):
+                with self.subTest(motion=motion, background=background, mode=mode):
+                    # (Once: one change, methylamine to methanol; Loop: and back - every frame rendered, in two pieces; the liquid
+                    # renders each molecule's melt once, played forward and backward, and a reform between: 2 melts of 2 frames
+                    # and a reform of 1 Once, 2 of 2 and 2 of 1 as a Loop)
+                    rendered = self.film(motion, background, mode, frames, molecules=(METHYLAMINE, METHANOL))
+                    self.assertEqual(rendered, {"once": 5, "loop": 6}[mode] if motion == "change-liquid" else frames)
+
+    def test_a_change_of_one_molecule_says_it_needs_two(self):
+        why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
+        self.assertEqual(why, "render.py: a change of molecules needs two molecules or more, rendered together")
+
+    def test_a_portrait_film_keeps_a_tall_molecule_whole(self):
+        # (a chain standing up the canvas, in a frame twice as tall as wide: Blender's Auto would put the sensor across the
+        # height, and the studio's framing - which takes it across the width - would cut the chain's ends off at the top and
+        # the bottom. The frame's top and bottom rows: paper, not carbon)
+        chain = {"atoms": [{"el": "C", "p": [0.6 * (i % 2), 1.3 * i - 7.0, 0.0]} for i in range(12)],
+                 "bonds": [{"a": i, "b": i + 1, "order": 1} for i in range(11)]}
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [chain]}}}]}
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 2, "fps": 30, "motion": "pulse"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            probe = ("import bpy, numpy as np\n"
+                     "im = bpy.data.images.load('frames/f_0002.png'); W, H = im.size\n"
+                     "x = np.empty(W * H * 4, np.float32); im.pixels.foreach_get(x); x = x.reshape(H, W, 4)[..., :3].mean(axis=2)\n"
+                     "print('EDGES', float(x[:3].min()), float(x[-3:].min()), float(x.min()))\n")
+            look = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", probe], cwd=d, capture_output=True, text=True, timeout=300)
+            bottom, top, darkest = (float(v) for v in re.search(r"^EDGES (\S+) (\S+) (\S+)$", look.stdout, re.M).groups())
+            # (the chain is in the frame, dark; its rows nearest the frame's edges are the paper's, as light as it is)
+            self.assertLess(darkest, 0.3)
+            self.assertGreater(min(top, bottom), 0.6, (top, bottom, darkest))
 
     def test_a_cycle_renders_half_and_plays_it_back(self):
         # (assemble loops as a cycle: 6 frames played, 4 rendered - forward, then back)
@@ -512,6 +636,54 @@ class Renders(unittest.TestCase):
             self.assertIn("as timed before", second)
             expected = "Rendering on the graphics processor" if entry["device"] == "gpu" else "Rendering on the processor (the faster one here)"
             self.assertIn(expected, second)
+
+    def test_a_motion_s_film_left_to_choose_takes_the_faster_as_timed(self):
+        # (a picture times the two and keeps the faster; that kept, a motion's film on the same computer takes it - here the
+        # processor, as if it were the faster - and says so, as the card reads it: never the graphics processor for being there)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:
+            cache = os.path.join(k, "device-probe.json")
+            first = self.run_job(d, {"device": "auto"}, cache)
+            if "no graphics processor Blender can use" in first:
+                self.skipTest("no graphics processor here to time against the processor")
+            kept = json.load(open(cache))
+            json.dump({key: {**v, "device": "cpu"} for key, v in kept.items()}, open(cache, "w"))
+            # (a motion of one molecule, and a change of molecules - a Loop of two pieces, each in a Blender of its own)
+            for motion, molecules in (("pulse", [METHYLAMINE]), ("change-ring", [METHYLAMINE, METHANOL])):
+                with self.subTest(motion=motion):
+                    out = self.motion_film(motion, molecules, "auto", cache)
+                    self.assertIn("as timed before", out)
+                    self.assertIn(worker.FASTER, out)
+                    self.assertNotIn("Rendering on the graphics processor", out)
+                    if motion.startswith("change-"):
+                        self.assertEqual(re.findall(r"^Change \d of \d: .*$", out, re.M), ["Change 1 of 2: on the processor", "Change 2 of 2: on the processor"])
+                    entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 4, "fps": 30, "motion": motion}
+                    said = ask("collect", step="render", entries=[entry], options={}, files={}, log=out, ended="done")
+                    self.assertEqual(said["result"]["note"], "Rendered on the processor")
+
+    def motion_film(self, motion, molecules, device, probe_file=None):
+        """A Loop of a motion, tiny, as Meno runs it: its log."""
+        with tempfile.TemporaryDirectory() as m:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": molecules}}}]}
+            (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 4, "fps": 30, "motion": motion}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": device, "mode": "loop"})
+            job = said["result"]["jobs"][0]
+            files = {f["name"]: f["text"] for f in job["files"]}
+            if probe_file:
+                files["render.json"] = json.dumps({**json.loads(files["render.json"]), "probe_file": probe_file})
+            for name, text in files.items():
+                (pathlib.Path(m) / name).write_text(text, encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=m, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            return run.stdout
+
+    def test_every_piece_of_a_change_on_the_graphics_processor_has_its_devices(self):
+        # (each piece's studio resets Blender, its Cycles preferences with it: the graphics processor's devices enabled again in
+        # every piece - a later one on none would render on the processor, its log still saying the graphics processor)
+        out = self.motion_film("change-ring", [METHYLAMINE, METHANOL], "gpu")
+        if worker.FELL_BACK in out:
+            self.skipTest("no graphics processor here")
+        self.assertEqual(re.findall(r"^Change \d of \d: .*$", out, re.M), ["Change 1 of 2: on the graphics processor", "Change 2 of 2: on the graphics processor"])
 
     def test_the_processor_choice_never_times_and_says_so(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as k:

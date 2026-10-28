@@ -2,7 +2,7 @@ import { Text } from "@react-three/drei";
 import * as THREE from "three";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { DURATION, TAU, follow } from "../../../theme/motion";
+import { DURATION, EASE, TAU, eased, follow } from "../../../theme/motion";
 import { usePresence } from "../../../theme/presence";
 import { labelSetOf, placeLabel, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
@@ -35,23 +35,74 @@ export default function Labels2D() {
   const waited = useEditor((s) => s.labelLeft != null);
   // (a label written over and let go - or kept as it was - comes back as the writing goes: faded in, not there at once)
   const ended = useEditor((s) => s.labelEnd);
-  const arriving = useMemo(
-    () => (ended && ended.how !== "kept" ? new Set([`atom-${ended.atomId}`, `mark-${ended.atomId}`]) : undefined),
-    [ended],
-  );
-  const keyOf = (t: TextItem, i: number) => {
+  // (a selection let go after a turn or a drag: each label carried with it is set again, and one set otherwise - OH
+  // become HO - goes over as one fading out and the other in together, by a key of its own for the one set now)
+  const held = useEditor((s) => s.panHold.active);
+  const generation = useRef(new Map<string, number>());
+  const ghosts = useRef(new Map<string, { item: TextItem; atom: number; dx: number; dy: number }>());
+  const settled = useRef<{ held: boolean; texts: readonly TextItem[]; atoms: readonly { id: number; x: number; y: number }[] }>({ held, texts: layout.texts, atoms });
+  const baseOf = (t: TextItem, i: number, on: readonly { id: number }[]) => {
     const index = t.beside ? t.markOf : t.atom;
-    const id = index != null ? atoms[index]?.id : undefined;
+    const id = index != null ? on[index]?.id : undefined;
     return id != null ? `${t.beside ? "mark" : "atom"}-${id}` : `txt-${i}`;
   };
+  const resetNow = useMemo(() => {
+    const was = settled.current;
+    settled.current = { held, texts: layout.texts, atoms };
+    if (!was.held || held) return [];
+    // (each label's letters and where they stand from its atom, then and now)
+    const placed = (t: TextItem, on: readonly { x: number; y: number }[]) => {
+      const a = on[(t.beside ? t.markOf : t.atom) ?? -1];
+      const { x, y, ...rest } = t;
+      return a ? JSON.stringify(rest) + `@${Math.round((x - a.x) * 1e4)},${Math.round((y - a.y) * 1e4)}` : null;
+    };
+    const before = new Map(was.texts.map((t, i) => [baseOf(t, i, was.atoms), placed(t, was.atoms)]));
+    const changed = layout.texts.flatMap((t, i) => {
+      const key = baseOf(t, i, atoms);
+      return before.has(key) && before.get(key) !== placed(t, atoms) ? [key] : [];
+    });
+    // (the one going stays by its atom as it fades, wherever its atom is drawn - still gliding to where the turn left it)
+    const thenAt = new Map(was.texts.map((t, i) => [baseOf(t, i, was.atoms), t]));
+    for (const key of changed) {
+      const n = generation.current.get(key) ?? 0;
+      const t = thenAt.get(key)!;
+      const a = was.atoms[(t.beside ? t.markOf : t.atom) ?? -1];
+      if (a) ghosts.current.set(n ? `${key}~${n}` : key, { item: t, atom: a.id, dx: t.x - a.x, dy: t.y - a.y });
+      generation.current.set(key, n + 1);
+    }
+    return changed;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- as the texts are, and the press
+  }, [layout.texts, held]);
+  const keyOf = (t: TextItem, i: number) => {
+    const base = baseOf(t, i, atoms);
+    const n = generation.current.get(base);
+    return n ? `${base}~${n}` : base;
+  };
+  const arriving = useMemo(() => {
+    const typed = ended && ended.how !== "kept" ? [`atom-${ended.atomId}`, `mark-${ended.atomId}`] : [];
+    const reset = resetNow.map((k) => `${k}~${generation.current.get(k)}`);
+    return typed.length || reset.length ? new Set([...typed, ...reset]) : undefined;
+  }, [ended, resetNow]);
   // (a label gone - its atom undone or deleted, its label taken back - kept a moment, by what it was drawn by, as it fades out)
   const at = new Map(layout.texts.map((t, i) => [t, i]));
   // (kept a little past the fade, so that it ends at naught, not cut short by a slow frame)
   const shown = usePresence(layout.texts, (t) => keyOf(t, at.get(t) ?? -1), DURATION.quick * 1000 + 50);
   const leavingKeys = shown.filter((e) => e.leaving).map((e) => e.key);
   const signature = leavingKeys.join("\u0000");
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- as the texts are, and which are going
-  const texts = useMemo(() => shown.map((e) => e.item), [layout.texts, signature]);
+  // (a label set otherwise on letting go, fading out by its atom: where its atom is drawn now, as it stood from it)
+  for (const k of [...ghosts.current.keys()]) if (!leavingKeys.includes(k)) ghosts.current.delete(k);
+  const following = ghosts.current.size > 0;
+  const texts = useMemo(() => {
+    if (!following) return shown.map((e) => e.item);
+    const index = new Map(atoms.map((a, i) => [a.id, i]));
+    return shown.map((e) => {
+      const g = e.leaving ? ghosts.current.get(e.key) : undefined;
+      const i = g ? index.get(g.atom) : undefined;
+      if (!g || i == null) return e.item;
+      return { ...g.item, x: atoms[i].x + g.dx, y: atoms[i].y + g.dy, ...(g.item.beside ? { markOf: i } : { atom: i }) };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- as the texts are, which are going, and - while one goes by its atom - where the atoms are
+  }, [layout.texts, signature, following ? atoms : null]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the same
   const keys = useMemo(() => shown.map((e) => e.key), [layout.texts, signature]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the same
@@ -89,6 +140,14 @@ type TextsProps = {
   arriving?: ReadonlySet<string>;
   /** How opaque all of them are, read at each frame: a label being written as it comes and goes (LabelTyping2D). */
   opacity?: { readonly current: number };
+  /** The typeface they are set in, where it is not the labels': words on the page given one of their own (Captions2D). */
+  family?: string;
+};
+
+/** How texts given `family` are set: as the labels are, in it. */
+const setIn = (opts: Parameters<typeof labelSetOf>[0], family: string | undefined) => {
+  const set = labelSetOf(opts);
+  return family ? { ...set, fontFamily: family } : set;
 };
 
 export function Texts2D(props: TextsProps) {
@@ -109,6 +168,7 @@ function EachText2D({
   onDrawn,
   keyOf,
   leaving,
+  family: own,
 }: TextsProps) {
   const { opts } = useDrawnLayout();
 
@@ -116,7 +176,7 @@ function EachText2D({
   // font the layout measures in is the one drawn with, so nothing needs
   // measuring here. Until the font is known nothing is drawn, rather than a
   // label in some other font that then jumps.
-  const family = opts.fontFamily ?? "Arial";
+  const family = own ?? opts.fontFamily ?? "Arial";
   // (a letter no typeface of Meno's has drawn as a white square - as the layout measured it: lib/chem/labelFonts `STAND_IN`)
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
   const font = useLabelFontUrl(family, fallback);
@@ -190,7 +250,7 @@ function EachText2D({
   const made = useRef<{ under: unknown[]; texts: WeakMap<TextItem, { key: string; label: ReactElement }> }>({ under: [], texts: new WeakMap() });
   const labels = useMemo(() => {
     if (font === null) return null;
-    const set = labelSetOf(opts);
+    const set = setIn(opts, own);
     const glyphs = labelFont(set.fontFamily);
     const fill = shadow || moved ? 0 : seen.current.level;
     const under = [opts, labelZoom, labelColor, font, moved, shadow, renderOrder, fill];
@@ -235,7 +295,7 @@ function EachText2D({
       return label;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
-  }, [items, opts, labelZoom, labelColor, font, moved, shadow, renderOrder]);
+  }, [items, opts, own, labelZoom, labelColor, font, moved, shadow, renderOrder]);
   if (font === null) return null;
   return <group ref={group}>{labels}</group>;
 }
@@ -246,9 +306,9 @@ function EachText2D({
  * while it is the same item, faded in as the font comes, told when drawn -
  * as `EachText2D` draws them one by one.
  */
-function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving, opacity }: TextsProps) {
+function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving, opacity, family: own }: TextsProps) {
   const { opts } = useDrawnLayout();
-  const family = opts.fontFamily ?? "Arial";
+  const family = own ?? opts.fontFamily ?? "Arial";
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
   const font = useLabelFontUrl(family, fallback);
   const seen = useRef<{ font: string | null; level: number }>({ font: null, level: 0 });
@@ -266,7 +326,7 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
   useLayoutEffect(() => {
     const b = batch;
     if (!b) return;
-    const set = labelSetOf(opts);
+    const set = setIn(opts, own);
     const glyphs = labelFont(set.fontFamily);
     // (what every label is drawn by: all of them set again where it changes)
     const now = [opts, labelZoom, labelColor, b];
@@ -292,7 +352,7 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
     b.keepOnly(keep);
     invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyOf: what each is drawn by, as the texts are
-  }, [items, opts, labelZoom, labelColor, batch, invalidate]);
+  }, [items, opts, own, labelZoom, labelColor, batch, invalidate]);
   // (told once every letter is set - after the batch has set them)
   useLayoutEffect(() => {
     const b = batch;
@@ -352,7 +412,8 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
         continue;
       }
       out.current.set(k, level);
-      b.fadeKey(k, Math.min(seen.current.level, fadedOpacity(level)));
+      // (coming in on Meno's curve, as an element's meno-fade-in does)
+      b.fadeKey(k, Math.min(seen.current.level, eased(EASE, level)));
       going = true;
     }
     if (going) invalidate();
@@ -379,6 +440,7 @@ export function WholeTexts2D({
   onDrawn,
   renderOrder,
   opacity,
+  family,
 }: {
   texts: readonly TextItem[];
   fadeIn?: boolean;
@@ -386,6 +448,8 @@ export function WholeTexts2D({
   renderOrder?: number;
   /** How opaque they are, read at each frame (Texts2D `opacity`). */
   opacity?: { readonly current: number };
+  /** Their own typeface, where it is not the labels' (Texts2D `family`). */
+  family?: string;
 }) {
   // (two sets, one shown and one being set - each set made anew, so that it waits in its own Suspense - and the latest, to be set next: textSets)
   const sets = useRef(noTextSets<readonly TextItem[]>());
@@ -409,7 +473,7 @@ export function WholeTexts2D({
         return (
           <Suspense key={i} fallback={null}>
             <group visible={i === s.front}>
-              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} opacity={opacity} />
+              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} opacity={opacity} family={family} />
             </group>
           </Suspense>
         );

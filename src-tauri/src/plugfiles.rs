@@ -201,7 +201,7 @@ pub fn folder(data: &Path, id: &str, pixi: bool) -> PathBuf {
 pub enum Held {
     /// There, as it was fetched: its size and SHA-256 the manifest's - an archive, unpacked whole.
     Whole,
-    /// Not there - an archive, not unpacked whole. (One cut short is kept as `<file>.part`, never under its name.)
+    /// Not there - an archive, not unpacked whole. (One cut short is kept as its part, `part_of`, never under its name.)
     Missing,
     /// There, but not its size, or its SHA-256 not the manifest's: changed, or damaged, since it was fetched.
     Changed,
@@ -252,6 +252,31 @@ pub fn held(dir: &Path, d: &Download) -> Held {
     if ok { Held::Whole } else { Held::Changed }
 }
 
+
+/// How file `d` stands in `dir` as far as can be told without reading it through (`held`): not there; another size;
+/// else as this launch last read it, or - not read yet - as it was kept, whole. Whether a plugin is added is asked so,
+/// at launch, of every plugin; its files are read through for their SHA-256 when it is used (`held`), and one changed
+/// at its own size is found then.
+pub fn there(dir: &Path, d: &Download) -> Held {
+    if d.unpack.is_some() {
+        return held(dir, d);
+    }
+    let path = dir.join(&d.file);
+    let meta = match std::fs::metadata(&path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Held::Missing,
+        Err(e) => return Held::Unreadable(e.to_string()),
+    };
+    if meta.len() != d.bytes {
+        return Held::Changed;
+    }
+    let when = meta.modified().ok();
+    let known = CHECKED.get_or_init(Default::default).lock().ok().and_then(|c| c.get(&path).cloned());
+    match known {
+        Some((len, at, sha, false)) if len == meta.len() && at == when && sha == d.sha256 => Held::Changed,
+        _ => Held::Whole,
+    }
+}
 
 /// The files a plugin needs as it is set up: those for this computer.
 pub fn needed(downloads: &[Download]) -> Vec<Download> {
@@ -471,7 +496,7 @@ fn manifest_of(app: &AppHandle, id: &str) -> Result<Value, String> {
 /// said as they come (`plugin-files:progress`); an archive unpacked, and
 /// thrown away.
 #[tauri::command]
-pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Option<Vec<String>>) -> Result<FilesState, String> {
+pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Option<Vec<String>>, through: Option<bool>) -> Result<FilesState, String> {
     if !crate::plugin_id_ok(&plugin) {
         return Err(format!("not a plugin's id: {plugin}"));
     }
@@ -480,10 +505,12 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Op
     let pixi = manifest.get("environment").and_then(Value::as_str) == Some("pixi");
     let data = crate::local_data_dir(&app)?;
     let dir = folder(&data, &plugin, pixi);
-    // (each file's SHA-256 read through, where it is, off the async runtime: a model's weights take a while)
+    // (each file's SHA-256 read through, where it is, off the async runtime: a model's weights take a while - unless
+    // only whether it is there is asked, as whether the plugin is added is, at launch: `there`. Fetching reads through)
+    let through = fetch || through.unwrap_or(true);
     let stand = {
         let (dir, downloads) = (dir.clone(), downloads.clone());
-        tauri::async_runtime::spawn_blocking(move || downloads.iter().map(|d| held(&dir, d)).collect::<Vec<_>>())
+        tauri::async_runtime::spawn_blocking(move || downloads.iter().map(|d| if through { held(&dir, d) } else { there(&dir, d) }).collect::<Vec<_>>())
             .await
             .map_err(|e| format!("checking {plugin}'s files: {e}"))?
     };
@@ -530,7 +557,13 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Op
         let archive = dir.join(&d.file);
         // (an archive there whole - fetched, its unpacking cut short - is not fetched again)
         if d.unpack.is_none() || !whole(&archive, d) {
-            fetch_one(&client, d, &dir, tell).await?;
+            // (stopped part of the way, taken up again of itself; failed after all, why kept with the task and in Meno's log)
+            if let Err(e) = fetch_resuming(&client, d, &dir, tell, &RESUME_WAITS).await {
+                let said = e.to_string();
+                crate::logfile::logged!("Downloading what {name} needs: {said}");
+                task.fail(&said);
+                return Err(said);
+            }
         }
         before += d.bytes;
         if d.unpack.is_some() {
@@ -588,35 +621,128 @@ fn sized(n: u64) -> String {
 
 /// What is said of a download that stopped part of the way, `why`: how much came of how much, that it is kept, and
 /// that adding the plugin again goes on from there.
-fn stopped(d: &Download, had: u64, why: &str) -> String {
-    format!(
+fn stopped(d: &Download, had: u64, why: &str) -> Fetched {
+    Fetched::Stopped(format!(
         "{} stopped after {} of {} ({why}). What came is kept: Add goes on from there.",
         d.file,
         sized(had),
         sized(d.bytes)
-    )
+    ))
 }
 
-/// One file fetched into `dir`: into `<file>.part` - taken up where an
-/// earlier try left it, where the server sends the rest - then, all of it
-/// there and its hash the manifest's, put in place; a file whose hash is
-/// not is thrown away.
-pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut tell: impl FnMut(u64)) -> Result<(), String> {
-    let part = dir.join(format!("{}.part", d.file));
+/// Why a file was not fetched: it stopped part of the way, what came kept to be taken up again (`fetch_resuming`); or
+/// it failed otherwise - refused, not the file expected - and nothing is kept.
+#[derive(Debug, PartialEq)]
+pub enum Fetched {
+    Stopped(String),
+    Failed(String),
+}
+
+impl std::fmt::Display for Fetched {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Fetched::Stopped(s) | Fetched::Failed(s) => f.write_str(s),
+        }
+    }
+}
+
+/// How long a download that stopped part of the way waits before it is taken up again of itself, each time: four
+/// times, each wait longer - the server's or the network's hiccup given time to pass.
+pub const RESUME_WAITS: [Duration; 4] = [Duration::from_secs(2), Duration::from_secs(5), Duration::from_secs(15), Duration::from_secs(30)];
+
+/// `fetch_one`, a download that stops part of the way taken up again from
+/// where it stopped (a range asked for), after each of `waits` in turn -
+/// each stop written to Meno's log, with how much came - and only then said
+/// to have stopped, with how often it was taken up.
+pub async fn fetch_resuming(client: &reqwest::Client, d: &Download, dir: &Path, mut tell: impl FnMut(u64), waits: &[Duration]) -> Result<(), Fetched> {
+    let mut taken_up = 0;
+    loop {
+        match fetch_one(client, d, dir, &mut tell).await {
+            Ok(()) => return Ok(()),
+            Err(Fetched::Stopped(said)) if taken_up < waits.len() => {
+                crate::logfile::logged!("{said} Taken up again in {} s.", waits[taken_up].as_secs());
+                tokio::time::sleep(waits[taken_up]).await;
+                taken_up += 1;
+            }
+            Err(Fetched::Stopped(said)) if taken_up > 0 => {
+                return Err(Fetched::Stopped(said.replacen("). ", &format!("; taken up again {taken_up} times). "), 1)));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Where a file is fetched to until it is all there and its hash checked:
+/// `<file>.<its SHA-256's first 12 digits>.part` - so that what came of the
+/// file one manifest named is never taken up as another's, the manifest
+/// having changed since.
+pub fn part_of(dir: &Path, d: &Download) -> PathBuf {
+    dir.join(format!("{}.{}.part", d.file, &d.sha256[..12.min(d.sha256.len())]))
+}
+
+/// What came of `d`'s file before for another manifest's - `<file>.part`, as
+/// Meno kept it until 0.1.18, or another hash's - thrown away: never taken up.
+fn forget_other_parts(dir: &Path, d: &Download, ours: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with(&format!("{}.", d.file)) && name.ends_with(".part") && e.path() != ours {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+/// Whether a 206's Content-Range (`bytes <first>-<last>/<size>`) begins where what came before ends, `had`: else what
+/// it sends is not the rest of the file.
+fn range_from(content_range: Option<&str>, had: u64) -> bool {
+    content_range
+        .and_then(|r| r.trim().strip_prefix("bytes "))
+        .and_then(|r| r.split('-').next())
+        .and_then(|first| first.trim().parse::<u64>().ok())
+        == Some(had)
+}
+
+/// One file fetched into `dir`: into its part (`part_of`) - taken up where
+/// an earlier try left it, where the server sends the rest, from there
+/// (`range_from`); begun again where it sends all of it, another range, or
+/// says the part is past its file's end (416) - then, all of it there and
+/// its hash the manifest's, put in place; a file whose hash is not is
+/// thrown away.
+pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut tell: impl FnMut(u64)) -> Result<(), Fetched> {
+    let part = part_of(dir, d);
+    forget_other_parts(dir, d, &part);
     let (mut hasher, mut had) = match hashed_so_far(&part) {
         Ok((h, n)) if n > 0 && n < d.bytes => (h, n),
         _ => (Sha256::new(), 0),
     };
-    let mut ask = client.get(&d.url);
-    if had > 0 {
-        ask = ask.header(reqwest::header::RANGE, format!("bytes={had}-"));
+    // (no answer at all, or one refused: nothing came this time - taken up again too, where anything came before)
+    let ask = |from: u64| {
+        let mut ask = client.get(&d.url);
+        if from > 0 {
+            ask = ask.header(reqwest::header::RANGE, format!("bytes={from}-"));
+        }
+        async move { ask.send().await.map_err(|e| if from > 0 { stopped(d, from, "the connection broke") } else { Fetched::Failed(format!("fetching {}: {e}", d.url)) }) }
+    };
+    let mut response = ask(had).await?;
+    // (the part past the file's end, as the server has it: thrown away, and the file begun again - once)
+    if had > 0 && response.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+        let _ = std::fs::remove_file(&part);
+        (hasher, had) = (Sha256::new(), 0);
+        response = ask(0).await?;
     }
-    let mut response = ask.send().await.map_err(|e| format!("fetching {}: {e}", d.url))?;
-    response = response.error_for_status().map_err(|e| format!("fetching {}: {e}", d.url))?;
-    // (the server sends it all again: begun again)
-    if had > 0 && response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-        hasher = Sha256::new();
-        had = 0;
+    response = response.error_for_status().map_err(|e| Fetched::Failed(format!("fetching {}: {e}", d.url)))?;
+    if had > 0 {
+        let partial = response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+        let content_range = response.headers().get(reqwest::header::CONTENT_RANGE).and_then(|v| v.to_str().ok()).map(str::to_string);
+        if !(partial && range_from(content_range.as_deref(), had)) {
+            // (all of it sent again - begun again; another range than the rest - asked for all of it, and begun again)
+            (hasher, had) = (Sha256::new(), 0);
+            if partial {
+                response = ask(0).await?.error_for_status().map_err(|e| Fetched::Failed(format!("fetching {}: {e}", d.url)))?;
+            }
+        }
     }
     let mut out = std::fs::OpenOptions::new()
         .create(true)
@@ -624,7 +750,7 @@ pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut t
         .append(had > 0)
         .truncate(had == 0)
         .open(&part)
-        .map_err(|e| format!("{}: {e}", part.display()))?;
+        .map_err(|e| Fetched::Failed(format!("{}: {e}", part.display())))?;
     tell(had);
     // (the server gone quiet past the client's read timeout, or the connection broken, part of the way: what came is
     //  kept, and said so, with how to go on - never the client library's own words)
@@ -641,14 +767,14 @@ pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut t
         if had + chunk.len() as u64 > d.bytes {
             drop(out);
             let _ = std::fs::remove_file(&part);
-            return Err(format!("{} is larger than it should be", d.url));
+            return Err(Fetched::Failed(format!("{} is larger than it should be", d.url)));
         }
         hasher.update(&chunk);
-        out.write_all(&chunk).map_err(|e| format!("{}: {e}", part.display()))?;
+        out.write_all(&chunk).map_err(|e| Fetched::Failed(format!("{}: {e}", part.display())))?;
         had += chunk.len() as u64;
         tell(had);
     }
-    out.flush().map_err(|e| format!("{}: {e}", part.display()))?;
+    out.flush().map_err(|e| Fetched::Failed(format!("{}: {e}", part.display())))?;
     drop(out);
     if had != d.bytes {
         // (kept, to be taken up again)
@@ -657,9 +783,9 @@ pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut t
     let got = hex(hasher);
     if got != d.sha256 {
         let _ = std::fs::remove_file(&part);
-        return Err(format!("{} is not the file Meno expects: its SHA-256 is {got}", d.url));
+        return Err(Fetched::Failed(format!("{} is not the file Meno expects: its SHA-256 is {got}", d.url)));
     }
-    std::fs::rename(&part, dir.join(&d.file)).map_err(|e| format!("{}: {e}", part.display()))
+    std::fs::rename(&part, dir.join(&d.file)).map_err(|e| Fetched::Failed(format!("{}: {e}", part.display())))
 }
 
 #[cfg(test)]
@@ -980,9 +1106,27 @@ mod tests {
         f.set_modified(at + std::time::Duration::from_secs(10)).unwrap();
         drop(f);
         assert_eq!(held(dir.path(), &d), Held::Whole);
-        // (another size: changed too - one cut short is kept as model.bin.part, never under its name)
+        // (another size: changed too - one cut short is kept as its part, never under its name)
         std::fs::write(&path, b"weights").unwrap();
         assert_eq!(held(dir.path(), &d), Held::Changed);
+    }
+
+    #[test]
+    fn asks_whether_a_kept_file_is_there_without_reading_it_and_finds_one_changed_at_its_size_when_it_is_read() {
+        let dir = Scratch::new();
+        let body = b"weights for there".to_vec();
+        let d = Download { file: "there.bin".into(), url: "https://h/there.bin".into(), sha256: sha(&body), bytes: body.len() as u64, ..Default::default() };
+        let path = dir.path().join("there.bin");
+        assert_eq!(there(dir.path(), &d), Held::Missing);
+        // (other bytes at its size, never read this launch: there, as far as can be told without reading it)
+        std::fs::write(&path, b"weights for therf").unwrap();
+        assert_eq!(there(dir.path(), &d), Held::Whole);
+        // (read through as it is used: changed - and from then on said so without reading it again)
+        assert_eq!(held(dir.path(), &d), Held::Changed);
+        assert_eq!(there(dir.path(), &d), Held::Changed);
+        // (another size: changed, unread)
+        std::fs::write(&path, b"short").unwrap();
+        assert_eq!(there(dir.path(), &d), Held::Changed);
     }
 
     #[cfg(unix)]
@@ -1089,17 +1233,22 @@ mod tests {
                     .lines()
                     .find_map(|l| l.to_ascii_lowercase().strip_prefix("range: bytes=").map(|r| r.trim_end_matches('-').parse::<usize>().unwrap()));
                 asked.push(from.map(|f| format!("from {f}")).unwrap_or_else(|| "all".into()));
-                let (status, part) = match from {
-                    Some(f) if ranges => ("206 Partial Content", &body[f..]),
-                    _ => ("200 OK", &body[..]),
+                let (status, part, range) = match from {
+                    Some(f) if ranges => ("206 Partial Content", &body[f..], format!("Content-Range: bytes {f}-{}/{}\r\n", body.len() - 1, body.len())),
+                    _ => ("200 OK", &body[..], String::new()),
                 };
-                let reply = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", part.len());
+                let reply = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\n{range}Connection: close\r\n\r\n", part.len());
                 s.write_all(reply.as_bytes()).await.unwrap();
                 s.write_all(part).await.unwrap();
             }
             asked
         });
         (url, handle)
+    }
+
+    /// Where what came of `body`, as a download, is kept until it is all there.
+    fn part(dir: &Path, body: &[u8]) -> PathBuf {
+        part_of(dir, &download("https://h/m", body))
     }
 
     fn download(url: &str, body: &[u8]) -> Download {
@@ -1115,7 +1264,7 @@ mod tests {
         let mut seen = Vec::new();
         fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |n| seen.push(n)).await.unwrap();
         assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
-        assert!(!dir.path().join("model.bin.part").exists());
+        assert!(!part(dir.path(), &body).exists());
         assert_eq!(*seen.last().unwrap(), body.len() as u64);
         assert_eq!(server.await.unwrap(), ["all"]);
     }
@@ -1126,7 +1275,7 @@ mod tests {
         for ranges in [true, false] {
             let (url, server) = serve(body.clone(), ranges, 1).await;
             let dir = Scratch::new();
-            std::fs::write(dir.path().join("model.bin.part"), &body[..20_000]).unwrap();
+            std::fs::write(part(dir.path(), &body), &body[..20_000]).unwrap();
             fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap();
             assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body, "ranges {ranges}");
             assert_eq!(server.await.unwrap(), ["from 20000"]);
@@ -1141,8 +1290,8 @@ mod tests {
         let mut d = download(&url, &body);
         d.sha256 = "0".repeat(64);
         let err = fetch_one(&client_builder().build().unwrap(), &d, dir.path(), |_| {}).await.unwrap_err();
-        assert!(err.contains("not the file Meno expects"), "{err}");
-        assert!(!dir.path().join("model.bin").exists() && !dir.path().join("model.bin.part").exists());
+        assert!(matches!(&err, Fetched::Failed(s) if s.contains("not the file Meno expects")), "{err}");
+        assert!(!dir.path().join("model.bin").exists() && !part_of(dir.path(), &d).exists());
     }
 
     #[tokio::test]
@@ -1151,8 +1300,8 @@ mod tests {
         let (url, _server) = serve(body[..4].to_vec(), true, 1).await;
         let dir = Scratch::new();
         let err = fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap_err();
-        assert_eq!(err, "model.bin stopped after 4 bytes of 10 bytes (the server ended it early). What came is kept: Add goes on from there.");
-        assert_eq!(std::fs::read(dir.path().join("model.bin.part")).unwrap(), b"0123");
+        assert_eq!(err.to_string(), "model.bin stopped after 4 bytes of 10 bytes (the server ended it early). What came is kept: Add goes on from there.");
+        assert_eq!(std::fs::read(part(dir.path(), &body)).unwrap(), b"0123");
     }
 
     #[tokio::test]
@@ -1179,12 +1328,162 @@ mod tests {
         let dir = Scratch::new();
         let client = client_builder().read_timeout(Duration::from_millis(500)).build().unwrap();
         let err = fetch_one(&client, &download(&url, &body), dir.path(), |_| {}).await.unwrap_err();
-        assert_eq!(err, "model.bin stopped after 1.2 MB of 2.0 MB (the server stopped sending). What came is kept: Add goes on from there.");
-        assert_eq!(std::fs::read(dir.path().join("model.bin.part")).unwrap().len(), 1_200_000);
+        assert_eq!(err.to_string(), "model.bin stopped after 1.2 MB of 2.0 MB (the server stopped sending). What came is kept: Add goes on from there.");
+        assert_eq!(std::fs::read(part(dir.path(), &body)).unwrap().len(), 1_200_000);
         server.abort();
         let (url, again) = serve(body.clone(), true, 1).await;
         fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap();
         assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
         assert_eq!(again.await.unwrap(), ["from 1200000"]);
+    }
+
+    /// A server of one body, at `/f`, that says it sends all that was asked
+    /// for - all of it, or the rest from a range - but closes the connection
+    /// after `cuts[k]` bytes of the body on the k-th request (none: all), as
+    /// a CDN that drops a long download does. What each request asked for, in turn.
+    async fn serve_cut(body: Vec<u8>, cuts: Vec<Option<usize>>) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/f", listener.local_addr().unwrap());
+        let handle = tokio::spawn(async move {
+            let mut asked = Vec::new();
+            for cut in cuts {
+                let (mut s, _) = listener.accept().await.unwrap();
+                let mut head = Vec::new();
+                let mut b = [0u8; 1];
+                while !head.ends_with(b"\r\n\r\n") {
+                    s.read_exact(&mut b).await.unwrap();
+                    head.push(b[0]);
+                }
+                let head = String::from_utf8(head).unwrap();
+                let from = head
+                    .lines()
+                    .find_map(|l| l.to_ascii_lowercase().strip_prefix("range: bytes=").map(|r| r.trim_end_matches('-').parse::<usize>().unwrap()))
+                    .unwrap_or(0);
+                asked.push(if from > 0 { format!("from {from}") } else { "all".into() });
+                let status = if from > 0 { "206 Partial Content" } else { "200 OK" };
+                let range = if from > 0 { format!("Content-Range: bytes {from}-{}/{}\r\n", body.len() - 1, body.len()) } else { String::new() };
+                let reply = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\n{range}Connection: close\r\n\r\n", body.len() - from);
+                s.write_all(reply.as_bytes()).await.unwrap();
+                let to = cut.map_or(body.len(), |c| (from + c).min(body.len()));
+                s.write_all(&body[from..to]).await.unwrap();
+                // (closed there, short of what it said it would send)
+                let _ = s.shutdown().await;
+            }
+            asked
+        });
+        (url, handle)
+    }
+
+    #[tokio::test]
+    async fn takes_a_download_cut_short_up_again_of_itself_from_where_it_stopped() {
+        let body: Vec<u8> = (0..300_000u32).map(|i| (i % 233) as u8).collect();
+        // (cut after 100 000 bytes, then after 50 000 more; the third time it comes whole)
+        let (url, server) = serve_cut(body.clone(), vec![Some(100_000), Some(50_000), None]).await;
+        let dir = Scratch::new();
+        let waits = [Duration::from_millis(10); 4];
+        fetch_resuming(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}, &waits).await.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
+        assert!(!part(dir.path(), &body).exists());
+        assert_eq!(server.await.unwrap(), ["all", "from 100000", "from 150000"]);
+    }
+
+    #[tokio::test]
+    async fn says_how_much_came_and_how_often_it_was_taken_up_where_it_never_comes_whole() {
+        let body: Vec<u8> = (0..30_000u32).map(|i| (i % 227) as u8).collect();
+        let (url, server) = serve_cut(body.clone(), vec![Some(5_000), Some(5_000), Some(5_000)]).await;
+        let dir = Scratch::new();
+        let waits = [Duration::from_millis(10); 2];
+        let err = fetch_resuming(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}, &waits).await.unwrap_err();
+        let said = err.to_string();
+        assert!(said.starts_with("model.bin stopped after 15000 bytes of 30000 bytes ("), "{said}");
+        assert!(said.ends_with("; taken up again 2 times). What came is kept: Add goes on from there."), "{said}");
+        assert_eq!(std::fs::read(part(dir.path(), &body)).unwrap(), body[..15_000]);
+        assert_eq!(server.await.unwrap(), ["all", "from 5000", "from 10000"]);
+    }
+
+    #[tokio::test]
+    async fn takes_up_no_download_that_failed_otherwise() {
+        let body = b"not the weights".to_vec();
+        let (url, server) = serve_cut(body.clone(), vec![None]).await;
+        let dir = Scratch::new();
+        let mut d = download(&url, &body);
+        d.sha256 = "0".repeat(64);
+        let err = fetch_resuming(&client_builder().build().unwrap(), &d, dir.path(), |_| {}, &[Duration::from_millis(10); 4]).await.unwrap_err();
+        assert!(matches!(err, Fetched::Failed(_)), "{err}");
+        assert_eq!(server.await.unwrap(), ["all"]);
+    }
+
+    /// A server at `/f` that answers each request in turn as `replies` says: its status line, its headers, and its body.
+    async fn serve_replies(replies: Vec<(&'static str, String, Vec<u8>)>) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/f", listener.local_addr().unwrap());
+        let handle = tokio::spawn(async move {
+            let mut asked = Vec::new();
+            for (status, headers, body) in replies {
+                let (mut s, _) = listener.accept().await.unwrap();
+                let mut head = Vec::new();
+                let mut b = [0u8; 1];
+                while !head.ends_with(b"\r\n\r\n") {
+                    s.read_exact(&mut b).await.unwrap();
+                    head.push(b[0]);
+                }
+                let head = String::from_utf8(head).unwrap();
+                asked.push(head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("range: bytes=").map(|r| format!("from {}", r.trim_end_matches('-')))).unwrap_or_else(|| "all".into()));
+                let reply = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\n{headers}Connection: close\r\n\r\n", body.len());
+                s.write_all(reply.as_bytes()).await.unwrap();
+                s.write_all(&body).await.unwrap();
+            }
+            asked
+        });
+        (url, handle)
+    }
+
+    #[test]
+    fn takes_a_partial_reply_as_the_rest_only_where_its_range_begins_where_what_came_ends() {
+        assert!(range_from(Some("bytes 20000-49999/50000"), 20_000));
+        assert!(!range_from(Some("bytes 0-49999/50000"), 20_000));
+        assert!(!range_from(Some("bytes */50000"), 20_000));
+        assert!(!range_from(None, 20_000));
+    }
+
+    #[tokio::test]
+    async fn begins_again_where_a_partial_reply_is_not_the_rest() {
+        let body: Vec<u8> = (0..50_000u32).map(|i| (i % 229) as u8).collect();
+        // (a range from 0 sent where the rest from 20 000 was asked for: not taken as the rest - all of it asked for, and begun again)
+        let (url, server) = serve_replies(vec![
+            ("206 Partial Content", "Content-Range: bytes 0-49999/50000\r\n".into(), body.clone()),
+            ("200 OK", String::new(), body.clone()),
+        ])
+        .await;
+        let dir = Scratch::new();
+        std::fs::write(part(dir.path(), &body), &body[..20_000]).unwrap();
+        fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
+        assert_eq!(server.await.unwrap(), ["from 20000", "all"]);
+    }
+
+    #[tokio::test]
+    async fn begins_again_once_where_the_part_is_past_the_servers_file() {
+        let body: Vec<u8> = (0..30_000u32).map(|i| (i % 223) as u8).collect();
+        let (url, server) = serve_replies(vec![("416 Range Not Satisfiable", "Content-Range: bytes */30000\r\n".into(), Vec::new()), ("200 OK", String::new(), body.clone())]).await;
+        let dir = Scratch::new();
+        std::fs::write(part(dir.path(), &body), &body[..10_000]).unwrap();
+        fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
+        assert_eq!(server.await.unwrap(), ["from 10000", "all"]);
+    }
+
+    #[tokio::test]
+    async fn never_takes_up_what_came_of_another_manifests_file() {
+        let body: Vec<u8> = (0..20_000u32).map(|i| (i % 211) as u8).collect();
+        let (url, server) = serve(body.clone(), true, 1).await;
+        let dir = Scratch::new();
+        // (kept as Meno kept a part until 0.1.18, and one of another hash: neither taken up, both thrown away)
+        std::fs::write(dir.path().join("model.bin.part"), &body[..5_000]).unwrap();
+        std::fs::write(dir.path().join("model.bin.0123456789ab.part"), b"older").unwrap();
+        fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
+        assert_eq!(server.await.unwrap(), ["all"]);
+        assert!(!dir.path().join("model.bin.part").exists() && !dir.path().join("model.bin.0123456789ab.part").exists());
     }
 }

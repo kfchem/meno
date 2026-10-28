@@ -111,6 +111,11 @@ if not ATOMS_IN:
 heavy_ = [a["p"] for a in ATOMS_IN if a["el"] != "H"] or [a["p"] for a in ATOMS_IN]
 centre = sum(heavy_, Vector()) / len(heavy_)
 ATOMS = [{"el": a["el"], "p": (a["p"] - centre) * K} for a in ATOMS_IN]
+if CFG.get("stand"):
+    # (stood on the floor, where asked: its lowest atom just above z = 0 - so that every molecule of a change of molecules
+    # stands on the same floor, and one piece's last frame is the next one's first)
+    zlow_ = min(a["p"].z - EL.get(a["el"], (None, 0.34))[1] * K for a in ATOMS)
+    for a in ATOMS: a["p"] = a["p"] - Vector((0, 0, zlow_ - CFG.get("float", 0.004)))
 BONDS = BONDS_IN
 NB = [[] for _ in ATOMS]
 for i, b in enumerate(BONDS):
@@ -128,7 +133,9 @@ def graph_dist(sources):
         q = n
     return d
 
-RADIUS = max(a["p"].length for a in ATOMS) + 0.35 * K
+# (its reach from its middle: where it stands on the floor, from the middle of its height)
+MID = Vector((0, 0, 0.5 * (min(a["p"].z for a in ATOMS) + max(a["p"].z for a in ATOMS)))) if CFG.get("stand") else Vector()
+RADIUS = max((a["p"] - MID).length for a in ATOMS) + 0.35 * K
 
 # --- scene ------------------------------------------------------------------------
 
@@ -424,6 +431,10 @@ def studio_white(key=1.0, rim=1.0):
 # --- camera ----------------------------------------------------------------------------
 
 CAM = bpy.data.cameras.new("cam"); CAM.lens = CFG.get("lens", 85); CAM.sensor_width = 36
+# (the sensor across the frame's width, whatever its shape: the framing here takes the width's field as the lens and the
+# sensor give it, the height's as the frame's shape makes it - Blender's own Auto puts the sensor across the longer side,
+# the height of a portrait film, which would cut a tall molecule's ends; a landscape film is as it was)
+CAM.sensor_fit = "HORIZONTAL"
 CAM.clip_start = 0.05; CAM.clip_end = 50
 CAMOB = bpy.data.objects.new("cam", CAM); sc.collection.objects.link(CAMOB); sc.camera = CAMOB
 FOCUS = bpy.data.objects.new("focus", None); sc.collection.objects.link(FOCUS)

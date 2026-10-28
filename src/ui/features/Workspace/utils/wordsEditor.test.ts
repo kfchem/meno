@@ -122,6 +122,18 @@ describe("words written in place", () => {
     expect(on.text).toBe("rt,12 h");
   });
 
+  it("write a minus after a comma as its digit is typed, and the comma's space as the word ends - each a step of its own to undo", () => {
+    const on = writing("");
+    on.smart = () => true;
+    for (const k of "LDA,-7") on.replaceSelection(k);
+    expect(on.text).toBe("LDA,\u22127");
+    for (const k of "8dc") on.replaceSelection(k);
+    on.kept();
+    expect(on.text).toBe("LDA, \u221278 \u00b0C");
+    on.undo();
+    expect(on.text).toBe("LDA,\u221278dc");
+  });
+
   it("leave what is pasted as it is, and write the word last typed as it is meant as they are kept", () => {
     const ed = writing("");
     ed.smart = () => true;

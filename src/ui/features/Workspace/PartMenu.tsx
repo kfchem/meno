@@ -244,12 +244,12 @@ export default function PartMenu({
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
   /**
    * What the words right-clicked can do besides (docs/EDITOR-2D.md,
-   * *Text*): a size of their own, chosen on a card; all their letters bold,
+   * *Text*): a size, line spacing and typeface of their own, chosen on a card; all their letters bold,
    * in italics, raised or lowered - ticked where all are already; their
    * lines a list, or plain again.
    */
   words?: {
-    onSize: () => void;
+    onFont: () => void;
     bold: boolean;
     italic: boolean;
     list: boolean;
@@ -416,8 +416,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
-  /** The structure right-clicked read from a figure and not yet said to be checked against it (utils/figureNotes): said so. */
-  figure?: { run: () => void };
+  /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
+  figure?: { from: string; run?: () => void };
   /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
   numbers?: { items: { name: string; run: () => void }[]; kinds: { name: string; checked: boolean; run: () => void }[] };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
@@ -671,7 +671,7 @@ export default function PartMenu({
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
           ...(words
             ? [
-                { name: "Size…", keys: "", run: words.onSize, icon: MENU_ICONS.size },
+                { name: "Font…", keys: "", run: words.onFont, icon: MENU_ICONS.size },
                 { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
                 { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
                 { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
@@ -918,7 +918,7 @@ export default function PartMenu({
             : []),
           ...stereoItem,
           { name: "Select this structure", keys: "", run: onSelectStructure },
-          ...(figure ? [{ name: "Checked against the figure", keys: "", run: figure.run, divider: true }] : []),
+          ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
           ...stackItem,
           ...magnifyItems,
         ];

@@ -171,6 +171,33 @@ describe("a drawing laid out a structure at a time", () => {
     expect(third.lines.some((l) => before.has(l))).toBe(false);
   });
 
+  it("carries a structure turned while a gesture lasts - its layout turned with it, its labels upright - and lays it out again once the gesture ends", () => {
+    const m = row([dressed(cholesterol), taxol], 3);
+    const { atoms, bonds } = laidOut(m);
+    const kept = structureLayouts();
+    const first = layoutByStructure(atoms, bonds, opts, ZOOM, kept);
+    // (all of it turned by 30 degrees about a point and moved, as the selection's handle turns it)
+    const a = Math.PI / 6;
+    const turned = atoms.map((p) => ({ ...p, x: p.x * Math.cos(a) - p.y * Math.sin(a) + 2, y: p.x * Math.sin(a) + p.y * Math.cos(a) - 1 }));
+    const during = layoutByStructure(turned, bonds, opts, ZOOM, kept, [], true);
+    // (each line turned and moved as the atoms were)
+    const at = (x: number, y: number) => ({ x: x * Math.cos(a) - y * Math.sin(a) + 2, y: x * Math.sin(a) + y * Math.cos(a) - 1 });
+    const sorted = (l: { lines: { x1: number; y1: number; x2: number; y2: number }[] }) => l.lines.map((q) => [q.x1, q.y1, q.x2, q.y2].map((v) => Math.round(v * 1e6) / 1e6).join()).sort();
+    expect(sorted(during)).toEqual(sorted({ lines: first.lines.map((q) => ({ x1: at(q.x1, q.y1).x, y1: at(q.x1, q.y1).y, x2: at(q.x2, q.y2).x, y2: at(q.x2, q.y2).y })) }));
+    // (each label moved with its atom, upright: its letters as they were)
+    const label = first.texts.find((t) => t.atom != null && t.text.length > 1)!;
+    const now = during.texts.find((t) => t.atom === label.atom && t.text === label.text)!;
+    expect(now.x - turned[label.atom!].x).toBeCloseTo(label.x - atoms[label.atom!].x, 9);
+    expect(now.y - turned[label.atom!].y).toBeCloseTo(label.y - atoms[label.atom!].y, 9);
+    expect(now.runs).toEqual(label.runs);
+    // (an atom changed besides its place - a charge - is laid out again, gesture or not)
+    const charged = turned.map((p, i) => (i === 0 ? { ...p, charge: 1 } : p));
+    expect(marks(layoutByStructure(charged, bonds, opts, ZOOM, kept, [], true))).toEqual(marks(layoutMolecule(charged, bonds, opts, ZOOM)));
+    // (let go: laid out again, as if it had been drawn there)
+    layoutByStructure(turned, bonds, opts, ZOOM, kept, [], true);
+    expect(marks(layoutByStructure(turned, bonds, opts, ZOOM, kept))).toEqual(marks(layoutMolecule(turned, bonds, opts, ZOOM)));
+  });
+
   it("says which atom each label is of by its place in the drawing, as atoms come and go before it", () => {
     const m = row([dressed(cholesterol), dressed(cholesterol)], 3);
     const { atoms, bonds } = laidOut(m);

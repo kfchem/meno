@@ -3,6 +3,7 @@ import type { FigureDrawn } from "../../../../lib/figure/drawn";
 import aldol from "../../../../lib/figure/fixtures/aldol-rdkitrxn.json";
 import camphor from "../../../../lib/figure/fixtures/camphor-rdkitacs.json";
 import acetate from "../../../../lib/figure/fixtures/sodium-acetate-rdkit.json";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { schemeDrawn } from "./figures";
 import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
 import { centreWithin, figureOn, pageStructuresOf, structureAt, structuresOf, type PageStructure } from "./pageStructures";
@@ -11,6 +12,9 @@ const read = (s: PageStructure) => {
   if ("none" in s.read) throw new Error(s.read.none);
   return s.read.model;
 };
+/** What of a structure taken in part is not read - its atoms' unsure words - or why none of it is taken. */
+const UNREAD = /^"[^"]*" lies (beside it|at this end|within it)|^Lines drawn beside it|^Words at this end/;
+const unread = (s: PageStructure): string[] => ("none" in s.read ? [s.read.none] : s.read.model.atoms.flatMap((a) => (a.unsure?.said ?? []).filter((t) => UNREAD.test(t))));
 const formula = (s: PageStructure) => {
   const count = new Map<string, number>();
   for (const a of read(s).atoms) count.set(a.el, (count.get(a.el) ?? 0) + 1);
@@ -235,6 +239,26 @@ describe("the structures of a figure, each taken whole", () => {
     });
   });
 
+  describe("a small piece, part of it not read", () => {
+    const L = 14.4;
+    type P = [number, number];
+    const stroke = (p: P, q: P) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", ...p], ["L", ...q]] }) as FigureDrawn["paths"][number];
+    /** A zigzag chain of `n` carbons, and - `stray` - a letter no atom takes beside the middle of its first bond. */
+    const chain = (n: number, stray: boolean): FigureDrawn => {
+      const pts = Array.from({ length: n }, (_, i): P => [100 + i * L * 0.866, 200 + (i % 2 ? -L / 2 : 0)]);
+      const mid: P = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2 + 3];
+      const letter = { c: "§", box: [mid[0] - 1.5, mid[1] - 2, mid[0] + 1.5, mid[1] + 2] as [number, number, number, number], at: [mid[0] - 1.5, mid[1] + 2] as [number, number], size: 6 };
+      return { paths: pts.slice(1).map((p, i) => stroke(pts[i], p)), letters: stray ? [letter] : [], pictures: [] };
+    };
+    const one = (d: FigureDrawn) => structuresOf(d, 0, "pdf", 0, []).map((s) => ("none" in s.read ? s.read.none : [formula(s), unread(s)]));
+
+    it("is refused, as before, at three heavy atoms or fewer - most likely a cut-off bit, or none - but taken unmarked; at four, taken, marked", () => {
+      expect(one(chain(3, true))).toEqual(['Part of this structure could not be read ("§"), so none of it is taken.']);
+      expect(one(chain(3, false))).toEqual([["C3", []]]);
+      expect(one(chain(4, true))).toEqual([["C4", ['"§" lies within it, not read as part of it.']]]);
+    });
+  });
+
   it("finds none in one line with no label - a chart's tick, a table's rule - nor in a lone word: they are no structures", () => {
     const line: FigureDrawn = { paths: [{ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 100, 100], ["L", 120, 100]] }], letters: [], pictures: [] };
     expect(structuresOf(line, 0, "pdf", 0, [])).toEqual([]);
@@ -246,14 +270,14 @@ describe("the structures of a figure, each taken whole", () => {
     expect(structuresOf({ paths: [], letters: [], pictures: [[0, 0, 100, 100]] }, 0, "pdf", 0, [])).toEqual([]);
   });
 
-  it("refuses a structure with letters inside it that no atom took, saying so - never read in part", () => {
+  it("takes a structure with letters inside it that no atom took, the atom nearest them unsure, saying so - what is read taken", () => {
     const drawn = camphor as unknown as FigureDrawn;
     const [whole] = structuresOf(drawn, 0, "pdf", 0, []);
     // (in the middle of it, among its bonds, where no label goes)
     const at = { x: (whole.box[0] + whole.box[2]) / 2, y: (whole.box[1] + whole.box[3]) / 2 };
     const stray = { c: "§", box: [at.x - 1.5, at.y - 2, at.x + 1.5, at.y + 2] as [number, number, number, number], at: [at.x - 1.5, at.y + 2] as [number, number], size: 6 };
     const [s] = structuresOf({ ...drawn, letters: [...drawn.letters, stray] }, 0, "pdf", 0, []);
-    expect(s.read).toEqual({ none: 'Part of this structure could not be read ("§"), so none of it is taken.' });
+    expect(["model" in s.read, unread(s)]).toEqual([true, ['"§" lies within it, not read as part of it.']]);
   });
 });
 
@@ -303,19 +327,19 @@ describe("a structure the page's figures may have cut in two", () => {
   const atRight = whole.atoms.find((a) => a.x === right)!;
   const label = (gap: number, width: number) => ({ box: [right + gap, atRight.y - 4, right + gap + width, atRight.y + 4] as [number, number, number, number], text: "OSiPh2tBu" });
 
-  it("is refused where a wide label outside its figure lies right by it - a 60 point label, its other half beyond - naming the words", () => {
+  it("is taken, marked, where a wide label outside its figure lies right by it - a 60 point label, its other half beyond - naming the words", () => {
     const [s] = structuresOf(drawn, 0, "pdf", 0, [label(0.2 * bond, 60)]);
-    expect(s.read).toEqual({ none: 'Part of this structure could not be read ("OSiPh2tBu" lies beside it), so none of it is taken.' });
+    expect(unread(s)).toContain('"OSiPh2tBu" lies beside it, outside its figure: part of it may lie there.');
   });
 
-  it("is refused where a label lies most of a bond off: 30 points wide, 12 off a 14 point bond", () => {
+  it("is taken, marked, where a label lies most of a bond off: 30 points wide, 12 off a 14 point bond", () => {
     const [s] = structuresOf(drawn, 0, "pdf", 0, [label((12 / 14) * bond, (30 / 14) * bond)]);
-    expect("none" in s.read).toBe(true);
+    expect("model" in s.read && unread(s).some((t) => /^"[^"]*" lies (beside it|at this end|within it)|^Lines drawn beside it|^Words at this end/.test(t))).toBe(true);
   });
 
-  it("is refused where lines outside its figure lie by it", () => {
+  it("is taken, marked, where lines outside its figure lie by it", () => {
     const [s] = structuresOf(drawn, 0, "pdf", 0, [{ box: [right + 0.5 * bond, atRight.y - 1, right + 2 * bond, atRight.y + 1] }]);
-    expect(s.read).toEqual({ none: "Part of this structure could not be read (lines drawn beside it lie outside its figure), so none of it is taken." });
+    expect(unread(s)).toContain("Lines drawn beside it lie outside its figure: part of it may lie there.");
   });
 
   it("is read whole where what lies outside its figure is more than a bond off", () => {
@@ -402,11 +426,11 @@ describe("every structure on a page", () => {
   const right = Math.max(...whole.atoms.map((a) => a.x));
   const y = whole.atoms.find((a) => a.x === right)!.y;
 
-  it("reads each figure with all of the page outside it beside it: a label outside its figure refuses it, named", () => {
+  it("reads each figure with all of the page outside it beside it: a label outside its figure marks it, named", () => {
     const outside = { kind: "text" as const, box: [figure[2] + 0.2 * bond, y - 4, figure[2] + 0.2 * bond + 60, y + 4] as [number, number, number, number] };
     const inside = { kind: "path" as const, box: whole.box };
     const { structures } = pageStructuresOf({ objects: [inside, outside], wordsIn: () => "OSiPh2tBu" }, [figure], () => drawn, "pdf", 0);
-    expect(structures.map((s) => s.read)).toEqual([{ none: 'Part of this structure could not be read ("OSiPh2tBu" lies beside it), so none of it is taken.' }]);
+    expect(structures.map(unread)).toEqual([['"OSiPh2tBu" lies beside it, outside its figure: part of it may lie there.']]);
   });
 
   it("reads a structure whole whose own label's box passes its figure's edge a little - a letter's full height - as PDFium boxes one", () => {
@@ -415,13 +439,13 @@ describe("every structure on a page", () => {
     expect("model" in structures[0].read).toBe(true);
   });
 
-  it("refuses a structure whose wide label straddles its figure's edge and the next figure's - reaching into both, most of it outside - naming the words", () => {
+  it("marks a structure whose wide label straddles its figure's edge and the next figure's - reaching into both, most of it outside - naming the words", () => {
     // (60 points of label from 3 points inside its figure, the other half's bonds 2 points past its end)
     const label = { kind: "text" as const, box: [figure[2] - 3, y - 4, figure[2] + 57, y + 4] as [number, number, number, number] };
     const halfB = { kind: "path" as const, box: [figure[2] + 59, y - 8, figure[2] + 59 + 3 * bond, y + 8] as [number, number, number, number] };
     const figureB = [figure[2] + 50, y - 10, figure[2] + 60 + 3 * bond, y + 10] as [number, number, number, number];
     const { structures } = pageStructuresOf({ objects: [label, halfB], wordsIn: () => "OSiPh2tBu" }, [figure, figureB], (k) => (k === 0 ? drawn : null), "pdf", 0);
-    expect("none" in structures[0].read).toBe(true);
+    expect("model" in structures[0].read && unread(structures[0]).some((t) => /^"[^"]*" lies (beside it|at this end|within it)|^Lines drawn beside it|^Words at this end/.test(t))).toBe(true);
   });
 
   it("reads a structure whole on a page with a background behind all of it - three full-page paths, as a browser prints a page", () => {
@@ -442,11 +466,11 @@ describe("every structure on a page", () => {
     expect(structures.map((s) => "model" in s.read)).toEqual([true, true]);
   });
 
-  it("still refuses a structure where lines cross into it from outside its figure, though a background lies behind all", () => {
+  it("still marks a structure where lines cross into it from outside its figure, though a background lies behind all", () => {
     const page = { kind: "path" as const, box: [0, 0, 612, 792] as [number, number, number, number] };
     const crossing = { kind: "path" as const, box: [figure[2] - 0.5 * bond, y - 2, figure[2] + 3 * bond, y + 2] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [page, crossing] }, [figure], () => drawn, "pdf", 0);
-    expect(structures[0].read).toEqual({ none: "Part of this structure could not be read (lines drawn beside it lie outside its figure), so none of it is taken." });
+    expect(unread(structures[0])).toContain("Lines drawn beside it lie outside its figure: part of it may lie there.");
   });
 
   it("reads a structure whole where all else on the page lies far from it", () => {
@@ -528,7 +552,7 @@ describe("words at a bond's open end, in the structure's own figure", () => {
   const word = (text: string, x0: number, y0: number) =>
     [...text].map((c, k) => ({ c, box: [x0 + k * 6, y0, x0 + 5 + k * 6, y0 + 7] as [number, number, number, number], at: [x0 + k * 6, y0 + 7] as [number, number], size: 9 }));
 
-  it("refuse a structure with 150 points of words at a bond's end, the rest of it past them in the next figure - neither half read", () => {
+  it("mark a structure with 150 points of words at a bond's end, the rest of it past them in the next figure - each half marked", () => {
     const long = word("OSiPh2tBuprotectedalcohol", end.x + 0.1 * f.bond, end.y - 3.5);
     const withLong = { ...drawn, letters: [...drawn.letters, ...long] };
     const [own] = structuresOf(withLong, 0, "pdf", 0, []);
@@ -537,7 +561,7 @@ describe("words at a bond's open end, in the structure's own figure", () => {
     const x = Math.max(...long.map((l) => l.box[2])) + 3;
     const halfB = { kind: "path" as const, box: [x, end.y - 6, x + 3 * f.bond, end.y + 6] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [halfB] }, [figureA], () => withLong, "pdf", 0);
-    expect("none" in structures[0].read).toBe(true);
+    expect("model" in structures[0].read && unread(structures[0]).some((t) => /^"[^"]*" lies (beside it|at this end|within it)|^Lines drawn beside it|^Words at this end/.test(t))).toBe(true);
     void back;
   });
 
@@ -575,7 +599,7 @@ describe("a structure cut in two at a wide label reaching into both its halves' 
   });
   const y = (one.box[1] + one.box[3]) / 2;
   for (const overlap of [2, 5]) {
-    it(`refuses both halves, naming the label: 130 points of it reaching ${overlap} points into each`, () => {
+    it(`marks both halves, naming the label: 130 points of it reaching ${overlap} points into each`, () => {
       const figA = [one.box[0] - 1, one.box[1] - 1, one.box[2] + 1, one.box[3] + 1] as [number, number, number, number];
       const label = { kind: "text" as const, box: [figA[2] - overlap, y - 4, figA[2] - overlap + 130, y + 4] as [number, number, number, number] };
       const dx = label.box[2] - overlap - figA[0];
@@ -583,7 +607,7 @@ describe("a structure cut in two at a wide label reaching into both its halves' 
       const pathsA = { kind: "path" as const, box: one.box };
       const pathsB = { kind: "path" as const, box: [one.box[0] + dx, one.box[1], one.box[2] + dx, one.box[3]] as [number, number, number, number] };
       const { structures } = pageStructuresOf({ objects: [pathsA, label, pathsB], wordsIn: () => "OSiPh2tBuOTBDPSlongname" }, [figA, figB], (k) => (k === 0 ? drawn : shifted(drawn, dx)), "pdf", 0);
-      expect(structures.map((s) => ("none" in s.read ? s.read.none : "whole"))).toEqual([0, 1].map(() => 'Part of this structure could not be read ("OSiPh2tBuOTBDPSlongname" lies beside it), so none of it is taken.'));
+      expect(structures.map((s) => "model" in s.read && unread(s).some((t) => t.startsWith('"OSiPh2tBuOTBDPSlongname"')))).toEqual([true, true]);
     });
   }
 });
@@ -604,25 +628,49 @@ describe("a label between a structure's two halves, as the page's objects have i
     const objects = [...bondBoxes(0), { kind: "text" as const, box: [x0, y - 4, x0 + label, y + 4] as [number, number, number, number] }, ...bondBoxes(dxB)];
     const figs = figuresOf(objects);
     const r = pageStructuresOf({ objects, wordsIn: () => "OSiPh2tBu" }, figs, (k) => (figs[k][0] < one.box[2] + 1 ? drawn : shift(drawn, dxB)), "p", 0);
-    return { figures: figs.length, kinds: r.structures.map((st) => ("none" in st.read ? "refused" : "read")) };
+    return { figures: figs.length, kinds: r.structures.map((st) => ("none" in st.read ? "refused" : unread(st).length ? "marked" : "read")) };
   };
 
   it("reads a whole structure whole where a word lies 6 points off one of its ring atoms - no open end there, as a compound's name beside it", () => {
     expect(read(30, 6).kinds[0]).toBe("read");
   });
 
-  it("refuses a structure where a 30-point word of its own figure, none of its labels, lies 6 points past one of its open ends - a label its drawing did not hold", () => {
+  it("marks a structure where a 30-point word of its own figure, none of its labels, lies 6 points past one of its open ends - a label its drawing did not hold - at that end", () => {
     const end = one.ends[0];
     const word = { kind: "text" as const, box: [end.x - 15, end.y + 6, end.x + 15, end.y + 14] as [number, number, number, number] };
     const fig = [one.box[0] - 1, one.box[1] - 1, one.box[2] + 1, end.y + 15] as [number, number, number, number];
     const r = pageStructuresOf({ objects: [...bondBoxes(0), word], wordsIn: () => "OSiPh2tBu" }, [fig], () => drawn, "p", 0);
-    expect(r.structures[0].read).toEqual({ none: 'Part of this structure could not be read ("OSiPh2tBu" lies beside it), so none of it is taken.' });
+    expect(unread(r.structures[0])).toEqual(['"OSiPh2tBu" lies at this end, not read as its label.']);
   });
 
   for (const overlap of [2, 5]) {
-    it(`refuses both halves where a 130-point label reaches ${overlap} points into each`, () => {
+    it(`marks both halves where a 130-point label reaches ${overlap} points into each`, () => {
       const r = read(130, -overlap);
-      expect(r.kinds.every((k) => k === "refused")).toBe(true);
+      expect(r.kinds.every((k) => k === "marked")).toBe(true);
     });
   }
+});
+
+describe("structures of one figure drawn at different sizes", () => {
+  type P = [number, number];
+  const stroke = (p: P, q: P) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", ...p], ["L", ...q]] }) as FigureDrawn["paths"][number];
+  /** A ring of six drawn about `c`, its bonds `l` long. */
+  const ring = (c: P, l: number) => {
+    const pts = Array.from({ length: 6 }, (_, i): P => [c[0] + l * Math.cos((Math.PI / 3) * i + Math.PI / 6), c[1] + l * Math.sin((Math.PI / 3) * i + Math.PI / 6)]);
+    return pts.map((p, i) => stroke(p, pts[(i + 1) % 6]));
+  };
+  const bondsOf = (s: PageStructure) => {
+    if ("none" in s.read) throw new Error(s.read.none);
+    const m = s.read.model;
+    const at = new Map(m.atoms.map((a) => [a.id, a]));
+    return m.bonds.map((b) => Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y));
+  };
+
+  it("are each taken with a bond as long as Meno draws one, not the figure's: a ring drawn small beside two drawn large comes in as large as they", () => {
+    // (two rings drawn with bonds of 14.4 points - the figure's bond - and one with bonds half as long, all in one figure)
+    const drawn: FigureDrawn = { paths: [...ring([100, 100], 14.4), ...ring([160, 100], 14.4), ...ring([215, 100], 7.2)], letters: [], pictures: [] };
+    const found = structuresOf(drawn, 0, "pdf", 0, []);
+    expect(found).toHaveLength(3);
+    for (const s of found) for (const l of bondsOf(s)) expect(l).toBeCloseTo(NOMINAL_BOND_LENGTH, 6);
+  });
 });

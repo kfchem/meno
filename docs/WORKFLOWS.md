@@ -213,6 +213,12 @@ As Meno's own things look (decided: 15), not as the figures here do:
   shows through a little). Its bars are named over them (*Energy above
   the lowest, each conformer*), laid on whole device pixels, each as wide
   as the next; in its line a number is never parted from its unit.
+  *How it was made* (the method, seed and what was kept, as what made it
+  says them) stays shut under its name until its chevron opens it,
+  eased: the card keeps to what the molecule is, and leaves it in view.
+  Opening and shutting, its width and its height go together - one time
+  and one curve (theme/motion), each the same part of the way at every
+  frame - its width known from the start, never measured as it grows.
 
 Everything comes and goes as Meno's things do (theme/motion): a set, a
 step and a wire fade in where they are put; a state changes its words
@@ -231,7 +237,9 @@ pointer does; put back by an undo, they glide back.
    structures or molecules in 3D (a few atoms of a structure make no
    input). It fades in once the selection is made; nothing else of the
    selection changes, and a chemist who never pulls it never meets a
-   workflow.
+   workflow. Where any of the selection lies in a set already, it shows
+   none (`selectionInSet`): a port there is the set's own, not one of
+   what is chosen inside it.
 3. **Pull a wire out of the port.** The selection's frame stays, as an
    *Input* set; a wire follows the pointer.
    - Let go on empty space: Quick Add opens there, at the kinds of step
@@ -284,7 +292,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Kind | Icon (Heroicons' outline) | Takes | Gives |
 | --- | --- | --- | --- |
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
-| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers |
+| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
@@ -1591,7 +1599,12 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
 - **Chips on the page** (*How it looks*): drawn at the page's scale -
   `--page`, set on the layer the page's HTML is drawn in each time the
   zoom changes - from where each hangs, and faded out below 75 %, with
-  the sets' names and the cards' words (`utils/pageScale`).
+  the sets' names and the cards' words (`utils/pageScale`). Each is laid
+  out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
+  they are seen at - not drawn at one size and scaled by a transform,
+  which the Mac's WebView magnifies soft up close (2026-10-25; so the
+  frames chip, *Make again*, a measurement's value and the notes over a
+  molecule or a figure).
 - **Quick Add** opens where it will stay as a panel opens below its row -
   its calculations, or the field a SMILES is typed in: its side is chosen
   once, for its largest, and it is held by its top left corner, so that
@@ -1997,7 +2010,12 @@ page could not be read after one run.
     `withExits`).
   - **A wire goes round** (look `wireRoute`). Going on to the right it
     is a curve, running on across all the way, never back out over what
-    is beside its ends. Where its input lies less than half a bond to the
+    is beside its ends - but where it falls or rises more than twice as
+    far as it goes across, it is no curve, whose long middle would run
+    slanting and bowed: it goes across, straight up or down halfway to
+    its input, and across into it, only its two turns rounded, so that
+    its long run is straight, and wires out of one port share it (*A lane
+    of its own*). Where its input lies less than half a bond to the
     right of where it leaves (`WIRE_TURNS`), or to the left of it, or the
     curve would cross another set or card, or come within half a bond of
     one away from its ends, it goes round them all: out a bond to the
@@ -2009,7 +2027,25 @@ page could not be read after one run.
     between it and its end, where that leaves half a bond either side or
     the frame lies across the line in or out. Of these, the way over
     least, then the shortest; where every way is over something, each is
-    tried again round that too. Inside another set or card it never goes,
+    tried again round that too, and of those the one over least as far
+    along it - to within half a bond, ways over alike - then the shortest:
+    where every way must pass a gap narrower than a bond beside a frame,
+    the way down past all and back is no less over than the way straight
+    in, only longer (where one of its ends lies within half a bond of
+    another frame, frames laid over each other, by how many of its points
+    are over, as before). It never goes out past both its ends and
+    back again round nothing (look `doublesBack`): where the way chosen
+    would - every way passing too near something, as a gap of less than a
+    bond between a card and the set beside it - it goes straight across
+    at the level of the one end or the other instead, where that runs on
+    one way across and passes over no more (measured along it, not by
+    its points). Nor does it turn more than it must: where that straight
+    way - down where it leaves and in level, or across and down a bond
+    before its input - is as clear and no longer by its corners, it takes
+    that, two bends, not a jog to a bond before its input, nor down,
+    across and down again. Gone straight, it keeps that way while dragged
+    as it keeps a side: until it is no longer clear, or the way round is a
+    fifth shorter. Inside another set or card it never goes,
     however near its ends. Its turns are a bond wide, on the page, so they
     are arcs at any zoom; two turns closer than that both shrink alike.
     It keeps half a bond from every other frame's line (docs/LOOK.md,
@@ -2017,7 +2053,11 @@ page could not be read after one run.
     going round to the curve, a wire changes shape once, and the drawing
     eases that (`DURATION.move`). Into a card that names its inputs, a
     wire comes in level for as long as the input's name, under it.
-  - **A lane of its own** (look `wireLanes`). Wires going round that
+  - **A lane of its own** (look `wireLanes`). Wires out of one port are
+    one signal: where they run on one another - the way out of the port
+    they share - they are one run, a bus, moved together and never put in
+    lanes apart, and they part where their ways do, with no step. Wires
+    out of different ports going round that
     would run on one another - up or down, or across, within half a bond
     of each other along the same stretch - are moved apart into lanes half
     a bond apart (`WIRE_LANE`, the room from a frame), as near where they ran as that
@@ -2040,10 +2080,31 @@ page could not be read after one run.
   - **It keeps its way** while that is still clear: the side it passed
     what it goes round, unless the other side has become a fifth shorter.
     A card dragged past a set makes its wire change way twice at most.
+    That is kept only while a card or a set is dragged: let go, every wire
+    is worked out anew, and one moved by an undo is worked out as if new.
+    A wire coming back, round what it leaves and comes into, is kept as
+    the side it passes them too, not as the curve: once taken for the
+    curve, it tried the shortest side again the next frame, over the card
+    being dragged, and flipped between the two frame by frame (the desk's
+    drag sweep: one wire 60 times in 60 one-pixel steps). What a wire has
+    to go round is found from the way it would go now, whichever side it
+    passed before - else each side, kept, finds others in its way than the
+    other does, and wins each other frame. And a way kept, a side or the
+    way straight across, stays while it passes within half a bond of a
+    frame for less than half a bond along it: a frame's room grazed by a
+    point for a pixel of a drag does not send it the other way and back.
+    Within a drag, a wire not on the card changes its way only where the
+    way it kept is no longer clear, or the other has become a fifth
+    shorter, and never back the frame after.
     Placement keeps clear of the same routes, and a change of way on the
     page is eased, never a jump: its ends stay on their ports while it
     eases, only the rest moving (look `wireToward`), and a wire dragged by
-    its card is not eased at all (`shapeMoved`).
+    its card is not eased at all (`shapeMoved`). What is drawn is worked
+    out as it is drawn, from where the wire is to be then (look
+    `WireEasing`), not set aside for the next frame: an update set aside
+    can wait behind a drag's on a slower machine, all the drag long, and
+    the wire would be drawn where its ports were. Its ends are on its
+    ports at every frame, however slow the frames.
   - **Only what moved is worked out again.** Each wire looks at the sets
     and cards near it (`nearWire`), and is keyed by its ends and those
     (`wireKey`): a drag works out again only the wires whose key changed.
@@ -2628,7 +2689,20 @@ each entry's number, then its energy).
 - Zoomed out until words on the page are too small to read, a chart - and
   an energy diagram - is still drawn, its points, levels, lines and axes;
   only its words fade out, as a set's name and count do. A table and a
-  number, all words, fade out whole.
+  number, all words, fade out whole. All of these, and a step's card's
+  words, fade with the zoom, not at once: from fully shown at 1.15 times
+  the least scale words are read at to gone at 1/1.15 of it, about four
+  notches of a mouse wheel (utils/pageScale `wordsShown`, `--words` on the
+  page's layer), as a molecule's chips do. A step's card's large icons,
+  which stand for its words where they are gone, come in over the same
+  band (`standInShown`, `--stand-in`), so that a zoom stopped anywhere in
+  it leaves the card plainly there (the maintainer, 2026-10-25: stopped in
+  the middle, a card had been all but empty, its words gone and its icons
+  not yet come). The two cross over as a power-keeping cross-fade does,
+  each a quarter turn's cosine or sine: laid one over the other, together
+  they are never less than 0.91 opaque, each 0.71 at the band's middle.
+  What is pressed on the words still stops at the least scale they are
+  read at, the band's middle (`wordsTooSmall`).
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

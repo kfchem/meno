@@ -30,6 +30,7 @@ import { undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
+import { factor } from "../../../../lib/units";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -504,6 +505,29 @@ export function rowFrom(items: Turned[], at: { x: number; y: number }): { x: num
 export async function conformersOf(chem: ChemClient, block: Block, isomers: "one" | "all", options: OptionValues = {}): Promise<Conformers[]> {
   const like = block.like ? { like: block.like } : {};
   return (await chem.request("conformers", { molblock: block.molblock, isomers, ...like, options }, CONFORMERS_MS)).isomers;
+}
+
+const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
+
+/**
+ * A stereoisomer's conformers kept within `kcal` (kcal/mol) of the lowest,
+ * as the canvas's 3D structure keeps them (docs/WORKSPACE.md, *Conformers
+ * kept*); the rest set aside, and the window said with how they were made.
+ * A force field can trap a ring in a minimum far above the rest - the
+ * MMFF94 search of cyclooctane finds two some 66 and 77 kcal/mol up - which
+ * nobody drawing a structure asks for. A workflow's conformer step keeps
+ * every one: only an *Energy window* step sets any aside there. Without
+ * energies none is set aside, and that is said.
+ */
+export function withinWindow(c: Conformers, kcal: number): Conformers {
+  const energies = c.energies?.length === c.frames.length ? c.energies : undefined;
+  const finite = energies?.filter(Number.isFinite) ?? [];
+  if (!energies || !finite.length) return { ...c, how: [...(c.how ?? []), { label: "Energy window", text: "none: no energies" }] };
+  const lowest = least(finite);
+  const keep = energies.map((e) => !Number.isFinite(e) || (e - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9);
+  const aside = keep.filter((k) => !k).length;
+  const said = { label: "Energy window", text: `within ${kcal} kcal/mol of the lowest${aside ? `, ${aside} above it set aside` : ""}` };
+  return { ...c, frames: c.frames.filter((_, i) => keep[i]), energies: energies.filter((_, i) => keep[i]), how: [...(c.how ?? []), said] };
 }
 
 /**

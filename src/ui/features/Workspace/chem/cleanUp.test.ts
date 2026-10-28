@@ -11,6 +11,7 @@ import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } f
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
 import { cleanUp, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partOf } from "./cleanUp";
+import { overlapsMade } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
 import { MENO } from "../../../../lib/chem/style";
@@ -51,13 +52,14 @@ function slower<T>(small: T, large: T, run: (x: T) => void): number {
   return least[1] / least[0];
 }
 
-// a methyl on a wedge from a CH with two more carbons, and apart from them
-// an ethane
+// a methyl on a wedge from a CH with two more carbons, drawn as a Y (as a
+// T, its two carbons in line, it would state no configuration: IUPAC 2006,
+// ST-1.2.12), and apart from them an ethane
 const model: Model = {
   atoms: [
     atom(1, 0, 0),
-    atom(2, 1, 0),
-    atom(3, -1, 0),
+    atom(2, 0.866, -0.5),
+    atom(3, -0.866, -0.5),
     atom(4, 0, 1),
     atom(5, 10, 0),
     atom(6, 11, 0),
@@ -201,14 +203,82 @@ describe("cleanUp", () => {
       expect(q.x).toBeCloseTo(p.x, 6);
       expect(q.y).toBeCloseTo(p.y, 6);
     }
-    // at the drawing's own bond length, every bond alike
+    // at the style's bond length, every bond alike - drawn at 1, it was not
     for (const b of after.bonds) {
       const [p, q] = [b.a, b.b].map((id) => after.atoms.find((a) => a.id === id)!);
-      expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(1, 3);
+      expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
     }
     const [s0, s1] = [stereo(before), stereo(after)];
     expect([...s1.keys()]).toEqual([...s0.keys()]);
     for (const [c, t] of s0) expect(sameConfiguration(t, s1.get(c)!)).toBe(true);
+  });
+
+  it("brings a structure put down too small or too large to the style's bond length, alone or with all the rest, where it was", async () => {
+    // butane twice: at half the style's bond and at twice it, far apart; and
+    // a third shown magnified twice (its true size the style's)
+    const zigzag = (first: number, by: number, x0: number, magnified?: number): Model => {
+      const b = NOMINAL_BOND_LENGTH * by;
+      const atoms = [0, 1, 2, 3].map((i) => ({ ...atom(first + i, x0 + i * b * Math.cos(Math.PI / 6), (i % 2) * b * 0.5), ...(magnified ? { magnified } : {}) }));
+      return { atoms, bonds: [0, 1, 2].map((i) => ({ id: first + i, a: first + i, b: first + i + 1, order: 1 as const, stereo: "none" as const, stereoOrient: "principle" as const })) };
+    };
+    const parts = [zigzag(1, 0.5, 0), zigzag(11, 2, 40), zigzag(21, 2, 80, 2)];
+    const drawn: Model = { atoms: parts.flatMap((m) => m.atoms), bonds: parts.flatMap((m) => m.bonds) };
+    const bondsIn = (m: Model, first: number) =>
+      m.bonds
+        .filter((b) => b.a >= first && b.a < first + 10)
+        .map((b) => {
+          const [p, q] = [b.a, b.b].map((id) => m.atoms.find((a) => a.id === id)!);
+          return Math.hypot(p.x - q.x, p.y - q.y);
+        });
+    const ids = (first: number) => new Set([0, 1, 2, 3].map((i) => first + i));
+    // Clean-up on one: it alone, the other as it was
+    const one = canvas(drawn);
+    await cleanUp(one.store, 2);
+    const once = one.store.getState().model;
+    for (const l of bondsIn(once, 1)) expect(l).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+    for (const l of bondsIn(once, 11)) expect(l).toBeCloseTo(2 * NOMINAL_BOND_LENGTH, 6);
+    const [p, q] = [centroid(drawn, ids(1)), centroid(once, ids(1))];
+    expect(q.x).toBeCloseTo(p.x, 6);
+    expect(q.y).toBeCloseTo(p.y, 6);
+    // Clean up all: each, the magnified one shown as large as it was
+    const all = canvas(drawn);
+    await cleanUp(all.store);
+    const after = all.store.getState().model;
+    for (const l of [...bondsIn(after, 1), ...bondsIn(after, 11)]) expect(l).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+    for (const l of bondsIn(after, 21)) expect(l).toBeCloseTo(2 * NOMINAL_BOND_LENGTH, 3);
+    const [r, t] = [centroid(drawn, ids(11)), centroid(after, ids(11))];
+    expect(t.x).toBeCloseTo(r.x, 6);
+    expect(t.y).toBeCloseTo(r.y, 6);
+  });
+
+  it("never puts one atom on another or on a bond where the drawing had none: it refuses, and moves nothing", async () => {
+    // a tetrahydropyran bridged 2,5 by a long chain (made up): the engine's
+    // first placement of such a system can lay the chain's first carbon on
+    // the ring's O. Drawn round a circle - no atom on another, none on a bond
+    const input = fromSmiles("C1CCCCC2CCC(CO2)CCCCCCCC1");
+    const n = input.atoms.length;
+    const R = (n * NOMINAL_BOND_LENGTH) / (2 * Math.PI);
+    const drawn: Model = {
+      atoms: input.atoms.map((a, i) => atom(i + 1, R * Math.cos((2 * Math.PI * i) / n), R * Math.sin((2 * Math.PI * i) / n), a.el)),
+      bonds: input.bonds.map((b, i) => ({ id: 100 + i, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 })),
+    };
+    expect(overlapsMade({ atoms: [], bonds: [] }, { atoms: [], bonds: [] })).toEqual([]);
+    for (const around of [null, 1]) {
+      const { store } = canvas(drawn);
+      const settled = await cleanUp(store, around).then(
+        () => "laid out",
+        (e: Error) => e.message,
+      );
+      const after = store.getState().model;
+      if (settled === "laid out") {
+        // (laid out, it has none of its atoms on each other or on a bond)
+        const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
+        expect(overlapsMade(drawn, moved)).toEqual([]);
+      } else {
+        expect(settled).toMatch(/one atom on another or on a bond, so nothing was moved/);
+        expect(after).toEqual(drawn);
+      }
+    }
   });
 
   it("lays out only the structure an atom is in, when asked about one", async () => {

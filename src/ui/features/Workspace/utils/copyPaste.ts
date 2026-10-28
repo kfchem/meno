@@ -14,12 +14,12 @@ import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image"
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { ARROW_KINDS, ARROW_SETTINGS, WEIGHT_SHARE, type ArrowLook } from "../../../../lib/chem/reactionArrow";
-import { acceptValue, fieldOf } from "../../../../lib/chem/styleFields";
+import { acceptValue, fieldOf, isTypefaceName } from "../../../../lib/chem/styleFields";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
-import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
-import { isBox, moved as shapeMoved, roundedPt, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
+import { marksOf, stylesOf, WORDS_SIZE_RANGE, WORDS_SPACING_RANGE, type WordsMark } from "../../../../lib/chem/captions";
+import { isBox, moved as shapeMoved, roundedBeforePt, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
@@ -355,6 +355,9 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
         ...(from ? { from } : {}),
         // (its own size, within reason; its letters' marks where they read, inside its text - colours only as colours)
         ...(isNum(c.size) && c.size >= WORDS_SIZE_RANGE[0] && c.size <= WORDS_SIZE_RANGE[1] ? { size: c.size } : {}),
+        // (its own typeface, where it is a typeface's name; its own line spacing, within reason)
+        ...(typeof c.font === "string" && isTypefaceName(c.font) ? { font: c.font } : {}),
+        ...(isNum(c.lines) && c.lines !== 1 && c.lines >= WORDS_SPACING_RANGE[0] && c.lines <= WORDS_SPACING_RANGE[1] ? { lines: c.lines } : {}),
         ...(() => {
           const marks = marksRead(c.marks, c.text.length);
           return marks.length ? { marks } : {};
@@ -525,7 +528,7 @@ function readShape(raw: unknown, pointPx: number): Shape | null {
   const kind = (was ? "rect" : s?.kind) as ShapeKind;
   if (!s || !isNum(s.id) || !SHAPE_KINDS.includes(kind) || !isNum(s.x0) || !isNum(s.y0) || !isNum(s.x1) || !isNum(s.y1)) return null;
   if (isBox(kind) ? !(s.x1 > s.x0 && s.y1 > s.y0) : s.x0 === s.x1 && s.y0 === s.y1) return null;
-  const radius = was ? roundedPt(s.x1 - s.x0, s.y1 - s.y0, pointPx) : kind === "rect" && isNum(s.radius) && s.radius > 0 ? s.radius : 0;
+  const radius = was ? roundedBeforePt(s.x1 - s.x0, s.y1 - s.y0, pointPx) : kind === "rect" && isNum(s.radius) && s.radius > 0 ? s.radius : 0;
   return {
     id: s.id,
     kind,

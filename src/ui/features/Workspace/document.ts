@@ -1984,7 +1984,7 @@ export function updateCaption(
   const captions = doc.captions ?? [];
   const index = captions.findIndex((c) => c.id === id);
   if (index < 0) return doc;
-  const { arrow, width, align, size, marks, ...rest } = patch;
+  const { arrow, width, align, size, font, lines, marks, ...rest } = patch;
   const was = captions[index];
   // (over the arrow it was over, unless said; as wide as it was, unless said - none, as its words)
   const link = arrow === undefined ? was.arrow : (arrow ?? undefined);
@@ -1993,8 +1993,11 @@ export function updateCaption(
   const lie = align === undefined ? was.align : align === "center" ? undefined : align;
   // (its own size, unless said - none, the labels'; its letters marked as they were, unless said - none, plain)
   const sized = size === undefined ? was.size : size != null && size > 0 ? size : undefined;
+  // (its own typeface and line spacing, unless said - none, the labels' and single)
+  const face = font === undefined ? was.font : font || undefined;
+  const spaced = lines === undefined ? was.lines : lines != null && lines > 0 && lines !== 1 ? lines : undefined;
   const marked = marks === undefined ? was.marks : marks.length ? marks : undefined;
-  const { arrow: _was, width: _wide, align: _lie, size: _size, marks: _marks, ...kept } = was;
+  const { arrow: _was, width: _wide, align: _lie, size: _size, font: _font, lines: _lines, marks: _marks, ...kept } = was;
   const next: Caption = {
     ...kept,
     ...rest,
@@ -2002,10 +2005,12 @@ export function updateCaption(
     ...(wide != null ? { width: wide } : {}),
     ...(lie ? { align: lie } : {}),
     ...(sized != null ? { size: sized } : {}),
+    ...(face ? { font: face } : {}),
+    ...(spaced != null ? { lines: spaced } : {}),
     ...(marked ? { marks: marked } : {}),
   };
   const sameMarks = JSON.stringify(next.marks ?? []) === JSON.stringify(was.marks ?? []);
-  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align && next.size === was.size && sameMarks) return doc;
+  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align && next.size === was.size && next.font === was.font && next.lines === was.lines && sameMarks) return doc;
   const out = captions.slice();
   out[index] = next;
   return { ...doc, captions: out };

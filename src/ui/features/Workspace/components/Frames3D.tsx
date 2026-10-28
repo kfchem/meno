@@ -1,9 +1,11 @@
 import PageHtml from "./PageHtml";
+import { PAGE_SIZED } from "../utils/pageScale";
 import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
+import { EASED } from "../../../theme/motion";
 import { barsAbove } from "../utils/barsAbove";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
@@ -269,9 +271,9 @@ export function FramesChip({
     return { text: valueText(v, r), marked: isMarked(v, r) };
   });
   if (unread?.length) details.push({ group: "Could not read it", rows: unread.map((u) => ({ label: readerNameOf(u.from), text: u.why })) });
-  // (its method first, in the words of what made it: a starting geometry, as it was made)
+  // (its method first, in the words of what made it: a starting geometry, as it was made - shut until asked for, as it would fill the card past what the molecule is)
   const madeRows = made ? [...(made.method ? [{ label: "Method", text: made.method }] : []), ...made.how] : [];
-  if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })) });
+  if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })), folded: true });
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
   if (noShares) details.push({ group: "Shares", rows: [{ label: "None", text: noShares }] });
   // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
@@ -334,7 +336,7 @@ export function FramesChip({
       ref={root}
       className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
       // (the pointer goes through it but for what it shows: a chip hidden keeps its size, and would hide what lies under it - a set's port, a step's card)
-      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0", pointerEvents: "none" }}
+      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px))`, pointerEvents: "none" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
         else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);
@@ -345,21 +347,23 @@ export function FramesChip({
         setPointed(null);
       }}
     >
+      <div className="flex flex-col items-center" style={PAGE_SIZED}>
       {(!single || about || title) && (
         <div className="relative">
           <div
             ref={chipEl}
             // (shut, it lets the page show through a little; open, nothing shows through it - what lies under it would read as part of it)
-            className={`rounded-2xl border border-gh-line shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity,background-color] duration-200 ease-out ${full || reading ? "bg-white" : "bg-white/85 backdrop-blur"}`}
+            className={`rounded-2xl border border-gh-line shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity,background-color] ${full || reading ? "bg-white" : "bg-white/85 backdrop-blur"}`}
             style={{
+              ...EASED,
               opacity: shown ? (full ? 1 : 0.75) : 0,
               pointerEvents: shown ? "auto" : "none",
               width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
             }}
           >
             <div
-              className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-              style={{ gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
+              className="grid transition-[grid-template-rows,opacity]"
+              style={{ ...EASED, gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
             >
               <div className="overflow-hidden flex flex-col items-center" style={{ width }}>
                 {/* (what the bars are, named over them) */}
@@ -438,11 +442,12 @@ export function FramesChip({
                 nothing covers the structure) */}
             {details.length > 0 && (
               <div
-                className="grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out"
-                style={{ gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
+                className="grid w-full transition-[grid-template-rows,opacity]"
+                style={{ ...EASED, gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
               >
                 <div className="overflow-hidden flex justify-center">
-                  <div ref={detailed} className="w-max max-w-[20rem] px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
+                  {/* (never shrunk to the chip as it widens: measured so, its width would follow the chip's, a frame behind, and the chip would creep after it) */}
+                  <div ref={detailed} className="w-max max-w-[20rem] shrink-0 px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
                     <ResultGroups groups={details} />
                   </div>
                 </div>
@@ -452,6 +457,7 @@ export function FramesChip({
         </div>
       )}
       {below && <div style={{ pointerEvents: "auto" }}>{below}</div>}
+      </div>
     </div>
   );
 }

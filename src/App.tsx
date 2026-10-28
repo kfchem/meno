@@ -57,6 +57,7 @@ import {
   startNetwork,
   useNetwork,
 } from "./lib/net/network";
+import { sayFailedSetUps } from "./ui/setUpSaid";
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
@@ -122,6 +123,9 @@ export default function App() {
   useEffect(() => {
     if (isTauri()) void addedReaders([...READERS, ...ALL_PLUGINS.filter((p) => !READERS.some((r) => r.id === p.id))]).catch(() => {});
   }, []);
+
+  // A plugin's set-up that ends without its being added, said wherever the chemist is, until dismissed (ui/setUpSaid).
+  useEffect(() => sayFailedSetUps(), []);
 
   // What this computer's jobs may use, as Settings says, told to its runner
   // as Meno starts and whenever Settings changes it: those waiting take it

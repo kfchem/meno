@@ -3,6 +3,7 @@ import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
+import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
@@ -81,7 +82,8 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import SizeCard from "./SizeCard";
+import WordsCard from "./WordsCard";
+import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
@@ -127,7 +129,7 @@ import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { cleanUp, fragmentOf } from "./chem/cleanUp";
@@ -171,6 +173,7 @@ import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
+import { useKeepUnselected } from "./hooks/useKeepUnselected";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -200,7 +203,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
@@ -223,7 +226,7 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import FigureNotes2D from "./components/FigureNotes2D";
-import { figureNotesOf } from "./utils/figureNotes";
+import { figureNoteSource, figureNotesOf, readMarksShown } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
@@ -232,7 +235,7 @@ import InkWriting from "./components/InkWriting";
 import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
-import { roundedPt, roundestOf } from "../../../lib/chem/shapes";
+import { roundedOfBondPt, roundedPt, roundestOf } from "../../../lib/chem/shapes";
 import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
 import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
@@ -391,7 +394,8 @@ function WorkspaceContent({
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
-  const readUnsure = useMemo(() => readMarks(model), [model]);
+  // (drawn only on what is not said to be checked: utils/figureNotes)
+  const readUnsure = useMemo(() => readMarksShown(model, readMarks(model)), [model]);
   const procedures = useAppSettings((s) => s.procedures);
   const chem = useChem();
   // (a plugin's files besides its packages, as they come while it is set up)
@@ -515,7 +519,9 @@ function WorkspaceContent({
         });
         for (const block of blocks) {
           if (stopped) return;
-          const isomersMade = await conformersOf(chem, block, isomers, options);
+          // (within the window Settings gives: a workflow's conformer step keeps every one - make3d withinWindow)
+          const window3d = useAppSettings.getState().chemistry.window3d ?? WINDOW_3D;
+          const isomersMade = (await conformersOf(chem, block, isomers, options)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -682,7 +688,7 @@ function WorkspaceContent({
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
+  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -966,7 +972,7 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setSizeCard(null);
+    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1458,7 +1464,7 @@ function WorkspaceContent({
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
   const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
-  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
+  const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "font" | "lines" | "marks">>): { y?: number } => {
     if (!c.width || c.arrow != null) return {};
     const set = labelSetOf(layoutOpts);
     const top = c.y + wordsSet(c, layoutOpts, set).halfH;
@@ -1470,10 +1476,36 @@ function WorkspaceContent({
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
   };
+  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
+  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
+    const a = clientToWorld(0, 0);
+    const b = clientToWorld(100, 100);
+    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
+    const kx = 100 / (b.x - a.x);
+    const ky = 100 / (a.y - b.y);
+    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
+    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
+    return cardBeside(target, WORDS_CARD, menu.within);
+  };
+  // (their lines as far apart as asked - single, none of their own)
+  const spaceWords = (id: number, lines: number | null) => {
+    const st = store.getState();
+    const c = st.captions.find((x) => x.id === id);
+    if (c) st.updateCaption(id, { lines, ...keepTop(c, { lines: lines ?? undefined }) });
+  };
+  // (in a typeface of their own - none, the drawing's - once its letters are read: set in it at once, not in another first)
+  const faceWords = (id: number, font: string | null) =>
+    void typefaceRead(font ?? style.fontFamily).then(() => {
+      const st = store.getState();
+      const c = st.captions.find((x) => x.id === id);
+      if (c) st.updateCaption(id, { font, ...keepTop(c, { font: font ?? undefined }) });
+    });
   const [startZoom] = useState(() => startingZoom(style));
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
   useDropZone(dropRef, dropZone);
+  // (no text of the page's selected on it or over it: Meno's own selection is what selects here)
+  useKeepUnselected(dropRef);
   // Render: a picture or a film of molecules in 3D, asked in a card over the canvas (docs/RENDER.md)
   const [rendering, setRendering] = useState<{ ids: number[]; motions: Motion[]; surfaces: boolean } | null>(null);
   const askRender = (ids: number[]) => {
@@ -1567,7 +1599,7 @@ function WorkspaceContent({
     <div
       ref={dropRef}
       data-guide="page"
-      className={`flex-1 min-w-0 h-full relative${fadeIn ? " meno-fade-in" : ""}`}
+      className={`flex-1 min-w-0 h-full relative select-none${fadeIn ? " meno-fade-in" : ""}`}
       onMouseDownCapture={handleMouseDownCapture}
       onMouseMove={handleWrapperMouseMove}
       onMouseLeave={handleWrapperMouseLeave}
@@ -1961,16 +1993,19 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {sizeCard && (
-          <SizeCard
-            key={`${sizeCard.x},${sizeCard.y}`}
-            now={store.getState().captions.find((c) => c.id === sizeCard.id)?.size ?? null}
+        {wordsCard && (
+          <WordsCard
+            key={`${wordsCard.x},${wordsCard.y}`}
+            id={wordsCard.id}
             label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            onSize={(pt) => sizeWords(sizeCard.id, pt)}
-            x={sizeCard.x}
-            y={sizeCard.y}
-            within={sizeCard.within}
-            onClose={() => setSizeCard(null)}
+            drawing={style.fontFamily}
+            onSize={(pt) => sizeWords(wordsCard.id, pt)}
+            onLines={(lines) => spaceWords(wordsCard.id, lines)}
+            onFont={(font) => faceWords(wordsCard.id, font)}
+            x={wordsCard.x}
+            y={wordsCard.y}
+            within={wordsCard.within}
+            onClose={() => setWordsCard(null)}
           />
         )}
       </AnimatePresence>
@@ -1985,6 +2020,7 @@ function WorkspaceContent({
                 key={`${cornersCard.x},${cornersCard.y}`}
                 now={sh.radius ?? 0}
                 most={roundestOf(sh.x1 - sh.x0, sh.y1 - sh.y0) / pointPx}
+                rounded={roundedOfBondPt(pointPx)}
                 onCorners={(pt) => store.getState().updateShape(sh.id, { radius: pt })}
                 x={cornersCard.x}
                 y={cornersCard.y}
@@ -2132,7 +2168,7 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onSize: () => setSizeCard({ id: c.id, x: menu.x, y: menu.y, within: menu.within }),
+              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
@@ -2371,13 +2407,15 @@ function WorkspaceContent({
             if (at != null) store.getState().selectStructure(at);
           }}
           figure={(() => {
-            // (its structure read from a figure, not yet said to be checked: saying so, one step - its note going)
+            // (its structure read from a figure: where it came from - and, not yet said to be checked, saying so, one step)
             const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
             if (at == null) return undefined;
-            const m = store.getState().model;
-            const atoms = fragmentOf(m, at);
-            const note = figureNotesOf(m).find((n) => n.atoms.has(at));
-            return note ? { run: () => store.getState().setFigureChecked([...atoms], true) } : undefined;
+            const st = store.getState();
+            const atoms = fragmentOf(st.model, at);
+            const note = figureNotesOf(st.model).find((n) => n.atoms.has(at));
+            if (!note) return undefined;
+            const from = st.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? st.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure";
+            return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
           stereo={(() => {
             const st = store.getState();
@@ -2951,7 +2989,7 @@ function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () =
       {suggest.map((id) => {
         const p = anyPluginById(id);
         if (!p) return null;
-        const adding = states[id] === "adding";
+        const adding = states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}

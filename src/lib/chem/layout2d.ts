@@ -125,6 +125,8 @@ export type LayoutOptions = {
   wedgeWidthPx: number;
   /** Least distance between the hashes of a hashed wedge, centre to centre. */
   hashSpacingPx: number;
+  /** The fewest hashes a short hashed bond or wedge is drawn with, room allowing (`FEWEST_HASHES`, where the style asks); unset, as the spacing gives. */
+  fewestHashes?: number;
   /**
    * A bold bond's width, and the length of a hashed bond's hashes. Left
    * unset, two thirds of a wedge's broad end.
@@ -390,6 +392,11 @@ export type TextItem = {
    * words on the page given a size of their own (docs/EDITOR-2D.md, *Text*).
    */
   ownSize?: boolean;
+  /**
+   * Set in a typeface of its own, by name, in pictures too, not the
+   * labels': words on the page given one (docs/EDITOR-2D.md, *Text*).
+   */
+  family?: string;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -1894,11 +1901,12 @@ function buildWedgeTriangle(
 /**
  * A bold bond, as ACS 1996 draws it: a bar `half` either side of the line,
  * each end a broad end cut along the bonds continuing from its atom, as a
- * wedge's wide end is. Round ends round its free corners by half its width,
- * so an end that meets nothing is a half circle - but for one another of a
- * ring in perspective's shapes is broad at (`square1`, `square2`): that end
- * stays square, the outer corner between the two filled after
- * (perspectiveCorners).
+ * wedge's wide end is. Round ends round its free corners as a line's end is
+ * rounded, by half a line's width, so an end that meets nothing is a
+ * rectangle's with rounded corners, not a half circle (the maintainer,
+ * 2026-10-24) - but for one another of a ring in perspective's shapes is
+ * broad at (`square1`, `square2`): that end stays square, the outer corner
+ * between the two filled after (perspectiveCorners).
  */
 function buildBoldBar(
   p1: Vec2,
@@ -1922,9 +1930,18 @@ function buildBoldBar(
   const points = [...end1.points, ...end2.points];
   const soften = [...end1.soften.map((v) => v && !square1), ...end2.soften.map((v) => v && !square2)];
   return {
-    points: round ? roundPolyCorners(points, half, soften) : points,
+    points: round ? roundPolyCorners(points, lineHalf, soften) : points,
   };
 }
+
+/**
+ * The fewest hashes a hashed bond or wedge is drawn with, room allowing,
+ * where the style asks for it (`fewestHashes`; Meno's own styles, the
+ * maintainer, 2026-10-24): two read as a pair of lines - an equals sign -
+ * and three are the fewest that read as a row along the bond, a wedge's
+ * widening from hash to hash. A journal's style keeps its spacing exactly.
+ */
+export const FEWEST_HASHES = 3;
 
 /**
  * The hashes of a hashed wedge, from `narrow` (the stereocentre) along `dir`,
@@ -1935,7 +1952,9 @@ function buildBoldBar(
  * `wideHalf` at `end`, and each hash the part of it one line width deep - a trapezoid, its ends following the
  * outline. The first hash sits flush with `start` and the last with `end`,
  * and as many lie between as fit at least the hash spacing apart, spread
- * evenly. Round ends make each hash a line with a cap at either end instead,
+ * evenly - but, where the style asks, never fewer than `fewest` where that
+ * many fit a line width clear of each other: a short one, to a label, still
+ * reads as hashed. Round ends make each hash a line with a cap at either end instead,
  * reaching across the outline as far as the trapezoid does at its middle.
  */
 function buildHashes(
@@ -1948,6 +1967,7 @@ function buildHashes(
   spacing: number,
   lineWidth: number,
   round: boolean,
+  fewest = 1,
 ): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
   const out = { lines: [] as LineSeg[], polys: [] as Poly[], ends: [] as Vec2[] };
   if (!(end > 0) || !(lineWidth > 0)) return out;
@@ -1957,8 +1977,9 @@ function buildHashes(
   const depth = Math.min(lineWidth, end - from);
   const first = from + depth / 2;
   const last = end - depth / 2;
-  const count =
-    spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
+  const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
+  const fit = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  const count = Math.max(spaced, Math.min(fewest, fit));
   // half the outline's width, a distance `at` from the narrow atom
   const halfAt = (at: number) =>
     Math.max(0, startHalf + (wideHalf - startHalf) * ((at - from) / (end - from)));
@@ -2867,6 +2888,7 @@ export function buildBondPrimitives(
       spacing,
       pxToWorld(lwPx, zoom),
       round,
+      opts.fewestHashes,
     );
     for (const l of hashes.lines) l.widthPx = lwPx;
     lines.push(...hashes.lines);
@@ -2970,6 +2992,7 @@ export function buildBondPrimitives(
         spacing,
         pxToWorld(lwPx, zoom),
         (opts.joinStyle ?? "round") === "round",
+        opts.fewestHashes,
       );
       for (const l of hashes.lines) l.widthPx = lwPx;
       lines.push(...hashes.lines);
@@ -4823,7 +4846,7 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
   }
   for (const t of layout.texts) {
-    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, set, svgColor(t.color, fill));
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
   }
   const img = layout.solidsImage;
   s += img

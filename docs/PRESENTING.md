@@ -41,8 +41,15 @@ page; a talk is a way through it.
   left corner, and a dashed line runs from each to the next, an arrowhead
   half way along it, from the edge of the one to the edge of the other -
   or, one within the other (a detail zoomed into), from number to number.
-  All in Meno's own colour, faint, the same on the screen at any zoom;
-  gone while a talk is given, and never in a picture of the page.
+  All in Meno's own colour, faint, the same on the screen at any zoom -
+  until a number's disc would be more than a sixth of its slide's
+  height on the screen: from there the number shrinks with its slide, and
+  the line and its arrowhead with the smaller of the two it joins; and
+  where its figures are too small to read, it fades out, from 1.15 times
+  the least size the page's words are read at (8.25 px) to 1/1.15 of it,
+  evenly with the zoom, never at a jump (presenting/slides `markScale`).
+  Gone while a talk is given, and never in a picture of the page. A number
+  being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around
   these*: as wide as it needs, a little room about it), or from Quick Add
   (*Slide*: a slide of what is seen, a little in from its edges); last in
@@ -145,6 +152,10 @@ words, a width they break into lines at, and how their lines lie.
   14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
   *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
   down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
+  over the drawing style's. Unset, single and the drawing's labels'
+  typeface.
 - **Letters marked**: bold, italic, a colour, superscript and subscript
   (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd with + and
   with = (the keys that give + and =, wherever a keyboard has them). The words stay plain text; the marks are kept beside them as
@@ -171,7 +182,8 @@ words, a width they break into lines at, and how their lines lie.
   the highlight's colour, just inside its top left corner, where their
   curve begins - dragged along its top, it rounds them, from square to
   round ends, as one step; and *Corners…* in its menu opens a card of
-  them: *Square*, *Rounded* (9 points, as *Box around these* rounds them),
+  them: *Square*, *Rounded* (a fifth of a bond, as *Box around these*
+  rounds them - the maintainer, 2026-10-24: 9 points was far too round),
   *Round ends*, or another radius typed in points. Chosen there, or undone
   and redone, the corners go round or square eased; a new rectangle's are
   square.

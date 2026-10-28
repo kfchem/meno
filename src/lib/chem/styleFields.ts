@@ -139,7 +139,7 @@ export const STYLE_FIELDS: StyleField[] = [
     group: "Lines",
     label: "Line ends and corners",
     description:
-      "Square ends with sharp corners, or round ends with round corners. Every line in the drawing, double and triple bonds included, follows the same choice.",
+      "Square ends with sharp corners, or round ends with round corners. Every line in the drawing, double and triple bonds included, follows the same choice - and a bold bond's free end, square or with its corners rounded.",
     kind: {
       type: "choice",
       options: [
@@ -254,6 +254,20 @@ export const STYLE_FIELDS: StyleField[] = [
     description:
       "The least distance between two hashes of a hashed wedge or bond. A longer bond gets more hashes, spread evenly, not wider gaps.",
     kind: length(0.5, 8),
+  },
+  {
+    key: "shortHashes",
+    group: "Hashes and dashes",
+    label: "Shortest hashed bond",
+    description:
+      "A short hashed wedge or bond - one to a label - drawn at the spacing above, as a journal's specification has it, or with three hashes at least, closer together, so that it still reads as hashed.",
+    kind: {
+      type: "choice",
+      options: [
+        { value: "spaced", label: "At the spacing" },
+        { value: "three", label: "Three hashes at least" },
+      ],
+    },
   },
   {
     key: "hashStartOffset",
@@ -537,6 +551,8 @@ export function automaticValue(
       return wedgeBroadEndOf({ ...style, wedgeBroadEnd: undefined });
     case "hashStartOffset":
       return style.hashInterval;
+    case "shortHashes":
+      return "spaced";
     case "reactionArrowThickness":
       return style.lineThickness;
     case "labelBaseline":
@@ -676,6 +692,8 @@ export function acceptDrawingStyle(raw: unknown): DrawingStyle {
   const bond = acceptValue(fieldOf("bondLengthPt")!, r.bondLengthPt, base.bondLengthPt);
   const L = (bond as number | undefined) ?? base.bondLengthPt;
   const out: Record<string, unknown> = { ...base };
+  // (a style saved before it could say how a short hashed bond is drawn, at the spacing, as it was drawn then - not as Meno's)
+  if (r.shortHashes === undefined) delete out.shortHashes;
   for (const [key, value] of Object.entries(r)) {
     const field = FIELD_BY_KEY.get(key as keyof DrawingStyle);
     if (!field) continue;

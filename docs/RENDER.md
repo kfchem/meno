@@ -32,7 +32,10 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
   - a film's length in seconds - a vibration's made whole periods of 1.2 s,
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
-    or square;
+    or square - a film's width and height each made the nearest even
+    number, as its video needs (H.264 keeps colour for each 2x2 pixels:
+    360 px at 16:9 is 360 by 202), and its frame on the page given that
+    shape exactly, grown, never cut;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
     outlined. **The looks are the renderer's**: the card offers the
@@ -354,7 +357,8 @@ uv, no package), and the script Blender runs, `render.py`.
   4 cm an ångström - a product on a table - as the canvas shows them, in
   the motions' own finish (each element's colour under a clear coat;
   carbon near black): a perspective camera with an 85 mm lens and depth of
-  field, motion blur, a finishing compositor. The Look and its parts are
+  field - its sensor across the frame's width, a portrait film's too, so
+  that a tall molecule is framed whole - motion blur, a finishing compositor. The Look and its parts are
   not used for them: a motion has its own. The Background choice picks
   the studio: **White** (or Transparent, a film having none) the white
   studio - a paper sweep the camera sees, lit only by a soft source above
@@ -371,8 +375,55 @@ uv, no package), and the script Blender runs, `render.py`.
   so the seam does not show. Each motion is timed in a length of its own
   (Reveal 7 s, Pulse 6, Assemble 8, Scan 7, Dissolve 7) and a film of
   another length plays it all, faster or slower; a loop is timed in the
-  film's length. A motion renders on the graphics processor wherever
-  Blender has one, unless the processor is asked for.
+  film's length. A motion chooses where it renders as a picture does
+  (*Where it renders*): on Automatic, the faster here, as timed once and
+  kept - never the graphics processor only for being there, which on a
+  computer whose graphics processor is slower than its processor (an
+  integrated one, say) renders slower.
+- **Its changes of molecules** (2026-10-26; the films lane's patterns,
+  each approved by the maintainer from its films of 2026-10-19 to 10-23):
+  a film of two molecules or more rendered together, each becoming the
+  next in turn, in the order Meno wrote them - Once to the last, Loop back
+  to the first. One film keeps one change throughout (the maintainer,
+  2026-10-19). With one molecule, the render says it needs two.
+  - **Ring** (`change-ring`): A's bonds let go; its atoms rise into one
+    evenly spaced ring about the molecule (hydrogens just inside), which
+    turns and lets them fall, in a sweep round it, into B's places - the
+    nearest by the least travel in all, the same element preferred
+    (Hungarian assignment); each keeps its colour until it lands, as B's
+    element, with a squash. Where B has more atoms, one buds on the ring
+    beside its source; where fewer, the spare ones fall into a neighbour.
+  - **Scan** (`change-scan`): a sheet of light with a cobalt hoop at its
+    rim passes down to the paper; below it A, its cut edge lit; just above
+    it B, a rim of light seen through, solid a little higher.
+  - **Shatter** (`change-shatter`): A breaks into shards of its own
+    spheres and sticks (a Voronoi fracture made in the script, Bullet
+    rigid bodies, the floor), and the shards gather into B's atoms, which
+    fuse in a wave up from the paper.
+  - **Liquid** (`change-liquid`, the white studio only): each molecule
+    melts from the top down into a pool of molten gold (Mantaflow, as
+    viscous as honey; its grid as fine as the film's width asks, 192 cells
+    at 1920 px); a pool draws up into one round drop and spreads out as the
+    next molecule's pool, which rises into it - its melt played backwards.
+    It is made in stages: each molecule's melt once, its pool's last
+    surface kept in the job's folder, then each change between two pools.
+    Each melt is a simulation of its own: the longest of all to render.
+    Every melt ends with the camera where every reform stays: at the
+    least distance from which the whole of the liquid's domain - sized for
+    the widest molecule - is in the frame, so no pool is ever cut.
+  - Each piece is made in a Blender of its own - the studio, the part the
+    changes share (`change.py`) and the change's script - after the one
+    before. Every molecule stands on the same floor, turned as the canvas
+    shows it; the camera is one move through the whole film - turning one
+    way (Once) or swinging and back (Loop) - so one piece's last frame is
+    the next one's first. The film is put together in the sequencer as
+    runs of frames, one image strip for each run from one piece's folder
+    (every piece's files have the same names). Shaders that glow are not sampled as lights,
+    which would change how a molecule at rest is rendered between pieces.
+  - Each change is timed in a length of its own (Ring, Scan and Shatter
+    5 s; the liquid 8 s a melt and 1.6 s a reform), and the film's length
+    is shared out among the pieces, each played faster or slower to fit -
+    a liquid's simulation too.
 - **Where it renders** (2026-10-16, the maintainer): a three-way choice,
   *Render on*: **Automatic (the faster one)**, the default; **Graphics
   processor**; **Processor**. Automatic times the two once on this
