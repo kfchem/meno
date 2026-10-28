@@ -30,7 +30,7 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { markNotHad } from "../../../../lib/doc/notHad";
 import { sha256Hex } from "../../../../lib/binary/sha256";
 import type { CalcSource } from "../../../../lib/calc/output";
-import { readWorkflow, type SavedWorkflow } from "../workflow/saved";
+import { JOB, readWorkflow, type SavedWorkflow } from "../workflow/saved";
 import { withKeptJobs, type JobsKept } from "../workflow/keptJobs";
 
 export const WORKSPACE = "meno-workspace";
@@ -419,7 +419,7 @@ function textOfRead(v: unknown): { of?: TextOf } {
   const o = v as { step?: unknown; molecule?: unknown; jobs?: unknown; job?: unknown } | null | undefined;
   if (Number.isInteger(o?.step)) {
     // (a step's log of several jobs: their ids - as jobs are named - and the one shown, where they read)
-    const jobs = Array.isArray(o!.jobs) && o!.jobs.length > 1 && o!.jobs.every((j) => typeof j === "string" && /^[A-Za-z0-9._-]{1,80}$/.test(j)) ? (o!.jobs as string[]) : null;
+    const jobs = Array.isArray(o!.jobs) && o!.jobs.length > 1 && o!.jobs.every((j) => typeof j === "string" && JOB.test(j)) ? (o!.jobs as string[]) : null;
     const job = jobs && Number.isInteger(o!.job) && (o!.job as number) >= 0 && (o!.job as number) < jobs.length ? (o!.job as number) : 0;
     return { of: { step: o!.step as number, ...(jobs ? { jobs, job } : {}) } };
   }

@@ -144,6 +144,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   const forgotten = new Set<string>();
   /** The texts that show a job's log, by the job. */
   const shown = new Map<string, number>();
+  // (each log text's latest asking for a job to show, counted: one read late is let go)
+  const logAsked = new Map<number, number>();
   let looking = false;
 
   const ended = (id: number) =>
@@ -1211,7 +1213,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * runs; the others followed no more in it.
    */
   async function showLogJob(text: number, jobs: string[], k: number) {
+    // (the last asked for wins: one asked for before it, read after it, is let go)
+    const asked = (logAsked.get(text) ?? 0) + 1;
+    logAsked.set(text, asked);
     const all = await wholeLog(jobs[k]);
+    if (logAsked.get(text) !== asked) return;
     const t = (doc.getState().texts ?? []).find((x) => x.id === text);
     if (!t?.of || !("step" in t.of)) return;
     const step = t.of.step;
@@ -1605,6 +1611,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       let last: number;
       if (open) {
         last = open.id;
+        // (a log of one of several jobs as it was named before - *Optimise log 1* - named as the step's log now)
+        if (open.name !== `${name} log`) doc.amend((x) => ({ ...x, texts: (x.texts ?? []).map((t) => (t.id === open.id ? { ...t, name: `${name} log` } : t)) }), { unsaved: true });
         const of = open.of as { step: number; jobs?: string[]; job?: number };
         // (its jobs as they are now - run again since: the first shown; one job: its log as it is now)
         if (!several || JSON.stringify(of.jobs) !== JSON.stringify(jobs)) await showLogJob(open.id, jobs, 0);

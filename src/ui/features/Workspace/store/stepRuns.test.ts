@@ -3,6 +3,8 @@ import type { Job, JobAsk } from "../../../../lib/jobs";
 
 /** The jobs, as the test has them: each one's record, its log and its files; and what was asked. */
 const jobs = new Map<string, Job & { log: string; files: Record<string, string> }>();
+/** Where set, how long a job's log takes to read, in ms: a log read late. */
+const logDelay = new Map<string, number>();
 const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[] };
 let next = 1;
 /** A file's text, as the test has it, that stands for one too large to read. */
@@ -32,6 +34,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   listJobs: async () => [...jobs.values()],
   jobOf: async (id: string) => jobs.get(id)!,
   readJobLog: async (id: string, from: number) => {
+    const wait = logDelay.get(id);
+    if (wait) await new Promise((go) => setTimeout(go, wait));
     const log = jobs.get(id)?.log ?? "";
     return { text: log.slice(from), next: log.length };
   },
@@ -648,6 +652,30 @@ describe("a step that runs a plugin's program", () => {
     // (kept with the workspace: its jobs and the one shown)
     const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
     expect(ws?.texts.find((t) => t.name === logs[0].name)?.of).toEqual({ step, jobs: ids, job: 2 });
+    // (two chosen quickly, the first read late: the last chosen is the one shown)
+    logDelay.set(ids[0], 50);
+    const first = st().showStepLogJob(logs[0].id, 0);
+    const second = st().showStepLogJob(logs[0].id, 1);
+    await Promise.all([first, second]);
+    logDelay.clear();
+    expect(st().texts.find((t) => t.id === logs[0].id)).toMatchObject({ text: "job 2\n", of: { job: 1 } });
+    // (a log of one of several jobs as it was named before, shown again: named as the step's log)
+    doc.amend((x) => ({ ...x, texts: (x.texts ?? []).map((t) => (t.id === logs[0].id ? { ...t, name: `${t.name} 1` } : t)) }));
+    await st().showStepLog(step);
+    expect(st().texts.find((t) => t.id === logs[0].id)!.name).toBe(logs[0].name);
+  });
+
+  it("reads a step's log as a file keeps it: its jobs where they are jobs' ids and the one shown among them - else a log of one job, as one before them was", () => {
+    const read = (of: unknown) => readWorkspace(JSON.stringify({ format: "meno-workspace", version: 2, atoms: [], bonds: [], texts: [{ name: "Optimise log", sha256: "a".repeat(64), text: "x", of }] }))?.texts[0]?.of;
+    const good = [idOf(1), idOf(2)];
+    expect(read({ step: 3, jobs: good, job: 1 })).toEqual({ step: 3, jobs: good, job: 1 });
+    // (the one shown past its jobs: the first)
+    expect(read({ step: 3, jobs: good, job: 5 })).toEqual({ step: 3, jobs: good, job: 0 });
+    // (a job's id not as jobs are named - a path, markup: none of them taken)
+    expect(read({ step: 3, jobs: [idOf(1), "../../etc"], job: 0 })).toEqual({ step: 3 });
+    expect(read({ step: 3, jobs: [idOf(1), "<b>x</b>"] })).toEqual({ step: 3 });
+    // (from before: a step's log with no jobs)
+    expect(read({ step: 3 })).toEqual({ step: 3 });
   });
 
   it("is its plugin's: its calculation changed to another the plugin does, with the options it takes for that one, those they share kept - never to one it does not", () => {
