@@ -226,6 +226,17 @@ describe("what several readers found in one output", () => {
     expect(cut.unmarked).toBe("cut");
   });
 
+  it("keeps the imaginary frequencies the program judged the last geometry has, and what it warned of (2026-10-28: found in the app, left out here)", () => {
+    const warnings = [{ kind: "hessian-not-stationary", text: "the gradient is not small" }];
+    const saddle = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, imaginary: [-927.98], warnings } }, { from: "nbo", version: "7", output: nbo }]).output;
+    expect([saddle.imaginary, saddle.warnings]).toEqual([[-927.98], warnings]);
+    // (none judged, as some: kept - and none said where no reader judged)
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, imaginary: [] } }]).output.imaginary).toEqual([]);
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }]).output).not.toHaveProperty("imaginary");
+    // (of a reader that read other geometries: not of the last of these)
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }, { from: "nbo", version: "7", output: { ...nbo, imaginary: [-50] } }]).output).not.toHaveProperty("imaginary");
+  });
+
   it("keeps each geometry's mark with it where one before it does not read - never all marks dropped with one geometry", () => {
     // (three geometries, the middle one cut short: the last, marked converged, still is)
     const three = [water.frames[0], water.frames[0].slice(0, 5), water.frames[0]];
