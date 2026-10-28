@@ -490,6 +490,10 @@ block's were 0). Enhanced stereo is written as V3000 collections
 An abbreviation is written out - the atoms a file gave it, or the
 dictionary's, laid out by Meno's own engine on from its bond - with an
 abbreviation Sgroup labelling them, so that it reads back contracted. A
+label bonded more than once at the atom it is attached by - an NMe in a
+chain, an NBoc in a ring - has its own bonds there in the widest opening
+between those, on its bisector, as a drawn substituent's are (IUPAC
+GR-4.1.2): an NMe's methyl 120 degrees from each carbon. A
 label on a metal that names a ligand bound in a complex - Cp, Cp*, allyl,
 cod, CO - is written out as bound (lib/chem/boundLigand): a pi system
 through all its atoms, by a multi-centre bond (ENDPTS, ATTACH=ALL) to a

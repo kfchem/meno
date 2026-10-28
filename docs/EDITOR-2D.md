@@ -1535,7 +1535,10 @@ lipids each have their own way of being drawn, which it should know.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
      (*Expand abbreviation*) puts the group in free space: away from all
-     the atom's bonds, out of a ring from a ring's atom, and clear of the
+     the atom's bonds, in the widest opening between them as a drawn
+     substituent is (GR-4.1.2; an NMe in a chain, its methyl 120 degrees
+     from each carbon, as a file is written), out of a ring from a ring's
+     atom, and clear of the
      drawing's atoms, bonds and labels as far as their letters are set -
      turned, or seen in a mirror where it has no stereo of its own, only
      where it is not clear as laid out; nothing else moves

@@ -163,13 +163,18 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
     const variable = VARIABLES.has(a.el) && touching.length === 1;
     if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    // (bonded more than once - an NMe in a chain - laid out away from all its bonds, as a drawn substituent is)
+    const toward = touching.flatMap((b) => {
+      const o = byId.get(b.a === a.id ? b.b : b.a);
+      return o ? [{ x: o.x - a.x, y: o.y - a.y }] : [];
+    });
     // (a label on a metal that names a ligand bound so - Cp, allyl, CO - written out as bound: lib/chem/boundLigand)
     const bound = !a.abbrev && touching.length === 1 && first && isMetal(first.el) ? boundLigandStructure(a.el, { x: first.x - a.x, y: first.y - a.y }) : null;
     const structure: AbbreviationStructure | null =
       a.abbrev ??
       bound ??
       (abbreviationOf(a.el)
-        ? placedAbbreviation(a.el, first ? { x: first.x - a.x, y: first.y - a.y } : null, NOMINAL_BOND_LENGTH)
+        ? placedAbbreviation(a.el, toward.length > 1 ? toward : first ? { x: first.x - a.x, y: first.y - a.y } : null, NOMINAL_BOND_LENGTH)
         : null);
     if (!structure || !structure.atoms.length) {
       aliases.set(a.id, a.el);
