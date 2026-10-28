@@ -101,6 +101,13 @@ export type DrawingStyle = {
    * without it is "spaced".
    */
   shortHashes?: "spaced" | "three";
+  /**
+   * A hashed wedge's widest hash: reaching the atom at its wide end ("atom"),
+   * or stopping short of it by a hash's clear gap ("short"), the bonds on
+   * from the atom starting there on their own. Unset, "atom", in every
+   * style (the maintainer, 2026-10-28).
+   */
+  hashedWedgeEnd?: "atom" | "short";
   /** A dashed bond's dashes, and the least gap between two of them. */
   dashLength: Length;
   dashGap: Length;
@@ -526,6 +533,7 @@ export function layoutOptionsFor(
     hashSpacingPx: at(style.hashInterval),
     hashFirstGapPx: at(style.hashStartOffset ?? style.hashInterval),
     ...(style.shortHashes === "three" ? { fewestHashes: FEWEST_HASHES } : {}),
+    ...(style.hashedWedgeEnd === "short" ? { hashedWedgeShort: true } : {}),
     boldWidthPx: at(style.boldThickness),
     dashLengthPx: at(style.dashLength),
     dashGapPx: at(style.dashGap),

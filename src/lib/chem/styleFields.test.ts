@@ -27,6 +27,7 @@ const EVERY_SETTING: (keyof DrawingStyle)[] = [
   "tripleGap",
   "wedgeBroadEnd",
   "shortHashes",
+  "hashedWedgeEnd",
   "hashStartOffset",
   "labelBaseline",
   "reactionArrowThickness",
@@ -183,5 +184,17 @@ describe("the shortest hashed bond, a style's own setting", () => {
     expect(acceptDrawingStyle({ ...presetById("rsc").style }).shortHashes).toBeUndefined();
     expect(acceptDrawingStyle({ ...presetById("meno").style }).shortHashes).toBe("three");
     expect(acceptValue(STYLE_FIELDS.find((f) => f.key === "shortHashes")!, "sometimes", 14.4)).toBeUndefined();
+  });
+});
+
+describe("a hashed wedge's widest hash, a style's own setting", () => {
+  it("reaches the atom in every style as it was, and stops short where asked - kept through a save and an open", () => {
+    const short = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, layoutOptionsFor(p.style, 1).hashedWedgeShort]));
+    expect(short).toEqual({ meno: undefined, acs1996: undefined, rsc: undefined, wiley: undefined, nature: undefined });
+    expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("atom");
+    const asked = withSetting({ preset: "meno", changes: {} }, "hashedWedgeEnd", "short");
+    const read = acceptStyleChoice(JSON.parse(JSON.stringify(asked)));
+    expect(read).toEqual(asked);
+    expect(layoutOptionsFor(styleOf(read), 1).hashedWedgeShort).toBe(true);
   });
 });

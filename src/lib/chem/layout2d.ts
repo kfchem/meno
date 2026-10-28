@@ -127,6 +127,8 @@ export type LayoutOptions = {
   hashSpacingPx: number;
   /** The fewest hashes a short hashed bond or wedge is drawn with, room allowing (`FEWEST_HASHES`, where the style asks); unset, as the spacing gives. */
   fewestHashes?: number;
+  /** A hashed wedge's widest hash stops short of a bare atom at its wide end, by a hash's clear gap; unset, it reaches the atom. */
+  hashedWedgeShort?: boolean;
   /**
    * A bold bond's width, and the length of a hashed bond's hashes. Left
    * unset, two thirds of a wedge's broad end.
@@ -2980,13 +2982,17 @@ export function buildBondPrimitives(
     } else {
       // The hashes start where a label at the narrow atom leaves off, or one
       // hash spacing out from a bare atom, and run to the wide end or the
-      // label there.
+      // label there - or, where the style asks (`hashedWedgeShort`), stop
+      // short of a bare atom there by a hash's own clear gap, the bonds on
+      // from it starting at the atom on their own.
       const spacing = toWorld(opts.hashSpacingPx, zoom, units);
+      const lw = pxToWorld(lwPx, zoom);
+      const shortBy = opts.hashedWedgeShort && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
       const hashes = buildHashes(
         narrowO,
         vnorm(vsub(wideO, narrowO)),
         trimNarrow > 0 ? trimNarrow : firstGap,
-        L0 - trimWide,
+        L0 - trimWide - shortBy,
         pxToWorld(lwPx, zoom) / 2,
         baseHalf,
         spacing,

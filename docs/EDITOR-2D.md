@@ -610,6 +610,11 @@ Both go together, because both touch every layer.
   it; a journal's keeps its spacing exactly, as its specification has it
   (2026-10-27), and a style saved before the setting is drawn at the
   spacing.
+- **A hashed wedge's widest hash** reaches the atom at its wide end, or, in
+  a style that asks for it ("Hashed wedge: widest hash: Short of the atom"),
+  stops a hash's clear gap short of a bare atom there, the bonds on from it
+  starting at the atom on their own. Every style reaches the atom unless it
+  is set (the maintainer, 2026-10-28); a picture draws it as the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
   is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and

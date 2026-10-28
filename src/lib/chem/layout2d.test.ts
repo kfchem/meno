@@ -974,6 +974,21 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
+  it("stops a hashed wedge's widest hash short of a bare atom at its wide end, where the style asks", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const o = opts();
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, deg).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    // (reaching the atom, as ever; short of it by a hash's clear gap - the widest hash as wide)
+    expect(far(at)).toBeCloseTo(pair("C")[1].x, 9);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+    const widest = (h: { farWidth: number; far: number }[]) => h.reduce((p, q) => (q.far > p.far ? q : p)).farWidth;
+    expect(widest(short)).toBeCloseTo(widest(at), 9);
+    // (at a label it stops at the label, as ever)
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys));
+  });
+
   it("keeps the wave of a wavy bond the same length", () => {
     const o = opts();
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "wavy" };
