@@ -97,8 +97,11 @@ export default function Select<T extends string>({
       centred.current = false;
       return;
     }
-    const row = list.current?.querySelector<HTMLElement>(`[data-row="${lit}"]`);
-    row?.scrollIntoView({ block: centred.current ? "nearest" : "center" });
+    const box = list.current;
+    const row = box?.querySelector<HTMLElement>(`[data-row="${lit}"]`);
+    // (the list itself scrolled, nothing round it: a scroll of the page under it would shut it)
+    if (box && row && !centred.current) box.scrollTop = Math.max(0, row.offsetTop - (box.clientHeight - row.offsetHeight) / 2);
+    else row?.scrollIntoView({ block: "nearest" });
     centred.current = true;
   }, [open, lit]);
 
