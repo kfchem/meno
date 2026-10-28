@@ -1080,7 +1080,7 @@ export default function Workflow2D() {
             if (underCard({ x: f.x1, y: (f.y0 + f.y1) / 2 }, coverFrame, portR)) return null;
             return (
               <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
-                <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} />
+                <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} of={(f.y1 - f.y0) / PX} />
               </div>
             );
           })}
@@ -1098,6 +1098,7 @@ export default function Workflow2D() {
                     data={{ "data-take": `${s.id}:${p.id}` }}
                     onPointerDown={(e) => drawInto(e, s.id, p.id)}
                     style={{ left: 0, top: portDown(k) / PX }}
+                    of={CARD_H / PX}
                   />
                   ),
                 )}
@@ -1107,7 +1108,7 @@ export default function Workflow2D() {
           {/* the selection's port: pulled, the selection becomes an input set */}
           {asSet && !wireDrag && (
             <div className="meno-fade-in" style={{ ...onLayer(asSet.x1, (asSet.y0 + asSet.y1) / 2), width: 0, height: 0 }}>
-              <Port look="plain" label="Set as input" data={{}} onPointerDown={setFromSelection} style={{ left: 0, top: 0 }} />
+              <Port look="plain" label="Set as input" data={{}} onPointerDown={setFromSelection} style={{ left: 0, top: 0 }} of={(asSet.y1 - asSet.y0) / PX} />
             </div>
           )}
         </div>
