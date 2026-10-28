@@ -10,7 +10,7 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
  * engine fail. The first use sets the plugin up, asking before it downloads.
  * Laid out in `style` - the drawing's it goes into - or else the app's.
  */
-export async function structureFromSmiles(smiles: string, style?: DrawingStyle): Promise<Model & { stereoOpen?: StereoOpen }> {
+export async function structureFromSmiles(smiles: string, style?: DrawingStyle): Promise<Model & { stereoOpen?: StereoOpen; asCame?: string }> {
   const c = await chemWorker("smiles");
   const { molblock } = await c.request("from_smiles", { smiles });
   // (and how many of its stereocentres and double bonds the SMILES leaves without a configuration - asked of the same
@@ -68,9 +68,9 @@ export function stereoOpenSaid(open: StereoOpen | undefined): string | null {
   return `${parts.length > 2 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts.join(" and ")} not specified`;
 }
 
-/** A structure read from text without what it is told to be: what goes onto the page. */
-export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen }>(drawn: T): Omit<T, "stereoOpen"> {
-  const { stereoOpen: _open, ...rest } = drawn;
+/** A structure read from text without what it is told to be - the stereo it leaves open, that it came as it was drawn: what goes onto the page. */
+export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen; asCame?: string }>(drawn: T): Omit<T, "stereoOpen" | "asCame"> {
+  const { stereoOpen: _open, asCame: _came, ...rest } = drawn;
   return rest;
 }
 
@@ -81,11 +81,14 @@ export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen }>(drawn: 
  * engine fail. One way for every such drawing: a SMILES's, and the
  * structures a step makes.
  */
-export async function drawingOf(molblock: string, style?: DrawingStyle): Promise<Model> {
+export async function drawingOf(molblock: string, style?: DrawingStyle): Promise<Model & { asCame?: string }> {
   const result = await processFileContent("drawing.mol", molblock);
   const drawn = editorModelOf(result.model);
-  return laidOut(drawn, style).catch((e: unknown) => {
-    console.warn("the structure is drawn as the plugin laid it out", e);
-    return drawn;
-  });
+  // (as it came, said why: put down, it is said - asCameSaid)
+  return laidOut(drawn, style).catch((e: unknown) => ({ ...drawn, asCame: e instanceof Error ? e.message : String(e) }));
+}
+
+/** What to say of a structure drawn as it came, not laid out (`drawingOf`): none where it was laid out. */
+export function asCameSaid(drawn: { asCame?: string }): string | null {
+  return drawn.asCame ? `Drawn as it came: ${drawn.asCame.replace(/, so nothing was moved\.?$/, "")}.` : null;
 }
