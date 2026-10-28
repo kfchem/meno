@@ -9,7 +9,7 @@ Both downloads are on [Meno's website](/#download), which takes them from the pr
 - Windows: `Meno_<version>_x64-setup.exe`
 - Mac: `Meno_<version>_aarch64.dmg`
 
-The other files in a release are what Meno downloads when it updates itself; you do not need them. There is no build for Intel Macs or Linux yet.
+The other files in a release are what Meno downloads when it updates itself; you do not need them. There is no build for Intel Macs or Linux.
 
 ## On Windows {#windows}
 
@@ -18,7 +18,7 @@ The other files in a release are what Meno downloads when it updates itself; you
 3. The installer asks nothing. A small window shows while it installs Meno for your account alone, so it needs no administrator's password, and Meno opens when it is done.
 4. Afterwards, open Meno from the Start menu or the desktop.
 
-> Edge and Windows warn about the installer because it is not yet signed with a certificate they know.
+> Edge and Windows warn about the installer because it is not signed with a certificate they know.
 
 ## The first time on a Mac {#mac}
 
@@ -27,7 +27,7 @@ The other files in a release are what Meno downloads when it updates itself; you
 3. Open System Settings, then *Privacy & Security*. Under *Security*, choose *Open Anyway* beside the line about Meno, and give your password when asked.
 4. Open Meno again. If macOS asks once more, choose *Open Anyway*. It remembers this, so you do it once.
 
-> macOS asks because Meno is not yet notarised by Apple. Open Meno from Applications, not from the disk image: a Meno opened from the disk image cannot update itself.
+> macOS asks because Meno is not notarised by Apple. Open Meno from Applications, not from the disk image: a Meno opened from the disk image cannot update itself.
 
 ## The first question {#first-question}
 
