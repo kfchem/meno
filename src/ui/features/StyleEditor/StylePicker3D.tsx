@@ -74,6 +74,12 @@ export default function StylePicker3D({
     onChange(next);
   };
   useLayoutEffect(() => flip.play(), [choice, drag, flip]);
+  // (a card carried: the hand's pointer all the way, over the other slot's molecule too - not the turning one)
+  const carrying = drag != null;
+  useEffect(() => {
+    document.documentElement.classList.toggle("meno-carrying", carrying);
+    return () => document.documentElement.classList.remove("meno-carrying");
+  }, [carrying]);
 
   // a press on a card: a drag, once it moves; else a choice of what is set
   useEffect(() => {
@@ -196,7 +202,7 @@ export default function StylePicker3D({
                 {/* (the molecule live in it: turned by a drag on its atoms or bonds, as on the canvas; a drag anywhere else moves the card,
                     a click picks the style - the maintainer, 2026-10-28) */}
                 <div className="h-44" onPointerDown={(e) => turnsSample(e.nativeEvent) && e.stopPropagation()}>
-                  <Preview3D style={style} look={role} onTap={() => onEdit(id)} turnOn="molecule" />
+                  <Preview3D style={style} look={role} onTap={() => onEdit(id)} turnOn="molecule" idle />
                 </div>
               </div>
             </div>

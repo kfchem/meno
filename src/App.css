@@ -206,6 +206,11 @@ body {
 .meno-words-gone {
   opacity: var(--stand-in, 0);
 }
+/* A style's card carried (StyleEditor/StylePicker3D): the hand's pointer all the way, over whatever it passes. */
+.meno-carrying,
+.meno-carrying * {
+  cursor: grabbing !important;
+}
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
 [data-presenting] .meno-control-chip {
