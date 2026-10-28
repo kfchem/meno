@@ -669,6 +669,28 @@ def orca_energies(text, frames, kept):
     return values, None
 
 
+# ORCA's simple keywords for the tight-binding methods, each to the method it runs - by its xtb program (the ORCA 6.1
+# manual, 3.5.2, its table of simple input keywords) or by ORCA itself (3.5.3, its native GFN1-xTB and GFN2-xTB): the
+# method named as the xtb program names it, the one method whichever runs it
+ORCA_XTB = {
+    "XTB0": ("GFN0-xTB", "xtb"), "GFN0-XTB": ("GFN0-xTB", "xtb"),
+    "XTB1": ("GFN1-xTB", "xtb"), "GFN1-XTB": ("GFN1-xTB", "xtb"), "GFN-XTB": ("GFN1-xTB", "xtb"),
+    "XTB": ("GFN2-xTB", "xtb"), "XTB2": ("GFN2-xTB", "xtb"), "GFN2-XTB": ("GFN2-xTB", "xtb"),
+    "XTBFF": ("GFN-FF", "xtb"), "GFN-FF": ("GFN-FF", "xtb"),
+    "NATIVE-GFN-XTB": ("GFN1-xTB", "orca"), "NATIVE-GFN1-XTB": ("GFN1-xTB", "orca"), "NATIVE-XTB1": ("GFN1-xTB", "orca"),
+    "NATIVE-GFN2-XTB": ("GFN2-xTB", "orca"), "NATIVE-XTB2": ("GFN2-xTB", "orca"),
+}
+# who ran it, said beside the method
+ORCA_XTB_BY = {"xtb": "the xtb program, through ORCA", "orca": "ORCA itself (its native implementation)"}
+
+
+def orca_xtb(text):
+    """The tight-binding method an ORCA run's input names among its simple keywords (`ORCA_XTB`), and what ran it - the
+    one, where it names one alone; else none."""
+    found = {ORCA_XTB[w.upper()] for w in orca_keywords(text) if w.upper() in ORCA_XTB}
+    return found.pop() if len(found) == 1 else None
+
+
 def orca_level(text, meta):
     """ORCA's method and basis set, each as its input names it - a simple keyword the output says it took as
     that: the functional or composite method it says it recognised, else the method cclib read where the input
@@ -686,6 +708,10 @@ def orca_level(text, meta):
         last = ([str(x) for x in meta.get("methods") or [] if x] or [None])[-1]
         methods = [w for w in words if last and w.lower() == last.lower()]
     method = methods[0] if len({key(w) for w in methods}) == 1 else None
+    # (a tight-binding method: as the xtb program names it, whichever ran it - and no basis, which it has none of)
+    xtb = orca_xtb(text) if not methods else None
+    if xtb:
+        return xtb[0], None
     # (as ORCA writes it, where the input names it, in whatever case: "STO-3G" for "sto-3g")
     basis = ORCA_BASIS.search(text)
     basis = basis.group(1) if basis and any(w.lower() == basis.group(1).lower() for w in words) else None
@@ -879,6 +905,7 @@ def op_read(m):
         run_results(ended, why, scf, whole)
         + path_said(data, text, len(frames))
         + energies_said(program, energies, unread)
+        + xtb_said(text if program == "orca" else "")
         + molecule_wide(data)
         + of_state(dipole(data, text, program, frames[-1] if frames else None, printed), states[0])
         + per_frame(data, len(frames))
@@ -1032,6 +1059,13 @@ def path_said(data, text, frames):
     if excited_path(data, frames):
         out.append({"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Excited state", "value": "energies not read", "rank": 0})
     return out
+
+
+def xtb_said(text):
+    """Of an ORCA run at a tight-binding method, what ran it: the xtb program, or ORCA itself - the one method either
+    way (`ORCA_XTB`)."""
+    xtb = orca_xtb(text) if text else None
+    return [{"id": "method.by", "on": "molecule", "group": "Calculation", "label": f"{xtb[0]} run by", "value": ORCA_XTB_BY[xtb[1]]}] if xtb else []
 
 
 def energies_said(program, energies, unread):

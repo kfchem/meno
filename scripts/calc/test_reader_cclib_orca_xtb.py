@@ -239,6 +239,27 @@ class OneEnergy(unittest.TestCase):
         self.assertEqual(worker.orca_one_energy("nothing"), (None, "it states no final single-point energy"))
 
 
+class TightBindingMethod(unittest.TestCase):
+    def method(self, line):
+        return worker.orca_xtb(echoed(line, *H2))
+
+    def test_named_as_the_xtb_program_names_it_whichever_ran_it(self):
+        for line, said in [
+            ("! XTB2 OPT", ("GFN2-xTB", "xtb")),
+            ("! xtb FREQ", ("GFN2-xTB", "xtb")),
+            ("! GFN-xTB", ("GFN1-xTB", "xtb")),
+            ("! XTB0", ("GFN0-xTB", "xtb")),
+            ("! GFN-FF OPT", ("GFN-FF", "xtb")),
+            ("! NATIVE-XTB2 NUMFREQ", ("GFN2-xTB", "orca")),
+            ("! Native-GFN-xTB OPT", ("GFN1-xTB", "orca")),
+        ]:
+            self.assertEqual(self.method(line), said, line)
+
+    def test_none_where_it_names_none_or_more_than_one(self):
+        for line in ["! B3LYP def2-SVP OPT", "! XTB1 XTB2", "! XTB2 NATIVE-XTB2", "! Native-spGFN2-xTB"]:
+            self.assertIsNone(self.method(line), line)
+
+
 class WholeOutput(unittest.TestCase):
     def test_an_optimisation_reads_each_geometry_with_its_energy_and_the_dipole_as_printed(self):
         text = sample("ethanol_xtb2_opt.out")
@@ -246,6 +267,9 @@ class WholeOutput(unittest.TestCase):
         finals = [float(v) for v in re.findall(r"^FINAL SINGLE POINT ENERGY\s+(\S+)", text, re.M)]
         self.assertEqual(len(r["frames"]), len(finals))
         self.assertEqual(r["energies"], finals)
+        # (its method as the xtb program names it, and what ran it)
+        self.assertEqual((r["method"], r["basis"]), ("GFN2-xTB", None))
+        self.assertEqual(said(r, "method.by")["value"], "the xtb program, through ORCA")
         dip = said(r, "dipole")
         printed = float(re.findall(r"^Magnitude \(Debye\)\s*:\s*(\S+)", text, re.M)[-1])
         self.assertEqual(dip["value"], printed)

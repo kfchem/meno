@@ -925,7 +925,10 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   - its input's one "* xyz" block is taken as the geometry it worked at,
   in Angstrom or Bohrs as its simple keywords say, and only where the run
   is surely one of a single geometry; otherwise nothing is taken, and the
-  output is not read (`scripts/calc/test_reader_cclib_orca_xtb.py`). An
+  output is not read. A tight-binding method an ORCA input names is
+  given as the xtb program names it (XTB2 and NATIVE-XTB2 alike are
+  GFN2-xTB), saying which ran it, the xtb program or ORCA itself
+  (`scripts/calc/test_reader_cclib_orca_xtb.py`). An
   answer never holds a number that is not one (JSON has none). Tested,
   with cclib, by hand (`scripts/calc/test_reader_cclib_runs.py`).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
