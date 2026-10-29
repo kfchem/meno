@@ -31,6 +31,8 @@ export const ASSETS = ["manual.css", "manual.js"];
  * half-width katakana.
  */
 const UNSTABLE = /[\u2160-\u217f\u2460-\u24ff\u2776-\u2793\u3200-\u33ff\uff61-\uff9f]/u;
+/** The id of every page's own content - the skip link leads there - which no section or item takes. */
+const FRAME_ID = "page";
 /** Japanese and Chinese characters and their punctuation: a line broken between two of them joins up with no space. */
 const WIDE = /[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff01-\uff60]/u;
 
@@ -116,7 +118,8 @@ function list(block, where, link, steps) {
     const html = inline(joinLines(m ? [it.lines[0].slice(m[0].length), ...it.lines.slice(1)] : it.lines), it.at, link);
     if (!m) return `<li>${html}</li>`;
     if (steps.some((s) => s.id === m[1])) fail(it.at, `a second item {#${m[1]}}`);
-    steps.push({ id: m[1], html });
+    if (m[1] === FRAME_ID) fail(it.at, `{#${FRAME_ID}} is the page's own`);
+    steps.push({ id: m[1], html, at: it.at });
     return `<li id="${m[1]}">${html}</li>`;
   });
   return `<${tag}>\n${li.join("\n")}\n</${tag}>`;
@@ -170,6 +173,7 @@ export function parsePage(source, where, link = (target) => target) {
       const level = m[1].length;
       const text = inline(m[2], at, link);
       if (headings.some((h) => h.id === m[3])) fail(at, `a second section #${m[3]}`);
+      if (m[3] === FRAME_ID) fail(at, `#${FRAME_ID} is the page's own`);
       headings.push({ level, id: m[3], text });
       html.push(`<h${level} id="${m[3]}">${text}</h${level}>`);
     } else if (first.startsWith("#")) {
@@ -195,6 +199,8 @@ export function parsePage(source, where, link = (target) => target) {
     }
   }
   if (title === undefined) fail(`${where}:1`, "a page begins with its title: # ...");
+  // (an id once on the page: an item's is not a section's)
+  for (const st of steps) if (headings.some((h) => h.id === st.id)) fail(st.at, `{#${st.id}} is a section's id on this page too`);
   return { title, description, headings, steps, html: html.join("\n") };
 }
 
@@ -284,8 +290,8 @@ export function buildManual({ contents, sources, howTo = {}, landing = null }) {
     const where = `how-to/${page}`;
     if (!/^[a-z0-9-]+$/.test(page) || all.includes(page) || page === "how-to") fail("contents.json", `how-to page ${page}: a name of its own, in a-z, 0-9 and -`);
     if (!t?.recorded) fail(`${where}/steps.json`, "missing: the page's recording (scripts/gui/run.ps1 -Tutorial)");
-    const { steps, size, result } = t.recorded;
-    if (!Array.isArray(steps) || !steps.length || !size?.width || !size?.height || !result) fail(`${where}/steps.json`, "its steps, the size of its shots and its result");
+    checkRecording(t.recorded, `${where}/steps.json`);
+    const { steps, result } = t.recorded;
     for (const shot of [...steps.map((st) => st.shot), result]) if (!t.shots.includes(shot)) fail(`${where}/shots/${shot}`, "missing: steps.json names it");
     for (const shot of t.shots) if (![...steps.map((st) => st.shot), result].includes(shot)) fail(`${where}/shots/${shot}`, "not in steps.json");
     for (const language of languages) {
@@ -341,12 +347,50 @@ export function buildManual({ contents, sources, howTo = {}, landing = null }) {
   return files;
 }
 
+/** What a mark of each kind holds: a part (x, y, w, h), a point (w and h 0), a path, or a key. */
+const MARK_KINDS = { click: "part", doubleclick: "part", rightclick: "part", longpress: "part", type: "part or none", drag: "path", trace: "path", key: "text", shortcut: "text" };
+
+/**
+ * A recording as run.ps1 -Tutorial writes it, checked before anything of it
+ * goes into a page: its size, its result, and each step's id, picture and
+ * mark - every number a number, every path two points or more.
+ */
+function checkRecording(recorded, where) {
+  const finite = (...vs) => vs.every((v) => typeof v === "number" && Number.isFinite(v));
+  const { steps, size, result } = recorded;
+  if (!Array.isArray(steps) || !steps.length) fail(where, "its steps, one or more");
+  if (!finite(size?.width, size?.height) || size.width <= 0 || size.height <= 0) fail(where, "the size of its shots, in pixels: { width, height }");
+  if (typeof result !== "string" || !/^[\w.-]+\.webp$/.test(result)) fail(where, "its result, a picture in shots/");
+  const ids = new Set();
+  steps.forEach((st, i) => {
+    const at = `step ${i + 1}${typeof st?.id === "string" ? ` (${st.id})` : ""}`;
+    if (typeof st?.id !== "string" || !/^[a-z0-9-]+$/.test(st.id)) fail(where, `${at}: its id, in a-z, 0-9 and -`);
+    if (ids.has(st.id)) fail(where, `${at}: a second step ${st.id}`);
+    ids.add(st.id);
+    if (typeof st.shot !== "string" || !/^[\w.-]+\.webp$/.test(st.shot)) fail(where, `${at}: its picture, in shots/`);
+    const mark = st.mark;
+    const holds = MARK_KINDS[mark?.kind];
+    if (!holds) fail(where, `${at}: its mark, of a kind there is (${Object.keys(MARK_KINDS).join(", ")})`);
+    const placed = ["x", "y", "w", "h"].filter((k) => mark[k] !== undefined);
+    if (holds === "part" || (holds === "part or none" && placed.length)) {
+      if (!finite(mark.x, mark.y, mark.w, mark.h) || mark.w < 0 || mark.h < 0) fail(where, `${at}: a ${mark.kind}'s mark is where it is done, x, y, w and h, in numbers`);
+      if (mark.near !== undefined && (!Array.isArray(mark.near) || mark.near.length !== 4 || !finite(...mark.near) || mark.near[2] < 0 || mark.near[3] < 0)) {
+        fail(where, `${at}: what is near it, x, y, width and height, in numbers`);
+      }
+    }
+    if (holds === "path" && (!Array.isArray(mark.path) || mark.path.length < 2 || !mark.path.every((p) => Array.isArray(p) && p.length === 2 && finite(...p)))) {
+      fail(where, `${at}: a ${mark.kind}'s mark is its way, two points or more, each [x, y] in numbers`);
+    }
+    if ((holds === "text" || mark.kind === "type") && (typeof mark.text !== "string" || !mark.text)) fail(where, `${at}: a ${mark.kind}'s mark says what is ${mark.kind === "type" ? "typed" : "pressed"}`);
+  });
+}
+
 /** Each how-to page's title in a language. */
 function tutorialTitles(howTo, language) {
   return Object.fromEntries(Object.entries(howTo).map(([page, t]) => [page, parsePage(t.words[language] ?? "# ?", page).title]));
 }
 
-/** "{n} steps", the number put in. */
+/** "{n} steps", the number put in (and "1 step", for one). */
 const fill = (words, values) => escape(words).replace(/\{(\w+)\}/g, (_, k) => escape(values[k] ?? ""));
 
 /** The how-to pages' gallery: what each makes, as its result shows it. */
@@ -357,7 +401,7 @@ function gallery({ contents, language, howTo }) {
     const { size } = t.recorded;
     const h = Math.round((1760 * size.height) / size.width);
     const title = parsePage(t.words[language], page).title;
-    return `  <li><a href="./${page}/"><img src="../../pictures/${page}/${t.recorded.result}" width="1760" height="${h}" alt="" loading="lazy"><b>${title}</b><span>${fill(w.stepCount, { n: t.recorded.steps.length })}</span></a></li>`;
+    return `  <li><a href="./${page}/"><img src="../../pictures/${page}/${t.recorded.result}" width="1760" height="${h}" alt="" loading="lazy"><b>${title}</b><span>${fill(t.recorded.steps.length === 1 ? w.oneStep : w.stepCount, { n: t.recorded.steps.length })}</span></a></li>`;
   });
   return {
     title: escape(w.howTo),
@@ -371,9 +415,11 @@ function gallery({ contents, language, howTo }) {
  * The mark over a step's picture, in the picture's own pixels: Meno's guide
  * ring round the part a step is done at (two for a double click, filled for
  * a long press, a dot at its corner for a right click), a ring round a point
- * of the page, a path for a drag or a chain led; a key, under the picture.
+ * of the page, a path for a drag or a chain led; a key, under the picture,
+ * and words typed where nothing was marked, none. `id`, the step's: the
+ * path's head is its own on a page of several.
  */
-export function markSvg(mark, size) {
+export function markSvg(mark, size, id = "step") {
   const pad = 8;
   const part = mark.w > 0 || mark.h > 0;
   const ring = (grow = 0) =>
@@ -382,8 +428,11 @@ export function markSvg(mark, size) {
       : `<circle cx="${mark.x}" cy="${mark.y}" r="${30 + grow}"/>`;
   let shape;
   switch (mark.kind) {
-    case "click":
     case "type":
+      if (mark.x === undefined) return "";
+      shape = ring();
+      break;
+    case "click":
       shape = ring();
       break;
     case "doubleclick":
@@ -401,13 +450,14 @@ export function markSvg(mark, size) {
     case "trace": {
       const points = corners(mark.path).map(([x, y]) => `${x},${y}`).join(" ");
       // (a head at each corner as well as at the end: a ring led back to where it began shows its way round)
-      shape = `<circle cx="${mark.path[0][0]}" cy="${mark.path[0][1]}" r="10" class="dot"/><polyline points="${points}" marker-mid="url(#head)" marker-end="url(#head)"/>`;
+      shape = `<circle cx="${mark.path[0][0]}" cy="${mark.path[0][1]}" r="10" class="dot"/><polyline points="${points}" marker-mid="url(#head_${id})" marker-end="url(#head_${id})"/>`;
       break;
     }
     default:
       return "";
   }
-  const head = '<defs><marker id="head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="34" markerHeight="34" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" class="tip"/></marker></defs>';
+  // (head_: no section's or step's id has a _)
+  const head = `<defs><marker id="head_${id}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="34" markerHeight="34" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" class="tip"/></marker></defs>`;
   return `<svg class="mark" viewBox="0 0 ${size.width} ${size.height}" aria-hidden="true">${mark.kind === "drag" || mark.kind === "trace" ? head : ""}<g class="halo">${shape}</g><g class="line">${shape}</g></svg>`;
 }
 
@@ -456,14 +506,14 @@ function tutorial({ contents, language, page, t, link }) {
     const c = cropAround(st.mark, size);
     const pct = (v) => `${+v.toFixed(3)}%`;
     const place = `width:${pct((100 * size.width) / c.width)};left:${pct((-100 * c.x) / c.width)};top:${pct((-100 * c.y) / c.height)}`;
-    return `<li id="${st.id}">\n  <p><span>${words[st.id]}</span></p>\n  <figure class="shot near" style="aspect-ratio:${size.width} / ${size.height}"><div class="view" style="${place}"><img src="${pics}${st.shot}" width="1760" height="${h}" alt="" loading="lazy">${markSvg(st.mark, size)}</div>${key}</figure>\n</li>`;
+    return `<li id="${st.id}">\n  <p><span>${words[st.id]}</span></p>\n  <figure class="shot near" style="aspect-ratio:${size.width} / ${size.height}" tabindex="0" role="button" aria-expanded="false" aria-label="${escape(w.wholeWindow)}"><div class="view" style="${place}"><img src="${pics}${st.shot}" width="1760" height="${h}" alt="" loading="lazy">${markSvg(st.mark, size, st.id)}</div>${key}</figure>\n</li>`;
   });
   const need = needs?.length ? `\n<p class="needs"><span>${escape(w.needs)}</span> ${needs.map((n) => `<b>${escape(n)}</b>`).join(" ")}</p>` : "";
   return {
     title: parsed.title,
     description: parsed.description,
     headings: [],
-    html: `<p class="lead">${parsed.html.match(/^<p class="lead">(.*)<\/p>/)[1]}</p>${need}\n<figure class="shot result"><img src="${pics}${result}" width="1760" height="${h}" alt=""></figure>\n<ol class="steps">\n${items.join("\n")}\n</ol>${meno ? `\n<p class="pictures">${fill(w.pictures, { version: meno })}</p>` : ""}`,
+    html: `<p class="lead">${parsed.html.match(/^<p class="lead">(.*)<\/p>/)[1]}</p>${need}\n<figure class="shot result"><img src="${pics}${result}" width="1760" height="${h}" alt="${escape(w.resultAlt)}"></figure>\n<ol class="steps">\n${items.join("\n")}\n</ol>${meno ? `\n<p class="pictures">${fill(w.pictures, { version: meno })}</p>` : ""}`,
   };
 }
 
@@ -576,7 +626,7 @@ ${alternates.join("\n")}
 <link rel="stylesheet" href="${manual}manual.css">
 </head>
 <body>
-<a class="skip" href="#page">${escape(w.skip)}</a>
+<a class="skip" href="#${FRAME_ID}">${escape(w.skip)}</a>
 <div class="honeycomb" aria-hidden="true"></div>
 
 <header class="top">
@@ -593,7 +643,7 @@ ${alternates.join("\n")}
 
 <div class="wrap layout">
 ${side}
-<main id="page">
+<main id="${FRAME_ID}">
 <article${isHowTo ? ' class="how"' : ""}>
 <h1>${parsed.title}</h1>
 ${parsed.html}${list}

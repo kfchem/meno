@@ -98,7 +98,8 @@ A gallery of what Meno makes (`/manual/<language>/how-to/`), each opening
 on the steps that make it, from the very first click: for each step its
 words, then a picture of the window with the spot marked - the ring Meno's
 own guides draw round a part - shown near the spot, its words readable, and
-opening out to the whole window when clicked.
+opening out to the whole window when clicked, or from the keyboard (Enter
+or Space).
 
 | | |
 |---|---|
@@ -113,4 +114,12 @@ window gives it (`scripts/gui/README.md`, *Recording a how-to page*), and
 recorded again whenever the window changes. The words are written here, in
 both languages, and a recording never touches them. The build refuses words
 whose steps are not the recording's - the same ids, in the same order - and
-a recording whose pictures are not there.
+a recording whose pictures are not there, or whose marks are not what a mark
+of their kind holds: a number that is not one, a step with no mark, a path
+of fewer than two points; each said by its step. A step's id is one of its
+own on the page: no section's, and not `page`, the page's own content's.
+
+A question about the network is the reader's to answer, never a run's: its
+*Allow and download* is recorded with `-NotDone` and left, and the run goes
+on in a profile where it was answered. A step that would answer one yes
+without `-NotDone` stops the run.

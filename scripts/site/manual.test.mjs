@@ -156,7 +156,7 @@ describe("the manual's front door", () => {
 function withHowTo(over = {}) {
   const m = manual();
   m.contents.howTo = ["film"];
-  const more = { howTo: "How do I?", howToLead: "Pick one.", needs: "Needs", stepCount: "{n} steps", pictures: "Pictures from Meno {version}." };
+  const more = { howTo: "How do I?", howToLead: "Pick one.", needs: "Needs", stepCount: "{n} steps", pictures: "Pictures from Meno {version}.", oneStep: "1 step", resultAlt: "Done", wholeWindow: "Whole" };
   Object.assign(m.contents.words.en, more);
   Object.assign(m.contents.words.xx, more);
   const words = (title) => `# ${title}\n\nA film.\n\n1. {#settings} Click *Settings*.\n2. {#add} Press *Add*.\n`;
@@ -219,9 +219,10 @@ describe("the how-to pages", () => {
     expect(markSvg({ kind: "click", x: 100, y: 100, w: 50, h: 20 }, size)).toContain('<g class="line"><rect x="92" y="92" width="66" height="36" rx="16"/></g>');
     expect(markSvg({ kind: "doubleclick", x: 100, y: 100, w: 50, h: 20 }, size).match(/<rect/g)).toHaveLength(4);
     expect(markSvg({ kind: "rightclick", x: 600, y: 400, w: 0, h: 0 }, size)).toContain('<circle cx="600" cy="400" r="30"/><circle cx="621" cy="379" r="9" class="dot"/>');
-    expect(markSvg({ kind: "trace", path: [[10, 10], [60, 40]] }, size)).toContain('<polyline points="10,10 60,40" marker-mid="url(#head)" marker-end="url(#head)"/>');
+    expect(markSvg({ kind: "trace", path: [[10, 10], [60, 40]] }, size)).toContain('<polyline points="10,10 60,40" marker-mid="url(#head_step)" marker-end="url(#head_step)"/>');
     expect(corners([[0, 0], [25, 0], [50, 0], [50, 25], [50, 50]])).toEqual([[0, 0], [50, 0], [50, 50]]);
     expect(markSvg({ kind: "key", text: "Enter" }, size)).toBe("");
+    expect(markSvg({ kind: "type", text: "OMe" }, size)).toBe("");
   });
 
   it("show a key pressed as its cap, and a shortcut with the Mac's command key", () => {
@@ -231,6 +232,51 @@ describe("the how-to pages", () => {
     const page = buildManual(m).get("en/how-to/film/index.html");
     expect(page).toContain('<kbd class="key">Enter</kbd>');
     expect(page).toContain('<kbd class="key">\u23181</kbd>');
+  });
+
+  it("give each path's head an id of its own, and say one step as one", () => {
+    const m = withHowTo();
+    const { steps } = m.howTo.film.recorded;
+    steps[0].mark = { kind: "trace", path: [[10, 10], [60, 40]] };
+    steps[1].mark = { kind: "drag", path: [[100, 100], [300, 120]] };
+    const page = buildManual(m).get("en/how-to/film/index.html");
+    expect(page.match(/<marker id="head_[a-z0-9-]+"/g)).toEqual(['<marker id="head_settings"', '<marker id="head_add"']);
+    expect(page).toContain('marker-end="url(#head_add)"');
+    const one = withHowTo();
+    one.howTo.film.recorded.steps.pop();
+    one.howTo.film.words.en = one.howTo.film.words.xx = "# Film\n\nA film.\n\n1. {#settings} Click *Settings*.\n";
+    one.howTo.film.shots = ["01-settings.webp", "result.webp"];
+    expect(buildManual(one).get("en/how-to/index.html")).toContain("<span>1 step</span>");
+  });
+
+  it("say what the result shows, and open a step's picture from the keyboard as well", () => {
+    const page = buildManual(withHowTo()).get("en/how-to/film/index.html");
+    expect(page).toContain('<img src="../../../pictures/film/result.webp" width="1760" height="1144" alt="Done">');
+    expect(page).toContain('<figure class="shot near" style="aspect-ratio:2400 / 1560" tabindex="0" role="button" aria-expanded="false" aria-label="Whole">');
+  });
+
+  it("refuse a recording whose numbers are not numbers, a step with no mark, and a drag with no way", () => {
+    const broken = (change) => {
+      const m = withHowTo();
+      change(m.howTo.film.recorded.steps);
+      return () => buildManual(m);
+    };
+    expect(broken((st) => (st[1].mark.x = "2094"))).toThrow(/how-to\/film\/steps\.json: step 2 \(add\): a click's mark is where it is done, x, y, w and h, in numbers/);
+    expect(broken((st) => (st[1].mark.w = Number.NaN))).toThrow(/step 2 \(add\): a click's mark/);
+    expect(broken((st) => (st[1].mark.near = [210, 698, "1980", 100]))).toThrow(/step 2 \(add\): what is near it/);
+    expect(broken((st) => delete st[0].mark)).toThrow(/step 1 \(settings\): its mark, of a kind there is/);
+    expect(broken((st) => (st[0].mark = { kind: "drag" }))).toThrow(/step 1 \(settings\): a drag's mark is its way, two points or more/);
+    expect(broken((st) => (st[0].mark = { kind: "trace", path: [[1, 2], [3]] }))).toThrow(/a trace's mark is its way/);
+    expect(broken((st) => (st[0].mark = { kind: "key" }))).toThrow(/step 1 \(settings\): a key's mark says what is pressed/);
+    expect(broken((st) => (st[1].id = "settings"))).toThrow(/step 2 \(settings\): a second step settings/);
+    expect(broken((st) => (st[0].mark = { kind: "drag", path: [[1, 2], [3, 4]] }))).not.toThrow();
+    expect(broken((st) => (st[0].mark = { kind: "type", text: "OMe" }))).not.toThrow();
+  });
+
+  it("refuse an item's id that is a section's on its page, or the page's own", () => {
+    expect(() => parsePage("# T\n\nA.\n\n## One {#one}\n\n1. {#one} Step.\n", "x.md")).toThrow(/x\.md:7: \{#one\} is a section's id on this page too/);
+    expect(() => parsePage("# T\n\nA.\n\n1. {#page} Step.\n", "x.md")).toThrow(/x\.md:5: \{#page\} is the page's own/);
+    expect(() => parsePage("# T\n\nA.\n\n## P {#page}\n", "x.md")).toThrow(/x\.md:5: #page is the page's own/);
   });
 
   it("show a step near its spot, with what tells where it is, in the window's proportions", () => {

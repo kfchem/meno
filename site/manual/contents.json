@@ -17,7 +17,10 @@
       "howToLead": "Pick what you want to make: each opens on its steps, from the very first click.",
       "needs": "Needs",
       "stepCount": "{n} steps",
-      "pictures": "Pictures from Meno {version}."
+      "pictures": "Pictures from Meno {version}.",
+      "oneStep": "1 step",
+      "resultAlt": "Meno's window once the steps are done",
+      "wholeWindow": "Show the whole window"
     },
     "ja": {
       "language": "日本語",
@@ -34,7 +37,10 @@
       "howToLead": "作りたいものを選ぶと、最初のクリックから順に、手順を一つずつ示します。",
       "needs": "必要なもの",
       "stepCount": "{n} ステップ",
-      "pictures": "画面は Meno {version} のものです。"
+      "pictures": "画面は Meno {version} のものです。",
+      "oneStep": "1 ステップ",
+      "resultAlt": "手順を終えたときの Meno の画面",
+      "wholeWindow": "ウィンドウ全体を表示"
     }
   },
   "howTo": []
