@@ -3,7 +3,7 @@ import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
 import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
 import { diagramHow, diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
-import { CHART_PX, TABLE_SHOWN_ROWS } from "./look";
+import { CHART_PX, TABLE_COLUMN_GAP_PX, TABLE_FOOT_PX, TABLE_GAP_PX, TABLE_HEAD_PX, TABLE_ROW_PX, TABLE_SHOWN_ROWS } from "./look";
 
 /** How many of a table's rows its frame shows. */
 const SHOWN_ROWS = TABLE_SHOWN_ROWS;
@@ -37,13 +37,14 @@ export function TableBody({ table }: { table: Table }) {
     ...(table.left.length ? [`${table.left.length} left`] : []),
   ].join(" · ");
   return (
-    <div className="flex flex-col gap-1.5 w-full text-[11px] leading-4" data-set-table="">
+    // (each height set as the set's frame counts it - look TABLE_*_PX - never left to its text)
+    <div className="flex flex-col w-full text-[11px] leading-4" style={{ gap: TABLE_GAP_PX }} data-set-table="">
       <table className="w-full table-fixed border-collapse tabular-nums">
         <thead>
-          <tr>
-            {columns.map((c) => (
+          <tr style={{ height: TABLE_HEAD_PX }}>
+            {columns.map((c, j) => (
               // (a number's head over its numbers, at the right as they are; any other at the left)
-              <th key={c.name} className={`truncate font-medium text-gh-gray border-b border-gh-line pb-0.5 pr-2 ${c.kind === "number" ? "text-right" : "text-left"}`} title={headTitle(c)}>
+              <th key={c.name} className={`truncate font-medium text-gh-gray border-b border-gh-line p-0 ${c.kind === "number" ? "text-right" : "text-left"}`} style={{ paddingLeft: j ? TABLE_COLUMN_GAP_PX : 0 }} title={headTitle(c)}>
                 {headOf(c)}
               </th>
             ))}
@@ -51,9 +52,9 @@ export function TableBody({ table }: { table: Table }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={i} style={{ height: TABLE_ROW_PX }}>
               {columns.map((c, j) => (
-                <td key={c.name} className={`truncate pr-2 text-gh-black ${c.kind === "number" ? "text-right" : ""}`}>
+                <td key={c.name} className={`truncate p-0 text-gh-black ${c.kind === "number" ? "text-right" : ""}`} style={{ paddingLeft: j ? TABLE_COLUMN_GAP_PX : 0 }}>
                   {cellText(r[j])}
                 </td>
               ))}
@@ -61,7 +62,7 @@ export function TableBody({ table }: { table: Table }) {
           ))}
         </tbody>
       </table>
-      <div className="text-[10px] text-gh-gray" title={[...table.unread.map((u) => `${u.column ? `${u.column}, ` : ""}row ${u.row}: ${u.why}`), ...table.left.map((l) => `${l.column}: ${l.why}`)].join("\n") || undefined}>
+      <div className="text-[10px] text-gh-gray" style={{ height: TABLE_FOOT_PX }} title={[...table.unread.map((u) => `${u.column ? `${u.column}, ` : ""}row ${u.row}: ${u.why}`), ...table.left.map((l) => `${l.column}: ${l.why}`)].join("\n") || undefined}>
         {said}
       </div>
     </div>

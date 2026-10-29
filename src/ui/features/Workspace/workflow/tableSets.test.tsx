@@ -10,7 +10,7 @@ import { takenBy } from "./kinds";
 import { addTableSet, membersSettled, TABLE_SET, tableSetSize } from "./model";
 import { partsOf } from "./parts";
 import { NumberBody, TableBody } from "./ValueBody";
-import { NAME_DOWN, PX, SET_PAD, tableBodyPx } from "./look";
+import { NAME_DOWN, PX, SET_PAD, TABLE_COLUMN_GAP_PX, TABLE_FOOT_PX, TABLE_GAP_PX, TABLE_HEAD_PX, TABLE_ROW_PX, tableBodyPx } from "./look";
 
 const TABLE = readTable("name,energy (kcal/mol),ok\na,1.5,yes\nb,n/a,no\nc,2.25,yes\n");
 
@@ -133,6 +133,16 @@ describe("a table's heads, and its frame", () => {
     expect(html).not.toMatch(/>reaction\.product</);
     expect(html).toMatch(/<th class="[^"]*text-right[^"]*"[^>]*title="distance \(Å\)"/);
     expect(html).toMatch(/<th class="[^"]*text-left[^"]*"[^>]*title="Product/);
+  });
+
+  it("draws each height the set's frame counts on - set on it, never left to its text - and room before each column after the first", () => {
+    const html = renderToString(<TableBody table={changes} />);
+    expect(html).toContain(`gap:${TABLE_GAP_PX}px`);
+    expect(html).toContain(`<tr style="height:${TABLE_HEAD_PX}px">`);
+    expect(html.match(new RegExp(`<tr style="height:${TABLE_ROW_PX}px">`, "g"))?.length).toBe(changes.rows.length);
+    expect(html).toContain(`height:${TABLE_FOOT_PX}px`);
+    expect(html.match(new RegExp(`padding-left:${TABLE_COLUMN_GAP_PX}px`, "g"))?.length).toBe((changes.columns.length - 1) * (changes.rows.length + 1));
+    expect(tableBodyPx(changes.rows.length)).toBe(TABLE_HEAD_PX + TABLE_GAP_PX + changes.rows.length * TABLE_ROW_PX + TABLE_FOOT_PX);
   });
 
   it("keeps a column's label in the file, and reads one that does not read as none, the column kept", () => {
