@@ -5,7 +5,7 @@
  *
  * A name's first unit sits on its atom and the rest follows it, read
  * outward from its bond: leftward from a lone bond coming in from the
- * right (IUPAC GR-2.3: TBSO), rightward otherwise. A lone bond within 35
+ * right (IUPAC GR-2.3.3, GR-2.1.6: TBSO), rightward otherwise. A lone bond within 35
  * degrees of upright may be read either way, and is read the way that has
  * more room - as a chemist writes OAc or AcO under a ring as there is
  * space - the usual way where both have as much.

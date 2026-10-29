@@ -924,7 +924,7 @@ All hover-based, as above.
     a pseudo-asymmetric centre; an axis's a upright and set below, Ra and
     Sa (IUPAC 2013, P-91.2.1.1). Bare in Meno's style, and in RSC's,
     Wiley's and Nature's, as IUPAC's recommendations for structure
-    diagrams draw them (Brecher 2008, GR-11; the journals say nothing of
+    diagrams draw them (Brecher 2008, GR-11.1; the journals say nothing of
     them in drawings, and Wiley's point to those recommendations). In
     parentheses, (R), in ACS 1996's, as ACS writes them in names. A
     setting of the drawing style: *R, S, E and Z*.

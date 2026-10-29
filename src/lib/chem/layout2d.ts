@@ -2184,7 +2184,7 @@ const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
  * R₁); an atom list in brackets (GR-9.1); any other label - an
  * abbreviation, a class such as Ar, a reserved atom type such as A or Q -
  * with its counts subscript, read outward from its bond where that comes in
- * from the right (GR-2.3: TBSO). `anchor` is the run that sits on the atom.
+ * from the right (GR-2.3.3, GR-2.1.6: TBSO). `anchor` is the run that sits on the atom.
  */
 function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: number } | null {
   if (a.el === "R#" || (a.rgroups?.length && !ELEMENT_SYMBOLS.has(a.el))) {
@@ -4110,7 +4110,7 @@ const QUERY_LABEL = {
   any: "Any",
 } as const;
 
-/** An annotation's size against an atom label's: set smaller, so it reads as one (IUPAC GR-11). */
+/** An annotation's size against an atom label's: set smaller, so it reads as one (IUPAC GR-11.1). */
 const ANNOTATION_SIZE = 0.8;
 
 /** How a reacting centre that is not drawn with strokes is tagged ("CTfile Formats": 1, a centre; 2, no change). */
