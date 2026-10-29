@@ -2762,7 +2762,10 @@ doubled quotes); a byte-order mark before it is left out.
   2026-10-30): "Product" over the column named "reaction.product". Its
   name stays its key - what rows are matched on, what a condition names -
   and hovering on the head says both ("Product · reaction.product"). A
-  number column's head stands at the right, over its numbers.
+  number column's head stands at the right, over its numbers, and its
+  numbers are written with one count of decimals - the most any of those
+  shown needs - so that their points line up ("0.00" over "0.37"); the
+  value kept is as it came.
 - **A table's set is as tall as the rows it shows** (`tableSetSize`): its
   heads, up to six rows, and the line saying what it is, with nothing
   under it.

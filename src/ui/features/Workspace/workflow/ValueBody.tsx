@@ -19,7 +19,10 @@ const headOf = (c: TableColumn) => {
 const headTitle = (c: TableColumn) => (c.label && c.label !== c.name ? `${headOf(c)} \u00b7 ${c.name}` : headOf(c));
 
 /** A cell as its frame shows it: a number as Meno writes numbers, true or false, text as it is, none as a dash. */
-const cellText = (v: string | number | boolean | null) => (v == null ? "–" : typeof v === "number" ? numberText(v) : typeof v === "boolean" ? (v ? "true" : "false") : v);
+const cellText = (v: string | number | boolean | null, decimals?: number) => (v == null ? "–" : typeof v === "number" ? numberText(v, decimals) : typeof v === "boolean" ? (v ? "true" : "false") : v);
+/** How many decimals a column's numbers are written with: as many as the one of those shown that needs most (`numberText`), so that their points line up - "0.00" over "0.37". */
+const decimalsOf = (values: readonly (string | number | boolean | null)[]) =>
+  Math.max(0, ...values.map((v) => (typeof v === "number" ? (numberText(v).split(".")[1]?.length ?? 0) : 0)));
 
 /**
  * A set holding a table, inside its frame (docs/WORKFLOWS.md, *Tables*):
@@ -30,6 +33,7 @@ const cellText = (v: string | number | boolean | null) => (v == null ? "–" : t
 export function TableBody({ table }: { table: Table }) {
   const columns = table.columns.slice(0, SHOWN_COLUMNS);
   const rows = table.rows.slice(0, SHOWN_ROWS);
+  const decimals = columns.map((c, j) => (c.kind === "number" ? decimalsOf(rows.map((r) => r[j])) : undefined));
   const said = [
     `${table.rows.length.toLocaleString("en-US")} ${table.rows.length === 1 ? "row" : "rows"} · ${table.columns.length} ${table.columns.length === 1 ? "column" : "columns"}`,
     ...(table.columns.length > SHOWN_COLUMNS ? [`the first ${SHOWN_COLUMNS} shown`] : []),
@@ -55,7 +59,7 @@ export function TableBody({ table }: { table: Table }) {
             <tr key={i} style={{ height: TABLE_ROW_PX }}>
               {columns.map((c, j) => (
                 <td key={c.name} className={`truncate p-0 text-gh-black ${c.kind === "number" ? "text-right" : ""}`} style={{ paddingLeft: j ? TABLE_COLUMN_GAP_PX : 0 }}>
-                  {cellText(r[j])}
+                  {cellText(r[j], decimals[j])}
                 </td>
               ))}
             </tr>

@@ -145,6 +145,22 @@ describe("a table's heads, and its frame", () => {
     expect(tableBodyPx(changes.rows.length)).toBe(TABLE_HEAD_PX + TABLE_GAP_PX + changes.rows.length * TABLE_ROW_PX + TABLE_FOOT_PX);
   });
 
+  it("writes a number column's numbers with one count of decimals, the most any shown needs, so their points line up", () => {
+    const energies: Table = {
+      columns: [
+        { name: "name", kind: "text" },
+        { name: "energy", kind: "number", unit: "kcal/mol" },
+        { name: "atom", kind: "number", unit: "none" },
+      ],
+      rows: [["a", 0, 1], ["b", 0.37, 12], ["c", 1.5, 3], ["d", -2, 4]],
+      unread: [],
+      left: [],
+    };
+    const cells = [...renderToString(<TableBody table={energies} />).matchAll(/<td[^>]*>([^<]*)<\/td>/g)].map((m) => m[1]);
+    expect(cells.filter((_, i) => i % 3 === 1)).toEqual(["0.00", "0.37", "1.50", "\u22122.00"]);
+    expect(cells.filter((_, i) => i % 3 === 2)).toEqual(["1", "12", "3", "4"]);
+  });
+
   it("keeps a column's label in the file, and reads one that does not read as none, the column kept", () => {
     const lost = () => {};
     expect(tableIn(JSON.parse(JSON.stringify(changes)), lost)).toEqual(changes);
