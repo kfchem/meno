@@ -3,6 +3,11 @@ import type { Restraint } from "../../../../lib/entry";
 import type { SetEntry } from "./entries";
 import { kindInfo } from "./kinds";
 import { runMeno, runMenoPair } from "./meno";
+import { menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
+import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import type { Molecule3D } from "../store/types";
+import { readWorkspace, workspaceText } from "../utils/workspace";
 
 /** Restraints and Torsion restraints as a workflow runs them, on entries whose places are set by hand. */
 
@@ -136,5 +141,30 @@ describe("Torsion restraints, as a step", () => {
     expect(kindInfo("torsion-restraints").inputs?.map((p) => p.name)).toEqual(["Molecules", "Reference"]);
     expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("held at 180°, +50 kcal/mol/rad², matched on product");
     expect(kindInfo("torsion-restraints").how?.({ step: "50" })).toBe("held at 180°, +50 kcal/mol/rad²");
+  });
+});
+
+describe("restraints in a saved workspace", () => {
+  it("are read back as they were when the workspace is opened again, none left out", () => {
+    const held = runMenoPair("torsion-restraints", { entries: [dce(true)], holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, { step: "50" });
+    if (!held.ok) throw new Error(held.said);
+    const e = held.kept[0];
+    const m: Omit<Molecule3D, "id"> = {
+      at: { x: 0, y: 0 },
+      atoms: e.atoms.map((a, i) => ({ el: a.el, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })),
+      bonds: e.bonds.map((b) => ({ ...b })),
+      properties: [e.properties!],
+    } as Omit<Molecule3D, "id">;
+    const saving = createWorkspaceDocument();
+    const store = createEditorStore(saving);
+    connectStoreToDocument(store, saving);
+    saving.edit("as it was", () => addMolecule3d(emptyWorkspaceDocument(), m));
+    const ws = readWorkspace(readMenoFile(menoFileBytes(workspaceText(store.getState()), [])).workspace)!;
+    expect(ws.leftOut).toBeUndefined();
+    const opened = createWorkspaceDocument();
+    const again = createEditorStore(opened);
+    connectStoreToDocument(again, opened);
+    again.getState().openWorkspace(ws, true);
+    expect(again.getState().molecules3d[0].properties?.[0]?.restraints).toEqual(e.properties!.restraints);
   });
 });
