@@ -57,7 +57,34 @@ export type StepPort = {
   takes: readonly ValueKind[];
   /** It reads what comes in as a table (lib/table `moleculesAsTable`) - each molecule as it is, a conformer set's frames its conformers - not as a step's entries: a set mixing conformer sets with other molecules goes in (`readsAsTable`). */
   asTable?: true;
+  /**
+   * The step runs with nothing wired into it (*where wanted*): an Energy
+   * diagram's *Connects*, Add's *Number*. A kind's first input is never
+   * so; every later one not marked is needed (`laterPortsNeed`). Its look
+   * is a port's like any other: the card's line names what is needed, and
+   * never this one.
+   */
+  optional?: true;
+  /** Another optional port's id, wired with it or not at all - a saddle point's two sides: both, or neither. */
+  together?: string;
 };
+
+/**
+ * What a step's later inputs still need, as `isWired` says which are
+ * wired: the first one not marked optional with nothing wired into it
+ * ("Nothing comes into Second"), or an optional one wired without the one
+ * it goes together with ("Product side is wired: wire Reactant side too,
+ * or neither"). None, where they are as they may be.
+ */
+export function laterPortsNeed(ports: readonly StepPort[], isWired: (id: string) => boolean): string | null {
+  for (const port of ports.slice(1)) {
+    if (isWired(port.id)) continue;
+    if (!port.optional) return `Nothing comes into ${port.name}`;
+    const other = port.together ? ports.find((p) => p.id === port.together) : undefined;
+    if (other && isWired(other.id)) return `${other.name} is wired: wire ${port.name} too, or neither`;
+  }
+  return null;
+}
 
 /**
  * An exit a kind gives. Every exit is a result set of its own, made with the
@@ -383,7 +410,7 @@ export const KINDS: readonly KindInfo[] = [
     made: "Energy diagram",
     inputs: [
       { id: "levels", name: "Levels", takes: ["molecules", "conformers"], asTable: true },
-      { id: "connects", name: "Connects", takes: ["table"] },
+      { id: "connects", name: "Connects", takes: ["table"], optional: true },
     ],
     // (on its card, each a list of what comes into Levels - its energies, its levels: workflow/diagramOptions)
     options: [
