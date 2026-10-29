@@ -239,6 +239,42 @@ class RenderScriptNames(unittest.TestCase):
         self.assertIn(f"FASTER = {worker.FASTER!r}".replace("'", '"'), src)
 
 
+class FilmStrips(unittest.TestCase):
+    """How the frames a film plays become the sequencer's image strips (render.py `strip_runs`): a strip reads every file from
+    its first file's folder, so each run from one folder is a strip of its own."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "strip_runs")
+        ns = {"os": os}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), "render.py", "exec"), ns)
+        cls.runs = staticmethod(ns["strip_runs"])
+
+    def test_every_film_frame_is_its_own_file_across_folders_of_the_same_names(self):
+        # (a liquid change of three molecules, Once: melt 1 forward, reform 1, melt 2 backward, melt 2 forward from its second,
+        # reform 2, melt 3 backward - three folders holding the very same names, one of them played twice and reversed)
+        d = lambda name: os.path.join("job", "frames", name)
+        f = lambda folder, n: os.path.join(d(folder), f"f_{n:04d}.png")
+        frames = ([f("melt-01", n) for n in (1, 2, 3)] + [f("reform-01", n) for n in (1, 2)] + [f("melt-02", n) for n in (3, 2, 1)]
+                  + [f("melt-02", n) for n in (2, 3)] + [f("reform-02", n) for n in (1, 2)] + [f("melt-03", n) for n in (3, 2, 1)])
+        runs = self.runs(frames)
+        # (each film frame, as its strip plays it: its strip's folder, the name at its place in the strip)
+        played = []
+        for folder, names, start in runs:
+            self.assertEqual(start, len(played) + 1)
+            played += [os.path.join(folder, name) for name in names]
+        self.assertEqual(played, frames)
+        # (one run for melt 2 played backward then forward: one folder, its names in the order played)
+        self.assertEqual([(os.path.basename(r[0]), r[1]) for r in runs][2], ("melt-02", ["f_0003.png", "f_0002.png", "f_0001.png", "f_0002.png", "f_0003.png"]))
+        self.assertEqual(len(runs), 5)
+
+    def test_a_film_of_one_folder_is_one_strip(self):
+        frames = [os.path.join("job", "frames", f"f_{n:04d}.png") for n in (1, 2, 3, 2)]
+        self.assertEqual(self.runs(frames), [(os.path.join("job", "frames"), ["f_0001.png", "f_0002.png", "f_0003.png", "f_0002.png"], 1)])
+
+
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
@@ -459,6 +495,32 @@ class MotionsRender(unittest.TestCase):
     def test_a_change_of_one_molecule_says_it_needs_two(self):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
         self.assertEqual(why, "render.py: a change of molecules needs two molecules or more, rendered together")
+
+    def test_a_portrait_film_keeps_a_tall_molecule_whole(self):
+        # (a chain standing up the canvas, in a frame twice as tall as wide: Blender's Auto would put the sensor across the
+        # height, and the studio's framing - which takes it across the width - would cut the chain's ends off at the top and
+        # the bottom. The frame's top and bottom rows: paper, not carbon)
+        chain = {"atoms": [{"el": "C", "p": [0.6 * (i % 2), 1.3 * i - 7.0, 0.0]} for i in range(12)],
+                 "bonds": [{"a": i, "b": i + 1, "order": 1} for i in range(11)]}
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [chain]}}}]}
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 2, "fps": 30, "motion": "pulse"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            probe = ("import bpy, numpy as np\n"
+                     "im = bpy.data.images.load('frames/f_0002.png'); W, H = im.size\n"
+                     "x = np.empty(W * H * 4, np.float32); im.pixels.foreach_get(x); x = x.reshape(H, W, 4)[..., :3].mean(axis=2)\n"
+                     "print('EDGES', float(x[:3].min()), float(x[-3:].min()), float(x.min()))\n")
+            look = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", probe], cwd=d, capture_output=True, text=True, timeout=300)
+            bottom, top, darkest = (float(v) for v in re.search(r"^EDGES (\S+) (\S+) (\S+)$", look.stdout, re.M).groups())
+            # (the chain is in the frame, dark; its rows nearest the frame's edges are the paper's, as light as it is)
+            self.assertLess(darkest, 0.3)
+            self.assertGreater(min(top, bottom), 0.6, (top, bottom, darkest))
 
     def test_a_cycle_renders_half_and_plays_it_back(self):
         # (assemble loops as a cycle: 6 frames played, 4 rendered - forward, then back)

@@ -292,7 +292,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Kind | Icon (Heroicons' outline) | Takes | Gives |
 | --- | --- | --- | --- |
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
-| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers |
+| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
@@ -431,7 +431,7 @@ are read as Export reads them (`pluginEntry`), and given with it. *Show
 log* and *Show files* are on the step's menu (right-click), once it has
 run.
 
-Another click on its title, its *Close*, or Escape closes it; a press elsewhere does not - the page is worked on (panned, scrolled, other cards) while its options stay open (2026-10-14). The
+A double-click on its card closes it, as do its *Close* and Escape; it never closes by itself (the maintainer, 2026-10-28): a single click on it again leaves it open, and a press elsewhere, a zoom, the selection changing, or a run starting or ending do not close it - the page is worked on (panned, zoomed, other cards opened) while its options stay open (2026-10-14). A double-click on a closed card opens it and leaves it open (workflow/cardOpen). Zoomed out where its words are too small to read, its options stay open, each line of their words a grey bar where it lies, as a text's words are (workflow/TextBars), and nothing in them can be pressed until they are read again. The
 step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere
@@ -1081,6 +1081,13 @@ Decided while building it, for the maintainer to confirm:
   hover blue only for a wire under the pointer, as for an atom.
 - **A step's card is 208 px wide** at 100 %, its ports 28 px below its
   top: wires join where they always did as the card opens.
+- **A port** is round at every zoom - a ring a hair thick, or filled in
+  the accent while a wire may join it - and stands exactly at its wire's
+  end. It is 9 hairs across on the screen where the page is near; zoomed
+  out, never more than its own 11 page px - it shrinks with the page from
+  there - nor than a sixth of its set's or card's height, its ring then at
+  most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
+  were far too big for their sets; look `portSize`).
 - **One layer of HTML for all sets and steps**: with a layer for each, a
   step's layer covered the ports of sets under it (ARCHITECTURE.md,
   *Workflows*).
@@ -2693,13 +2700,18 @@ each entry's number, then its energy).
   an energy diagram - is still drawn, its points, levels, lines and axes;
   only its words fade out, as a set's name and count do. A table and a
   number, all words, fade out whole. All of these, and a step's card's
-  words, fade with the zoom, not at once: from fully shown at 1.15 times
-  the least scale words are read at to gone at that scale, about two
-  notches of a mouse wheel (utils/pageScale `wordsShown`, `--words` on the
-  page's layer), as a molecule's chips do. A step's card's large icons,
-  which stand for its words where they are gone, come in only after, from
-  that scale to 1/1.15 of it (`standInShown`, `--stand-in`): the two are
-  never seen at once.
+  words, go where they are too small, never at once - and never faded with
+  the zoom (the maintainer, 2026-10-28: faded with the zoom, a zoom could
+  stop where words and icons were both half there; before that, 2026-10-25,
+  where both were all but gone). Past a threshold they switch: off below
+  the least scale words are read at, divided by 1.05, and on again only
+  above it times 1.05, so that a zoom stopped at it, or turned a little
+  back, does not switch them back and forth (utils/pageScale
+  `wordsReadAt`, utils/zoomSwitch `switchedAt`). Switched, they fade over
+  Meno's quick time, 120 ms, on its curve (`--words` on the page's layer,
+  a CSS transition), as a molecule's chips do; a step's card's large icons,
+  which stand for its words where they are gone, fade in as they go
+  (`--stand-in`). What is pressed on them switches with them.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

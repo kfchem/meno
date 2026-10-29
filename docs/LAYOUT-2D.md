@@ -634,7 +634,7 @@ A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take
 (`src/lib/layout/names.ts`). Its first unit sits on its atom and the rest
 follows, read outward from its bond: leftward from a bond coming in from
-the right (TBSO, IUPAC GR-2.3), rightward otherwise - and from its bonds
+the right (TBSO, IUPAC GR-2.3.3, GR-2.1.6), rightward otherwise - and from its bonds
 where it has several, as a ring's atom has: leftward where they come in
 from the right all together, none leaving to the left (an NFmoc at a
 ring's lower left reads FmocN, away from the ring); a name of one unit
@@ -1022,8 +1022,16 @@ its parts in each other's way, `untangledKeeping` (`untangleKept.ts`) clears
 them as the engine clears its own (`untangle`): a branch turned off its
 angle, a little and then more, and at last the bond it hangs from drawn
 longer. Only moves that keep the arrangement are taken:
-- no ring's atom moves, nor any atom the caller keeps as drawn (a chair's),
-  by any move: a turn, or a bond drawn longer, which moves all beyond it;
+- no ring is turned, nor anything the caller keeps as drawn (a chair's). A
+  ring system, with what is kept as drawn on it, may be moved whole by a
+  bond drawn longer - its shape and its turn kept - by at most 0.6 of a
+  bond; anything else kept as drawn does not move at all (the maintainer,
+  2026-10-27);
+- no turn leaves two of an atom's bonds next to each other closer than 100
+  degrees, or 110 at an atom with a double bond, where that pair was not
+  already - each pair by its own angle, so a ring's narrow corner leaves
+  the wide angles at its atom wide (the maintainer, 2026-10-27: angles near
+  the style's, never squeezed to clear the way);
 - no atom's neighbour ends on the other side of another from where the
   regular drawing has it - a substituent across its bond, a chain's turn
   the other way. That is where the drawing has it, the regulariser seeing

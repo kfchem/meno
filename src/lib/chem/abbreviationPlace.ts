@@ -14,7 +14,11 @@ type P = { x: number; y: number };
  * The atoms an abbreviation stands for, placed: laid out by Meno's own
  * engine, `bondLength` apart, and turned so that the bond into it runs on
  * from `neighbour` - where the atom it is bonded to is, from the label's
- * atom - through the label's atom, where its first attachment sits.
+ * atom - through the label's atom, where its first attachment sits. Given
+ * where each of two or more atoms it is bonded to is, all at that one atom
+ * (an NMe in a chain, an NBoc in a ring), its own bonds there are set in
+ * the widest opening between those, on its bisector, as a drawn
+ * substituent's are (IUPAC GR-4.1.2).
  * Positions are from that atom (for one attached by nothing - a reagent, a
  * complex - from the middle of the whole), as an abbreviation from a file
  * has them. A pi system's star is set at its centre; a stereocentre is
@@ -23,7 +27,7 @@ type P = { x: number; y: number };
  */
 export function placedAbbreviation(
   label: string,
-  neighbour: P | null,
+  neighbour: P | readonly P[] | null,
   bondLength: number,
 ): AbbreviationStructure | null {
   const s = abbreviationStructure(label);
@@ -31,7 +35,7 @@ export function placedAbbreviation(
 }
 
 /** A structure laid out as `placedAbbreviation` lays out an abbreviation's. */
-export function placedStructure(given: GroupStructure, neighbour: P | null, bondLength: number): AbbreviationStructure {
+export function placedStructure(given: GroupStructure, neighbour: P | readonly P[] | null, bondLength: number): AbbreviationStructure {
   const s = drawnAsSaid(given);
   return placedFrom(given, s, layout2D(inputFor(s)), neighbour, bondLength);
 }
@@ -134,9 +138,10 @@ function placedFrom(
   given: GroupStructure,
   s: ReturnType<typeof drawnAsSaid>,
   laid: Layout2D,
-  neighbour: P | null,
+  neighbour: P | readonly P[] | null,
   bondLength: number,
 ): AbbreviationStructure {
+  const around = (Array.isArray(neighbour) ? neighbour : neighbour ? [neighbour as P] : []).filter((d) => Math.hypot(d.x, d.y) > 1e-9);
   const stars = new Map((s.haptic ?? []).map((h) => [h.star, h.atoms]));
   const head = s.attach[0] ?? 0;
   const from = s.atoms.length;
@@ -212,7 +217,7 @@ function placedFrom(
   // attached through a pi system: its centre as far again from the bond's
   // other end as the system is wide, so that its atoms keep clear of it
   const pi = stars.get(head);
-  const reach = pi && neighbour ? Math.max(...pi.map((k) => Math.hypot(laid.x[k] - laid.x[head], laid.y[k] - laid.y[head]))) : 0;
+  const reach = pi && around.length ? Math.max(...pi.map((k) => Math.hypot(laid.x[k] - laid.x[head], laid.y[k] - laid.y[head]))) : 0;
   const away = Math.hypot(into.x, into.y) || 1;
   // attached by nothing: its middle where the label was
   const xs = atoms.map((a) => a.at.x);
@@ -220,9 +225,15 @@ function placedFrom(
   const at = s.attach.length
     ? { x: laid.x[head] - (into.x / away) * reach, y: laid.y[head] - (into.y / away) * reach }
     : { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
-  // the way the bond runs now: from the neighbour to the label's atom
-  const want = neighbour && s.attach.length ? { x: -neighbour.x, y: -neighbour.y } : into;
-  const turn = s.attach.length ? Math.atan2(want.y, want.x) - Math.atan2(into.y, into.x) : 0;
+  // the way the bond runs now: from the neighbour to the label's atom - or,
+  // bonded at that atom to more than one, the way its own bonds there go
+  // together, into the widest opening between those (bonded at more than
+  // one of its atoms: on from all of them together)
+  const among = around.length > 1 && s.attach.length === 1;
+  const own = among ? ownWay(bonds, atoms, head) ?? into : into;
+  const back = around.length > 1 ? together(around) ?? around[0] : around[0];
+  const want = among ? widestOpening(around) : back && s.attach.length ? { x: -back.x, y: -back.y } : into;
+  const turn = s.attach.length ? Math.atan2(want.y, want.x) - Math.atan2(own.y, own.x) : 0;
   const cos = Math.cos(turn) * bondLength;
   const sin = Math.sin(turn) * bondLength;
   return {
@@ -242,6 +253,38 @@ function placedFrom(
     ...(s.haptic?.length ? { haptic: s.haptic } : {}),
     ...(given.lends?.some(Boolean) ? { lends: given.lends } : {}),
   };
+}
+
+/** The way an atom's bonds go together, from it (`together`). */
+function ownWay(bonds: AbbreviationStructure["bonds"], atoms: readonly { at: P }[], at: number): P | null {
+  const p = atoms[at].at;
+  const out = bonds.flatMap((b) => {
+    if (b.endpoints || (b.a1 !== at && b.a2 !== at)) return [];
+    const q = atoms[b.a1 === at ? b.a2 : b.a1].at;
+    return Math.hypot(q.x - p.x, q.y - p.y) > 1e-9 ? [{ x: q.x - p.x, y: q.y - p.y }] : [];
+  });
+  return together(out);
+}
+
+/** These directions together: the sum of them each as long as the other, or nothing where they cancel. */
+function together(ds: readonly P[]): P | null {
+  const sum = ds.reduce((t, d) => {
+    const l = Math.hypot(d.x, d.y);
+    return { x: t.x + d.x / l, y: t.y + d.y / l };
+  }, { x: 0, y: 0 });
+  return Math.hypot(sum.x, sum.y) > 1e-6 ? sum : null;
+}
+
+/** The bisector of the widest opening between these directions. */
+function widestOpening(ds: readonly P[]): P {
+  const t = ds.map((d) => Math.atan2(d.y, d.x)).sort((a, b) => a - b);
+  let widest = -1;
+  let at = 0;
+  t.forEach((a, k) => {
+    const gap = (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - a;
+    if (gap > widest + 1e-9) [widest, at] = [gap, a + gap / 2];
+  });
+  return { x: Math.cos(at), y: Math.sin(at) };
 }
 
 /** An atom of a structure, with what a drawing needs said of it besides. */

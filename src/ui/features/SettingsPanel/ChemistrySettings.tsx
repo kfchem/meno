@@ -3,11 +3,15 @@ import { chemAtHand, chemWorker, rolePlugin, useChem } from "../../../lib/roles/
 import RoleChoices from "./RoleChoices";
 import {
   useAppSettings,
+  WINDOW_3D,
+  WINDOW_3D_MOST,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
+import type { Option, OptionValues } from "../../../lib/options";
+import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
 
-const SWITCHES: { key: keyof Settings; name: string; detail: string }[] = [
+const SWITCHES: { key: "valenceWarnings"; name: string; detail: string }[] = [
   {
     key: "valenceWarnings",
     name: "Point out atoms with too many bonds",
@@ -98,7 +102,33 @@ export default function ChemistrySettings() {
       {/* (who makes molecules in 3D: done on a structure drawn, at once, as the rest here) */}
       <div className="mt-6">
         <RoleChoices where="molecules3d" heading="3D" />
+        <Window3D chemistry={chemistry} setChemistry={setChemistry} />
       </div>
+    </div>
+  );
+}
+
+const WINDOW: Option[] = [{ id: "window", label: "Keep conformers within", type: "number", default: WINDOW_3D, min: 0, max: WINDOW_3D_MOST, step: 5, unit: "kcal/mol" }];
+
+/**
+ * The energy window a structure's conformers are kept within, made in 3D on
+ * the canvas (docs/WORKSPACE.md, *Conformers kept*): of the lowest, those
+ * above set aside. A workflow's conformer step keeps every one; only its
+ * *Energy window* step sets any aside.
+ */
+function Window3D({ chemistry, setChemistry }: { chemistry: Settings; setChemistry: (c: Settings) => void }) {
+  const values: OptionValues = { window: chemistry.window3d ?? WINDOW_3D };
+  const change = (v: OptionValues) => {
+    const n = typeof v.window === "number" && Number.isFinite(v.window) ? Math.min(Math.max(0, v.window), WINDOW_3D_MOST) : WINDOW_3D;
+    const { window3d: _, ...rest } = chemistry;
+    setChemistry({ ...rest, ...(n !== WINDOW_3D ? { window3d: n } : {}) });
+  };
+  return (
+    <div className="mt-2 rounded-lg border border-gh-line bg-white">
+      <OptionRows options={WINDOW} values={values} onChange={change} />
+      <p className="px-3 pb-2.5 text-xs leading-snug text-gh-gray max-w-2xl">
+        Of a structure made in 3D here, its conformers within this of the lowest are kept, and the window is said with how they were made. A workflow's conformer step keeps every one: there, an Energy window step sets any aside.
+      </p>
     </div>
   );
 }

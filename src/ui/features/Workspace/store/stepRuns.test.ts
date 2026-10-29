@@ -388,6 +388,30 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
   });
 
+  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so", async () => {
+    installedAt.orca = "/Applications/orca_6/orca";
+    const needing = async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 Opt\n" }], reads: [], needs: ["xtb"] }] }) as never;
+    // (the xTB plugin not added: refused before any job is made)
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    worker.prepare.mockImplementationOnce(needing);
+    const first = editor();
+    const step = first.st().addStep("energy", "orca", 10, 10);
+    first.st().connect({ set: first.st().sets[0].id }, step);
+    await first.st().runStep(step);
+    expect(asked.started).toEqual([]);
+    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "The xTB plugin is needed for this: add it in Settings, Plugins" });
+    // (added: the job asks for it, by the plugin's id)
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    worker.prepare.mockImplementationOnce(needing);
+    const again = editor();
+    const next = again.st().addStep("energy", "orca", 10, 10);
+    again.st().connect({ set: again.st().sets[0].id }, next);
+    void again.st().runStep(next);
+    await settle();
+    await settle();
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "orca", program: "orca", needs: ["xtb"] })]);
+  });
+
   it("runs the programs installed beside it after it, and keeps the wavefunction it wrote with what was read - saved with the workspace", async () => {
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";

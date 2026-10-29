@@ -177,6 +177,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       units: opts.units === "px" ? ("px" as const) : ("world" as const),
       family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"),
       parentheses: !!opts.stereoParentheses,
+      // (and set as the drawing's are: StereoInk3D)
+      opts,
       gap: opts.stereoGap ?? 0.35,
     };
   }, [drawingStyle]);

@@ -56,7 +56,7 @@ export default function StackChip3D({
   open: boolean;
   onShow: (index: number) => void;
 }) {
-  const { camera, gl, invalidate } = useThree();
+  const { camera, invalidate } = useThree();
   const group = useRef<THREE.Group>(null!);
   const low = useRef<number | null>(null);
   useFrame((_, dt) => {
@@ -74,7 +74,6 @@ export default function StackChip3D({
         frame={index}
         open={open}
         onFrame={onShow}
-        area={gl.domElement}
         title={shown.title}
         about={shown.calc ? calcLine(shown.calc) : undefined}
         results={stackedResults(shown, frame)}

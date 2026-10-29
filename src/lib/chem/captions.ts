@@ -13,8 +13,18 @@ import { wordsLine, type SchemeArrow } from "./reactionScheme";
 import { letterStarts } from "../text/editing";
 import type { ArrowCorner } from "./reactionArrow";
 
-/** How far apart a caption's lines are, baseline to baseline, in ems. */
+/** How far apart a caption's lines are, baseline to baseline, in ems: single spacing. */
 export const CAPTION_LINE = 1.25;
+
+/** The line spacings words on the page are offered in, as multiples of single spacing (`CAPTION_LINE`). */
+export const WORDS_SPACINGS: readonly number[] = [1, 1.15, 1.5, 2];
+/** The least and the most line spacing a box may have, as a multiple of single spacing. */
+export const WORDS_SPACING_RANGE: readonly [number, number] = [0.5, 4];
+
+/** How far apart words' lines are, baseline to baseline, in ems: single spacing, or as many times it as their own spacing says. */
+export function wordsLineEms(c: { lines?: number }): number {
+  return c.lines != null && c.lines > 0 ? c.lines * CAPTION_LINE : CAPTION_LINE;
+}
 
 /**
  * The size words on the page are set at: their own, in points - a title's
@@ -477,11 +487,12 @@ export type CaptionWords = CaptionSet & { words: { x: number; y: number; w: numb
 
 /**
  * A caption's text set about (x, y), its middle: line under line
- * `CAPTION_LINE` ems apart, at `fontSize` - a label's size, or its own -
- * in the typeface `set` measures in, broken into lines as wide as `width`
- * where it is given one; each line lying in that width - or the widest
- * line's - as `align` says, a list's lines in from its edge; its letters
- * set as `marks` mark them. Blank lines keep their room.
+ * `lineEms` apart - `CAPTION_LINE`, unless its own spacing says - at
+ * `fontSize` - a label's size, or its own - in the typeface `set` measures
+ * in, broken into lines as wide as `width` where it is given one; each line
+ * lying in that width - or the widest line's - as `align` says, a list's
+ * lines in from its edge; its letters set as `marks` mark them. Blank lines
+ * keep their room.
  */
 export function captionSet(
   text: string,
@@ -492,8 +503,9 @@ export function captionSet(
   width?: number,
   align: CaptionAlign = "center",
   marks?: readonly WordsMark[],
+  lineEms = CAPTION_LINE,
 ): CaptionSet {
-  const { items, halfW, halfH } = setWords(text, x, y, fontSize, set, width, align, false, marks);
+  const { items, halfW, halfH } = setWords(text, x, y, fontSize, set, width, align, false, marks, lineEms);
   return { items, halfW, halfH };
 }
 
@@ -512,8 +524,9 @@ export function captionWords(
   width?: number,
   align: CaptionAlign = "center",
   marks?: readonly WordsMark[],
+  lineEms = CAPTION_LINE,
 ): CaptionWords {
-  return setWords(text, x, y, fontSize, set, width, align, true, marks);
+  return setWords(text, x, y, fontSize, set, width, align, true, marks, lineEms);
 }
 
 /** Each laid line's letters across: where each place in it lies - before each letter, and at its end - and where it begins, as `align` lays it in `box` about `x`. */
@@ -577,10 +590,11 @@ function setWords(
   align: CaptionAlign,
   byWord: boolean,
   marks?: readonly WordsMark[],
+  lineEms = CAPTION_LINE,
 ): CaptionWords {
   const styles = stylesOf(text.length, marks);
   const lines = linesOf(text, fontSize, set, width, styles);
-  const step = fontSize * CAPTION_LINE;
+  const step = fontSize * lineEms;
   const top = ((lines.length - 1) / 2) * step;
   const box = boxOf(lines, fontSize, set, width, styles);
   const xs = across(lines, x, box, fontSize, set, align, styles);
@@ -615,18 +629,25 @@ function setWords(
   return { items, halfW, halfH, words };
 }
 
-/** Words on the page as a caption keeps them: their text, where their middle is, how wide and how they lie, their own size and their letters' marks. */
-export type Words = { text: string; x: number; y: number; width?: number; align?: CaptionAlign | "center"; size?: number; marks?: readonly WordsMark[] };
+/** Words on the page as a caption keeps them: their text, where their middle is, how wide and how they lie, their own size, typeface and line spacing, and their letters' marks. */
+export type Words = { text: string; x: number; y: number; width?: number; align?: CaptionAlign | "center"; size?: number; font?: string; lines?: number; marks?: readonly WordsMark[] };
+
+/** The way words are set: the drawing's labels' (`set`), in their own typeface where they have one. */
+export function wordsLabelSet(c: { font?: string }, set: LabelSet): LabelSet {
+  return c.font ? { ...set, fontFamily: c.font } : set;
+}
 
 /**
  * Words on the page set as they are kept - at their own size or the
- * labels' (`wordsFontPx`), their letters as marked - about their middle,
- * or `at`; each text told where its size is its own, so that pictures set
- * it so (layout2d `TextItem.ownSize`).
+ * labels' (`wordsFontPx`), in their own typeface or the labels', their
+ * lines as far apart as their spacing says, their letters as marked -
+ * about their middle, or `at`; each text told where its size or its
+ * typeface is its own, so that pictures set it so (layout2d
+ * `TextItem.ownSize`, `TextItem.family`).
  */
 export function wordsSet(c: Words, sizes: { fontPx: number; pointPx?: number }, set: LabelSet = ACS_LABEL_SET, at?: { x: number; y: number }): CaptionSet {
-  const s = captionSet(c.text, at?.x ?? c.x, at?.y ?? c.y, wordsFontPx(c, sizes), set, c.width, c.align, c.marks);
-  return c.size ? { ...s, items: s.items.map((t) => ({ ...t, ownSize: true })) } : s;
+  const s = captionSet(c.text, at?.x ?? c.x, at?.y ?? c.y, wordsFontPx(c, sizes), wordsLabelSet(c, set), c.width, c.align, c.marks, wordsLineEms(c));
+  return c.size || c.font ? { ...s, items: s.items.map((t) => ({ ...t, ...(c.size ? { ownSize: true } : {}), ...(c.font ? { family: c.font } : {}) })) } : s;
 }
 
 /**
@@ -671,10 +692,11 @@ export function captionPlaces(
   width?: number,
   align: CaptionAlign = "center",
   marks?: readonly WordsMark[],
+  lineEms = CAPTION_LINE,
 ): CaptionPlaces {
   const styles = stylesOf(text.length, marks);
   const laid = linesOf(text, fontSize, set, width, styles);
-  const step = fontSize * CAPTION_LINE;
+  const step = fontSize * lineEms;
   const top = ((laid.length - 1) / 2) * step;
   const box = boxOf(laid, fontSize, set, width, styles);
   const xsOf = across(laid, x, box, fontSize, set, align, styles);

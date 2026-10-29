@@ -1526,6 +1526,20 @@ words are: by itself, not by a box drawn round it.
   is let go and however far the canvas is zoomed. With too few bonds to
   say, the figure's is used. A scheme taken whole by a box keeps one scale
   for all of it, its structures' bonds the length most are drawn at.
+- **It comes in at the style's geometry, its arrangement kept** (the
+  maintainer, 2026-10-27). Kept as drawn: which atom is bonded to which,
+  where its rings are and how they are turned, the side each substituent
+  and branch is on, and every bond's mark - which bond is wedged or hashed
+  and its narrow end, wavy and bold bonds, a double bond's side. Made the
+  style's: every bond its length, the standard angles, regular rings. A
+  ring drawn unevenly is the regular one, where it is and turned as it is,
+  as a fused system is; a chain goes the way it is drawn, a third of a turn
+  at each atom, on the side it is drawn. A ring drawn as a chair, a bridged
+  system and a cage are drawings in perspective, kept as drawn at the
+  style's scale, with the bonds out of them. Crowded, or crossing what the
+  drawing does not cross, it is cleared, its arrangement kept; where it
+  cannot be, or where its stereochemistry would read otherwise, it is left
+  as drawn (lib/layout/regularise).
 - **Clicked, it is selected**, and Shift adds another. Its right-click menu
   has *Put on the page* and *Copy*.
 - **Its own labels are its**: a press on a label's letters takes the

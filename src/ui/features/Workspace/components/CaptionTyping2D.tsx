@@ -33,7 +33,7 @@
 import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, keptWords, marksOf, WORDS_STEPS, wordsFontPx, wordsSet } from "../../../../lib/chem/captions";
+import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, keptWords, marksOf, WORDS_STEPS, wordsFontPx, wordsLabelSet, wordsLineEms, wordsSet } from "../../../../lib/chem/captions";
 import { IS_MAC, plusOrEquals } from "../../../../lib/doc/shortcuts";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -95,6 +95,9 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const [own, setOwn] = useState<number | undefined>(caption?.size);
   const fs = wordsFontPx({ size: own }, opts);
   const set = useMemo(() => labelSetOf(opts), [opts]);
+  // (in their own typeface, their lines as far apart as their own spacing - or the labels' and single)
+  const ownSet = useMemo(() => wordsLabelSet(caption ?? {}, set), [caption, set]);
+  const lineEms = wordsLineEms(caption ?? {});
   // (a box given a width, not over an arrow, keeps its top as it grows: where its top was as it opened)
   const [top] = useState(() => (caption?.width && caption.arrow == null ? caption.y + wordsSet(caption, opts, labelSetOf(opts)).halfH : null));
   const cam = camera as THREE.OrthographicCamera;
@@ -113,12 +116,12 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const marks = left ? caption?.marks : marksOf(ed.styles);
   const shownMarks = c ? marksOf(stylesThrough(ed.styles, { from: c.from, to: c.to, insert: c.text }, ed.pending)) : marks;
   // (set about their middle, drawn there: moved, nothing of them set again)
-  const laid = captionSet(shownText, 0, 0, fs, set, width, align, shownMarks);
+  const laid = captionSet(shownText, 0, 0, fs, ownSet, width, align, shownMarks, lineEms);
   const halfW = Math.max(laid.halfW, fs / 2);
   const halfH = Math.max(laid.halfH, fs / 2);
   const at = left && caption ? { x: caption.x, y: caption.y } : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
-  const places = captionPlaces(text, at.x, at.y, fs, set, width, align, marks);
-  const shown = c ? captionPlaces(shownText, at.x, at.y, fs, set, width, align, shownMarks) : places;
+  const places = captionPlaces(text, at.x, at.y, fs, ownSet, width, align, marks, lineEms);
+  const shown = c ? captionPlaces(shownText, at.x, at.y, fs, ownSet, width, align, shownMarks, lineEms) : places;
   // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
   const arrows = useEditor((s) => s.arrows);
   const captions = useEditor((s) => s.captions);
@@ -138,12 +141,12 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     // (drawn: the caption's own no longer - until they are kept or let go, when its own are drawn again: Captions2D)
     if (!left) store.getState().markCaptionDrawn(n);
   };
-  const font = `${fs * zoom}px ${fontStack(opts.fontFamily ?? "Arial")}`;
+  const font = `${fs * zoom}px ${fontStack(ownSet.fontFamily ?? "Arial")}`;
   ed.layout = {
     places,
     shown,
     toScreen: (p: Pt) => ({ x: size.width / 2 + (p.x - cam.position.x) * zoom, y: size.height / 2 - (p.y - cam.position.y) * zoom }),
-    linePx: fs * CAPTION_LINE * zoom,
+    linePx: fs * lineEms * zoom,
     font,
     measure: (t: string) => measured(font, t),
   };
@@ -163,7 +166,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     let still: number | null = edit.id;
     if (keep) {
       const half = (t: string) => {
-        const r = captionSet(t, 0, 0, fs, set, caption?.width, caption?.align, kept);
+        const r = captionSet(t, 0, 0, fs, ownSet, caption?.width, caption?.align, kept, lineEms);
         return { w: r.halfW, h: r.halfH };
       };
       const others = s.captions
@@ -309,7 +312,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
       </mesh>
       {/* (the type, made as it is first needed, waited for by what draws it: not by the field, which would be taken away meanwhile, and the keys with it) */}
       <group position={[at.x, at.y, 0]}>
-        <WholeTexts2D texts={laid.items} onDrawn={onDrawn} />
+        <WholeTexts2D texts={laid.items} onDrawn={onDrawn} family={caption?.font} />
       </group>
       {out}
     </group>

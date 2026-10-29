@@ -133,6 +133,10 @@ pub struct JobSpec {
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
+    /// Other plugins whose programs it needs, by id (`Need`): only which - what each is, and what it is given as, its
+    /// runner works out again from the plugins themselves (`needs_given`), never from here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub needs: Vec<String>,
     /// The files it was given, by their paths in its work folder (`make_job` writes them): what is kept of it where what
     /// its program made is taken out (`trim_made`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -427,7 +431,7 @@ pub fn run_as_runner(dir: &Path) -> i32 {
 fn runner(data: &Path, plugins: &Path, dir: &Path) -> i32 {
     let Ok(dir) = runner_folder(data, dir) else { return 1 };
     // (checked before its program runs: its work folder holds what was written for it, and nothing else yet)
-    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir)))
+    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir)).and_then(|()| needs_linked(&dir, data, plugins, spec)))
 }
 
 /// Run the job in `dir`: wait for its turn, run its program, and write down
@@ -1593,6 +1597,31 @@ pub fn make_job(root: &Path, spec: &JobSpec, files: &[JobFile]) -> Result<(Strin
     Ok((id, dir))
 }
 
+/// The programs a job needs of other plugins (`Need`), each linked in its
+/// work folder under its own name, as `need_value` names it - on Windows,
+/// where its path is given, none.
+pub fn link_needed(dir: &Path, needed: &[(String, PathBuf)]) -> Result<(), String> {
+    #[cfg(unix)]
+    for (name, program) in needed {
+        std::os::unix::fs::symlink(program, dir.join(WORK).join(name)).map_err(|e| format!("{name} could not be given to the job: {e}"))?;
+    }
+    #[cfg(not(unix))]
+    let _ = (dir, needed);
+    Ok(())
+}
+
+/// A job made (`make_job`) and given each program it needs (`link_needed`) -
+/// or, where one cannot be given it, no job at all: its folder taken away
+/// again, never left as one to run without what it needs.
+pub fn make_needing_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
+    let (id, dir) = make_job(root, spec, files)?;
+    if let Err(e) = link_needed(&dir, needed) {
+        let _ = fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    Ok((id, dir))
+}
+
 /// What a job's log says from byte `from` on - at most `most` bytes, never
 /// ending inside a character - and where that ends.
 pub fn read_log(dir: &Path, from: u64, most: u64) -> (String, u64) {
@@ -1811,8 +1840,28 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
     }
     let port = proxy_port_of(&spec.env).ok_or("not pointed at Meno's network")?;
     let cores = spec.env.get(THREADS[0]).and_then(|c| c.parse().ok());
-    if given_env(&found, port, cores) != spec.env {
+    // (and, where it needs another plugin's program, what Meno gives it for that - worked out again here, from the plugins
+    //  themselves: a value taken from the spec would let whatever wrote it choose the program run)
+    let (needed_env, needed) = needs_given(data, &manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
+    if given_env(&found, port, cores).into_iter().chain(needed_env).collect::<BTreeMap<_, _>>() != spec.env {
         return Err(format!("{} given what Meno does not give it", spec.name));
+    }
+    let _ = needed;
+    Ok(())
+}
+
+/// Whether each program of another plugin a job in folder `dir` needs is linked in its work folder under its name to
+/// that program - found again from the plugins themselves (`needs_given`) - and to nothing else: what its runner checks
+/// besides `spec_allowed`, before its program runs. On Windows, where none is linked, nothing to check.
+pub fn needs_linked(dir: &Path, data: &Path, plugins: &Path, spec: &JobSpec) -> Result<(), String> {
+    if spec.needs.is_empty() || cfg!(not(unix)) {
+        return Ok(());
+    }
+    let (_, needed) = needs_given(data, &manifest_of(&plugins.join(&spec.plugin), &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
+    for (name, program) in &needed {
+        if fs::read_link(dir.join(WORK).join(name)).ok().as_deref() != Some(program.as_path()) {
+            return Err(format!("{name} in its folder is not the program it needs"));
+        }
     }
     Ok(())
 }
@@ -2084,6 +2133,89 @@ pub struct JobAsk {
     /// The files of its work folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (keptjobs.rs).
     #[serde(default)]
     pub reads: Vec<String>,
+    /// Other plugins whose programs it needs, by id: each one its plugin's manifest declares (`needs`).
+    #[serde(default)]
+    pub needs: Vec<String>,
+}
+
+/// A program of another plugin a plugin's jobs may need, as its manifest
+/// declares it (`needs`): that plugin, its program by the name its manifest
+/// gives it, and the variable the job is told where it is in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Need {
+    pub plugin: String,
+    pub program: String,
+    pub env: String,
+}
+
+/// What a manifest declares its jobs may need of other plugins' programs - all as they must be, or none.
+pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need>, String> {
+    let Some(list) = manifest.get("needs") else { return Ok(Vec::new()) };
+    let list = list.as_array().ok_or_else(|| format!("{id}'s needs are not a list"))?;
+    let mut out: Vec<Need> = Vec::new();
+    for n in list {
+        let field = |k: &str| n.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+        let need = Need { plugin: field("plugin"), program: field("program"), env: field("env") };
+        let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
+        if !plugin_id(&need.plugin) || need.plugin == id || !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.plugin == need.plugin) {
+            return Err(format!("{id} declares a need Meno cannot give: {n}"));
+        }
+        out.push(need);
+    }
+    Ok(out)
+}
+
+/// What a job's variable for a program it needs (`Need`) is set to, the
+/// program found at `found`: on macOS and Linux, a link to it put in the
+/// job's work folder - where the job runs - by its own name (`./xtb`), for a
+/// path with a space in it is never given, and a program may take one as two
+/// words (ORCA 6.1.1 on macOS takes "~/Library/Application Support/..." as
+/// no file); on Windows, where no link is made, its path, refused where it
+/// has a space, never quoted.
+pub fn need_value(found: &Path, windows: bool) -> Result<String, String> {
+    if windows {
+        // (one separator throughout: an environment's folders may be given with "/", as pixi's activation gives Library/bin)
+        let path = found.to_string_lossy().replace('/', "\\");
+        if path.chars().any(char::is_whitespace) {
+            return Err(format!("{path} has a space in it, which the program it is given to may not take: it cannot be given"));
+        }
+        return Ok(path);
+    }
+    let name = found.file_name().and_then(|n| n.to_str()).ok_or("a program with no name")?;
+    Ok(format!("./{name}"))
+}
+
+/// The variables a job is given for the programs of other plugins it needs, and each program with the name it is linked under.
+pub type NeedsGiven = (BTreeMap<String, String>, Vec<(String, PathBuf)>);
+
+/// What a job of plugin `id` (its manifest `manifest`) is given for the
+/// programs of other plugins it `needs`, by their ids: each one its manifest
+/// declares (`needs_declared`), found again as that plugin's own jobs find it
+/// (`plugin_program`, its folder by `dir_of`) - the variables, each with the
+/// value `need_value` gives it, and each program with the name it is linked
+/// under. Worked out the same way as the job is made and as its runner checks
+/// it: nothing of it is taken from what a job's spec says but which plugins.
+/// That plugin not set up, why, as the step says it.
+pub fn needs_given(data: &Path, manifest: &serde_json::Value, id: &str, needs: &[String], dir_of: &dyn Fn(&str) -> Result<PathBuf, String>) -> Result<NeedsGiven, String> {
+    let mut env = BTreeMap::new();
+    let mut links = Vec::new();
+    if needs.is_empty() {
+        return Ok((env, links));
+    }
+    let declared = needs_declared(manifest, id)?;
+    for other in needs {
+        let need = declared.iter().find(|n| &n.plugin == other).ok_or_else(|| format!("{id} declares no need of {other}"))?;
+        if needs.iter().filter(|n| *n == other).count() > 1 {
+            return Err(format!("{id} needs {other} twice"));
+        }
+        let other_dir = dir_of(&need.plugin)?;
+        let name = manifest_of(&other_dir, &need.plugin).ok().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| need.plugin.clone());
+        let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
+        let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+        env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
+        links.push((file, found.program));
+    }
+    Ok((env, links))
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -2123,6 +2255,14 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
     };
     let then = then_of(&found, &payload.program, &payload.then)?;
+    // (another plugin's program it needs: one its manifest declares, found as that plugin's own jobs find it - that plugin
+    //  not set up, nothing is made, saying so - and named in the job's work folder, never as a path with a space in it)
+    let (needed_env, needed) = needs_given(&data, &manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.needs, &|p| {
+        crate::resource_path(&app, &Path::new("resources/plugins").join(p))
+    })?;
+    if let Some((name, _)) = needed.iter().find(|(name, _)| payload.files.iter().any(|f| &f.name == name)) {
+        return Err(format!("a job's file is named {name}, as the program it needs is"));
+    }
     // (one asking for more than the computer has never starts: refused, saying so)
     if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
         return Err(format!("It cannot run on this computer: {why}"));
@@ -2134,16 +2274,18 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         program: found.program.to_string_lossy().into_owned(),
         args: payload.args,
         stdin: payload.stdin,
-        env: given_env(&found, net.proxy_port(), payload.cores),
+        env: given_env(&found, net.proxy_port(), payload.cores).into_iter().chain(needed_env).collect(),
         cores: payload.cores.unwrap_or(1).clamp(1, 1024),
         memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
         label: payload.label.map(|l| l.chars().take(200).collect()),
         key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
+        needs: payload.needs.clone(),
         given: vec![],
     };
-    let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
+    // (each program it needs, linked in its work folder: a link there is never listed, kept or saved - keptjobs `kept_files`)
+    let (id, dir) = make_needing_job(&jobs_root(&app)?, &spec, &payload.files, &needed)?;
     // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
     let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
     let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
@@ -2528,6 +2670,7 @@ mod tests {
             label: None,
             key: None,
             then: vec![],
+            needs: vec![],
             given: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
@@ -3459,6 +3602,7 @@ mod tests {
             label: None,
             key: None,
             then: vec![],
+            needs: vec![],
             given: vec![],
         }
     }
@@ -4015,6 +4159,204 @@ mod tests {
         assert_eq!(read_work_file_within(&dir, "large.txt", 1 << 20), Err("large.txt is too large to read: 2 MB, past 1 MB".into()));
         assert_eq!(read_work_file(&dir, "odd.txt").unwrap(), "caf\u{fffd}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
+        // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
+        let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
+        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
+        assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
+        // (its own program, a shell, a path, a variable that finds or loads programs, one plugin twice: none of them)
+        for bad in [
+            serde_json::json!([{"plugin": "orca", "program": "orca", "env": "X"}]),
+            serde_json::json!([{"plugin": "xtb", "program": "sh", "env": "X"}]),
+            serde_json::json!([{"plugin": "xtb", "program": "bin/xtb", "env": "X"}]),
+            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "PATH"}]),
+            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "DYLD_INSERT_LIBRARIES"}]),
+            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "A"}, {"plugin": "xtb", "program": "xtb", "env": "B"}]),
+            serde_json::json!({"plugin": "xtb"}),
+        ] {
+            assert!(needs_declared(&serde_json::json!({ "needs": bad }), "orca").is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn names_a_needed_program_in_the_jobs_folder_never_by_a_path_with_a_space_in_it() {
+        let found = Path::new("/Users/someone/Library/Application Support/Meno/pixi/plugin-xtb/.pixi/envs/default/bin/xtb");
+        assert_eq!(need_value(found, false).unwrap(), "./xtb");
+        // (on Windows its path, where it has no space - never quoted where it has one)
+        assert_eq!(need_value(Path::new(r"C:\Meno\pixi\plugin-xtb\Library\bin\xtb.exe"), true).unwrap(), r"C:\Meno\pixi\plugin-xtb\Library\bin\xtb.exe");
+        let err = need_value(Path::new(r"C:\Users\Some One\AppData\Local\Meno\xtb.exe"), true).unwrap_err();
+        assert!(err.contains("has a space in it"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_job_runs_a_program_it_needs_linked_in_its_folder_from_a_path_with_a_space_and_never_keeps_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = temp();
+        // (another plugin's program, in a folder whose name has a space: as the xTB plugin's xtb is, in Application Support)
+        let away = root.join("Application Support").join("bin");
+        fs::create_dir_all(&away).unwrap();
+        let tool = away.join("tool");
+        fs::write(&tool, "#!/bin/sh\necho needed program ran\n").unwrap();
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
+        write_limits(&root, Limits { cores: 1, memory: 0 }).unwrap();
+        let spec = JobSpec {
+            plugin: "test".into(),
+            name: "shell".into(),
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), "\"$NEEDED\"".into()],
+            stdin: None,
+            env: BTreeMap::from([("NEEDED".into(), need_value(&tool, false).unwrap())]),
+            cores: 1,
+            memory: 0,
+            created: now_ms(),
+            label: None,
+            key: None,
+            then: vec![],
+            needs: vec![],
+            given: vec![],
+        };
+        let (_, dir) = make_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap();
+        link_needed(&dir, &[("tool".into(), tool.clone())]).unwrap();
+        assert_eq!(run_job(&dir), 0);
+        assert!(fs::read_to_string(dir.join(LOG)).unwrap().contains("needed program ran"));
+        // (the link is never a file the job kept: not listed, so neither kept as a raw output nor saved in a workspace)
+        let kept = crate::keptjobs::kept_files(&dir);
+        assert!(kept.iter().any(|f| f.name == "work/input.txt"));
+        assert!(kept.iter().all(|f| !f.name.contains("tool")), "{:?}", kept.iter().map(|f| &f.name).collect::<Vec<_>>());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_job_that_cannot_be_given_what_it_needs_leaves_no_folder() {
+        let root = temp();
+        let spec = JobSpec {
+            plugin: "test".into(),
+            name: "shell".into(),
+            program: "/bin/sh".into(),
+            args: vec![],
+            stdin: None,
+            env: BTreeMap::new(),
+            cores: 1,
+            memory: 0,
+            created: now_ms(),
+            label: None,
+            key: None,
+            then: vec![],
+            needs: vec![],
+            given: vec![],
+        };
+        // (a file of its own under the needed program's name: the link cannot be made)
+        let err = make_needing_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())]).unwrap_err();
+        assert!(err.contains("tool could not be given to the job"), "{err}");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        // (where it can be, a job, with its link)
+        let (_, dir) = make_needing_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())]).unwrap();
+        assert!(fs::symlink_metadata(dir.join(WORK).join("tool")).unwrap().file_type().is_symlink());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Two plugins: `asker`, whose program `main` may need `helper`'s `tool` in the variable TOOLEXE, and `helper` - each
+    /// program a script that says what it is and, the asker's, runs what TOOLEXE names; `helper` set up only where asked.
+    #[cfg(unix)]
+    fn needing(helper_set_up: bool) -> (PathBuf, PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let base = temp();
+        let plugins = base.join("plugins");
+        // (Meno's data folder with a space in its name, as it has on macOS: never given in a path)
+        let data = base.join("Application Support");
+        let script = |at: &Path, text: &str| {
+            fs::create_dir_all(at.parent().unwrap()).unwrap();
+            fs::write(at, text).unwrap();
+            fs::set_permissions(at, fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        fs::create_dir_all(plugins.join("asker")).unwrap();
+        fs::write(
+            plugins.join("asker").join("manifest.json"),
+            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "needs": [{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]}"#,
+        )
+        .unwrap();
+        fs::create_dir_all(plugins.join("helper")).unwrap();
+        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        script(&data.join("uv/plugin-asker/venv/bin/main"), "#!/bin/sh\necho main ran\n\"$TOOLEXE\"\n");
+        if helper_set_up {
+            script(&data.join("uv/plugin-helper/venv/bin/tool"), "#!/bin/sh\necho the tool ran\n");
+        }
+        (base, data, plugins)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_runner_gives_a_program_another_plugins_only_as_it_works_it_out_again_never_as_its_spec_says() {
+        let (base, data, plugins) = needing(true);
+        let found = plugin_program(&data, &plugins.join("asker"), "asker", "main", &[]).unwrap();
+        let tool = plugin_program(&data, &plugins.join("helper"), "helper", "tool", &[]).unwrap().program;
+        let with = |needs: &[&str], extra: &[(&str, &str)]| {
+            let mut spec = spec_for("asker", "main", &found, &[]);
+            spec.needs = needs.iter().map(|n| n.to_string()).collect();
+            spec.env.extend(extra.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+            spec
+        };
+        // (the need, given as Meno gives it: taken)
+        assert_eq!(spec_allowed(&data, &plugins, &with(&["helper"], &[("TOOLEXE", "./tool")]), &[]), Ok(()));
+        // (another value - a program of the writer's choosing - or the variable missing, or one more besides: refused)
+        for bad in [
+            with(&["helper"], &[("TOOLEXE", "/bin/sh")]),
+            with(&["helper"], &[("TOOLEXE", tool.to_str().unwrap())]),
+            with(&["helper"], &[]),
+            with(&["helper"], &[("TOOLEXE", "./tool"), ("OTHER", "x")]),
+            with(&[], &[("TOOLEXE", "./tool")]),
+        ] {
+            assert!(spec_allowed(&data, &plugins, &bad, &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
+        }
+        // (a need its plugin does not declare, or twice)
+        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no need of other"));
+        assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[]).is_err());
+        // (the needed plugin not set up: refused, saying so)
+        let (gone, gone_data, gone_plugins) = needing(false);
+        let found_gone = plugin_program(&gone_data, &gone_plugins.join("asker"), "asker", "main", &[]).unwrap();
+        let mut spec = spec_for("asker", "main", &found_gone, &[]);
+        spec.needs = vec!["helper".into()];
+        spec.env.insert("TOOLEXE".into(), "./tool".into());
+        assert_eq!(spec_allowed(&gone_data, &gone_plugins, &spec, &[]), Err("The Helper plugin is needed for this: add it in Settings, Plugins".into()));
+        let _ = fs::remove_dir_all(gone);
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_runner_runs_a_job_needing_another_plugins_program_linked_in_its_folder_and_no_other_link() {
+        let (base, data, plugins) = needing(true);
+        let jobs = data.join("jobs");
+        write_limits(&jobs, Limits { cores: 1, memory: 0 }).unwrap();
+        let found = plugin_program(&data, &plugins.join("asker"), "asker", "main", &[]).unwrap();
+        let (env, needed) = needs_given(&data, &manifest_of(&plugins.join("asker"), "asker").unwrap(), "asker", &["helper".into()], &|p| Ok(plugins.join(p))).unwrap();
+        assert_eq!(env, BTreeMap::from([("TOOLEXE".to_string(), "./tool".to_string())]));
+        let mut spec = spec_for("asker", "main", &found, &[]);
+        spec.needs = vec!["helper".into()];
+        spec.env.extend(env);
+        // (as job_start makes it: its folder, then the link; then its runner, checking both, runs it)
+        let (_, dir) = make_job(&jobs, &spec, &[]).unwrap();
+        link_needed(&dir, &needed).unwrap();
+        assert_eq!(runner(&data, &plugins, &dir), 0);
+        let log = fs::read_to_string(dir.join(LOG)).unwrap();
+        assert!(log.contains("main ran") && log.contains("the tool ran"), "{log}");
+        // (its link pointing elsewhere - another program put under its name: not run)
+        let (_, other) = make_job(&jobs, &spec, &[]).unwrap();
+        std::os::unix::fs::symlink("/bin/sh", other.join(WORK).join("tool")).unwrap();
+        assert_eq!(needs_linked(&other, &data, &plugins, &read_spec(&other).unwrap()), Err("tool in its folder is not the program it needs".into()));
+        assert_ne!(runner(&data, &plugins, &other), 0);
+        assert!(!fs::read_to_string(other.join(LOG)).unwrap_or_default().contains("main ran"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn gives_a_needed_programs_path_on_windows_with_one_separator() {
+        assert_eq!(need_value(Path::new(r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library/bin\xtb.exe"), true).unwrap(), r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library\bin\xtb.exe");
     }
 
 }

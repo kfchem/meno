@@ -30,7 +30,7 @@ describe("the readers Meno knows of", () => {
     const [cclib, pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
-      version: "0.1.2",
+      version: "0.1.3",
       uses: [{ name: "cclib", version: "1.9rc1" }],
       profile: "plugin-cclib",
       lock: "resources/plugins/cclib/requirements.lock",

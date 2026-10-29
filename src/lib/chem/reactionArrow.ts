@@ -124,6 +124,19 @@ export function cornerAt(from: P, to: P, p: P): ArrowCorner {
   return { along: (d.x * u.x + d.y * u.y) / len, across: -d.x * u.y + d.y * u.x };
 }
 
+/**
+ * Where a corner between `p` and `q` makes a right angle nearest `pointer`: on the circle whose
+ * diameter is `pq` (Thales), along the line from its middle through the pointer - the line an L.
+ * The pointer itself where it is at the middle, which says no way.
+ */
+export function squareCorner(p: P, q: P, pointer: P): P {
+  const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  const r = Math.hypot(q.x - p.x, q.y - p.y) / 2;
+  const d = Math.hypot(pointer.x - mid.x, pointer.y - mid.y);
+  if (!(r > 0) || !(d > 1e-9)) return pointer;
+  return { x: mid.x + ((pointer.x - mid.x) / d) * r, y: mid.y + ((pointer.y - mid.y) / d) * r };
+}
+
 const dist = (a: P, b: P) => Math.hypot(b.x - a.x, b.y - a.y);
 const unitOf = (a: P, b: P): P => {
   const l = dist(a, b) || 1;

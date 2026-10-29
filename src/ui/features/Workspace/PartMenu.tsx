@@ -244,12 +244,12 @@ export default function PartMenu({
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
   /**
    * What the words right-clicked can do besides (docs/EDITOR-2D.md,
-   * *Text*): a size of their own, chosen on a card; all their letters bold,
+   * *Text*): a size, line spacing and typeface of their own, chosen on a card; all their letters bold,
    * in italics, raised or lowered - ticked where all are already; their
    * lines a list, or plain again.
    */
   words?: {
-    onSize: () => void;
+    onFont: () => void;
     bold: boolean;
     italic: boolean;
     list: boolean;
@@ -511,7 +511,6 @@ export default function PartMenu({
     ? [
         // (the other look, one step away: the 3D style's secondary, or back to its primary)
         { name: molecule3d.otherLook.name, keys: "", run: molecule3d.otherLook.run, icon: MENU_ICONS[molecule3d.otherLook.atoms] },
-        { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn, icon: MENU_ICONS.resetTurn },
         { name: "Turn once", keys: "", run: molecule3d.onTurnOnce, icon: MENU_ICONS.turnOnce },
       ]
     : [];
@@ -535,6 +534,8 @@ export default function PartMenu({
         ...(molecule3d.stack ? [{ name: molecule3d.stack.spread ? "Stack again" : "Lay out as a grid", keys: "", run: molecule3d.stack.run }] : []),
         ...(molecule3d.lists ?? []).map((l) => ({ name: l.name, keys: "", run: l.open })),
         ...(molecule3d.output ? [{ name: `Show ${molecule3d.output.name}`, keys: "", run: molecule3d.output.show }] : []),
+        // (in words, beside turning it like the drawing: no picture of it reads at a glance - the maintainer, 2026-10-28)
+        { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn },
         ...(molecule3d.onTurnLikeDrawing ? [{ name: "Turn like the drawing", keys: "", run: molecule3d.onTurnLikeDrawing }] : []),
         ...(molecule3d.onRemake ? [{ name: "Make again from the drawing", keys: "", run: molecule3d.onRemake, divider: true }] : []),
         ...(molecule3d.onDrawFormula ? [{ name: "Draw as formula", keys: "", run: molecule3d.onDrawFormula }] : []),
@@ -671,7 +672,7 @@ export default function PartMenu({
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
           ...(words
             ? [
-                { name: "Size…", keys: "", run: words.onSize, icon: MENU_ICONS.size },
+                { name: "Font…", keys: "", run: words.onFont, icon: MENU_ICONS.size },
                 { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
                 { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
                 { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
