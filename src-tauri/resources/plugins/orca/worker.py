@@ -380,9 +380,21 @@ def ended_well(log):
     return "ORCA TERMINATED NORMALLY" in log and not re.search(r"error termination", log, re.I)
 
 
+#: What a parallel run says where Open MPI's mpirun is not there to start it: ORCA's error at its start-up, the shell's
+#: words on mpirun beside it (ORCA 6.1.1).
+NO_MPI = re.compile(r"mpirun: (?:command )?not found", re.I)
+#: That said plainly, and what to do: ORCA runs on more than one core with Open MPI on Linux and Mac alone, its mpirun on
+#: the PATH (the ORCA 6.1 manual, 2.5.2.1, *Single Node Runs*).
+NO_MPI_SAID = ("ORCA runs on more than one core only with Open MPI, whose mpirun this computer does not have "
+               "(the ORCA manual, 2.5.2.1): set Cores to 1 in Settings, or install Open MPI")
+
+
 def not_ended_why(log, ended):
     """Why a job is not read: ORCA's own words where it said it ended by an error, or where its runner saw it fail; where
-    it ended (exit 0) saying neither that nor that it terminated normally, that plainly, with the last thing it said."""
+    it ended (exit 0) saying neither that nor that it terminated normally, that plainly, with the last thing it said. A
+    parallel run that could not start for want of Open MPI is said plainly, with what to do."""
+    if re.search(r"error termination in Startup", log, re.I) and NO_MPI.search(log):
+        return NO_MPI_SAID
     if ended != "done" or re.search(r"error termination", log, re.I):
         return why_of(log)
     lines = [line.strip() for line in log.splitlines() if line.strip()]

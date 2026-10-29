@@ -316,7 +316,12 @@ class Collect(unittest.TestCase):
     def test_a_job_that_exited_0_but_ended_by_error_termination_failed_and_only_one_that_terminated_normally_is_read(self):
         # (as ORCA 6.1.1 ends a parallel run whose MPI is not there: its exit code 0, read as done)
         startup = "%pal nprocs 4 end\nsh: mpirun: command not found\nORCA finished by error termination in Startup\nCalling Command: mpirun -np 4 orca_startup_mpi input.int.tmp input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
-        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=startup, ended="done"), {"why": "ORCA finished by error termination in Startup"})
+        # (said plainly, with what to do: Open MPI is what ORCA runs in parallel with, its manual's 2.5.2.1)
+        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=startup, ended="done"), {"why": worker.NO_MPI_SAID})
+        self.assertTrue(worker.NO_MPI_SAID.startswith("ORCA runs on more than one core only with Open MPI"))
+        # (a start-up error of another kind: in ORCA's words, as before)
+        other = startup.replace("sh: mpirun: command not found\n", "")
+        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=other, ended="done"), {"why": "ORCA finished by error termination in Startup"})
         # (nor one that never says it ended - cut off, though its runner saw it end)
         self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="FINAL SINGLE POINT ENERGY -76.4\n", ended="done"), {"why": "ORCA's log does not say it ended normally; it last said: FINAL SINGLE POINT ENERGY -76.4"})
         self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="", ended="done"), {"why": "ORCA's log does not say it ended normally"})
