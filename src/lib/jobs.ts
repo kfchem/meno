@@ -57,6 +57,8 @@ export type JobAsk = {
   label?: string;
   /** The files of its folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (lib/doc/keptJobs). */
   reads?: string[];
+  /** Other plugins whose programs it needs, by id - each its plugin's manifest declares (`needs`): found as their own jobs would find them, and named in its folder. */
+  needs?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */

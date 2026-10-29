@@ -511,7 +511,6 @@ export default function PartMenu({
     ? [
         // (the other look, one step away: the 3D style's secondary, or back to its primary)
         { name: molecule3d.otherLook.name, keys: "", run: molecule3d.otherLook.run, icon: MENU_ICONS[molecule3d.otherLook.atoms] },
-        { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn, icon: MENU_ICONS.resetTurn },
         { name: "Turn once", keys: "", run: molecule3d.onTurnOnce, icon: MENU_ICONS.turnOnce },
       ]
     : [];
@@ -535,6 +534,8 @@ export default function PartMenu({
         ...(molecule3d.stack ? [{ name: molecule3d.stack.spread ? "Stack again" : "Lay out as a grid", keys: "", run: molecule3d.stack.run }] : []),
         ...(molecule3d.lists ?? []).map((l) => ({ name: l.name, keys: "", run: l.open })),
         ...(molecule3d.output ? [{ name: `Show ${molecule3d.output.name}`, keys: "", run: molecule3d.output.show }] : []),
+        // (in words, beside turning it like the drawing: no picture of it reads at a glance - the maintainer, 2026-10-28)
+        { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn },
         ...(molecule3d.onTurnLikeDrawing ? [{ name: "Turn like the drawing", keys: "", run: molecule3d.onTurnLikeDrawing }] : []),
         ...(molecule3d.onRemake ? [{ name: "Make again from the drawing", keys: "", run: molecule3d.onRemake, divider: true }] : []),
         ...(molecule3d.onDrawFormula ? [{ name: "Draw as formula", keys: "", run: molecule3d.onDrawFormula }] : []),

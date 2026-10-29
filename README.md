@@ -28,13 +28,16 @@ under *Assets*. Pick the file for your computer:
 
 The other files in a release (`latest.json`, `Meno_aarch64.app.tar.gz` and the
 `.sig` files) are what Meno downloads when it updates itself; you do not need
-them. There is no build for Intel Macs or Linux yet.
+them. There is no build for Intel Macs or Linux.
+
+The [manual](https://kfchem.github.io/meno/manual/) goes through installing
+too, in English and in Japanese.
 
 ### Windows
 
 1. Download `Meno_<version>_x64-setup.exe` and open it.
 2. If Windows says it protected your PC, choose *More info*, then *Run anyway*.
-   Windows says this because Meno's installer is not yet signed with a
+   Windows says this because Meno's installer is not signed with a
    certificate it knows.
 3. The installer asks nothing. A small window shows while it installs Meno
    for your user account alone, so it needs no administrator's password,
@@ -53,7 +56,7 @@ them. There is no build for Intel Macs or Linux yet.
 5. Open Meno again. If macOS asks once more, choose *Open Anyway*. It
    remembers this, so you do it once.
 
-macOS asks because Meno is not yet notarised by Apple. Open Meno from
+macOS asks because Meno is not notarised by Apple. Open Meno from
 Applications rather than from the disk image: a Meno opened from the disk
 image cannot update itself.
 
@@ -166,7 +169,8 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every pull request:
 typecheck, lint, tests and build on Ubuntu, and `cargo check` / `clippy` /
 `test` on Windows. Releases are built by `.github/workflows/release.yml`
 ([`docs/RELEASING.md`](docs/RELEASING.md)). The website is in [`site/`](site/)
-and is published to GitHub Pages by `.github/workflows/pages.yml`.
+and is published to GitHub Pages by `.github/workflows/pages.yml`, with
+the manual built into it ([`docs/MANUAL.md`](docs/MANUAL.md)).
 
 Further reading: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (how the app
 is structured, Tauri commands, supported file formats) and

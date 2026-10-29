@@ -7,7 +7,7 @@ import { anyKindById, pluginById, type PythonPlugin } from "../../../../../lib/c
 import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
-import { pluginClient } from "../../../../../lib/calc/workers";
+import { pluginClient, useReaders } from "../../../../../lib/calc/workers";
 import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
@@ -966,6 +966,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
+    // (another plugin's program its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: one its manifest declares, and that
+    //  plugin added, or no job starts - said, naming it)
+    for (const n of [...new Set(prepared.flatMap((p) => p.needs ?? []))]) {
+      if (!plugin.needs?.some((d) => d.plugin === n)) return void fail(id, `${plugin.name} asked for ${n}'s program, which it does not declare`, at, key);
+      if (useReaders.getState().state[n] !== "added") return void fail(id, `The ${pluginById(n)?.name ?? n} plugin is needed for this: add it in Settings, Plugins`, at, key);
+    }
     const jobs: StepJob[] = [];
     try {
       for (const p of prepared) {
@@ -984,13 +990,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           label: `${entries[p.entries[0]]?.name ?? compoundLetter(entries[p.entries[0]]?.compound ?? 0)} ${kindInfo(step.kind).name}`,
           ...(path ? { path } : {}),
           reads: p.reads,
+          ...(p.needs ? { needs: p.needs } : {}),
         };
         const jobKeyed = await jobKey({
           plugin: plugin.id,
           pluginVersion: plugin.version,
           program: p.program,
           programVersion: useInstalled.getState().chosen[programKey(plugin.id, p.program)]?.version ?? said,
-          stamps: stamps ?? [],
+          // (and the version of each plugin whose program it needs: another xtb is another run)
+          stamps: [...(stamps ?? []), ...(p.needs ?? []).map((n) => `${n} ${pluginById(n)?.version ?? ""}`)],
           args: p.args,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),

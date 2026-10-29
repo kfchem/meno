@@ -188,23 +188,27 @@ body {
 /* A chip on the page - a molecule's frames chip, a measurement's value -
    grows and shrinks with the page, as its cards and sets do: drawn at the
    page's scale, `--page` (components/PageScale), from where it hangs; and
-   fades out with the zoom where its words would be too small to read, as a
-   step's card fades to its icons alone (utils/pageScale `wordsShown`). */
+   goes where its words would be too small to read, as a step's card goes
+   to its icons alone - switched past a threshold, not faded with the zoom,
+   and faded over Meno's quick time (utils/pageScale `wordsReadAt`). */
 .meno-page-chip {
   opacity: var(--words, 1);
+  transition: opacity 120ms var(--ease-meno);
 }
 [data-words-small] .meno-page-chip {
   pointer-events: none !important;
 }
-/* The words of the page's cards and sets, faded with the zoom as chips are
-   (`--words`); and what stands for them where they are gone, faded in as
-   they go, over the same band (`--stand-in`): never both near naught. */
+/* The words of the page's cards and sets, switched as chips are
+   (`--words`), and what stands for them the other way (`--stand-in`): the
+   one fading out as the other fades in, over Meno's quick time. */
 .meno-words,
 .meno-words-each > span {
   opacity: var(--words, 1);
+  transition: opacity 120ms var(--ease-meno);
 }
 .meno-words-gone {
   opacity: var(--stand-in, 0);
+  transition: opacity 120ms var(--ease-meno);
 }
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
