@@ -303,14 +303,17 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
 }
 
 /**
- * Restraints as a file gives them, read back (`Restraint`): each row a
+ * Restraints as a file gives them, read back (`Restraint`) - and where a
+ * minimisation first held them (`start`), each a finite number: each row a
  * distance, a dihedral or atoms fixed, its atoms whole numbers from 0, a
  * finite value and a strength above 0 where its kind has them, none where
  * it has not. None where any row does not read - nothing held in part.
  * Whether its atoms are the entry's is `valueFault`'s, as for any value.
  */
-function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
+function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] } | undefined {
   const rows = (v as { restraints?: unknown } | null)?.restraints;
+  const start = (v as { start?: unknown } | null)?.start;
+  if (start != null && (!Array.isArray(start) || !start.every((x) => typeof x === "number" && Number.isFinite(x)))) return undefined;
   if (!Array.isArray(rows)) return undefined;
   const out: Restraint[] = [];
   for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
@@ -324,7 +327,7 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
     if (typeof r.value !== "number" || !Number.isFinite(r.value) || typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
     out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, strength: r.strength });
   }
-  return { restraints: out };
+  return { restraints: out, ...(start != null ? { start: [...(start as number[])] } : {}) };
 }
 
 /**
