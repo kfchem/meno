@@ -1,0 +1,176 @@
+/* Meno's manual: the website's own look (site/style.css) - its paper, ink
+   and teal, IBM Plex, the faint honeycomb - for pages that are read. The
+   manual's pages in a column beside the one being read; the page set for
+   reading at length, in English or in Japanese. */
+
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url(../assets/fonts/IBMPlexSans-Regular.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-style: italic; font-display: swap; src: url(../assets/fonts/IBMPlexSans-Italic.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 500; font-style: normal; font-display: swap; src: url(../assets/fonts/IBMPlexSans-Medium.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; font-style: normal; font-display: swap; src: url(../assets/fonts/IBMPlexSans-SemiBold.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url(../assets/fonts/IBMPlexMono-Regular.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-style: normal; font-display: swap; src: url(../assets/fonts/IBMPlexMono-Medium.woff2) format("woff2"); }
+
+/* The website's tokens (site/style.css), the same values. */
+:root {
+  --paper: #f6fafc;
+  --sheet: #ffffff;
+  --ink: #1a1f2b;
+  --muted: #59636e;
+  --line: #d1d9e0;
+  --teal: #317689;
+  --teal-soft: #cfe7ee;
+  --on-teal: #ffffff;
+  --hex-filter: none;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Japanese in the system's own Japanese typeface; Latin letters still in Plex */
+  --font-sans-ja: "IBM Plex Sans", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e1217;
+    --sheet: #151a21;
+    --ink: #e6edf3;
+    --muted: #9aa6b2;
+    --line: #29313b;
+    --teal: #74b7ca;
+    --teal-soft: #1b343d;
+    --on-teal: #0e1217;
+    --hex-filter: invert(1);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 24px; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+html:lang(ja) body { font-family: var(--font-sans-ja); line-height: 1.85; }
+a { color: var(--teal); text-underline-offset: 0.18em; }
+a:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 6px; }
+.wrap { width: min(1180px, 100%); margin-inline: auto; padding-inline: 24px; }
+@media (max-width: 600px) { .wrap { padding-inline: 16px; } }
+
+.skip { position: absolute; left: 16px; top: -60px; z-index: 3; padding: 8px 14px; border-radius: 8px; background: var(--teal); color: var(--on-teal); }
+.skip:focus { top: 12px; }
+
+/* The honeycomb the website's pages are drawn on, faint. */
+.honeycomb {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='69.28' height='120' viewBox='0 0 69.28 120'%3E%3Cpath d='M34.64 0v20M0 40l34.64-20 34.64 20M0 40v40M69.28 40v40M0 80l34.64 20 34.64-20M34.64 100v20' fill='none' stroke='black' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 69.28px 120px;
+  opacity: 0.06;
+  filter: var(--hex-filter);
+  -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 0%, black, transparent);
+  mask-image: radial-gradient(ellipse 70% 50% at 50% 0%, black, transparent);
+}
+
+/* The bar: Meno and the manual's name, the languages */
+.top { position: relative; z-index: 2; padding-block: 22px; padding-top: calc(22px + env(safe-area-inset-top, 0px)); }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.names { display: flex; align-items: center; gap: 16px; min-width: 0; white-space: nowrap; }
+.brand { display: block; color: var(--ink); line-height: 0; }
+.brand svg { height: 24px; width: auto; aspect-ratio: 2464 / 399; }
+.crumb { font: 500 13px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); text-decoration: none; padding-left: 16px; border-left: 1px solid var(--line); }
+html:lang(ja) .crumb { letter-spacing: 0.04em; }
+.languages { display: flex; gap: 4px; font-size: 15px; white-space: nowrap; }
+.languages a, .languages span { padding: 5px 10px; border-radius: 999px; text-decoration: none; }
+.languages a { color: var(--muted); transition: color 160ms var(--ease), background-color 160ms var(--ease); }
+.languages a:hover { color: var(--ink); background: var(--sheet); }
+.languages span { color: var(--ink); background: var(--teal-soft); }
+
+/* The column of pages, and the page */
+.layout { position: relative; z-index: 1; display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 64px; align-items: start; padding-block: 28px 104px; }
+.side { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow: auto; font-size: 15px; }
+.side ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.side a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; transition: color 160ms var(--ease), background-color 160ms var(--ease); }
+.side a:hover { color: var(--ink); background: var(--sheet); }
+.side a[aria-current="page"] { color: var(--ink); background: var(--teal-soft); font-weight: 500; }
+.side .side-home { margin-bottom: 8px; font: 500 12px/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); }
+.side .side-home[aria-current="page"] { color: var(--teal); }
+.side .here { margin: 4px 0 10px 10px; padding-left: 8px; border-left: 1px solid var(--line); font-size: 14px; }
+.side .here a { padding: 4px 8px; }
+
+article { max-width: 70ch; }
+article h1 { margin: 0 0 18px; font-weight: 500; font-size: clamp(34px, 5vw, 52px); line-height: 1.06; letter-spacing: -0.03em; text-wrap: balance; }
+html:lang(ja) article h1 { line-height: 1.25; letter-spacing: 0; }
+article h2 { margin: 56px 0 14px; font-size: 26px; font-weight: 500; line-height: 1.2; letter-spacing: -0.02em; text-wrap: balance; }
+article h3 { margin: 32px 0 10px; font-size: 19px; font-weight: 600; line-height: 1.3; }
+html:lang(ja) article h2, html:lang(ja) article h3 { letter-spacing: 0; }
+article p, article ol, article ul { margin: 0 0 16px; text-wrap: pretty; }
+/* Japanese: running text broken anywhere the rules of Japanese allow, so its lines run full;
+   headings, short, by phrase, so that none is split mid-word */
+html:lang(ja) article, html:lang(ja) .sections span { word-break: normal; line-break: strict; }
+html:lang(ja) article h1, html:lang(ja) article h2, html:lang(ja) article h3, html:lang(ja) .sections b { word-break: auto-phrase; }
+article .lead { font-size: 19px; color: var(--muted); margin-bottom: 28px; }
+article ol, article ul { padding-left: 1.4em; display: grid; gap: 10px; }
+article ol li::marker { font-family: var(--font-mono); color: var(--teal); }
+article ul li::marker { color: var(--teal); }
+article code { font: 0.86em/1.4 var(--font-mono); padding: 0.1em 0.36em; border: 1px solid var(--line); border-radius: 6px; background: var(--sheet); overflow-wrap: anywhere; }
+article b { font-weight: 600; }
+.note { margin: 20px 0 24px; padding: 16px 20px; border-radius: 12px; background: var(--teal-soft); }
+.note p { margin: 0; font-size: 16px; }
+
+/* The contents: each page with what it is about */
+.sections { list-style: none; padding: 0 !important; display: grid !important; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 16px !important; margin-top: 36px; }
+.sections a {
+  display: grid; gap: 6px; height: 100%; padding: 20px 22px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--sheet); color: var(--ink); text-decoration: none;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.sections a:hover, .pager a:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -10px rgba(26, 31, 43, 0.45); }
+.sections b { font-size: 18px; }
+.sections span { color: var(--muted); font-size: 15px; line-height: 1.5; }
+
+/* The way on: the page before and the page after */
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 70ch; margin-top: 72px; }
+.pager a {
+  display: grid; gap: 6px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--sheet); color: var(--ink); text-decoration: none;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.pager small { font: 500 12px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); }
+.pager .next { grid-column: 2; text-align: right; }
+
+footer { position: relative; z-index: 1; border-top: 1px solid var(--line); padding-block: 36px 52px; padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 14px; }
+footer .wrap { display: grid; gap: 14px; }
+footer p { margin: 0; max-width: 72ch; }
+footer a { color: inherit; }
+.foot-mark { height: 18px; width: auto; aspect-ratio: 2464 / 399; color: var(--ink); }
+
+/* The front door, for a moment or without script: both languages */
+.door { min-height: 100vh; min-height: 100svh; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 12px; padding: 24px; }
+.btn {
+  display: inline-flex; align-items: center; padding: 13px 20px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--sheet); color: var(--ink); font: 500 16px/1.1 var(--font-sans); text-decoration: none;
+}
+.btn:lang(ja) { font-family: var(--font-sans-ja); }
+
+/* A narrow window: the page alone - the contents are a page of their own, and the way on below */
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); padding-top: 12px; }
+  .side { display: none; }
+}
+@media (max-width: 480px) {
+  .brand svg { height: 18px; }
+  .names { gap: 10px; }
+  .crumb { padding-left: 10px; font-size: 12px; }
+  .languages { gap: 2px; font-size: 14px; }
+  .languages a, .languages span { padding: 4px 8px; }
+  .pager { grid-template-columns: minmax(0, 1fr); }
+  .pager .next { grid-column: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sections a, .pager a, .languages a, .side a { transition: none; }
+}

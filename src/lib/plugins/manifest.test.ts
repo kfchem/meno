@@ -206,6 +206,19 @@ describe("a plugin's manifest", () => {
     expect(rdkit.steps.find((d) => d.kind === "conformers")?.options).toEqual(rdkit.roles.find((r) => r.role === "conformers")?.options);
   });
 
+  it("may declare another plugin's program its jobs may need - a plugin, a program it runs, a variable to name it in - all as they must be, or none", () => {
+    const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
+    const need = { plugin: "xtb", program: "xtb", env: "XTBEXE" };
+    expect(acceptManifest({ ...steps, needs: [need] })?.needs).toEqual([need]);
+    expect(acceptManifest(steps)?.needs).toBeUndefined();
+    // (its own plugin, a shell, a path, a variable that finds programs, one plugin twice: none taken)
+    for (const bad of [{ ...need, plugin: good.id }, { ...need, program: "sh" }, { ...need, program: "bin/xtb" }, { ...need, env: "PATH" }, { ...need, env: "1X" }])
+      expect(acceptManifest({ ...steps, needs: [bad] })?.needs, JSON.stringify(bad)).toBeUndefined();
+    expect(acceptManifest({ ...steps, needs: [need, { ...need, env: "OTHER" }] })?.needs).toBeUndefined();
+    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.needs).toEqual([need]);
+  });
+
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {
     const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["conformers"], programs: ["crest"] }] };
     expect(acceptManifest({ ...steps, systems: ["macos", "linux", "beos"] })?.systems).toEqual(["macos", "linux"]);

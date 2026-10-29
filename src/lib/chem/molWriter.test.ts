@@ -664,3 +664,48 @@ describe("overBonded", () => {
     expect([...overBonded(star({ el: "Cl" }, [["Pd", 1], ["Pd", 1]]))]).toEqual([]);
   });
 });
+
+describe("a label bonded more than once, written out", () => {
+  // (the angle at an atom between two of its neighbours, in degrees)
+  const angle = (o: { x: number; y: number }, p: { x: number; y: number }, q: { x: number; y: number }) =>
+    (Math.abs(Math.atan2((p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x), (p.x - o.x) * (q.x - o.x) + (p.y - o.y) * (q.y - o.y))) * 180) / Math.PI;
+  const around = (text: string, at: number) => {
+    const r = readMolfile(text)!;
+    const o = r.atoms[at];
+    const next = r.bonds.filter((b) => b.a1 === at || b.a2 === at).map((b) => r.atoms[b.a1 === at ? b.a2 : b.a1]);
+    return next.flatMap((p, i) => next.slice(i + 1).map((q) => angle(o, p, q)));
+  };
+
+  it("has its group in the widest opening between its bonds, as a drawn substituent: NMe, NBoc, NTs in a chain", () => {
+    const c = (L * Math.sqrt(3)) / 2;
+    for (const label of ["NMe", "NBoc", "NTs"]) {
+      const chain: WriterModel = {
+        atoms: [
+          { id: 1, el: "C", x: -2 * c, y: 0 },
+          { id: 2, el: "C", x: -c, y: L / 2 },
+          { id: 3, el: label, x: 0, y: 0 },
+          { id: 4, el: "C", x: c, y: L / 2 },
+          { id: 5, el: "C", x: 2 * c, y: 0 },
+        ],
+        bonds: [
+          { a: 1, b: 2, order: 1 },
+          { a: 2, b: 3, order: 1 },
+          { a: 3, b: 4, order: 1 },
+          { a: 4, b: 5, order: 1 },
+        ],
+      };
+      // (the N's three bonds 120° apart: the group's first atom on neither chain carbon, nor at a right angle to the second)
+      for (const deg of around(writeMolfile(chain), 2)) expect(deg, label).toBeCloseTo(120, 1);
+    }
+  });
+
+  it("has it out of a ring, on the bisector, from a ring's atom", () => {
+    const atoms = Array.from({ length: 6 }, (_, k) => ({ id: k + 1, el: k ? "C" : "NBoc", x: L * Math.cos((k * Math.PI) / 3), y: L * Math.sin((k * Math.PI) / 3) }));
+    const bonds = atoms.map((_, k) => ({ a: k + 1, b: ((k + 1) % 6) + 1, order: 1 as const }));
+    const r = readMolfile(writeMolfile({ atoms, bonds }))!;
+    const boc = r.bonds.filter((b) => b.a1 === 0 || b.a2 === 0).map((b) => r.atoms[b.a1 === 0 ? b.a2 : b.a1]).find((a) => !atoms.slice(1).some((x) => Math.abs(x.x * MOL_BOND_LENGTH / L - a.x) < 1e-3 && Math.abs(x.y * MOL_BOND_LENGTH / L - a.y) < 1e-3))!;
+    // (straight out: the ring's centre behind the N, the Boc's carbon level with it)
+    expect(boc.x).toBeGreaterThan(r.atoms[0].x);
+    expect(boc.y).toBeCloseTo(r.atoms[0].y, 2);
+  });
+});

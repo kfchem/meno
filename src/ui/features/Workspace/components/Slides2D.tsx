@@ -39,6 +39,7 @@ import { heldShows, type Held } from "./held";
 import { useStyleOptions } from "../useDrawingStyle";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
 import { boxOf, joinOf, markScale } from "../presenting/slides";
+import { switchFade, switchStep } from "../utils/zoomSwitch";
 
 /** Where slides' frames lie: over the drawing and what is on the page. */
 const Z = 0.6;
@@ -219,18 +220,22 @@ function SlideNumber({ n, font, opacity, h }: { n: number; font: string | null; 
   const group = useRef<THREE.Group>(null);
   const disc = useRef<THREE.MeshBasicMaterial>(null);
   const figures = useRef<THREE.Mesh & { fillOpacity: number }>(null);
-  const shown = useRef(1);
+  // (seen, or not, as its figures can be read: switched, and faded over a short time - utils/zoomSwitch)
+  const read = useRef(true);
+  const shown = useRef(switchFade(true));
+  const invalidate = useThree((st) => st.invalidate);
   useScreenSize(
     (px) => {
-      const m = h == null ? { k: 1, seen: 1 } : markScale(h, px, 2 * NUMBER_PX, FIGURES_PX);
-      shown.current = m.seen;
+      const m = h == null ? { k: 1, read: true } : markScale(h, px, 2 * NUMBER_PX, FIGURES_PX, read.current);
+      read.current = m.read;
       group.current?.scale.setScalar(px * m.k);
-      if (group.current) group.current.visible = m.seen > 0;
     },
     [h],
   );
-  usePartFrame(() => {
-    const o = opacity() * shown.current;
+  usePartFrame((_, dt) => {
+    if (switchStep(shown.current, read.current, Math.min(dt, 1 / 20))) invalidate();
+    const o = opacity() * shown.current.v;
+    if (group.current) group.current.visible = shown.current.v > 0;
     if (disc.current) disc.current.opacity = o;
     if (figures.current) figures.current.fillOpacity = o;
   });
@@ -576,30 +581,34 @@ function Join({ from, to, h, opacity }: { from: Pt; to: Pt; h: number; opacity: 
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const head = useRef<THREE.Mesh>(null);
   const headMaterial = useRef<THREE.MeshBasicMaterial>(null);
-  const shown = useRef(1);
+  // (seen, or not, as the smaller slide's number is: switched, and faded over a short time)
+  const read = useRef(true);
+  const shown = useRef(switchFade(true));
+  const long = useRef(true);
+  const invalidate = useThree((st) => st.invalidate);
   const line = useRef<THREE.Mesh>(null);
   useScreenSize(
     (screenPx) => {
       // (its pixel as its numbers': shrunk with them, where they shrink with their slides)
-      const m = markScale(h, screenPx, 2 * NUMBER_PX, FIGURES_PX);
-      shown.current = m.seen;
+      const m = markScale(h, screenPx, 2 * NUMBER_PX, FIGURES_PX, read.current);
+      read.current = m.read;
       const px = screenPx * m.k;
-      if (line.current) line.current.visible = m.seen > 0;
       // (a little apart from the frames at either end)
       const gap = Math.min(NUMBER_PX * px * 1.4, len / 3);
       material.uniforms.uFrom.value.set(from.x + ux * gap, from.y + uy * gap);
       material.uniforms.uTo.value.set(to.x - ux * gap, to.y - uy * gap);
       material.uniforms.uWidth.value = JOIN_PX * px;
       material.uniforms.uPx.value = px;
-      if (head.current) {
-        head.current.scale.setScalar(HEAD_PX * px);
-        head.current.visible = m.seen > 0 && len > 6 * HEAD_PX * px;
-      }
+      if (head.current) head.current.scale.setScalar(HEAD_PX * px);
+      long.current = len > 6 * HEAD_PX * px;
     },
     [from.x, from.y, to.x, to.y, h, material],
   );
-  usePartFrame(() => {
-    const o = opacity() * shown.current;
+  usePartFrame((_, dt) => {
+    if (switchStep(shown.current, read.current, Math.min(dt, 1 / 20))) invalidate();
+    const o = opacity() * shown.current.v;
+    if (line.current) line.current.visible = shown.current.v > 0;
+    if (head.current) head.current.visible = shown.current.v > 0 && long.current;
     material.uniforms.uOpacity.value = o;
     if (headMaterial.current) headMaterial.current.opacity = o * 1.4;
   });

@@ -188,23 +188,49 @@ body {
 /* A chip on the page - a molecule's frames chip, a measurement's value -
    grows and shrinks with the page, as its cards and sets do: drawn at the
    page's scale, `--page` (components/PageScale), from where it hangs; and
-   fades out with the zoom where its words would be too small to read, as a
-   step's card fades to its icons alone (utils/pageScale `wordsShown`). */
+   goes where its words would be too small to read, as a step's card goes
+   to its icons alone - switched past a threshold, not faded with the zoom,
+   and faded over Meno's quick time (utils/pageScale `wordsReadAt`). */
 .meno-page-chip {
   opacity: var(--words, 1);
+  transition: opacity 120ms var(--ease-meno);
 }
 [data-words-small] .meno-page-chip {
   pointer-events: none !important;
 }
-/* The words of the page's cards and sets, faded with the zoom as chips are
-   (`--words`); and what stands for them where they are gone, faded in as
-   they go, over the same band (`--stand-in`): never both near naught. */
+/* The words of the page's cards and sets, switched as chips are
+   (`--words`), and what stands for them the other way (`--stand-in`): the
+   one fading out as the other fades in, over Meno's quick time. */
 .meno-words,
 .meno-words-each > span {
   opacity: var(--words, 1);
+  transition: opacity 120ms var(--ease-meno);
 }
 .meno-words-gone {
   opacity: var(--stand-in, 0);
+  transition: opacity 120ms var(--ease-meno);
+}
+/* Words shown as grey bars where they are too small to read (workflow/TextBars): the words themselves unseen, faded out, and nothing pressed. */
+.meno-barred,
+.meno-barred * {
+  color: transparent !important;
+  transition: color 120ms var(--ease-meno);
+  pointer-events: none;
+}
+.meno-barred ::placeholder {
+  color: transparent !important;
+}
+/* A workflow's port, however small it is drawn - zoomed out, with the page (workflow/look `portSize`) - taken hold of over at least 12 hairlines about its middle. */
+.meno-port::after {
+  content: "";
+  position: absolute;
+  inset: min(0px, calc((var(--port) - var(--hair, 1px) * 12) / 2));
+  border-radius: 9999px;
+}
+/* A style's card carried (StyleEditor/StylePicker3D): the hand's pointer all the way, over whatever it passes. */
+.meno-carrying,
+.meno-carrying * {
+  cursor: grabbing !important;
 }
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */

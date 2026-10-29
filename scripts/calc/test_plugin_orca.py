@@ -137,6 +137,18 @@ class Prepare(unittest.TestCase):
         self.assertFalse(said["ok"])
         self.assertIn("99O", said["error"])
 
+    def test_a_job_running_an_xtb_method_through_the_xtb_program_asks_for_the_xtb_plugins_and_no_other_does(self):
+        # (each keyword ORCA 6.1.1 runs through the xtb program, in the method or the keywords, any case; its native ones not)
+        for method, keywords in [("XTB2", ""), ("gfn2-xtb", ""), ("XTB0", ""), ("XTB1", ""), ("GFN1-XTB", ""), ("XTB", ""), ("GFN0-XTB", ""), ("B3LYP", "GFN-FF"), ("XTBFF", "")]:
+            job = ask("prepare", step="optimise", entries=[WATER], options={**defaults("optimise"), "method": method, "basis": "", "dispersion": "none", "keywords": keywords})["jobs"][0]
+            self.assertEqual(job.get("needs"), ["xtb"], (method, keywords))
+        for method in ["B3LYP", "NATIVE-GFN2-XTB", "NATIVE-XTB2", "NATIVE-XTB", "NATIVE-SPGFN2-XTB", "XTB2PLUS"]:
+            job = ask("prepare", step="optimise", entries=[WATER], options={**defaults("optimise"), "method": method})["jobs"][0]
+            self.assertNotIn("needs", job, method)
+        # (what it asks for, its manifest declares)
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["needs"], [{"plugin": "xtb", "program": "xtb", "env": "XTBEXE"}])
+
     def test_refuses_what_it_does_not_know(self):
         for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [WATER], "options": {**defaults("energy"), **options}}))

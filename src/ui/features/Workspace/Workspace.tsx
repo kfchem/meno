@@ -46,7 +46,7 @@ import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
-import { stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
+import { asCameSaid, stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
 import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
@@ -132,7 +132,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
-import { cleanUp, fragmentOf } from "./chem/cleanUp";
+import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
@@ -412,7 +412,8 @@ function WorkspaceContent({
       cleanUp(store, aroundAtom)
         .catch((e: unknown) =>
           setChemError(
-            `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
+            // (what it left as drawn, named - the rest laid out: its own words; anything else, a failure)
+            e instanceof CleanUpRefused ? e.message : `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
           ),
         )
         .finally(() => {
@@ -1898,7 +1899,7 @@ function WorkspaceContent({
               // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
               const read = await structureFromSmiles(smiles, style);
               // (and the stereo it leaves open, said as a paste of it says it)
-              const said = stereoOpenSaid(read.stereoOpen);
+              const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
               if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
             }}
             onCoordinates={(structures) => {
