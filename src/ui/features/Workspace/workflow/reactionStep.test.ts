@@ -8,6 +8,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import { addSet, addStep, connect } from "./model";
 import { resultOf } from "./flow";
 import { runStep, type RunWith } from "./run";
+import { setName } from "./doers";
 
 /** A molecule in 3D as a step's entry: its atoms, bonds and places. */
 const entryOf = (m: Molecule, compound = 0, extra: Partial<SetEntry> = {}): SetEntry =>
@@ -80,5 +81,12 @@ describe("Reaction, as a step", () => {
     expect(changes.made).toMatchObject({ holds: "table" });
     expect(changes.table!.rows).toHaveLength(6);
     expect(resultOf(ran, step, "out")!.members?.length).toBe(1);
+  });
+});
+
+describe("Reaction's sets, named", () => {
+  it("each exit's by its own name: what it maps, what it did not, and the bond changes", () => {
+    const steps = [{ id: 3, kind: "reaction", by: "meno", x: 0, y: 0 }] as unknown as Parameters<typeof setName>[1];
+    expect(["out", "rest", "changes"].map((exit) => setName({ made: { step: 3, exit, holds: "molecules" } }, steps))).toEqual(["Mapped products", "Not mapped", "Bond changes"]);
   });
 });
