@@ -2,7 +2,6 @@ import {
   CloudIcon,
   CpuChipIcon,
   CursorArrowRaysIcon,
-  FilmIcon,
   FunnelIcon,
   PhotoIcon,
   PresentationChartLineIcon,
@@ -140,7 +139,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M6.8 8 L4.6 10 L6.8 12 M13.2 8 L15.4 10 L13.2 12" />
     </>
   ),
-  film: FilmIcon,
+  // (a path, its highest point taken)
+  peak: (
+    <>
+      <path d="M2 16.5 C6 16.5, 6.8 7.5, 10 7.5 C13.2 7.5, 14 13, 18 13" />
+      <circle cx="2" cy="16.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="13" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.5" r="2.5" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
