@@ -15,7 +15,8 @@
       "resources/plugins/*/LICENSE",
       "resources/licenses/*",
       "pdfium/windows/pdfium.dll",
-      "icons/document/meno-document.ico"
+      "icons/document/meno-document.ico",
+      "icons/formats/*.ico"
     ],
     "fileAssociations": [
       {

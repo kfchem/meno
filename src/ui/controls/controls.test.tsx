@@ -217,6 +217,16 @@ describe("Meno's own controls, as they first show", () => {
     expect(html).not.toContain("<select");
   });
 
+  it("a Select in a header, quiet: no frame, as tabs and icon buttons are - a field's has one", () => {
+    const quiet = renderToString(<Select label="Job" value="0" options={[{ value: "0", label: "Job 1 of 7 · done" }]} onChange={() => {}} variant="quiet" />);
+    const field = renderToString(<Select label="Job" value="0" options={[{ value: "0", label: "Job 1 of 7 · done" }]} onChange={() => {}} />);
+    const classOf = (html: string) => /<button[^>]*class="([^"]*)"/.exec(html)![1].split(" ");
+    expect(classOf(quiet)).not.toContain("border");
+    expect(classOf(quiet)).toContain("hover:bg-gh-base");
+    expect(classOf(quiet)).toContain("h-7");
+    expect(classOf(field)).toContain("border");
+  });
+
   it("a Select with nothing chosen: what it says instead, quieter", () => {
     const html = renderToString(<Select label="Carboxyl O4, O5" value={null} placeholder="Choose…" options={LOOKS} onChange={() => {}} />);
     expect(html).toMatch(/<span class="[^"]*text-gh-gray[^"]*">Choose…<\/span>/);
