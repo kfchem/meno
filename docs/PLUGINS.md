@@ -510,9 +510,12 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   2000 steps and the same ones sorted out - on ten cores (Apple M4), from
   five hundred conformers to five thousand, so five thousand took 132 s.
   The bound is said once, in the manifest (`max` of *How many*), which
-  Settings draws the field by and the worker reads; a request above it, or
-  a number that is no whole number, is refused, saying what it takes -
-  never cut to the bound.
+  Settings draws the field by and the worker reads. The worker holds every
+  option of the search to the manifest so - the force field to its
+  choices, the steps and the seed to their bounds, each a whole number: a
+  request with anything else is refused, saying what it takes, never cut
+  to a bound nor put back to a default. An option a request leaves out is
+  its default.
 - **The same conformer** (the maintainer, 2026-10-21): two conformers are
   one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
   each other, laid over at their best - turned and moved, never reflected

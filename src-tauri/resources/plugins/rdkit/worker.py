@@ -432,7 +432,7 @@ SAME_CONFORMER = 0.01
 #: Trying every way of a Pd(PPh3)4, whose four phosphines and twelve phenyls map onto each other every way
 #: round, took 2.1 s for a single pair of conformers here, where 1000 ways took 0.002 s.
 ALIKE_WAYS = 1000
-# conformers' random seed, and how many steps an optimisation may take, unless asked
+# conformers' random seed, and how many steps an optimisation may take, where a request gives none
 SEED = 0x4D45
 STEPS = 2000
 # the force fields conformers may be optimised in
@@ -441,53 +441,68 @@ FIELDS = ("MMFF94", "MMFF94s", "UFF")
 MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "manifest.json")
 
 
-def declared(role, option):
-    """An option the manifest declares for a role, as Settings draws its field: the one place its bounds are said."""
+def declared(role):
+    """The options the manifest declares for a role, by id, as Settings draws their fields: the one place what each
+    may be is said."""
     with open(MANIFEST, encoding="utf-8") as f:
         roles = json.load(f)["roles"]
-    return next(o for r in roles if r["role"] == role for o in r.get("options") or [] if o["id"] == option)
+    return {o["id"]: o for r in roles if r["role"] == role for o in r.get("options") or []}
 
 
-#: The most conformers a chemist may ask for (*This many*), as the manifest bounds *How many*: one number for the
-#: field and for a request, which above it is refused, never cut to it. Each conformer of a C30 chain (an ether, an
-#: amide and an amine in it; 25 turning bonds) took 22 to 27 ms here - ETKDG v3, MMFF94 at up to 2000 steps and
-#: sorting out the same ones, on ten cores (Apple M4), from 500 conformers to 5000: 132 s for 5000.
-MOST_CONFORMERS = declared("conformers", "count")["max"]
+#: The conformer search's options (*Conformers sought*, *How many*, the force field, the steps, the seed), as the
+#: manifest declares them: a request is held to what each may be there, and refused where it is anything else -
+#: never cut to a bound, nor put back to a default, which would make other conformers than were asked for.
+CONFORMER_OPTIONS = declared("conformers")
+#: The most conformers a chemist may ask for (*This many*), as the manifest bounds *How many*. Each conformer of a
+#: C30 chain (an ether, an amide and an amine in it; 25 turning bonds) took 22 to 27 ms here - ETKDG v3, MMFF94 at
+#: up to 2000 steps and sorting out the same ones, on ten cores (Apple M4), from 500 conformers to 5000: 132 s for
+#: 5000.
+MOST_CONFORMERS = CONFORMER_OPTIONS["count"]["max"]
+#: Each option as a refusal names it.
+SAID = {"sought": "Conformers sought", "count": "How many conformers", "field": "Force field", "iters": "Optimisation steps", "seed": "Random seed"}
 
 
-def count_of(v):
-    """How many conformers were asked for, as asked: a whole number from 1 to MOST_CONFORMERS. Refused, saying what
-    it may be, where it is anything else - never cut to the bound, which would make fewer than were asked for."""
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v != int(v) or not 1 <= v <= MOST_CONFORMERS:
-        raise ValueError(f"How many conformers is {v}: it takes a whole number from 1 to {MOST_CONFORMERS}")
-    return int(v)
+def option_of(key, v):
+    """An option of the conformer search as asked: a number a whole one within its bounds, a choice one of its
+    choices. Refused, saying what it takes, where it is anything else."""
+    o = CONFORMER_OPTIONS[key]
+    if o["type"] == "number":
+        low, high = o["min"], o["max"]
+        # (only a float can be infinite or not a number: a whole number past a float's range, as JSON may give one,
+        #  is held to the bounds as it is)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or isinstance(v, float) and not math.isfinite(v) or v != int(v) or not low <= v <= high:
+            raise ValueError(f"{SAID[key]} is {v!r}: it takes a whole number from {low} to {high}")
+        return int(v)
+    choices = [c["value"] for c in o["choices"]]
+    if v not in choices:
+        raise ValueError(f"{SAID[key]} is {v!r}: it takes {', '.join(choices[:-1])} or {choices[-1]}")
+    return v
 
 
 def options_of(m):
     """How conformers are to be made, as the request's options say - those
-    the manifest declares for the role (roleOptions), each kept to what it
-    may be, but the number asked for, which is refused where it may not be
-    (`count_of`) - else as before: `count` alone, as older requests give it.
+    the manifest declares for the role (roleOptions), each refused where it
+    is not what it may be (`option_of`) - else as before: `count` alone, as
+    older requests give it. An option a request leaves out is its default.
     How many are sought is the `count` asked for where the options ask for a
     number of their own (`sought`: "fixed"), and none where the molecule is
     to say how many it needs, which `sought` below works out."""
     o = m.get("options") or {}
 
-    def number(key, default, low, high, kind=int):
-        try:
-            v = kind(o.get(key, default))
-        except (TypeError, ValueError):
-            v = default
-        return min(max(v, low), high)
+    def given(key, default):
+        return option_of(key, o[key]) if key in o else default
 
+    sought = given("sought", None)
     # (a number, where the chemist asked for one - or where the request gives a count and no choice at all)
-    asked = o.get("sought") == "fixed" or (o.get("sought") is None and ("count" in o or "count" in m))
+    asked = sought == "fixed" or (sought is None and ("count" in o or "count" in m))
     return {
-        "count": count_of(o.get("count", m.get("count", RING_CONFORMERS))) if asked else None,
-        "seed": number("seed", SEED, 0, 2**31 - 1),
-        "field": o.get("field") if o.get("field") in FIELDS else "MMFF94",
-        "iters": number("iters", STEPS, 10, 100000),
+        "count": option_of("count", o.get("count", m.get("count", RING_CONFORMERS))) if asked else None,
+        "seed": given("seed", SEED),
+        "field": given("field", "MMFF94"),
+        "iters": given("iters", STEPS),
     }
+
+
 #: Kilocalories per mole in a hartree: energies go back in hartrees. The hartree (4.3597447222071e-18 J,
 #: CODATA 2018) times the Avogadro constant (6.02214076e23 per mole, exact, SI 2019), over the
 #: thermochemical calorie (4.184 J, exact).
@@ -2305,7 +2320,7 @@ def op_prepare(m):
     if m.get("step") != "conformers":
         raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
     options = m.get("options") or {}
-    options_of({"options": options})  # (a number it may not take, said now - not in each job)
+    options_of({"options": options})  # (an option it may not take, said now - not in each job)
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
         mol_of(entry)  # (one RDKit cannot make sense of, said now - not in its job)
