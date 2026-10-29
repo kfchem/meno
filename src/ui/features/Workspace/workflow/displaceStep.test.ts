@@ -44,7 +44,7 @@ const ok = (o: ReturnType<typeof runMeno>) => {
 
 describe("Displace, as a step", () => {
   it("moves each geometry along its imaginary vibration, the atom moving most by the amplitude; its energy, of the old geometry, not its own", () => {
-    const o = ok(runMeno("displace", [ts([-1450, 300])], "molecules", { amplitude: "0.1" }));
+    const o = ok(runMeno("displace", [ts([-1450, 300])], "molecules", { amplitude: 0.1 }));
     expect(o.kept).toHaveLength(1);
     expect(o.kept[0].xyz[3]).toBeCloseTo(0.1, 12);
     expect(o.kept[0].xyz[0]).toBeCloseTo(-1.2 - 0.1 / 3, 12);
@@ -54,27 +54,33 @@ describe("Displace, as a step", () => {
   });
 
   it("moves along a vibration chosen by number, from 1 on the card - the other way for a negative amplitude", () => {
-    const o = ok(runMeno("displace", [ts([-1450, 300])], "molecules", { vibration: "number", number: "2", amplitude: "-0.2" }));
+    const o = ok(runMeno("displace", [ts([-1450, 300])], "molecules", { vibration: "number", number: 2, amplitude: -0.2 }));
     expect(o.kept[0].xyz[4]).toBeCloseTo(0.2, 12);
   });
 
   it("sets aside one with no imaginary vibration, or none at all, saying why", () => {
-    const o = ok(runMeno("displace", [ts([1450, 300]), ts([-1450, 300], { calc: undefined, number: 2 } as Partial<SetEntry>)], "molecules", { amplitude: "0.1" }));
+    const o = ok(runMeno("displace", [ts([1450, 300]), ts([-1450, 300], { calc: undefined, number: 2 } as Partial<SetEntry>)], "molecules", { amplitude: 0.1 }));
     expect(o.kept).toEqual([]);
     expect(o.aside.map((e) => e.properties?.set_aside?.value)).toEqual(["It has no imaginary vibration.", "The entry has no vibrations."]);
-    expect(o.said).toBe("0 entries displaced · 2 not displaced");
+    expect(o.said).toBe("0 entries displaced \u00b7 2 not displaced");
   });
 
-  it("will not run without an amplitude, or with a vibration's number that does not read; says what it does on its card, defaults unsaid", () => {
+  it("sets aside one not finished as not finished, its vibrations no ground to move it on; counts a conformer set's frames", () => {
+    const o = ok(runMeno("displace", [ts([-1450, 300], { failed: { kind: "not-converged", why: "100 cycles" } } as Partial<SetEntry>)], "molecules", { amplitude: 0.1 }));
+    expect(o.aside.map((e) => e.properties?.set_aside?.value)).toEqual(["not finished: not converged"]);
+    expect(ok(runMeno("displace", [ts([-1450, 300])], "conformers", { amplitude: 0.1 })).said).toBe("1 frame displaced");
+  });
+
+  it("will not run without an amplitude - 0, which moves nothing, until one is given - or with a vibration's number that does not read; says what it does on its card, defaults unsaid", () => {
     const info = kindInfo("displace");
-    const needs = (v: Record<string, string>) => info.needs!(optionsOf(info.options ?? [], v));
-    const how = (v: Record<string, string>) => info.how!(optionsOf(info.options ?? [], v));
+    const needs = (v: Record<string, string | number>) => info.needs!(optionsOf(info.options ?? [], v));
+    const how = (v: Record<string, string | number>) => info.how!(optionsOf(info.options ?? [], v));
     expect(needs({})).toBe("Give the amplitude");
-    expect(needs({ amplitude: "0" })).toBe('"0" is no amplitude in Å');
-    expect(needs({ amplitude: "0.1", vibration: "number", number: "0" })).toBe('"0" is no vibration\'s number, from 1');
-    expect(needs({ amplitude: "0.1" })).toBeUndefined();
-    expect(how({ amplitude: "0.1" })).toBe("0.1 Å");
-    expect(how({ amplitude: "-0.1", vibration: "number", number: "7" })).toBe("-0.1 Å along vibration 7");
+    expect(needs({ amplitude: 0 })).toBe("Give the amplitude");
+    expect(needs({ amplitude: 0.1, vibration: "number", number: 0 })).toBe("0 is no vibration's number, from 1");
+    expect(needs({ amplitude: 0.1 })).toBeUndefined();
+    expect(how({ amplitude: 0.1 })).toBe("0.1 \u00c5");
+    expect(how({ amplitude: -0.1, vibration: "number", number: 7 })).toBe("-0.1 \u00c5 along vibration 7");
     expect(runMeno("displace", [ts([-1450, 300])], "molecules", {})).toEqual({ ok: false, said: "Give the amplitude" });
   });
 });

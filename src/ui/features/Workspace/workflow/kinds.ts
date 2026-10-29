@@ -599,8 +599,9 @@ export const KINDS: readonly KindInfo[] = [
         ],
         default: "imaginary",
       },
-      { id: "number", label: "Vibration, from 1", type: "text", default: "", when: { id: "vibration", in: ["number"] } },
-      { id: "amplitude", label: "Amplitude, \u00c5 (negative: the other way)", type: "text", default: "" },
+      { id: "number", label: "Vibration, from 1", type: "number", default: 1, min: 1, step: 1, when: { id: "vibration", in: ["number"] } },
+      // (0, which moves nothing, until one is given: no amplitude is right for every system, and none is given without a basis)
+      { id: "amplitude", label: "Amplitude (negative: against the mode as written)", type: "number", default: 0, step: 0.05, unit: "\u00c5", unset: 0 },
     ],
     how: (v) => displaceHow(v),
     needs: (v) => displaceNeeds(v),
@@ -609,15 +610,12 @@ export const KINDS: readonly KindInfo[] = [
 
 /** *Displace*'s options as read: its amplitude (Å, not 0), and the vibration (from 0) where one is chosen by number - or what it still needs. */
 export function displaceRead(v: OptionValues): { amplitude: number; vibration: "imaginary" | number } | { why: string } {
-  const amp = String(v.amplitude ?? "").trim();
-  const amplitude = amp ? Number(amp) : NaN;
-  if (!amp) return { why: "Give the amplitude" };
-  if (!Number.isFinite(amplitude) || amplitude === 0) return { why: `"${amp}" is no amplitude in \u00c5` };
+  const amplitude = Number(v.amplitude ?? 0);
+  if (!Number.isFinite(amplitude) || amplitude === 0) return { why: "Give the amplitude" };
   if (v.vibration !== "number") return { amplitude, vibration: "imaginary" };
-  const n = String(v.number ?? "").trim();
-  if (!n) return { why: "Give the vibration's number" };
-  if (!/^\d+$/.test(n) || Number(n) < 1) return { why: `"${n}" is no vibration's number, from 1` };
-  return { amplitude, vibration: Number(n) - 1 };
+  const n = Number(v.number ?? 1);
+  if (!Number.isInteger(n) || n < 1) return { why: `${n} is no vibration's number, from 1` };
+  return { amplitude, vibration: n - 1 };
 }
 const displaceNeeds = (v: OptionValues): string | undefined => {
   const r = displaceRead(v);

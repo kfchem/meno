@@ -18,7 +18,7 @@ import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
-import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -292,14 +292,21 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
  * the one chosen, by the amplitude: the atom moving most by exactly that,
  * the rest in proportion. What it carried rides along, each value saying
  * the geometry it was worked out at; its energy and calculation, of that
- * geometry, are not its own any more. One with no vibrations to move along,
- * no imaginary one, or no such vibration, is set aside with why.
+ * geometry, are not its own any more. One not finished - its calculation
+ * failed, or did not converge - is set aside as not finished: its
+ * vibrations are no ground to move it on. One with no vibrations to move
+ * along, no imaginary one, or no such vibration, is set aside with why. A
+ * conformer set's are counted as frames.
  */
 export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { amplitude: number; vibration: "imaginary" | number }): Outcome3D {
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const notes = new Set<string>();
   entries.forEach((e, i) => {
+    if (entryState(e) !== FINISHED) {
+      aside.push(withSaid(e, SET_ASIDE, `not finished: ${entryState(e)}`));
+      return;
+    }
     const r = displacedEntry(entryOfSet(e, String(i)), o, String(i));
     if ("failed" in r) {
       aside.push(withSaid(e, SET_ASIDE, r.failed));
@@ -309,7 +316,7 @@ export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { 
     const made = setEntryOfEntry(r.entry, { compound: e.compound, number: e.number }, e);
     if (made) kept.push(made);
   });
-  const line = [`${plural(kept.length, "entry", "entries")} displaced`];
+  const line = [`${holds === "conformers" ? plural(kept.length, "frame") : plural(kept.length, "entry", "entries")} displaced`];
   if (aside.length) line.push(`${aside.length} not displaced`);
   return { ok: true, holds, kept, aside, said: [line.join(" · "), ...notes].join(". ") };
 }
