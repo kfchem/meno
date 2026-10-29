@@ -235,12 +235,6 @@ public static class MacGui {
     return app != IntPtr.Zero && SendBool(app, sel_registerName("terminate")) != 0;
   }
 
-  public static int FrontmostPid() {
-    IntPtr ws = Send(Cls("NSWorkspace"), sel_registerName("sharedWorkspace"));
-    IntPtr app = Send(ws, sel_registerName("frontmostApplication"));
-    return app == IntPtr.Zero ? 0 : SendInt(app, sel_registerName("processIdentifier"));
-  }
-
   public static string AppName(int pid) {
     IntPtr app = Running(pid);
     if (app == IntPtr.Zero) return "pid " + pid;
@@ -496,11 +490,31 @@ function Get-WindowInfo {
     return $w
 }
 
+function Get-FrontPid {
+    <#
+      .SYNOPSIS
+      The process of the app in front now, as Launch Services has it (0 where
+      none is to be had).
+
+      .DESCRIPTION
+      Asked of lsappinfo each time, not of NSWorkspace's frontmostApplication:
+      that is kept up to date by notifications on a run loop this process
+      never runs, and stayed on a Meno that had quit for as long as it was
+      asked (2026-10-29) - a Meno started again, and in front, was taken for
+      one that would not come forward.
+    #>
+    $asn = ((& /usr/bin/lsappinfo front) -join "").Trim()
+    if (-not $asn) { return 0 }
+    $info = (& /usr/bin/lsappinfo info -only pid $asn) -join " "
+    if ($info -match '\bpid"?\s*=\s*(\d+)') { return [int]$Matches[1] }
+    return 0
+}
+
 function Wait-MenoFront {
     param([int] $TimeoutMs = 2000)
     $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
     do {
-        if ([MacGui]::FrontmostPid() -eq $script:MenoPid) { return $true }
+        if ((Get-FrontPid) -eq $script:MenoPid) { return $true }
         Start-Sleep -Milliseconds 100
     } while ((Get-Date) -lt $deadline)
     return $false
@@ -579,8 +593,8 @@ function Assert-MenoFront {
     # Input goes to whichever app is in front and to whichever window is
     # under the pointer, not to Meno by name. If Meno has lost the front, the
     # next keystroke lands in some other app, so stop rather than send it.
-    if ([MacGui]::FrontmostPid() -ne $script:MenoPid) {
-        $front = [MacGui]::AppName([MacGui]::FrontmostPid())
+    if ((Get-FrontPid) -ne $script:MenoPid) {
+        $front = [MacGui]::AppName((Get-FrontPid))
         throw "Meno is no longer in front - '$front' is - and input sent now would go there. Stopping."
     }
     # (a system window - a password prompt - can float over Meno with Meno
@@ -647,7 +661,7 @@ function Set-MenoWindow {
     if (-not (Wait-MenoFront)) {
         [MacGui]::Activate($script:MenoPid) | Out-Null
         if (-not (Wait-MenoFront)) {
-            throw "the window would not come to the front, so input would go to '$([MacGui]::AppName([MacGui]::FrontmostPid()))' instead. Check that the screen is unlocked."
+            throw "the window would not come to the front, so input would go to '$([MacGui]::AppName((Get-FrontPid)))' instead. Check that the screen is unlocked."
         }
     }
     # The window may have moved to another display.
