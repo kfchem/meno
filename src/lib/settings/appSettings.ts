@@ -82,6 +82,9 @@ export const CORES_MOST = 1024;
 export const MEMORY_MOST = 64 * 1024 * 1024;
 /** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this - the most a workspace's file may come to at all. */
 export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
+/** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol, unless Settings says otherwise; and the widest Settings takes. */
+export const WINDOW_3D = 30;
+export const WINDOW_3D_MOST = 1000;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
@@ -155,6 +158,8 @@ export type UpdateSettings = {
 export type ChemistrySettings = {
   /** Atoms with more bonds than they can have. (R and S, E and Z are shown on what they are asked for on, and kept in the document: docs/EDITOR-2D.md, *R and S*.) */
   valenceWarnings: boolean;
+  /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol - unset, `WINDOW_3D`. A workflow's conformer step keeps every one. */
+  window3d?: number;
 };
 
 export type NetworkSettings = {
@@ -358,10 +363,11 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings } = raw as Record<string, unknown>;
+  const { valenceWarnings, window3d } = raw as Record<string, unknown>;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
+    ...(typeof window3d === "number" && Number.isFinite(window3d) && window3d >= 0 && window3d <= WINDOW_3D_MOST ? { window3d } : {}),
   };
 }
 

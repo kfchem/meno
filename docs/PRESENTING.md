@@ -45,9 +45,11 @@ page; a talk is a way through it.
   until a number's disc would be more than a sixth of its slide's
   height on the screen: from there the number shrinks with its slide, and
   the line and its arrowhead with the smaller of the two it joins; and
-  where its figures are too small to read, it fades out, from 1.15 times
-  the least size the page's words are read at (8.25 px) to 1/1.15 of it,
-  evenly with the zoom, never at a jump (presenting/slides `markScale`).
+  where its figures are too small to read - the least size the page's
+  words are read at, 8.25 px - it goes: switched there, a little either
+  way, and faded over Meno's quick time, never faded with the zoom
+  (presenting/slides `markScale`, utils/zoomSwitch; the maintainer,
+  2026-10-28).
   Gone while a talk is given, and never in a picture of the page. A number
   being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around
@@ -152,6 +154,10 @@ words, a width they break into lines at, and how their lines lie.
   14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
   *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
   down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
+  over the drawing style's. Unset, single and the drawing's labels'
+  typeface.
 - **Letters marked**: bold, italic, a colour, superscript and subscript
   (kcal mol⁻¹, ΔG‡, r²SCAN) - Ctrl/Cmd+B, Ctrl/Cmd+I, Ctrl/Cmd with + and
   with = (the keys that give + and =, wherever a keyboard has them). The words stay plain text; the marks are kept beside them as

@@ -1,0 +1,30 @@
+{
+  "languages": ["en", "ja"],
+  "pages": ["installing"],
+  "words": {
+    "en": {
+      "language": "English",
+      "title": "Meno manual",
+      "manual": "Manual",
+      "contents": "Contents",
+      "languages": "Language",
+      "skip": "Skip to the page",
+      "previous": "Previous",
+      "next": "Next",
+      "pager": "The pages before and after",
+      "footer": "Meno is pre-alpha: its interface and the files it saves may change without notice. It is free and open source under the Apache License 2.0, at [github.com/kfchem/meno](https://github.com/kfchem/meno). The website's [disclaimer](/#disclaimer-h) holds for this manual too."
+    },
+    "ja": {
+      "language": "日本語",
+      "title": "Meno マニュアル",
+      "manual": "マニュアル",
+      "contents": "目次",
+      "languages": "言語",
+      "skip": "本文へ移動",
+      "previous": "前へ",
+      "next": "次へ",
+      "pager": "前後のページ",
+      "footer": "Meno はプレアルファ版です。画面や保存されるファイルは予告なく変わることがあります。Apache License 2.0 のもとで公開されている無料のオープンソースソフトウェアで、[github.com/kfchem/meno](https://github.com/kfchem/meno) にあります。ウェブサイトの[免責事項](/#disclaimer-h)はこのマニュアルにも当てはまります。"
+    }
+  }
+}

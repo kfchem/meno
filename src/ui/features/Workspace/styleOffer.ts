@@ -46,6 +46,13 @@ export const rolesName = (r: Roles3D) => `${r.primary.name} and ${r.secondary.na
 /** What a workspace is asked: for each kind of style that differs from Settings', its name now and Settings'. */
 export type StyleAsk = { drawing?: { now: string; settings: string }; d3?: { now: string; settings: string } };
 
+/** Which of a workspace's styles differ from Settings': its drawing style, its 3D styles in their roles - or none. */
+export function settingsDiffer(ws: { style: StyleChoice; style3d: Workspace3D }, settings: SettingsStyles): { drawing: boolean; d3: boolean } | null {
+  const drawing = keyOf(ws.style) !== keyOf(settings.drawing);
+  const d3 = keyOf({ primary: ws.style3d.primary, secondary: ws.style3d.secondary }) !== keyOf(settings.roles);
+  return drawing || d3 ? { drawing, d3 } : null;
+}
+
 /**
  * What to ask a workspace in `ws`'s styles, Settings' being `settings`, and
  * answered (or opened) when Settings' were `answered` (`keyOf`): nothing
@@ -54,9 +61,9 @@ export type StyleAsk = { drawing?: { now: string; settings: string }; d3?: { now
  */
 export function styleAsk(ws: { style: StyleChoice; style3d: Workspace3D }, settings: SettingsStyles, answered: string): StyleAsk | null {
   if (keyOf(settings) === answered) return null;
-  const drawing = keyOf(ws.style) !== keyOf(settings.drawing);
-  const d3 = keyOf({ primary: ws.style3d.primary, secondary: ws.style3d.secondary }) !== keyOf(settings.roles);
-  if (!drawing && !d3) return null;
+  const differ = settingsDiffer(ws, settings);
+  if (!differ) return null;
+  const { drawing, d3 } = differ;
   return {
     ...(drawing ? { drawing: { now: drawingName(ws.style), settings: drawingName(settings.drawing) } } : {}),
     ...(d3 ? { d3: { now: rolesName(ws.style3d), settings: rolesName(settings.roles) } } : {}),

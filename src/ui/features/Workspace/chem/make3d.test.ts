@@ -4,9 +4,10 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { layoutOptionsFor, MENO } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
+import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -363,5 +364,54 @@ describe("a molecule in 3D drawn as a formula", () => {
     const radical = { ...chain(2), atoms: chain(2).atoms.map((a, i) => (i === 0 ? { ...a, radical: "doublet" as const } : a)) };
     await formulaOf(asked.chem, radical, 0);
     expect(asked.asked[0].molblock).toContain("M  RAD  1   1   2\n");
+  });
+});
+
+describe("withinWindow", () => {
+  // (four conformers, lowest first, as the plugin gives them: 0, 1.2, 66 and 77 kcal/mol up - cyclooctane's two trapped MMFF94 minima)
+  const kcal = factor("kcal/mol", "Eh");
+  const made = (energies?: number[]): Conformers => ({
+    atoms: [{ el: "C", charge: 0 }],
+    bonds: [],
+    frames: [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]],
+    ...(energies ? { energies } : {}),
+    field: energies ? "MMFF94" : "none",
+    how: [{ label: "Embedded", text: "ETKDG v3" }],
+    cip: { atoms: {}, bonds: {} },
+    chosen: { atoms: {}, bonds: {} },
+    smiles: "C",
+  });
+  const four = [-0.1, -0.1 + 1.2 * kcal, -0.1 + 66 * kcal, -0.1 + 77 * kcal];
+
+  it("keeps those within the window of the lowest, in their order, and says what it set aside", () => {
+    const kept = withinWindow(made(four), 30);
+    expect(kept.frames).toEqual([[0, 0, 0], [1, 0, 0]]);
+    expect(kept.energies).toEqual(four.slice(0, 2));
+    expect(kept.how).toEqual([
+      { label: "Embedded", text: "ETKDG v3" },
+      { label: "Energy window", text: "within 30 kcal/mol of the lowest, 2 above it set aside" },
+    ]);
+    // (wide enough: none set aside, the window still said)
+    const all = withinWindow(made(four), 100);
+    expect(all.frames).toHaveLength(4);
+    expect(all.how?.[1]).toEqual({ label: "Energy window", text: "within 100 kcal/mol of the lowest" });
+    // (one just at the edge is kept; nothing below the lowest is lost at 0)
+    expect(withinWindow(made(four), 66).frames).toHaveLength(3);
+    expect(withinWindow(made(four), 0).frames).toEqual([[0, 0, 0]]);
+  });
+
+  it("sets none aside without energies, and says so; a conformer whose energy is not a number is kept", () => {
+    const none = withinWindow(made(), 30);
+    expect(none.frames).toHaveLength(4);
+    expect(none.how?.[1]).toEqual({ label: "Energy window", text: "none: no energies" });
+    const odd = withinWindow(made([-0.1, Number.NaN, -0.1 + 66 * kcal, -0.1]), 30);
+    expect(odd.frames).toEqual([[0, 0, 0], [1, 0, 0], [3, 0, 0]]);
+  });
+
+  it("is said with how the molecule in 3D was made", () => {
+    const [block] = blocksOf(ethanol, [12]);
+    const m = moleculeOf(withinWindow(made(four), 30), block);
+    expect(m.made?.how[1]).toEqual({ label: "Energy window", text: "within 30 kcal/mol of the lowest, 2 above it set aside" });
+    expect(m.frames).toHaveLength(1);
   });
 });

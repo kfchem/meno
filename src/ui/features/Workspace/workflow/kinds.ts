@@ -41,7 +41,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "film";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "film";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -141,7 +141,7 @@ export const KINDS: readonly KindInfo[] = [
     name: "Duplicates",
     // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
     whole: true,
-    icon: "twins",
+    icon: "copies",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -259,7 +259,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "check-structures",
     name: "Check structures",
-    icon: "band",
+    icon: "check",
     takes: ["structures"],
     gives: "structures",
     runs: "program",
@@ -281,7 +281,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "descriptors",
     name: "Descriptors",
-    icon: "bars",
+    icon: "list",
     takes: ["structures"],
     gives: "structures",
     runs: "program",
@@ -292,7 +292,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "enumerate",
     name: "Enumerate",
-    icon: "grouped",
+    icon: "fan",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -312,10 +312,11 @@ export const KINDS: readonly KindInfo[] = [
       },
       {
         id: "lists",
-        label: "R groups, one to a line",
+        label: "R groups",
         type: "lines",
         default: "R1:\n",
         rows: 6,
+        note: "Each R and its groups, as R1: Me, Et",
         when: { id: "way", in: ["rgroups"] },
         // (read as the step runs them, beside each line - asked when shown: the reader is the canvas's)
         readAs: (text) => listsReadAs(text),

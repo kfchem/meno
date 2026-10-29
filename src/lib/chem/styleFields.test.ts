@@ -6,9 +6,12 @@ import {
   ofBond,
   presetById,
   STYLE_PRESETS,
+  layoutOptionsFor,
+  styleOf,
   type DrawingStyle,
 } from "./style";
 import {
+  acceptDrawingStyle,
   acceptStyleChoice,
   acceptValue,
   automaticValue,
@@ -23,6 +26,7 @@ const EVERY_SETTING: (keyof DrawingStyle)[] = [
   ...(Object.keys(ACS_1996) as (keyof DrawingStyle)[]),
   "tripleGap",
   "wedgeBroadEnd",
+  "shortHashes",
   "hashStartOffset",
   "labelBaseline",
   "reactionArrowThickness",
@@ -156,5 +160,28 @@ describe("changing one setting", () => {
     // left unset: automatic again
     const own = withSetting(DEFAULT_STYLE_CHOICE, "tripleGap", pt(3));
     expect(withSetting(own, "tripleGap", undefined).changes).toEqual({});
+  });
+});
+
+describe("the shortest hashed bond, a style's own setting", () => {
+  it("is three hashes at least in Meno's own style, and at the spacing in every journal's - as their specifications have it", () => {
+    const fewest = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, layoutOptionsFor(p.style, 1).fewestHashes]));
+    expect(fewest).toEqual({ meno: 3, acs1996: undefined, rsc: undefined, wiley: undefined, nature: undefined });
+    expect(automaticValue("shortHashes", ACS_1996)).toBe("spaced");
+  });
+
+  it("is kept through a save and an open, and a change of it with the style it is made from", () => {
+    const acs = { preset: "acs1996", changes: {} };
+    const asked = withSetting(acs, "shortHashes", "three");
+    const read = acceptStyleChoice(JSON.parse(JSON.stringify(asked)));
+    expect(read).toEqual(asked);
+    expect(styleOf(read).shortHashes).toBe("three");
+    // (a workspace in Meno's style saved before the setting: Meno's, three; a journal's: at the spacing)
+    expect(styleOf(acceptStyleChoice({ preset: "meno", changes: {} })).shortHashes).toBe("three");
+    expect(styleOf(acceptStyleChoice({ preset: "rsc", changes: {} })).shortHashes).toBeUndefined();
+    // (and an own style saved before it, at the spacing it was drawn at then - not Meno's)
+    expect(acceptDrawingStyle({ ...presetById("rsc").style }).shortHashes).toBeUndefined();
+    expect(acceptDrawingStyle({ ...presetById("meno").style }).shortHashes).toBe("three");
+    expect(acceptValue(STYLE_FIELDS.find((f) => f.key === "shortHashes")!, "sometimes", 14.4)).toBeUndefined();
   });
 });

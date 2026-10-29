@@ -16,7 +16,7 @@ describe("the guide among the window's layers", () => {
     const to = source.indexOf("</AboveGuide>");
     expect(from).toBeGreaterThan(0);
     expect(to).toBeGreaterThan(from);
-    for (const opened of ["<PartMenu", "<ColourCard", "<SizeCard", "<QuickAdd", "<ExportCard", "<OrdersCard", "<RenderCard", "<PenCard", "<Ask3D", "<ConfirmDiscard", "<NameDialog"]) {
+    for (const opened of ["<PartMenu", "<ColourCard", "<WordsCard", "<QuickAdd", "<ExportCard", "<OrdersCard", "<RenderCard", "<PenCard", "<Ask3D", "<ConfirmDiscard", "<NameDialog"]) {
       const at = source.indexOf(opened);
       expect(at, opened).toBeGreaterThan(from);
       expect(at, opened).toBeLessThan(to);

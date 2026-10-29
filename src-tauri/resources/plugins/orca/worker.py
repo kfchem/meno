@@ -193,6 +193,21 @@ def memory_of(options, cores):
     return maxcore * processes if maxcore else None
 
 
+#: ORCA's keywords for the xTB methods it runs through the xtb program, not its own: the ORCA 6.1 manual, 3.5.2
+#: Extended Tight-Binding: GFN0-xTB, GFN-xTB, GFN2-xTB, its simple input keywords
+#: (https://www.faccts.de/docs/orca/6.1/manual/contents/modelchemistries/semiempirical.html#extended-tight-binding-gfn0-xtb-gfn-xtb-gfn2-xtb).
+#: ORCA 6.1.1 on macOS stops on each without the program ("otool_xtb not available ... Please set the XTBEXE
+#: environment variable"; 1.2.4 How do I install the xtb module?). Its native ones (3.5.3 Native GFN-xTB and
+#: GFN2-xTB: NATIVE-XTB2, NATIVE-GFN2-XTB and the rest) run in ORCA itself, and need none.
+XTB_KEYWORDS = {"XTB", "XTB0", "GFN0-XTB", "XTB1", "GFN1-XTB", "XTB2", "GFN2-XTB", "XTBFF", "GFN-FF"}
+
+
+def needs_xtb(options):
+    """Whether a job runs an xTB method through the xtb program: one of its keywords in the method or the keywords."""
+    said = f"{options.get('method', '')} {options.get('keywords', '')}"
+    return any(word.upper() in XTB_KEYWORDS for word in said.split())
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
@@ -208,6 +223,8 @@ def op_prepare(m):
             **({"then": [TO_MOLDEN]} if keep else {}),
             "reads": [WAVEFUNCTION] if keep else [],
             **({"memory": memory} if memory else {}),
+            # (the xTB plugin's xtb, where an xTB method runs through it: Meno gives it as manifest.json's `needs` says)
+            **({"needs": ["xtb"]} if needs_xtb(options) else {}),
         })
     if not jobs:
         raise Refused("nothing came in")
@@ -230,12 +247,29 @@ def why_of(log):
     return lines[-1] if lines else "ORCA said nothing"
 
 
+def ended_well(log):
+    """Whether ORCA says it ended well: "ORCA TERMINATED NORMALLY", and nowhere "error termination". Its exit code is no
+    word on it: ORCA 6.1.1 exits 0 where it stopped at its start-up with "ORCA finished by error termination in Startup"
+    (a parallel run, its MPI not there) - read as done, it would hand on as worked out what it never touched."""
+    return "ORCA TERMINATED NORMALLY" in log and not re.search(r"error termination", log, re.I)
+
+
+def not_ended_why(log, ended):
+    """Why a job is not read: ORCA's own words where it said it ended by an error, or where its runner saw it fail; where
+    it ended (exit 0) saying neither that nor that it terminated normally, that plainly, with the last thing it said."""
+    if ended != "done" or re.search(r"error termination", log, re.I):
+        return why_of(log)
+    lines = [line.strip() for line in log.splitlines() if line.strip()]
+    return "ORCA's log does not say it ended normally" + (f"; it last said: {lines[-1]}" if lines else "")
+
+
 def op_collect(m):
     step = m.get("step")
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
-    if m.get("ended") != "done":
-        return {"why": why_of(m.get("log") or "")}
+    log = m.get("log") or ""
+    if m.get("ended") != "done" or not ended_well(log):
+        return {"why": not_ended_why(log, m.get("ended"))}
     # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}

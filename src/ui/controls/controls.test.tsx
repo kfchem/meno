@@ -233,6 +233,8 @@ describe("Meno's own controls, as they first show", () => {
     expect(html).toMatch(/aria-checked="true" tabindex="0"/);
     expect(html).toContain("stroke-accel-base");
     expect(html).not.toContain('type="radio"');
+    // (a long name wrapped hangs under its first line, set left, its circle on that line)
+    expect(html.match(/role="radio"[^>]*class="[^"]*\bitems-start\b[^"]*\btext-left\b/g)).toHaveLength(3);
   });
 
   it("a radio's ring and dot, and a checkbox's box, drawn as shapes - round and square at any scale, not boxes whose sides round apart", () => {

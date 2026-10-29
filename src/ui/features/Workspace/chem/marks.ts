@@ -8,6 +8,7 @@
  * maintainer's ruling of 2026-10-21, reversing that of 2026-10-10, which
  * kept them out of every picture.
  */
+import { switchedAt } from "../utils/zoomSwitch";
 import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
@@ -31,20 +32,24 @@ export const MARK_HALF_HEIGHT = 0.42;
 export const MARKS_APART = 0.6;
 
 /**
- * How far R, S, E and Z are in view at a zoom, 0 to 1, from the size in
- * pixels their letters would have there (`naturalPx`, the labels' size times
- * `MARK_SCALE`, before `MARK_MIN_PX`): all of them while they are as large
- * as that least size; then, held at it as the view goes further out, fading
- * - eased, as the zoom goes, never at once - and gone where it is twice the
- * size they would be (the maintainer, 2026-10-21: at a far zoom they stayed
- * as large and floated round a structure a few pixels across). Atom numbers
- * on a molecule in 3D go the same way below their own least size
- * (utils/atomNumbers `NUMBER_LEAST_PX`).
+ * The size R, S, E and Z go at, in pixels their letters would have at a
+ * zoom (`naturalPx`, the labels' size times `MARK_SCALE`, before
+ * `MARK_MIN_PX`): held at that least size as the view goes further out, they
+ * go once they would be three quarters of it (the maintainer, 2026-10-21:
+ * at a far zoom they stayed as large and floated round a structure a few
+ * pixels across).
  */
-export function marksSeenAt(naturalPx: number): number {
-  const t = Math.min(Math.max((naturalPx - MARK_MIN_PX / 2) / (MARK_MIN_PX / 2), 0), 1);
-  return t * t * (3 - 2 * t);
-}
+export const MARKS_LEAST_PX = 0.75 * MARK_MIN_PX;
+
+/**
+ * Whether R, S, E and Z are in view at a zoom, they having been (`was`) or
+ * not: switched past `MARKS_LEAST_PX`, a little either way, and faded over a
+ * short time - never faded with the zoom, which left them half there at a
+ * zoom (the maintainer, 2026-10-28; utils/zoomSwitch). Atom numbers on a
+ * molecule in 3D go below their own least size (utils/atomNumbers
+ * `NUMBER_LEAST_PX`).
+ */
+export const marksReadAt = (was: boolean, naturalPx: number): boolean => switchedAt(was, naturalPx, MARKS_LEAST_PX);
 
 export type ValenceProblem = { valence: number; most?: number };
 
@@ -658,12 +663,24 @@ export function stereoPictureItems(o: {
     bond: NOMINAL_BOND_LENGTH,
     fixed,
   });
-  return places.map((p) => {
-    const [letter, axis] = stereoParts(p.text);
-    const runs: TextRun[] = [...(parentheses ? [{ text: "(" }] : []), { text: letter, italic: true }, ...(axis ? [{ text: axis, sub: true }] : []), ...(parentheses ? [{ text: ")" }] : [])];
-    // (its middle where the canvas puts it: a text is placed by its first letter's middle)
-    const w = runsWidth(runs, size, set);
-    const first = runsWidth([runs[0]], size, set);
-    return { x: p.x - w / 2 + first / 2, y: p.y, text: runs.map((r) => r.text).join(""), fontPx: size, runs, anchorRun: 0, ownSize: true, ...(opts.labelColor ? { color: opts.labelColor } : {}) };
-  });
+  return places.map((p) => stereoTextItem(p, size, opts));
+}
+
+/**
+ * One of R, S, E and Z as a text, its middle at `p`, `size` large: the letter
+ * in italics, an axis's a smaller and lower, in parentheses where the style
+ * says so, in the labels' colour. What the canvas draws (ChemMarks2D) and a
+ * picture of the drawing (`stereoPictureItems`) both: the same ink. `width`
+ * measures it at `size`; the canvas gives the size the drawing's labels are
+ * set at and measured in, where that is not the page's (`fontPx`).
+ */
+export function stereoTextItem(p: { x: number; y: number; text: string }, size: number, opts: LayoutOptions, fontPx = size): TextItem {
+  const set = labelSetOf(opts);
+  const parentheses = !!opts.stereoParentheses;
+  const [letter, axis] = stereoParts(p.text);
+  const runs: TextRun[] = [...(parentheses ? [{ text: "(" }] : []), { text: letter, italic: true }, ...(axis ? [{ text: axis, sub: true }] : []), ...(parentheses ? [{ text: ")" }] : [])];
+  // (its middle where the canvas puts it: a text is placed by its first letter's middle)
+  const w = runsWidth(runs, size, set);
+  const first = runsWidth([runs[0]], size, set);
+  return { x: p.x - w / 2 + first / 2, y: p.y, text: runs.map((r) => r.text).join(""), fontPx, runs, anchorRun: 0, ownSize: true, ...(opts.labelColor ? { color: opts.labelColor } : {}) };
 }

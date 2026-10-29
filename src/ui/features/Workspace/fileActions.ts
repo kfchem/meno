@@ -710,7 +710,7 @@ export function drawingLayout(
   if (words.length) {
     layout.texts.push(...words);
     // (each line's ink, about where it is set)
-    const boxes = words.map((t) => ({ t, b: labelBox(t, t.ownSize ? t.fontPx : opts.fontPx, set) }));
+    const boxes = words.map((t) => ({ t, b: labelBox(t, t.ownSize ? t.fontPx : opts.fontPx, t.family ? { ...set, fontFamily: t.family } : set) }));
     take(
       boxes.flatMap(({ t, b }) => [t.x - b.left, t.x + b.right]),
       boxes.flatMap(({ t, b }) => [t.y - b.bottom, t.y + b.top]),

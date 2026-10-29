@@ -1,29 +1,33 @@
 import { useContext, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { PageHtmlLayer } from "./coverLayer";
-import { pageScale, standInShown, wordsShown, wordsTooSmall } from "../utils/pageScale";
+import { pageScale, wordsReadAt, WORDS_LEAST } from "../utils/pageScale";
 
 /**
  * The page's scale, told to what is drawn on it in HTML (utils/pageScale):
  * `--page` on the layer it is drawn in, how many screen pixels a page pixel
  * is - which chips grow and shrink by (`.meno-page-chip`) - `--words`,
- * how much of their words is shown (`wordsShown`) and of what stands for
- * them (`standInShown`), and `data-words-small`
- * there while their words would be too small to read.
+ * 1 while their words are read and 0 once they are too small, and
+ * `--stand-in` the other way (`wordsReadAt`: switched past a threshold,
+ * faded over a short time by CSS), and `data-words-small` while their words
+ * are too small.
  */
 export default function PageScale() {
   const layer = useContext(PageHtmlLayer);
   const camera = useThree((s) => s.camera);
   const told = useRef<{ layer: HTMLElement | null; zoom: number }>({ layer: null, zoom: NaN });
+  // (whether the words are read now: switched past their threshold, as the zoom goes)
+  const read = useRef(pageScale(camera.zoom || 1) >= WORDS_LEAST);
   useFrame(() => {
     if (!layer) return;
     const zoom = camera.zoom || 1;
     if (told.current.layer === layer && told.current.zoom === zoom) return;
     told.current = { layer, zoom };
     layer.style.setProperty("--page", pageScale(zoom).toFixed(4));
-    layer.style.setProperty("--words", wordsShown(zoom).toFixed(3));
-    layer.style.setProperty("--stand-in", standInShown(zoom).toFixed(3));
-    layer.toggleAttribute("data-words-small", wordsTooSmall(zoom));
+    read.current = wordsReadAt(zoom, read.current);
+    layer.style.setProperty("--words", read.current ? "1" : "0");
+    layer.style.setProperty("--stand-in", read.current ? "0" : "1");
+    layer.toggleAttribute("data-words-small", !read.current);
   });
   return null;
 }

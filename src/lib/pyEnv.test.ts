@@ -39,6 +39,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "py_env_setup_uv") return void files.set(VENV_PYTHON, "");
     if (cmd === "plugin_files") {
       if (args?.fetch) state.missing = state.changed = [];
+      // (asked only whether they are there: none read through - one changed at its own size not known - and at once)
+      if (args?.through === false) return { folder: "/data/uv/plugin-blender/files", missing: state.missing.filter((f) => !state.changed.includes(f)), bytes: 0, changed: [], unreadable: [] };
       // (a check that takes a while: its files read through)
       if (!args?.fetch && state.checkMs) {
         await new Promise((r) => setTimeout(r, state.checkMs));
@@ -58,7 +60,7 @@ vi.mock("./net/network", () => ({
   },
 }));
 
-const { ensurePyEnv, setUpFiles, useCheckingFiles } = await import("./pyEnv");
+const { ensurePyEnv, pyEnvReady, setUpFiles, useCheckingFiles } = await import("./pyEnv");
 // (what was said of a check of its files, as the check went)
 const checkingSeen: string[] = [];
 const { PLUGINS } = await import("./calc/catalog");
@@ -203,6 +205,26 @@ describe("setting a plugin up, with what it downloads besides", () => {
     await ensurePyEnv("plugin-blender");
     expect(checkingSeen).toEqual(["Blender"]);
     expect(useCheckingFiles.getState()).toEqual({});
+  });
+
+  it("asks only whether its files are there where whether it is added is asked, as at launch - none read through, nothing said - and reads them through as it is used, where one changed at its own size is caught", async () => {
+    state.granted.add("python-env:plugin-blender");
+    files.set(VENV_PYTHON, "");
+    files.set(STAMP, JSON.stringify({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] }));
+    // (its weights other bytes at their own size: what reading them through finds - and fetches anew, as the app's side says it)
+    state.missing = [dmg.file];
+    state.changed = [dmg.file];
+    state.checkMs = 400;
+    expect(await pyEnvReady("plugin-blender")).toBe(true);
+    expect(commands.filter((c) => c.cmd === "plugin_files").map((c) => c.args?.through)).toEqual([false]);
+    expect(checkingSeen).toEqual([]);
+    expect(asked).toEqual([]);
+    // (used: read through - said, as it takes a while - and the changed file caught, asked about before it is fetched anew)
+    await ensurePyEnv("plugin-blender");
+    expect(commands.filter((c) => c.cmd === "plugin_files" && c.args?.fetch === false).map((c) => c.args?.through)).toEqual([false, undefined]);
+    expect(checkingSeen).toEqual(["Blender"]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0].detail.startsWith(`${dmg.file} is not the file Meno downloaded`)).toBe(true);
   });
 
   it("fetches nothing where the user says no", async () => {

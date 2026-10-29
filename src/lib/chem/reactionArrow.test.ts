@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrowMeasures, arrowOutline, arrowPath, arrowPieces, cornerAt, pathLength, strokeOutline, type ArrowMeasures } from "./reactionArrow";
+import { arrowMeasures, arrowOutline, arrowPath, arrowPieces, cornerAt, pathLength, squareCorner, strokeOutline, type ArrowMeasures } from "./reactionArrow";
 import { ACS_1996, MENO, ofBond, pt, resolveStyle } from "./style";
 
 type P = { x: number; y: number };
@@ -225,5 +225,25 @@ describe("an arrow's kinds, heads, dashes, weight and corners", () => {
     const o = strokeOutline([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }], 0.2);
     expect(o).toHaveLength(6);
     expect(Math.abs(area2(o)) / 2).toBeCloseTo(0.2 * 8, 6);
+  });
+});
+
+describe("a corner dragged to a right angle", () => {
+  it("lies where the line turns a quarter turn between its neighbours, toward the pointer - an L", () => {
+    const p = { x: 0, y: 0 };
+    const q = { x: 4, y: 0 };
+    for (const pointer of [{ x: 0.3, y: 3 }, { x: 3.5, y: -1 }, { x: 2, y: 0.4 }]) {
+      const c = squareCorner(p, q, pointer);
+      const dot = (p.x - c.x) * (q.x - c.x) + (p.y - c.y) * (q.y - c.y);
+      expect(dot).toBeCloseTo(0, 9);
+      // (on the pointer's side, toward it from the middle)
+      expect(Math.sign(c.y)).toBe(Math.sign(pointer.y));
+    }
+    // (the pointer straight above the middle: the L's corner straight above it)
+    const top = squareCorner(p, q, { x: 2, y: 5 });
+    expect(top.x).toBeCloseTo(2, 9);
+    expect(top.y).toBeCloseTo(2, 9);
+    // (at the middle itself, no way to say: where the pointer is)
+    expect(squareCorner(p, q, { x: 2, y: 0 })).toEqual({ x: 2, y: 0 });
   });
 });
