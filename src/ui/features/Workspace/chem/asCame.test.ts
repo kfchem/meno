@@ -15,9 +15,14 @@ function roundMolblock(smiles: string): string {
 
 describe("a plugin's drawing that cannot be laid out", () => {
   it("is drawn as it came, and says so - why, in a sentence - where it is put down", async () => {
-    // (made up: the bridged macrocycle the layout puts an atom of on a bond - #685's guard refuses it)
-    const drawn = await drawingOf(roundMolblock("C1CCCCC2CCC(CO2)CCCCCCCC1"));
-    expect(drawn.asCame).toMatch(/one atom on another or on a bond/);
+    // (made up: the bridged macrocycle the layout once put an atom of on a
+    // bond, which #685's guard refused - laid out now, 2026-10-29: it says nothing)
+    const laid = await drawingOf(roundMolblock("C1CCCCC2CCC(CO2)CCCCCCCC1"));
+    expect(laid.asCame).toBeUndefined();
+    expect(asCameSaid(laid)).toBeNull();
+    // (one the guard refuses - as relayoutFrom refuses it; no structure is
+    // known now that the engine lays out so - is said so in a sentence)
+    const drawn = { ...laid, asCame: "the structure could not be laid out without putting one atom on another or on a bond, so nothing was moved" };
     expect(asCameSaid(drawn)).toBe("Drawn as it came: it could not be laid out without putting one atom on another.");
     // (and what goes onto the page carries none of it)
     expect("asCame" in withoutStereoOpen(drawn)).toBe(false);

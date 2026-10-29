@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
-import { layout2D, roomForHydrogens, scorer } from "./engine";
+import { layout2D, measureLaidOut, roomForHydrogens, scorer } from "./engine";
+import { misreadCentres, turnedDoubleBonds } from "./readBack";
 import { macrocycleShape } from "./macrocycle";
 import { hydrogenSpot, LABEL_VERTEX, labelsCrowding, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
@@ -1229,4 +1230,39 @@ describe("a macrocycle's groups", () => {
     expect(end).toBeGreaterThanOrEqual(0);
     expect(insidePolygon({ x: out.x[end], y: out.y[end] }, polygon)).toBe(false);
   }, 60_000);
+});
+
+describe("a macrocycle bridged across a small ring", () => {
+  // (a tetrahydropyran bridged 2,5 by chains of 7 to 9 atoms, and 3,5 by
+  // one; a cyclohexane bridged 1,4; [8]paracyclophane; one with stereo)
+  const family = [
+    "C1CCCCC2CCC(CO2)CCCCCCCC1",
+    "C1CCCCCC2CCC(CO2)CCCCCCCC1",
+    "C1CCCCC2CCC(CO2)CCCCCCC1",
+    "C1CCCC2CCC(CO2)CCCCCCC1",
+    "C1CCCCC2CCC(CC2)CCCCCCCC1",
+    "C1CCCCCCC2=CC=C(C=C2)CCCCCC1",
+    "C1CCCCC[C@H]2CC[C@@H](CO2)CCCCCCCC1",
+  ];
+
+  it("is drawn with no atom on another or on a bond, no bonds crossing - the small ring regular, the macrocycle round it taking the strain (GR-3.3.4)", () => {
+    for (const smiles of family) {
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      const m = measureLaidOut(input, out);
+      expect([m.overlaps, m.clashes, m.crossings], smiles).toEqual([0, 0, 0]);
+      // (the six-membered ring a regular hexagon: each atom a bond from its middle)
+      const six = perceive(input).rings.find((r) => r.length === 6)!;
+      const c = { x: six.reduce((t, a) => t + out.x[a], 0) / 6, y: six.reduce((t, a) => t + out.y[a], 0) / 6 };
+      for (const a of six) expect(dist({ x: out.x[a], y: out.y[a] }, c), smiles).toBeCloseTo(1, 1);
+    }
+  }, measured(2_000));
+
+  it("reads back as the molecule given: its centres as given, none turned by a chain laid over them", () => {
+    for (const smiles of family) {
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      expect([...turnedDoubleBonds(input, out), ...misreadCentres(input, out)], smiles).toEqual([]);
+    }
+  }, measured(2_000));
 });

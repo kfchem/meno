@@ -318,8 +318,27 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // (a metal's chelates set round it one way or another: eased as laid flat)
     if (!e && !u) {
       const sys = mol.systems[i];
-      const hub = metalHub(mol, sys.rings.map((r) => mol.rings[r]));
-      return void local.set(i, hub ? layoutFlat(mol, sys, v).pos : placeRingSystem(mol, sys, v));
+      const rings = sys.rings.map((r) => mol.rings[r]);
+      const hub = metalHub(mol, rings);
+      if (hub) return void local.set(i, layoutFlat(mol, sys, v).pos);
+      const raw = placeRingSystem(mol, sys, v);
+      // (a bridged one - a macrocycle bridged across a small ring as well -
+      // where its shape placed as it is crowds or stretches it, eased and
+      // laid from each of its rings as layoutFlat lays one, where that is
+      // better and keeps its double bonds as given: placed raw, a
+      // 2,5-bridged tetrahydropyran's chain lay on its ring O)
+      if (bridgedRings(rings)) {
+        const before = flatCost(mol, sys, raw);
+        if (before >= 1) {
+          const flat = layoutFlat(mol, sys, v);
+          if (flatCost(mol, sys, flat.pos, flat.depth) < before && keepsDoubleBonds(mol, flat.pos)) {
+            local.set(i, flat.pos);
+            flat.depth?.forEach((d, a) => (depth[a] = d));
+            return;
+          }
+        }
+      }
+      return void local.set(i, raw);
     }
     const laid = u ? placeUnit(mol, u, v, u.chelate && layoutFlat(mol, u.chelate).pos) : placeEta(mol, e!, v);
     local.set(i, laid.pos);
@@ -392,13 +411,15 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const piece = mol.pieces.find((p) => p.includes(sys.atoms[0]))!;
     let best = 0;
     let bestScore = Infinity;
+    let bestFaults = Infinity;
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
     for (let v = 0; v < count; v++) {
       setVariant(i, v);
       // (measured as this one is drawn: a cage's depth is its view's)
-      const score = kept(scorer(mol, piece, depth, measured, 0, false));
+      const draft = scorer(mol, piece, depth, measured, 0, false);
+      const score = kept(draft);
       // the frame it grows best in - the best few, for a piece of up to
       // sixty atoms - each tried the other way and untangled where it helps:
       // substituents inside a macrocycle are crowded until then, and the
@@ -437,14 +458,22 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         // camphor as it is always drawn, not the other way round)
         // (views as good by the system's own measure go to what hangs from them)
         const views = cageViews.get(i);
-        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + (views && v && !views[v].tied ? CAGE_VIEW_MARGIN : 0);
+        const done = untangle(mol, piece, better.pos, better.score, score, fixed);
+        const s = done.score + (views && v && !views[v].tied ? CAGE_VIEW_MARGIN : 0);
+        // (the fewest faults first, whatever else they cost - a macrocycle's
+        // shape that lays an atom on a bond loses to any that does not; not
+        // a metal's, whose chelates and rings bound face-on are set right
+        // after this, turned as a propeller's blades, so that a fault here
+        // says nothing of the drawing it becomes - PdCl2(dppf)'s)
+        const f = etaOf.has(i) || unitOf.has(i) ? 0 : faultsIn(draft.metrics(done.pos));
         // (only where clearly better: whatever is tried here - a
         // macrocycle's shapes, a cage's views, the spins of a ring bound
         // face-on to a metal - those alike on the measure keep the order
         // they are offered in, not the one the rounding of a sum favoured:
         // a ring with nothing on it reads as well in each shape, and takes
         // the one that lies best, offered first)
-        if (s < bestScore - 1e-9) {
+        if (f < bestFaults || (f === bestFaults && s < bestScore - 1e-9)) {
+          bestFaults = f;
           bestScore = s;
           best = v;
         }
@@ -480,8 +509,10 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         d[v] = l;
         q[v] = true;
       }
+      const draft = scorer(mol, piece, d, q, 0, false);
       return {
-        score: kept(scorer(mol, piece, d, q, 0, false)),
+        score: kept(draft),
+        faults: (pos: Grown) => faultsIn(draft.metrics(pos)),
         scoreH: kept(scorer(mol, piece, d, q, 1)),
         scoreFan: kept(scorer(mol, piece, d, q, 1, undefined, true)),
         scoreRoom: kept(scorer(mol, piece, d, q, 1, undefined, undefined, 1, LABEL_ROOM)),
@@ -558,7 +589,8 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const set = finalists
       .map((cand) => {
         const joined = rejoin(mol, piece, cand.pos, cand.score, cand.m.score, fixed);
-        return { ...untangle(mol, piece, joined.pos, joined.score, cand.m.score, fixed), m: cand.m, start: cand.start, mirrored: cand.mirrored };
+        const done = untangle(mol, piece, joined.pos, joined.score, cand.m.score, fixed);
+        return { ...done, faults: cand.m.faults(done.pos), m: cand.m, start: cand.start, mirrored: cand.mirrored };
       })
       .sort(bestFirst(mol, piece));
     // (each set right to the end - its sugars faced, room made for its
@@ -594,25 +626,41 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const settled = settleFans(mol, piece, roomy, scoreFan(roomy), scoreFan, fixed).pos;
       return { pos: settled, score: scoreH(settled), m: faced.m, mirrored: faced.mirrored, drafted };
     };
+    // (where they differ in faults, each finished and those with the
+    // fewest kept, whatever else they cost - counted on the finished
+    // drawing, not the draft: a clash the finishing clears is no fault -
+    // and chosen among as before)
+    let pool = set;
+    const done = new Map<(typeof set)[number], ReturnType<typeof finish>>();
+    if (set.some((c) => c.faults !== set[0].faults)) {
+      const faults = set.map((c) => {
+        const f = finish(c);
+        done.set(c, f);
+        return c.m.faults(f.pos);
+      });
+      const least = Math.min(...faults);
+      pool = set.filter((_, i) => faults[i] === least);
+    }
+    const finished = (c: (typeof set)[number]) => done.get(c) ?? finish(c);
     // Drawings that read as well as each other here - phorbol's skeleton
     // turned end for end - can still read otherwise once their wedges are
     // put on: an H drawn on a centre may have a clear place in one and
     // none in the other, and the wedge go on a ring bond instead. Of
     // those, the one that reads best with its stereochemistry drawn as it
     // will be; still alike, the first.
-    const tied = set.filter((c) => c.score <= set[0].score + 1e-9);
+    const tied = pool.filter((c) => c.score <= pool[0].score + 1e-9);
     const centres = piece.filter((a) => mol.tetra.has(a) && !solid[a]);
     if (tied.length > 1 && centres.length) {
-      const finished = tied.map(finish);
-      const drawn = finished.map((c) => {
+      const each = tied.map(finished);
+      const drawn = each.map((c) => {
         // (as it will be set on the page: squared up)
         const pos = new Map(c.pos);
         if (!fixed(piece) && !c.m.lift) squareUp(mol, piece, pos, c.drafted);
         return stereoScore(mol, piece, pos, c.m.lift, depth, measured, centres);
       });
       const k = drawn.reduce((b, v, i) => (v < drawn[b] - 1e-9 ? i : b), 0);
-      best = finished[k];
-    } else best = finish(set[0]);
+      best = each[k];
+    } else best = finished(pool[0]);
     const { lift } = best.m;
     const drafted = best.drafted ?? best.pos;
     // (the blades it was drawn with turned: their depth, and so drawn)
@@ -1209,15 +1257,32 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
+/** Whether each double bond given as cis or trans, its ends and refs all placed in `pos`, is drawn so. */
+function keepsDoubleBonds(mol: Molecule, pos: ReadonlyMap<number, Point>): boolean {
+  return mol.bonds.every((b) => {
+    const st = b.stereo;
+    if (!st || b.order !== 2) return true;
+    const [r0, r1] = st.refs;
+    const p = [b.a, b.b, r0, r1].map((a) => pos.get(a));
+    if (p.some((q) => !q)) return true;
+    const [a, c] = [p[0]!, p[1]!];
+    const side = (q: Point) => Math.sign((c.x - a.x) * (q.y - a.y) - (c.y - a.y) * (q.x - a.x));
+    return (side(p[2]!) === side(p[3]!)) === st.cis;
+  });
+}
+
+/** Whether two of these rings share three atoms or more: a ring bridged across another, whatever their sizes. */
+function bridgedRings(rings: readonly (readonly number[])[]): boolean {
+  return rings.some((r, j) => rings.some((q, k) => k > j && q.filter((a) => r.includes(a)).length >= 3));
+}
+
 export function layoutFlat(mol: Molecule, sys: RingSystem, variant?: number): SystemLayout {
   // (as laid out already in choosing its rings)
   const kept = variant == null ? keptFlat(mol, sys) : null;
   if (kept) return kept;
   let flat = placeRingSystem(mol, sys, variant ?? 0);
   const rings = sys.rings.map((r) => mol.rings[r]);
-  const bridged = rings.some((r, j) =>
-    rings.some((q, k) => k > j && q.filter((a) => r.includes(a)).length >= 3 && q.length < 9 && r.length < 9),
-  );
+  const bridged = bridgedRings(rings);
   // how it reads, flat - its rings' shapes counted as well as its faults,
   // and each gap too narrow for the groups either side of it (narrowGap) -
   // and, with a fault in it (a crowded atom, a stretched bond, such a gap),
@@ -1235,15 +1300,32 @@ export function layoutFlat(mol: Molecule, sys: RingSystem, variant?: number): Sy
   // meeting at their shared atom closer than their own angles allow -
   // saxitoxin's five-membered rings - the gap between them opened)
   if (!bridged && rings.every((r) => r.length < 9)) flat = eased(flat);
+  // a macrocycle bridged across a small ring - a 2,5-bridged
+  // tetrahydropyran, a paracyclophane - that crowds or stretches it as
+  // placed: laid from each of its rings in turn, the small ring regular and
+  // the macrocycle round it taking the strain (GR-3.3.4), where that reads
+  // better and keeps its double bonds as given
+  const large = rings.some((r) => r.length >= 9);
+  if (bridged && large && flatCost(mol, sys, flat) >= 1) {
+    let least = cost(flat);
+    for (const r of sys.rings) {
+      const trial = eased(placeRingSystem(mol, sys, variant ?? 0, r));
+      const c = cost(trial);
+      if (c < least - 1e-9 && keepsDoubleBonds(mol, trial)) {
+        least = c;
+        flat = trial;
+      }
+    }
+  }
   // a bridged system laid flat from each of its rings in turn: which ring
   // stays regular and which arcs round it decides whether it reads
-  if (bridged && !rings.some((r) => r.length >= 9)) {
+  if (bridged && !large) {
     flat = eased(flat);
     // (which ring stays regular counting the room its bonds out of it leave, as well)
     const roomed = (pos: Map<number, Point>) => cost(pos) + flatCost(mol, sys, pos, undefined, true) - flatCost(mol, sys, pos);
     let least = roomed(flat);
     for (const r of sys.rings) {
-      const trial = eased(placeRingSystem(mol, sys, 0, r));
+      const trial = eased(placeRingSystem(mol, sys, variant ?? 0, r));
       const c = roomed(trial);
       if (c < least - 1e-9) {
         least = c;
@@ -1843,6 +1925,8 @@ function stereoScore(
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
 type Measures = {
   score: (pos: Grown) => number;
+  /** Its faults (`faultsIn`), as the drawing has its depth. */
+  faults: (pos: Grown) => number;
   scoreH: (pos: Grown) => number;
   scoreFan: (pos: Grown) => number;
   /** As scoreH, with a label on a bare vertex counted too (`roomForHydrogens`). */
@@ -2314,7 +2398,7 @@ export function scorer(
   hydrogenInk?: boolean,
   labelRoom?: number,
   inkRoom?: number,
-): (pos: Grown) => number {
+): Scorer {
   const index = new Map(piece.map((a, i) => [a, i]));
   const edges: [number, number][] = [];
   const orders: number[] = [];
@@ -2343,7 +2427,7 @@ export function scorer(
     const t = mol.tetra.get(a);
     return t && { neighbours: t.neighbours.map((b) => (b < 0 ? -1 : index.get(b)!)), volume: t.volume };
   });
-  return (pos) =>
+  const metrics = (pos: Grown) =>
     layoutMetrics({
       x: piece.map((a) => pos.get(a)!.x),
       y: piece.map((a) => pos.get(a)!.y),
@@ -2367,5 +2451,20 @@ export function scorer(
       labelRoom: labelRoom ?? 0,
       inkRoom: inkRoom ?? 0,
       sugarFaces,
-    }).score;
+    });
+  return Object.assign((pos: Grown) => metrics(pos).score, { metrics });
 }
+
+/** A piece's measure, as one number, and as each of its measures. */
+type Scorer = ((pos: Grown) => number) & { metrics: (pos: Grown) => LayoutMetrics };
+
+/**
+ * A drawing's faults: atoms on each other, bonds crossing, an atom on a
+ * bond. Never acceptable (GR-4.3): where finished drawings are chosen
+ * between, the one with fewer always wins, whatever else it costs, and
+ * those with as many are chosen between as before (the maintainer,
+ * 2026-10-29). Only there - inside the search, a drawing part made has
+ * clashes the passes after it clear, and weighed above all else they
+ * steer it off.
+ */
+const faultsIn = (m: LayoutMetrics) => m.overlaps + m.crossings + m.clashes;

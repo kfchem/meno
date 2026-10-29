@@ -238,6 +238,14 @@ they hang from.
   group of its own: huperzine A's three-atom bridge laid round its
   ethylidene carbon left the ethylidene on the bridge; laid across the
   face of the ring, it leaves it room.
+- **A macrocycle bridged across a small ring** - a tetrahydropyran bridged
+  2,5 by a long chain, a paracyclophane: the small ring regular, the
+  macrocycle round it taking the strain (GR-3.3.4). Where its shape, placed
+  as it is, crowds or stretches it, it is laid out again from each of its
+  rings in turn, each eased, and the one that reads best kept, so long as
+  it keeps the macrocycle's double bonds as given. Placed as it was, a
+  2,5-bridged tetrahydropyran's chain lay on the ring's O, its bond over
+  C2-O, and the wedge went onto that hidden bond (2026-10-29).
 - **Cages**: a system whose rings are all bridged, each sharing three atoms
   or more with another (norbornane, camphor, tropane, quinuclidine,
   adamantane), or a polyhedron (cubane), is drawn in perspective, as the
@@ -893,7 +901,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
    section 2 and choosing among free placements by section 5.
 4. Try the frame's orientations and keep the one that reads best by
    section 4, its free choices tried the other way and its parts
-   untangled (section 5).
+   untangled (section 5). Where finished drawings are chosen between - a
+   macrocycle's shapes, a cage's views, a piece's best few at the end -
+   the one with the fewest faults (an atom on another, bonds crossing, an
+   atom on a bond) always wins, whatever else it costs, and those with as
+   many are chosen between by how they read (GR-4.3; the maintainer,
+   2026-10-29). Only there: inside the search a drawing part made has
+   clashes the passes after it clear, and weighed above everything they
+   steer it off.
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn

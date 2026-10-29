@@ -270,14 +270,12 @@ describe("cleanUp", () => {
         (e: Error) => e.message,
       );
       const after = store.getState().model;
-      if (settled === "laid out") {
-        // (laid out, it has none of its atoms on each other or on a bond)
-        const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
-        expect(overlapsMade(drawn, moved)).toEqual([]);
-      } else {
-        expect(settled).toMatch(/one atom on another or on a bond, so nothing was moved/);
-        expect(after).toEqual(drawn);
-      }
+      // (laid out now - the small ring regular, the chain round it - with
+      // none of its atoms on each other or on a bond, 2026-10-29; refused,
+      // moving nothing, before)
+      expect(settled).toBe("laid out");
+      const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
+      expect(overlapsMade(drawn, moved)).toEqual([]);
     }
   });
 
@@ -298,6 +296,11 @@ describe("cleanUp", () => {
       (e: unknown) => e,
     );
     const after = store.getState().model;
+    // (laid out now, both of them, with nothing on anything)
+    if (!refused) {
+      const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
+      expect(overlapsMade(drawn, moved)).toEqual([]);
+    }
     if (refused) {
       expect(refused).toBeInstanceOf(CleanUpRefused);
       expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C18H34O: .*one atom on another or on a bond/);
