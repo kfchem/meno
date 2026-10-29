@@ -25,7 +25,7 @@ Meno の設定がどこにあり、それぞれの部分に何があるかを説
 
 ## 3D {#3d}
 
-「Molecules in 3D」：新しいワークスペースで分子を見せるスタイル（「Primary」と「Secondary」）、それぞれのスタイルが分子をどう描くか（「Atoms」から「Hydrogens on carbon」まで）、「Atom colours」、そして「Every style」の下に、光、軌道と密度、リボン、回転があります。
+「Molecules in 3D」：新しいワークスペースで分子を見せるスタイル（「Primary」と「Secondary」）、それぞれのスタイルが分子をどう描くか（「Atoms」「Hydrogens on carbon」、鎖、面、線など）、「Atom colours」、そして「Every style」の下に、光、軌道と密度、リボン、回転があります。
 
 ## Chemistry {#chemistry}
 

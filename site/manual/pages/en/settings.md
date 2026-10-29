@@ -25,7 +25,7 @@ The drawing style and the 3D styles in Settings are the ones new workspaces star
 
 ## 3D {#3d}
 
-*Molecules in 3D*: the styles new workspaces show molecules in, as *Primary* and *Secondary*; how each style draws a molecule, from *Atoms* to *Hydrogens on carbon*; *Atom colours*; and, under *Every style*, the light, orbitals and densities, ribbons and turning.
+*Molecules in 3D*: the styles new workspaces show molecules in, as *Primary* and *Secondary*; how each style draws a molecule - *Atoms*, *Hydrogens on carbon*, chains, surfaces, lines and more; *Atom colours*; and, under *Every style*, the light, orbitals and densities, ribbons and turning.
 
 ## Chemistry {#chemistry}
 
