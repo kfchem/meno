@@ -222,6 +222,57 @@ Number of SCF / gradient calculations:
 """
 # (and where one image's SCF did not converge, ORCA carrying on with the band)
 SCF_FAILED = "[file orca_leanscf/orca_leanscf.cpp, line 306]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged. There may be a way out but we have to stop here \n"
+def irc_log(capped=()):
+    """ORCA's log of a reaction path, in its form: each side, then the path summary - the point it started from marked."""
+    side = lambda name: f"""
+         *                          {name} IRC                      *
+    0        -1.0950   -1.00   0.01  0.005
+""" + ("""         *  MAXIMUM NUMBER OF ITERATIONS REACHED - STOPPING IRC RUN  *
+""" if name.lower() in capped else """                      ***            THE IRC HAS CONVERGED          ***
+""")
+    return side("FORWARD") + side("BACKWARD") + """
+                       IRC PATH SUMMARY
+Step        E(Eh)      dE(kcal/mol)  max(|G|)   RMS(G)
+   1        -1.170000   -50.20    0.000800  0.000400
+   2        -1.100000    -6.27    0.010000  0.005000
+   3        -1.090000     0.00    0.000016  0.000008 <= TS
+   4        -1.120000   -18.83    0.010000  0.005000
+
+                             ****ORCA TERMINATED NORMALLY****
+"""
+
+
+IRC_FILES = {"input_IRC_Full_trj.xyz": xyz([(0.74, -1.17), (0.90, -1.10), (0.97, -1.09), (1.10, -1.12)])}
+
+
+class ReactionPath(unittest.TestCase):
+    def test_a_job_for_each_point_irc_both_ways_its_steps_where_said(self):
+        options = defaults("reaction-path")
+        job = ask("prepare", step="reaction-path", entries=[H2], options={**options, "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"})["jobs"][0]
+        lines = job["files"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "! NATIVE-XTB2 IRC")
+        self.assertFalse(any(l.startswith("%irc") for l in lines))
+        self.assertEqual(job["reads"], ["input_IRC_Full_trj.xyz"])
+        more = ask("prepare", step="reaction-path", entries=[H2], options={**options, "maxiter": 256})["jobs"][0]
+        self.assertIn("%irc maxiter 256 end", more["files"][0]["text"].splitlines())
+
+    def test_reads_the_path_end_to_end_its_start_marked_each_side_said(self):
+        options = {**defaults("reaction-path"), "method": "NATIVE-XTB2", "basis": ""}
+        out = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=irc_log(), ended="done")["outputs"][0]
+        self.assertEqual(out["energies"], [-1.17, -1.10, -1.09, -1.12])
+        self.assertEqual(out["converged"], [False, False, True, False])
+        self.assertEqual(out["method"], "GFN2-xTB")
+        self.assertEqual(out["results"][0]["values"], ["backward, step 2 of 2", "backward, step 1 of 2", "the point it started from", "forward, step 1 of 1"])
+        self.assertNotIn("optimised", out)
+        # (a side stopped at ORCA's cap: the path as far as it came, said - no converged one)
+        capped = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=irc_log(("forward",)), ended="done")["outputs"][0]
+        self.assertEqual(capped["optimised"], False)
+        self.assertIn("The forward side stopped at ORCA's iteration cap", capped["warnings"][0]["text"])
+        # (a summary that does not list the frames written, or marks no start: not read)
+        bad = ask("collect", step="reaction-path", entries=[H2], options=options, files={"input_IRC_Full_trj.xyz": xyz([(0.74, -1.17)])}, log=irc_log(), ended="done")["outputs"][0]
+        self.assertEqual(bad["kind"], "no-geometry")
+
+
 H2 = {"name": "h2", "atoms": [{"el": "H", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 0.74, "y": 0, "z": 0}], "bonds": [], "charge": 0, "multiplicity": 1}
 H2_END = {**H2, "atoms": [{"el": "H", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 1.10, "y": 0, "z": 0}]}
 

@@ -961,7 +961,7 @@ describe("Quick Add's calculations", () => {
     expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers", "check-structures", "stereoisomers", "descriptors"]], ["Meno", ["filter", "enumerate", "chart"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { orca: "added" }, problem: {} });
-    expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies", "path-search"]]);
+    expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies", "path-search", "reaction-path"]]);
     expect(pluginById("orca")?.name).toBe("ORCA interface");
     expect(doerOf({ kind: "energy", by: "orca" })).toEqual({ id: "orca", name: "ORCA" });
   });

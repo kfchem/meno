@@ -425,12 +425,13 @@ const chem = {
  * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test). Merge, Re-bond and
  * Compare bonding take two inputs, which this wires one of: each against its own (workflow/pairedSteps.test) - Merge and Compare
  * bonding give back the entries that came in, Re-bond its bonding entry's charge and multiplicity. Path search takes two too, each pair
- * of one charge and spin or refused (workflow/pathSearch.test).
+ * of one charge and spin or refused (workflow/pathSearch.test). Follow the reaction path reads back a path, never one geometry: its
+ * entry keeps the charge and multiplicity that came in (workflow/reactionPath.test).
  */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -516,7 +517,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
     // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

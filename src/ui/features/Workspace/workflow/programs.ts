@@ -384,6 +384,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
+  if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
   return {
     ...anew(entry),
     // (what it came as - its structure drawn - where it still is that compound)
@@ -393,6 +394,34 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
     ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+  };
+}
+
+/**
+ * A reaction path, as its program followed it from the point given (docs/
+ * WORKFLOWS.md, *Follow the reaction path*): one molecule, its frames the
+ * path from one end to the other in the order its program gave them, each
+ * with its energy, its entry the point it started from (the run's one
+ * converged geometry), between them. A side that stopped before its end -
+ * its program's iteration cap reached - leaves the path as far as it came,
+ * out of *Failed*, its program's words on it: its end no minimum.
+ */
+function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
+  const k = out.converged?.length === frames.length ? out.converged.indexOf(true) : -1;
+  if (k < 0 || out.converged!.lastIndexOf(true) !== k) return { kind: "no-geometry", why: "It read back no one point the path started from" };
+  if (!energies || frames.length < 3 || k === 0 || k === frames.length - 1) return { kind: "no-geometry", why: "It read back no path with energies, the point it started from between its ends" };
+  const stopped = out.optimised === false ? (out.warnings?.map((w) => w.text).join("; ") ?? "") || "A side stopped before its end" : null;
+  return {
+    ...anew(entry),
+    ...keptAnew(entry, frames[k], calc.charge),
+    xyz: [...frames[k]],
+    energy: energies[k],
+    path: frames.slice(0, k),
+    pathEnergies: energies.slice(0, k),
+    after: frames.slice(k + 1),
+    afterEnergies: energies.slice(k + 1),
+    calc,
+    ...(stopped ? { failed: { kind: "not-converged" as const, why: stopped } } : {}),
   };
 }
 

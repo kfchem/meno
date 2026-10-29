@@ -774,16 +774,25 @@ export const MARKS_UNREAD = "its frames' marks could not be read, so whether it 
 export const PATH_FRAME = "path.frame";
 export const REFINED_SAID = "highest point refined";
 
-/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
-export function refinedFrame(m: Pick<Molecule3D, "calc">): number | null {
+/** What a reaction path's program writes on the frame it started from (ORCA's worker: `IRC_STARTED_SAID`). */
+export const STARTED_SAID = "the point it started from";
+
+/** The one frame of a molecule its frames say is `what`; none where none is, or more than one. */
+function frameSaid(m: Pick<Molecule3D, "calc">, what: string): number | null {
   const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
   if (!said || said.on !== "frames") return null;
-  const k = said.values.indexOf(REFINED_SAID);
-  return k >= 0 && said.values.lastIndexOf(REFINED_SAID) === k ? k : null;
+  const k = said.values.indexOf(what);
+  return k >= 0 && said.values.lastIndexOf(what) === k ? k : null;
 }
 
-/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, its path going on past it. */
-const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? n - 1;
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export const refinedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, REFINED_SAID);
+
+/** Of a reaction path's molecule, the frame it started from, as its frames say; none for any other molecule. */
+export const startedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, STARTED_SAID);
+
+/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, a reaction path's, the point it started from, its path going on past it. */
+const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
 
 /** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
