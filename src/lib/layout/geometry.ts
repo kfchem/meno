@@ -55,6 +55,68 @@ export function centroid(points: readonly Point[]): Point {
   return { x: x / n, y: y / n };
 }
 
+/**
+ * How near, in bond lengths, an atom's mirror image must land on its partner
+ * for a drawing to be its own mirror image: a drawing laid out symmetric is,
+ * one with an atom a tenth of a bond off it is not.
+ */
+export const MIRROR_TOL = 0.05;
+
+/**
+ * The lines a drawing is its own mirror image in, as their directions in
+ * radians (0 to pi): every point reflected lands within `tol` of a point of
+ * the same kind, and every edge on an edge of the same kind. Such a line
+ * passes through the points' centroid, and either the first point lies on
+ * it or its partner lies across it: its partners give every line there can
+ * be.
+ */
+export function mirrorLines(
+  points: readonly Point[],
+  kinds: readonly string[],
+  edges: readonly (readonly [number, number, string])[],
+  tol: number,
+): number[] {
+  const n = points.length;
+  if (n < 2) return [];
+  const c = centroid(points);
+  const edgeKind = new Map<string, string>();
+  for (const [a, b, k] of edges) edgeKind.set(a < b ? `${a},${b}` : `${b},${a}`, k);
+  const r0 = dist(points[0], c);
+  const lines: number[] = [];
+  for (let j = 0; j < n; j++) {
+    if (kinds[j] !== kinds[0] || Math.abs(dist(points[j], c) - r0) > tol) continue;
+    // (the line through the first point, where it is its own partner; the
+    // perpendicular bisector of the two otherwise)
+    let t: number;
+    if (j === 0) {
+      if (r0 <= tol) continue;
+      t = angleOf(sub(points[0], c));
+    } else {
+      const d = sub(points[j], points[0]);
+      if (len(d) <= tol) continue;
+      t = angleOf(d) + Math.PI / 2;
+    }
+    t = ((t % Math.PI) + Math.PI) % Math.PI;
+    if (lines.some((u) => Math.abs(wrap(2 * (u - t))) < 1e-6)) continue;
+    const far = add(c, dir(t));
+    const image: number[] = [];
+    for (let a = 0; a < n; a++) {
+      const m = mirror(points[a], c, far);
+      const b = points.findIndex((q, i) => kinds[i] === kinds[a] && dist(q, m) <= tol);
+      if (b < 0) break;
+      image.push(b);
+    }
+    if (image.length < n) continue;
+    const kept = edges.every(([a, b, k]) => {
+      const p = image[a];
+      const q = image[b];
+      return edgeKind.get(p < q ? `${p},${q}` : `${q},${p}`) === k;
+    });
+    if (kept) lines.push(t);
+  }
+  return lines;
+}
+
 /** Whether p lies inside the polygon (even-odd). */
 export function insidePolygon(p: Point, polygon: readonly Point[]): boolean {
   let inside = false;
