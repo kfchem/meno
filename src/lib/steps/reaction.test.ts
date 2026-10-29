@@ -20,7 +20,7 @@ function water(): Entry {
     species: { charge: 0, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } },
     properties: {
       energy: { value: -76.4, unit: "Eh", at, status: "computed" },
-      charges: { value: { list: [0.4, -0.8, 0.4], per: "atom" }, unit: "e", at, status: "computed" },
+      charges: { value: { list: [0.4, -0.8, 0.4], per: "atom" }, unit: "none", at, status: "computed" },
       modes: { value: { modes: [[1, 0, 0, 2, 0, 0, 3, 0, 0]] }, unit: "none", at, status: "computed" },
       held: { value: { restraints: [{ kind: "distance", atoms: [0, 1], value: 1, strength: 1 }] }, unit: "none", status: "computed" },
       name: { value: "water", unit: "none", status: "computed" },
