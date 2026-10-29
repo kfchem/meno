@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chipWidthOf } from "./chipWidth";
+import { chipShiftOf, chipWidthOf } from "./chipWidth";
 import { GROW_MS, OPENED, openingAfter, SHOW_MS, SHUT, type Opening } from "../../../theme/opening";
 
 // (a set of seven: its slider 196 px, what it says 110, its details 150 - each with the chip's 10 px either side where it is the chip's)
@@ -56,5 +56,22 @@ describe("a frames chip's width", () => {
       if (made.shown > 0) expect(width(OPENED, made, MADE_W)).toBe(MADE_W);
     }
     expect(width(OPENED, made, MADE_W)).toBe(OPEN_W);
+  });
+
+  it("widens to the right only as how it was made opens, and back: its left edge, and the toggle there, never move", () => {
+    const MADE_W = 300;
+    const at = (made: Opening) => ({ shut: SHUT_W, open: OPEN_W, details: DETAILS_W, made: MADE_W, grown: 1, madeGrown: made.grown });
+    // (its left edge from where it is centred: half its width to the left, and as far back as it is drawn to the right)
+    const left = (made: Opening) => chipShiftOf(at(made)) - chipWidthOf(at(made)) / 2;
+    expect(chipShiftOf(at(SHUT))).toBe(0);
+    expect(chipShiftOf(at(OPENED))).toBe((MADE_W - OPEN_W) / 2);
+    let made: Opening = SHUT;
+    for (const [open, ms] of [[true, GROW_MS + SHOW_MS], [false, 60], [true, 40], [false, SHOW_MS + GROW_MS]] as const) {
+      for (let t = 0; t < ms; t += 1000 / 60) {
+        made = openingAfter(made, open, 1000 / 60);
+        expect(left(made)).toBeCloseTo(-OPEN_W / 2, 9);
+      }
+    }
+    expect(chipShiftOf(at(made))).toBe(0);
   });
 });

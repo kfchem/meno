@@ -559,7 +559,9 @@ Taken on 2026-10-13:
   no wider (the maintainer, 2026-10-28). Opened, the card first grows to
   it, wider and taller together in 160 ms, and only then do its lines fade
   in, in 120 ms, as gently at first as at the end; shut, they fade out
-  first, the same way, and the card then shrinks back.
+  first, the same way, and the card then shrinks back. It widens to the
+  right only as *How it was made* opens, and back, so the toggle at its
+  left stays under the pointer that pressed it.
   A frames chip opens to its details the same way. Opened or shut again
   part way, it goes back from where it is (the maintainer, 2026-10-29;
   `theme/opening`). An eta complex's

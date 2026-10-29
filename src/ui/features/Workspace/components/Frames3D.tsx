@@ -7,7 +7,7 @@ import { ResultGroups, type CardGroups, type Fold } from "./PointedCard3D";
 import { EASED } from "../../../theme/motion";
 import { GROW_MS, SHOW_MS, useEasedTo, useOpening } from "../../../theme/opening";
 import { barsAbove } from "../utils/barsAbove";
-import { chipWidthOf } from "../utils/chipWidth";
+import { chipShiftOf, chipWidthOf } from "../utils/chipWidth";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 import { imaginaryWords } from "../../../../lib/calc/output";
@@ -320,14 +320,17 @@ export function FramesChip({
   const shutWidth = useEasedTo((single && full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE);
   const openWidth = useEasedTo(single ? 0 : Math.max(width, saidWidth) + 2 * SIDE);
   const detailsOwn = useEasedTo(details.length > 0 ? detailsWidth : 0);
-  const chipWidth = chipWidthOf({
+  const widths = {
     shut: shutWidth,
     open: openWidth,
     details: detailsOwn,
     made: details.length > 0 ? madeWidth + 2 * DETAILS_SIDE : 0,
     grown: read.grown,
     madeGrown: madeAt.grown,
-  });
+  };
+  const chipWidth = chipWidthOf(widths);
+  // (how it was made opening, it widens to the right only: its toggle, at its left, stays where it was pressed)
+  const chipShift = chipShiftOf(widths);
   const fold: Fold = { open: madeOpen, at: madeAt, toggle: () => setMadeOpen((o) => !o), measured: madeMeasured };
   // (how many device pixels one of its own pixels is drawn as - the page's scale, and the screen's - that its bars are laid on whole ones:
   //  followed each frame while it is open)
@@ -352,6 +355,7 @@ export function FramesChip({
     measure();
     return () => cancelAnimationFrame(id);
   }, [full]);
+  const drawnPx = devicePx ?? (typeof window === "undefined" ? 1 : window.devicePixelRatio);
   return (
     <div
       ref={root}
@@ -381,6 +385,8 @@ export function FramesChip({
               pointerEvents: shown ? "auto" : "none",
               // (as wide as what it shows, and no wider: the details' own room either side is the chip's)
               width: chipWidth,
+              // (on whole device pixels, that its bars stay sharp)
+              transform: chipShift ? `translateX(${Math.round(chipShift * drawnPx) / drawnPx}px)` : undefined,
             }}
           >
             {/* (a set's bars and slider: opened with its details, and the same way - a single geometry has none) */}
@@ -398,7 +404,7 @@ export function FramesChip({
                     frame={frame}
                     pointed={pointed}
                     width={width}
-                    devicePx={devicePx ?? (typeof window === "undefined" ? 1 : window.devicePixelRatio)}
+                    devicePx={drawnPx}
                     onPoint={setPointed}
                     onFrame={onFrame}
                   />
