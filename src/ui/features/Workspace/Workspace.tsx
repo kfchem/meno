@@ -46,7 +46,7 @@ import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
-import { stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
+import { asCameSaid, stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
 import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
@@ -1899,7 +1899,7 @@ function WorkspaceContent({
               // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
               const read = await structureFromSmiles(smiles, style);
               // (and the stereo it leaves open, said as a paste of it says it)
-              const said = stereoOpenSaid(read.stereoOpen);
+              const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
               if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
             }}
             onCoordinates={(structures) => {
