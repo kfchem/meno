@@ -89,6 +89,17 @@ its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
   - The degree is in Meno's units table as the unit of the angle dimension.
 - **Its geometry.** Each value says the geometry it was measured at. An
   entry with frames gets a list, one value per frame.
+- **Atoms typed, or from a table.** *Atoms* is *Typed* (on the card, from
+  1) or *From the table* wired into its second input, *Atoms*, where wanted
+  (a Reaction's bond changes). From a table, each row's atoms are measured:
+  the cells of the columns that say they hold atoms and how they count
+  them (`atomsOfRows`, `src/lib/table.ts`), two a distance, three an angle,
+  four a dihedral. Every row goes to every entry, or - *Rows matched on* a
+  name - the rows whose value in the column of that name is the entry's
+  value of the property of that name (`product`, which a Reaction writes
+  on each product it maps and in each row). A table whose columns do not
+  say how they count atoms is refused: a table read from a file never
+  says, and its numbers are not guessed.
 - **Nothing left out.**
   - An entry with no 3D places gets each measurement as not applicable,
     with the reason.
@@ -240,10 +251,19 @@ IRC's ends are in one numbering without leaving the workflow.
   worked out at its geometry still names that geometry, in the new order.
   Each product is a compound of its own, its maps numbered from 1.
 - **Bond changes**, a table (`bondChangesTable`): a row a bond each map
-  forms, breaks or changes in order - its product, the map where there are
-  several, what changed, its two atoms from 1 (as a card and the 3D view
-  number them) and their elements, and its order before and after, 0
-  where there is none. A step that takes atoms from it reads them so.
+  forms, breaks or changes in order - `product`, naming the mapped product
+  (its name or place, and its map where every map is given; the mapped
+  product carries the same as its property `product`), *Map* where a
+  product has several, what changed, its two atoms and their elements, and
+  its order before and after, 0 where there is none. The two atom columns
+  count from 1, as a card and the 3D view do, and say so (`atoms: "from
+  1"`): a step that takes atoms from the table reads them by that, never
+  by assumption (*Measure*).
+- **State.** A product not finished - failed, or its marks not read - is
+  set aside as not finished, never passed on as one that is. A product
+  mapped keeps its energy and its imaginary frequencies, which are of its
+  geometry however it is numbered; its calculation is not carried, and the
+  step's line says so.
 - **Nothing in part.** A product with no hydrogens, or one whose atoms do
   not all map one to one, goes out of *Not mapped* with why written on it
   (`set_aside`). Reactants that are not one entry, or have no hydrogens,
@@ -255,13 +275,19 @@ IRC's ends are in one numbering without leaving the workflow.
 Checked: the Diels-Alder of the mapping tests, as a step and laid out on
 the page - the product in the reactants' numbering, every atom where it
 stands in the product, and six bond changes (two formed, four orders
-changed); two reactant entries refused; a product of other atoms and a
-skeleton set aside, each saying why.
+changed); two reactant entries refused; a product of other atoms, a
+skeleton and a product not finished set aside, each saying why. End to
+end on the page, its bond changes into *Measure*: the bond it forms, C1
+to C5, measured on the mapped product as long as it is in the product as
+drawn.
 
 ## Numbering
 
 Atoms in the entry record are numbered from 0, as its bonds are: every
 atom a step takes or gives as data (a measurement's atoms, atoms passed
 over, a restraint's) is from 0. What is said to a chemist (a property's
-name, a reason, a table on the page - a Reaction's bond changes) numbers them
-from 1, as a card shows them.
+name, a reason) numbers them from 1, as a card shows them. A table's
+column of atoms says how it counts them (`TableColumn.atoms`): a
+Reaction's bond changes count from 1, as the table is shown, and every
+step that takes atoms from a table reads them through `atomsOfRows`,
+which refuses a column that does not say.

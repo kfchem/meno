@@ -471,9 +471,33 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Measured",
-    options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
-    how: (v) => measureHow(String(v.measurements ?? "")),
+    // (the atoms typed, or each row's of a table wired in where wanted - a Reaction's bond changes - its columns saying how they count them)
+    inputs: [
+      { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
+    ],
+    options: [
+      {
+        id: "from",
+        label: "Atoms",
+        type: "choice",
+        choices: [
+          { value: "typed", label: "Typed" },
+          { value: "table", label: "From the table" },
+        ],
+        default: "typed",
+      },
+      { id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "", when: { id: "from", in: ["typed"] } },
+      { id: "rows", label: "Rows matched on (blank: every row)", type: "text", default: "", when: { id: "from", in: ["table"] } },
+    ],
+    how: (v) =>
+      v.from === "table"
+        ? String(v.rows ?? "").trim()
+          ? `Each row's atoms, on the entries of its ${String(v.rows).trim()}`
+          : "Each row's atoms, on every entry"
+        : measureHow(String(v.measurements ?? "")),
     needs: (v) => {
+      if (v.from === "table") return undefined;
       const typed = measurementsTyped(String(v.measurements ?? ""));
       return "why" in typed ? typed.why : undefined;
     },

@@ -27,6 +27,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
+import { measuredSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdTable, TABLE_SET, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
@@ -84,6 +85,11 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "take-frames") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+  }
+  // (Measure's atoms from a table wired into Atoms, where its card says so)
+  if (step.kind === "measure" && input.holds !== "structures") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    if (o.from === "table") return ranAs(doc, id, measuredSet(setEntries(input.molecules, input.holds), input.holds, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
   }
   const outcome =
     input.holds === "structures"

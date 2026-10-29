@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { dielsAlder, sn2 } from "../../../../lib/chem/reactionMap.fixtures";
-import type { SetEntry } from "./entries";
+import { setEntries, type SetEntry } from "./entries";
+import { measuredSet } from "./structureSteps";
 import { kindInfo } from "./kinds";
 import { runMenoPair } from "./meno";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
@@ -112,3 +113,40 @@ describe("Reaction's sets, named", () => {
     expect(["out", "rest", "changes"].map((exit) => setName({ made: { step: 3, exit, holds: "molecules" } }, steps))).toEqual(["Mapped products", "Not mapped", "Bond changes"]);
   });
 });
+
+describe("Reaction's bond changes into Measure, on the page", () => {
+  it("measures the bond the Diels-Alder forms, C1-C5, on the product mapped - its atoms read from the table as its columns count them", () => {
+    const da = dielsAlder();
+    const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
+    const mol = (m: Molecule, x: number) => ({ at: { x, y: 0 }, atoms: m.atoms, bonds: m.bonds });
+    let doc = addMolecule3d(emptyWorkspaceDocument(), mol(da.reactants[0], 0));
+    doc = addMolecule3d(doc, mol(da.product, 20));
+    const a = doc.nextWorkflowId ?? 1;
+    doc = addSet(doc, { x0: -4, y0: -4, x1: 4, y1: 4 });
+    const b = doc.nextWorkflowId!;
+    doc = addSet(doc, { x0: 16, y0: -4, x1: 24, y1: 4 });
+    const reaction = doc.nextWorkflowId!;
+    doc = addStep(doc, "reaction", 40, 0);
+    doc = connect(connect(doc, { set: a }, reaction, "reactants"), { set: b }, reaction, "products");
+    const products = resultOf(doc, reaction, "out")!.id;
+    const changes = resultOf(doc, reaction, "changes")!.id;
+    const measure = doc.nextWorkflowId!;
+    doc = addStep(doc, "measure", 80, 0, { from: "table", rows: "product" });
+    doc = connect(connect(doc, { set: products }, measure), { set: changes }, measure, "atoms");
+    // (Measure run: the Reaction before it run first, as any step before one)
+    const ran = runStep(doc, measure, W);
+    expect(ran.steps!.find((s) => s.id === measure)!.ran).toMatchObject({ ok: true, said: "6 measurements on 1 entry" });
+    const measured = resultOf(ran, measure, "out")!;
+    const m = ran.molecules3d!.find((x) => x.id === measured.members![0].molecule)!;
+    // (C1 and C5 in the reactants' numbering are atoms 1 and 11; their distance in the product as it was drawn, by name)
+    const p = (name: string) => da.product.atoms[da.productOrder.indexOf(name)];
+    const truth = Math.hypot(p("C1").x - p("C5").x, p("C1").y - p("C5").y, p("C1").z - p("C5").z);
+    const entry = setEntries([m], "molecules")[0];
+    expect(entry.properties?.["distance 1-11"]?.value).toBeCloseTo(truth, 6);
+    // (a column that does not say how it counts atoms, refused - never guessed)
+    const unsaid = { ...resultOf(ran, reaction, "changes")!.table! };
+    unsaid.columns = unsaid.columns.map((c) => (c.kind === "number" ? { name: c.name, kind: "number", unit: c.unit } : c));
+    expect(measuredSet([entry], "molecules", "", { table: unsaid, rows: "" })).toEqual({ ok: false, said: "No column of the table says it holds atoms, and how it counts them" });
+  });
+});
+

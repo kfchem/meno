@@ -18,9 +18,10 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { bondChangesTable, renumberedEntry } from "../../../../lib/steps/reaction";
+import { bondChangesTable, PRODUCT, renumberedEntry } from "../../../../lib/steps/reaction";
 import { mapProducts } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
+import { atomsOfRows, type Table } from "../../../../lib/table";
 import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -121,19 +122,39 @@ export function combinedSet(entries: readonly SetEntry[]): Outcome3D {
 }
 
 /** *Measure* (lib/steps `measured`): each entry with its measurements as properties; one that does not apply to it says why on itself. */
-export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: string): Outcome3D {
-  const typed = measurementsTyped(text);
-  if ("why" in typed) return { ok: false, said: typed.why };
-  const made = entries.map((e, i) => measured(entryOfSet(e, String(i)), typed.atoms));
+export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: string, fromTable?: { table: Table | null; rows: string }): Outcome3D {
+  // (the atoms of each entry: typed, the same for all; or each row's of the table - every row on every entry, or those whose
+  //  value in the column named is the entry's value of the property of that name - read as the table's columns say they count them)
+  let each: (e: SetEntry) => number[][];
+  if (fromTable) {
+    if (!fromTable.table) return { ok: false, said: "Nothing comes into Atoms" };
+    const read = atomsOfRows(fromTable.table);
+    if ("why" in read) return { ok: false, said: read.why };
+    const name = fromTable.rows.trim();
+    const column = name ? fromTable.table.columns.findIndex((c) => c.name === name) : -1;
+    if (name && column < 0) return { ok: false, said: `The table has no column ${name}` };
+    const cells = fromTable.table.rows.map((r) => (column >= 0 ? r[column] : null));
+    each = (e) => {
+      const value = e.properties?.[name]?.value;
+      return read.rows.filter((_, k) => !name || (value != null && String(cells[k]) === String(value)));
+    };
+  } else {
+    const typed = measurementsTyped(text);
+    if ("why" in typed) return { ok: false, said: typed.why };
+    each = () => typed.atoms;
+  }
+  const atoms = entries.map(each);
+  const made = entries.map((e, i) => measured(entryOfSet(e, String(i)), atoms[i]));
   // (each measurement this step made that does not apply, or failed: said on the entry, counted here)
-  const names = typed.atoms.map(measurementName);
-  const notDone = made.reduce((n, e) => n + names.filter((k) => e.properties[k] && e.properties[k].status !== "computed").length, 0);
+  const asked = atoms.reduce((n, a) => n + a.length, 0);
+  const notDone = made.reduce((n, e, i) => n + atoms[i].map(measurementName).filter((k) => e.properties[k] && e.properties[k].status !== "computed").length, 0);
+  const none = atoms.filter((a) => !a.length).length;
   return {
     ok: true,
     holds,
     kept: backEach(entries, made),
     aside: [],
-    said: `${plural(typed.atoms.length, "measurement")} on ${plural(entries.length, "entry", "entries")}${notDone ? `, ${notDone} not measured` : ""}`,
+    said: `${plural(asked, "measurement")} on ${plural(entries.length, "entry", "entries")}${notDone ? `, ${notDone} not measured` : ""}${none ? `, ${none} with no row of the table` : ""}`,
   };
 }
 
@@ -331,6 +352,8 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
   if (refused) return { ok: false, said: refused };
   const reactant = reactants[0];
   const whole = products.filter(mappable);
+  // (a mapped product as its rows and it name it: the product's name or place - and its map, where every map is given)
+  const productKey = (m: { product: number; map: number }) => `${whole[m.product].name ?? named(whole[m.product])}${maps === "every" ? `, map ${m.map + 1}` : ""}`;
   const out = mapped ?? mapProducts(moleculeOfEntry(reactant), whole.map(moleculeOfEntry), { every: maps === "every" });
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = products.flatMap((p) =>
@@ -354,8 +377,8 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
     if (!e) continue;
     done.push(m);
     counts.set(m.product, (counts.get(m.product) ?? 0) + 1);
-    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried; its calculation not)
-    kept.push({ ...e, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) });
+    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried; its calculation not - and which mapped product it is, as its bond changes' rows name it)
+    kept.push(withSaid({ ...e, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) }, PRODUCT, productKey(m)));
   }
   // (a product of which no map went through, aside with why - each map's that did not, said on it)
   const why = new Map<number, string[]>();
@@ -363,7 +386,7 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
   whole.forEach((p, k) => {
     if (!counts.has(k) && why.has(k)) aside.push(withSaid(p, SET_ASIDE, why.get(k)!.join(" ")));
   });
-  const changes = bondChangesTable(done, (k) => whole[k].name ?? named(whole[k]));
+  const changes = bondChangesTable(done, productKey);
   const line = [`${plural(counts.size, "product")} in the reactants' numbering${maps === "every" ? `, ${plural(kept.length, "map")}` : ""}`, `${plural(changes.rows.length, "bond change")}`];
   if (aside.length) line.push(`${aside.length} not mapped`);
   if (done.some((m) => whole[m.product].calc)) line.push("calculations not carried");

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { geometryKey, type Entry } from "../entry";
 import { bondChangesTable, renumberedEntry } from "./reaction";
+import { atomsOfRows, tableIn } from "../table";
 
 /** Water, numbered H, O, H: its geometry, a value at it, a list and a vibration by atom, a restraint, and its stereo elements. */
 function water(): Entry {
@@ -73,11 +74,17 @@ describe("a reaction's bond changes as a table", () => {
 
   it("has a row a bond, its atoms from 1, with what changed and its order before and after", () => {
     const t = bondChangesTable([{ product: 0, map: 0, changes }], () => "b");
-    expect(t.columns.map((c) => c.name)).toEqual(["Product", "Change", "Atom 1", "Atom 2", "Element 1", "Element 2", "Order before", "Order after"]);
+    expect(t.columns.map((c) => c.name)).toEqual(["product", "Change", "Atom 1", "Atom 2", "Element 1", "Element 2", "Order before", "Order after"]);
     expect(t.rows).toEqual([
       ["b", "formed", 1, 5, "C", "C", 0, 1],
       ["b", "order changed", 1, 2, "C", "C", 2, 1],
     ]);
+  });
+
+  it("says its atom columns count from 1, which a reader takes them by - kept when the workspace is saved and read back", () => {
+    const t = bondChangesTable([{ product: 0, map: 0, changes }], () => "b");
+    expect(atomsOfRows(t)).toEqual({ columns: ["Atom 1", "Atom 2"], rows: [[0, 4], [0, 1]] });
+    expect(atomsOfRows(tableIn(JSON.parse(JSON.stringify(t)))!)).toEqual(atomsOfRows(t));
   });
 
   it("names the map, from 1, where a product has several", () => {

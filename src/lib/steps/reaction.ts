@@ -64,20 +64,25 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
   };
 }
 
+/** The column of a Reaction's bond changes, and the property of each product it mapped, that names the mapped product. */
+export const PRODUCT = "product";
+
 /** What a bond change is called in its table's *Change* column. */
 const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };
 
 /**
  * The bond changes of each product mapped, as one table: a row a bond -
- * the product it is of (by `productName`), the map (from 1, where there are
- * several of a product), what changed, its two atoms (from 1) and their
- * elements, and its order before and after.
+ * the mapped product it is of (`product`, as `productKey` names it - and
+ * the mapped product carries the same, so that a step taking atoms from
+ * the table matches rows to it), the map (from 1, where there are several
+ * of a product), what changed, its two atoms (from 1, the columns saying
+ * so) and their elements, and its order before and after.
  */
-export function bondChangesTable(mapped: readonly { product: number; map: number; changes: readonly BondChangeRow[] }[], productName: (product: number) => string): Table {
+export function bondChangesTable(mapped: readonly { product: number; map: number; changes: readonly BondChangeRow[] }[], productKey: (m: { product: number; map: number }) => string): Table {
   const maps = mapped.some((m) => m.map > 0);
   return {
     columns: [
-      { name: "Product", kind: "text" },
+      { name: PRODUCT, kind: "text" },
       ...(maps ? [{ name: "Map", kind: "number" as const, unit: "none" as const }] : []),
       { name: "Change", kind: "text" },
       { name: "Atom 1", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
@@ -88,7 +93,7 @@ export function bondChangesTable(mapped: readonly { product: number; map: number
       { name: "Order after", kind: "number", unit: "none" },
     ],
     rows: mapped.flatMap((m) =>
-      m.changes.map((c) => [productName(m.product), ...(maps ? [m.map + 1] : []), CHANGE_WORDS[c.change], c.a1 + 1, c.a2 + 1, c.element1, c.element2, c.before, c.after]),
+      m.changes.map((c) => [productKey(m), ...(maps ? [m.map + 1] : []), CHANGE_WORDS[c.change], c.a1 + 1, c.a2 + 1, c.element1, c.element2, c.before, c.after]),
     ),
     unread: [],
     left: [],
