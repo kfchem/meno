@@ -73,7 +73,7 @@ describe("Restraints, as a step", () => {
     if (!o.ok) throw new Error(o.said);
     expect(held(o.kept[0])).toEqual([{ kind: "fixed", atoms: [1] }]);
     expect(o.aside[0].failed).toEqual({ kind: "refused", why: "It has no atom 2: its atoms are 1 to 1." });
-    expect(o.said).toBe("1 entry restrained · 1 atom fixed · 1 failed");
+    expect(o.said).toBe("1 entry restrained · 1 atom fixed · 1 entry's earlier distances and atoms fixed replaced · 1 failed");
   });
 });
 
@@ -102,7 +102,7 @@ describe("Torsion restraints, as a step", () => {
     expect([o.kept.length, o.aside.length]).toEqual([1, 1]);
     expect(runMenoPair("torsion-restraints", { entries: [tagged(dce(true), "product", "p-3")], holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product", step: "50" })).toEqual({
       ok: false,
-      said: "1 entry could not be set against a reference. a #1: no entry of Reference has its product, p-3",
+      said: "1 entry could not be set against a reference: a #1: no entry of Reference has its product, p-3",
     });
     expect(runMenoPair("torsion-restraints", { entries: [dce(true)], holds: "molecules" }, { entries: refs, holds: "molecules" }, { step: "50" })).toEqual({
       ok: false,
@@ -110,9 +110,25 @@ describe("Torsion restraints, as a step", () => {
     });
   });
 
+  it("counts apart an entry whose reference has no trans torsion at all, from those trans already", () => {
+    // (a reference with no double bond: no trans torsion to hold)
+    const ref = entry(["C", "C", "H", "H"], [0, 0, 0, 1.54, 0, 0, -0.5, 0.9, 0, 2.04, 0.9, 0], [[0, 1, 1], [0, 2, 1], [1, 3, 1]]);
+    const both = [tagged(dce(false), "product", "p-0"), tagged(ref, "product", "p-1")];
+    const o = runMenoPair("torsion-restraints", { entries: both, holds: "molecules" }, { entries: both, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
+    if (!o.ok) throw new Error(o.said);
+    expect(o.said).toBe("0 restrained · 1 trans already · 1 with no trans torsion in its reference");
+  });
+
+  it("names every entry it could not set against a reference", () => {
+    const refs = [tagged(dce(false), "product", "p-1")];
+    const o = runMenoPair("torsion-restraints", { entries: [tagged(dce(true), "product", "p-2"), tagged(dce(true), "product", "p-3")], holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
+    expect(o).toEqual({ ok: false, said: "2 entries could not be set against a reference: a #1: no entry of Reference has its product, p-2; a #1: no entry of Reference has its product, p-3" });
+  });
+
   it("has no strength of its own to add: it says so on its card", () => {
     expect(kindInfo("torsion-restraints").needs?.({})).toBe("Set the strength added");
     expect(kindInfo("torsion-restraints").inputs?.map((p) => p.name)).toEqual(["Molecules", "Reference"]);
-    expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("Trans torsions held at 180°, 50 kcal/mol/rad² stronger each time, against the reference of the same product");
+    expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("held at 180°, +50 kcal/mol/rad² each time, matched on product");
+    expect(kindInfo("torsion-restraints").how?.({ step: "50" })).toBe("held at 180°, +50 kcal/mol/rad² each time");
   });
 });

@@ -560,7 +560,7 @@ export const KINDS: readonly KindInfo[] = [
     others: [FAILED],
     options: [
       { id: "coordination", label: "Coordination bonds", type: "switch", default: true },
-      { id: "factor", label: "At, times their van der Waals radii together (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
+      { id: "factor", label: "Kept at \u00d7 the sum of their van der Waals radii (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
       { id: "distances", label: "Pairs kept at their distance, atoms from 1 (3-7, 1-12)", type: "text", default: "" },
       { id: "fixed", label: "Atoms fixed, from 1 (1, 4-6)", type: "text", default: "" },
       { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: "" },
@@ -662,12 +662,13 @@ export function torsionsNeeds(v: OptionValues): string | undefined {
   return typeof step === "object" ? step.why : undefined;
 }
 
-/** A Torsion restraints step's line: against what, and by how much. */
+/** A Torsion restraints step's line: what it adds each time, and what it matches on where it does. */
 export function torsionsHow(v: OptionValues): string {
   const needs = torsionsNeeds(v);
   if (needs) return needs;
-  const against = v.reference === "property" ? `against the reference of the same ${String(v.property).trim()}` : "against the one reference";
-  return `Trans torsions held at 180\u00b0, ${String(v.step).trim()} kcal/mol/rad\u00b2 stronger each time, ${against}`;
+  // (the one reference is the default: left unsaid)
+  const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
+  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2 each time${matched}`;
 }
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */

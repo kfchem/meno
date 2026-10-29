@@ -81,7 +81,28 @@ describe("Restraints", () => {
       { kind: "distance", atoms: [1, 2], value: 5, strength: 200 },
       { kind: "fixed", atoms: [0] },
     ]);
-    expect("count" in r && r.count).toEqual({ coordination: 0, distances: 1, fixed: 1 });
+    expect("count" in r && r.count).toEqual({ coordination: 0, distances: 1, fixed: 1, replaced: 0, torsionsKept: 0 });
+  });
+
+  it("replaces the distances and atoms fixed an entry held, and keeps its torsions at the strengths they reached", () => {
+    const held = {
+      value: {
+        restraints: [
+          { kind: "distance" as const, atoms: [0, 1], value: 2, strength: 10 },
+          { kind: "dihedral" as const, atoms: [0, 1, 2, 3], value: 180, strength: 150 },
+          { kind: "fixed" as const, atoms: [2] },
+        ],
+      },
+      unit: "none" as const,
+      status: "computed" as const,
+    };
+    const e = butene(false, { restraints: held });
+    const r = restraintsOf(e, { fixed: [0] });
+    expect(rowsOf(e, r)).toEqual([
+      { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 150 },
+      { kind: "fixed", atoms: [0] },
+    ]);
+    expect("count" in r && [r.count.replaced, r.count.torsionsKept]).toEqual([2, 1]);
   });
 
   it("fails, with the reason: an atom the entry has not, an element with no radius, no strength for a distance, no 3D places", () => {
@@ -155,7 +176,7 @@ describe("Torsion restraints", () => {
     const z = butene(false);
     const first = torsionsRestrained(z, butene(true), 50);
     if ("failed" in first) throw new Error(first.failed);
-    expect(first.count).toEqual({ wrong: 2, added: 2, raised: 0 });
+    expect(first.count).toEqual({ trans: 2, wrong: 2, added: 2, raised: 0 });
     expect(valueFault(first.property.value, z)).toBeNull();
     expect(restraintsHeld({ properties: { restraints: first.property } })).toEqual([
       { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 50 },
@@ -164,7 +185,7 @@ describe("Torsion restraints", () => {
     // (still Z after a round: each raised to 100)
     const second = torsionsRestrained(butene(false, { restraints: first.property }), butene(true), 50);
     if ("failed" in second) throw new Error(second.failed);
-    expect(second.count).toEqual({ wrong: 2, added: 0, raised: 2 });
+    expect(second.count).toEqual({ trans: 2, wrong: 2, added: 0, raised: 2 });
     expect(restraintsHeld({ properties: { restraints: second.property } }).map((r) => r.strength)).toEqual([100, 100]);
   });
 
@@ -181,7 +202,7 @@ describe("Torsion restraints", () => {
     };
     const r = torsionsRestrained(butene(true, { restraints: held }), butene(true), 50);
     if ("failed" in r) throw new Error(r.failed);
-    expect(r.count).toEqual({ wrong: 0, added: 0, raised: 0 });
+    expect(r.count).toEqual({ trans: 2, wrong: 0, added: 0, raised: 0 });
     expect(r.property.value).toEqual(held.value);
   });
 

@@ -244,7 +244,11 @@ strength. Restraints are a label: they name no geometry, and ride along.
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
   about 1.6 Å).
-- **Replaced, not added to.** What an entry held before is replaced.
+- **What an entry held before.** Its distances and atoms fixed - the kinds
+  this step makes - are replaced. Its torsions (*Torsion restraints*'),
+  with the strengths they reached in earlier rounds, are kept. The line
+  says both: "2 entries' earlier distances and atoms fixed replaced · 2
+  entries' torsions kept".
 - **Refused, with the reason** (out of *Failed*): an atom the entry does not
   have, an element Alvarez gives no radius for, or an entry with no 3D
   places or with frames.
@@ -273,17 +277,25 @@ minimisation (docs/WORKFLOWS-FOUNDATION.md), its numbers the chemist's.
 - **Held**: each such torsion that is not trans in the entry (90° or under)
   is held at 180°, by E = k φ²/2 (φ in radians, the shorter way round,
   k in kcal mol⁻¹ rad⁻²).
+- **Trans, and 180°.** A torsion over 90° either way is trans (anti), at or
+  under 90° cis (syn): Klyne and Prelog's division of a torsion angle (W.
+  Klyne and V. Prelog, Experientia 1960, 16, 521), the boundary Compare
+  bonding's E or Z uses too. The target, 180°, is the torsion of a trans
+  pair across a planar double bond.
 - **Stronger each time.** Its strength is the step typed more than the entry
   held it at, or the step where it held it at none. A torsion held once
   stays held at the strength it reached, even when it is trans now. What
   else the entry holds rides along.
 - **Exits.** Entries with a torsion not trans go out of *Restrained*, the
-  rest out of *Trans already*, as they came. Its line counts them: "5
-  restrained · 7 trans already · 7 torsions newly held".
+  rest out of *Trans already*, as they came. Its line counts them, an
+  entry whose reference has no trans torsion at all apart: "5 restrained ·
+  6 trans already · 1 with no trans torsion in its reference · 7 torsions
+  newly held".
 - **Against** the one reference, or the reference with the same value of a
   property. Where any entry cannot be set against a reference (none to pair
-  with, another numbering, no 3D places), nothing is done and the step says
-  why: no entry goes on as trans that was never looked at.
+  with, another numbering, no 3D places), nothing is done and the step
+  names each such entry with why. Its only other exit is *Trans already*,
+  and no entry goes on as trans that was never looked at.
 - **No default** for the step: "Set the strength added".
 
 Checked: (E)- and (Z)-but-2-ene, with their hydrogens: methyl to methyl and

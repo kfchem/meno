@@ -304,6 +304,8 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const total = { coordination: 0, distances: 0, fixed: 0 };
+  let replaced = 0;
+  let torsionsKept = 0;
   entries.forEach((was, i) => {
     const r = restraintsOf(entryOfSet(was, String(i)), typed.asked);
     if ("failed" in r) {
@@ -313,12 +315,17 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
     total.coordination += r.count.coordination;
     total.distances += r.count.distances;
     total.fixed += r.count.fixed;
+    if (r.count.replaced) replaced++;
+    if (r.count.torsionsKept) torsionsKept++;
     kept.push(withRestraints(was, r.property));
   });
   const said = [`${plural(kept.length, "entry", "entries")} restrained`];
   if (typed.asked.coordination != null) said.push(total.coordination ? `${plural(total.coordination, "coordination bond")} held` : "no coordination bonds");
   if (total.distances) said.push(`${plural(total.distances, "pair")} at their distance`);
   if (total.fixed) said.push(`${plural(total.fixed, "atom")} fixed`);
+  // (what an entry held before: its distances and atoms fixed replaced, its torsions - with the strengths they reached - kept; both said)
+  if (replaced) said.push(`${replaced} ${replaced === 1 ? "entry's" : "entries'"} earlier distances and atoms fixed replaced`);
+  if (torsionsKept) said.push(`${torsionsKept} ${torsionsKept === 1 ? "entry's" : "entries'"} torsions kept`);
   if (aside.length) said.push(`${aside.length} failed`);
   return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
 }
@@ -328,9 +335,11 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
  * its reference - the one of *Reference*, or the one with the same value of
  * a property - each torsion trans there and not trans here held at 180°,
  * stronger by the step each time; out of *Restrained*. One with every such
- * torsion trans already out of *Trans already*, as it came. Where any entry
- * cannot be set against a reference, nothing is done, saying why: none is
- * passed on as trans that was never looked at.
+ * torsion trans already out of *Trans already*, as it came - counted apart
+ * where its reference has no trans torsion at all. Where any entry cannot
+ * be set against a reference, nothing is done, each such entry named with
+ * why: its only other exit is *Trans already*, and none is passed on as
+ * trans that was never looked at.
  */
 export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
   const needs = torsionsNeeds(v);
@@ -346,18 +355,21 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
   const problems: string[] = [];
   let added = 0;
   let raised = 0;
+  let noTrans = 0;
   entries.forEach((e, i) => {
     const m = matched[i];
     if ("why" in m) return problems.push(`${named(e)}: ${m.why}`);
     const r = torsionsRestrained(es[i], rs[m.index], step);
     if ("failed" in r) return problems.push(`${named(e)}: ${r.failed}`);
+    if (!r.count.trans) noTrans++;
     if (!r.count.wrong) return aside.push(e);
     added += r.count.added;
     raised += r.count.raised;
     kept.push(withRestraints(e, r.property));
   });
-  if (problems.length) return { ok: false, said: `${plural(problems.length, "entry", "entries")} could not be set against a reference. ${problems[0]}` };
-  const said = [`${kept.length} restrained`, `${aside.length} trans already`];
+  if (problems.length) return { ok: false, said: `${plural(problems.length, "entry", "entries")} could not be set against a reference: ${problems.join("; ")}` };
+  const said = [`${kept.length} restrained`, `${aside.length - noTrans} trans already`];
+  if (noTrans) said.push(`${noTrans} with no trans torsion in ${noTrans === 1 ? "its" : "their"} reference`);
   if (added) said.push(`${plural(added, "torsion")} newly held`);
   if (raised) said.push(`${plural(raised, "torsion")} held stronger`);
   return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };

@@ -166,26 +166,25 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M7 8.8 H13 M7 11.7 H13" />
     </>
   ),
-  // (atoms held to a wall: restraints)
+  // (two atoms held to a wall: restraints)
   held: (
     <>
-      <path d="M3 3.5 V16.5 M3 10 H7.6 M10.4 10 L13.6 6.6 M10.6 11.4 L13.8 13.8" />
-      <path d="M3 4.6 l-1.6 1.6 M3 7.4 l-1.6 1.6 M3 10.2 l-1.6 1.6 M3 13 l-1.6 1.6 M3 15.8 l-1.6 1.6" strokeWidth={1} />
+      <path d="M3.2 3.5 V16.5 M3.2 10 H7 M11.2 10 H13.8" />
+      <path d="M3.2 4.2 l-1.8 1.8 M3.2 7.4 l-1.8 1.8 M3.2 10.6 l-1.8 1.8 M3.2 13.8 l-1.8 1.8" />
       <circle cx="9" cy="10" r="2.2" fill="currentColor" stroke="none" />
-      <circle cx="15.4" cy="5" r="2.2" fill="currentColor" stroke="none" />
-      <circle cx="15.6" cy="15" r="2.2" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="10" r="2.2" fill="currentColor" stroke="none" />
     </>
   ),
   // (four atoms anti, a torsion at 180, held: Restraints' hatching under it)
   heldAnti: (
     <>
-      <path d="M2.6 13 L7.2 6 L12.8 12 L17.4 5 M5.6 17.2 H14.4" />
-      <circle cx="2.6" cy="13" r="1.9" fill="currentColor" stroke="none" />
-      <circle cx="7.2" cy="6" r="1.9" fill="currentColor" stroke="none" />
-      <circle cx="12.8" cy="12" r="1.9" fill="currentColor" stroke="none" />
-      <circle cx="17.4" cy="5" r="1.9" fill="currentColor" stroke="none" />
-      <path d="M7 17.2 l-1.5 2 M9.4 17.2 l-1.5 2 M11.8 17.2 l-1.5 2 M14.2 17.2 l-1.5 2" strokeWidth={1} />
-      <path d="M10 9 V17.2" strokeWidth={1} strokeDasharray="0.1 1.8" />
+      <path d="M2.6 12.6 L7.2 5.6 L12.8 11.6 L17.4 4.6 M4.8 17 H15.2" />
+      <circle cx="2.6" cy="12.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="7.2" cy="5.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="12.8" cy="11.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="17.4" cy="4.6" r="1.9" fill="currentColor" stroke="none" />
+      <path d="M6.6 17 l-1.6 2 M9.4 17 l-1.6 2 M12.2 17 l-1.6 2 M15 17 l-1.6 2" />
+      <path d="M10 8.8 V17" strokeWidth={1} strokeDasharray="0.1 1.8" />
     </>
   ),
   // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)

@@ -44,8 +44,8 @@ export type RestraintsAsked = {
   strength?: number;
 };
 
-/** What restraints an entry was given, by kind, as a step's line counts them. */
-export type RestraintsCount = { coordination: number; distances: number; fixed: number };
+/** What restraints an entry was given, by kind, as a step's line counts them - and how many it held before of the kinds made here (distances, atoms fixed), now replaced, and of torsions, kept. */
+export type RestraintsCount = { coordination: number; distances: number; fixed: number; replaced: number; torsionsKept: number };
 
 type V = [number, number, number];
 const at = (xyz: readonly number[], i: number): V => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
@@ -56,7 +56,12 @@ export function restraintsHeld(e: Pick<Entry, "properties">): Restraint[] {
   return typeof v === "object" && v !== null && "restraints" in v ? v.restraints : [];
 }
 
-/** Restraints from `e` itself (*Restraints*), or why there can be none. */
+/**
+ * Restraints from `e` itself (*Restraints*), or why there can be none. Of
+ * what the entry held before, the kinds made here - distances, atoms fixed -
+ * are replaced, and its torsions (*Torsion restraints*', with the strengths
+ * they reached) kept, each counted.
+ */
 export function restraintsOf(e: Entry, o: RestraintsAsked): { property: Property; count: RestraintsCount } | { failed: string } {
   if (e.geometry.kind !== "3d") return { failed: e.geometry.kind === "frames" ? "It holds frames: take one frame first (Take frames)." : "It has no 3D places to take restraints from." };
   const xyz = e.geometry.xyz;
@@ -66,8 +71,10 @@ export function restraintsOf(e: Entry, o: RestraintsAsked): { property: Property
   if (missing !== undefined) return { failed: `It has no atom ${missing + 1}: its atoms are 1 to ${n}.` };
   const strength = o.strength ?? NaN;
   if ((o.coordination != null || o.distances?.length) && !(strength > 0 && Number.isFinite(strength))) return { failed: "A distance held needs a strength above 0." };
-  const rows: Restraint[] = [];
-  const count: RestraintsCount = { coordination: 0, distances: 0, fixed: 0 };
+  const before = restraintsHeld(e);
+  const torsions = before.filter((r) => r.kind === "dihedral").map((r) => ({ ...r, atoms: [...r.atoms] }));
+  const rows: Restraint[] = [...torsions];
+  const count: RestraintsCount = { coordination: 0, distances: 0, fixed: 0, replaced: before.length - torsions.length, torsionsKept: torsions.length };
   if (o.coordination != null) {
     for (const b of e.structure.bonds) {
       if (!b.coordination) continue;
@@ -87,7 +94,9 @@ export function restraintsOf(e: Entry, o: RestraintsAsked): { property: Property
     rows.push({ kind: "fixed", atoms: fixed });
     count.fixed = fixed.length;
   }
-  return { property: { value: { restraints: rows }, unit: "none", status: "computed" }, count };
+  const was = e.properties.restraints?.value;
+  const value = typeof was === "object" && was !== null && "restraints" in was ? { ...was, restraints: rows } : { restraints: rows };
+  return { property: { value, unit: "none", status: "computed" }, count };
 }
 
 /**
@@ -127,8 +136,8 @@ export function transTorsions(reference: Entry): [number, number, number, number
 /** Two torsions as one: the same four atoms, either way round. */
 const sameTorsion = (r: readonly number[], t: readonly number[]) => r.length === 4 && (r.every((a, i) => a === t[i]) || r.every((a, i) => a === t[3 - i]));
 
-/** What *Torsion restraints* did to an entry: the torsions trans in the reference that are not trans here, those of them newly held, and those whose strength was raised. */
-export type TorsionsCount = { wrong: number; added: number; raised: number };
+/** What *Torsion restraints* did to an entry: the torsions trans in the reference, those of them not trans here, those newly held, and those whose strength was raised. */
+export type TorsionsCount = { trans: number; wrong: number; added: number; raised: number };
 
 /**
  * `e`'s restraints with each torsion that is trans in `reference` and not
@@ -147,8 +156,9 @@ export function torsionsRestrained(e: Entry, reference: Entry, step: number): { 
   if (bad >= 0) return { failed: `Atom ${bad + 1} is ${atoms[bad].el} here and ${ref[bad].el} in the reference: both must hold the same atoms in one numbering.` };
   const xyz = e.geometry.xyz;
   const rows = restraintsHeld(e).map((r) => ({ ...r, atoms: [...r.atoms] }));
-  const count: TorsionsCount = { wrong: 0, added: 0, raised: 0 };
-  for (const t of transTorsions(reference)) {
+  const trans = transTorsions(reference);
+  const count: TorsionsCount = { trans: trans.length, wrong: 0, added: 0, raised: 0 };
+  for (const t of trans) {
     if (Math.abs(dihedral(at(xyz, t[0]), at(xyz, t[1]), at(xyz, t[2]), at(xyz, t[3]))) > 90) continue;
     count.wrong++;
     const held = rows.find((r) => r.kind === "dihedral" && sameTorsion(r.atoms, t));
