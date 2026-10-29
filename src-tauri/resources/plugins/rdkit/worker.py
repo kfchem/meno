@@ -2210,18 +2210,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
               for el, d in sorted(set(metals), key=lambda x: (x[0], x[1] or ""))],
-            *([{"label": "Dropped", "text": f"{len(dropped) + len(clashed) + len(off)}: " + "; ".join([
-                # (what was found, in words - the thresholds are the docs', not the chip's)
-                *(f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} too near one another"
-                  f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
-                  for m in sorted({m for _, m, _ in dropped.values()}) for angle in [next(a for _, mm, a in dropped.values() if mm == m)]),
-                *(f"two atoms run into one another (nearest: {mol.GetAtomWithIdx(i).GetSymbol()}"
-                  f" and {mol.GetAtomWithIdx(j).GetSymbol()}, {d:.2f} \u00c5)"
-                  for i, j, d, _ in ([min(clashed.values(), key=lambda c: c[3])] if clashed else [])),
-                *(f"a bond to a metal far from its length (furthest: {mol.GetAtomWithIdx(m).GetSymbol()}-"
-                  f"{mol.GetAtomWithIdx(x).GetSymbol()}, {d:.2f} \u00c5)"
-                  for m, x, d, length in ([max(off.values(), key=lambda c: abs(c[2] / c[3] - 1))] if off else [])),
-            ])}] if dropped or clashed or off else []),
+            *([{"label": "Dropped", "text": dropped_words(mol, dropped, clashed, off)}] if dropped or clashed or off else []),
             {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"
              + (f", {len(left) - len(kept)} the same as one kept" if len(left) > len(kept) else "")},
             {"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
@@ -2229,6 +2218,30 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
             {"label": "Made by", "text": f"RDKit {rdBase.rdkitVersion}"},
         ],
     }
+
+
+def dropped_words(mol, dropped, clashed, off):
+    """The Dropped row: how many conformers were dropped, and for what, in words - the thresholds are the docs', not
+    the chip's - each with the worst found and the length or angle it came to; by reason where there is more than
+    one. `dropped` the floor's ({cid: (under, metal, angle)}), `clashed` atoms run into one another ({cid: (i, j, d,
+    share)}), `off` a bond to a metal far from its length ({cid: (metal, atom, d, length)})."""
+    el = lambda i: mol.GetAtomWithIdx(i).GetSymbol()
+    parts = []
+    for m in sorted({m for _, m, _ in dropped.values()}):
+        angle = next(a for _, mm, a in dropped.values() if mm == m)
+        n = sum(1 for _, mm, _ in dropped.values() if mm == m)
+        parts.append((n, f"two ligands at {el(m)} too near one another"
+                         f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"))
+    if clashed:
+        i, j, d, _ = min(clashed.values(), key=lambda c: c[3])
+        parts.append((len(clashed), f"two atoms run into one another (nearest: {el(i)} and {el(j)} at {d:.2f} \u00c5)"))
+    if off:
+        m, x, d, _ = max(off.values(), key=lambda c: abs(c[2] / c[3] - 1))
+        parts.append((len(off), f"a bond to a metal far from its length (the worst: {el(m)}-{el(x)} at {d:.2f} \u00c5)"))
+    total = sum(n for n, _ in parts)
+    if len(parts) == 1:
+        return f"{total}: {parts[0][1]}"
+    return f"{total}: " + "; ".join(f"{n} with {words}" for n, words in parts)
 
 
 def op_conformers(m):

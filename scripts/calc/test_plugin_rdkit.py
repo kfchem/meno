@@ -12,6 +12,7 @@ will do.)
 import importlib.util
 import math
 import pathlib
+import re
 import time
 import unittest
 
@@ -605,8 +606,12 @@ class RunIntoItself(unittest.TestCase):
         dropped = int(rows["Dropped"].split(":")[0])
         self.assertEqual(len(entry["frames"]) + dropped, 500)
         # (said in words, with the pair - the thresholds are the docs')
-        self.assertIn("two atoms run into one another (nearest: Cl and C, ", rows["Dropped"])
-        self.assertIn("a bond to a metal far from its length (furthest: Zr-Cl, ", rows["Dropped"])
+        # (by reason, each with the worst it came to: "5: 2 with two ligands at Zr ...; 2 with two atoms ...; 1 with a bond ...")
+        self.assertRegex(rows["Dropped"], r"^\d+: \d+ with two ligands at Zr too near one another \(narrowest \d+\u00b0\); "
+                                          r"\d+ with two atoms run into one another \(nearest: Cl and C at 1\.\d\d \u00c5\); "
+                                          r"\d+ with a bond to a metal far from its length \(the worst: Zr-Cl at \d\.\d\d \u00c5\)$")
+        counts = [int(x) for x in re.findall(r"(?:: |; )(\d+) with", rows["Dropped"])]
+        self.assertEqual(sum(counts), dropped)
         self.assertNotIn("0.65", rows["Dropped"])
         self.assertNotIn("%", rows["Dropped"])
 
