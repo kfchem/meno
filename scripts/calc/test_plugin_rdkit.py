@@ -1585,3 +1585,67 @@ class SmilesStereoOpen(unittest.TestCase):
         for smiles, runs in [("CC=C=CC", [[1, 2]]), ("CC=C=C=CC", [[1, 2, 3]]), ("CC=C=C=C=CC", [[1, 2, 3, 4]]), ("CC=CC=CC", [])]:
             block = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
             self.assertEqual(self.worker.op_stereo_left_open({"molblock": block})["cumulated"], runs, smiles)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class CoordinationBonds(unittest.TestCase):
+    """A coordination bond - a MOL block's type 9, a plugin entry's `coordination` - is RDKit's dative bond, taking no
+    hydrogen from either end as Meno counts them; where RDKit cannot hold it, refused in words - never a hydrogen
+    short, never a covalent single."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    @staticmethod
+    def block(atoms, bonds):
+        """A V3000 MOL block as Meno writes one: atoms (element, x, y, and a charge or none), bonds (type, from 1, to 1)."""
+        lines = ["", "  Meno", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", f"M  V30 COUNTS {len(atoms)} {len(bonds)} 0 0 0", "M  V30 BEGIN ATOM"]
+        lines += [f"M  V30 {i + 1} {el} {x} {y} 0 0{f' CHG={c}' if c else ''}" for i, (el, x, y, c) in enumerate(atoms)]
+        lines += ["M  V30 END ATOM", "M  V30 BEGIN BOND"]
+        lines += [f"M  V30 {i + 1} {t} {a} {b}" for i, (t, a, b) in enumerate(bonds)]
+        lines += ["M  V30 END BOND", "M  V30 END CTAB", "M  END", ""]
+        return "\n".join(lines)
+
+    def formula(self, molblock):
+        iso = self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
+        return "".join(sorted(a["el"] for a in iso["atoms"]))
+
+    def test_a_main_group_adduct_drawn_with_an_arrow_is_refused_in_words_never_a_hydrogen_short(self):
+        # (H3N->BH3 as plain atoms: RDKit gave the B two hydrogens - H3N->BH2 - where Meno draws three)
+        adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
+        with self.assertRaisesRegex(ValueError, r"^RDKit cannot hold the coordination bond from N to B as drawn: B takes no further bond there\. Draw the two charged instead, N\+ bonded to B-\.$"):
+            self.formula(adduct)
+        alane = self.block(
+            [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
+            [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)],
+        )
+        with self.assertRaisesRegex(ValueError, r"coordination bond from N to Al as drawn"):
+            self.formula(alane)
+        # (drawn charged, as the words say: made, its six hydrogens all there)
+        self.assertEqual(self.formula(self.block([("N", 0, 0, 1), ("B", 1.6, 0, -1)], [(1, 1, 2)])), "BHHHHHHN")
+
+    def test_a_metal_acceptor_keeps_its_ligands_hydrogens(self):
+        # (cis-[PtCl2(NH3)2], each ammine's bond to Pt an arrow: six hydrogens, none taken)
+        cisplatin = self.block([("Pt", 0, 0, 0), ("Cl", 2, 0, 0), ("Cl", 0, 2, 0), ("N", -2, 0, 0), ("N", 0, -2, 0)], [(1, 1, 2), (1, 1, 3), (9, 4, 1), (9, 5, 1)])
+        self.assertEqual(self.formula(cisplatin), "ClClHHHHHHNNPt")
+
+    def test_a_plugin_entrys_coordination_bond_is_dative_never_a_covalent_single(self):
+        # (H3N->BH3 with all its hydrogens, its B-N bond marked: refused; a Pt ammine's N->Pt: dative)
+        h = lambda x, k: {"el": "H", "x": x, "y": 0.9 * (k - 1), "z": 0.5}
+        borane = {
+            "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0}, {"el": "B", "x": 1.66, "y": 0, "z": 0}] + [h(-0.4, k) for k in range(3)] + [h(2.1, k) for k in range(3)],
+            "bonds": [{"a1": 0, "a2": 1, "order": 1, "coordination": True}] + [{"a1": 0, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 1, "a2": 5 + k, "order": 1} for k in range(3)],
+        }
+        with self.assertRaisesRegex(ValueError, r"coordination bond from N to B as drawn"):
+            self.worker.mol_of(borane)
+        ammine = {
+            "atoms": [{"el": "Pt", "x": 0, "y": 0, "z": 0}, {"el": "N", "x": 2.05, "y": 0, "z": 0}] + [h(2.4, k) for k in range(3)] + [{"el": "Cl", "x": -2.3, "y": 0, "z": 0}],
+            "bonds": [{"a1": 1, "a2": 0, "order": 1, "coordination": True}] + [{"a1": 1, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 0, "a2": 5, "order": 1}],
+        }
+        mol = self.worker.mol_of(ammine)
+        bond = mol.GetBondBetweenAtoms(0, 1)
+        self.assertEqual((bond.GetBondType(), bond.GetBeginAtomIdx()), (Chem.BondType.DATIVE, 1))
+        self.assertEqual(mol.GetAtomWithIdx(1).GetTotalNumHs(includeNeighbors=True), 3)

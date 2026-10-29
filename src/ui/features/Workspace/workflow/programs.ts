@@ -11,6 +11,7 @@ import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
@@ -65,7 +66,8 @@ export function pluginEntry(e: SetEntry): PluginEntry {
       ...(a.radical ? { radical: a.radical } : {}),
       ...(a.isotope ? { isotope: a.isotope } : {}),
     })),
-    bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),
+    // (a coordination bond single and marked, as the entry record holds one: docs/PLUGINS.md, *The entry a plugin is given*)
+    bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order })),
   };
   // (an isotope's mass with it, where NIST gives a measured one: what a program's input takes - ORCA's "M =")
   const atoms = molecule.atoms.map((a) => {
