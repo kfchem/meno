@@ -217,6 +217,11 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
 
 ## On the page
 
+The frame is moved as anything on the page is: a drag on it - not on its
+button - carries it, kept clear of where it now stands, and what the
+render makes lands where it stands as it ends (the maintainer,
+2026-10-28; `moveRender`).
+
 While it renders, a dashed frame stands where what it makes will lie,
 as large as it will be - beside the molecules, on the right, as large as
 they are drawn; or, where something lies there, in the free space nearest

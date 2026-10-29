@@ -14,7 +14,8 @@ import { menoShader } from "../utils/menoShader";
 import { NOTES_SCALE, pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
-import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
+import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
+import { switchFade, switchStep } from "../utils/zoomSwitch";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
@@ -538,6 +539,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   stereoNow.current = stereoPresent;
   // (how far each is in view, and its fade: fadeStep)
   const stereoFades = useRef(new Map<string, LabelFade>());
+  // (R and S all switched on or off as the view is far out or not, and faded over a short time: utils/zoomSwitch)
+  const stereoRead = useRef(true);
+  const stereoSeen = useRef(switchFade(true));
   // (frames waited for the labels shown together to be there)
   const stereoWaited = useRef(0);
   const stereoAnchors = useRef(new Map<string, { anchor: THREE.Group | null; ink: StereoInk | null }>());
@@ -1442,8 +1446,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const g = Math.max(grown.current.v, 1e-3);
       const natural = props.stereoFont.units === "px" ? props.stereoFont.size : props.stereoFont.size / px;
       const font = Math.max(MARK_MIN_PX, natural);
-      // (the view far out: faded as the drawing's are, marksSeenAt)
-      const seenAtZoom = marksSeenAt(natural);
+      // (the view far out: switched as the drawing's are, past their least size - marksReadAt - and faded over a short time)
+      stereoRead.current = marksReadAt(stereoRead.current, natural);
+      if (switchStep(stereoSeen.current, stereoRead.current, step)) moving = true;
+      const seenAtZoom = stereoSeen.current.v;
       const v = new THREE.Vector3();
       const onScreen = (parent: THREE.Object3D, x: number, y: number, z: number) => {
         parent.localToWorld(v.set(x, y, z)).project(camera);
@@ -2014,7 +2020,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               made={m.made}
               conformers={m.conformerSet}
               said={m.said}
-              area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}
               {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
               {...(m.marksUnread ? { marksUnread: true } : {})}

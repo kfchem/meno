@@ -31,10 +31,10 @@ function card(s: WorkflowStep): string {
       onKind={noop}
       onShowRun={noop}
       onKeepRun={noop}
-      onClose={noop}
       onCardDown={noop}
       onContextMenu={noop}
       onHover={noop}
+      onClose={noop}
     />,
   );
 }

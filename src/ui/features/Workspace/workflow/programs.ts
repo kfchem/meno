@@ -5,6 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
+import { isId } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
@@ -97,6 +98,8 @@ export type Prepared = {
   reads: string[];
   /** The memory it takes, in MiB, as its plugin declares it (ORCA's, Gaussian's, from what they are given): counted against what jobs may use. */
   memory?: number;
+  /** The other plugins whose programs it needs, by id - each one its plugin's manifest declares (`needs`): ORCA's xTB methods, the xTB plugin's xtb. */
+  needs?: string[];
 };
 
 /** The most memory a job may say it takes, in MiB: 64 TiB. */
@@ -169,7 +172,9 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
       : [];
     const stdin = r?.stdin;
     const given = stdin === undefined || (typeof stdin === "string" && files.some((f) => f.name === stdin));
-    if (!entries?.length || !program || !args || !reads || reads.some((n) => !inside(n)) || files.length !== (r?.files as unknown[]).length || !given || then.some((t) => !t))
+    // (other plugins' programs it needs, by their ids: a few, each once)
+    const needs = r?.needs === undefined ? [] : Array.isArray(r.needs) && r.needs.length <= 4 && r.needs.every(isId) && new Set(r.needs).size === r.needs.length ? (r.needs as string[]) : null;
+    if (!entries?.length || !program || !args || !reads || reads.some((n) => !inside(n)) || files.length !== (r?.files as unknown[]).length || !given || then.some((t) => !t) || !needs)
       return "It prepared a job Meno cannot run";
     if (entries.some((i) => refused.has(i))) return "It prepared a job for what it refused";
     entries.forEach((i) => covered.add(i));
@@ -183,6 +188,7 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
       reads: [...reads],
       // (a whole number of MiB, within reason; any other, none said)
       ...(Number.isInteger(r?.memory) && (r!.memory as number) > 0 && (r!.memory as number) <= MEMORY_MOST ? { memory: r!.memory as number } : {}),
+      ...(needs.length ? { needs: [...needs] } : {}),
     });
   }
   if (covered.size !== count) return "It prepared no job for some of what came in";

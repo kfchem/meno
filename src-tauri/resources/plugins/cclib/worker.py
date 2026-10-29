@@ -216,16 +216,22 @@ def electric_origin(data, text, program):
     return [float(v) for v in origin] if origin is not None and len(origin) == 3 else None
 
 
-def dipole(data, text, program, xyz):
+def dipole(data, text, program, xyz, printed=None):
     """The dipole moment, in debye: as the output has it where the molecule
-    is neutral. A charged molecule's depends on the point it is taken about,
-    so it is taken again about the centre of mass of the geometry it is of,
-    `xyz` (the last), and said to be - or left out where that cannot be
-    done."""
+    is neutral - as cclib read it, else as it was printed where cclib could
+    not read it (`printed`: ORCA's total alone, `orca_total_dipoles`). A
+    charged molecule's depends on the point it is taken about, so it is taken
+    again about the centre of mass of the geometry it is of, `xyz` (the
+    last), and said to be - or left out where that cannot be done."""
     moments = getattr(data, "moments", None)
-    if moments is None or len(moments) < 2 or len(moments[1]) != 3:
+    if moments is not None and len(moments) >= 2 and len(moments[1]) == 3:
+        vector = [float(v) for v in moments[1]]
+        stated = None
+    elif printed is not None and len(printed.get("vector") or []) == 3:
+        vector = [float(v) for v in printed["vector"]]
+        stated = printed.get("debye")
+    else:
         return []
-    vector = [float(v) for v in moments[1]]
     charge = int(data.charge) if has(data, "charge") else 0
     label = "Dipole moment"
     if charge:
@@ -234,7 +240,8 @@ def dipole(data, text, program, xyz):
             return []
         vector = [v - charge * (c - o) * DEBYE_PER_E_ANGSTROM for v, c, o in zip(vector, centre, origin)]
         label = ABOUT_CENTRE
-    value = sum(v * v for v in vector) ** 0.5
+    # (a neutral molecule's as ORCA printed its magnitude, where it did: not again from its vector, printed rounded)
+    value = stated if stated is not None and not charge else sum(v * v for v in vector) ** 0.5
     if not math.isfinite(value):
         return []
     return [{"id": "dipole", "on": "molecule", "group": "Properties", "label": label, "value": value, "quantity": "dipole", "rank": 2}]
@@ -440,8 +447,114 @@ def program_of(text):
     return None
 
 
+# a dipole moment as ORCA prints it after an xTB run through the xtb program: its total alone, in atomic units, with no
+# electronic and nuclear contributions above it ("Total Dipole Moment    :     -0.54100       0.32700      -0.48700")
+ORCA_MAGNITUDE = re.compile(r"^Magnitude \(Debye\)\s*:\s*(\d+\.\d*)\s*$")
+ORCA_TOTAL_DIPOLE = re.compile(r"^Total Dipole Moment\s*:\s*([-+]?\d+\.\d*)\s+([-+]?\d+\.\d*)\s+([-+]?\d+\.\d*)\s*$")
+
+
+def orca_total_dipoles(text):
+    """ORCA's output with each DIPOLE MOMENT block that gives its total alone taken out - as ORCA prints one after an
+    xTB run through the xtb program, which cclib's ORCA parser, expecting electronic and nuclear contributions above
+    the total, cannot read - and the last such total, in debye, as printed (in atomic units: e bohr), with its
+    magnitude in debye where ORCA printed that (`{"vector", "debye"}`: the vector printed rounded). Every other
+    block, and every other line, as it was: a block with its contributions is cclib's to read, as before. Nothing is
+    made up: a total that does not read is not taken, and its block is left as it was."""
+    lines = text.split("\n")
+    out, total, debye = [], None, None
+    i = 0
+    while i < len(lines):
+        if lines[i].startswith("DIPOLE MOMENT") and i + 3 < len(lines) and lines[i + 1].startswith("-") and lines[i + 2].split() == ["X", "Y", "Z"]:
+            m = ORCA_TOTAL_DIPOLE.match(lines[i + 3])
+            if m:
+                total, debye = [float(v) for v in m.groups()], None
+                # (its title, rule, header and total, then what follows of it: a rule and its magnitudes)
+                j = i + 4
+                while j < len(lines) and (lines[j].strip().startswith("-") or lines[j].startswith("Magnitude")):
+                    said = ORCA_MAGNITUDE.match(lines[j])
+                    if said:
+                        debye = float(said.group(1))
+                    j += 1
+                i = j
+                continue
+        out.append(lines[i])
+        i += 1
+    if total is None:
+        return "\n".join(out), None
+    return "\n".join(out), {"vector": [convertor(v, "ebohr", "Debye") for v in total], "debye": debye if debye is not None and math.isfinite(debye) else None}
+
+
 # ORCA's input, as its output echoes it: a line of the coordinate block - its element or Q, and the rest
 ORCA_ECHO = re.compile(r"^(\|\s*\d+>\s+)(\S+)(.*)$")
+# the simple keywords that ask ORCA for more than one geometry - an optimisation of any kind, a path, a scan, dynamics
+# ("OPT", "TIGHTOPT", "OPTTS", "NEB-TS", "IRC", "MD") - and the blocks and lines that may: none of them, or no geometry
+# of the input's is taken as the one
+ORCA_MOVES = re.compile(r".*OPT.*|.*NEB.*|IRC|MD|.*SCAN.*", re.I)
+ORCA_MOVES_BLOCKS = re.compile(r"^(%geom|%irc|%neb|%md|%compound|%coords|\$new_job)\b", re.I)
+ORCA_UNITS = {"angs": 1.0, "bohrs": BOHR}
+ORCA_INPUT_END = "****END OF INPUT****"
+
+
+def orca_input_geometry(text):
+    """An ORCA output with its input's geometry written as a block of coordinates where ORCA wrote none - as it writes
+    none for frequencies an xTB run through the xtb program works out - so that cclib reads its atoms and its one
+    geometry; or the output as it was, and why not. Taken only where it is surely the geometry the run worked at: the
+    input's one "* xyz" block, its atoms each an element and three numbers, its units Angstrom unless a simple keyword
+    says Bohrs (ORCA's default, and its "! Bohrs"); and the run one of a single geometry, asking for no optimisation,
+    path, scan or dynamics, and no block that may move it. Anything else, nothing taken: never a geometry guessed.
+    Whether it was taken, too."""
+    if ORCA_GEOMETRY in text:
+        return text, False, None
+    echoed = orca_echoed(text)
+    # (no input echoed - a run stopped before it was read: nothing to take, and nothing to say of it)
+    if not echoed:
+        return text, False, None
+    keywords = [w.lower() for w in orca_keywords(text)]
+    if any(ORCA_MOVES.fullmatch(w) for w in keywords) or any(ORCA_MOVES_BLOCKS.match(line) for line in echoed):
+        # (none to take, and nothing to say of it: a run of many geometries writes each it works at)
+        return text, False, None
+    units = [ORCA_UNITS[w] for w in keywords if w in ORCA_UNITS]
+    if len(set(units)) > 1:
+        return text, False, "its input's units are not clear"
+    scale = units[0] if units else 1.0
+    starts = [i for i, line in enumerate(echoed) if line.startswith("*") and ORCA_INPUT_END not in line]
+    if len(starts) != 2 or not re.fullmatch(r"\*\s*xyz\s+-?\d+\s+\d+", echoed[starts[0]], re.I) or echoed[starts[1]] != "*":
+        return text, False, "its input gives no one block of coordinates"
+    atoms = []
+    for line in echoed[starts[0] + 1 : starts[1]]:
+        parts = line.split()
+        if len(parts) != 4 or parts[0] not in ELEMENTS[1:]:
+            return text, False, f"its input's atom {line!r} is not an element and its place"
+        try:
+            xyz = [float(v) * scale for v in parts[1:]]
+        except ValueError:
+            return text, False, f"its input's atom {line!r} is not an element and its place"
+        if not all(math.isfinite(v) for v in xyz):
+            return text, False, f"its input's atom {line!r} is not an element and its place"
+        atoms.append((parts[0], xyz))
+    lines = text.split("\n")
+    end = next((i for i, line in enumerate(lines) if ORCA_INPUT_END in line), None)
+    if not atoms or end is None:
+        return text, False, "its input gives no atoms"
+    block = ["", "-" * len(ORCA_GEOMETRY), ORCA_GEOMETRY, "-" * len(ORCA_GEOMETRY)]
+    block += [f"  {el:<2} {x:>16.10f} {y:>16.10f} {z:>16.10f}" for el, (x, y, z) in atoms] + [""]
+    return "\n".join(lines[: end + 1] + block + lines[end + 1 :]), True, None
+
+
+def orca_one_energy(text):
+    """The energy of a run of one geometry, its input's (`orca_input_geometry`), as ORCA states it: its final
+    single-point energy - stated more than once where its gradient and its Hessian were each worked out by another
+    program, the same each time. Where they are not the same, or there is none, none, and why."""
+    values = [m.group(1) for m in map(ORCA_FINAL.match, text.split("\n")) if m]
+    if not values:
+        return None, "it states no final single-point energy"
+    if len(set(values)) != 1:
+        return None, "its final single-point energies, at its one geometry, are not the same"
+    try:
+        value = float(values[0])
+    except ValueError:
+        return None, "a final single-point energy is not a number"
+    return ([value], None) if math.isfinite(value) else (None, "a final single-point energy is not a number")
 
 
 def orca_for_cclib(text):
@@ -556,6 +669,28 @@ def orca_energies(text, frames, kept):
     return values, None
 
 
+# ORCA's simple keywords for the tight-binding methods, each to the method it runs - by its xtb program (the ORCA 6.1
+# manual, 3.5.2, its table of simple input keywords) or by ORCA itself (3.5.3, its native GFN1-xTB and GFN2-xTB): the
+# method named as the xtb program names it, the one method whichever runs it
+ORCA_XTB = {
+    "XTB0": ("GFN0-xTB", "xtb"), "GFN0-XTB": ("GFN0-xTB", "xtb"),
+    "XTB1": ("GFN1-xTB", "xtb"), "GFN1-XTB": ("GFN1-xTB", "xtb"), "GFN-XTB": ("GFN1-xTB", "xtb"),
+    "XTB": ("GFN2-xTB", "xtb"), "XTB2": ("GFN2-xTB", "xtb"), "GFN2-XTB": ("GFN2-xTB", "xtb"),
+    "XTBFF": ("GFN-FF", "xtb"), "GFN-FF": ("GFN-FF", "xtb"),
+    "NATIVE-GFN-XTB": ("GFN1-xTB", "orca"), "NATIVE-GFN1-XTB": ("GFN1-xTB", "orca"), "NATIVE-XTB1": ("GFN1-xTB", "orca"),
+    "NATIVE-XTB": ("GFN2-xTB", "orca"), "NATIVE-GFN2-XTB": ("GFN2-xTB", "orca"), "NATIVE-XTB2": ("GFN2-xTB", "orca"),
+}
+# who ran it, said beside the method
+ORCA_XTB_BY = {"xtb": "the xtb program, through ORCA", "orca": "ORCA itself (its native implementation)"}
+
+
+def orca_xtb(text):
+    """The tight-binding method an ORCA run's input names among its simple keywords (`ORCA_XTB`), and what ran it - the
+    one, where it names one alone; else none."""
+    found = {ORCA_XTB[w.upper()] for w in orca_keywords(text) if w.upper() in ORCA_XTB}
+    return found.pop() if len(found) == 1 else None
+
+
 def orca_level(text, meta):
     """ORCA's method and basis set, each as its input names it - a simple keyword the output says it took as
     that: the functional or composite method it says it recognised, else the method cclib read where the input
@@ -573,6 +708,10 @@ def orca_level(text, meta):
         last = ([str(x) for x in meta.get("methods") or [] if x] or [None])[-1]
         methods = [w for w in words if last and w.lower() == last.lower()]
     method = methods[0] if len({key(w) for w in methods}) == 1 else None
+    # (a tight-binding method: as the xtb program names it, whichever ran it - and no basis, which it has none of)
+    xtb = orca_xtb(text) if not methods else None
+    if xtb:
+        return xtb[0], None
     # (as ORCA writes it, where the input names it, in whatever case: "STO-3G" for "sto-3g")
     basis = ORCA_BASIS.search(text)
     basis = basis.group(1) if basis and any(w.lower() == basis.group(1).lower() for w in words) else None
@@ -687,13 +826,21 @@ def op_read(m):
         raise ValueError("nothing to read")
     program = program_of(text)
     ghosts = []
+    printed = None
+    given, taken = None, False
     if program == "orca":
+        # (where ORCA wrote no geometry: its input's, where that is surely the one it worked at - else why not)
+        text, taken, given = orca_input_geometry(text)
         text, ghosts = orca_for_cclib(text)
+        text, printed = orca_total_dipoles(text)
     elif program == "gaussian":
         ghosts = gaussian_ghosts(text)
-    data, whole = readable(text, os.path.splitext(name)[1] or ".out")
+    try:
+        data, whole = readable(text, os.path.splitext(name)[1] or ".out")
+    except ValueError as e:
+        raise ValueError(f"{e}; ORCA wrote no geometry, and {given}" if given else str(e)) from e
     if data is None or not has(data, "atomnos"):
-        raise ValueError(f"No molecule was found in {name}.")
+        raise ValueError(f"No molecule was found in {name}." + (f" ORCA wrote no geometry, and {given}." if given else ""))
     meta = getattr(data, "metadata", {}) or {}
     atoms = [ELEMENTS[int(z)] for z in data.atomnos]
     frames = []
@@ -716,7 +863,13 @@ def op_read(m):
     energies, unread = None, None
     if frames and not excited_path(data, len(frames)):
         if program == "orca":
-            energies, unread = orca_energies(text, len(frames), good)
+            # (as many as the SCF energies kept - or, where cclib read none at all, as an xTB run through the xtb program
+            #  has none it reads, and no SCF said it failed, one to each geometry, as ORCA states them)
+            fails = scf is not None and False in scf
+            if taken:
+                energies, unread = orca_one_energy(text)
+            else:
+                energies, unread = orca_energies(text, len(frames), good if found or fails else len(frames))
         else:
             energies = frame_energies(data, len(frames))
     method, basis = orca_level(text, meta) if program == "orca" else (method_of(meta), meta.get("basis_set"))
@@ -752,8 +905,9 @@ def op_read(m):
         run_results(ended, why, scf, whole)
         + path_said(data, text, len(frames))
         + energies_said(program, energies, unread)
+        + xtb_said(text if program == "orca" else "")
         + molecule_wide(data)
-        + of_state(dipole(data, text, program, frames[-1] if frames else None), states[0])
+        + of_state(dipole(data, text, program, frames[-1] if frames else None, printed), states[0])
         + per_frame(data, len(frames))
         + of_state(per_atom(data, len(atoms)), states[1])
         + vibrations(data, len(atoms))
@@ -905,6 +1059,13 @@ def path_said(data, text, frames):
     if excited_path(data, frames):
         out.append({"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Excited state", "value": "energies not read", "rank": 0})
     return out
+
+
+def xtb_said(text):
+    """Of an ORCA run at a tight-binding method, what ran it: the xtb program, or ORCA itself - the one method either
+    way (`ORCA_XTB`)."""
+    xtb = orca_xtb(text) if text else None
+    return [{"id": "method.by", "on": "molecule", "group": "Calculation", "label": f"{xtb[0]} run by", "value": ORCA_XTB_BY[xtb[1]]}] if xtb else []
 
 
 def energies_said(program, energies, unread):

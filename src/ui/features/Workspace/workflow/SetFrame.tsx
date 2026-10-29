@@ -162,7 +162,7 @@ export default function SetFrame(p: SetFrameProps) {
           )}
         </div>
       )}
-      {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} />}
+      {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} of={h} />}
     </div>
   );
 }

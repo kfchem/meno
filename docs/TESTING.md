@@ -22,6 +22,8 @@ faults show only there. Two to keep in mind when writing a test:
 
 ## Timeouts
 
+A bound on the clock - how many milliseconds something takes - is no test of what a test runs on a busy machine: those sit in a describe run only with `MENO_PERF=1` (`MENO_PERF=1 npx vitest run <file>`), on a machine with nothing else running (`workflow/placement.test.ts`, *on the clock*).
+
 A test's timeout is there to stop a test that hangs, never one that is
 slow because the machine is busy. On the development Mac several lanes run
 the suite, builds and the app at once, and a test has been seen to take 10

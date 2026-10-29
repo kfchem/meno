@@ -649,14 +649,13 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
   const touching = doc.model.bonds.filter((b) => b.a === id || b.b === id);
   const out = touching[0] ? atoms.find((x) => x.id === (touching[0].a === id ? touching[0].b : touching[0].a)) : undefined;
   const now = out ? { x: out.x - a.x, y: out.y - a.y } : null;
-  // (laid out away from all the atom's bonds together - out of a ring, from a ring's atom, as its bonds open - not on along the first alone)
+  // (laid out away from all the atom's bonds together - out of a ring, from a ring's atom, in the widest opening between its bonds - not on
+  // along the first alone)
   const all = touching.flatMap((b) => {
     const o = atoms.find((x) => x.id === (b.a === id ? b.b : b.a));
-    const l = o ? Math.hypot(o.x - a.x, o.y - a.y) : 0;
-    return o && l ? [{ x: (o.x - a.x) / l, y: (o.y - a.y) / l }] : [];
+    return o ? [{ x: o.x - a.x, y: o.y - a.y }] : [];
   });
-  const sum = all.reduce((p, q) => ({ x: p.x + q.x, y: p.y + q.y }), { x: 0, y: 0 });
-  const inward = all.length > 1 && Math.hypot(sum.x, sum.y) > 1e-6 ? sum : now;
+  const inward = all.length > 1 ? all : now;
   const s = group ? placedStructure(group, inward, NOMINAL_BOND_LENGTH) : (a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH));
   if (!s || !s.atoms.length) return doc;
   // a file's: turned by as much as its bond out has turned since
