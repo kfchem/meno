@@ -5,7 +5,8 @@ import {
   exitDistance,
   markIndex,
   MARK_MIN_PX,
-  marksSeenAt,
+  marksReadAt,
+  MARKS_LEAST_PX,
   MarkObstacles,
   marksOf,
   placeMark,
@@ -309,27 +310,14 @@ describe("R and S, E and Z shown", () => {
 });
 
 describe("R and S, E and Z at a far zoom", () => {
-  it("are all seen while their letters are at least the least size, and gone where that is twice their size", () => {
-    expect(marksSeenAt(40)).toBe(1);
-    expect(marksSeenAt(MARK_MIN_PX)).toBe(1);
-    expect(marksSeenAt(MARK_MIN_PX / 2)).toBe(0);
-    expect(marksSeenAt(1)).toBe(0);
-    expect(marksSeenAt(0.75 * MARK_MIN_PX)).toBeCloseTo(0.5, 12);
-  });
-
-  it("fade as the zoom goes, a little for a little, eased at both ends - never at once", () => {
-    let last = 0;
-    let most = 0;
-    for (let px = MARK_MIN_PX / 2; px <= MARK_MIN_PX; px += 0.01) {
-      const v = marksSeenAt(px);
-      expect(v).toBeGreaterThanOrEqual(last);
-      most = Math.max(most, v - last);
-      last = v;
-    }
-    // (no step past what a hundredth of a pixel moves a smoothstep at its steepest: 1.5 / 4.5 per px)
-    expect(most).toBeLessThan(0.01 * (1.5 / (MARK_MIN_PX / 2)) + 1e-9);
-    // (gentle into the fade and out of it)
-    expect(marksSeenAt(MARK_MIN_PX - 0.01)).toBeGreaterThan(0.9999);
-    expect(marksSeenAt(MARK_MIN_PX / 2 + 0.01)).toBeLessThan(0.0001);
+  it("are seen while their letters would be three quarters of the least size, switched past it a little either way, never half there at a zoom", () => {
+    expect(MARKS_LEAST_PX).toBe(0.75 * MARK_MIN_PX);
+    expect(marksReadAt(false, 40)).toBe(true);
+    expect(marksReadAt(true, 1)).toBe(false);
+    // (between the two edges of the switch: as they were)
+    expect(marksReadAt(true, MARKS_LEAST_PX)).toBe(true);
+    expect(marksReadAt(false, MARKS_LEAST_PX)).toBe(false);
+    expect(marksReadAt(true, MARKS_LEAST_PX / 1.06)).toBe(false);
+    expect(marksReadAt(false, MARKS_LEAST_PX * 1.06)).toBe(true);
   });
 });

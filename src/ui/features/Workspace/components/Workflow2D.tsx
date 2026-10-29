@@ -20,7 +20,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { standInShown, wordsShown, wordsTooSmall } from "../utils/pageScale";
+import { wordsReadAt } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
@@ -477,6 +477,7 @@ export default function Workflow2D() {
   // a hair on the screen is on the page's layer of HTML (`--hair`); and, by
   // steps of a few per cent, what the wires are made as wide on the screen for
   const [compact, setCompact] = useState(false);
+  const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   const layer = useRef<HTMLDivElement>(null);
   const portsLayer = useRef<HTMLDivElement>(null);
@@ -495,12 +496,14 @@ export default function Workflow2D() {
   }, [over]);
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
-    const small = wordsTooSmall(z);
+    // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
+    read.current = wordsReadAt(z, read.current);
+    const small = !read.current;
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
-    layer.current?.style.setProperty("--words", wordsShown(z).toFixed(3));
-    layer.current?.style.setProperty("--stand-in", standInShown(z).toFixed(3));
+    layer.current?.style.setProperty("--words", read.current ? "1" : "0");
+    layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
     portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
   });
 

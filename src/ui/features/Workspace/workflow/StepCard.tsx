@@ -203,8 +203,8 @@ export default function StepCard(p: StepCardProps) {
         className={`rounded-xl bg-white shadow-sm ${p.selected ? "border-accel-base" : "border-gh-line"}`}
         style={{ borderWidth: HAIR, borderStyle: "solid", cursor: "default" }}
       >
-        {/* (its words, and its icons alone large where they are too small to read: one over the other, the words fading out with the zoom as
-            the icons fade in - utils/pageScale `wordsShown`, `standInShown` - never one put for the other at once, nor the card left empty between) */}
+        {/* (its words, and its icons alone large where they are too small to read: one over the other, switched past a threshold - utils/pageScale
+            `wordsReadAt` - the words fading out as the icons fade in, over a short time: never one put for the other at once, nor both half there at a zoom) */}
         <div className="grid">
           <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: CARD_H / PX }} aria-hidden={!p.compact}>
             <StepGlyph icon={p.info.icon} size={28} />

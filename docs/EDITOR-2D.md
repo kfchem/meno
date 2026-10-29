@@ -975,11 +975,14 @@ All hover-based, as above.
     alone might make it another or none. On a molecule in 3D, not yet.
   - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
     and floated round a structure a few pixels across). Their letters keep
-    to 9 px at the least; past that they fade as the view goes out, eased
-    with the zoom, and are gone where 9 px is twice the size they would be
-    (`marksSeenAt`). On a drawing and on a molecule in 3D alike; atom
-    numbers on a molecule in 3D fade below their own least size the same
-    way.
+    to 9 px at the least; past that they go once 9 px would be a third
+    larger than they are (`MARKS_LEAST_PX`) - switched there, not faded with
+    the zoom (the maintainer, 2026-10-28: a fade with the zoom left them half
+    there at a zoom), a little either way so that a zoom stopped at it does
+    not switch them back and forth, and faded over Meno's quick time, 120 ms
+    (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
+    alike. Atom numbers on a molecule in 3D still fade below their own least
+    size with the zoom, atom by atom, in the 3D view's shaders.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

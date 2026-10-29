@@ -8,6 +8,7 @@
  * maintainer's ruling of 2026-10-21, reversing that of 2026-10-10, which
  * kept them out of every picture.
  */
+import { switchedAt } from "../utils/zoomSwitch";
 import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
@@ -31,20 +32,24 @@ export const MARK_HALF_HEIGHT = 0.42;
 export const MARKS_APART = 0.6;
 
 /**
- * How far R, S, E and Z are in view at a zoom, 0 to 1, from the size in
- * pixels their letters would have there (`naturalPx`, the labels' size times
- * `MARK_SCALE`, before `MARK_MIN_PX`): all of them while they are as large
- * as that least size; then, held at it as the view goes further out, fading
- * - eased, as the zoom goes, never at once - and gone where it is twice the
- * size they would be (the maintainer, 2026-10-21: at a far zoom they stayed
- * as large and floated round a structure a few pixels across). Atom numbers
- * on a molecule in 3D go the same way below their own least size
- * (utils/atomNumbers `NUMBER_LEAST_PX`).
+ * The size R, S, E and Z go at, in pixels their letters would have at a
+ * zoom (`naturalPx`, the labels' size times `MARK_SCALE`, before
+ * `MARK_MIN_PX`): held at that least size as the view goes further out, they
+ * go once they would be three quarters of it (the maintainer, 2026-10-21:
+ * at a far zoom they stayed as large and floated round a structure a few
+ * pixels across).
  */
-export function marksSeenAt(naturalPx: number): number {
-  const t = Math.min(Math.max((naturalPx - MARK_MIN_PX / 2) / (MARK_MIN_PX / 2), 0), 1);
-  return t * t * (3 - 2 * t);
-}
+export const MARKS_LEAST_PX = 0.75 * MARK_MIN_PX;
+
+/**
+ * Whether R, S, E and Z are in view at a zoom, they having been (`was`) or
+ * not: switched past `MARKS_LEAST_PX`, a little either way, and faded over a
+ * short time - never faded with the zoom, which left them half there at a
+ * zoom (the maintainer, 2026-10-28; utils/zoomSwitch). Atom numbers on a
+ * molecule in 3D go below their own least size (utils/atomNumbers
+ * `NUMBER_LEAST_PX`).
+ */
+export const marksReadAt = (was: boolean, naturalPx: number): boolean => switchedAt(was, naturalPx, MARKS_LEAST_PX);
 
 export type ValenceProblem = { valence: number; most?: number };
 
