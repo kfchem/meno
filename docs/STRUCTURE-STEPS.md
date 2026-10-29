@@ -123,7 +123,10 @@ are numbered on after *First*'s. *Keep* is *All*, or *One of each* value of
 a property: the first met is kept, and each later one is set aside, naming
 the one kept ("the same start as a #1, which was kept"). One with no value
 of it is set aside too, saying so. More than two sets are merged by chaining
-Merges.
+Merges. One input that holds nothing - a branch that gave none this time, a
+step's second exit that none went out of - adds nothing: the other's
+entries come out, and the line says so ("nothing came from
+First"). Both empty, nothing is merged, and the step says so.
 
 ## Re-bond
 
