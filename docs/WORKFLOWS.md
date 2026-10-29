@@ -2683,15 +2683,20 @@ steps 9, 30 and 34), the lowest of each species and each path (step 32),
 the first in each path (step 48).
 
 - **Its options**: the property it ranks by (*By*, energy unless named),
-  lowest or highest first, how many it keeps (*Keep the first*, 1 unless
-  set), and within what: *Each group* - a conformer set's compounds -
+  lowest or highest first, how many it keeps (*Keep the first*: 1 unless
+  set, the lowest of each, as case F takes it at steps 32, 44 and 48 - the
+  chemist's to change), and within what: *Each group* - a conformer set's compounds -
   *Each value of a property*, the property named (*path*, *species*, as a
   Tag wrote them), or *All together*. Its card says it in a line ("the
   lowest 64 by energy in each species"), or what it still needs.
 - **What it gives**: those kept, in their ranked order, on its first exit;
   *The rest* on its second, each as it came, its place written on it
   (`set_aside`: "ranked 3 of 7 in its group by energy, lowest first; the
-  first 1 kept"). Ties keep the order they came in.
+  first 1 kept"). Ties keep the order they came in, and one ranked out
+  with the same value as the last one kept in its group - a degenerate
+  conformer - says so, on it ("tied with a #2, which was kept as it came
+  first") and on the line ("1 tied with one kept"): which is kept is never
+  chosen silently.
 - **Only values that can be ranked together are**: numbers of one
   dimension, converted to the first one's unit, each worked out the same
   way - its conditions, program, method, basis and thermal treatment

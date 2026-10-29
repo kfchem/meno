@@ -110,3 +110,22 @@ describe("a Rank step", () => {
     expect([info.name, info.made, info.others?.map((o) => o.name)]).toEqual(["Rank", "The first {keep}", ["The rest"]]);
   });
 });
+
+describe("a Rank step, its ties and its names", () => {
+  it("says where one ranked out has the same value as the last one kept - a degenerate conformer - on the line and on it", () => {
+    // (#2 and #3 the same energy: #2 kept, as it came first)
+    const doc = runStep(ranking([water([-76.40, -76.42, -76.42])], {}), 2, W);
+    expect(ran(doc)?.said).toBe("the lowest 1 by energy in each group: 1 of 3 kept · rest 2 (2: below the first 1) · 1 tied with one kept");
+    expect(out(doc)[0].numbers).toEqual([2]);
+    expect(out(doc, "rest")[0].properties?.map((p) => p[SET_ASIDE]?.value)).toEqual([
+      "ranked 3 of 3 in its group by energy, lowest first; the first 1 kept",
+      "ranked 2 of 3 in its group by energy, lowest first; the first 1 kept; tied with a #2, which was kept as it came first",
+    ]);
+  });
+
+  it("names entries in a why by their place alone: a level's own parentheses left as they are", () => {
+    const by = (method: string): Property => ({ value: 1, unit: "kcal/mol", by: { program: "P", method }, status: "computed" });
+    const doc = runStep(ranking([water([-1, -1], {}, [{ dg: by("B3LYP-D3(0)") }, { dg: by("PBE0-D3(1)") }])], { property: "dg" }), 2, W);
+    expect(out(doc, "rest")[0].properties?.[0][SET_ASIDE]?.value).toBe("its group's dg values differ in method: B3LYP-D3(0) (a #1) and PBE0-D3(1) (a #2), and are not ranked together");
+  });
+});

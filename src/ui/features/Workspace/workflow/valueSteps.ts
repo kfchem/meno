@@ -7,7 +7,7 @@
  * out where that was said.
  */
 import type { Entry, Property } from "../../../../lib/entry";
-import { workedOutAs } from "../../../../lib/nodes/base";
+import { groupOf, numberIn, workedOutAs } from "../../../../lib/nodes/base";
 import { rank, type RankOptions } from "../../../../lib/nodes/rank";
 import { compoundLetter, entryOfSet, entryState, FINISHED, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
@@ -16,6 +16,21 @@ import { SET_ASIDE, withSaid } from "./structureSteps";
 
 /** An entry as a step's line names it: its compound's letter and its number, "b #2". */
 const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+
+/**
+ * An entry's id as the nodes are given it - its place in what came in,
+ * after a mark no value or name carries (U+2063, an invisible separator) -
+ * so that where a node's why names it in parentheses, it can be said as
+ * the chemist knows it ("b #2"), and nothing else in parentheses is taken
+ * for one: a method's "B3LYP-D3(0)".
+ */
+const MARK = "\u2063";
+const idOf = (i: number) => `${MARK}${i}`;
+const placeOf = (id: string) => Number(id.slice(MARK.length));
+const MARKED = new RegExp(`\\(${MARK}(\\d+)\\)`, "g");
+
+/** Whether two values are the same: equal, but for the last bits a conversion leaves. */
+const same = (a: number, b: number) => Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(a), Math.abs(b));
 
 /**
  * What a value is, in a few words, as its record says it was worked out:
@@ -76,16 +91,35 @@ export function rankedSet(entries: readonly SetEntry[], holds: Holds3D, options:
     const state = entryState(e);
     if (state !== FINISHED) unfinished.set(i, `not ranked: ${state}`);
   });
-  let read = entries.flatMap((e, i) => (unfinished.has(i) ? [] : [entryOfSet(e, String(i))]));
+  let read = entries.flatMap((e, i) => (unfinished.has(i) ? [] : [entryOfSet(e, idOf(i))]));
   if (options.within === "each value") read = regrouped(read, groupBy);
   const out = rank(read, { property, order: options.order, keep: options.keep, within: options.within === "all" ? "all" : "each group" });
   if (!out.ok) return out;
-  const back = (id: string) => entries[Number(id)];
-  // (its why in a chemist's names: "(3)" an entry's place in what came in, said as "b #2")
-  const inNames = (why: string) => why.replace(/\((\d+)\)/g, (_, id) => `(${named(back(id))})`).replace("it has no group to be ranked within", `it has no ${groupBy || "group"} to be ranked within`);
+  const back = (id: string) => entries[placeOf(id)];
+  // (its why in a chemist's names: an entry the node names, by its marked id, said as "b #2")
+  const inNames = (why: string) => why.replace(MARKED, (_, i) => `(${named(entries[Number(i)])})`).replace("it has no group to be ranked within", `it has no ${groupBy || "group"} to be ranked within`);
   const asideWhy = (e: Entry) => (typeof e.status === "object" && e.status && "aside" in e.status ? String(e.status.aside) : "");
+  // (one ranked out with the same value as the last one kept in its group - a degenerate conformer - said so: which of them is kept
+  //  is the order they came in, as the core keeps ties; never chosen silently)
+  const keyOf = (e: Entry) => (options.within === "all" ? "" : (groupOf(e) ?? ""));
+  const lastKept = new Map<string, Entry>();
+  for (const e of out.exits.kept) lastKept.set(keyOf(e), e);
+  const tieOf = (e: Entry): SetEntry | null => {
+    const k = lastKept.get(keyOf(e));
+    const at = k?.properties[property];
+    if (!k || !at || at.unit === undefined) return null;
+    const v = numberIn(k, property, at.unit);
+    const w = numberIn(e, property, at.unit);
+    return "value" in v && "value" in w && same(v.value, w.value) ? back(k.id) : null;
+  };
+  let ties = 0;
   const aside = [
-    ...out.exits.rest.map((e) => withSaid(back(e.id), SET_ASIDE, inNames(asideWhy(e)))),
+    ...out.exits.rest.map((e) => {
+      const why = inNames(asideWhy(e));
+      const tie = /^ranked \d+ of \d+/.test(why) ? tieOf(e) : null;
+      if (tie) ties++;
+      return withSaid(back(e.id), SET_ASIDE, tie ? `${why}; tied with ${named(tie)}, which was kept as it came first` : why);
+    }),
     ...[...unfinished].map(([i, why]) => withSaid(entries[i], SET_ASIDE, why)),
   ];
   const what = workedOutSaid(out.exits.kept[0]?.properties[property]);
@@ -99,5 +133,6 @@ export function rankedSet(entries: readonly SetEntry[], holds: Holds3D, options:
     whys.set(key, (whys.get(key) ?? 0) + 1);
   }
   const rest = aside.length ? ` · rest ${aside.length} (${[...whys].map(([why, n]) => `${n}: ${why}`).join("; ")})` : "";
-  return { ok: true, holds, kept: out.exits.kept.map((e) => back(e.id)), aside, said: `${head}: ${out.exits.kept.length} of ${entries.length} kept${rest}` };
+  const tied = ties ? ` · ${ties} tied with one kept` : "";
+  return { ok: true, holds, kept: out.exits.kept.map((e) => back(e.id)), aside, said: `${head}: ${out.exits.kept.length} of ${entries.length} kept${rest}${tied}` };
 }
