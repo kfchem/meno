@@ -615,14 +615,31 @@ class RunIntoItself(unittest.TestCase):
         self.assertNotIn("0.65", rows["Dropped"])
         self.assertNotIn("%", rows["Dropped"])
 
-    def test_drops_a_conformer_whose_metal_bond_the_hold_lost(self):
-        # (PdCl2(PPh3)2: about one in five pulls a phosphine off, or runs a phenyl into the other)
+    def test_finds_a_bond_the_hold_lost_and_two_atoms_run_into_one_another_in_a_torn_frame(self):
+        # (frames torn by hand from a sound one, so that the checks hold on real data whatever else keeps a complex
+        #  whole: PdCl2(PPh3)2, whose Pd-Cl came out at 4.19 A and a P 1.99 A from a phenyl carbon before its metal was
+        #  embedded square planar)
+        import numpy as np
         block = Chem.MolToMolBlock(self.mol("Cl[Pd](Cl)([P](c1ccccc1)(c1ccccc1)c1ccccc1)[P](c1ccccc1)(c1ccccc1)c1ccccc1"), kekulize=False)
-        entry = self.made(block, 100)
-        least, off = self.intact(block, entry)
-        self.assertGreaterEqual(least, self.worker.CONTACT_FLOOR)
-        self.assertLessEqual(off, self.worker.METAL_BOND_OFF)
-        self.assertIn("Dropped", {r["label"] for r in entry["how"]})
+        entry = self.made(block, 10)
+        mol = Chem.AddHs(self.worker.read(block))
+        contact, bonded = self.worker.contact_pairs(mol, ()), self.worker.held_bonds(mol)
+        sound = np.array(entry["frames"][0]).reshape(-1, 3)
+        self.assertIsNone(self.worker.run_into(sound, contact))
+        self.assertIsNone(self.worker.torn_from(sound, bonded))
+        # (a Cl pulled off along its bond to 4.19 A)
+        pd, cl = 1, 0
+        torn = sound.copy()
+        torn[cl] = torn[pd] + (torn[cl] - torn[pd]) / np.linalg.norm(torn[cl] - torn[pd]) * 4.19
+        m, x, d, length = self.worker.torn_from(torn, bonded)
+        self.assertEqual((m, x, round(d, 2)), (pd, cl, 4.19))
+        self.assertIsNone(self.worker.run_into(torn, contact))
+        # (one atom of a counted pair moved 1.99 A from the other)
+        i, j, _ = contact[0]
+        run = sound.copy()
+        run[j] = run[i] + (run[j] - run[i]) / np.linalg.norm(run[j] - run[i]) * 1.99
+        hit = self.worker.run_into(run, contact)
+        self.assertEqual((hit[0], hit[1], round(hit[2], 2)), (i, j, 1.99))
 
     def test_leaves_sound_molecules_as_they_were(self):
         # (strained, crowded, peri, a cobalt tris-chelate, a ruthenium benzylidene - and salts, whose ions the

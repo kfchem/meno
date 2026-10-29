@@ -1591,6 +1591,32 @@ def contact_pairs(mol, eta=()):
     return pairs
 
 
+def run_into(p, contact):
+    """Where a conformer's places `p` (one row an atom) have two atoms run into one another - nearer than the least
+    `contact` (contact_pairs) gives them: the nearest such, as (i, j, distance, share of their contact); else None."""
+    import numpy as np
+
+    if not contact:
+        return None
+    I, J, least = (np.array(v) for v in zip(*contact))
+    d = np.linalg.norm(p[I] - p[J], axis=1)
+    q = int(np.argmin(d / least))
+    return (int(I[q]), int(J[q]), float(d[q]), float(d[q] / least[q] * CONTACT_FLOOR)) if d[q] < least[q] else None
+
+
+def torn_from(p, bonded):
+    """Where a conformer's places `p` have a bond to a metal further than METAL_BOND_OFF from the length it is held to
+    (held_bonds): the furthest such, as (metal, atom, distance, length); else None."""
+    import numpy as np
+
+    if not bonded:
+        return None
+    M, X, length = (np.array(v) for v in zip(*bonded))
+    share = np.linalg.norm(p[M] - p[X], axis=1) / length
+    q = int(np.argmax(np.abs(share - 1)))
+    return (int(M[q]), int(X[q]), float(share[q] * length[q]), float(length[q])) if abs(share[q] - 1) > METAL_BOND_OFF else None
+
+
 def angle_at(mol, cid, m, j, k):
     """The angle j-m-k in conformer `cid` (degrees)."""
     p = mol.GetConformer(cid).GetPositions()
@@ -2143,19 +2169,13 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         if cid in dropped:
             continue
         p = mol.GetConformer(cid).GetPositions()
-        if contact:
-            I, J, least = (np.array(v) for v in zip(*contact))
-            d = np.linalg.norm(p[I] - p[J], axis=1)
-            q = int(np.argmin(d / least))
-            if d[q] < least[q]:
-                clashed[cid] = (int(I[q]), int(J[q]), float(d[q]), float(d[q] / least[q] * CONTACT_FLOOR))
-                continue
-        if bonded:
-            M, X, length = (np.array(v) for v in zip(*bonded))
-            share = np.linalg.norm(p[M] - p[X], axis=1) / length
-            q = int(np.argmax(np.abs(share - 1)))
-            if abs(share[q] - 1) > METAL_BOND_OFF:
-                off[cid] = (int(M[q]), int(X[q]), float(share[q] * length[q]), float(length[q]))
+        hit = run_into(p, contact)
+        if hit:
+            clashed[cid] = hit
+            continue
+        torn = torn_from(p, bonded)
+        if torn:
+            off[cid] = torn
     left = [cid for cid in ids if cid not in dropped and cid not in clashed and cid not in off]
     if not left and dropped:
         m, angle = next((m, angle) for _, m, angle in dropped.values())
