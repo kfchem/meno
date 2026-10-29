@@ -6,7 +6,7 @@
  * it.
  */
 import { FAILURE_WORDS, type Failure } from "./failures";
-import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
+import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
@@ -1132,7 +1132,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
   return {
     id,
     from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
-    structure: { atoms, bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
+    // (a coordination bond - the CTfile's type, as a molecule in 3D holds it - as the record marks one: single, so marked)
+    structure: { atoms, bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1 as const, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
     geometry: { kind: "3d", xyz: [...e.xyz] },
     species: speciesOf(written, e),
     properties,
@@ -1170,7 +1171,7 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     y: xyz[3 * i + 1],
     z: xyz[3 * i + 2],
   }));
-  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order }));
+  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.coordination ? COORDINATION_BOND : b.order }));
   const own = Object.fromEntries(Object.entries(e.properties).filter(([k]) => !MENO_OWN.has(k)));
   const name = e.properties.name?.value;
   const made: SetEntry = {
