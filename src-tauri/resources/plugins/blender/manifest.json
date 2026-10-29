@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "uses": [{"name": "Blender", "version": "5.2.2"}],
   "description": "Renders pictures and films of molecules in 3D with Blender 5.2.2 LTS - its official build, under its own licence, fetched by Meno as the plugin is set up and kept for Meno's own use.",
   "licence": "GPL-3.0-or-later",
@@ -36,7 +36,6 @@
         {"id": "marble", "label": "Marble: polished white stone, veined", "description": "Polished white stone with veins.", "own": true},
         {"id": "porcelain", "label": "Porcelain: glazed blue-white", "description": "Glazed porcelain, or a pearl's cream white.", "own": true},
         {"id": "slime", "label": "Slime: see-through jelly", "description": "A see-through jelly in the element colours.", "parts": {"sticks": "stopped"}, "own": true, "seeThrough": true},
-        {"id": "ice", "label": "Ice: melting, clear", "description": "Melting ice: lumps, wet highlights, a faint cyan.", "parts": {"sticks": "stopped"}, "own": true, "seeThrough": true},
         {"id": "neon", "label": "Neon: lit tubes", "description": "Lit tubes that glow at their edges.", "own": true},
         {"id": "xray", "label": "X-ray: layers that add up", "description": "See-through layers that add up.", "parts": {"sticks": "shown"}, "own": true, "seeThrough": true},
         {"id": "fur", "label": "Fur: long, or short and dense as velvet", "description": "Hair on every ball and stick.", "own": true}
@@ -49,11 +48,10 @@
         {"id": "dissolve", "label": "Dissolve: burning away into embers", "description": "The molecule burns away from one side into embers; on white, amber grains cooling to graphite dust."},
         {"id": "change-ring", "label": "Change, ring: atoms circle and land as the next", "description": "Two molecules or more, one becoming the next in turn: the atoms rise into one ring, which turns and lets them fall into the next molecule's places."},
         {"id": "change-scan", "label": "Change, scan: a sheet of light leaves the next", "description": "Two molecules or more, one becoming the next in turn: a sheet of light passes down through the molecule, and leaves the next one above it."},
-        {"id": "change-shatter", "label": "Change, shatter: shards gather into the next", "description": "Two molecules or more, one becoming the next in turn: the molecule shatters, and its shards fly together into the next one."},
-        {"id": "change-liquid", "label": "Change, liquid: molten gold becomes the next", "description": "Two molecules or more, one becoming the next in turn, on the white studio: the molecule melts into a pool of molten gold, which draws up into a drop and spreads out again, and the next molecule rises out of it. Each molecule's melt is simulated: this takes long."}
+        {"id": "change-shatter", "label": "Change, shatter: shards gather into the next", "description": "Two molecules or more, one becoming the next in turn: the molecule shatters, and its shards fly together into the next one."}
       ],
       "options": [
-        {"id": "mode", "when": {"id": "motion", "in": ["reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter", "change-liquid"]}, "label": "Once or Loop", "type": "choice", "choices": [{"value": "once", "label": "Once: eases in and comes to rest"}, {"value": "loop", "label": "Loop: seamless, over and over"}], "default": "once"},
+        {"id": "mode", "when": {"id": "motion", "in": ["reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter"]}, "label": "Once or Loop", "type": "choice", "choices": [{"value": "once", "label": "Once: eases in and comes to rest"}, {"value": "loop", "label": "Loop: seamless, over and over"}], "default": "once"},
         {"id": "pile", "when": {"id": "look", "in": ["fur"]}, "label": "Pile", "type": "choice", "choices": [{"value": "long", "label": "Long: fur"}, {"value": "short", "label": "Short and dense: velvet"}], "default": "long"},
         {"id": "clay-colour", "when": {"id": "look", "in": ["clay"]}, "label": "Terracotta's colour", "type": "choice", "choices": [{"value": "terracotta", "label": "One colour (terracotta)"}, {"value": "elements", "label": "Element colours"}], "default": "terracotta"},
         {"id": "porcelain-finish", "when": {"id": "look", "in": ["porcelain"]}, "label": "Porcelain's finish", "type": "choice", "choices": [{"value": "porcelain", "label": "Porcelain: glazed blue-white"}, {"value": "pearl", "label": "Pearl: cream white with an orient"}], "default": "porcelain"},
