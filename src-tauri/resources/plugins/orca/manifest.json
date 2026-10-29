@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
@@ -53,6 +53,6 @@
         {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     },
-    {"kinds": ["path-search"], "programs": ["orca"], "options": [{"id": "method", "label": "Method", "type": "text", "default": "NATIVE-XTB2"}, {"id": "basis", "label": "Basis set", "type": "text", "default": ""}, {"id": "keywords", "label": "More keywords", "type": "text", "default": ""}, {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}]}
+    {"kinds": ["path-search"], "programs": ["orca"], "options": [{"id": "method", "label": "Method", "type": "text", "default": "NATIVE-XTB2"}, {"id": "basis", "label": "Basis set", "type": "text", "default": ""}, {"id": "run", "label": "Path", "type": "choice", "choices": [{"value": "NEB-TS", "label": "A band, its highest point refined (NEB-TS)"}, {"value": "ZOOM-NEB-TS", "label": "A band, a finer one about its highest point, that refined (ZOOM-NEB-TS)"}], "default": "NEB-TS"}, {"id": "images", "label": "Images between the ends (NImages)", "type": "number", "default": 8, "min": 1, "step": 1}, {"id": "maxiter", "label": "Steps for refining its highest point (%geom MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50}, {"id": "keywords", "label": "More keywords", "type": "text", "default": ""}, {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}]}
   ]
 }
