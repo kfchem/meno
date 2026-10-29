@@ -300,18 +300,50 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
 }
 
 /**
+ * Restraints as a file gives them, read back (`Restraint`): each row a
+ * distance, a dihedral or atoms fixed, its atoms whole numbers from 0, a
+ * finite value and a strength above 0 where its kind has them, none where
+ * it has not. None where any row does not read - nothing held in part.
+ * Whether its atoms are the entry's is `valueFault`'s, as for any value.
+ */
+function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
+  const rows = (v as { restraints?: unknown } | null)?.restraints;
+  if (!Array.isArray(rows)) return undefined;
+  const out: Restraint[] = [];
+  for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
+    if (!r || typeof r !== "object" || (r.kind !== "distance" && r.kind !== "dihedral" && r.kind !== "fixed")) return undefined;
+    if (!Array.isArray(r.atoms) || !r.atoms.length || !r.atoms.every((a) => Number.isInteger(a) && (a as number) >= 0)) return undefined;
+    if (r.kind === "fixed") {
+      if (r.value != null || r.strength != null) return undefined;
+      out.push({ kind: "fixed", atoms: [...(r.atoms as number[])] });
+      continue;
+    }
+    if (typeof r.value !== "number" || !Number.isFinite(r.value) || typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
+    out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, strength: r.strength });
+  }
+  return { restraints: out };
+}
+
+/**
  * A property as a file or a plugin gives it, read back: its value - a
- * number, a text, true or false, or a table of numbers (`numberTableIn`) -
+ * number, a text, true or false, a table of numbers (`numberTableIn`), or
+ * restraints (`restraintsIn`) -
  * its unit, what worked it out and where (each field a text, a temperature
  * and a pressure numbers), and whether it was. None where any of that does
  * not read, or its value is of another kind - a list, a table of other
  * cells, modes - which a molecule on the page does not keep as a property.
+ * (Restraints read back from 2026-10-30: a workspace saved before kept them
+ * only until it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
   const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value: PropertyValue | undefined =
-    (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean" ? p.value : numberTableIn(p.value);
+    (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean"
+      ? p.value
+      : typeof p.value === "object" && p.value !== null && "restraints" in p.value
+        ? restraintsIn(p.value)
+        : numberTableIn(p.value);
   if (value === undefined) return undefined;
   if (!(p.unit === "none" || (typeof p.unit === "string" && isUnit(p.unit)))) return undefined;
   const st = p.status as { failed?: unknown; notApplicable?: unknown } | string | null | undefined;

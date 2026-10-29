@@ -125,6 +125,21 @@ describe("a property's value, checked against its entry", () => {
   });
 });
 
+describe("restraints read back from a file", () => {
+  it("reads each row as it was written, and nothing where any row does not read", () => {
+    const value = { restraints: [
+      { kind: "distance", atoms: [0, 1], value: 3.21, strength: 500 },
+      { kind: "dihedral", atoms: [3, 0, 1, 2], value: 180, strength: 50 },
+      { kind: "fixed", atoms: [2] },
+    ] };
+    const p = propertyIn({ value, unit: "none", status: "computed" });
+    expect(p).toEqual({ value, unit: "none", status: "computed" });
+    // (a row of no kind, a distance with no strength, atoms fixed with a value, an atom not a whole number: none read - nothing held in part)
+    for (const bad of [{ kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 }, { kind: "distance", atoms: [0, 1], value: 2 }, { kind: "fixed", atoms: [0], value: 1 }, { kind: "fixed", atoms: [0.5] }])
+      expect(propertyIn({ value: { restraints: [value.restraints[0], bad] }, unit: "none", status: "computed" })).toBeUndefined();
+  });
+});
+
 describe("a molecule's species, by Meno's one rule", () => {
   const anion = { atoms: [{ el: "O", x: 0, y: 0, z: 0, charge: -1 }, { el: "H", x: 1, y: 0, z: 0 }], bonds: [] };
 
