@@ -916,9 +916,21 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   part".
   Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
   not atoms of the molecule and are left out; ORCA's point charges ("Q")
-  are taken out before cclib reads it. An answer never holds a number
-  that is not one (JSON has none). Tested, with cclib, by hand
-  (`scripts/calc/test_reader_cclib_runs.py`).
+  are taken out before cclib reads it, and so is the dipole moment ORCA
+  prints as its total alone after an xTB run through the xtb program,
+  which cclib cannot read: that total is given as printed, with its
+  magnitude as printed, and the run's energies are ORCA's final
+  single-point ones, one to each geometry, as for any ORCA output. Where
+  ORCA wrote no geometry at all - as for frequencies such a run works out
+  - its input's one "* xyz" block is taken as the geometry it worked at,
+  in Angstrom or Bohrs as its simple keywords say, and only where the run
+  is surely one of a single geometry; otherwise nothing is taken, and the
+  output is not read. A tight-binding method an ORCA input names is
+  given as the xtb program names it (XTB2 and NATIVE-XTB2 alike are
+  GFN2-xTB), saying which ran it, the xtb program or ORCA itself
+  (`scripts/calc/test_reader_cclib_orca_xtb.py`). An
+  answer never holds a number that is not one (JSON has none). Tested,
+  with cclib, by hand (`scripts/calc/test_reader_cclib_runs.py`).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows; cclib
   from PyPI) is a plugin of its own, sharing no code with another
