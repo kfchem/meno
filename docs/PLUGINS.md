@@ -959,8 +959,18 @@ The same for every plugin and for Meno's own parts:
     the program prints one (xtb prints none, and its documentation states
     none); and how it was worked out, `thermo.treatment`, a text in the
     program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
-    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03).
-    Two values of one treatment are written alike, so that they compare.
+    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
+    ORCA's `quasi-RRHO (Grimme), 100 cm-1`, from where it says its
+    vibrational entropy is the QRRHO of S. Grimme and at which reference
+    frequency. Two values of one treatment are written alike, so that
+    they compare. And the symmetry its thermochemistry took, as the
+    program printed it - of several jobs, the last: its point group,
+    `thermo.point-group` (ORCA's "Point Group: D3h", Gaussian's "Full
+    point group", xtb's box's "symmetry"), and the rotational symmetry
+    number its rotational entropy counts, `thermo.symmetry-number` (ORCA's
+    "Symmetry Number: 6", Gaussian's "Rotational symmetry number", xtb's
+    "rotational number"). Not printed, not read: Meno works none of them
+    out itself (2026-10-30).
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**

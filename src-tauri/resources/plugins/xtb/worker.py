@@ -497,6 +497,13 @@ def thermo_of(log):
     treatment = treatment_of(log)
     if treatment and out:
         add("thermo.treatment", "Treatment", treatment)
+    # (the symmetry its thermochemistry took, as xtb's box prints it: ":  symmetry   c1  :", ":  rotational number   1  :")
+    group = re.search(r":\s*symmetry\s+(\S+)\s*:", log)
+    rotational = re.search(r":\s*rotational number\s+(\d+)\s*:", log)
+    if out and group:
+        add("thermo.point-group", "Point group", group.group(1))
+    if out and rotational:
+        add("thermo.symmetry-number", "Symmetry number", int(rotational.group(1)), unit="none", digits=0)
     return out
 
 

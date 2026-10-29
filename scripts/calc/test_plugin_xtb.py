@@ -58,6 +58,11 @@ H          -0.00000000000000    0.00000000000000    3.14662249230588
 # xtb's other stream fallen between its rows, as a log of both streams has it - the THERMODYNAMIC summary, and the
 # summary the run ends with: its total energy, and its total enthalpy, the total energy and H(T) of the row used)
 THERMO = """
+          :  # imaginary freq.                       0      :
+          :  linear?                             false      :
+          :  only rotor calc.                    false      :
+          :  symmetry                              c2v      :
+          :  rotational number                       2      :
           |             Thermodynamic Functions             |
           :  scaling factor                  1.0000000      :
           :  rotor cutoff                   50.0000000 cm⁻¹ :
@@ -254,6 +259,8 @@ class Collect(unittest.TestCase):
         self.assertAlmostEqual(thermo["thermo.enthalpy"], -8.640016786693 + 0.0583013, places=6)
         # (and how they were worked out, as its setup said)
         self.assertEqual(thermo["thermo.treatment"], "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1")
+        # (and the symmetry it took, as its box printed it: its point group, and the rotational symmetry number counted)
+        self.assertEqual((thermo["thermo.point-group"], thermo["thermo.symmetry-number"]), ("c2v", 2))
 
     def test_warns_of_frequencies_at_a_geometry_not_fully_optimised_in_xtb_s_words(self):
         # (the block xtb 6.7.1 ends a --hess run with on a geometry not optimised: a warning, never a failure)
