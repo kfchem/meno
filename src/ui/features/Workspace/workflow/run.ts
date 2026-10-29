@@ -18,7 +18,7 @@ export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
@@ -134,16 +134,16 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
-  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
-  // (two inputs it cannot run without - Meno's of two, and a program's that works on pairs (Path search): its second wired too, as
-  //  it takes - and Merge's, of the kind its first is)
-  if (PAIRED.includes(step.kind) || (kindInfo(step.kind).runs === "program" && ports.length === 2)) {
-    const second = ports[1];
-    const into = inputOf(doc, step.id, second.id);
-    if (!into) return `Nothing comes into ${second.name}`;
-    if (!takenBy(second.takes, into.holds)) return `${second.name} takes ${second.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
-    if (step.kind === "merge" && into.holds !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${second.name} ${SET_NAMES[into.holds]}: Merge makes one set of two of one kind`;
+  // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
+  //  and each wired one taking what comes into it; Merge's second of the kind its first is)
+  const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
+  if (missing) return missing;
+  for (const port of ports.slice(1)) {
+    const into = inputOf(doc, step.id, port.id);
+    if (into && !takenBy(port.takes, into.holds)) return `${port.name} takes ${port.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
+    if (into && step.kind === "merge" && into.holds !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${port.name} ${SET_NAMES[into.holds]}: Merge makes one set of two of one kind`;
   }
+  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
 }
 
