@@ -79,12 +79,15 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
           { group: "Energies", rows: [{ label: "Total", text: "-1 Eh" }] },
           { group: "How it was made", rows: [{ label: "Method", text: "ETKDG v3 + MMFF94" }], folded: true },
         ]}
+        most="12rem"
       />,
     );
     // (a button of its own, shut; its rows under it laid out but shut - no browser disclosure)
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*How it was made<\/button>/);
     expect(html).toMatch(/grid-template-rows:\s*0fr[^"]*opacity:\s*0/);
     expect(html).not.toContain("<details");
+    // (opened no wider than the room inside the card it is on)
+    expect(html).toMatch(/class="w-max" style="max-width:\s*12rem"/);
     // (a group not folded: its name and rows as they were, no button)
     expect(html.match(/<button/g)).toHaveLength(1);
     expect(html).toContain('<div class="text-[10px] text-gh-gray">Energies</div>');
@@ -101,6 +104,8 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     // (how it was made, held by the chip: no width of its own in its details, its rows drawn whole and cut by the chip until it has grown to them; shut, no height and not seen)
     expect(html).toMatch(/class="grid grid-cols-\[0px\]" style="grid-template-rows:0fr;opacity:0"/);
     expect(html).toContain("overflow-x:visible;overflow-y:clip");
+    // (its folded rows opened no wider than its details' own room: 20rem less their sides)
+    expect(html).toContain("max-width:18.75rem");
   });
 
   it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {

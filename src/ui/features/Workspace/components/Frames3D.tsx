@@ -468,7 +468,8 @@ export function FramesChip({
                 nothing covers the structure) */}
             {details.length > 0 && (
               <div className="grid w-full" style={{ gridTemplateRows: `${read.grown}fr`, opacity: read.shown }}>
-                {/* (at the chip's left, what is past its right edge cut there as it widens: never centred, cut at both ends, ahead of the chip - LOOK, 2026-10-28) */}
+                {/* (at the chip's left, what is past its right edge cut there as it widens: never centred, cut at both ends, ahead of the chip - LOOK, 2026-10-28;
+                    at its left too where they fit, under the bars' name: centred, how it was made's toggle went from under the pointer as it opened) */}
                 <div className="overflow-hidden flex justify-start">
                   {/* (never shrunk to the chip as it widens: measured so, its width would follow the chip's, a frame behind, and the chip would creep after it) */}
                   <div
@@ -476,8 +477,8 @@ export function FramesChip({
                     className="w-max max-w-[20rem] shrink-0 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums"
                     style={{ paddingInline: DETAILS_SIDE }}
                   >
-                    {/* (its one folded group, how it was made: opened as the chip says) */}
-                    <ResultGroups groups={details} fold={fold} />
+                    {/* (its one folded group, how it was made: opened as the chip says, no wider than the details' most, 20rem, less their sides) */}
+                    <ResultGroups groups={details} fold={fold} most="18.75rem" />
                   </div>
                 </div>
               </div>
