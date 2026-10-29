@@ -240,7 +240,9 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 A plugin that does nothing - reads, writes, fills, colours, guides and
 suggests nothing - is none. Options are in the general form (`lib/options`:
 a choice, a number, a text or a switch, each with a label and a default it
-takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
+takes; a number's `min`, `max`, `step`, `unit`, and `whole` (true: a
+whole number alone - a count, a seed - its field refusing one with a
+fraction as it refuses one out of range); `from` the molecule's
 charge, multiplicity or name, for a writer's).
 
 A step's options are saved with its workspace, and a workspace may come
@@ -502,6 +504,21 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,
     adamantane).
+- **A number of the chemist's own is up to five thousand** (*This many*,
+  RDKit plugin 0.1.12). It was five hundred, and a number above that was
+  cut to it and nothing said, though a flexible molecule still had new
+  low-energy conformers to give past it. Five thousand is set by what a
+  conformer costs: each of a C30 chain's (an ether, an amide and an amine
+  in it, 25 turning bonds) took 22 to 27 ms - ETKDG v3, MMFF94 at up to
+  2000 steps and the same ones sorted out - on ten cores (Apple M4), from
+  five hundred conformers to five thousand, so five thousand took 132 s.
+  The bound is said once, in the manifest (`max` of *How many*), which
+  Settings draws the field by and the worker reads. The worker holds every
+  option of the search to the manifest so - the force field to its
+  choices, the steps and the seed to their bounds, each a whole number: a
+  request with anything else is refused, saying what it takes, never cut
+  to a bound nor put back to a default. An option a request leaves out is
+  its default.
 - **The same conformer** (the maintainer, 2026-10-21): two conformers are
   one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
   each other, laid over at their best - turned and moved, never reflected

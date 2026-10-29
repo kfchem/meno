@@ -31,7 +31,8 @@ export type ChoiceOption = OptionBase & {
   choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
-export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known };
+/** `whole`: a whole number alone - a count, a seed - one with a fraction refused, as one out of range is. */
+export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; whole?: true; unit?: string; from?: Known };
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
@@ -76,7 +77,7 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
     case "choice":
       return typeof v === "string" && o.choices.some((c) => c.value === v) ? v : undefined;
     case "number":
-      return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) ? v : undefined;
+      return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) && (!o.whole || Number.isInteger(v)) ? v : undefined;
     case "text":
     case "lines":
     case "atoms":
@@ -160,6 +161,7 @@ export function acceptOptions(raw: unknown): Option[] {
         ...(num(r.min) !== undefined ? { min: num(r.min) } : {}),
         ...(num(r.max) !== undefined ? { max: num(r.max) } : {}),
         ...(num(r.step) !== undefined ? { step: num(r.step) } : {}),
+        ...(r.whole === true ? { whole: true as const } : {}),
         ...(label(r.unit, 20) ? { unit: label(r.unit, 20)! } : {}),
         ...(from ? { from } : {}),
       };

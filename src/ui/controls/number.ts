@@ -1,5 +1,5 @@
-/** The numbers a field takes: from `min` to `max`, each where given; `step` what an arrow key adds or takes away. */
-export type NumberRange = { min?: number; max?: number; step?: number };
+/** The numbers a field takes: from `min` to `max`, each where given, whole ones alone where `whole`; `step` what an arrow key adds or takes away. */
+export type NumberRange = { min?: number; max?: number; step?: number; whole?: boolean };
 
 /**
  * A number field as it is (NumberField): the text in it, the last good
@@ -48,16 +48,15 @@ function placesOf(n: number): number {
 }
 
 /** Whether `n` is a number `range` takes. */
-function inRange(n: number, { min, max }: NumberRange): boolean {
-  return Number.isFinite(n) && (min == null || n >= min) && (max == null || n <= max);
+function inRange(n: number, { min, max, whole }: NumberRange): boolean {
+  return Number.isFinite(n) && (min == null || n >= min) && (max == null || n <= max) && (!whole || Number.isInteger(n));
 }
 
-/** The numbers `range` takes, said: "From 1 to 100", "At least 0", "At most 5" - or nothing, where any is. */
-export function rangeSaid({ min, max }: NumberRange): string {
-  if (min != null && max != null) return `From ${min} to ${max}`;
-  if (min != null) return `At least ${min}`;
-  if (max != null) return `At most ${max}`;
-  return "";
+/** The numbers `range` takes, said: "From 1 to 100", "At least 0", "At most 5", "A whole number from 1 to 100" - or nothing, where any is. */
+export function rangeSaid({ min, max, whole }: NumberRange): string {
+  const bounds = min != null && max != null ? `from ${min} to ${max}` : min != null ? `at least ${min}` : max != null ? `at most ${max}` : "";
+  if (whole) return `A whole number${min != null && max != null ? " " : bounds ? ", " : ""}${bounds}`;
+  return bounds && bounds[0].toUpperCase() + bounds.slice(1);
 }
 
 /**
@@ -84,7 +83,9 @@ export function numberField(d: NumberDraft, e: NumberEvent, range: NumberRange =
     case "step": {
       const step = range.step ?? 1;
       const typed = typedNumber(d.text);
-      const from = Number.isFinite(typed) ? typed : Number.isFinite(d.value) ? d.value : (range.min ?? 0);
+      const was = Number.isFinite(typed) ? typed : Number.isFinite(d.value) ? d.value : (range.min ?? 0);
+      // (a whole number's field steps from the whole number on the arrow's side of one typed with a fraction: 12.5 up to 13)
+      const from = range.whole ? (e.by > 0 ? Math.floor(was) : Math.ceil(was)) : was;
       const n = from + e.by * step;
       // (to as many places as the step or the number has, the more: 0.1 and 0.2 add to 0.3, and 0.25 and 1 to 1.25)
       const places = Math.max(placesOf(step), placesOf(from));

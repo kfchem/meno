@@ -52,7 +52,7 @@ export default function OptionRows({
           ) : (
             <span className="shrink-0 flex items-center gap-1.5">
               {o.type === "number" ? (
-                <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
+                <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
               ) : (
                 <input
                   type="text"

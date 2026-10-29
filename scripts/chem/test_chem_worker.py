@@ -259,10 +259,25 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(how["The same within"], "0.01 \u00c5, all atoms (H included), over its symmetries")
         self.assertTrue(how["Made by"].startswith("RDKit "))
         self.assertLessEqual(len(made["frames"]), 5)
-        # (what it may not be, kept to what it may: a force field it does not know, the default)
-        odd = ask("conformers", molblock=PCPA, options={"count": 2, "field": "GAFF", "iters": 1})["result"]["isomers"][0]
-        self.assertEqual(odd["field"], "MMFF94")
-        self.assertIn("at most 10 steps", {r["label"]: r["text"] for r in odd["how"]}["Optimised"])
+        # (what it may not be, refused, saying what it takes - never put back to a default, nor cut to a bound)
+        for odd, said in (({"field": "GAFF"}, "Force field is 'GAFF': it takes MMFF94, MMFF94s or UFF"),
+                          ({"iters": 1}, "Optimisation steps is 1: it takes a whole number from 10 to 100000"),
+                          ({"seed": -1}, "Random seed is -1: it takes a whole number from 0 to 2147483647")):
+            answer = ask("conformers", molblock=PCPA, options={"count": 2, **odd})
+            self.assertFalse(answer["ok"], odd)
+            self.assertEqual(answer["error"], said)
+
+    def test_makes_as_many_conformers_as_asked_and_refuses_more_than_it_takes(self):
+        propanol = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("C", 2.6, 0), ("O", 3.9, 0.75)], [(0, 1, 1, None), (1, 2, 1, None), (2, 3, 1, None)])
+        # (more than the 500 a number was once cut to, unsaid: as many as asked)
+        made = ask("conformers", molblock=propanol, options={"sought": "fixed", "count": 600})["result"]["isomers"][0]
+        self.assertRegex({r["label"]: r["text"] for r in made["how"]}["Kept"], r"^\d+ of 600 embedded \(600 sought\)")
+        most = worker.MOST_CONFORMERS
+        # (and a whole number past a float's range, as JSON may carry one, the same)
+        for v in (most + 1, 10**400):
+            said = ask("conformers", molblock=propanol, options={"sought": "fixed", "count": v})
+            self.assertFalse(said["ok"])
+            self.assertEqual(said["error"], f"How many conformers is {v}: it takes a whole number from 1 to {most}")
 
     def test_makes_conformers_keeping_the_atoms_and_the_drawn_wedge(self):
         made = ask("conformers", molblock=PCPA, count=8)["result"]["isomers"]

@@ -10,6 +10,7 @@ will do.)
 """
 
 import importlib.util
+import json
 import math
 import pathlib
 import time
@@ -578,6 +579,67 @@ class HowManySought(unittest.TestCase):
         # (and asks the molecule where it does not)
         self.assertIsNone(self.worker.options_of({"options": {"sought": "needed", "count": 12}})["count"])
         self.assertIsNone(self.worker.options_of({"options": {}})["count"])
+
+    def test_holds_the_number_asked_for_to_the_bound_its_field_has(self):
+        manifest = json.loads((WORKER.parent / "manifest.json").read_text(encoding="utf-8"))
+        field = next(o for r in manifest["roles"] if r["role"] == "conformers" for o in r["options"] if o["id"] == "count")
+        most = self.worker.MOST_CONFORMERS
+        self.assertEqual((field["min"], field["max"]), (1, most))
+        self.assertGreaterEqual(most, 5000)
+        self.assertEqual(self.worker.options_of({"options": {"sought": "fixed", "count": most}})["count"], most)
+        # (more, or what is no whole number: refused, saying what it takes - never cut to the bound, which made
+        #  fewer than were asked for and said nothing)
+        said = rf"^How many conformers is .+: it takes a whole number from 1 to {most}$"
+        for v in (most + 1, 0, -3, 12.5, "12", True, None, float("inf"), float("nan"), 10**400):
+            with self.assertRaisesRegex(ValueError, said, msg=repr(v)):
+                self.worker.options_of({"options": {"sought": "fixed", "count": v}})
+        for v in (most + 1, 10**400):
+            with self.assertRaisesRegex(ValueError, said):
+                self.worker.options_of({"count": v})  # (as older requests give it)
+        # (a number not asked for is held to nothing: the molecule says how many)
+        self.assertIsNone(self.worker.options_of({"options": {"sought": "needed", "count": most + 1}})["count"])
+
+    def test_holds_every_option_to_what_its_field_takes(self):
+        manifest = json.loads((WORKER.parent / "manifest.json").read_text(encoding="utf-8"))
+        fields = {o["id"]: o for r in manifest["roles"] if r["role"] == "conformers" for o in r["options"]}
+        self.assertEqual(set(self.worker.SAID), set(fields))
+        self.assertEqual(tuple(c["value"] for c in fields["field"]["choices"]), self.worker.FIELDS)
+        # (each number a whole one, as the worker takes them: the field refuses one with a fraction before any run)
+        self.assertEqual({k for k, o in fields.items() if o["type"] == "number"}, {"count", "iters", "seed"})
+        self.assertTrue(all(o.get("whole") is True for o in fields.values() if o["type"] == "number"))
+        # (left out, its default - the manifest's, which Settings starts from)
+        self.assertEqual(self.worker.options_of({"options": {}}), {"count": None, "seed": fields["seed"]["default"], "field": fields["field"]["default"], "iters": fields["iters"]["default"]})
+        # (at its bounds, as asked)
+        ends = {"sought": "fixed", "count": 1, "seed": fields["seed"]["max"], "field": "UFF", "iters": fields["iters"]["min"]}
+        self.assertEqual(self.worker.options_of({"options": ends}), {"count": 1, "seed": fields["seed"]["max"], "field": "UFF", "iters": fields["iters"]["min"]})
+        # (anything else, refused in words - never cut to a bound nor put back to its default)
+        for key, v, said in (
+            ("seed", -1, "Random seed is -1: it takes a whole number from 0 to 2147483647"),
+            ("seed", 2**31, "Random seed is 2147483648: it takes a whole number from 0 to 2147483647"),
+            ("seed", 7.5, "Random seed is 7.5: it takes a whole number from 0 to 2147483647"),
+            ("iters", 9, "Optimisation steps is 9: it takes a whole number from 10 to 100000"),
+            ("seed", 10**400, f"Random seed is {10**400}: it takes a whole number from 0 to 2147483647"),
+            ("iters", -(10**400), f"Optimisation steps is {-(10**400)}: it takes a whole number from 10 to 100000"),
+            ("iters", 100001, "Optimisation steps is 100001: it takes a whole number from 10 to 100000"),
+            ("iters", "300", "Optimisation steps is '300': it takes a whole number from 10 to 100000"),
+            ("field", "GAFF", "Force field is 'GAFF': it takes MMFF94, MMFF94s or UFF"),
+            ("field", "mmff94", "Force field is 'mmff94': it takes MMFF94, MMFF94s or UFF"),
+            ("field", None, "Force field is None: it takes MMFF94, MMFF94s or UFF"),
+            ("sought", "all", "Conformers sought is 'all': it takes needed or fixed"),
+        ):
+            with self.assertRaises(ValueError, msg=(key, v)) as caught:
+                self.worker.options_of({"options": {key: v}})
+            self.assertEqual(str(caught.exception), said)
+
+    def test_makes_no_job_of_a_number_it_may_not_take(self):
+        water = {"atoms": [{"el": "O", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 0.96, "y": 0, "z": 0}, {"el": "H", "x": -0.24, "y": 0.93, "z": 0}],
+                 "bonds": [{"a1": 0, "a2": 1, "order": 1}, {"a1": 0, "a2": 2, "order": 1}]}
+        for v in (self.worker.MOST_CONFORMERS + 1, 10**400):
+            ask = {"step": "conformers", "entries": [water], "options": {"sought": "fixed", "count": v}}
+            with self.assertRaisesRegex(ValueError, r"^How many conformers is \d+: it takes a whole number from 1 to \d+$"):
+                self.worker.op_prepare(ask)
+        ask["options"]["count"] = self.worker.MOST_CONFORMERS
+        self.assertEqual(len(self.worker.op_prepare(ask)["jobs"]), 1)
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
