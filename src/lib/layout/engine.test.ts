@@ -1261,7 +1261,7 @@ describe("a macrocycle bridged across a small ring", () => {
   it("never reads as another molecule for fewer faults: a cyclotetradecadienone's double bonds as given, each way round", () => {
     // (the dienone with its first C=C cis and its second trans was drawn
     // with the cis one trans - a shape of the ring with no fault chosen over
-    // the one that read as the molecule - DESK, #744)
+    // the one that read as the molecule - found in review)
     for (const smiles of [
       "O=C1/C=C\\C=C/CCCCCCCCC1",
       "O=C1/C=C\\C=C\\CCCCCCCCC1",
@@ -1273,6 +1273,29 @@ describe("a macrocycle bridged across a small ring", () => {
       expect(turnedDoubleBonds(input, layout2D(input)), smiles).toEqual([]);
     }
   }, measured(2_000));
+
+  it("never loses a centre or turns a double bond for fewer faults or a tidier ring: cases found in review, each read back as given", () => {
+    for (const smiles of [
+      // (two macrocycles' cis C=C, once drawn trans for a shape with no fault)
+      "CO[C@H]1CCOC/C=C\\CCC/C=C\\C(=O)C1",
+      "C/C1=C/CN[C@H](CO)CCOC/C=C\\COC1",
+      // (two small bridged systems, a 3-oxa-8-azabicyclo[3.2.1]octane, whose centre with depth was once lost)
+      "Fc1ccc(N2[C@@H]3COC[C@H]2C[C@H](OCCN2CCOCC2)C3)cc1",
+      "CCc1cc2c(cc1/C=C\\N1[C@@H]3COC[C@H]1C[C@H](N)C3)OCCO2",
+    ]) {
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      expect([...turnedDoubleBonds(input, out), ...misreadCentres(input, out)], smiles).toEqual([]);
+    }
+    // (a macrocycle through three benzene rings whose centre was once lost
+    // for a benzene's bond drawn true: every centre shown, no double bond
+    // outside a ring turned)
+    const ring = "CO[C@H]1[C@H](C)[C@H](O)[C@@H](O)C#CC(=O)N[C@@H](C)c2ccc(cc2)CN(C)[C@H](C)Cc2ccc(cc2)Oc2ccc(cc2)C[C@H](O)[C@@H](O)[C@H]1N1CCN(C)CC1";
+    const input = fromSmiles(ring);
+    const out = layout2D(input);
+    expect(misreadCentres(input, out)).toEqual([]);
+    expect(turnedDoubleBonds(input, out).filter((t) => !/ in a \d+-membered ring/.test(t))).toEqual([]);
+  }, measured(4_000));
 
   it("reads back as the molecule given: its centres as given, none turned by a chain laid over them", () => {
     for (const smiles of family) {

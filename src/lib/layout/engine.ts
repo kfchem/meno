@@ -146,9 +146,9 @@ const rules = { on: true, engaged: false };
 /**
  * `input` laid out by those rules - and, where they took part, by today's
  * choices as well, the drawing they make kept only where it is no worse
- * than today's on anything a reader cannot miss (what it misstates, a
- * double bond turned or a centre no longer shown as given; its faults) and
- * better on one of them. Never a drawing that gains a fault or reads as
+ * than today's on anything a reader cannot miss - a centre no longer shown
+ * as given, a double bond turned, its faults, a ring's double bond drawn
+ * trans in a small ring, each counted apart - and better on one of them. Never a drawing that gains a fault or reads as
  * another molecule for what the rules change (the maintainer, 2026-10-29).
  */
 function laidOutKeepingToday(input: LayoutInput): Layout2D {
@@ -160,9 +160,13 @@ function laidOutKeepingToday(input: LayoutInput): Layout2D {
     if (!rules.engaged) return fresh;
     rules.on = false;
     const today = layoutInOrder(input);
+    // (each count apart, none to be traded for another: a centre no longer
+    // shown, a double bond turned, the faults, and last a ring's double bond
+    // drawn trans inside a ring of six or fewer, which reads as a ring)
     const counts = (out: Layout2D) => {
-      const m = measureLaidOut(input, out);
-      return [turnedDoubleBonds(input, out).length + misreadCentres(input, out).length, faultsIn(m)];
+      const turned = turnedDoubleBonds(input, out);
+      const inRing = turned.filter((t) => / in a \d+-membered ring/.test(t)).length;
+      return [misreadCentres(input, out).length, turned.length - inRing, faultsIn(measureLaidOut(input, out)), inRing];
     };
     const [f, t] = [counts(fresh), counts(today)];
     const noWorse = f.every((c, k) => c <= t[k]);

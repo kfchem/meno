@@ -16,7 +16,8 @@ function roundMolblock(smiles: string): string {
 describe("a plugin's drawing that cannot be laid out", () => {
   it("is drawn as it came, and says so - why, in a sentence - where it is put down", async () => {
     // (made up: the bridged macrocycle the layout once put an atom of on a
-    // bond, which #685's guard refused - laid out now, 2026-10-29: it says nothing)
+    // bond, which the guard against atoms on each other refused - laid out
+    // now, 2026-10-29: it says nothing)
     const laid = await drawingOf(roundMolblock("C1CCCCC2CCC(CO2)CCCCCCCC1"));
     expect(laid.asCame).toBeUndefined();
     expect(asCameSaid(laid)).toBeNull();
