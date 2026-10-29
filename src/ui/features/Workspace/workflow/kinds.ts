@@ -576,7 +576,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
       { id: "elements", label: "Pass over elements", type: "text", default: "" },
       { id: "reach", label: "Bonded within \u00d7 the sum of their covalent radii (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
-      { id: "floor", label: "And at least \u00c5 over the sum", type: "number", default: REACH_FLOOR, min: 0, max: 1, step: 0.05 },
+      { id: "floor", label: "At least the sum plus, \u00c5", type: "number", default: REACH_FLOOR, min: 0, max: 1, step: 0.05 },
     ],
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
@@ -761,8 +761,7 @@ export function compareHow(v: OptionValues): string {
   const elements = String(v.elements ?? "").trim();
   const said = [
     v.reference === "property" ? `matched on ${String(v.property).trim()}` : writes !== "matches" ? `the match as ${writes}` : "",
-    reach !== BOND_REACH ? `bonded within ${reach} \u00d7 covalent radii` : "",
-    floor !== REACH_FLOOR ? `at least ${floor} \u00c5 over` : "",
+    reach !== BOND_REACH || floor !== REACH_FLOOR ? `bonded within ${reach} \u00d7 covalent radii${floor !== REACH_FLOOR ? `, at least +${floor} \u00c5` : ""}` : "",
     [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean).join(" and "),
     atoms ? `passing over atoms ${atoms}` : "",
     elements ? `passing over ${elements}` : "",

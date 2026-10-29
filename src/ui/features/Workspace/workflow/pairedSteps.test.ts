@@ -329,7 +329,8 @@ describe("Compare bonding's reach", () => {
     // (out of range: refused by the step itself, whatever sent it)
     expect(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, { reach: 2.5 })).toEqual({ ok: false, said: "Bonded within must be from 1 to 2 times the sum of the covalent radii" });
     expect(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, { floor: -0.1 })).toEqual({ ok: false, said: "At least over the sum must be from 0 to 1 Å" });
-    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1, floor: 0 })).toBe("bonded within 1.1 \u00d7 covalent radii; at least 0 \u00c5 over");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1, floor: 0 })).toBe("bonded within 1.1 \u00d7 covalent radii, at least +0 \u00c5");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", floor: 0.3 })).toBe("bonded within 1.2 \u00d7 covalent radii, at least +0.3 \u00c5");
     expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1 })).toBe("bonded within 1.1 \u00d7 covalent radii");
     expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.2 })).toBe("against each reference");
   });

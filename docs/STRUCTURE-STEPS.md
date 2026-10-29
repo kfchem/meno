@@ -195,8 +195,7 @@ references, the first it is bonded as (`matchingReference`).
   measured over 1,437 molecules laid out by ETKDG and MMFF (1.1 missed 12
   bonds, 9 of them peroxides' O-O; 1.2 missed 1 and made none extra:
   `BOND_REACH`, `src/utils/structureParsers.ts`). It is at least a floor
-  over their radii together, on the card too (*And at least … Å over the
-  sum*): 0.15 Å unless set, the maintainer's of 2026-10-13, for H2's
+  over their radii together, on the card too (*At least the sum plus, Å*): 0.15 Å unless set, the maintainer's of 2026-10-13, for H2's
   0.741 Å bond (`REACH_FLOOR`), as for every geometry Meno reads. Each
   difference says whether the reach or the floor decided. The reach is
   taken from 1 to 2, the floor from 0 to 1 Å; outside them the step
