@@ -80,6 +80,11 @@ img { max-width: 100%; }
 .top nav { display: flex; gap: 22px; font-size: 15px; }
 .top nav a { color: var(--muted); text-decoration: none; }
 .top nav a:hover { color: var(--ink); }
+/* a phone: the wordmark and three links on one line */
+@media (max-width: 480px) {
+  .brand svg { height: 20px; }
+  .top nav { gap: 14px; font-size: 14px; }
+}
 
 /* Hero */
 .hero { position: relative; z-index: 1; padding-top: 48px; }
