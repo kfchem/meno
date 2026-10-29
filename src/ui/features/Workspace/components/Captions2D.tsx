@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { longPressMs } from "../longPress";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
@@ -8,7 +9,7 @@ import { selectedOf } from "../store/slices/selectionSlice";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { Caption } from "../store/types";
 import { guideMove, guideWidth } from "../utils/guiding";
@@ -318,7 +319,7 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
       s.clearSel();
       s.selectCaptions([c.id]);
       moveFrom(from.x, from.y);
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     // (a drag before then selects letters, from where it pressed - the words written anew in place)
     const onMove = (m: PointerEvent) => {
       if (was !== "press" || Math.hypot(m.clientX - from.x, m.clientY - from.y) < MOV_PX) return;

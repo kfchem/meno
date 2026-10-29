@@ -341,8 +341,11 @@ larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
 
-**A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
-first press only: the second of a double-click held still waits to be
+**A long press** is a press held still for as long as Settings says
+(*General*, *A long press*: shorter 0.22 s, normal 0.26 s, longer 0.4 s;
+`LONG_PRESSES`, `longPressMs`; 0.32 s until 2026-10-28, when the maintainer
+asked for about a quarter of a second and a choice), on the first press
+only: the second of a double-click held still waits to be
 dragged - on a bond as on an atom or empty space (until 2026-10-13 a
 bond's second press began one: `pressOnBond`). It is counted while the button is held.
 As it is held, the selection's shade spreads out from the atom along the
