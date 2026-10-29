@@ -110,6 +110,16 @@ export const SET_PAD = NOMINAL_BOND_LENGTH / 2;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
+/** How many of a table's rows its frame shows (ValueBody `TableBody`; model `tableSetSize`). */
+export const TABLE_SHOWN_ROWS = 6;
+/**
+ * How tall a table's body draws (ValueBody `TableBody`), in its own pixels:
+ * its heads' line (16, with its rule under it, 3), the gap (6), a line for
+ * each row it shows (16) and the line saying what it is (16). A table's set
+ * is made as tall as this (model `tableSetSize`), and its frame scales it to
+ * that (SetFrame).
+ */
+export const tableBodyPx = (rows: number) => 19 + 6 + 16 * Math.min(rows, TABLE_SHOWN_ROWS) + 16;
 /** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
 export const CHART_PX = { w: 360, h: 260 };
 /** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */

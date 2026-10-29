@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { numberIn, readTable, tableIn, tableOfText } from "../../../../lib/table";
+import { numberIn, readTable, tableIn, tableOfText, type Table } from "../../../../lib/table";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { countOf, holdsOf, setMembers } from "./entries";
 import { takenBy } from "./kinds";
-import { addTableSet, membersSettled } from "./model";
+import { addTableSet, membersSettled, TABLE_SET, tableSetSize } from "./model";
 import { partsOf } from "./parts";
 import { NumberBody, TableBody } from "./ValueBody";
+import { NAME_DOWN, PX, SET_PAD, tableBodyPx } from "./look";
 
 const TABLE = readTable("name,energy (kcal/mol),ok\na,1.5,yes\nb,n/a,no\nc,2.25,yes\n");
 
@@ -111,5 +112,47 @@ describe("a set holding a table", () => {
     expect(html).toContain("–");
     expect(html).toContain("3 rows · 3 columns · 1 not read");
     expect(renderToString(<NumberBody number={{ value: 1.5, unit: "kcal/mol", by: { program: "p", method: "m" } }} />).split("<!-- -->").join("")).toContain("p · m");
+  });
+});
+
+describe("a table's heads, and its frame", () => {
+  const changes: Table = {
+    columns: [
+      { name: "reaction.product", kind: "text", label: "Product" },
+      { name: "atom 1", kind: "number", unit: "none" },
+      { name: "distance", kind: "number", unit: "Å" },
+    ],
+    rows: [["b", 1, 1.54], ["c", 2, 2.1]],
+    unread: [],
+    left: [],
+  };
+
+  it("heads a column with its label where it has one - its name kept as its key, said on hover - and a number's head over its numbers, at the right", () => {
+    const html = renderToString(<TableBody table={changes} />);
+    expect(html).toMatch(/<th[^>]*title="Product · reaction.product"[^>]*>Product<\/th>/);
+    expect(html).not.toMatch(/>reaction\.product</);
+    expect(html).toMatch(/<th class="[^"]*text-right[^"]*"[^>]*title="distance \(Å\)"/);
+    expect(html).toMatch(/<th class="[^"]*text-left[^"]*"[^>]*title="Product/);
+  });
+
+  it("keeps a column's label in the file, and reads one that does not read as none, the column kept", () => {
+    const lost = () => {};
+    expect(tableIn(JSON.parse(JSON.stringify(changes)), lost)).toEqual(changes);
+    const bad = tableIn({ ...changes, columns: [{ name: "reaction.product", kind: "text", label: 7 }, ...changes.columns.slice(1)] }, lost)!;
+    expect(bad.columns[0]).toEqual({ name: "reaction.product", kind: "text" });
+  });
+
+  it("is as tall as the rows it shows, its line under them: no taller", () => {
+    const two = tableSetSize(changes).h;
+    const six = tableSetSize({ rows: Array.from({ length: 6 }, () => []) }).h;
+    const many = tableSetSize({ rows: Array.from({ length: 40 }, () => []) }).h;
+    expect(two).toBeLessThan(six);
+    expect(many).toBe(six);
+    expect(six).toBeLessThanOrEqual(TABLE_SET.h);
+    const doc = addTableSet(emptyWorkspaceDocument(), { x: 0, y: 0 }, changes);
+    const set = doc.sets![0];
+    expect(set.y1 - set.y0).toBeCloseTo(two, 9);
+    // (its frame leaves its body just the height it draws: drawn whole, at its own size - SetFrame's scale 1)
+    for (const n of [0, 2, 6, 40]) expect((tableSetSize({ rows: Array.from({ length: n }, () => []) }).h - 2 * NAME_DOWN - SET_PAD) / PX).toBeCloseTo(tableBodyPx(n), 9);
   });
 });

@@ -3,15 +3,20 @@ import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
 import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
 import { diagramHow, diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
-import { CHART_PX } from "./look";
+import { CHART_PX, TABLE_SHOWN_ROWS } from "./look";
 
 /** How many of a table's rows its frame shows. */
-const SHOWN_ROWS = 6;
+const SHOWN_ROWS = TABLE_SHOWN_ROWS;
 /** How many of its columns. */
 const SHOWN_COLUMNS = 4;
 
-/** A column's head as its frame shows it: its name, and a number's unit. */
-const headOf = (c: TableColumn) => (c.kind === "number" && c.unit !== "none" ? `${c.name} (${c.unit})` : c.name);
+/** A column's head as its frame shows it: its label - else its name - and a number's unit. */
+const headOf = (c: TableColumn) => {
+  const shown = c.label ?? c.name;
+  return c.kind === "number" && c.unit !== "none" ? `${shown} (${c.unit})` : shown;
+};
+/** What a column's head says on hover: its head, and the name it is matched on where a label stands for it ("Product · reaction.product"). */
+const headTitle = (c: TableColumn) => (c.label && c.label !== c.name ? `${headOf(c)} \u00b7 ${c.name}` : headOf(c));
 
 /** A cell as its frame shows it: a number as Meno writes numbers, true or false, text as it is, none as a dash. */
 const cellText = (v: string | number | boolean | null) => (v == null ? "–" : typeof v === "number" ? numberText(v) : typeof v === "boolean" ? (v ? "true" : "false") : v);
@@ -37,7 +42,8 @@ export function TableBody({ table }: { table: Table }) {
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.name} className="truncate text-left font-medium text-gh-gray border-b border-gh-line pb-0.5 pr-2" title={headOf(c)}>
+              // (a number's head over its numbers, at the right as they are; any other at the left)
+              <th key={c.name} className={`truncate font-medium text-gh-gray border-b border-gh-line pb-0.5 pr-2 ${c.kind === "number" ? "text-right" : "text-left"}`} title={headTitle(c)}>
                 {headOf(c)}
               </th>
             ))}
