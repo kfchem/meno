@@ -404,6 +404,8 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
     ...(out.optimised === false && (optimising || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+    // (a saddle point's optimisation whose reader could not say whether it converged: never passed on as converged)
+    ...(kind === "saddle-point" && out.optimised == null ? { failed: { kind: "failed" as const, why: "Whether the optimisation converged could not be read" } } : {}),
   };
 }
 

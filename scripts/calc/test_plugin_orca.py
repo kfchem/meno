@@ -233,7 +233,11 @@ class SaddlePoint(unittest.TestCase):
         # (at ORCA's own xTB its first Hessian is a numerical one: said on the step's line; no wavefunction kept)
         self.assertEqual(said.get("note"), "its first Hessian computed numerically")
         self.assertEqual(said["jobs"][0]["reads"], [])
-        dft = ask("prepare", step="saddle-point", entries=[nh3], options={**options, "hessian": "model"})
+        # (no level of its own unless set: the chemist sets it)
+        self.assertEqual((options["method"], options["basis"], options["dispersion"]), ("", "", "none"))
+        with self.assertRaisesRegex(AssertionError, "there is no method"):
+            ask("prepare", step="saddle-point", entries=[nh3], options=options)
+        dft = ask("prepare", step="saddle-point", entries=[nh3], options={**options, "method": "B3LYP", "basis": "def2-SVP", "dispersion": "D3BJ", "hessian": "model"})
         self.assertEqual(dft["jobs"][0]["files"][0]["text"].splitlines()[0], "! B3LYP def2-SVP D3BJ OPTTS")
         self.assertFalse(any("Calc_Hess" in l for l in dft["jobs"][0]["files"][0]["text"].splitlines()))
         self.assertNotIn("note", dft)

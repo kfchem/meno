@@ -58,9 +58,9 @@
       "kinds": ["saddle-point"],
       "programs": ["orca"],
       "options": [
-        {"id": "method", "label": "Method", "type": "text", "default": "B3LYP"},
-        {"id": "basis", "label": "Basis set", "type": "text", "default": "def2-SVP"},
-        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"}, {"value": "D4", "label": "D4"}], "default": "D3BJ"},
+        {"id": "method", "label": "Method", "type": "text", "default": ""},
+        {"id": "basis", "label": "Basis set", "type": "text", "default": ""},
+        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"}, {"value": "D4", "label": "D4"}], "default": "none"},
         {"id": "solvation", "label": "Solvation", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "CPCM", "label": "C-PCM"}, {"value": "SMD", "label": "SMD"}], "default": "none"},
         {"id": "solvent", "label": "Solvent", "type": "choice", "when": {"id": "solvation", "in": ["CPCM", "SMD"]}, "choices": [
           {"value": "water", "label": "Water"},

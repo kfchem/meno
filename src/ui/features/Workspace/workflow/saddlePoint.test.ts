@@ -41,6 +41,12 @@ describe("Optimise to a saddle point", () => {
     expect([w.xyz[2], w.failed?.kind]).toEqual([0.07, "not-converged"]);
   });
 
+  it("never passes on as converged an optimisation whose reader could not say whether it converged", () => {
+    const { optimised: _, ...unsaid } = optts([nh3(0.1).xyz, nh3(0.0).xyz], true) as ReaderOutput & { optimised?: boolean };
+    const w = workedOf("saddle-point", nh3(), unsaid as ReaderOutput, ["cclib 1.9rc1"]) as Worked;
+    expect([w.failed?.kind, w.failed?.why]).toEqual(["failed", "Whether the optimisation converged could not be read"]);
+  });
+
   it("gives a plugin each guess with its sides beside it, as they are", () => {
     const g = { ...nh3(), sides: { reactant: nh3(0.4), product: nh3(-0.4) } };
     const sent = pluginEntry(g) as unknown as { atoms: { z: number }[]; sides: { reactant: { atoms: { z: number }[] }; product: { atoms: { z: number }[] } } };

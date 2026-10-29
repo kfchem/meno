@@ -427,8 +427,11 @@ them a saddle point.
 - **What it gives.** Each guess optimised, its way there as frames, its last
   geometry its entry. One that did not converge goes out of *Failed* at the
   last geometry it reached, for a run again to start from.
+- **What it gives** is never passed on as converged where its reader could
+  not say whether it converged: that guess goes out of *Failed*, saying so.
 - **ORCA's plugin** runs OptTS (the ORCA 6.1 manual, *Transition State
-  Searches*), at any method and basis set. Its *First Hessian* is computed
+  Searches*), at the method and basis set given: the step has no level of
+  its own unless set. Its *First Hessian* is computed
   at the start (`Calc_Hess`), "the most straightforward option" (4.3.2.1),
   or ORCA's model one. At ORCA's own xTB, which has no analytic Hessian,
   ORCA computes it numerically, and the step's line says so. ORCA's OptTS
