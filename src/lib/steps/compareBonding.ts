@@ -56,6 +56,36 @@ function cis(xyz: readonly number[], a: number, p: number, q: number, b: number)
   return dot(cross(b1, b2), cross(b2, b3)) > 0;
 }
 
+/**
+ * A structure's stereo units, by the rules above: its stereocentres (four
+ * neighbours, no two in one symmetry orbit), each with its neighbours by
+ * number; and its double bonds that can be cis or trans, each as the four
+ * atoms whose dihedral tells which - the first neighbour (by number) at one
+ * end, the two ends, the first neighbour at the other.
+ */
+export function stereoUnits(structure: Entry["structure"]): { centres: { atom: number; neighbours: number[] }[]; doubleBonds: [number, number, number, number][] } {
+  const nbrs: number[][] = structure.atoms.map(() => []);
+  for (const b of structure.bonds) {
+    nbrs[b.a1].push(b.a2);
+    nbrs[b.a2].push(b.a1);
+  }
+  for (const n of nbrs) n.sort((p, q) => p - q);
+  const { orbit } = symmetryOrbits({
+    atoms: structure.atoms.map((a) => ({ el: a.el, charge: a.charge, hs: 0 })),
+    bonds: structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+  });
+  const unlike = (xs: readonly number[]) => new Set(xs.map((x) => orbit[x])).size === xs.length;
+  const centres = nbrs.flatMap((n, atom) => (n.length === 4 && unlike(n) ? [{ atom, neighbours: n }] : []));
+  const doubleBonds: [number, number, number, number][] = [];
+  for (const b of structure.bonds) {
+    if (b.order !== 2) continue;
+    const ends = [nbrs[b.a1].filter((y) => y !== b.a2), nbrs[b.a2].filter((y) => y !== b.a1)];
+    if (ends.some((x) => x.length < 1 || x.length > 2 || (x.length === 2 && !unlike(x)))) continue;
+    doubleBonds.push([ends[0][0], b.a1, b.a2, ends[1][0]]);
+  }
+  return { centres, doubleBonds };
+}
+
 export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = {}): BondingCompared {
   if (e.geometry.kind !== "3d") return { failed: e.geometry.kind === "frames" ? "The entry holds frames: take one frame first (Take frames)." : "The entry has no 3D places to read bonds from." };
   const atoms = e.structure.atoms;
@@ -91,33 +121,21 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
   if (o.rs || o.ez) {
     if (reference.geometry.kind !== "3d") return { failed: "The reference has no 3D places: R or S and E or Z cannot be compared with it." };
     const rxyz = reference.geometry.xyz;
-    const nbrs: number[][] = ref.map(() => []);
-    for (const b of reference.structure.bonds) {
-      nbrs[b.a1].push(b.a2);
-      nbrs[b.a2].push(b.a1);
-    }
-    for (const n of nbrs) n.sort((p, q) => p - q);
-    const { orbit } = symmetryOrbits({
-      atoms: ref.map((a) => ({ el: a.el, charge: a.charge, hs: 0 })),
-      bonds: reference.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
-    });
-    const unlike = (xs: readonly number[]) => new Set(xs.map((x) => orbit[x])).size === xs.length;
+    const units = stereoUnits(reference.structure);
     if (o.rs) {
-      nbrs.forEach((n, c) => {
-        if (n.length !== 4 || !unlike(n) || skipAtom.has(c) || skipEl.has(els[c])) return;
+      for (const { atom: c, neighbours: n } of units.centres) {
+        if (skipAtom.has(c) || skipEl.has(els[c])) continue;
         const h = handedness(xyz, c, n);
         const r = handedness(rxyz, c, n);
         if (h !== r) differences.push(`${els[c]}${c + 1} has ${h === 0 ? "its neighbours in a plane" : "the other configuration"} from the reference's.`);
-      });
+      }
     }
     if (o.ez) {
-      for (const b of reference.structure.bonds) {
-        if (b.order !== 2 || passed(b.a1, b.a2)) continue;
-        const ends = [b.a1, b.a2].map((x, i) => nbrs[x].filter((y) => y !== [b.a2, b.a1][i]));
-        if (ends.some((x) => x.length < 1 || x.length > 2 || (x.length === 2 && !unlike(x)))) continue;
-        const here = cis(xyz, ends[0][0], b.a1, b.a2, ends[1][0]);
-        const there = cis(rxyz, ends[0][0], b.a1, b.a2, ends[1][0]);
-        if (here !== there) differences.push(`The double bond ${said(b.a1, b.a2)} is ${here ? "cis" : "trans"} at ${said(ends[0][0], ends[1][0])} here and ${there ? "cis" : "trans"} in the reference.`);
+      for (const [a, p, q, b] of units.doubleBonds) {
+        if (passed(p, q)) continue;
+        const here = cis(xyz, a, p, q, b);
+        const there = cis(rxyz, a, p, q, b);
+        if (here !== there) differences.push(`The double bond ${said(p, q)} is ${here ? "cis" : "trans"} at ${said(a, b)} here and ${there ? "cis" : "trans"} in the reference.`);
       }
     }
   }

@@ -12,7 +12,7 @@ import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEne
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, speciesSet, taggedSet } from "./structureSteps";
+import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
 import { positionIds, substituted } from "./substituents";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
@@ -64,13 +64,15 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return combinedSet(entries);
     case "measure":
       return measuredSet(entries, holds, String(options.measurements ?? ""));
+    case "restraints":
+      return restrainedSet(entries, holds, options);
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps): *Merge*, *Re-bond* and *Compare bonding*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding"];
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps): *Merge*, *Re-bond*, *Compare bonding* and *Torsion restraints*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
@@ -93,6 +95,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         atoms: String(o.atoms ?? ""),
         elements: String(o.elements ?? ""),
       });
+    case "torsion-restraints":
+      return torsionsSet(a.entries, b.entries, a.holds, o);
     default:
       return { ok: false, said: "Meno does not do this itself on two inputs" };
   }
