@@ -147,19 +147,16 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M13.5 4 H17.5 M13.5 8 H17.5 M13.5 12 H17.5 M13.5 16 H17.5" />
     </>
   ),
-  // (a chain's atoms where they stand, then the same atoms bonded)
+  // (three atoms where they stand, then the same atoms bonded)
   rebond: (
     <>
-      <circle cx="3" cy="6" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="7.5" cy="2.5" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="12.5" cy="6" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="17" cy="2.5" r="1.4" fill="currentColor" stroke="none" />
-      <path d="M10 8.3 V12 M8.3 10.4 L10 12.1 L11.7 10.4" />
-      <path d="M3 17.5 L7.5 14 L12.5 17.5 L17 14" />
-      <circle cx="3" cy="17.5" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="7.5" cy="14" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="12.5" cy="17.5" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="17" cy="14" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="6.5" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="2.8" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="6.5" r="2.1" fill="currentColor" stroke="none" />
+      <path d="M4 17 L10 13.3 L16 17" />
+      <circle cx="4" cy="17" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="13.3" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="17" r="2.1" fill="currentColor" stroke="none" />
     </>
   ),
   // (a chain as drawn, the same as its reference)
