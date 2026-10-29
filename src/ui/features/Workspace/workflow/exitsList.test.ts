@@ -35,6 +35,7 @@ describe("a kind's exits, as a list", () => {
       rebond: [first("Re-bonded", "same"), rest("Not re-bonded", "same")],
       "compare-bonding": [first("Same", "same"), rest("Different", "same")],
       "take-frames": [first("Frames", "molecules")],
+      rank: [first("The first {keep}", "same"), rest("The rest", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

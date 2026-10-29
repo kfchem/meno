@@ -304,6 +304,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from; the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
+| Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
@@ -2672,6 +2673,43 @@ A descriptor's unit reads as Meno's units table has it: "mw < 500
 g/mol", "tpsa < 90 Å²" (or Å2).
 
 Not yet: conditions picked from what comes in rather than typed.
+
+### Rank (2026-10-29)
+
+*Rank*, Meno's own, orders entries by a value they carry and keeps the
+first N (lib/nodes `rank`, WORKFLOWS-FOUNDATION.md, *Meno's own nodes*):
+the conformers within a few kcal/mol taken on, at most so many (case F,
+steps 9, 30 and 34), the lowest of each species and each path (step 32),
+the first in each path (step 48).
+
+- **Its options**: the property it ranks by (*By*, energy unless named),
+  lowest or highest first, how many it keeps (*Keep the first*, 1 unless
+  set), and within what: *Each group* - a conformer set's compounds -
+  *Each value of a property*, the property named (*path*, *species*, as a
+  Tag wrote them), or *All together*. Its card says it in a line ("the
+  lowest 64 by energy in each species"), or what it still needs.
+- **What it gives**: those kept, in their ranked order, on its first exit;
+  *The rest* on its second, each as it came, its place written on it
+  (`set_aside`: "ranked 3 of 7 in its group by energy, lowest first; the
+  first 1 kept"). Ties keep the order they came in.
+- **Only values that can be ranked together are**: numbers of one
+  dimension, converted to the first one's unit, each worked out the same
+  way - its conditions, program, method, basis and thermal treatment
+  (lib/nodes `workedOutAs`). A group whose values were not is set aside
+  whole, saying how two of them differ, by name ("dg values differ in
+  method: M (a #1) and N (a #2)"); never ranked as one.
+- **An entry that is no result is never ranked**: failed, not converged,
+  its marks unread - set aside saying so ("not ranked: not converged"),
+  though its value would rank first. An entry with no value, or none of
+  the group property, is set aside saying that.
+- **Its line says what it ranked by**: the property, and how it was
+  worked out where its record says - level, program, solvent,
+  temperature ("the lowest 1 by dg (wB97X-D/6-311+G(d,p), Gaussian, in
+  SMD(chloroform), at 298.15 K) in each group") - then how many it kept,
+  and the rest counted by why ("rest 3 (2: below the first 1; 1: it has
+  no path to be ranked within)").
+- It takes molecules in 3D and conformer sets; structures drawn are not
+  ranked yet.
 
 ### Charts (2026-10-22)
 

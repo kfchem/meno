@@ -14,6 +14,7 @@ import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
 import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, speciesSet, taggedSet } from "./structureSteps";
 import { positionIds, substituted } from "./substituents";
+import { rankedSet } from "./valueSteps";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -56,6 +57,14 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
     case "filter":
       return filtered(entries, holds, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
+    case "rank":
+      return rankedSet(entries, holds, {
+        property: String(options.property ?? ""),
+        order: options.order === "highest first" ? "highest first" : "lowest first",
+        keep: Number(options.keep),
+        within: options.within === "all" ? "all" : options.within === "each value" ? "each value" : "each group",
+        groupBy: String(options.groupBy ?? ""),
+      });
     case "tag":
       return taggedSet(entries, holds, String(options.name ?? ""));
     case "species":
