@@ -182,6 +182,11 @@ export type Molecule3DViewProps = {
   look: Look3D;
   frame: number;
   turn: Turn3D | undefined;
+  /**
+   * How it is turned, read as each frame is drawn, in place of `turn`: a turn that changes all the time, changed
+   * without anything drawn again but the frame (StyleEditor/Preview3D's samples).
+   */
+  turning?: { readonly current: THREE.Quaternion };
   /** How lit its outline is: 0 not at all, 1 hovered or turning, 2 moving. */
   lit: number;
   selected: boolean;
@@ -876,10 +881,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (seen) dolly.current.matrix.copy(seen);
     else dolly.current.matrix.identity();
     dolly.current.matrixWorldNeedsUpdate = true;
-    if (!shownTurn.current || shownTurn.current.angleTo(quaternion) < TURN_FOLLOWED) {
-      shownTurn.current = quaternion.clone();
+    const turnTo = props.turning?.current ?? quaternion;
+    if (!shownTurn.current || shownTurn.current.angleTo(turnTo) < TURN_FOLLOWED) {
+      shownTurn.current = turnTo.clone();
     } else {
-      shownTurn.current.slerp(quaternion, 1 - Math.exp(-step / PLACE_TAU));
+      shownTurn.current.slerp(turnTo, 1 - Math.exp(-step / PLACE_TAU));
       moving = true;
     }
     turned.current.quaternion.copy(shownTurn.current);

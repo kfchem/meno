@@ -126,9 +126,11 @@ export default function ChemMarks2D({
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
   const fontPx = Math.max(MARK_MIN_PX, labelFont * MARK_SCALE * z);
-  // (and, the view far out, whether they are still seen: switched past their least size, not faded with the zoom - marksReadAt)
-  const marksRead = useRef(true);
-  marksRead.current = marksReadAt(marksRead.current, labelFont * MARK_SCALE * z);
+  // (and, the view far out, whether they are still seen: switched past their least size, not faded with the zoom - marksReadAt;
+  // kept as state, set again as it renders where it switched - not a ref written in render)
+  const [marksWere, setMarksWere] = useState(true);
+  const marksRead = marksReadAt(marksWere, labelFont * MARK_SCALE * z);
+  if (marksRead !== marksWere) setMarksWere(marksRead);
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
@@ -285,10 +287,10 @@ export default function ChemMarks2D({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stereoKeys: as stereoShown
   }, [stereoShown, stereoLeaving]);
   // (and, switched there, faded in or out over a short time: utils/zoomSwitch)
-  const seen = useRef<SwitchFade>(switchFade(marksRead.current));
+  const seen = useRef<SwitchFade>(switchFade(marksRead));
   const stereoSeen = useRef(seen.current.v);
   useFrame((_, dt) => {
-    if (switchStep(seen.current, marksRead.current, Math.min(dt, 1 / 20))) invalidate();
+    if (switchStep(seen.current, marksRead, Math.min(dt, 1 / 20))) invalidate();
     stereoSeen.current = seen.current.v;
   });
   const boxesLeaving = useMemo(() => new Set(valenceShown.filter((s) => s.leaving).map((s) => s.key)), [valenceShown]);
@@ -302,7 +304,7 @@ export default function ChemMarks2D({
       {stereoShown.map(({ key, item: m, leaving }) => {
         const base = from.get(key);
         // (none to take hold of where they are switched off with the zoom)
-        if (leaving || !base || !marksRead.current) return null;
+        if (leaving || !base || !marksRead) return null;
         const id = Number(key.slice(key.indexOf("-") + 1));
         return (
           <MarkHold
