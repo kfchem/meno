@@ -10,6 +10,13 @@
 # itself first. This module decides. What could not be read is never taken
 # for "not the yes": an error, or nothing read at all, stops the input too.
 #
+# On Windows a press is told by the buttons themselves, not by the point:
+# Tauri lays a window for its resize borders over the whole page, which
+# lets the mouse through but stops UI Automation, so the part at any point
+# is that pane. Every button of Meno's windows is read, with where it is,
+# and a press inside one named as the yes is stopped; a reading that fails,
+# or holds no button at all, stops it too.
+#
 # MENO_GUI_ANSWER_NETWORK_YES=1, set by hand for one run, lets such input
 # through, saying so. Nothing in the repository sets it.
 
@@ -28,8 +35,59 @@ function Read-Part {
     param([Parameter(Mandatory)] [scriptblock] $Read)
     try { $r = & $Read } catch { return [pscustomobject]@{ Chain = @(); Unread = "$($_.Exception.Message)" } }
     if ($null -eq $r -or -not $r.PSObject.Properties["Chain"]) { return [pscustomobject]@{ Chain = @(); Unread = "nothing was read" } }
+    # (Tauri's pane for its resize borders, over the whole page on Windows: what is under it was not read)
+    $first = @($r.Chain | Where-Object { $null -ne $_ })[0]
+    if ("$first" -like "Pane`tTAURI_DRAG_RESIZE*") { return [pscustomobject]@{ Chain = @(); Unread = "UI Automation sees Tauri's resize borders there, not the page under them" } }
     # (a chain given as nothing is an empty one: nothing has the keys)
     return [pscustomobject]@{ Chain = @($r.Chain | Where-Object { $null -ne $_ }); Unread = $null }
+}
+
+function Read-Buttons {
+    <#
+      .SYNOPSIS
+      A platform's reading of the buttons on screen, as the guard takes it:
+      -Read gives an object with its Buttons (Name, X, Y, Width, Height, in
+      the units of the press they are held against); a throw, or nothing
+      given, is a reading that failed, and says why (Unread).
+    #>
+    param([Parameter(Mandatory)] [scriptblock] $Read)
+    try { $r = & $Read } catch { return [pscustomobject]@{ Buttons = @(); Unread = "$($_.Exception.Message)" } }
+    if ($null -eq $r -or -not $r.PSObject.Properties["Buttons"]) { return [pscustomobject]@{ Buttons = @(); Unread = "nothing was read" } }
+    $buttons = @($r.Buttons | Where-Object { $null -ne $_ })
+    # (Meno's window always has buttons - its tabs', Settings: none read is a reading of nothing)
+    if (-not $buttons.Count) { return [pscustomobject]@{ Buttons = @(); Unread = "no button was read in Meno's window" } }
+    return [pscustomobject]@{ Buttons = $buttons; Unread = $null }
+}
+
+function Find-YesUnder {
+    # The yes of a question about the network that a press at -At (X, Y) lands on, among -Buttons as Read-Buttons gives them - a pixel or two round each taken in - or nothing.
+    param([AllowEmptyCollection()] [object[]] $Buttons = @(), [Parameter(Mandatory)] $At)
+    foreach ($b in @($Buttons)) {
+        if ("$($b.Name)" -notlike $script:YesName) { continue }
+        if ($At.X -ge $b.X - 2 -and $At.X -le $b.X + $b.Width + 2 -and $At.Y -ge $b.Y - 2 -and $At.Y -le $b.Y + $b.Height + 2) { return $b }
+    }
+    return $null
+}
+
+function Assert-NotPressingYes {
+    <#
+      .SYNOPSIS
+      Stop before a press at -At that lands on the yes of a question about
+      the network, or whose buttons could not be read: -Look as Read-Buttons
+      gives it, -What saying what the press is, for the message.
+    #>
+    param([Parameter(Mandatory)] $Look, [Parameter(Mandatory)] $At, [Parameter(Mandatory)] [string] $What)
+    $override = $env:MENO_GUI_ANSWER_NETWORK_YES -eq "1"
+    if ($Look.Unread) {
+        if ($override) { Write-Warning "$What could not be told from a question's yes ($($Look.Unread)): MENO_GUI_ANSWER_NETWORK_YES=1 lets it through."; return }
+        throw ("$What could not be told from the yes of a question about the network: Meno's buttons could not be read ($($Look.Unread)). " +
+            "Stopping; nothing was sent.")
+    }
+    $yes = Find-YesUnder -Buttons $Look.Buttons -At $At
+    if (-not $yes) { return }
+    if ($override) { Write-Warning "$What answers a question about the network yes ('$($yes.Name)'): MENO_GUI_ANSWER_NETWORK_YES=1 lets it through."; return }
+    throw ("$What would answer a question about the network yes ('$($yes.Name)'). That answer is for the person at the computer, " +
+        "never a run's: answer it no (Escape) or leave it. Stopping; nothing was sent.")
 }
 
 function Test-NetworkYes {
@@ -80,4 +138,4 @@ function Assert-NotNetworkYes {
         "never a run's: answer it no (Escape) or leave it. Stopping; nothing was sent.")
 }
 
-Export-ModuleMember -Function Read-Part, Test-NetworkYes, Test-PageReached, Assert-NotNetworkYes
+Export-ModuleMember -Function Read-Part, Read-Buttons, Find-YesUnder, Test-NetworkYes, Test-PageReached, Assert-NotNetworkYes, Assert-NotPressingYes

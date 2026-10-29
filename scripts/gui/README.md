@@ -97,6 +97,13 @@ no, always goes. The platform module reads the part at the point, or the
 one with the focus, and what it sits in (`[MacGui]::ChainAt` and
 `FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
 on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`.
+On Windows a press is told by the buttons themselves: Tauri lays a pane
+for its resize borders over the whole page, which lets the mouse through
+but stops UI Automation, so what is at any point reads as that pane. Every
+button of Meno's windows is read instead (`FindAll`, some 40 ms), with its
+bounds, and a press inside one named `Allow...` is stopped; a reading
+that fails, or holds no button at all, stops it too, and a point read as
+that pane counts as unread.
 What could not be read is never taken for "not the yes": a lookup that
 fails - an error, or nothing given - stops the input as the yes does, and
 only "nothing has the keys" (`kAXErrorNoValue` for the focus) lets a key

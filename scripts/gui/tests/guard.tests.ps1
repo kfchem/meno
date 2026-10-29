@@ -4,6 +4,8 @@
 #   pwsh -NoProfile -File scripts/gui/tests/guard.tests.ps1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+# (the Mac's own guard, its module loaded only there)
+if (-not $IsMacOS) { Write-Host "guard.tests.ps1 checks the Mac harness: skipped on this system"; exit 0 }
 Import-Module (Join-Path $PSScriptRoot ".." "MenoGui.macOS.psm1") -Force
 
 $failed = 0

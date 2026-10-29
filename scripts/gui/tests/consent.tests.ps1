@@ -84,12 +84,35 @@ Check "FocusedElement throwing stops a key" (Stops { Assert-NotNetworkYes -Look 
 Check "a part gone while its chain is read stops it" (Stops { Assert-NotNetworkYes -Look (Read-Part { [pscustomobject]@{ Chain = @("Button`tNot now", (throw "element not available")) } }) -What "a click" }) $true
 Check "Not now, read, goes on" (Stops { Assert-NotNetworkYes -Look (Read-Part { [pscustomobject]@{ Chain = @("Button`tNot now", "Group`t") } }) -What "a click" }) $false
 
+Write-Host "Windows' presses, told by Meno's buttons (UI Automation stood in for)"
+# (as WINPC read them: the question's two buttons among the rest, in screen pixels)
+$allowB = [pscustomobject]@{ Name = "Allow and download"; X = 1300; Y = 900; Width = 220; Height = 60 }
+$notNowB = [pscustomobject]@{ Name = "Not now"; X = 1180; Y = 900; Width = 100; Height = 60 }
+$settingsB = [pscustomobject]@{ Name = "Settings"; X = 2320; Y = 10; Width = 60; Height = 60 }
+$read = Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB, $notNowB, $allowB) } }
+$at = { param($x, $y) [pscustomobject]@{ X = $x; Y = $y } }
+Check "a press inside the yes's bounds stops" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click" }) $true
+Check "and at its edge, a pixel past it" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1521 930) -What "a click" }) $true
+Check "a press on Not now goes on" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1230 930) -What "a click" }) $false
+Check "a press on the page, away from both, goes on" (Stops { Assert-NotPressingYes -Look $read -At (& $at 400 300) -What "a click" }) $false
+Check "no question asked: a press goes on" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB) } }) -At (& $at 1410 930) -What "a click" }) $false
+Check "the buttons' reading failing (FindAll throwing) stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { throw [System.InvalidOperationException]::new("FindAll failed") }) -At (& $at 400 300) -What "a click" }) $true
+Check "nothing given stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { $null }) -At (& $at 400 300) -What "a click" }) $true
+Check "no button read at all stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @() } }) -At (& $at 400 300) -What "a click" }) $true
+$said = try { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click"; "" } catch { $_.Exception.Message }
+Check "saying which" ($said -like "a click would answer a question about the network yes ('Allow and download')*nothing was sent.") $true
+# (what UI Automation gives for any point of the page: Tauri's resize-border pane, over it)
+$overlay = @("Pane`tTAURI_DRAG_RESIZE_WINDOW", "Window`tMeno", "Pane`t")
+Check "a point read as Tauri's resize-border pane is unread" ((Read-Part { [pscustomobject]@{ Chain = $overlay } }).Unread -like "*resize borders*") $true
+Check "and stops a press read that way" (Stops { Assert-NotNetworkYes -Look (Read-Part { [pscustomobject]@{ Chain = $overlay } }) -What "a click" }) $true
+
 Write-Host "the override"
 $env:MENO_GUI_ANSWER_NETWORK_YES = "yes"
 Check "must be exactly 1" (Stops { Assert-NotNetworkYes -Look (Read $macYes) -What "a click" }) $true
 $env:MENO_GUI_ANSWER_NETWORK_YES = "1"
 Check "set by hand, lets the yes through" (Stops { Assert-NotNetworkYes -Look (Read $macYes) -What "a click" }) $false
 Check "and a failed reading" (Stops { Assert-NotNetworkYes -Look (Read-Part { throw "AXError -25204" }) -What "a click" }) $false
+Check "and a press on the yes's button" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click" }) $false
 Remove-Item Env:MENO_GUI_ANSWER_NETWORK_YES -ErrorAction SilentlyContinue
 
 Write-Host "nothing in the repository sets the override"

@@ -183,6 +183,8 @@ Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1")
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
 
 $script:Window = [IntPtr]::Zero
+# (Meno's process, for the guard's reading of its windows' buttons)
+$script:MenoPid = 0
 
 function Get-MenoBuild {
     # Where `npm run tauri build` leaves the app on this platform.
@@ -286,6 +288,7 @@ function Get-MenoWindow {
             Select-Object -First 1
         if ($p) {
             $script:Window = $p.MainWindowHandle
+            $script:MenoPid = $p.Id
             return $script:Window
         }
         Start-Sleep -Milliseconds 250
@@ -400,15 +403,26 @@ function Get-UiaChain($Element) {
     return , $links
 }
 
-function Assert-NotYesAt {
-    # A press at a point, in screen pixels, that would answer a question about the network yes - or that could not be read - stopped before it is sent.
-    param([Parameter(Mandatory)] $At, [string] $What = "a press")
-    $look = Read-Part {
-        $el = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y))
-        if (-not $el) { throw "UI Automation gave nothing for the point" }
-        [pscustomobject]@{ Chain = (Get-UiaChain $el) }
+function Read-WinButtons {
+    # Every button of Meno's windows, as UI Automation names them, with where each is, in screen pixels - the guard's reading: the part at a point is Tauri's resize-border pane, over the whole page.
+    $pidIs = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$script:MenoPid)
+    $isButton = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+    $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $pidIs)
+    if (-not $windows -or $windows.Count -eq 0) { throw "UI Automation gave no window of Meno's (pid $script:MenoPid)" }
+    $buttons = foreach ($win in $windows) {
+        foreach ($b in $win.FindAll([System.Windows.Automation.TreeScope]::Descendants, $isButton)) {
+            $r = $b.Current.BoundingRectangle
+            if ($r.IsEmpty) { continue }
+            [pscustomobject]@{ Name = $b.Current.Name; X = $r.X; Y = $r.Y; Width = $r.Width; Height = $r.Height }
+        }
     }
-    Assert-NotNetworkYes -Look $look -What "$What at ($($At.X), $($At.Y)) px"
+    [pscustomobject]@{ Buttons = @($buttons) }
+}
+
+function Assert-NotYesAt {
+    # A press at a point, in screen pixels, that would land on the yes of a question about the network - or whose buttons could not be read - stopped before it is sent.
+    param([Parameter(Mandatory)] $At, [string] $What = "a press")
+    Assert-NotPressingYes -Look (Read-Buttons { Read-WinButtons }) -At $At -What "$What at ($($At.X), $($At.Y)) px"
 }
 
 function Assert-NotYesKeys {
