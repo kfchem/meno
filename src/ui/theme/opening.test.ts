@@ -54,33 +54,37 @@ describe("a card opening: it grows, and only then its new lines come in", () => 
     expect(1 - frames[0].shown).toBeLessThan(0.1);
   });
 
-  it("asked the other way mid-way, goes back from where it is - in either part, no jump", () => {
+  it("asked the other way mid-way, goes back from where it is - in either part, no jump, and no quicker than from rest", () => {
     const step = 1000 / 60;
-    const turnsAt: [Opening, boolean][] = [
-      [openingAfter(SHUT, true, GROW_MS * 0.4), false],
-      [openingAfter(SHUT, true, GROW_MS + SHOW_MS * 0.5), false],
-      [openingAfter(OPENED, false, SHOW_MS * 0.5), true],
-      [openingAfter(OPENED, false, SHOW_MS + GROW_MS * 0.6), true],
-    ];
-    // (the most a frame takes it, opening or shutting from rest)
-    const most = (key: "grown" | "shown") =>
-      Math.max(
-        ...[[SHUT, ...run(SHUT, true, GROW_MS + SHOW_MS, step)], [OPENED, ...run(OPENED, false, GROW_MS + SHOW_MS, step)]].flatMap((frames) =>
-          frames.slice(1).map((o, k) => Math.abs(o[key] - frames[k][key])),
-        ),
-      );
-    const fresh = { grown: most("grown"), shown: most("shown") };
-    for (const [at, open] of turnsAt) {
-      const next = openingAfter(at, open, step);
-      // (no further in a frame, turned back, than it goes in one from rest)
-      expect(Math.abs(next.grown - at.grown)).toBeLessThanOrEqual(fresh.grown + 1e-9);
-      expect(Math.abs(next.shown - at.shown)).toBeLessThanOrEqual(fresh.shown + 1e-9);
-      // (and the way it was asked)
-      if (open) expect(next.grown + next.shown).toBeGreaterThan(at.grown + at.shown);
-      else expect(next.grown + next.shown).toBeLessThan(at.grown + at.shown);
-      // (and it gets there, in no more than the whole of it)
-      const rest = run(next, open, GROW_MS + SHOW_MS);
-      expect(seen(rest[rest.length - 1])).toEqual(seen(open ? OPENED : SHUT));
+    // (each part on its own from rest, its first frame at its start: the most a frame of it moves either way)
+    const moves = (from: Opening, open: boolean, key: "grown" | "shown", ms: number) => {
+      const frames = [from, ...run(from, open, ms, step)];
+      return Math.max(...frames.slice(1).map((o, k) => Math.abs(o[key] - frames[k][key])));
+    };
+    const grownLess = { grown: 1, shown: 0 } as const;
+    const atGrown = openingAfter(SHUT, true, GROW_MS);
+    const atFaded = openingAfter(OPENED, false, SHOW_MS);
+    expect([atGrown.grown, atGrown.shown, atFaded.grown, atFaded.shown]).toEqual([grownLess.grown, grownLess.shown, 1, 0]);
+    const fresh = {
+      grown: Math.max(moves(SHUT, true, "grown", GROW_MS), moves(atFaded, false, "grown", GROW_MS)),
+      shown: Math.max(moves(atGrown, true, "shown", SHOW_MS), moves(OPENED, false, "shown", SHOW_MS)),
+    };
+    // (turned back at every millisecond of either way)
+    for (const [from, open] of [
+      [SHUT, true],
+      [OPENED, false],
+    ] as const) {
+      for (let ms = 1; ms < GROW_MS + SHOW_MS; ms++) {
+        const at = openingAfter(from, open, ms);
+        const next = openingAfter(at, !open, step);
+        expect(Math.abs(next.grown - at.grown)).toBeLessThanOrEqual(fresh.grown + 1e-9);
+        expect(Math.abs(next.shown - at.shown)).toBeLessThanOrEqual(fresh.shown + 1e-9);
+        // (the way it was asked, and it gets there, in no more than the whole of it)
+        if (open) expect(next.grown + next.shown).toBeLessThan(at.grown + at.shown);
+        else expect(next.grown + next.shown).toBeGreaterThan(at.grown + at.shown);
+        const rest = run(next, !open, GROW_MS + SHOW_MS);
+        expect(seen(rest[rest.length - 1])).toEqual(seen(open ? SHUT : OPENED));
+      }
     }
     // (turned back as it grows, its lines never come in)
     const grew = openingAfter(SHUT, true, GROW_MS * 0.4);

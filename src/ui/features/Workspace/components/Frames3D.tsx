@@ -7,6 +7,7 @@ import { ResultGroups, type CardGroups, type Fold } from "./PointedCard3D";
 import { EASED } from "../../../theme/motion";
 import { GROW_MS, SHOW_MS, useEasedTo, useOpening } from "../../../theme/opening";
 import { barsAbove } from "../utils/barsAbove";
+import { chipWidthOf } from "../utils/chipWidth";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 import { imaginaryWords } from "../../../../lib/calc/output";
@@ -314,10 +315,19 @@ export function FramesChip({
   // by frame, from where each part is: a CSS transition of the whole
   // chased what was itself still widening, and was still growing as the
   // lines came in.)
-  const own = useEasedTo((full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE);
-  const detailsOwn = useEasedTo(detailsWidth);
-  const withMade = detailsOwn + madeAt.grown * Math.max(0, madeWidth + 2 * DETAILS_SIDE - detailsOwn);
-  const chipWidth = own + (details.length > 0 ? read.grown * Math.max(0, withMade - own) : 0);
+  // (a set's bars are what it opens to, with its details; a single geometry's
+  // chip, which has none, is as wide as its slider's room only pointed at)
+  const shutWidth = useEasedTo((single && full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE);
+  const openWidth = useEasedTo(single ? 0 : Math.max(width, saidWidth) + 2 * SIDE);
+  const detailsOwn = useEasedTo(details.length > 0 ? detailsWidth : 0);
+  const chipWidth = chipWidthOf({
+    shut: shutWidth,
+    open: openWidth,
+    details: detailsOwn,
+    made: details.length > 0 ? madeWidth + 2 * DETAILS_SIDE : 0,
+    grown: read.grown,
+    madeGrown: madeAt.grown,
+  });
   const fold: Fold = { open: madeOpen, at: madeAt, toggle: () => setMadeOpen((o) => !o), measured: madeMeasured };
   // (how many device pixels one of its own pixels is drawn as - the page's scale, and the screen's - that its bars are laid on whole ones:
   //  followed each frame while it is open)
