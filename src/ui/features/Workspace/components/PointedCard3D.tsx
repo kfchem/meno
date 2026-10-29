@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { forwardRef, useState } from "react";
 import { EASED } from "../../../theme/motion";
+import { useOpening, type Opening } from "../../../theme/opening";
 
 /**
  * A card's rows, group by group: each row its name and its value, written;
@@ -31,13 +32,28 @@ function Rows({ rows }: { rows: CardGroups[number]["rows"] }) {
 }
 
 /**
- * A group shut under its name, opened and shut by it - eased, its chevron
- * turning - never by the card it is on. Shut, its rows take no room either
- * way: the card is as wide as what it shows, and grows wider as well as
- * taller as they open (the maintainer, 2026-10-28).
+ * How a card holding a folded group opens it (theme/opening): whether it is
+ * opened, where its opening is, and what opens or shuts it; `measured`, given
+ * its rows as they are laid out whole. A card that sizes itself to what it
+ * shows - a frames chip - holds it, and its rows then take no room of their
+ * own: drawn at their own width from the left, they are cut by the card
+ * until it has grown to them.
  */
-function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number]["rows"] }) {
-  const [open, setOpen] = useState(false);
+export type Fold = { open: boolean; at: Opening; toggle: () => void; measured: (el: HTMLDivElement | null) => void };
+
+/**
+ * A group shut under its name, opened and shut by it - its chevron turning -
+ * never by the card it is on. Shut, its rows take no room either way.
+ * Opened, the card grows to them, wide and tall together, and then they
+ * fade in; shut, they fade out, and then the card shrinks back (the
+ * maintainer, 2026-10-29). Its opening is its card's, `fold`, where the card
+ * holds it; its own otherwise.
+ */
+function FoldedGroup({ group, rows, fold }: { group: string; rows: CardGroups[number]["rows"]; fold?: Fold }) {
+  const [own, setOwn] = useState(false);
+  const ownAt = useOpening(own);
+  const open = fold ? fold.open : own;
+  const { grown, shown } = fold ? fold.at : ownAt;
   return (
     <>
       <button
@@ -46,36 +62,50 @@ function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number][
         className="flex items-center gap-0.5 text-[10px] text-gh-gray hover:text-gh-black transition-colors duration-150 ease-meno"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((o) => !o);
+          if (fold) fold.toggle();
+          else setOwn((o) => !o);
         }}
       >
         <ChevronRightIcon className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-90" : ""}`} style={EASED} strokeWidth={2.5} />
         {group}
       </button>
-      <div
-        className="grid transition-[grid-template-rows,grid-template-columns,opacity]"
-        style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", gridTemplateColumns: open ? "minmax(0, 1fr)" : "minmax(0, 0fr)", opacity: open ? 1 : 0 }}
-      >
-        <div className="overflow-hidden min-w-0">
-          {/* (laid out at its own width as it opens, and cut on the right until the card has widened to it - never squeezed, its words a letter a line) */}
-          <div className="w-max max-w-[18.75rem]">
-            <Rows rows={rows} />
+      {fold ? (
+        // (no width of its own: what it is on is as wide as the rest, and the card that holds it grows to its rows)
+        <div className="grid grid-cols-[0px]" style={{ gridTemplateRows: `${grown}fr`, opacity: shown }}>
+          <div className="min-h-0" style={{ overflowX: "visible", overflowY: "clip" }}>
+            <div ref={fold.measured} className="w-max max-w-[18.75rem]">
+              <Rows rows={rows} />
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid" style={{ gridTemplateRows: `${grown}fr`, gridTemplateColumns: `minmax(0, ${grown}fr)`, opacity: shown }}>
+          <div className="overflow-hidden min-w-0">
+            {/* (laid out at its own width as it opens, and cut on the right until the card has widened to it - never squeezed, its words a letter a line) */}
+            <div className="w-max max-w-[18.75rem]">
+              <Rows rows={rows} />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-/** Results said group by group - under each reader's name, where there are two - each group's name, then its rows, each its name and value; a group `folded`, shut under its name. */
-export function ResultGroups({ groups }: { groups: CardGroups }) {
+/**
+ * Results said group by group - under each reader's name, where there are
+ * two - each group's name, then its rows, each its name and value; a group
+ * `folded`, shut under its name, opened as `fold` says where the card holds
+ * its opening.
+ */
+export function ResultGroups({ groups, fold }: { groups: CardGroups; fold?: Fold }) {
   return (
     <>
       {groups.map((g, k) => (
         <div key={`${k}:${g.group}`} className="mt-1">
           {g.source && <div className="mt-1.5 text-[10px] font-medium text-gh-black">{g.source}</div>}
           {g.folded ? (
-            <FoldedGroup group={g.group} rows={g.rows} />
+            <FoldedGroup group={g.group} rows={g.rows} fold={fold} />
           ) : (
             <>
               <div className="text-[10px] text-gh-gray">{g.group}</div>

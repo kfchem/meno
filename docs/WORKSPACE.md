@@ -556,8 +556,12 @@ Taken on 2026-10-13:
   atom distances, rings ≥ 2.9 Å apart"), first under *How it was made*
   where it is pointed at, and kept with it in a workspace. Shut, *How it
   was made* takes no room: the card it is on is as wide as what it shows,
-  no wider, and grows wider as well as taller as it opens, eased (the
-  maintainer, 2026-10-28). An eta complex's
+  no wider (the maintainer, 2026-10-28). Opened, the card first grows to
+  it, wider and taller together in 160 ms, and only then do its lines fade
+  in, in 120 ms; shut, they fade out first and the card then shrinks back.
+  A frames chip opens to its details the same way. Opened or shut again
+  part way, it goes back from where it is (the maintainer, 2026-10-29;
+  `theme/opening`). An eta complex's
   shape most of all is held, not modelled: a real geometry comes from
   optimising it - an xTB or DFT step of a workflow.
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
