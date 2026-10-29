@@ -1333,7 +1333,16 @@ space-filling side by side is better science than either alone.
   context for each took the live ones' away). A style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
-  each card going to its new place eased, not jumping. A press, or Enter,
+  each card going to its new place eased, not jumping. A slot's molecule
+  is turned by a drag that begins on its atoms or bonds, the pointer the
+  turning one only there; a drag anywhere else on the card moves the card
+  (the maintainer, 2026-10-28: a drag on the card had always turned its
+  molecule, and only its name moved it). A slot's molecule turns by itself
+  all the time, slowly - a turn in about half a minute, about the screen's
+  upright - but while it is turned by hand or coasting from it, taking up
+  its own turn again eased after; nothing is drawn for it while the page is
+  out of sight. A card carried has the hand's pointer all the way, over the
+  other slot's molecule too. A press, or Enter,
   sets a style below; a right-click, or the menu key, offers Use as
   primary, Use as secondary, Duplicate, Export style… - and, for the user's
   own, Rename and Delete. A built-in style's changes are kept apart,

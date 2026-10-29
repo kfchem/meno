@@ -227,6 +227,11 @@ body {
   inset: min(0px, calc((var(--port) - var(--hair, 1px) * 12) / 2));
   border-radius: 9999px;
 }
+/* A style's card carried (StyleEditor/StylePicker3D): the hand's pointer all the way, over whatever it passes. */
+.meno-carrying,
+.meno-carrying * {
+  cursor: grabbing !important;
+}
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
 [data-presenting] .meno-control-chip {
