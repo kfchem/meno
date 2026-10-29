@@ -195,6 +195,8 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.centres?.length ? { centres: m.centres } : {}),
     // (each frame's marks: why it failed, its imaginary frequencies, and whether its marks did not read)
     ...marksOf(frames.map((f) => frameMarks(m, f, n))),
+    // (where a run ended converged at each frame taken: its own, of its geometry still)
+    ...(each(m.converged)?.some(Boolean) ? { converged: each(m.converged) } : {}),
   };
 }
 
