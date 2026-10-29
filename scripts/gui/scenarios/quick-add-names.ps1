@@ -6,7 +6,7 @@
 #   the SMILES chosen; the down arrow chooses the other, and Enter draws
 #   N-bromosuccinimide.
 # - dmf typed in small letters: N,N-dimethylformamide offered alone, and
-#   drawn; pdcl2: PdCl2, a formula, offered by its label and formula.
+#   drawn; pdcl2: PdCl2, a formula, offered by its label, said once.
 # - CCO typed: a SMILES alone, nothing said under the field.
 #
 # Nothing here needs the plugin that reads SMILES: nothing is drawn from one.
@@ -26,6 +26,10 @@ Save-Step "nbs-chosen"
 Send-MenoKey Enter
 Wait-MenoSettled | Out-Null
 Save-Step "nbs-drawn"
+# (what was drawn stays chosen: a click on empty space lets it go first, or
+# that is all the next double-click's first click does)
+Invoke-MenoClick -X ($cx + 300) -Y ($cy + 500)
+Start-Sleep -Milliseconds 600
 
 # a reagent typed small: offered alone, by its name, and drawn
 Invoke-MenoQuickAdd -X ($cx + 300) -Y ($cy - 200) -Item SMILES
