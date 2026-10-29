@@ -270,6 +270,20 @@ export const STYLE_FIELDS: StyleField[] = [
     },
   },
   {
+    key: "hashedWedgeEnd",
+    group: "Hashes and dashes",
+    label: "Hashed wedge: widest hash",
+    description:
+      "Where a hashed wedge's widest hash lies at an atom with no label: reaching the atom, or stopping a hash's gap short of it, so that the bonds on from the atom start there on their own.",
+    kind: {
+      type: "choice",
+      options: [
+        { value: "atom", label: "At the atom" },
+        { value: "short", label: "Short of the atom" },
+      ],
+    },
+  },
+  {
     key: "hashStartOffset",
     group: "Hashes and dashes",
     label: "Hashes: first one from the atom",
@@ -553,6 +567,8 @@ export function automaticValue(
       return style.hashInterval;
     case "shortHashes":
       return "spaced";
+    case "hashedWedgeEnd":
+      return "atom";
     case "reactionArrowThickness":
       return style.lineThickness;
     case "labelBaseline":
@@ -694,6 +710,8 @@ export function acceptDrawingStyle(raw: unknown): DrawingStyle {
   const out: Record<string, unknown> = { ...base };
   // (a style saved before it could say how a short hashed bond is drawn, at the spacing, as it was drawn then - not as Meno's)
   if (r.shortHashes === undefined) delete out.shortHashes;
+  // (and one saved before it could say where a hashed wedge's widest hash lies, reaching the atom, as then)
+  if (r.hashedWedgeEnd === undefined) delete out.hashedWedgeEnd;
   for (const [key, value] of Object.entries(r)) {
     const field = FIELD_BY_KEY.get(key as keyof DrawingStyle);
     if (!field) continue;

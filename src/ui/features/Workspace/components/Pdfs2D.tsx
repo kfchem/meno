@@ -23,6 +23,7 @@
  * the viewer and goes under; spread or gathered, the pages lift off one
  * after another and settle in their places.
  */
+import { longPressMs } from "../longPress";
 import { shownUnbroken } from "../../../../lib/pdf/make";
 import * as THREE from "three";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -64,7 +65,7 @@ import { placeBefore, selects } from "../utils/pdfSelection";
 import { dragWords, onSelected, type OnScreen } from "./wordsDrag";
 import { dragBox, inBox } from "./boxDrag";
 import { figureAt, figuresHad } from "../../../../lib/pdf/figures";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection, selectionMoving } from "../utils/dragSelection";
@@ -570,7 +571,7 @@ export default function Pdfs2D() {
         selectAlone();
         const m = motion.current.get(p.id);
         if (m?.held) holdPdf(p.id, { ...m.held, done: true });
-      }, LONG_PRESS_MS);
+      }, longPressMs());
     } else if (boxes && spot) {
       st.setPressHold({ at: q, start: performance.now() });
       hold = window.setTimeout(() => {
@@ -581,7 +582,7 @@ export default function Pdfs2D() {
         // (the page's figures, if they have come since the press)
         const f = fig ?? figureAt(figuresHad(p.sha256, spot.page) ?? [], spot.x, spot.y);
         if (f) store.getState().setPdfBox({ id: p.id, page: spot.page, box: f });
-      }, LONG_PRESS_MS);
+      }, longPressMs());
     } else if (w && letter != null) {
       st.setPressHold({ at: q, start: performance.now() });
       hold = window.setTimeout(() => {
@@ -592,7 +593,7 @@ export default function Pdfs2D() {
         const [a, b] = wordAt(w.t, letter, w.x);
         selecting = { first: [{ page: w.page, at: a }, { page: w.page, at: b }] };
         store.getState().setPdfSel({ id: p.id, anchor: selecting.first[0], focus: selecting.first[1] });
-      }, LONG_PRESS_MS);
+      }, longPressMs());
     }
     const letLightGo = () => {
       const m = motion.current.get(p.id);

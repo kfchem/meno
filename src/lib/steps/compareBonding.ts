@@ -124,6 +124,17 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
   return { same: differences.length === 0, differences };
 }
 
+/** Atoms typed from 1 ("3, 7-9"), as the entry numbers them from 0; or why they do not read. */
+export function atomsFromOne(text: string): number[] | { why: string } {
+  const out: number[] = [];
+  for (const part of text.split(/[\s,]+/).filter(Boolean)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m || Number(m[1]) < 1 || (m[2] != null && Number(m[2]) < Number(m[1]))) return { why: `"${part}" is no atom number, from 1, or run of them (7-9)` };
+    for (let n = Number(m[1]); n <= Number(m[2] ?? m[1]); n++) out.push(n - 1);
+  }
+  return out;
+}
+
 /** The first of the references an entry is bonded as (Compare bonding with each reference, naming the one it matches), or null where none. */
 export function matchingReference(e: Entry, references: readonly Entry[], o: CompareOptions = {}): number | null {
   for (let i = 0; i < references.length; i++) {

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { longPressMs } from "../longPress";
 import { PAGE_SIZED } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -16,7 +17,7 @@ import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend
 import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
-import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
+import { LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
 import Frames3D from "./Frames3D";
@@ -1057,7 +1058,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     let holdTo = 0;
     if (holding && spread) {
       const t = performance.now() - holding.start;
-      const u = Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (LONG_PRESS_MS - LONG_PRESS_SHOW_MS)));
+      const u = Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (longPressMs() - LONG_PRESS_SHOW_MS)));
       for (let i = 0; i < n; i++) h[i] = Math.min(1, Math.max(0, u * (spread.deepest + 1) - spread.level[i]));
       holdTo = 1;
       moving = true;

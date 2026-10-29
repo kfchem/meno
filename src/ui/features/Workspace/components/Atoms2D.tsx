@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { longPressMs } from "../longPress";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef } from "react";
 import { useThree, type ThreeEvent } from "@react-three/fiber";
@@ -9,7 +10,7 @@ import { onChord } from "../utils/press";
 import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
-import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { oncePerEvent, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { commitInstanceMatrices } from "./instances";
@@ -447,7 +448,7 @@ export function Atoms2D() {
         store.getState().clearSel();
         store.getState().selectStructure(a.id);
         store.getState().setPressHold(null);
-      }, LONG_PRESS_MS);
+      }, longPressMs());
       // (another button pressed with it: no press at all - utils/press#onChord)
       let chorded = false;
       const offChord = onChord(1, () => {
