@@ -493,8 +493,8 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) =>
       v.from === "table"
         ? String(v.rows ?? "").trim()
-          ? `Each row's atoms, on the entries of its ${String(v.rows).trim()}`
-          : "Each row's atoms, on every entry"
+          ? `atoms from the table, rows by ${String(v.rows).trim()}`
+          : "atoms from the table"
         : measureHow(String(v.measurements ?? "")),
     needs: (v) => {
       if (v.from === "table") return undefined;
