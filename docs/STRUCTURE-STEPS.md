@@ -219,6 +219,34 @@ Checked:
   its hydrogens swapped does not.
 - cis- and trans-2-butene differ where E or Z is asked.
 
+## Displace
+
+Each entry's geometry moved along a vibration (`displacedEntry`,
+`src/lib/steps/vibrations.ts`): case F's way back from a structure that
+has the wrong number of imaginary vibrations - moved along one, then
+optimised again.
+
+- **As a step.** *Along* is *The imaginary vibration* - the one of negative
+  frequency; of several, the most negative, said on the line - or *A
+  vibration by number*, from 1 in the order of its calculation's table.
+  *Amplitude* is in ångströms, negative for the other way. It has no
+  default: no value is right for every system, and none is given without a
+  stated basis.
+- **How far.** The atom the vibration moves most moves exactly the
+  amplitude, every other atom in proportion. Nothing depends on how the
+  program scaled its modes.
+- **What it carries.** Its properties ride along, each saying the geometry
+  it was worked out at. Its energy and calculation, of the old geometry,
+  are not its own any more.
+- **Nothing in part.** An entry with no vibrations, no imaginary one where
+  that is asked, or no vibration of the number asked, goes out of *Not
+  displaced*, with why written on it (`set_aside`).
+
+Checked: the atom moving most moved by the amplitude, the others in
+proportion, either way; the same move however the mode is scaled; O-H-O
+moved along its proton transfer, and along a bend chosen by number; an
+entry with no imaginary vibration, or no vibrations, set aside with why.
+
 ## Numbering
 
 Atoms in the entry record are numbered from 0, as its bonds are: every

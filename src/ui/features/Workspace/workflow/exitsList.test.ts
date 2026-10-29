@@ -35,6 +35,7 @@ describe("a kind's exits, as a list", () => {
       rebond: [first("Re-bonded", "same"), rest("Not re-bonded", "same")],
       "compare-bonding": [first("Same", "same"), rest("Different", "same")],
       "take-frames": [first("Frames", "molecules")],
+      displace: [first("Displaced", "same"), rest("Not displaced", "same")],
       "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
     };
     // (every kind guarded: one added declares its exits here too)

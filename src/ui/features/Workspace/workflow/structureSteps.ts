@@ -17,6 +17,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
+import { displacedEntry } from "../../../../lib/steps/vibrations";
 import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -283,4 +284,32 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   }
   const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : [])];
   return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
+}
+
+/**
+ * *Displace* (lib/steps `displacedEntry`): each entry's geometry moved
+ * along its imaginary vibration - the most negative of several, said - or
+ * the one chosen, by the amplitude: the atom moving most by exactly that,
+ * the rest in proportion. What it carried rides along, each value saying
+ * the geometry it was worked out at; its energy and calculation, of that
+ * geometry, are not its own any more. One with no vibrations to move along,
+ * no imaginary one, or no such vibration, is set aside with why.
+ */
+export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { amplitude: number; vibration: "imaginary" | number }): Outcome3D {
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const notes = new Set<string>();
+  entries.forEach((e, i) => {
+    const r = displacedEntry(entryOfSet(e, String(i)), o, String(i));
+    if ("failed" in r) {
+      aside.push(withSaid(e, SET_ASIDE, r.failed));
+      return;
+    }
+    if (r.said) notes.add(r.said);
+    const made = setEntryOfEntry(r.entry, { compound: e.compound, number: e.number }, e);
+    if (made) kept.push(made);
+  });
+  const line = [`${plural(kept.length, "entry", "entries")} displaced`];
+  if (aside.length) line.push(`${aside.length} not displaced`);
+  return { ok: true, holds, kept, aside, said: [line.join(" · "), ...notes].join(". ") };
 }

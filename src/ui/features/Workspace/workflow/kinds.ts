@@ -42,7 +42,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "moved";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -578,7 +578,57 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
   },
+  {
+    // (each geometry moved along a vibration - its imaginary one, or one chosen - by an amplitude, the atom moving most by exactly that; one that cannot be, aside with why)
+    kind: "displace",
+    name: "Displace",
+    icon: "moved",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Displaced",
+    others: [{ id: "rest", name: "Not displaced", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "vibration",
+        label: "Along",
+        type: "choice",
+        choices: [
+          { value: "imaginary", label: "The imaginary vibration" },
+          { value: "number", label: "A vibration by number" },
+        ],
+        default: "imaginary",
+      },
+      { id: "number", label: "Vibration, from 1", type: "text", default: "", when: { id: "vibration", in: ["number"] } },
+      { id: "amplitude", label: "Amplitude, \u00c5 (negative: the other way)", type: "text", default: "" },
+    ],
+    how: (v) => displaceHow(v),
+    needs: (v) => displaceNeeds(v),
+  },
 ];
+
+/** *Displace*'s options as read: its amplitude (Å, not 0), and the vibration (from 0) where one is chosen by number - or what it still needs. */
+export function displaceRead(v: OptionValues): { amplitude: number; vibration: "imaginary" | number } | { why: string } {
+  const amp = String(v.amplitude ?? "").trim();
+  const amplitude = amp ? Number(amp) : NaN;
+  if (!amp) return { why: "Give the amplitude" };
+  if (!Number.isFinite(amplitude) || amplitude === 0) return { why: `"${amp}" is no amplitude in \u00c5` };
+  if (v.vibration !== "number") return { amplitude, vibration: "imaginary" };
+  const n = String(v.number ?? "").trim();
+  if (!n) return { why: "Give the vibration's number" };
+  if (!/^\d+$/.test(n) || Number(n) < 1) return { why: `"${n}" is no vibration's number, from 1` };
+  return { amplitude, vibration: Number(n) - 1 };
+}
+const displaceNeeds = (v: OptionValues): string | undefined => {
+  const r = displaceRead(v);
+  return "why" in r ? r.why : undefined;
+};
+/** *Displace*'s card line: its amplitude, and the vibration where it is not the imaginary one. */
+function displaceHow(v: OptionValues): string {
+  const r = displaceRead(v);
+  if ("why" in r) return r.why;
+  return `${r.amplitude} \u00c5${r.vibration === "imaginary" ? "" : ` along vibration ${r.vibration + 1}`}`;
+}
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
 const NO_LISTS = "No lists yet";
