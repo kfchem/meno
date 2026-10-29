@@ -2020,7 +2020,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               made={m.made}
               conformers={m.conformerSet}
               said={m.said}
-              area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}
               {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
               {...(m.marksUnread ? { marksUnread: true } : {})}

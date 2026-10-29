@@ -830,8 +830,11 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
   says its results on a card beside it. The molecule's menu opens each list
   under it: a row pointed at outlines its atoms, one chosen moves the
   molecule or shows its frame. A list opened with too little room below it
-  glides the view until the molecule and the list are both seen, and an
-  opened chip rises to stay within the canvas. No colouring.
+  glides the view until the molecule and the list are both seen. A chip
+  stands only where its molecule puts it: opened at the window's edge, it
+  goes past the edge rather than chase it, and moves with its molecule as
+  the view moves (the maintainer, 2026-10-28: following the edge, it
+  jittered). No colouring.
 - **Vibrations** are a list whose rows move the molecule: the atom that
   moves most goes 0.3 Å, once every 1.2 s, eased in and out.
 - **Found on Windows** and put right: the reader's tests read the samples
