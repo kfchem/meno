@@ -54,7 +54,7 @@ export default function Select<T extends string>({
   // (kept a moment after it closes, as it fades out)
   const [shown, setShown] = useState(false);
   const [lit, setLit] = useState(0);
-  const [place, setPlace] = useState<{ left: number; top: number; minWidth: number } | null>(null);
+  const [place, setPlace] = useState<{ left: number; top: number; minWidth: number; maxHeight: number } | null>(null);
   const chosen = options.findIndex((o) => o.value === value);
   const current = chosen >= 0 ? options[chosen] : null;
 
@@ -170,8 +170,13 @@ export default function Select<T extends string>({
               "fixed z-[120] overflow-y-auto rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none",
               open ? "meno-fade-in" : "meno-fade-out pointer-events-none",
             )}
-            // (nine rows whole at most, or half the tenth showing there is more: ./place, LIST_ROWS)
-            style={{ ...(place ?? { left: -9999, top: -9999 }), maxHeight: LIST_MOST_HEIGHT }}
+            // (nine rows whole at most, or half the tenth showing there is more: ./place, LIST_ROWS; and no taller than the
+            // room on the side it opens)
+            style={
+              place
+                ? { left: place.left, top: place.top, minWidth: place.minWidth, maxHeight: `min(${LIST_MOST_HEIGHT}, ${place.maxHeight}px)` }
+                : { left: -9999, top: -9999, maxHeight: LIST_MOST_HEIGHT }
+            }
             onKeyDown={(e) =>
               listKey(
                 e,

@@ -151,7 +151,7 @@ describe("where an open list goes (placeList)", () => {
   const button = (left: number, top: number) => ({ left, top, bottom: top + 28, width: 120, height: 28 });
 
   it("under its button, as wide at least, its left edge with the button's", () => {
-    expect(placeList(button(100, 100), { width: 200, height: 160 }, window)).toEqual({ left: 100, top: 128 + GAP, minWidth: 120 });
+    expect(placeList(button(100, 100), { width: 200, height: 160 }, window)).toEqual({ left: 100, top: 128 + GAP, minWidth: 120, maxHeight: 600 - EDGE - 128 - GAP });
   });
 
   it("above it where the window has no room below and has above", () => {
@@ -160,6 +160,19 @@ describe("where an open list goes (placeList)", () => {
 
   it("under it still where there is room on neither side", () => {
     expect(placeList(button(100, 100), { width: 200, height: 560 }, window).top).toBe(128 + GAP);
+  });
+
+  it("where it fits on neither side, on the side with the more room, held to that room", () => {
+    // (a window 500 tall, a button 318-346, a list of ten rows and more, 310 tall: 142 below, 306 above)
+    const small = { width: 800, height: 500 };
+    const at = placeList({ left: 100, top: 318, bottom: 346, width: 120, height: 28 }, { width: 200, height: 310 }, small);
+    expect(at.top).toBe(EDGE);
+    expect(at.maxHeight).toBe(318 - GAP - EDGE);
+    expect(at.top + at.maxHeight).toBe(318 - GAP);
+    // (and where it fits below, below at its own height, the room there never less than it)
+    const fits = placeList(button(100, 100), { width: 200, height: 160 }, window);
+    expect(fits.top).toBe(128 + GAP);
+    expect(fits.maxHeight).toBeGreaterThanOrEqual(160);
   });
 
   it("never past the window's sides", () => {
@@ -174,13 +187,13 @@ describe("how tall an open list is (Select)", () => {
     expect(rowsShown(10)).toBe(9.5);
     expect(rowsShown(30)).toBe(9.5);
     expect(rowsShown(3)).toBe(3);
-    // (its rows 2rem each, its padding and the line round it, at nine and a half rows)
-    expect(LIST_MOST_HEIGHT).toBe("calc(9.5 * 2rem + 0.5rem + 2px)");
+    // (its rows 2rem each, the padding above them and the line round it, at nine and a half rows: half the tenth, no more)
+    expect(LIST_MOST_HEIGHT).toBe("calc(9.5 * 2rem + 0.25rem + 2px)");
   });
 
   it("is held to that, and to no fixed height that cuts a row of nine", () => {
     const select = readFileSync(join(__dirname, "Select.tsx"), "utf8");
-    expect(select).toMatch(/maxHeight: LIST_MOST_HEIGHT/);
+    expect(select).toMatch(/maxHeight: `min\(\$\{LIST_MOST_HEIGHT\}, \$\{place\.maxHeight\}px\)`/);
     expect(select).not.toMatch(/max-h-/);
   });
 });
