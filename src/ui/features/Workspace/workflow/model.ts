@@ -5,7 +5,7 @@
  */
 import type { ChartValue } from "../../../../lib/chart";
 import type { DiagramValue } from "../../../../lib/energyDiagram";
-import type { Table } from "../../../../lib/table";
+import type { NumberValue, Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
@@ -77,6 +77,14 @@ export function holdCollection(
 
 /** How large a set holding a chart is made, on the page: its axes, labels and points. */
 export const CHART_SET = { w: CHART_PX.w * PX + 2 * SET_PAD, h: SET_TOP + CHART_PX.h * PX + SET_PAD };
+
+/** How large a set holding a number is made, on the page: its title and its value, on one line. */
+export const NUMBER_SET = { w: 220 * PX + 2 * SET_PAD, h: SET_TOP + SET_PAD };
+
+/** A step's result set holding a number it gave (`WorkflowSet.number`): nothing on the page among its members. */
+export function holdNumber(doc: WorkspaceDocument, id: number, number: NumberValue): WorkspaceDocument {
+  return withSet(doc, id, ({ collection: _c, unread: _u, chart: _h, table: _t, ...b }) => ({ ...b, members: [], number }));
+}
 
 /** A step's result set holding a chart it made (`WorkflowSet.chart`): nothing on the page among its members, and no molecules of its own. */
 export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue | DiagramValue): WorkspaceDocument {

@@ -315,6 +315,8 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared (STRUCTURE-STEPS.md, *Compare bonding*) |
+| Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
+| Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -2685,6 +2687,50 @@ A descriptor's unit reads as Meno's units table has it: "mw < 500
 g/mol", "tpsa < 90 Å²" (or Å2).
 
 Not yet: conditions picked from what comes in rather than typed.
+
+### Add and Number (2026-10-29)
+
+*Add* and *Number*, Meno's own, make the free energy at a higher level
+of theory (lib/nodes `add`, `standardState`; WORKFLOWS-FOUNDATION.md,
+case F, steps 31 and 42): a single point's energy, plus a thermal
+correction to G worked out at another level, plus the standard-state
+term.
+
+- ***Number*** takes nothing and gives a number in a set of its own,
+  with its unit and what worked it out:
+  - *Standard state, 1 atm to 1 mol/L*: the free energy of taking a mole
+    of ideal gas from 1 atm to 1 mol/L at temperature T,
+    R T ln(R T c°/p°), with R = 8.314462618 J/(mol K) (CODATA 2018), p° =
+    101325 Pa and c° = 1 mol/L - 1.894 kcal/mol at 298.15 K. Its record
+    says the formula and constants and the temperature: its source is its
+    formula. *At* is 298.15 K unless set, the temperature thermochemistry
+    is tabulated at, as Populations' is - the chemist's to change.
+  - *Typed*: a value and a unit from Meno's units.
+- ***Add*** takes *Molecules* and, where wanted, a *Number* (an optional
+  input: it runs without one). Its options: the values to *Add*, one to a
+  line or each after a semicolon ("energy; thermo.g-correction"), and the
+  name the sum is written *As* ("G-DFT"). Each entry gets the sum, in the
+  first value's unit; the number wired in is summed as it is.
+- **Only values of one geometry are summed**: each named value must be of
+  the entry's own geometry (its record's geometry key). One of another
+  geometry, or of none, sets the entry aside, saying which ("its
+  thermo.g-correction was worked out at another geometry than its own").
+  A number wired in has no geometry, and is summed. The parts must agree
+  on temperature and pressure where they say them - the standard-state
+  term's temperature among them - or the entry is set aside, naming both.
+- **The sum keeps each part as it was** (`Property.parts`): the property
+  it was, its value, unit, and where and by what it was worked out. Its
+  own record claims no method or basis: it says where it is (the
+  geometry, the thermal part's temperature and pressure, the first part's
+  solvent), and in words what it is the sum of - "sum: energy
+  (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction
+  (wB97X-D/6-31G(d), Gaussian, 298.15 K, 1 atm, quasi-RRHO) + standard
+  state (...)" - never one level for the whole. A step that takes a free
+  energy (a barrier, a population) reads its parts to check each against
+  another's.
+- An entry with its own value under the name already, or missing a part,
+  is set aside saying so; a number wired in of another dimension refuses
+  the step.
 
 ### Charts (2026-10-22)
 
