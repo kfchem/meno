@@ -20,6 +20,7 @@ import { DURATION, EASE } from "../../theme/motion";
 import CardMenu from "./CardMenu";
 import { styleMenuItems3d } from "./styleMenus";
 import Preview3D from "./Preview3D";
+import { carryEnds } from "./carryEnds";
 import { turnsSample } from "./sampleTurn";
 import { exportStyles } from "./exportStyle";
 import { keptPicture3d, useStylePicture3d } from "./stylePicture3d";
@@ -120,24 +121,15 @@ export default function StylePicker3D({
       setDrag(null);
       setOver(null);
     };
-    const key = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape" || !pressed.current) return;
-      // (only the carry ends: not what the cards are on as well)
-      e.stopPropagation();
-      e.preventDefault();
-      putBack();
-    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
-    window.addEventListener("blur", putBack);
-    window.addEventListener("keydown", key, true);
+    const ends = carryEnds(window, () => pressed.current != null, putBack);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      window.removeEventListener("blur", putBack);
-      window.removeEventListener("keydown", key, true);
+      ends();
     };
   });
 
