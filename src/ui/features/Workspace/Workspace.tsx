@@ -205,7 +205,7 @@ import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt, clipItems } from "./utils/copyPaste";
-import { putDownSmiles } from "./utils/quickAddSmiles";
+import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
@@ -1901,6 +1901,10 @@ function WorkspaceContent({
               // (and the stereo it leaves open, said as a paste of it says it)
               const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
               if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
+            }}
+            onNamed={(label) => {
+              // (a molecule the dictionary has, drawn from it - no plugin asked - and put down as a SMILES read is: chem/resolve)
+              putDownSmiles(store, quickAdd, namedDrawn(label));
             }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;

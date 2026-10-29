@@ -542,8 +542,8 @@ function Send-MenoText {
 }
 
 function Send-MenoKey {
-    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace")] [string] $Key, [switch] $Shift)
-    $vk = @{ Enter = 0x0D; Escape = 0x1B; Tab = 0x09; Backspace = 0x08 }[$Key]
+    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
+    $vk = @{ Enter = 0x0D; Escape = 0x1B; Tab = 0x09; Backspace = 0x08; Up = 0x26; Down = 0x28 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [NativeGui]::Chord([uint16[]] @(0x10), [uint16] $vk) }
     else { [NativeGui]::TapKey([ushort] $vk) }

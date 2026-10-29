@@ -403,7 +403,22 @@ brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
 an atom and an aromatic one), an H written as an atom ("H is left out of
 a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
-aromatic ring that cannot alternate. Drawn once however fast Enter is pressed
+aromatic ring that cannot alternate. A molecule the dictionary has - a
+reagent, a formula read by rule, a ligand bound only by pairs it lends:
+DMF, Et3N, PdCl2, THF, typed as written or in small letters (dmf,
+et3n), as a label is given its case on the canvas; a formula in capitals
+(ET3N) is not, its elements' case being what it says - is drawn from the
+dictionary, as the canvas draws its label out, with no plugin asked; its
+name - or, for a formula, its label - and formula are said under the
+field as it is typed (a label that is the formula itself, PdCl2, once). Where the text is that and a SMILES too - NBS,
+BrCN - both are offered there, the SMILES first (the field is for
+SMILES), and Enter draws the one chosen, by a
+click or the up and down arrows; never one of them without the other
+shown. A SMILES alone is drawn as before, nothing said under it. Text is
+read as a structure by one reader wherever it is typed (`chem/resolve`):
+here as a whole molecule, in Enumerate's lists and Substituents' groups
+as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
+an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
