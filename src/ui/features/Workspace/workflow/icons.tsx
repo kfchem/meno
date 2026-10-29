@@ -139,13 +139,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M6.8 8 L4.6 10 L6.8 12 M13.2 8 L15.4 10 L13.2 12" />
     </>
   ),
-  // (a path, its highest point taken)
-  peak: (
+  // (a path, frames taken along it - none at its top, none larger)
+  frames: (
     <>
-      <path d="M2 16.5 C6 16.5, 6.8 7.5, 10 7.5 C13.2 7.5, 14 13, 18 13" />
-      <circle cx="2" cy="16.5" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="18" cy="13" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="10" cy="7.5" r="2.5" fill="currentColor" stroke="none" />
+      <path d="M1.5 16 C6 16, 6.5 5, 10 5 C13.5 5, 14 16, 18.5 16" />
+      <circle cx="5.44" cy="12.1" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="7.81" cy="6.74" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="12.19" cy="6.74" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="14.56" cy="12.1" r="1.9" fill="currentColor" stroke="none" />
     </>
   ),
 };
