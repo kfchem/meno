@@ -22,6 +22,8 @@ export type JoinOptions = {
   on: string;
   /** What is put on. */
   carry: readonly Carried[];
+  /** Why an entry of the other input is no result to take values from - failed, not converged, its marks unread - else null: a match with one is refused, saying so. */
+  notResult?: (other: Entry) => string | null;
 };
 
 /**
@@ -30,7 +32,7 @@ export type JoinOptions = {
  * ("species as first end"). Why not, where one does not read, or one name
  * is put on twice.
  */
-export function carriedIn(text: string): { carry: Carried[] } | { why: string } {
+export function carriedIn(text: string, reserved: ReadonlySet<string> = new Set()): { carry: Carried[] } | { why: string } {
   const carry: Carried[] = [];
   for (const raw of text.split(/[\n;]/)) {
     const line = raw.trim();
@@ -40,6 +42,8 @@ export function carriedIn(text: string): { carry: Carried[] } | { why: string } 
     const as = (m ? m[2] : line).trim();
     if (!from || !as) return { why: `"${line}" does not read: a property, or a property "as" a name` };
     if (carry.some((c) => c.as === as)) return { why: `"${as}" is put on twice` };
+    // (a name the entries' own records give - an energy, a state - is never put on: it would read as worked out at the entry's own geometry)
+    if (reserved.has(as)) return { why: `"${as}" is a name Meno gives an entry's own values: put it on under another name` };
     carry.push({ from, as });
   }
   return { carry };
@@ -61,13 +65,16 @@ export function join(entries: readonly Entry[], others: readonly Entry[], option
     const e = entries[i];
     if ("why" in m) return void rest.push(setAside(e, m.why));
     const o = others[m.index];
+    // (matched: counted as such, whatever it holds)
+    used.add(m.index);
+    const notDone = options.notResult?.(o);
+    if (notDone) return void rest.push(setAside(e, `its match is not finished: ${notDone}`));
     for (const c of options.carry) {
       const why = unreadable(o.properties[c.from], c.from);
       // ("its match has no species"; "its match's species failed: ...")
       if (why) return void rest.push(setAside(e, why.startsWith("it has") ? why.replace(/^it /, "its match ") : why.replace(/^its /, "its match's ")));
       if (c.as in e.properties) return void rest.push(setAside(e, `it has its own ${c.as} already`));
     }
-    used.add(m.index);
     joined.push({ ...e, properties: { ...e.properties, ...Object.fromEntries(options.carry.map((c) => [c.as, o.properties[c.from]])) } });
   });
   const unused = others.length - used.size;

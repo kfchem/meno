@@ -6,7 +6,7 @@
  * *Not joined* with why written on it (`set_aside`).
  */
 import { carriedIn, join } from "../../../../lib/nodes/join";
-import { entryOfSet, type SetEntry } from "./entries";
+import { entryOfSet, entryState, FINISHED, MENO_OWN, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 import { SET_ASIDE } from "./structureSteps";
@@ -17,7 +17,7 @@ const inPorts = (said: string) => said.replace(/\bthe other input\b/g, "From");
 /** What a Join step still needs of its options: a property to match on, and what to put on, as it reads. */
 export function joinNeeds(v: Record<string, string | number | boolean>): string | undefined {
   if (!String(v.on ?? "").trim()) return "Name the property to match on";
-  const read = carriedIn(String(v.carry ?? ""));
+  const read = carriedIn(String(v.carry ?? ""), MENO_OWN);
   if ("why" in read) return read.why;
   return read.carry.length ? undefined : "Name what to put on";
 }
@@ -26,7 +26,7 @@ export function joinNeeds(v: Record<string, string | number | boolean>): string 
 export function joinHow(v: Record<string, string | number | boolean>): string {
   const needs = joinNeeds(v);
   if (needs) return needs;
-  const read = carriedIn(String(v.carry));
+  const read = carriedIn(String(v.carry), MENO_OWN);
   const put = "carry" in read ? read.carry.map((c) => (c.as === c.from ? c.from : `${c.from} as ${c.as}`)).join(", ") : "";
   return `${put}, matched on ${String(v.on).trim()}`;
 }
@@ -35,12 +35,17 @@ export function joinHow(v: Record<string, string | number | boolean>): string {
 export function joinedSet(onto: readonly SetEntry[], from: readonly SetEntry[], holds: Holds3D, on: string, carry: string): Outcome3D {
   const needs = joinNeeds({ on, carry });
   if (needs) return { ok: false, said: needs };
-  const read = carriedIn(carry);
+  const read = carriedIn(carry, MENO_OWN);
   if ("why" in read) return { ok: false, said: read.why };
+  // (a From entry that is no result - failed, not converged, its marks unread - gives no values: in a step's line's words)
+  const notResult = (o: { id: string }) => {
+    const state = entryState(from[Number(o.id)]);
+    return state === FINISHED ? null : state;
+  };
   const out = join(
     onto.map((e, i) => entryOfSet(e, String(i))),
     from.map((e, i) => entryOfSet(e, String(i))),
-    { on: on.trim(), carry: read.carry },
+    { on: on.trim(), carry: read.carry, notResult },
   );
   if (!out.ok) return out;
   // (each as it came: what was put on added to its own properties, each record as it was)

@@ -50,9 +50,18 @@ describe("Join, as a step", () => {
     expect(o.said).toBe("0 of 2 entries of Onto given species, matched on path · rest 2 (1: no entry of From has its path, p; 1: 2 entries of From have its path, q) · 3 of From's entries matched none");
   });
 
-  it("never puts one on under a name of Meno's own, nor one an entry has: energy stays its own", () => {
-    const o = ok(runMenoPair("join", { entries: [water(1, { path: text("p") })], holds: "molecules" }, { entries: [water(1, { path: text("p"), e: { value: -1, unit: "Eh", status: "computed" } })], holds: "molecules" }, { on: "path", carry: "e as energy" }));
-    expect(o.aside.map((e) => e.properties?.[SET_ASIDE]?.value)).toEqual(["it has its own energy already"]);
+  it("never puts one on under a name of Meno's own: energy stays the entry's own, of its own geometry", () => {
+    const o = runMenoPair("join", { entries: [water(1, { path: text("p") })], holds: "molecules" }, { entries: [water(1, { path: text("p"), e: { value: -1, unit: "Eh", status: "computed" } })], holds: "molecules" }, { on: "path", carry: "e as energy" });
+    expect(o).toEqual({ ok: false, said: '"energy" is a name Meno gives an entry\'s own values: put it on under another name' });
+    expect(needsOf({ kind: "join", options: { on: "path", carry: "e as state" } })).toMatch(/^"state" is a name Meno gives/);
+  });
+
+  it("takes no values from a From entry that is no result: not converged, its energy never put on as one", () => {
+    const failed = { ...water(1, { path: text("p") }), failed: { kind: "not-converged", why: "stopped at 200 cycles" } } as SetEntry;
+    const o = ok(runMenoPair("join", { entries: [water(1, { path: text("p") })], holds: "molecules" }, { entries: [failed], holds: "molecules" }, { on: "path", carry: "energy as ts energy" }));
+    expect(o.kept).toEqual([]);
+    expect(o.aside.map((e) => e.properties?.[SET_ASIDE]?.value)).toEqual(["its match is not finished: not converged"]);
+    expect(o.said).toBe("0 of 1 entry of Onto given energy as ts energy, matched on path · rest 1 (1: its match is not finished: not converged)");
   });
 
   it("says on its card what it does, and what it still needs before it can run", () => {

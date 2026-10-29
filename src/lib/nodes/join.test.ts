@@ -65,3 +65,25 @@ describe("Join's line", () => {
     expect(out.ok && out.said).toBe("1 of 1 entry given s, matched on path · 1 of the other input's entries matched none");
   });
 });
+
+describe("Join, what it will not take", () => {
+  const text = (value: string): Property => ({ value, unit: "none", status: "computed" });
+  it("refuses a match that is no result - not converged - saying so, and counts it as matched", () => {
+    const es = [entry("ts", { path: text("p") })];
+    const others = [entry("o", { path: text("p"), e: quantity(-70.1, "Eh") })];
+    const out = join(es, others, { on: "path", carry: [{ from: "e", as: "ts e" }], notResult: () => "not converged" });
+    if (!out.ok) throw new Error(out.said);
+    expect(why(out.exits.rest)).toEqual([["ts", "its match is not finished: not converged"]]);
+    expect(out.said).toBe("0 of 1 entry given e as ts e, matched on path · rest 1 (1: its match is not finished: not converged)");
+  });
+
+  it("counts a From entry that matched as matched, though what it lacks sets the entry aside", () => {
+    const out = join([entry("x", { path: text("p") })], [entry("o", { path: text("p") })], { on: "path", carry: [{ from: "s", as: "s" }] });
+    expect(out.ok && out.said).toBe("0 of 1 entry given s, matched on path · rest 1 (1: its match has no s)");
+  });
+
+  it("refuses to put one on under a name reserved for an entry's own values, whether the entry has one or not", () => {
+    expect(carriedIn("e as energy", new Set(["energy"]))).toEqual({ why: '"energy" is a name Meno gives an entry\'s own values: put it on under another name' });
+    expect(carriedIn("energy as e2", new Set(["energy"]))).toEqual({ carry: [{ from: "energy", as: "e2" }] });
+  });
+});

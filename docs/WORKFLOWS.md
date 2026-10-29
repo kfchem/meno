@@ -2695,10 +2695,19 @@ of a reaction path's two ends put back on its saddle point, matched on
   of that geometry; nothing put on is read as worked out at Onto's.
 - **Nothing is put on silently.** An entry with no match, or more than
   one ("2 entries of From have its path, q"), goes out of *Not joined*
-  saying so; so does one whose match lacks a property asked for, or which
-  has its own under the name it would be put on as - an energy of Meno's
-  own among them: nothing of its own is overwritten. From's entries that
+  saying so; so does one whose match is no result - failed, not
+  converged, its marks unread ("its match is not finished: not
+  converged"): its values are not to be trusted - one whose match lacks a
+  property asked for, and one that has its own under the name it would be
+  put on as: nothing of its own is overwritten. From's entries that
   matched none are counted on the line.
+- **Meno's own names are never put on**: an energy, a state, a thermal
+  correction, vibrations - the names an entry's own record gives its own
+  values, worked out at its own geometry. A value put on under one would
+  read as of the entry's geometry; *Put on* refuses it ("put it on under
+  another name"), whether the entry has one or not.
+- A property whose name holds " as " cannot be put on: *Put on* reads it
+  as a name and the one it goes on as.
 - Its card says it in a line ("species as first end, matched on path"), or what it
   still needs. It takes molecules in 3D and conformer sets; a table to
   join from, and joining by identity or by drawn atom (the foundation's
