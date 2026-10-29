@@ -430,6 +430,8 @@ function Read-WinButtons {
 $script:MenoFamily = @()
 function Get-MenoFamily {
     # Meno's own processes under it - its web view's (WebView2) - for a point UI Automation answers with one of theirs; read again where a pid is not among them.
+    # (it holds whatever Meno started too - a calculation's program, a window of its own: a press there counts as on Meno's. No harm to the
+    # guard: the yes it stops is told by Meno's buttons, read apart from this, and only Meno asks a question about the network)
     param([int] $Root, [switch] $Again)
     if ($Again -or -not $script:MenoFamily.Count -or $script:MenoFamily[0] -ne $Root) {
         $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId)

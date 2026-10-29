@@ -118,7 +118,7 @@ Write-Host "Windows: the page's buttons waited for"
 # (a first reading may hold the window's frame alone: the page's own come once the web view has built them)
 $frame = @([pscustomobject]@{ Name = "Minimize"; X = 2200; Y = 0; Width = 40; Height = 30 }, [pscustomobject]@{ Name = "Close"; X = 2300; Y = 0; Width = 40; Height = 30 })
 $script:calls = 0
-$late = Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { $script:calls++; if ($script:calls -lt 3) { [pscustomobject]@{ Buttons = $frame } } else { [pscustomobject]@{ Buttons = @($frame) + @($notNowB, $allowB) } } }
+$late = Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { $script:calls++; if ($script:calls -lt 3) { [pscustomobject]@{ Buttons = $frame } } else { [pscustomobject]@{ Buttons = @($frame) + @($notNowB, $allowB); Page = $true } } }
 Check "read again until the page's are there" "$($script:calls) $([bool]$late.Unread)" "3 False"
 Check "and then a press on the yes stops" (Stops { Assert-NotPressingYes -Look $late -At (& $at 1410 930) -What "a click" }) $true
 $never = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frame } }
@@ -126,7 +126,7 @@ Check "never there: unread" ($never.Unread -like "no button of Meno's page was r
 Check "and every press stops" (Stops { Assert-NotPressingYes -Look $never -At (& $at 400 300) -What "a click" }) $true
 Check "a failed reading is not waited out" ((Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { throw "FindAll failed" }).Unread) "FindAll failed"
 $script:calls = 0
-$empty = Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { $script:calls++; if ($script:calls -lt 3) { [pscustomobject]@{ Buttons = @() } } else { [pscustomobject]@{ Buttons = @($settingsB) } } }
+$empty = Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { $script:calls++; if ($script:calls -lt 3) { [pscustomobject]@{ Buttons = @() } } else { [pscustomobject]@{ Buttons = @($settingsB); Page = $true } } }
 Check "a reading of no button at all is waited out too" "$($script:calls) $([bool]$empty.Unread)" "3 False"
 # (during a talk the top bar is hidden from UI Automation: the page itself is there, with few buttons or none)
 $talk = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = @(); Page = $true } }
@@ -135,7 +135,10 @@ Check "and a press during it goes on" (Stops { Assert-NotPressingYes -Look $talk
 $talkFrame = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frame; Page = $true } }
 Check "a talk with the frame's buttons alone: the page read too" "$([bool]$talkFrame.Unread)" "False"
 $other = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = @($frame) + @([pscustomobject]@{ Name = "Next slide"; X = 10; Y = 10; Width = 40; Height = 40 }) } }
-Check "any button not the frame's own is the page read" "$([bool]$other.Unread)" "False"
+Check "buttons alone, the page itself not seen: unread (buttons never say the page is read)" ($other.Unread -like "no button of Meno's page*") $true
+# (the frame's own buttons on a Windows in Japanese: Minimize, Maximize, Close as the system names them there)
+$frameJa = @("`u{6700}`u{5C0F}`u{5316}", "`u{6700}`u{5927}`u{5316}", "`u{9589}`u{3058}`u{308B}") | ForEach-Object { [pscustomobject]@{ Name = $_; X = 2200; Y = 0; Width = 40; Height = 30 } }
+Check "the frame alone on a Windows in Japanese: not the page" ((Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frameJa } }).Unread -like "no button of Meno's page*") $true
 Check "the frame's alone, the page not seen: unread" ((Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frame; Page = $false } }).Unread -like "no button of Meno's page*") $true
 
 Write-Host "Windows: the window at the point"

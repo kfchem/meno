@@ -24,8 +24,6 @@ $script:YesName = "Allow*"
 $script:ButtonRoles = @("AXButton", "Button")
 # (what a Mac's hit test lands on before the web view has built its page's parts: the page itself, or what holds it)
 $script:PageHolders = @("AXWebArea", "AXScrollArea", "AXWindow", "AXApplication", "")
-# (the window frame's own buttons, there before the page's parts are: any other button read, or the page itself, and they are)
-$script:FrameButtons = @("Minimize", "Maximize", "Restore", "Close")
 
 function Read-Part {
     <#
@@ -65,10 +63,9 @@ function Read-Buttons {
 }
 
 function Test-PageButtonsRead {
-    # Whether a reading of Meno's window holds its page's parts, not only the window's frame: any button that is not the frame's own, or the page itself, seen with something in it.
+    # Whether a reading of Meno's window holds its page's parts: the page itself seen, with something in it. Buttons never say so - the window frame's are named in the system's language - they only tell the yes.
     param([Parameter(Mandatory)] $Look)
-    if ($Look.PSObject.Properties["Page"] -and $Look.Page) { return $true }
-    return [bool](@($Look.Buttons) | Where-Object { "$($_.Name)" -notin $script:FrameButtons })
+    return [bool]($Look.PSObject.Properties["Page"] -and $Look.Page)
 }
 
 function Read-PageButtons {
