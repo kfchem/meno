@@ -19,7 +19,7 @@ describe("Join", () => {
     expect(out.exits.joined.map((e) => e.properties["first end"].value)).toEqual(["b", "a"]);
     // (each put on as it was: its value, unit, where and by what it was worked out)
     expect(out.exits.joined[0].properties.g).toEqual(g);
-    expect(out.said).toBe("2 of 2 entries given species as first end, g, on path");
+    expect(out.said).toBe("2 of 2 entries given species as first end, g, matched on path");
   });
 
   it("sets aside an entry with no match, or more than one - saying which - never matching by anything else", () => {
@@ -33,7 +33,7 @@ describe("Join", () => {
       ["y", "2 entries of the other input have its path, q"],
       ["z", "it has no path"],
     ]);
-    expect(out.said).toBe("0 of 3 entries given species, on path · rest 3 (1: no entry of the other input has its path, p; 1: 2 entries of the other input have its path, q; 1: it has no path) · 3 of the other input's entries matched none");
+    expect(out.said).toBe("0 of 3 entries given species, matched on path · rest 3 (1: no entry of the other input has its path, p; 1: 2 entries of the other input have its path, q; 1: it has no path) · 3 of the other input's entries matched none");
   });
 
   it("puts nothing on an entry whose match lacks a property asked for, nor overwrites one of its own", () => {
@@ -62,6 +62,6 @@ describe("Join", () => {
 describe("Join's line", () => {
   it("counts the other input's entries that matched none, one as well as more", () => {
     const out = join([entry("x", { path: { value: "p", unit: "none", status: "computed" } })], [entry("o1", { path: { value: "p", unit: "none", status: "computed" }, s: { value: "a", unit: "none", status: "computed" } }), entry("o2", { path: { value: "q", unit: "none", status: "computed" } })], { on: "path", carry: [{ from: "s", as: "s" }] });
-    expect(out.ok && out.said).toBe("1 of 1 entry given s, on path · 1 of the other input's entries matched none");
+    expect(out.ok && out.said).toBe("1 of 1 entry given s, matched on path · 1 of the other input's entries matched none");
   });
 });

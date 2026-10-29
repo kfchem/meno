@@ -73,7 +73,7 @@ export function join(entries: readonly Entry[], others: readonly Entry[], option
   const unused = others.length - used.size;
   const put = options.carry.map((c) => (c.as === c.from ? c.from : `${c.from} as ${c.as}`)).join(", ");
   const said =
-    `${joined.length} of ${count(entries.length)} given ${put}, on ${on}` +
+    `${joined.length} of ${count(entries.length)} given ${put}, matched on ${on}` +
     (rest.length ? ` · rest ${rest.length} (${tally(rest)})` : "") +
     (unused ? ` · ${unused} of the other input's entries matched none` : "");
   return { ok: true, exits: { joined, rest }, said };

@@ -38,7 +38,7 @@ describe("Join, as a step", () => {
     ]);
     // (each as it came: its own properties, its energy, its place)
     expect(o.kept[0]).toMatchObject({ compound: 0, number: 1, energy: -76.4, properties: { path: text("a→b") } });
-    expect(o.said).toBe("2 of 2 entries of Onto given species as first end, on path");
+    expect(o.said).toBe("2 of 2 entries of Onto given species as first end, matched on path");
   });
 
   it("puts nothing on an entry with no match, or more than one, and says why on it - From's unmatched counted", () => {
@@ -47,7 +47,7 @@ describe("Join, as a step", () => {
     const o = ok(runMenoPair("join", { entries: onto, holds: "molecules" }, { entries: from, holds: "molecules" }, { on: "path", carry: "species" }));
     expect(o.kept).toEqual([]);
     expect(o.aside.map((e) => e.properties?.[SET_ASIDE]?.value)).toEqual(["no entry of From has its path, p", "2 entries of From have its path, q"]);
-    expect(o.said).toBe("0 of 2 entries of Onto given species, on path · rest 2 (1: no entry of From has its path, p; 1: 2 entries of From have its path, q) · 3 of From's entries matched none");
+    expect(o.said).toBe("0 of 2 entries of Onto given species, matched on path · rest 2 (1: no entry of From has its path, p; 1: 2 entries of From have its path, q) · 3 of From's entries matched none");
   });
 
   it("never puts one on under a name of Meno's own, nor one an entry has: energy stays its own", () => {
@@ -57,7 +57,7 @@ describe("Join, as a step", () => {
 
   it("says on its card what it does, and what it still needs before it can run", () => {
     const info = kindInfo("join");
-    expect(howOf(info.options!, { on: "path", carry: "species as first end; g" }, info.how)).toBe("species as first end, g, on path");
+    expect(howOf(info.options!, { on: "path", carry: "species as first end; g" }, info.how)).toBe("species as first end, g, matched on path");
     expect(needsOf({ kind: "join", options: {} })).toBe("Name the property to match on");
     expect(needsOf({ kind: "join", options: { on: "path" } })).toBe("Name what to put on");
     expect(needsOf({ kind: "join", options: { on: "path", carry: "a as x; b as x" } })).toBe('"x" is put on twice');

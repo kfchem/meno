@@ -22,13 +22,13 @@ export function joinNeeds(v: Record<string, string | number | boolean>): string 
   return read.carry.length ? undefined : "Name what to put on";
 }
 
-/** How a Join step does its work, in a line: "species as first end, on path" - or what it still needs. */
+/** How a Join step does its work, in a line: "species as first end, matched on path" - or what it still needs. */
 export function joinHow(v: Record<string, string | number | boolean>): string {
   const needs = joinNeeds(v);
   if (needs) return needs;
   const read = carriedIn(String(v.carry));
   const put = "carry" in read ? read.carry.map((c) => (c.as === c.from ? c.from : `${c.from} as ${c.as}`)).join(", ") : "";
-  return `${put}, on ${String(v.on).trim()}`;
+  return `${put}, matched on ${String(v.on).trim()}`;
 }
 
 /** *Join*: `onto`'s entries with properties of `from`'s put on, matched on `on`; `carry`, what is put on as typed. */

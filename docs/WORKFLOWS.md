@@ -2699,7 +2699,7 @@ of a reaction path's two ends put back on its saddle point, matched on
   has its own under the name it would be put on as - an energy of Meno's
   own among them: nothing of its own is overwritten. From's entries that
   matched none are counted on the line.
-- Its card says it in a line ("species as first end, on path"), or what it
+- Its card says it in a line ("species as first end, matched on path"), or what it
   still needs. It takes molecules in 3D and conformer sets; a table to
   join from, and joining by identity or by drawn atom (the foundation's
   other two ways), are not built yet.
