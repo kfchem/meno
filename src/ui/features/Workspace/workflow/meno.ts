@@ -81,7 +81,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding* and *Join*. */
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints* and *Join*. */
 export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
