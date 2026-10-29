@@ -35,6 +35,7 @@ describe("a kind's exits, as a list", () => {
       rebond: [first("Re-bonded", "same"), rest("Not re-bonded", "same")],
       "compare-bonding": [first("Same", "same"), rest("Different", "same")],
       "take-frames": [first("Frames", "molecules")],
+      "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       restraints: [first("Restrained", "same"), failed()],
       "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
     };

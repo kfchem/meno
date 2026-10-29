@@ -43,7 +43,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "held" | "heldAnti";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "held" | "heldAnti";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -126,6 +126,37 @@ export const KINDS: readonly KindInfo[] = [
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
   { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
+  {
+    // (a path between two structures of the same atoms in one numbering - each start paired with an end, as its own options say - its highest
+    //  point refined: one molecule each, its frames the path, its entry the point refined; Meno judges none of them - docs/WORKFLOWS.md)
+    kind: "path-search",
+    name: "Path search",
+    icon: "path",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "program",
+    made: "Refined structures",
+    inputs: [
+      { id: "start", name: "Start", takes: ["molecules"] },
+      { id: "end", name: "End", takes: ["molecules"] },
+    ],
+    others: [FAILED],
+    whole: true,
+    own: [
+      {
+        id: "pairs",
+        label: "Pairs",
+        type: "choice",
+        choices: [
+          { value: "order", label: "In order" },
+          { value: "each", label: "Each with each" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "order",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+    ],
+  },
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",

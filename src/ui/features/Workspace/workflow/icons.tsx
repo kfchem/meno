@@ -196,6 +196,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="14.03" cy="7.76" r="2" fill="currentColor" stroke="none" />
     </>
   ),
+  // (a way over a barrier between two structures, its top the point refined)
+  path: (
+    <>
+      <path d="M5.3 14.5 C7.6 14.5, 7.8 6.5, 10 6.5 C12.2 6.5, 12.4 14.5, 14.7 14.5" />
+      <circle cx="3.1" cy="14.5" r="2.2" />
+      <circle cx="16.9" cy="14.5" r="2.2" />
+      <circle cx="10" cy="6.5" r="2" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */

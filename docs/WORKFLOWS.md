@@ -296,6 +296,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
+| Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
@@ -339,6 +340,74 @@ such as each R group given a list of groups, in 2D, every combination
 numbered and any not made set aside with its reason
 (WORKFLOWS-FOUNDATION.md, *Enumerate*). It is not *Generate*, which a
 plugin's program or model fills.
+
+### Path search
+
+*Path search* (2026-10-27) finds a path between two structures of the same
+atoms in one numbering, and refines its highest point. ORCA's plugin fills
+it with NEB-TS (the ORCA 6.1 manual, *Nudged Elastic Band Method*,
+https://www.faccts.de/docs/orca/6.1/manual/contents/structurereactivity/neb.html),
+at GFN2-xTB by default - ORCA's own (NATIVE-XTB2), or through the xTB
+plugin's xtb (XTB2; PLUGINS.md, `needs`), the one level either way. It
+runs NEB-TS alone (one role to a step, 2026-10-27): the point's frequencies
+are a *Frequencies* step's, wired after it.
+
+- **Pairs.** Each start is paired with an end as the step's *Pairs* says:
+  *In order* (the k-th with the k-th; other numbers refused), *Each with
+  each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
+  no end to match, a pair of other atoms or another order of them (*Re-bond
+  them first*), or of another charge or spin, goes out of *Failed* with why;
+  only the rest are sent.
+- **Its ends minima at its own level.** A barrier from a path's start is
+  one only where that start is a minimum at the level the path is worked
+  out at (2026-10-28). So each start and end must be a converged
+  optimisation, the two at one level (method, basis set, solvation), or
+  the pair is refused, naming them - the chemist wires *Optimise* at the
+  path's level before it; Meno never optimises them unasked. And the
+  path's own level, as its output says it, must be its ends': else that
+  pair fails, naming both. A tight-binding method is named as the xtb
+  program names it, whichever runs it, so ORCA's NATIVE-XTB2 and XTB2 and
+  the xTB plugin's GFN2 are one level.
+- **A tight-binding level alone, for now** (2026-10-29). The ends' level is
+  told by their method, basis set and solvation, not by their dispersion
+  correction: ends optimised with D3BJ and a path without it would pass as
+  one level. So ORCA's plugin runs a path search at a tight-binding method
+  alone (NATIVE-XTB2, XTB2 and the like), refusing any other in plain words,
+  and refuses a dispersion correction or a solvation in its method or *More
+  keywords* (D3BJ, D4, CPCM, SMD, ALPB and their kin): the path takes neither
+  until the ends' level can say them.
+- **One molecule for each pair.** Its frames are the path, in the order its
+  program gives them: its images, and the highest point it refined where it
+  puts it (ORCA's PATH SUMMARY order). Each frame has its energy and says
+  what it is: "NEB image 3 of 10", or "highest point refined". Its entry
+  frame - what a set, and the next step, takes of it - is the point refined.
+- **Barriers.** On the point refined, Meno works out from the energies
+  printed `path.E-barrier` (its energy less the path's start's, its first
+  image, of the same run) and `path.E-reverse-barrier` (less its end's, its
+  last image), in kcal/mol - E in their names, as electronic energies'
+  differences - each saying so in its `by`: electronic, at which level,
+  and from which end. Its frames' chip says a frame's energy so too: "ΔE
+  6.75 kcal/mol from its start". Neither is mixed with a free energy: no free-energy barrier
+  is given, the symmetry a program takes for each structure's free energy
+  being its own (2026-10-28). A path's start is the structure given - a
+  complex of the two that react, say - not the reactants apart.
+- **How far it went.** Its molecule says how many iterations each part of
+  the run took, as ORCA counts them ("NEB 5 · TS optimization 4"). A band
+  that did not converge in the iterations ORCA allows is not read: that
+  pair goes out of *Failed*, *not converged*, saying so and after how many
+  iterations - never in the words of the error return ORCA ends it by. An
+  image whose SCF did not converge while ORCA carried on with the band is
+  a warning on the molecule, in ORCA's words; it moves nothing.
+- **Frequencies, after it.** A *Frequencies* step wired after it works out
+  the point refined's: its `imaginary`, `imaginary.first` and
+  `imaginary.second` are then the chemist's to select on with *Filter*
+  ("imaginary = 1").
+- **Meno judges nothing.** It calls no structure a saddle point or a
+  transition state: the exit is *Refined structures*, each frame what was
+  done to it.
+- **Take frames** takes a path search's point refined as its *highest*,
+  whatever image stands higher, and says so; its ends and the images beside
+  them as they are.
 
 ### Who does a step
 

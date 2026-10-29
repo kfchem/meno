@@ -970,6 +970,21 @@ The same for every plugin and for Meno's own parts:
     *Response*). Meno's own writers run on the page: an SVG picture of
     molecules in 3D needs the page's WebGL.
 
+### Path search
+
+A plugin filling *Path search* is sent pairs: each entry is the start, as
+any entry is, with its end beside it (`end`, an entry of the same atoms in
+one numbering and of one charge and spin - Meno has checked both). Its
+`prepare` runs a job for each. What it reads back is an output in Meno's
+form, its frames the path in the order the program gives them, the point
+it refined among them, each with its energy; `converged` true for that
+point alone, which becomes the molecule's entry frame. A frames result
+`path.frame` says what each frame is - "highest point refined" for that
+point, words of the plugin's own for the rest (ORCA's: "NEB image 3 of
+10"). `imaginary`, and a `vibrations` list, are that point's, where the
+frequencies were worked out. Meno works out the barriers itself, and calls
+no frame a saddle point.
+
 ### Generate
 
 *Generate* makes new structures from nothing that comes in, so it has no

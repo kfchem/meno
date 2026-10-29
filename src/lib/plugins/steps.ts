@@ -34,6 +34,7 @@ export const STEP_KINDS = [
   "rebond",
   "compare-bonding",
   "take-frames",
+  "path-search",
   "restraints",
   "torsion-restraints",
 ] as const;
