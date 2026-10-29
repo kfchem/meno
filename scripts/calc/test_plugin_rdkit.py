@@ -452,6 +452,92 @@ class Metals(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
+class SquarePlanarOrNot(unittest.TestCase):
+    """Four ligands round a d8 metal lie square planar from the first, embedded so - flattened from a tetrahedron by
+    UFF's held angles, a bulky phosphine's bonds tore - and round a d10 one tetrahedral (Pd(PPh3)4)."""
+
+    PDCL2_PPH3_2 = "Cl[Pd](Cl)([P](c1ccccc1)(c1ccccc1)c1ccccc1)[P](c1ccccc1)(c1ccccc1)c1ccccc1"
+    PD_PPH3_4 = "[Pd]([P](c1ccccc1)(c1ccccc1)c1ccccc1)([P](c1ccccc1)(c1ccccc1)c1ccccc1)([P](c1ccccc1)(c1ccccc1)c1ccccc1)[P](c1ccccc1)(c1ccccc1)c1ccccc1"
+    #: A Buchwald-type precatalyst: a 2-aminobiphenyl palladacycle with a dicyclohexyl(biaryl)phosphine, synthetic.
+    PALLADACYCLE = "Cl[Pd]1([P](C2CCCCC2)(C2CCCCC2)c2ccccc2-c2c(C(C)C)cc(C(C)C)cc2C(C)C)c2ccccc2-c2ccccc2[NH2]1"
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def mol(self, smiles):
+        m = Chem.MolFromSmiles(smiles, sanitize=False)
+        m.UpdatePropertyCache(strict=False)
+        return m
+
+    def made(self, smiles, count):
+        block = Chem.MolToMolBlock(self.mol(smiles), kekulize=False)
+        return self.worker.op_conformers({"molblock": block, "options": {"sought": "fixed", "count": count}})["isomers"][0]
+
+    def shapes(self, entry):
+        """Each conformer's metal bonds, as shares of their covalent lengths, and its two widest angles at the metal."""
+        import numpy as np
+        m = next(i for i, a in enumerate(entry["atoms"]) if self.worker.group_of(Chem.Atom(a["el"]).GetAtomicNum()))
+        near = sorted(b["a2"] if b["a1"] == m else b["a1"] for b in entry["bonds"] if m in (b["a1"], b["a2"]))
+        pt = Chem.GetPeriodicTable()
+        out = []
+        for frame in entry["frames"]:
+            P = np.array(frame).reshape(-1, 3)
+            shares = [float(np.linalg.norm(P[j] - P[m])) / ((self.worker.RADII[entry["atoms"][m]["el"]][0] + self.worker.RADII[entry["atoms"][j]["el"]][0]) / 100) for j in near]
+            angles = sorted(math.degrees(math.acos(max(-1.0, min(1.0, float((P[i] - P[m]) @ (P[j] - P[m]) / np.linalg.norm(P[i] - P[m]) / np.linalg.norm(P[j] - P[m]))))))
+                            for x, i in enumerate(near) for j in near[x + 1:])
+            out.append((shares, angles[-2:]))
+        return out
+
+    def test_counts_a_metals_d_electrons_by_its_donors(self):
+        d = lambda smiles: self.worker.d_electrons(self.mol(smiles), next(a for a in self.mol(smiles).GetAtoms() if self.worker.is_metal(a)))
+        self.assertEqual(d(self.PDCL2_PPH3_2), 8)
+        self.assertEqual(d(self.PD_PPH3_4), 10)
+        # (the dative bonds drawn as charges: the same count)
+        self.assertEqual(d("Cl[Pd-2](Cl)([P+](C)(C)C)[P+](C)(C)C"), 8)
+        self.assertEqual(d("[Ni]([C-]#[O+])([C-]#[O+])([C-]#[O+])[C-]#[O+]"), 10)
+        self.assertEqual(d(self.PALLADACYCLE), 8)
+        # (an ammine drawn as N, given a hydrogen short by RDKit's valence, reads as an amide - so cisplatin is no d10
+        #  the count is sure of, and stays square planar)
+        self.assertEqual(self.worker.tetrahedral(self.mol("N[Pt](N)(Cl)Cl")), set())
+        self.assertEqual(self.worker.tetrahedral(self.mol(self.PD_PPH3_4)), {0})
+
+    def test_lies_a_d10_palladiums_four_phosphines_tetrahedral(self):
+        entry = self.made(self.PD_PPH3_4, 20)
+        for shares, widest in self.shapes(entry):
+            self.assertLess(max(widest), 140)
+            self.assertTrue(all(0.95 < x < 1.15 for x in shares), shares)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertEqual(rows["Pd"].split(", ligands")[0], "bonds at covalent lengths, its four ligands tetrahedral (d10)")
+        self.assertNotIn("square-planar angles", entry["method"])
+
+    def test_keeps_a_bulky_square_planar_complex_whole(self):
+        # (PdCl2(PPh3)2 made 100 times: 27 came out torn - a Pd-Cl at 4.19 A - where its four were flattened by UFF from
+        #  a tetrahedron; embedded square planar, and held gently first, none)
+        for shares, widest in self.shapes(self.made(self.PDCL2_PPH3_2, 100)):
+            self.assertTrue(all(0.95 < x < 1.15 for x in shares), shares)
+            self.assertGreater(min(widest), 165)
+
+    def test_never_sets_a_chelates_two_ends_trans_and_holds_its_bonds(self):
+        # (the palladacycle: its C and N, six atoms round with Pd, only cis; its Pd-C at 1.95 A by its radii came under
+        #  RDKit's own bound, and none of its metal's bonds was held)
+        mol = Chem.AddHs(self.worker.read(Chem.MolToMolBlock(self.mol(self.PALLADACYCLE), kekulize=False)))
+        self.assertIsNotNone(self.worker.metal_bounds(mol, ()))
+        entry = self.made(self.PALLADACYCLE, 30)
+        pd = next(i for i, a in enumerate(entry["atoms"]) if a["el"] == "Pd")
+        c, n = (next(b["a2"] if b["a1"] == pd else b["a1"] for b in entry["bonds"] if pd in (b["a1"], b["a2"]) and entry["atoms"][b["a2"] if b["a1"] == pd else b["a1"]]["el"] == el) for el in ("C", "N"))
+        import numpy as np
+        for frame, (shares, widest) in zip(entry["frames"], self.shapes(entry)):
+            P = np.array(frame).reshape(-1, 3)
+            u, v = P[c] - P[pd], P[n] - P[pd]
+            self.assertLess(math.degrees(math.acos(float(u @ v / np.linalg.norm(u) / np.linalg.norm(v)))), 110)
+            self.assertTrue(all(0.95 < x < 1.15 for x in shares), shares)
+            self.assertGreater(min(widest), 165)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
 class RingChairs(unittest.TestCase):
     """A ring's two chairs are both conformers of it: pruning while embedding, on coordinates no force field had
     touched yet, kept whichever chair came first and threw the other away."""
