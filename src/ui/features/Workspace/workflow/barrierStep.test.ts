@@ -153,6 +153,8 @@ describe("a Barrier step", () => {
   it("is a step of Meno's on two inputs, its saddle points and their starts, its options read", () => {
     const info = kindInfo("barrier");
     expect(info.inputs?.map((p) => p.name)).toEqual(["Saddle points", "Starts"]);
+    // (each a set of molecules, or of conformers - each conformer one saddle point, or one start)
+    expect(info.inputs?.map((p) => p.takes)).toEqual([["molecules", "conformers"], ["molecules", "conformers"]]);
     expect(info.others?.map((x) => x.name)).toEqual(["Failed"]);
     expect(needsOf({ kind: "barrier", options: {} })).toBeUndefined();
     expect(needsOf({ kind: "barrier", options: { free: " " } })).toBe("Name the property that is its free energy G");

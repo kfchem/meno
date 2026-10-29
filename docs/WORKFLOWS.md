@@ -322,7 +322,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
-| Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
+| Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
 | Reaction | an atom, an arrow, the same atom after it, mapped (drawn) | *Reactants*: one entry, molecules in 3D with every hydrogen (several made one complex first, by *Combine*); *Products*: molecules in 3D with every hydrogen | **molecules in 3D**: each product in the reactants' numbering, atom for atom - by its first map, or by every map - out of *Mapped products*; one that does not map one to one out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Reaction*) |
@@ -518,8 +518,9 @@ said by what the chain did before it - a reaction path followed down, its
 ends optimised, each named by *Compare bonding* - and the two are paired
 on it.
 
-- **Two inputs**: *Saddle points* and *Starts*, molecules in 3D, paired
-  as *Path search* pairs its ends (*Pairs*: in order, each with each, or
+- **Two inputs**: *Saddle points* and *Starts*, molecules in 3D or
+  conformer sets - each conformer one - paired as *Path search* pairs its
+  ends (*Pairs*: in order, each with each, or
   matched on a property, a *Tag*'s ID). Each pair gives the saddle point
   again, with its barrier.
 - **A pair is worked out only where both stand as results**, else the

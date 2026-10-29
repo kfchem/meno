@@ -730,17 +730,17 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => joinNeeds(v),
   },
   {
-    // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs: those it cannot have one out of Failed, each saying why)
+    // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs, a conformer set's each conformer one: those it cannot have one out of Failed, each saying why)
     kind: "barrier",
     name: "Barrier",
     icon: "height",
-    takes: ["molecules"],
+    takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "entries",
     made: "With barriers",
     inputs: [
-      { id: "saddles", name: "Saddle points", takes: ["molecules"] },
-      { id: "starts", name: "Starts", takes: ["molecules"] },
+      { id: "saddles", name: "Saddle points", takes: ["molecules", "conformers"] },
+      { id: "starts", name: "Starts", takes: ["molecules", "conformers"] },
     ],
     others: [FAILED],
     options: [

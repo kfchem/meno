@@ -941,7 +941,7 @@ describe("Quick Add's calculations", () => {
     // a compound set's wire: what takes it - a chart of it seen as a table too - and the conversion
     expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "reaction", "displace"]]]);
     // a conformer set's
-    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "merge", "rebond", "compare-bonding", "join", "restraints", "torsion-restraints", "add", "reaction", "displace"]]]);
+    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "reaction", "displace"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
