@@ -12,9 +12,9 @@ import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
-import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
+import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
-import { withoutCarried, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcProperties, withoutCarried, type SetEntry } from "./entries";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
@@ -378,6 +378,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const last = frames[frames.length - 1];
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
+  if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   return {
     ...anew(entry),
     // (what it came as - its structure drawn - where it still is that compound)
@@ -387,6 +388,45 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
     ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+  };
+}
+
+/** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
+const SAME_PLACE = 1e-3;
+
+/** Whether two geometries of the same atoms are one shape - each distance between two atoms within `SAME_PLACE` - however turned or moved as a whole. */
+function sameShape(a: readonly number[], b: readonly number[]): boolean {
+  const n = a.length / 3;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const d = (x: readonly number[]) => Math.hypot(x[3 * i] - x[3 * j], x[3 * i + 1] - x[3 * j + 1], x[3 * i + 2] - x[3 * j + 2]);
+      if (Math.abs(d(a) - d(b)) > SAME_PLACE) return false;
+    }
+  return true;
+}
+
+/**
+ * A single point's entry (an *Energy* step's): its energy at the entry's
+ * own geometry, kept as it came - its key with it - though its program
+ * turned it to its own orientation or printed it rounded; and what the
+ * entry carried of the calculation it came from (entries `CALC_CARRIED`:
+ * a Frequencies step's thermochemistry, its vibrations), of that geometry
+ * still, each with its own level: so an energy at one level and a
+ * correction to G at another stand on one geometry, for *Add* to sum. A
+ * program that moved an atom ran no single point: that entry fails.
+ */
+function singlePointWorked(entry: SetEntry, last: number[], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
+  if (!sameShape(entry.xyz, last)) return { kind: "failed", why: "Its atoms moved in what was to be a single point: its energy is of another geometry" };
+  const was = anew(entry);
+  const carried = { ...calcProperties(entry), ...Object.fromEntries(CALC_CARRIED.flatMap((k) => (entry.properties?.[k] ? [[k, entry.properties[k]]] : []))) };
+  const properties = { ...was.properties, ...carried };
+  return {
+    ...was,
+    ...keptAnew(entry, entry.xyz, calc?.charge),
+    xyz: [...entry.xyz],
+    ...(energies ? { energy: energies[energies.length - 1] } : {}),
+    calc,
+    ...(Object.keys(properties).length ? { properties } : {}),
   };
 }
 
