@@ -17,6 +17,14 @@ import { compoundLetter, entryOfSet, type SetEntry } from "./entries";
 
 export type Pairing = "order" | "each" | "property";
 
+/**
+ * The most pairs *Each with each* makes in one run: Meno's own limit, so
+ * that one option does not start a job for every pair of two large sets
+ * (two sets of 29 conformers, 841) - pairs matched on a property are as
+ * many as there are starts, and are not limited.
+ */
+export const MOST_PAIRS = 100;
+
 /** A start and an end, as one entry: the start's, with the end it is paired with - none where it is paired with none, and refused. */
 export type Paired = { entries: SetEntry[]; refused: { entry: number; why: string }[] } | { why: string };
 
@@ -61,6 +69,8 @@ export function pairEntries(starts: readonly SetEntry[], ends: readonly SetEntry
     if (starts.length !== ends.length) return { why: `Start holds ${starts.length} and End ${ends.length}: in order, each start is paired with the end in its place` };
     starts.forEach((s, k) => made.push({ start: s, end: ends[k] }));
   } else if (pairing === "each") {
+    if (starts.length * ends.length > MOST_PAIRS)
+      return { why: `Start holds ${starts.length} and End ${ends.length}: each with each makes ${starts.length * ends.length} pairs, and it makes at most ${MOST_PAIRS} - match them on a property instead` };
     for (const s of starts) for (const e of ends) made.push({ start: s, end: e });
   } else {
     const name = property.trim();

@@ -296,7 +296,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
-| Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
+| Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
@@ -355,7 +355,13 @@ are a *Frequencies* step's, wired after it.
   each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
   no end to match, a pair of other atoms or another order of them (*Re-bond
   them first*), or of another charge or spin, goes out of *Failed* with why;
-  only the rest are sent.
+  only the rest are sent. A conformer set into either is its conformers,
+  each one start or end (2026-10-30): a reactant's conformers, each paired
+  with the product made from it, matched on a *Tag*'s ID. *Each with each*
+  makes at most 100 pairs, Meno's own limit, so that one option does not
+  start a job for every pair of two large sets (two of 29 conformers make
+  841): past it, nothing is run, and the step says how many it would make;
+  pairs matched on a property are as many as the starts, and not limited.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged
