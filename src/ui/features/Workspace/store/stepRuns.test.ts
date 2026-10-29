@@ -477,7 +477,7 @@ describe("a step that runs a plugin's program", () => {
     // (water turned on the page a quarter turn about x)
     const quarter: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
     st().setTurn3d(water, quarter);
-    const step = st().addStep("energy", "gaussian", 10, 10);
+    const step = st().addStep("optimise", "gaussian", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
@@ -499,6 +499,38 @@ describe("a step that runs a plugin's program", () => {
     ];
     const sign = Math.sign(w * want[3] + x * want[0] + y * want[1] + z * want[2]);
     [x, y, z, w].forEach((v, i) => expect(v).toBeCloseTo(sign * want[i], 6));
+  });
+
+  it("keeps a single point's geometry as it went in, and turned as it is, though Gaussian gave it back in its own orientation", async () => {
+    useReaders.setState({ state: { gaussian: "added" }, problem: {} });
+    installedAt.g16 = "/Applications/g16/g16";
+    worker.prepare.mockImplementationOnce(
+      async () => ({ jobs: [{ entries: [0], program: "g16", args: [], files: [{ name: "input.gjf", text: "# SP\n" }], stdin: "input.gjf", reads: [] }] }) as never,
+    );
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "gaussian", log: true, name: "water.log" }] }) as never);
+    const { st } = editor();
+    const water = st().molecules3d[0];
+    // (water as Gaussian gives it back: in its standard orientation - turned a half turn about z, and moved)
+    const turned = water.atoms.flatMap((a) => [0.1 - a.x, -a.y, a.z]);
+    readOutput.mockImplementationOnce(async () => ({
+      output: { schema: 1, program: "Gaussian", version: "2016+B.01", method: "B3LYP", atoms: ["O", "H", "H"], frames: [turned], energies: [-76.4] },
+      readers: ["cclib 1.9rc1"],
+    }));
+    const quarter: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    st().setTurn3d(water.id, quarter);
+    const step = st().addStep("energy", "gaussian", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Gaussian's output" });
+    await st().lookAtJobs();
+    await ran;
+    const m = st().molecules3d[st().molecules3d.length - 1];
+    expect(m.id).not.toBe(water.id);
+    expect(m.energies).toEqual([-76.4]);
+    expect(m.atoms.map((a) => [a.x, a.y, a.z])).toEqual(water.atoms.map((a) => [a.x, a.y, a.z]));
+    st().turns3d[m.id].forEach((v, i) => expect(Math.abs(v)).toBeCloseTo(Math.abs(quarter[i]), 6));
   });
 
   it("says where to locate a program installed separately that is found nowhere - and starts nothing", async () => {
