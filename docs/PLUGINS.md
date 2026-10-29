@@ -464,7 +464,11 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   folded with others under a name (`group`), and a choice may fill in other
   options' values when picked (`sets`: a preset's parts, each still the
   chemist's to change); the rule may name an option of Meno's own form
-  beside the plugin's (Render's shading). Meno draws them and remembers
+  beside the plugin's (Render's shading). A number may name the value that
+  sets nothing, left to the program (`unset`: ORCA's %maxcore at 0). A
+  step's line says only the options that apply - one shown under another,
+  only while it is - and no number at its `unset`, as no choice of none:
+  ORCA's solvent is said only with a solvation. Meno draws them and remembers
   the chemist's last choices. The form, its drawing and the remembering are in place, used
   first by Meno's own writers in Export (`lib/options.ts`, FILE-IO.md).
   A plugin declares a role's options in its manifest, with the role
