@@ -1954,7 +1954,11 @@ export const FEWEST_HASHES = 3;
  * and as many lie between as fit at least the hash spacing apart, spread
  * evenly - but, where the style asks, never fewer than `fewest` where that
  * many fit a line width clear of each other: a short one, to a label, still
- * reads as hashed. Round ends make each hash a line with a cap at either end instead,
+ * reads as hashed. Those it is given so, from a bare narrow atom (`root`),
+ * are set at even steps from it - each gap the same, the first from the
+ * atom as well, the last flush with `end` (the maintainer, 2026-10-28): not
+ * the first a hash spacing out and the rest crowded after it. From a label,
+ * the first is flush with it, as ever, and the rest even after it. Round ends make each hash a line with a cap at either end instead,
  * reaching across the outline as far as the trapezoid does at its middle.
  */
 function buildHashes(
@@ -1968,6 +1972,7 @@ function buildHashes(
   lineWidth: number,
   round: boolean,
   fewest = 1,
+  root = 0,
 ): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
   const out = { lines: [] as LineSeg[], polys: [] as Poly[], ends: [] as Vec2[] };
   if (!(end > 0) || !(lineWidth > 0)) return out;
@@ -1978,15 +1983,23 @@ function buildHashes(
   const first = from + depth / 2;
   const last = end - depth / 2;
   const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
-  const fit = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  // (more than the spacing gives: as many as fit, each a line width deep and a line width clear - from the first on, or,
+  // where the first would stand off the root - a bare atom's spacing - from the root on, never fewer that way)
+  const base = Math.max(0, Math.min(root, from));
+  const offRoot = from > base + 1e-9;
+  const fromFirst = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  const fit = offRoot ? Math.max(fromFirst, Math.floor((last - base) / (2 * lineWidth) + 1e-9)) : fromFirst;
   const count = Math.max(spaced, Math.min(fewest, fit));
-  // half the outline's width, a distance `at` from the narrow atom
+  // (set from the root where it stands off it: at a label the first is flush, and the rest even after it)
+  const even = count > spaced && offRoot;
+  // half the outline's width, a distance `at` from the narrow atom: from where the hashes start
+  const o = even ? base : from;
   const halfAt = (at: number) =>
-    Math.max(0, startHalf + (wideHalf - startHalf) * ((at - from) / (end - from)));
+    Math.max(0, startHalf + (wideHalf - startHalf) * ((at - o) / (end - o)));
   const point = (at: number, side: number) =>
     vadd(narrow, vadd(vscale(dir, at), vscale(n, side)));
   for (let k = 0; k < count; k++) {
-    const at = count > 1 ? first + ((last - first) * k) / (count - 1) : last;
+    const at = even ? base + ((last - base) * (k + 1)) / count : count > 1 ? first + ((last - first) * k) / (count - 1) : last;
     if (round) {
       const half = Math.max(0, halfAt(at) - lineWidth / 2);
       const a = point(at, half);
@@ -2889,6 +2902,7 @@ export function buildBondPrimitives(
       pxToWorld(lwPx, zoom),
       round,
       opts.fewestHashes,
+      tStart > 0 ? tStart : 0,
     );
     for (const l of hashes.lines) l.widthPx = lwPx;
     lines.push(...hashes.lines);
@@ -2993,6 +3007,7 @@ export function buildBondPrimitives(
         pxToWorld(lwPx, zoom),
         (opts.joinStyle ?? "round") === "round",
         opts.fewestHashes,
+        trimNarrow > 0 ? trimNarrow : 0,
       );
       for (const l of hashes.lines) l.widthPx = lwPx;
       lines.push(...hashes.lines);

@@ -604,7 +604,8 @@ Both go together, because both touch every layer.
   as circles or as Kekulé structures; colour, bold and italic.
 - **Hashes at a fixed spacing.** A longer hashed bond gets more hashes, not
   wider gaps (PR #33). A short one - a hashed wedge to a label - gets three,
-  closer together but a line width clear, where three fit, in a style that
+  closer together but a line width clear, set at even steps from the narrow
+  atom (or its label) to the wide end, where three fit, in a style that
   asks for it ("Shortest hashed bond: Three hashes at least"): two read as
   a pair of lines (the maintainer, 2026-10-24). Meno's own style asks for
   it; a journal's keeps its spacing exactly, as its specification has it
