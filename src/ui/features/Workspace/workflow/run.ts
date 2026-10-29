@@ -86,10 +86,15 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
   }
-  // (Measure's atoms from a table wired into Atoms, where its card says so)
-  if (step.kind === "measure" && input.holds !== "structures") {
+  // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
+  //  what comes in is molecules: it takes nothing else)
+  if (step.kind === "measure") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
-    if (o.from === "table") return ranAs(doc, id, measuredSet(setEntries(input.molecules, input.holds), input.holds, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
+    const entries = setEntries(input.molecules, input.holds as Holds3D);
+    if (o.from === "table") return ranAs(doc, id, measuredSet(entries, input.holds as Holds3D, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
+    const typed = measuredSet(entries, input.holds as Holds3D, String(o.measurements ?? ""));
+    const unread = wireInto(doc, id, "atoms") && typed.ok ? { ...typed, said: `${typed.said} \u00b7 the table wired into Atoms not read: atoms typed` } : typed;
+    return ranAs(doc, id, unread, key, w);
   }
   const outcome =
     input.holds === "structures"

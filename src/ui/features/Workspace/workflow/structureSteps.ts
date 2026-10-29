@@ -353,7 +353,13 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
   const reactant = reactants[0];
   const whole = products.filter(mappable);
   // (a mapped product as its rows and it name it: the product's name or place - and its map, where every map is given)
-  const productKey = (m: { product: number; map: number }) => `${whole[m.product].name ?? named(whole[m.product])}${maps === "every" ? `, map ${m.map + 1}` : ""}`;
+  // (one to each: two products of one name told apart by their places)
+  const base = whole.map((p) => p.name ?? named(p));
+  const productKey = (m: { product: number; map: number }) => {
+    const p = whole[m.product];
+    const name = base.filter((b) => b === base[m.product]).length > 1 ? `${base[m.product]} (${named(p)})` : base[m.product];
+    return `${name}${maps === "every" ? `, map ${m.map + 1}` : ""}`;
+  };
   const out = mapped ?? mapProducts(moleculeOfEntry(reactant), whole.map(moleculeOfEntry), { every: maps === "every" });
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = products.flatMap((p) =>
@@ -364,6 +370,7 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
         : [],
   );
   const counts = new Map<number, number>();
+  let replaced = 0;
   const notMapped = [...out.notMapped];
   const done: typeof out.mapped = [];
   for (const m of out.mapped) {
@@ -377,8 +384,12 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
     if (!e) continue;
     done.push(m);
     counts.set(m.product, (counts.get(m.product) ?? 0) + 1);
-    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried; its calculation not - and which mapped product it is, as its bond changes' rows name it)
-    kept.push(withSaid({ ...e, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) }, PRODUCT, productKey(m)));
+    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry and vibrations as
+    //  its own properties, renumbered with it; its calculation not - and which mapped product it is, as its bond changes' rows name it)
+    const carried = Object.fromEntries(CALC_CARRIED.flatMap((k) => (r.properties[k] ? [[k, r.properties[k]]] : [])));
+    const held = { ...e, properties: { ...e.properties, ...carried }, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) };
+    if (p.properties?.[PRODUCT]) replaced++;
+    kept.push(withSaid(held, PRODUCT, productKey(m)));
   }
   // (a product of which no map went through, aside with why - each map's that did not, said on it)
   const why = new Map<number, string[]>();
@@ -390,5 +401,6 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
   const line = [`${plural(counts.size, "product")} in the reactants' numbering${maps === "every" ? `, ${plural(kept.length, "map")}` : ""}`, `${plural(changes.rows.length, "bond change")}`];
   if (aside.length) line.push(`${aside.length} not mapped`);
   if (done.some((m) => whole[m.product].calc)) line.push("calculations not carried");
+  if (replaced) line.push(`the ${PRODUCT} ${replaced === 1 ? "a product" : `${replaced} products`} carried replaced`);
   return { ok: true, holds: "molecules", kept, aside, said: line.join(" \u00b7 "), tables: { changes } };
 }

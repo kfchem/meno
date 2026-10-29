@@ -64,8 +64,13 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
   };
 }
 
-/** The column of a Reaction's bond changes, and the property of each product it mapped, that names the mapped product. */
-export const PRODUCT = "product";
+/**
+ * The column of a Reaction's bond changes, and the property of each product
+ * it mapped, that names the mapped product: a name of Meno's own, dotted as
+ * its others are (imaginary.first), which no chemist's property is taken
+ * for - one a product carried already is replaced, and said.
+ */
+export const PRODUCT = "reaction.product";
 
 /** What a bond change is called in its table's *Change* column. */
 const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };

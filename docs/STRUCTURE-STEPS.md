@@ -96,8 +96,9 @@ its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
   them (`atomsOfRows`, `src/lib/table.ts`), two a distance, three an angle,
   four a dihedral. Every row goes to every entry, or - *Rows matched on* a
   name - the rows whose value in the column of that name is the entry's
-  value of the property of that name (`product`, which a Reaction writes
-  on each product it maps and in each row). A table whose columns do not
+  value of the property of that name (`reaction.product`, which a Reaction
+  writes on each product it maps and in each row). Atoms typed with a table
+  wired in are measured as typed, and the line says the table was not read. A table whose columns do not
   say how they count atoms is refused: a table read from a file never
   says, and its numbers are not guessed.
 - **Nothing left out.**
@@ -251,9 +252,11 @@ IRC's ends are in one numbering without leaving the workflow.
   worked out at its geometry still names that geometry, in the new order.
   Each product is a compound of its own, its maps numbered from 1.
 - **Bond changes**, a table (`bondChangesTable`): a row a bond each map
-  forms, breaks or changes in order - `product`, naming the mapped product
-  (its name or place, and its map where every map is given; the mapped
-  product carries the same as its property `product`), *Map* where a
+  forms, breaks or changes in order - `reaction.product`, naming the mapped
+  product (its name or place - with its place too where two products share
+  a name - and its map where every map is given; the mapped product carries
+  the same as its property `reaction.product`, a name of Meno's own: one a
+  product carried already is replaced, and the line says so), *Map* where a
   product has several, what changed, its two atoms and their elements, and
   its order before and after, 0 where there is none. The two atom columns
   count from 1, as a card and the 3D view do, and say so (`atoms: "from
@@ -262,8 +265,9 @@ IRC's ends are in one numbering without leaving the workflow.
 - **State.** A product not finished - failed, or its marks not read - is
   set aside as not finished, never passed on as one that is. A product
   mapped keeps its energy and its imaginary frequencies, which are of its
-  geometry however it is numbered; its calculation is not carried, and the
-  step's line says so.
+  geometry however it is numbered, and its thermochemistry and vibrations
+  as properties of its own, renumbered with it; its calculation is not
+  carried, and the step's line says so.
 - **Nothing in part.** A product with no hydrogens, or one whose atoms do
   not all map one to one, goes out of *Not mapped* with why written on it
   (`set_aside`). Reactants that are not one entry, or have no hydrogens,

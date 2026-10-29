@@ -75,6 +75,16 @@ describe("Reaction, as a step", () => {
     expect(f.said).toBe("1 product in the reactants' numbering \u00b7 6 bond changes \u00b7 calculations not carried");
   });
 
+  it("names each mapped product apart - two of one name by their places - under a name of Meno's own, replacing and saying one the product carried; its vibrations kept", () => {
+    const vib = { value: { table: { columns: [{ name: "frequency", unit: "cm-1" }], rows: [[120]] } }, unit: "none", status: "computed" };
+    const twin = (compound: number) => ({ ...product, compound, properties: { "reaction.product": { value: "old", unit: "none", status: "computed" }, vibrations: vib } }) as unknown as SetEntry;
+    const o = ok(runMenoPair("reaction", { entries: [reactant], holds: "molecules" }, { entries: [twin(0), twin(1)], holds: "molecules" }));
+    expect(o.kept.map((e) => e.properties?.["reaction.product"]?.value)).toEqual(["cyclohexene (a #1)", "cyclohexene (b #1)"]);
+    expect(new Set(o.tables!.changes.rows.map((r) => r[0]))).toEqual(new Set(["cyclohexene (a #1)", "cyclohexene (b #1)"]));
+    expect(o.kept[0].properties?.vibrations).toEqual(vib);
+    expect(o.said).toBe("2 products in the reactants' numbering \u00b7 12 bond changes \u00b7 the reaction.product 2 products carried replaced");
+  });
+
   it("is laid out on the page: the mapped products, those not mapped, and the bond changes, a table, in their exits' sets", () => {
     const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
     const mol = (m: Molecule, x: number) => ({ at: { x, y: 0 }, atoms: m.atoms, bonds: m.bonds });
@@ -131,7 +141,7 @@ describe("Reaction's bond changes into Measure, on the page", () => {
     const products = resultOf(doc, reaction, "out")!.id;
     const changes = resultOf(doc, reaction, "changes")!.id;
     const measure = doc.nextWorkflowId!;
-    doc = addStep(doc, "measure", 80, 0, { from: "table", rows: "product" });
+    doc = addStep(doc, "measure", 80, 0, { from: "table", rows: "reaction.product" });
     doc = connect(connect(doc, { set: products }, measure), { set: changes }, measure, "atoms");
     // (Measure run: the Reaction before it run first, as any step before one)
     const ran = runStep(doc, measure, W);
@@ -148,6 +158,9 @@ describe("Reaction's bond changes into Measure, on the page", () => {
     const unsaid = { ...resultOf(ran, reaction, "changes")!.table! };
     unsaid.columns = unsaid.columns.map((c) => (c.kind === "number" ? { name: c.name, kind: "number", unit: c.unit } : c));
     expect(measuredSet([entry], "molecules", "", { table: unsaid, rows: "" })).toEqual({ ok: false, said: "No column of the table says it holds atoms, and how it counts them" });
+    // (atoms typed with a table wired in: measured as typed, the table said not read)
+    const typed = runStep({ ...ran, steps: ran.steps!.map((s) => (s.id === measure ? { ...s, options: { from: "typed", measurements: "1-11" } } : s)) }, measure, W);
+    expect(typed.steps!.find((s) => s.id === measure)!.ran).toMatchObject({ ok: true, said: "1 measurement on 1 entry \u00b7 the table wired into Atoms not read: atoms typed" });
   });
 });
 

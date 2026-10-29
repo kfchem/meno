@@ -74,7 +74,7 @@ describe("a reaction's bond changes as a table", () => {
 
   it("has a row a bond, its atoms from 1, with what changed and its order before and after", () => {
     const t = bondChangesTable([{ product: 0, map: 0, changes }], () => "b");
-    expect(t.columns.map((c) => c.name)).toEqual(["product", "Change", "Atom 1", "Atom 2", "Element 1", "Element 2", "Order before", "Order after"]);
+    expect(t.columns.map((c) => c.name)).toEqual(["reaction.product", "Change", "Atom 1", "Atom 2", "Element 1", "Element 2", "Order before", "Order after"]);
     expect(t.rows).toEqual([
       ["b", "formed", 1, 5, "C", "C", 0, 1],
       ["b", "order changed", 1, 2, "C", "C", 2, 1],
