@@ -140,7 +140,7 @@ describe("a table's heads, and its frame", () => {
     expect(html).toContain(`gap:${TABLE_GAP_PX}px`);
     expect(html).toContain(`<tr style="height:${TABLE_HEAD_PX}px">`);
     expect(html.match(new RegExp(`<tr style="height:${TABLE_ROW_PX}px">`, "g"))?.length).toBe(changes.rows.length);
-    expect(html).toContain(`height:${TABLE_FOOT_PX}px`);
+    expect(html).toContain(`height:${TABLE_FOOT_PX}px;line-height:${TABLE_FOOT_PX}px`);
     expect(html.match(new RegExp(`padding-left:${TABLE_COLUMN_GAP_PX}px`, "g"))?.length).toBe((changes.columns.length - 1) * (changes.rows.length + 1));
     expect(tableBodyPx(changes.rows.length)).toBe(TABLE_HEAD_PX + TABLE_GAP_PX + changes.rows.length * TABLE_ROW_PX + TABLE_FOOT_PX);
   });

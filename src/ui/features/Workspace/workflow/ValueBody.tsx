@@ -62,7 +62,7 @@ export function TableBody({ table }: { table: Table }) {
           ))}
         </tbody>
       </table>
-      <div className="text-[10px] text-gh-gray" style={{ height: TABLE_FOOT_PX }} title={[...table.unread.map((u) => `${u.column ? `${u.column}, ` : ""}row ${u.row}: ${u.why}`), ...table.left.map((l) => `${l.column}: ${l.why}`)].join("\n") || undefined}>
+      <div className="text-[10px] text-gh-gray" style={{ height: TABLE_FOOT_PX, lineHeight: `${TABLE_FOOT_PX}px` }} title={[...table.unread.map((u) => `${u.column ? `${u.column}, ` : ""}row ${u.row}: ${u.why}`), ...table.left.map((l) => `${l.column}: ${l.why}`)].join("\n") || undefined}>
         {said}
       </div>
     </div>
