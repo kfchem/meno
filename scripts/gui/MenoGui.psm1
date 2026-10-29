@@ -412,7 +412,8 @@ function Read-WinButtons {
     $buttons = foreach ($win in $windows) {
         foreach ($b in $win.FindAll([System.Windows.Automation.TreeScope]::Descendants, $isButton)) {
             $r = $b.Current.BoundingRectangle
-            if ($r.IsEmpty) { continue }
+            # (one with no bounds kept as such: a yes read so stops a press - MenoConsent.psm1)
+            if ($r.IsEmpty) { [pscustomobject]@{ Name = $b.Current.Name; X = 0; Y = 0; Width = 0; Height = 0 }; continue }
             [pscustomobject]@{ Name = $b.Current.Name; X = $r.X; Y = $r.Y; Width = $r.Width; Height = $r.Height }
         }
     }
@@ -422,7 +423,14 @@ function Read-WinButtons {
 function Assert-NotYesAt {
     # A press at a point, in screen pixels, that would land on the yes of a question about the network - or whose buttons could not be read - stopped before it is sent.
     param([Parameter(Mandatory)] $At, [string] $What = "a press")
-    Assert-NotPressingYes -Look (Read-Buttons { Read-WinButtons }) -At $At -What "$What at ($($At.X), $($At.Y)) px"
+    $label = "$What at ($($At.X), $($At.Y)) px"
+    # (the window at the point: Meno's, the one whose buttons are read - not another copy's; UI Automation's own answer there, Tauri's pane included, is the window's process)
+    Assert-OnMeno -MenoPid $script:MenoPid -What $label -Read {
+        $el = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y))
+        if (-not $el) { throw "UI Automation gave nothing for the point" }
+        [int]$el.Current.ProcessId
+    }
+    Assert-NotPressingYes -Look (Read-PageButtons -Read { Read-WinButtons }) -At $At -What $label
 }
 
 function Assert-NotYesKeys {

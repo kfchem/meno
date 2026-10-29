@@ -92,7 +92,17 @@ $settingsB = [pscustomobject]@{ Name = "Settings"; X = 2320; Y = 10; Width = 60;
 $read = Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB, $notNowB, $allowB) } }
 $at = { param($x, $y) [pscustomobject]@{ X = $x; Y = $y } }
 Check "a press inside the yes's bounds stops" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click" }) $true
-Check "and at its edge, a pixel past it" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1521 930) -What "a click" }) $true
+# (its bounds 1300-1520 across, 900-960 down, two pixels round them taken in: each edge, just in and just out)
+$edges = @(
+    @("left, 2 px out: in", 1298, 930, $true), @("left, 3 px out: out", 1297, 930, $false),
+    @("right, 2 px out: in", 1522, 930, $true), @("right, 3 px out: out", 1523, 930, $false),
+    @("top, 2 px out: in", 1410, 898, $true), @("top, 3 px out: out", 1410, 897, $false),
+    @("bottom, 2 px out: in", 1410, 962, $true), @("bottom, 3 px out: out", 1410, 963, $false),
+    @("its column, far below: out", 1410, 1400, $false), @("its row, far right: out", 2000, 930, $false))
+foreach ($e in $edges) {
+    $x = $e[1]; $y = $e[2]
+    Check "the yes's edge - $($e[0])" (Stops { Assert-NotPressingYes -Look $read -At (& $at $x $y) -What "a click" }) $e[3]
+}
 Check "a press on Not now goes on" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1230 930) -What "a click" }) $false
 Check "a press on the page, away from both, goes on" (Stops { Assert-NotPressingYes -Look $read -At (& $at 400 300) -What "a click" }) $false
 Check "no question asked: a press goes on" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB) } }) -At (& $at 1410 930) -What "a click" }) $false
@@ -101,6 +111,27 @@ Check "nothing given stops it" (Stops { Assert-NotPressingYes -Look (Read-Button
 Check "no button read at all stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @() } }) -At (& $at 400 300) -What "a click" }) $true
 $said = try { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click"; "" } catch { $_.Exception.Message }
 Check "saying which" ($said -like "a click would answer a question about the network yes ('Allow and download')*nothing was sent.") $true
+Check "a yes read with no bounds stops a press anywhere" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB, [pscustomobject]@{ Name = "Allow and download"; X = 0; Y = 0; Width = 0; Height = 0 }) } }) -At (& $at 400 300) -What "a click" }) $true
+Check "another button with no bounds is no matter" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB, [pscustomobject]@{ Name = "Zoom"; X = 0; Y = 0; Width = 0; Height = 0 }) } }) -At (& $at 400 300) -What "a click" }) $false
+
+Write-Host "Windows: the page's buttons waited for"
+# (a first reading may hold the window's frame alone: the page's own come once the web view has built them)
+$frame = @([pscustomobject]@{ Name = "Minimize"; X = 2200; Y = 0; Width = 40; Height = 30 }, [pscustomobject]@{ Name = "Close"; X = 2300; Y = 0; Width = 40; Height = 30 })
+$script:calls = 0
+$late = Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { $script:calls++; if ($script:calls -lt 3) { [pscustomobject]@{ Buttons = $frame } } else { [pscustomobject]@{ Buttons = @($frame) + @($notNowB, $allowB) } } }
+Check "read again until the page's are there" "$($script:calls) $([bool]$late.Unread)" "3 False"
+Check "and then a press on the yes stops" (Stops { Assert-NotPressingYes -Look $late -At (& $at 1410 930) -What "a click" }) $true
+$never = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frame } }
+Check "never there: unread" ($never.Unread -like "no button of Meno's page was read*") $true
+Check "and every press stops" (Stops { Assert-NotPressingYes -Look $never -At (& $at 400 300) -What "a click" }) $true
+Check "a failed reading is not waited out" ((Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { throw "FindAll failed" }).Unread) "FindAll failed"
+
+Write-Host "Windows: the window at the point"
+Check "Meno's own: goes on" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { 4242 } }) $false
+Check "another copy of Meno's, or another app's: stops" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { 5151 } }) $true
+Check "not told (FromPoint throwing): stops" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { throw "FromPoint failed" } }) $true
+Check "nothing given: stops" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { $null } }) $true
+
 # (what UI Automation gives for any point of the page: Tauri's resize-border pane, over it)
 $overlay = @("Pane`tTAURI_DRAG_RESIZE_WINDOW", "Window`tMeno", "Pane`t")
 Check "a point read as Tauri's resize-border pane is unread" ((Read-Part { [pscustomobject]@{ Chain = $overlay } }).Unread -like "*resize borders*") $true
