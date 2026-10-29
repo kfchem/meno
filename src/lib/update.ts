@@ -1,10 +1,10 @@
 /**
  * Meno keeping itself up to date (src-tauri/src/update.rs): it looks on the
- * project's GitHub Releases for a newer Meno as it starts and every few
- * hours, downloads one in the background, and installs it as Meno quits -
- * or at once, when the user restarts into it. On Windows, not while jobs
- * wait or run: installing would stop them (docs/WORKFLOWS.md, *When Meno
- * closes*).
+ * project's GitHub Releases for a newer Meno as it starts and once a day
+ * while it runs, downloads one in the background, and installs it as Meno
+ * quits - or at once, when the user restarts into it. On Windows, not while
+ * jobs wait or run: installing would stop them (docs/WORKFLOWS.md, *When
+ * Meno closes*).
  *
  * It uses the network as everything in Meno does (lib/net/network): under
  * its own purpose, which the user allows once (Meno asks, once, of its own
@@ -52,7 +52,7 @@ export const useUpdate = create<UpdateState | null>(() => null);
 
 /** How soon after Meno starts it first looks, and how often after that. */
 const FIRST_LOOK_MS = 20_000;
-const EVERY_MS = 6 * 60 * 60 * 1000;
+export const EVERY_MS = 24 * 60 * 60 * 1000;
 /** How often, with an update ready, Meno looks again at the jobs it waits for. */
 const HELD_EVERY_MS = 10_000;
 
@@ -63,7 +63,7 @@ export const UPDATE_CONSENT: ConsentRequest = {
   purpose: UPDATE_PURPOSE,
   title: "Keep Meno up to date?",
   detail:
-    "Meno looks on GitHub for a newer version as it starts and every few hours while it runs, " +
+    "Meno looks on GitHub for a newer version as it starts and once a day while it runs, " +
     "downloads it in the background (about 20 MB), and installs it when you quit. Every " +
     "connection is shown as it is made, and nothing goes out while Meno works offline. " +
     "You can take this back in Settings, under Network.",
@@ -148,7 +148,7 @@ export async function restartIntoUpdate(): Promise<void> {
 /**
  * Starts keeping Meno up to date, once the settings are in: asks the once -
  * after the user's first action (lib/firstAction), once it has ended, never
- * before - looks after a little while, then every few hours, and at once
+ * before - looks after a little while, then once a day, and at once
  * whenever it becomes allowed (back online, or just turned on). Returns a
  * stop.
  */

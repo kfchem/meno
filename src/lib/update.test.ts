@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { useNetwork } from "./net/network";
-import { mayLook, noticeShown, readySaid, UPDATE_PURPOSE, useUpdate, useUpdateDownloads, type UpdateState } from "./update";
+import { EVERY_MS, mayLook, noticeShown, readySaid, UPDATE_CONSENT, UPDATE_PURPOSE, useUpdate, useUpdateDownloads, type UpdateState } from "./update";
 
 describe("keeping Meno up to date", () => {
   afterEach(() => {
@@ -17,6 +17,11 @@ describe("keeping Meno up to date", () => {
     // offline mode wins over the leave given
     useNetwork.setState({ offline: true, granted: [UPDATE_PURPOSE] });
     expect(mayLook()).toBe(false);
+  });
+
+  it("looks once a day while Meno runs, and says so where the user is asked", () => {
+    expect(EVERY_MS).toBe(24 * 60 * 60 * 1000);
+    expect(UPDATE_CONSENT.detail).toContain("as it starts and once a day while it runs");
   });
 
   it("goes by a purpose Meno's settings keep", () => {

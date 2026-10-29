@@ -86,7 +86,7 @@ before building, and a build on a computer of one's own needs it once.
    signature names the version it is released as (see below).
 4. If the run passed: try the draft's installers, write the release notes
    on the release page if you like, and publish it. The Menos installed
-   find it the next time they look - as they start, and every few hours.
+   find it the next time they look - as they start, and once a day while they run.
    Never publish the draft of a run that failed. (Editing the notes does
    not change `latest.json`, whose `notes` were written as the workflow
    ran; Meno does not show them for now.)

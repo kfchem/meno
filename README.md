@@ -64,7 +64,7 @@ image cannot update itself.
 
 The first time you do something in Meno - put a structure down, open a file,
 open Settings - it then asks whether it may keep itself up to date. If you
-agree, it looks for a new version as it starts and every few hours,
+agree, it looks for a new version as it starts and once a day while it runs,
 downloads it in the background and installs it when you quit. *Restart now*
 in the notice installs it at once. On Windows it waits while calculation jobs
 are waiting or running, because installing would stop them: it goes in when

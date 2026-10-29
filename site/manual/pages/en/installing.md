@@ -31,7 +31,7 @@ The other files in a release are what Meno downloads when it updates itself; you
 
 ## The first question {#first-question}
 
-The first time you do something in Meno - put a structure down, open a file, open Settings - it asks *Keep Meno up to date?* With *Allow and download*, it looks on GitHub for a newer version as it starts and every few hours, downloads it in the background and installs it when you quit. With *Not now*, it does none of this. You can change your mind at any time in Settings, *Network*, under *Keep Meno up to date*.
+The first time you do something in Meno - put a structure down, open a file, open Settings - it asks *Keep Meno up to date?* With *Allow and download*, it looks on GitHub for a newer version as it starts and once a day while it runs, downloads it in the background and installs it when you quit. With *Not now*, it does none of this. You can change your mind at any time in Settings, *Network*, under *Keep Meno up to date*.
 
 ## Updates {#updates}
 
