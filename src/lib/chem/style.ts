@@ -228,7 +228,7 @@ const RULES = {
   chargeCircles: "single",
   chargedCarbonLabel: "hidden",
   // (bare, as IUPAC's recommendations for structure diagrams draw them,
-  // GR-11; the journals below say nothing of them in drawings)
+  // GR-11.1; the journals below say nothing of them in drawings)
   stereoDescriptors: "plain",
   stereoDescriptorGap: 0.15,
   aromaticCircleSize: 0.5,

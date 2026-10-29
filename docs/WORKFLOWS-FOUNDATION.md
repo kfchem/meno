@@ -707,17 +707,24 @@ A 3D structure is never made here. It comes from a step after it, such as
 
 #### R groups
 
-**The lists.** Each R number in the drawing has a list of options, one to
-a line, typed on the step:
+**The lists.** Each R number in the drawing has a list of options, typed
+on the step as a chemist writes them - several on a line, apart by commas
+or semicolons, or one to a line (2026-10-24):
 
 ```
-R1:  Me
-     Cl
-R2:  OMe
-     *C(=O)N(C)C
+R1: Me, Cl
+R2: OMe
+R2: *C(=O)N(C)C
 ```
 
-Each line is read in one of three ways:
+A line `R1:` (either case, `r1:`) starts R1's list, or adds to it where it
+was started already: R1: Me then R1: Et is {Me, Et}. A line with no R
+number goes on with the last one. A comma between two digits is a
+locant's, part of its group (`2,4-(MeO)2C6H3`). Said, and the step not run:
+a group before any R number, an empty one between two commas, and one
+given twice in one list (never dropped as if typed once).
+
+Each option is read in one of three ways:
 - **as a label typed on the canvas is read**: one reader, one definition.
   Smart labels give the label its case (`otbs` is `OTBS`). The dictionary,
   its label grammar and the chemist's own abbreviations then give its

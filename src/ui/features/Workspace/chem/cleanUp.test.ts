@@ -10,7 +10,7 @@ import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
-import { cleanUp, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partOf } from "./cleanUp";
+import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
 import { overlapsMade } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
@@ -279,6 +279,60 @@ describe("cleanUp", () => {
         expect(after).toEqual(drawn);
       }
     }
+  });
+
+  it("lays out the rest when it must leave one structure as drawn, and names that one by its formula and why", async () => {
+    // the made-up bridged macrocycle drawn round a circle (the engine lays an atom on a bond there), and a butane
+    const input = fromSmiles("C1CCCCC2CCC(CO2)CCCCCCCC1");
+    const n = input.atoms.length;
+    const R = (n * NOMINAL_BOND_LENGTH) / (2 * Math.PI);
+    const ring = input.atoms.map((a, i) => atom(i + 1, R * Math.cos((2 * Math.PI * i) / n), R * Math.sin((2 * Math.PI * i) / n), a.el));
+    const ringBonds: Bond[] = input.bonds.map((b, i) => ({ id: 100 + i, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 }));
+    const butane = [0, 1, 2, 3].map((i) => atom(300 + i, 40 + i, i % 2 ? 0.6 : 0));
+    const butaneBonds: Bond[] = [0, 1, 2].map((i) => ({ id: 400 + i, a: 300 + i, b: 301 + i, order: 1 }));
+    const drawn: Model = { atoms: [...ring, ...butane], bonds: [...ringBonds, ...butaneBonds] };
+    expect(partFormula({ atoms: ring, bonds: ringBonds })).toBe("C18H34O");
+    const { store, doc } = canvas(drawn);
+    const refused = await cleanUp(store).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    const after = store.getState().model;
+    if (refused) {
+      expect(refused).toBeInstanceOf(CleanUpRefused);
+      expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C18H34O: .*one atom on another or on a bond/);
+      // (the macrocycle as drawn; the butane laid out, at the style's bond, in one step)
+      for (const a of ring) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
+      const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);
+      expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+      expect(doc.history().undoDepth).toBe(1);
+    }
+  });
+
+  it("lays out the rest beside one whose wedges cannot be kept - drawn crossed - and names it, with its charge where it has one", async () => {
+    // a centre with a wedge and a hash in line, its other two bonds across: what Clean-up cannot keep; and a butane
+    const cross = [atom(1, 0, 0), atom(2, 1.8, 0), atom(3, -1.8, 0), atom(4, 0, 1.8), atom(5, 0, -1.8, "N")];
+    const crossBonds: Bond[] = [
+      { id: 11, a: 1, b: 2, order: 1, stereo: "up", stereoOrient: "principle" },
+      { id: 12, a: 1, b: 3, order: 1, stereo: "down", stereoOrient: "principle" },
+      { id: 13, a: 1, b: 4, order: 1 },
+      { id: 14, a: 1, b: 5, order: 1 },
+    ];
+    const butane = [0, 1, 2, 3].map((i) => atom(300 + i, 40 + i, i % 2 ? 0.6 : 0));
+    const butaneBonds: Bond[] = [0, 1, 2].map((i) => ({ id: 400 + i, a: 300 + i, b: 301 + i, order: 1 }));
+    const { store } = canvas({ atoms: [...cross, ...butane], bonds: [...crossBonds, ...butaneBonds] });
+    const refused = await cleanUp(store).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(refused).toBeInstanceOf(CleanUpRefused);
+    expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C4H11N: the wedges at C .*, so it was left as it is\.$/);
+    const after = store.getState().model;
+    for (const a of cross) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
+    const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);
+    expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+    // (a formula's charge: NH4+)
+    expect(partFormula({ atoms: [{ ...atom(1, 0, 0, "N"), charge: 1 }], bonds: [] })).toBe("H4N+");
   });
 
   it("lays out only the structure an atom is in, when asked about one", async () => {

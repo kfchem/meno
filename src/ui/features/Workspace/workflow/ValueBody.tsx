@@ -99,8 +99,8 @@ const AXIS = { className: "stroke-gh-gray", style: { strokeWidth: "max(1px, var(
 
 /**
  * A chart's body, its words - each a span over its drawing, which is SVG -
- * faded out with the zoom where they are too small to read (`.meno-words`,
- * utils/pageScale `wordsShown`): a chart at a fit zoom is still its points
+ * gone where they are too small to read (`.meno-words`, utils/pageScale
+ * `wordsReadAt`: switched past a threshold, faded over a short time): a chart at a fit zoom is still its points
  * and axes, never an empty frame.
  */
 const wordsOf = () => "meno-words-each relative text-[10px] leading-3 text-gh-gray tabular-nums";

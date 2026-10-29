@@ -1,3 +1,4 @@
+import { measured } from "../../../../testing/timeouts";
 import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { DrawnModel } from "../store/types";
@@ -695,12 +696,12 @@ describe("a wire not on a card being dragged", () => {
       expect(ways).toBeLessThanOrEqual(1);
       expect(jumps).toBeLessThanOrEqual(1);
     }
-    // (two pages, 60 frames each, routed as a drag routes them: a second or two alone, more where the machine is busy)
-  }, 20_000);
+    // (two pages, 60 frames each, routed as a drag routes them: docs/TESTING.md, *Timeouts*)
+  }, measured(2_800));
 });
 
 describe("a page's wires, worked out again", () => {
-  it("only where a wire or something near it moved - 50 wires on a page of 100 sets and 50 cards, keyed in well under a frame", () => {
+  it("only where a wire or something near it moved - 50 wires on a page of 100 sets and 50 cards, keyed the same each frame", () => {
     // (100 sets in a grid, 50 steps' cards beside them, and 50 wires each from a set into a card)
     const sets: Frame[] = Array.from({ length: 100 }, (_, i) => ({ x0: (i % 10) * 30, x1: (i % 10) * 30 + 10, y0: -Math.floor(i / 10) * 30 - 10, y1: -Math.floor(i / 10) * 30 }));
     const cards = Array.from({ length: 50 }, (_, i) => cardOf({ x: (i % 10) * 30 + 15, y: -Math.floor(i / 5) * 30 }));
@@ -708,11 +709,8 @@ describe("a page's wires, worked out again", () => {
     const keys = (all: Frame[]) => wires.map((w) => wireKey(w.p, w.q, w.e, framesHash(nearWire(w.p, w.q, w.e, all))));
     const page = [...sets, ...cards];
     const k0 = keys(page);
-    // (as a drag has it: the keys of all, each frame - 100 frames)
-    const t0 = performance.now();
-    for (let k = 0; k < 100; k++) keys(page);
-    const each = (performance.now() - t0) / 100;
-    expect(each).toBeLessThan(4);
+    // (as a drag has it: the keys of all, each frame - the same each time; how long it takes, `MENO_PERF` below)
+    for (let k = 0; k < 3; k++) expect(keys(page)).toEqual(k0);
     // (a set far to the bottom right moved: the wires near it keyed anew, those far off - the first, at the top left - as they were)
     const moved = page.map((f, i) => (i === 99 ? { ...f, x0: f.x0 + 1, x1: f.x1 + 1 } : f));
     const k1 = keys(moved);
@@ -723,7 +721,7 @@ describe("a page's wires, worked out again", () => {
     expect(keys(page)).toEqual(k0);
   });
 
-  it("a drag frame works out again only the wires whose key changed - a card moved 2 px among 100 sets, in well under a frame", () => {
+  it("a drag frame works out again only the wires whose key changed - a card moved 2 px among 100 sets: its own wire, and few others", () => {
     const sets: Frame[] = Array.from({ length: 100 }, (_, i) => ({ x0: (i % 10) * 30, x1: (i % 10) * 30 + 10, y0: -Math.floor(i / 10) * 30 - 10, y1: -Math.floor(i / 10) * 30 }));
     const cards = Array.from({ length: 50 }, (_, i) => cardOf({ x: (i % 10) * 30 + 15, y: -Math.floor(i / 5) * 30 }));
     const page = [...sets, ...cards];
@@ -739,13 +737,41 @@ describe("a page's wires, worked out again", () => {
     // (the first card moved 2 px right, its wire's input with it: as a drag's frame has it)
     const moved = page.map((f, i) => (i === 100 ? { ...f, x0: f.x0 + 2 * PX, x1: f.x1 + 2 * PX } : f));
     const now = wires.map((w, i) => (i === 0 ? { ...w, q: { x: w.q.x + 2 * PX, y: w.q.y }, e: { ...w.e, to: moved[100] } } : w));
-    const t = performance.now();
     const k1 = keys(moved, now);
     const again = now.filter((_, i) => k1[i] !== k0[i]);
     again.forEach((w) => drawn(w, moved));
-    const frame = performance.now() - t;
+    // (the moved card's own wire among them, and few others: what a frame works out again - how long it takes, `MENO_PERF` below)
+    expect(again).toContain(now[0]);
     expect(again.length).toBeLessThan(wires.length / 4);
+  });
+});
+
+/**
+ * How long a drag's frame takes to key and route the page's wires, on the
+ * clock: only where asked (MENO_PERF=1), as a busy machine - a build, other
+ * tests - makes any bound on the clock fail at times. The work itself is
+ * tested above, by what is done, not how long it takes.
+ */
+describe.runIf(process.env.MENO_PERF === "1")("a page's wires, worked out again, on the clock", () => {
+  it("keys 50 wires among 150 frames in under 4 ms, and works out a 2 px drag's frame in under 48 ms", () => {
+    const sets: Frame[] = Array.from({ length: 100 }, (_, i) => ({ x0: (i % 10) * 30, x1: (i % 10) * 30 + 10, y0: -Math.floor(i / 10) * 30 - 10, y1: -Math.floor(i / 10) * 30 }));
+    const cards = Array.from({ length: 50 }, (_, i) => cardOf({ x: (i % 10) * 30 + 15, y: -Math.floor(i / 5) * 30 }));
+    const page = [...sets, ...cards];
+    const wires = Array.from({ length: 50 }, (_, i) => ({ p: setGives(sets[i * 2]), q: { x: cards[i].x0, y: cards[i].y1 - PORT_DOWN }, e: { from: sets[i * 2], to: cards[i] } }));
+    const keys = (all: Frame[], ws: typeof wires) => ws.map((w) => wireKey(w.p, w.q, w.e, framesHash(nearWire(w.p, w.q, w.e, all))));
+    const t0 = performance.now();
+    for (let k = 0; k < 100; k++) keys(page, wires);
+    expect((performance.now() - t0) / 100).toBeLessThan(4);
+    const k0 = keys(page, wires);
+    const moved = page.map((f, i) => (i === 100 ? { ...f, x0: f.x0 + 2 * PX, x1: f.x1 + 2 * PX } : f));
+    const now = wires.map((w, i) => (i === 0 ? { ...w, q: { x: w.q.x + 2 * PX, y: w.q.y }, e: { ...w.e, to: moved[100] } } : w));
+    const t = performance.now();
+    const k1 = keys(moved, now);
+    for (const w of now.filter((_, i) => k1[i] !== k0[i])) {
+      const r = wireRoute(w.p, w.q, w.e, nearWire(w.p, w.q, w.e, moved));
+      byTurn(r.pts, pointsFor(r.pts, 1));
+    }
     // (16 ms a frame at 60 frames a second; this Mac takes about 7 - room left for a slower one)
-    expect(frame).toBeLessThan(48);
+    expect(performance.now() - t).toBeLessThan(48);
   });
 });

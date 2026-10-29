@@ -6,6 +6,7 @@
  *
  * The page's units, y up; a slide by its middle and its size.
  */
+import { switchedAt } from "../utils/zoomSwitch";
 import type { Slide } from "../store/types";
 import type { View } from "./zoomPath";
 
@@ -160,7 +161,6 @@ export const NUMBER_SHARE = 1 / 6;
  * about four notches of a mouse wheel, as those do.
  */
 export const FIGURES_LEAST_PX = 0.75 * 11;
-const FIGURES_FADE = 1.15;
 
 /**
  * How a slide's number - and the line from it to the next, and its
@@ -168,16 +168,15 @@ const FIGURES_FADE = 1.15;
  * being `px` on the page: at `k` of its own size, the same on the screen
  * (`k` 1) until its disc, `disc` px across, would be more than a sixth
  * of the slide's height on the screen (`NUMBER_SHARE`), and from there
- * shrinking with the slide; and seen as much as `seen` says, all where its
- * figures, `figures` px at their own size, are large enough to read, none
- * where they are too small, faded between (`FIGURES_LEAST_PX`). Both go
- * with the zoom, never at a jump.
+ * shrinking with the slide - with the zoom, never at a jump; and whether it
+ * is seen (`read`), it having been (`was`) or not: switched where its
+ * figures, `figures` px at their own size, pass `FIGURES_LEAST_PX`, a little
+ * either way, and faded over a short time by what draws it - never faded
+ * with the zoom (utils/zoomSwitch).
  */
-export function markScale(h: number, px: number, disc: number, figures: number): { k: number; seen: number } {
+export function markScale(h: number, px: number, disc: number, figures: number, was = true): { k: number; read: boolean } {
   const k = Math.min(1, (NUMBER_SHARE * h) / px / disc);
-  const t = Math.min(1, Math.max(0, (Math.log((figures * k) / FIGURES_LEAST_PX) + Math.log(FIGURES_FADE)) / (2 * Math.log(FIGURES_FADE))));
-  // (evenly in the zoom's own steps - a wheel's notch a factor, not an amount - so that no notch takes more of it than another)
-  return { k, seen: t };
+  return { k, read: switchedAt(was, figures * k, FIGURES_LEAST_PX) };
 }
 
 /** The box round the slides, or null with none. */

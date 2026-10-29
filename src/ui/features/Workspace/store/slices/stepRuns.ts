@@ -1,3 +1,4 @@
+import type { JobState } from "../../../../../lib/jobs";
 import type { StoreApi } from "zustand";
 import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -7,7 +8,7 @@ import { anyKindById, pluginById, type PythonPlugin } from "../../../../../lib/c
 import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
-import { pluginClient } from "../../../../../lib/calc/workers";
+import { pluginClient, useReaders } from "../../../../../lib/calc/workers";
 import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
@@ -16,7 +17,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { drawingOf, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -144,6 +145,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   const forgotten = new Set<string>();
   /** The texts that show a job's log, by the job. */
   const shown = new Map<string, number>();
+  // (each log text's latest asking for a job to show, counted: one read late is let go)
+  const logAsked = new Map<number, number>();
   let looking = false;
 
   const ended = (id: number) =>
@@ -682,7 +685,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
         try {
-          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: await drawingOf(block, style) }))));
+          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: withoutStereoOpen(await drawingOf(block, style)) }))));
         } catch {
           made.push([]);
           answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
@@ -834,7 +837,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(seed?.from?.length ? { from: seed.from } : {}),
           properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
         };
-        kept.push({ place: kept.length, drawn: await drawingOf(block, style), record });
+        kept.push({ place: kept.length, drawn: withoutStereoOpen(await drawingOf(block, style)), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -966,6 +969,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
+    // (another plugin's program its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: one its manifest declares, and that
+    //  plugin added, or no job starts - said, naming it)
+    for (const n of [...new Set(prepared.flatMap((p) => p.needs ?? []))]) {
+      if (!plugin.needs?.some((d) => d.plugin === n)) return void fail(id, `${plugin.name} asked for ${n}'s program, which it does not declare`, at, key);
+      if (useReaders.getState().state[n] !== "added") return void fail(id, `The ${pluginById(n)?.name ?? n} plugin is needed for this: add it in Settings, Plugins`, at, key);
+    }
     const jobs: StepJob[] = [];
     try {
       for (const p of prepared) {
@@ -984,13 +993,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           label: `${entries[p.entries[0]]?.name ?? compoundLetter(entries[p.entries[0]]?.compound ?? 0)} ${kindInfo(step.kind).name}`,
           ...(path ? { path } : {}),
           reads: p.reads,
+          ...(p.needs ? { needs: p.needs } : {}),
         };
         const jobKeyed = await jobKey({
           plugin: plugin.id,
           pluginVersion: plugin.version,
           program: p.program,
           programVersion: useInstalled.getState().chosen[programKey(plugin.id, p.program)]?.version ?? said,
-          stamps: stamps ?? [],
+          // (and the version of each plugin whose program it needs: another xtb is another run)
+          stamps: [...(stamps ?? []), ...(p.needs ?? []).map((n) => `${n} ${pluginById(n)?.version ?? ""}`)],
           args: p.args,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),
@@ -1205,6 +1216,26 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return { ...(line ? { line } : {}), ...(progress ? { progress } : {}) };
   }
 
+  /**
+   * A step's log text showing the `k`th of its jobs: that job's log, written
+   * in it - no step to undo, as a log followed is - and followed while it
+   * runs; the others followed no more in it.
+   */
+  async function showLogJob(text: number, jobs: string[], k: number) {
+    // (the last asked for wins: one asked for before it, read after it, is let go)
+    const asked = (logAsked.get(text) ?? 0) + 1;
+    logAsked.set(text, asked);
+    const all = await wholeLog(jobs[k]);
+    if (logAsked.get(text) !== asked) return;
+    const t = (doc.getState().texts ?? []).find((x) => x.id === text);
+    if (!t?.of || !("step" in t.of)) return;
+    const step = t.of.step;
+    doc.amend((x) => ops.setTextOf(ops.editText(x, text, all || "(Nothing yet)"), text, { step, ...(jobs.length > 1 ? { jobs, job: k } : {}) }), { unsaved: true });
+    for (const [job, at] of [...shown]) if (at === text) shown.delete(job);
+    const seen = get().jobsSeen[jobs[k]];
+    if (!seen || !finished(seen.state)) shown.set(jobs[k], text);
+  }
+
   /** The texts that show a job's log, followed: what it has said since, added - with no step to undo, and to be kept when the workspace is saved. */
   async function followShown() {
     for (const [job, text] of shown) {
@@ -1238,7 +1269,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const ids = run.jobs.map((j) => j.id);
       // (the kind and options it ran as: the step's may have changed since)
       const kind = run.kind ?? step.kind;
-      const as = { kind, options: run.options };
+      // (and, of several jobs, how each ended: said of each in its log's chooser, the workspace reopened)
+      const as = { kind, options: run.options, ...(ids.length > 1 ? { states: records.map((r): JobState => r?.state ?? "gone") } : {}) };
       const close = () => doc.amend((x) => setRunning(x, id, undefined), { unsaved: true });
 
       // stopped - or every one gone without saying how it ended: nothing comes in. (Some gone - the computer restarted,
@@ -1583,23 +1615,33 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (what the column shows as it is asked: a log come is shown by the store at once)
       const was = get();
       const showing = was.textsOpen && was.pdfShown == null ? was.textShown : null;
-      let last: number | null = null;
-      for (const [k, job] of jobs.entries()) {
-        const open = shown.get(job);
-        if (open != null && (doc.getState().texts ?? []).some((t) => t.id === open)) {
-          last ??= open;
-          continue;
-        }
-        const text = await wholeLog(job);
-        const made = ops.addTexts(doc.getState(), [{ name: `${name} log${jobs.length > 1 ? ` ${k + 1}` : ""}`, text: text || "(Nothing yet)", of: { step: id } }]);
+      // (one text for the step's log, whatever its jobs - several, a chooser of them in the column, the first shown: the maintainer, 2026-10-28)
+      const several = jobs.length > 1;
+      const open = (doc.getState().texts ?? []).find((t) => t.of && "step" in t.of && t.of.step === id && !t.at);
+      let last: number;
+      if (open) {
+        last = open.id;
+        // (a log of one of several jobs as it was named before - *Optimise log 1* - named as the step's log now)
+        if (open.name !== `${name} log`) doc.amend((x) => ({ ...x, texts: (x.texts ?? []).map((t) => (t.id === open.id ? { ...t, name: `${name} log` } : t)) }), { unsaved: true });
+        const of = open.of as { step: number; jobs?: string[]; job?: number };
+        // (its jobs as they are now - run again since: the first shown; one job: its log as it is now)
+        if (!several || JSON.stringify(of.jobs) !== JSON.stringify(jobs)) await showLogJob(open.id, jobs, 0);
+      } else {
+        const text = await wholeLog(jobs[0]);
+        const made = ops.addTexts(doc.getState(), [{ name: `${name} log`, text: text || "(Nothing yet)", of: { step: id, ...(several ? { jobs, job: 0 } : {}) } }]);
         if (made.doc !== doc.getState()) doc.edit("open text", () => made.doc);
-        if (made.last != null) {
-          last ??= made.last;
-          if (step.running) shown.set(job, made.last);
-        }
+        if (made.last == null) return;
+        last = made.last;
+        if (step.running) shown.set(jobs[0], made.last);
       }
       // (rising out of its step into the column, where the column is not showing it already)
-      if (last != null) set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+      set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+    },
+    showStepLogJob: (text: number, k: number) => {
+      const t = (doc.getState().texts ?? []).find((x) => x.id === text);
+      const of = t?.of && "step" in t.of ? t.of : null;
+      if (!of?.jobs || k < 0 || k >= of.jobs.length || k === (of.job ?? 0)) return Promise.resolve();
+      return showLogJob(text, of.jobs, k);
     },
     showStepFiles: async (id: number) => {
       const step = stepOf(doc.getState(), id);

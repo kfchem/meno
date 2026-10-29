@@ -64,8 +64,25 @@ fn known(ext: &str) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 // Windows: the keys, as lists, written on request and taken out exactly.
 
-/// The ProgID Meno's formats point to.
-pub const PROG_ID: &str = "Meno.File";
+/// The ProgID earlier Meno pointed all its formats to, taken out with the rest (`unregister`).
+pub const OLD_PROG_ID: &str = "Meno.File";
+
+/// The ProgID a format of Meno's points to: one each, so that each shows its own icon
+/// (`icon_of`) where Meno opens it.
+pub fn prog_id(ext: &str) -> String {
+    format!("Meno.File.{ext}")
+}
+
+/// A format's ProgID's key, under HKEY_CURRENT_USER.
+pub fn prog_id_key(ext: &str) -> String {
+    format!(r"Software\Classes\{}", prog_id(ext))
+}
+
+/// The name of a format's icon, in `icons/formats` (`<name>.ico`, `<name>.icns`): its
+/// extension's, a cube file's two spellings one icon.
+pub fn icon_of(ext: &str) -> &str {
+    if ext == "cub" { "cube" } else { ext }
+}
 /// The name Meno is listed by: `RegisteredApplications`' value, and `ApplicationName`, which
 /// must be the same (Microsoft Learn, *Registering an Application for Use with Default
 /// Programs*, Capabilities).
@@ -74,8 +91,6 @@ pub const APP_NAME: &str = "Meno";
 pub const CAPABILITIES: &str = r"Software\Meno\Capabilities";
 /// Where it lists the formats it is offered for, one value each.
 pub const FILE_ASSOCIATIONS: &str = r"Software\Meno\Capabilities\FileAssociations";
-/// Meno's ProgID's key, under HKEY_CURRENT_USER.
-pub const PROG_ID_KEY: &str = r"Software\Classes\Meno.File";
 /// The shared key Meno adds one value to, under HKEY_CURRENT_USER.
 pub const REGISTERED_APPLICATIONS: &str = r"Software\RegisteredApplications";
 
@@ -84,24 +99,36 @@ pub const REGISTERED_APPLICATIONS: &str = r"Software\RegisteredApplications";
 pub type Entry = (String, String, Option<String>);
 
 /// What Meno writes for the Meno at `exe` the first time it is offered for a format: its
-/// capabilities, its ProgID, and - last, once what it points to is there - its name in
-/// `RegisteredApplications`. With `claim` for each format offered, nothing else is written.
-pub fn registration(exe: &str) -> Vec<Entry> {
+/// capabilities and - last, once what it points to is there - its name in
+/// `RegisteredApplications`. With `format` and `claim` for each format offered, nothing else
+/// is written.
+pub fn registration(_exe: &str) -> Vec<Entry> {
     let e = |k: &str, n: &str, v: Option<String>| (k.to_string(), n.to_string(), v);
     vec![
         e(CAPABILITIES, "ApplicationDescription", Some("Chemical structures in 2D and 3D, calculations, PDFs and figures.".into())),
         e(CAPABILITIES, "ApplicationName", Some(APP_NAME.into())),
         e(FILE_ASSOCIATIONS, "", None),
-        e(PROG_ID_KEY, "", Some("Meno file".into())),
-        e(&format!(r"{PROG_ID_KEY}\DefaultIcon"), "", Some(format!("\"{exe}\",0"))),
-        e(&format!(r"{PROG_ID_KEY}\shell\open\command"), "", Some(format!("\"{exe}\" \"%1\""))),
         e(REGISTERED_APPLICATIONS, APP_NAME, Some(CAPABILITIES.into())),
     ]
 }
 
-/// The one value that offers Meno for `ext` in Default apps.
+/// A format's own ProgID, for the Meno at `exe`: the file opened with it, and shown with the
+/// format's icon (`icon_of`), installed beside it in `icons\formats` (tauri.windows.conf.json).
+pub fn format(exe: &str, ext: &str) -> Vec<Entry> {
+    let key = prog_id_key(ext);
+    // (its folder by Windows' own separator, so that the keys read the same wherever they are tested)
+    let dir = exe.rsplit_once(['\\', '/']).map_or("", |(d, _)| d);
+    let e = |k: String, v: String| (k, String::new(), Some(v));
+    vec![
+        e(key.clone(), format!("Meno .{ext} file")),
+        e(format!(r"{key}\DefaultIcon"), format!(r"{dir}\icons\formats\{}.ico", icon_of(ext))),
+        e(format!(r"{key}\shell\open\command"), format!("\"{exe}\" \"%1\"")),
+    ]
+}
+
+/// The one value that offers Meno for `ext` in Default apps, at its own ProgID.
 pub fn claim(ext: &str) -> Entry {
-    (FILE_ASSOCIATIONS.to_string(), format!(".{ext}"), Some(PROG_ID.to_string()))
+    (FILE_ASSOCIATIONS.to_string(), format!(".{ext}"), Some(prog_id(ext)))
 }
 
 /// Whether Windows' Default apps page takes `registeredAppUser` and opens at Meno's own
@@ -238,8 +265,10 @@ mod win {
     pub fn offer(ext: &str) -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         // (the claim before the listing, so that Meno is never listed for nothing)
-        let mut entries = registration(&exe.to_string_lossy());
+        let exe = exe.to_string_lossy();
+        let mut entries = registration(&exe);
         let listing = entries.pop();
+        entries.extend(format(&exe, ext));
         entries.push(claim(ext));
         entries.extend(listing);
         write(&entries)?;
@@ -286,13 +315,16 @@ mod win {
     }
 
     /// Takes out what `offer` wrote, and nothing else: Meno's value in the shared
-    /// `RegisteredApplications` (never the key), its own Capabilities and ProgID whole, and
-    /// `Software\Meno` only where nothing is left in it.
+    /// `RegisteredApplications` (never the key), its own Capabilities and each format's ProgID
+    /// whole - and the one ProgID earlier Meno wrote for them all - and `Software\Meno` only
+    /// where nothing is left in it.
     pub fn unregister() -> Result<(), String> {
         delete_value(REGISTERED_APPLICATIONS, APP_NAME);
+        let progs: Vec<String> = extensions().map(prog_id).chain([OLD_PROG_ID.to_string()]).collect();
+        let keys = [(r"Software\Meno", "Capabilities")].into_iter().chain(progs.iter().map(|p| (r"Software\Classes", p.as_str())));
         // SAFETY: keys opened, used and closed; a key not there is fine.
         unsafe {
-            for (parent, sub) in [(r"Software\Meno", "Capabilities"), (r"Software\Classes", PROG_ID)] {
+            for (parent, sub) in keys {
                 let mut hkey = HKEY::default();
                 if RegOpenKeyExW(HKEY_CURRENT_USER, &HSTRING::from(parent), None, KEY_ALL_ACCESS, &mut hkey) == ERROR_SUCCESS {
                     let _ = RegDeleteTreeW(hkey, &HSTRING::from(sub));
@@ -345,7 +377,9 @@ mod win {
                     ext: ext.to_string(),
                     app: path.as_ref().and_then(|_| assoc(&dotted, ASSOCSTR_FRIENDLYAPPNAME)),
                     path,
-                    meno: prog.as_deref() == Some(PROG_ID),
+                    // (earlier Meno's one ProgID still opens it with Meno, with Meno's own icon until
+                    // chosen again)
+                    meno: prog.as_deref() == Some(prog_id(ext).as_str()) || prog.as_deref() == Some(OLD_PROG_ID),
                     offered: offered.iter().any(|o| o == ext),
                 }
             })
@@ -578,8 +612,12 @@ mod tests {
 
     /// Every key and value offering Meno for all its formats would write.
     fn all() -> Vec<Entry> {
-        let mut e = registration(r"C:\Users\someone\AppData\Local\Meno\Meno.exe");
-        e.extend(extensions().map(claim));
+        let exe = r"C:\Users\someone\AppData\Local\Meno\Meno.exe";
+        let mut e = registration(exe);
+        for ext in extensions() {
+            e.extend(format(exe, ext));
+            e.push(claim(ext));
+        }
         e
     }
 
@@ -605,7 +643,7 @@ mod tests {
         for (key, name, _) in all() {
             assert!(!key.contains("OpenWithProgids") && !name.contains("OpenWithProgids"), "{key}");
             assert!(!key.contains(r"Applications\"), "{key}");
-            let ok = key == REGISTERED_APPLICATIONS || key.starts_with(CAPABILITIES) || key.starts_with(PROG_ID_KEY);
+            let ok = key == REGISTERED_APPLICATIONS || key.starts_with(CAPABILITIES) || extensions().any(|ext| key.starts_with(&prog_id_key(ext)));
             assert!(ok, "a key outside Meno's own: {key}");
         }
         let reg = registration("Meno.exe");
@@ -621,8 +659,8 @@ mod tests {
     }
 
     #[test]
-    fn claims_one_format_at_a_time_for_meno_s_progid() {
-        assert_eq!(claim("sdf"), (FILE_ASSOCIATIONS.to_string(), ".sdf".to_string(), Some(PROG_ID.to_string())));
+    fn claims_one_format_at_a_time_each_for_its_own_progid() {
+        assert_eq!(claim("sdf"), (FILE_ASSOCIATIONS.to_string(), ".sdf".to_string(), Some("Meno.File.sdf".to_string())));
         let claimed: Vec<String> = extensions().map(|e| claim(e).1).collect();
         let want: Vec<String> = crate::opened::OPENED_WITH.iter().map(|e| format!(".{e}")).collect();
         assert_eq!(claimed, want);
@@ -632,12 +670,34 @@ mod tests {
     }
 
     #[test]
-    fn opens_the_file_given_with_this_meno() {
-        let reg = registration(r"C:\Program Files\Meno\Meno.exe");
+    fn opens_the_file_given_with_this_meno_showing_its_format_s_own_icon() {
+        let reg = format(r"C:\Program Files\Meno\Meno.exe", "pdb");
+        assert_eq!(reg[0].0, r"Software\Classes\Meno.File.pdb");
         let command = reg.iter().find(|k| k.0.ends_with(r"shell\open\command")).unwrap();
         assert_eq!(command.2.as_deref(), Some(r#""C:\Program Files\Meno\Meno.exe" "%1""#));
         let icon = reg.iter().find(|k| k.0.ends_with("DefaultIcon")).unwrap();
-        assert_eq!(icon.2.as_deref(), Some(r#""C:\Program Files\Meno\Meno.exe",0"#));
+        assert_eq!(icon.2.as_deref(), Some(r"C:\Program Files\Meno\icons\formats\pdb.ico"));
+        // (a cube file's two spellings, one icon)
+        assert_eq!(format(r"C:\Meno\Meno.exe", "cub")[1].2.as_deref(), Some(r"C:\Meno\icons\formats\cube.ico"));
+    }
+
+    #[test]
+    fn has_an_icon_for_every_format_on_both_systems() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let plist = std::fs::read_to_string(root.join("Info.plist")).unwrap();
+        let mac = std::fs::read_to_string(root.join("tauri.macos.conf.json")).unwrap();
+        let win = std::fs::read_to_string(root.join("tauri.windows.conf.json")).unwrap();
+        assert!(win.contains(r#""icons/formats/*.ico""#), "the formats' icons are installed on Windows");
+        for ext in extensions() {
+            let icon = icon_of(ext);
+            for kind in ["ico", "icns", "svg"] {
+                assert!(root.join(format!("icons/formats/{icon}.{kind}")).is_file(), "icons/formats/{icon}.{kind}");
+            }
+            // (macOS: the format's own document type names its icon, put in the app's Resources)
+            let file = format!("meno-{icon}.icns");
+            assert!(plist.contains(&format!("<string>{file}</string>")), "Info.plist names {file}");
+            assert!(mac.contains(&format!(r#""Resources/{file}": "icons/formats/{icon}.icns""#)), "tauri.macos.conf.json puts {file} in Resources");
+        }
     }
 
     #[test]

@@ -55,14 +55,15 @@ export default function RadioGroup<T extends string>({
               e.preventDefault();
               go(next);
             }}
-            className="group flex items-center gap-2 py-0.5 text-sm text-gh-black outline-none"
+            // (a long name wrapped hangs under its own first line, to the right of its circle, set left - not centred, as a button's words are)
+            className="group flex items-start gap-2 py-0.5 text-left text-sm leading-5 text-gh-black outline-none"
           >
             {/* (drawn as circles, not a rounded box: round at any scale - a box 14 px across is 17.5 device pixels at 125%, its width and
                 height rounded apart, and the dot was seen as a stadium on Windows) */}
             <svg
               aria-hidden
               viewBox="0 0 14 14"
-              className="h-3.5 w-3.5 shrink-0 overflow-visible rounded-full group-focus-visible:ring-2 group-focus-visible:ring-accel-lightbase"
+              className="h-3.5 w-3.5 shrink-0 mt-[3px] overflow-visible rounded-full group-focus-visible:ring-2 group-focus-visible:ring-accel-lightbase"
             >
               <circle
                 cx={7}
@@ -78,7 +79,7 @@ export default function RadioGroup<T extends string>({
                 className={clsx("origin-center fill-accel-base transition-transform duration-150 ease-meno [transform-box:fill-box]", on ? "scale-100" : "scale-0")}
               />
             </svg>
-            {o.label}
+            <span className="min-w-0">{o.label}</span>
           </button>
         );
       })}
