@@ -56,8 +56,8 @@ the tests in `scripts/calc/test_plugin_blender.py` (`LiquidShare`, the cap, the 
 6. **What was met at 800 px.** Each reform was 30 frames, with no frame-to-frame step more than 2.5 times both its neighbours,
    and there was no domain flash.
 
-The films and numbers of that run are on the render exchange share, at `jobs/liquid-cap-714/`: the film, its log lines, the
-frame-difference curve, contact sheets of the pools and the melts, and every frame.
+The films and numbers of that run are on the render share, in its job for #714 ("liquid-cap-714"): the film, its log lines,
+the frame-difference curve, contact sheets of the pools and the melts, and every frame.
 
 ## What a restart should question first
 
@@ -74,8 +74,11 @@ frame-difference curve, contact sheets of the pools and the melts, and every fra
   conserved through the reform), not what the solver happens to make.
 - **The minimum length.** #718 gave the liquid 6 s a change. A new motion needs its own, set from trial films.
 
-## Tools (local, on the Mac)
+## Tools
 
-`~/work/meno-cache/films/plugintest/run.py` (a film as Meno runs it, with `RES`, `NOCAP` and `CAL` for the liquid), and in
-`~/work/meno-cache/films/judge/`: `diffcurve.py` (a decoded film's frame-to-frame change), `poolstat.py` (a kept pool's
-volume and reach) and `sheet.py` (contact sheets).
+The lane's local kit, kept off the repo:
+
+- a runner that makes a film as Meno runs it, with switches for the liquid's grid, the cap and a dry estimate of the pour;
+- a frame-to-frame difference curve of a decoded film;
+- a kept pool's volume and reach;
+- contact sheets of frames.
