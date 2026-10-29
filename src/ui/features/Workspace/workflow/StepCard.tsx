@@ -11,7 +11,7 @@ import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
-import { CARD_H, CARD_W, PORT_STEP, portDown, PX } from "./look";
+import { CARD_H, CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
 import { clock } from "./programs";
 import { COPYABLE } from "../hooks/useKeepUnselected";
 
@@ -23,23 +23,23 @@ export type PortLook = "plain" | "lit";
 
 /** A hairline on the screen, whatever the zoom: the page's layer of HTML sets it (Workflow2D). */
 export const HAIR = "var(--hair, 1px)";
-/** How large a port is on the screen, in hairlines. */
-const PORT_HAIRS = 9;
-
-/** A port, centred where it stands in its parent: a small ring, a hair thick. */
+/** A port, centred where it stands in its parent: a small ring, a hair thick. `of`: its set's or card's height, on the page, in px. */
 export function Port({
   look,
   style,
   onPointerDown,
   data,
   label,
+  of,
 }: {
   look: PortLook;
   style: CSSProperties;
   onPointerDown: (e: ReactPointerEvent) => void;
   data: Record<string, string>;
   label: string;
+  of?: number;
 }) {
+  const size = portSize(of);
   return (
     <div
       {...data}
@@ -48,15 +48,17 @@ export function Port({
       onPointerDown={onPointerDown}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
-        "absolute rounded-full select-none transition-colors duration-150 ease-meno",
+        // (taken hold of over at least 12 hairs, however small it is drawn: meno-port)
+        "meno-port absolute rounded-full select-none transition-colors duration-150 ease-meno",
         look === "lit" ? "bg-accel-base border-accel-base" : "bg-white border-gh-gray hover:bg-accel-lightbase hover:border-accel-base",
       )}
       style={{
-        width: `calc(${HAIR} * ${PORT_HAIRS})`,
-        height: `calc(${HAIR} * ${PORT_HAIRS})`,
-        marginLeft: `calc(${HAIR} * ${-PORT_HAIRS / 2})`,
-        marginTop: `calc(${HAIR} * ${-PORT_HAIRS / 2})`,
-        borderWidth: HAIR,
+        ["--port" as string]: size,
+        width: size,
+        height: size,
+        marginLeft: `calc(${size} / -2)`,
+        marginTop: `calc(${size} / -2)`,
+        borderWidth: `min(${HAIR}, calc(${size} / 5))`,
         borderStyle: "solid",
         pointerEvents: "auto",
         cursor: "crosshair",

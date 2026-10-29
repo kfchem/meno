@@ -1078,6 +1078,13 @@ Decided while building it, for the maintainer to confirm:
   hover blue only for a wire under the pointer, as for an atom.
 - **A step's card is 208 px wide** at 100 %, its ports 28 px below its
   top: wires join where they always did as the card opens.
+- **A port** is round at every zoom - a ring a hair thick, or filled in
+  the accent while a wire may join it - and stands exactly at its wire's
+  end. It is 9 hairs across on the screen where the page is near; zoomed
+  out, never more than its own 11 page px - it shrinks with the page from
+  there - nor than a sixth of its set's or card's height, its ring then at
+  most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
+  were far too big for their sets; look `portSize`).
 - **One layer of HTML for all sets and steps**: with a layer for each, a
   step's layer covered the ports of sets under it (ARCHITECTURE.md,
   *Workflows*).

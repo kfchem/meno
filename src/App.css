@@ -220,6 +220,13 @@ body {
 .meno-barred ::placeholder {
   color: transparent !important;
 }
+/* A workflow's port, however small it is drawn - zoomed out, with the page (workflow/look `portSize`) - taken hold of over at least 12 hairlines about its middle. */
+.meno-port::after {
+  content: "";
+  position: absolute;
+  inset: min(0px, calc((var(--port) - var(--hair, 1px) * 12) / 2));
+  border-radius: 9999px;
+}
 /* While a talk is given, what works a molecule - its frames, Make again -
    goes; what it says - a measurement's value - stays (docs/PRESENTING.md). */
 [data-presenting] .meno-control-chip {
