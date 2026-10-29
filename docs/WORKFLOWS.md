@@ -1765,6 +1765,11 @@ Foundation PR 5 (WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*):
   or neither ("Reactant side is wired: wire Product side too, or
   neither"). An optional input looks as any other: the card's line names
   what is needed, and never an optional one (`kinds` `laterPortsNeed`).
+  Wired, any input - optional or not - must give what it takes, by what
+  its set gives, run or not yet (flow `givesOf`): one wired from a set
+  that came to hold a table or a chart says so ("Second takes molecules
+  in 3D or conformer sets"), and the step does not run as if it were not
+  wired.
 
 Not read from a workspace saved before this: a wire into a step by its
 number alone, or out of a step, and a result set that does not say which
