@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DURATION } from "../theme/motion";
 import { listKey, opensList } from "./keys";
-import { placeList, pressedAway } from "./place";
+import { LIST_MOST_HEIGHT, placeList, pressedAway } from "./place";
 
 /** A choice of a Select: its value, and what it is called. */
 export type SelectOption<T extends string = string> = { value: T; label: string };
@@ -167,10 +167,11 @@ export default function Select<T extends string>({
             aria-activedescendant={open ? `${id}-${lit}` : undefined}
             tabIndex={-1}
             className={clsx(
-              "fixed z-[120] max-h-72 overflow-y-auto rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none",
+              "fixed z-[120] overflow-y-auto rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none",
               open ? "meno-fade-in" : "meno-fade-out pointer-events-none",
             )}
-            style={place ?? { left: -9999, top: -9999 }}
+            // (nine rows whole at most, or half the tenth showing there is more: ./place, LIST_ROWS)
+            style={{ ...(place ?? { left: -9999, top: -9999 }), maxHeight: LIST_MOST_HEIGHT }}
             onKeyDown={(e) =>
               listKey(
                 e,

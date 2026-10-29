@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Checkbox from "./Checkbox";
 import { answersEnter, checkboxKey, escapeLeft, listKey, nextChoice, nextLit, opensList, type Pressed } from "./keys";
-import { EDGE, GAP, placeList, pressedAway } from "./place";
+import { EDGE, GAP, LIST_MOST_HEIGHT, placeList, pressedAway, rowsShown } from "./place";
 import RadioGroup from "./Radio";
 import Select from "./Select";
 
@@ -163,6 +165,23 @@ describe("where an open list goes (placeList)", () => {
   it("never past the window's sides", () => {
     expect(placeList(button(700, 100), { width: 200, height: 160 }, window).left).toBe(800 - 200 - EDGE);
     expect(placeList(button(-20, 100), { width: 200, height: 160 }, window).left).toBe(EDGE);
+  });
+});
+
+describe("how tall an open list is (Select)", () => {
+  it("shows nine rows whole - one of nine never cut and scrolled by its padding - and past nine, half the tenth", () => {
+    expect(rowsShown(9)).toBe(9);
+    expect(rowsShown(10)).toBe(9.5);
+    expect(rowsShown(30)).toBe(9.5);
+    expect(rowsShown(3)).toBe(3);
+    // (its rows 2rem each, its padding and the line round it, at nine and a half rows)
+    expect(LIST_MOST_HEIGHT).toBe("calc(9.5 * 2rem + 0.5rem + 2px)");
+  });
+
+  it("is held to that, and to no fixed height that cuts a row of nine", () => {
+    const select = readFileSync(join(__dirname, "Select.tsx"), "utf8");
+    expect(select).toMatch(/maxHeight: LIST_MOST_HEIGHT/);
+    expect(select).not.toMatch(/max-h-/);
   });
 });
 
