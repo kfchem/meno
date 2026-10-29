@@ -56,6 +56,13 @@ export function centroid(points: readonly Point[]): Point {
 }
 
 /**
+ * How near, in bond lengths, an atom's mirror image must land on its partner
+ * for a drawing to be its own mirror image: a drawing laid out symmetric is,
+ * one with an atom a tenth of a bond off it is not.
+ */
+export const MIRROR_TOL = 0.05;
+
+/**
  * The lines a drawing is its own mirror image in, as their directions in
  * radians (0 to pi): every point reflected lands within `tol` of a point of
  * the same kind, and every edge on an edge of the same kind. Such a line

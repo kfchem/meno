@@ -22,7 +22,7 @@ import {
   type Frame,
   type Grown,
 } from "./assemble";
-import { angleOf, dist, mirror, mirrorLines, rad, segmentsCross, sub } from "./geometry";
+import { angleOf, dist, mirror, mirrorLines, MIRROR_TOL, rad, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, hydrogenWritten, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
@@ -1465,8 +1465,6 @@ function crossingsOf(bonds: readonly [number, number][], p: Grown): number {
 
 /** The most atoms a side turned over may have and still be set right within. */
 const SMALL_SIDE = 10;
-/** How near, in bond lengths, an atom's mirror image must land on its partner for a drawing to be its own mirror image. */
-const MIRROR_TOL = 0.05;
 
 /**
  * A piece with no ring that can lie square - its rings all five-membered,
