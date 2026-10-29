@@ -12,7 +12,7 @@ import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEne
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, measuredSet, speciesSet, taggedSet } from "./structureSteps";
+import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, speciesSet, taggedSet } from "./structureSteps";
 import { positionIds, substituted } from "./substituents";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
@@ -66,6 +66,35 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return measuredSet(entries, holds, String(options.measurements ?? ""));
     default:
       return { ok: false, said: "Meno does not do this itself" };
+  }
+}
+
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps): *Merge*, *Re-bond* and *Compare bonding*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding"];
+
+/** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
+export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
+  if (!a.entries.length) return { ok: false, said: "Nothing came into its first input" };
+  if (!b.entries.length) return { ok: false, said: "Nothing came into its second input" };
+  const o = optionsOf(kindInfo(kind).options ?? [], own);
+  switch (kind) {
+    case "merge":
+      return mergedSet(a.entries, b.entries, a.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
+    case "rebond":
+      return rebondedSet(a.entries, b.entries, a.holds, o.pairs === "property" ? "property" : "each", String(o.property ?? ""));
+    case "compare-bonding":
+      return comparedSet(a.entries, b.entries, a.holds, {
+        reference: o.reference === "property" ? "property" : "each",
+        property: String(o.property ?? ""),
+        writes: String(o.writes ?? ""),
+        from: String(o.from ?? ""),
+        rs: o.rs === true,
+        ez: o.ez === true,
+        atoms: String(o.atoms ?? ""),
+        elements: String(o.elements ?? ""),
+      });
+    default:
+      return { ok: false, said: "Meno does not do this itself on two inputs" };
   }
 }
 

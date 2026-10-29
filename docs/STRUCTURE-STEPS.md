@@ -4,7 +4,8 @@ The workflow steps on structures that Meno does itself
 (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures). Each does
 one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
 `src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
-*Combine* and *Measure* are steps of a workflow (docs/WORKFLOWS.md, *Kinds of
+*Combine* and *Measure* are steps of a workflow, and so are the steps of two
+inputs, *Merge*, *Re-bond* and *Compare bonding* (docs/WORKFLOWS.md, *Kinds of
 step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
 entry records, and gives each back as a step's entry - all it held kept
 where it is that entry still, what was worked out at another structure,
@@ -101,11 +102,40 @@ its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
   - the dihedral, distance and angle the tests' own geometry builder
     places by.
 
+## Steps of two inputs
+
+*Merge*, *Re-bond* and *Compare bonding* each take two inputs, named on the
+step, and will not run until both are wired. Each pairs entries of the two
+in a way said on its card, never by an implicit rule: each with each, or
+*matched on* a property the chemist types - an ID a *Tag* gave, which rides
+along with every entry made from it (`lib/nodes/match.ts`). An entry with
+none to pair with, or more than one, is not paired, and says why. Every
+entry a step sets aside goes out of its second exit with why written on it
+as a property: `set_aside` (Merge, Re-bond), `bonding` (Compare bonding).
+Each is a text, to read in the set's table and to filter on.
+
+## Merge
+
+Two sets of one kind made one (`merge`, `lib/nodes/merge.ts`): *First*'s
+entries, then *Second*'s. A set of molecules and a conformer set are not
+merged; the step says so. A conformer set's compounds stay apart: *Second*'s
+are numbered on after *First*'s. *Keep* is *All*, or *One of each* value of
+a property: the first met is kept, and each later one is set aside, naming
+the one kept ("the same start as a #1, which was kept"). One with no value
+of it is set aside too, saying so. More than two sets are merged by chaining
+Merges.
+
 ## Re-bond
 
 One entry's geometry with another's bonds and charges (`rebonded`): for
 example, a conformer of the reactant given the product's bonding, as the
 start of a restrained minimisation towards the product.
+
+- **As a step.** It takes *Geometry* and *Bonding*. *Pairs* is *Each with
+  each* (every geometry onto every bonding entry) or *Matched on* a
+  property. Entries re-bonded from one geometry compound onto one bonding
+  entry are one compound of their own. A pair that cannot be re-bonded sets
+  the geometry entry aside, naming the bonding entry and why ("onto b #1: …").
 
 - **One numbering.** The two must hold the same atoms in one numbering, atom
   by atom; a *Reaction* step writes its products in the reactants'. Where
@@ -141,6 +171,22 @@ refused at its first atom.
 Whether an entry's geometry is bonded as a reference is, the two holding the
 same atoms in one numbering (`comparedBonding`); or, against several
 references, the first it is bonded as (`matchingReference`).
+
+- **As a step.** It takes *Molecules* and *Reference*. *Against* is either:
+  - *Each reference*: the first one an entry is bonded as is written on it,
+    under the name given (*The match as*, `matches` by default). What is
+    written is that reference's value of a property, where one is chosen,
+    else its number among them, from 1 ("reference 2"). Where it matches
+    none, "none" is written.
+  - *Matched on* a property: each entry is compared with the one reference
+    that has its value.
+
+  Entries bonded as their reference go out of *Same*. The others go out of
+  *Different*, each with `bonding` written on it: its differences (against
+  its one reference, or "bonded as none of the 3 references"), or why it
+  was not compared (another numbering, frames, nothing to pair with). Its
+  line counts them apart: "12 same · 3 different · 1 not compared".
+  *Pass over atoms* are typed from 1 on the card.
 
 - **Bonds read from the geometry** as Meno reads any geometry given no bonds
   (`bondedPairs`): two atoms closer than their single-bond covalent radii
