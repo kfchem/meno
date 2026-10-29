@@ -132,7 +132,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
-import { cleanUp, fragmentOf } from "./chem/cleanUp";
+import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
@@ -412,7 +412,8 @@ function WorkspaceContent({
       cleanUp(store, aroundAtom)
         .catch((e: unknown) =>
           setChemError(
-            `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
+            // (what it left as drawn, named - the rest laid out: its own words; anything else, a failure)
+            e instanceof CleanUpRefused ? e.message : `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
           ),
         )
         .finally(() => {
