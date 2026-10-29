@@ -69,7 +69,7 @@ if ($env:FRESH) { Invoke-MenoClick -X 1257 -Y 1126; Start-Sleep -Milliseconds 80
 Start-Sleep -Seconds 2
 Open-MenoFile (Join-Path $Fixtures "conformance-workflows.meno"); Start-Sleep -Seconds 4
 Send-MenoShortcut 1; Start-Sleep -Milliseconds 1500
-Invoke-MenoWheel -X 1280 -Y 860 -Notches -8; Start-Sleep -Milliseconds 2000
+Invoke-MenoZoom -X 1280 -Y 860 -Notches -8; Start-Sleep -Milliseconds 2000
 Away
 Save-Step "workspace"
 
@@ -129,6 +129,6 @@ Invoke-MenoClick -X 1756 -Y 860 -Count 2; Start-Sleep -Milliseconds 1500
 Away
 Save-Step "relaid"
 
-Invoke-MenoWheel -X 1280 -Y 860 -Notches -12; Start-Sleep -Milliseconds 1500
+Invoke-MenoZoom -X 1280 -Y 860 -Notches -12; Start-Sleep -Milliseconds 1500
 Away
 Save-Step "zoomed-out"

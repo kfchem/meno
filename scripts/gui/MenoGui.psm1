@@ -183,6 +183,11 @@ function Get-MenoBuild {
     return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../../src-tauri/target/release/Meno.exe"))
 }
 
+function Get-MenoProfile {
+    # The folder of the Meno under test's settings, its settings.json in it (src-tauri/src/folders.rs, data_dir: the roaming one).
+    return Join-Path $env:APPDATA "Meno"
+}
+
 function Start-MenoProcess {
     param([Parameter(Mandatory)] [string] $Path)
     Start-Process -FilePath $Path | Out-Null
@@ -525,6 +530,9 @@ function Invoke-MenoSwipe {
 }
 
 function Invoke-MenoWheel {
+    # Turn the wheel over a point: positive notches upwards, as a page reads a
+    # turn (deltaY below 0), negative downwards. Which way that zooms is Meno's
+    # Settings' to say: to zoom by what is meant, Invoke-MenoZoom (run.ps1).
     param([Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y, [int] $Notches = 1)
     $p = ConvertTo-Screen $X $Y
     [NativeGui]::MoveTo($p.X, $p.Y)
@@ -587,7 +595,7 @@ function Wait-MenoSettled {
     return $false
 }
 
-Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
+Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled
