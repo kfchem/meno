@@ -668,7 +668,8 @@ export function torsionsHow(v: OptionValues): string {
   if (needs) return needs;
   // (the one reference is the default: left unsaid)
   const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
-  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2 each time${matched}`;
+  // (the + says it adds each time - the option's own label says it whole)
+  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
 }
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */

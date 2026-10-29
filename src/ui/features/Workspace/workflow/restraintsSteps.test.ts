@@ -128,7 +128,7 @@ describe("Torsion restraints, as a step", () => {
   it("has no strength of its own to add: it says so on its card", () => {
     expect(kindInfo("torsion-restraints").needs?.({})).toBe("Set the strength added");
     expect(kindInfo("torsion-restraints").inputs?.map((p) => p.name)).toEqual(["Molecules", "Reference"]);
-    expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("held at 180°, +50 kcal/mol/rad² each time, matched on product");
-    expect(kindInfo("torsion-restraints").how?.({ step: "50" })).toBe("held at 180°, +50 kcal/mol/rad² each time");
+    expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("held at 180°, +50 kcal/mol/rad², matched on product");
+    expect(kindInfo("torsion-restraints").how?.({ step: "50" })).toBe("held at 180°, +50 kcal/mol/rad²");
   });
 });
