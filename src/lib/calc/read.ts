@@ -81,8 +81,12 @@ export const readerLine = (f: { from: string; version: string }) => (f.version ?
  * that gives them; every reader's results are kept, each with the reader
  * it came from - a name is its reader's own, matched against no other's -
  * the first's first. What belongs to frames is kept only from a reader that
- * read as many as the geometries are. Also: the readers whose findings
- * were put together.
+ * read as many as the geometries are - and so are the imaginary frequencies
+ * the program judged the last of them has (none judged, `[]`, as well as
+ * some: a mark that it is no minimum) - and what the program warned of, the
+ * first's that gives any; and each geometry's population and degeneracy,
+ * from one that read as many. Also: the readers whose findings were put
+ * together.
  */
 export function combine(found: readonly Found[]): { output: ReaderOutput; readers: string[] } {
   const framesOf = (o: ReaderOutput) =>
@@ -100,6 +104,15 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
   const marking = taken.find((f) => sameFrames(f.output) && marksOf(f.output));
   const marks = marking ? marksOf(marking.output) : null;
   const results: Result[] = taken.flatMap((f) => readResults(f.output.results, atoms.length, sameFrames(f.output) ? frames.length : 0, f.from));
+  const perFrame = <K extends "populations" | "degeneracies">(pick: (o: ReaderOutput) => ReaderOutput[K], key: K) => {
+    const v = first((o) => {
+      const got = pick(o);
+      return sameFrames(o) && got?.length === frames.length ? got : null;
+    });
+    return v ? { [key]: v } : {};
+  };
+  const imaginary = taken.find((f) => sameFrames(f.output) && Array.isArray(f.output.imaginary))?.output.imaginary;
+  const warnings = first((o) => (Array.isArray(o.warnings) && o.warnings.length ? o.warnings : null));
   return {
     output: {
       schema: OUTPUT_SCHEMA,
@@ -114,7 +127,13 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       atoms,
       frames,
       energies: first((o) => (sameFrames(o) && o.energies?.length === frames.length ? o.energies : null)),
+      // (each geometry's population and degeneracy, where a reader gives them - of these geometries, as energies are)
+      ...perFrame((o) => o.populations, "populations"),
+      ...perFrame((o) => o.degeneracies, "degeneracies"),
       ...(marks ? { converged: marks.converged, ...(marks.unmarked ? { unmarked: marks.unmarked } : {}) } : {}),
+      // (the program's own verdicts on the run: left out here, a saddle point read through a reader was never marked one)
+      ...(imaginary ? { imaginary } : {}),
+      ...(warnings ? { warnings } : {}),
       results,
       // (of a file of several jobs, its jobs as its reader read them: each opens as a molecule of its own)
       ...(base.output.job ? { job: base.output.job } : {}),
