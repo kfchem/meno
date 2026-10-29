@@ -8,6 +8,8 @@ import { findSet, resultOf } from "./flow";
 import { howOf, kindInfo, needsOf } from "./kinds";
 import { addSet, addStep, connect } from "./model";
 import { runStep, type RunWith } from "./run";
+import { readWorkflow } from "./saved";
+import { noting } from "../utils/readNotes";
 import { SET_ASIDE } from "./structureSteps";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
@@ -63,6 +65,16 @@ describe("a Number step", () => {
     expect(n.value).toBeCloseTo(standardStateTerm(298.15)!, 12);
     expect(n.unit).toBe("kcal/mol");
     expect(n.by?.treatment).toMatch(/^standard state 1 atm to 1 mol\/L at 298\.15 K: R T ln\(R T c°\/p°\)/);
+  });
+
+  it("is kept in the workspace's file, and reads back as its step's, with its number and what worked it out", () => {
+    let doc = addStep(emptyWorkspaceDocument(), "number", 0, 0, { temperature: 298.15 });
+    const id = doc.steps![0].id;
+    doc = runStep(doc, id, W);
+    const read = noting(() => readWorkflow(JSON.parse(JSON.stringify({ sets: doc.sets, steps: doc.steps, wires: doc.wires })))!);
+    expect(read.left).toEqual({});
+    const set = read.value.sets.find((b) => b.made?.step === id)!;
+    expect([set.made?.holds, set.number]).toEqual(["number", findSet(doc, resultOf(doc, id)!.id)!.number]);
   });
 
   it("gives a number typed with its unit, and says what it needs where it cannot", () => {
