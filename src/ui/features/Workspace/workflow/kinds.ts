@@ -10,6 +10,7 @@ import { shownOptions, type Option, type OptionValues } from "../../../../lib/op
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 import { takeFramesHow, type Which } from "./takeFrames";
+import { joinHow, joinNeeds } from "./joinStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
@@ -41,8 +42,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), two tables linked (a join). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "join";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -546,6 +547,27 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
+  },
+  {
+    // (Onto's entries with properties of From's put on, matched on a property both carry - lib/nodes/join - each record as it was; those with nothing put on out of the second exit, each saying why)
+    kind: "join",
+    name: "Join",
+    icon: "join",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Joined",
+    inputs: [
+      { id: "onto", name: "Onto", takes: ["molecules", "conformers"] },
+      { id: "from", name: "From", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Not joined", gives: "same", of: "rest" }],
+    options: [
+      { id: "on", label: "Matched on", type: "text", default: "" },
+      { id: "carry", label: "Put on", type: "text", default: "" },
+    ],
+    how: (v) => joinHow(v),
+    needs: (v) => joinNeeds(v),
   },
 ];
 
