@@ -159,6 +159,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="16" cy="17" r="2.1" fill="currentColor" stroke="none" />
     </>
   ),
+  // (an atom, a reaction arrow, the same atom after it - a dashed arc mapping one onto the other)
+  reaction: (
+    <>
+      <circle cx="3.5" cy="13.5" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="16.5" cy="13.5" r="2.1" fill="currentColor" stroke="none" />
+      <path d="M6.5 13.5 H13.6 M11.4 11.6 L13.6 13.5 L11.4 15.4" />
+      <path d="M3.5 10.5 C5 3, 15 3, 16.5 10.5" strokeDasharray="1.3 1.6" />
+    </>
+  ),
   // (a chain as drawn, the same as its reference)
   compare: (
     <>

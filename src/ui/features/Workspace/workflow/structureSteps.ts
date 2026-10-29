@@ -1,7 +1,8 @@
 /**
  * Meno's steps on structures, as a workflow's steps run them
  * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine* and *Measure*, and
- * those of two inputs, *Merge*, *Re-bond* and *Compare bonding* - each
+ * those of two inputs, *Merge*, *Re-bond*, *Compare bonding* and
+ * *Reaction* - each
  * a set's entries read as Meno's entry record (`entryOfSet`), the step's own
  * function done on them (lib/nodes, lib/steps), and each entry given back as
  * a step's entry (`setEntryOfEntry`) - all it held kept where it is that
@@ -17,6 +18,9 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
+import { bondChangesTable, renumberedEntry } from "../../../../lib/steps/reaction";
+import { mapProducts } from "../../../../lib/chem/reactionMap";
+import type { Molecule } from "../../../../lib/chem/molecule";
 import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -283,4 +287,65 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   }
   const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : [])];
   return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
+}
+
+/** A step's entry as the atom mapper reads a structure: its atoms where its places are, its bonds. */
+export const moleculeOfEntry = (e: SetEntry): Molecule => ({
+  atoms: e.atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })),
+  bonds: e.bonds.map((b) => ({ ...b })),
+});
+
+/** What the atom mapper made of a Reaction's products (lib/chem/reactionMap `mapProducts`), worked out here or in a worker. */
+export type ProductsMapped = ReturnType<typeof mapProducts>;
+
+/**
+ * Why a Reaction cannot map what came in at all - not one reactant entry,
+ * or one without its hydrogens - or none where it can. Its products are
+ * looked at one by one (`reactionSet`).
+ */
+export function reactionRefused(reactants: readonly SetEntry[]): string | null {
+  if (reactants.length !== 1) return `Reactants takes one entry, the reactants as one structure (make a complex of several with Combine): ${reactants.length} came in`;
+  if (reactants[0].skeleton) return "The reactants have no hydrogens: every atom must map, hydrogens included";
+  return null;
+}
+
+/**
+ * *Reaction* (lib/chem/reactionMap `mapProducts`, lib/steps/reaction): each
+ * product mapped onto the one reactant entry, atom for atom and hydrogens
+ * too, and written in its numbering - by its first map, or by every map -
+ * each its own compound, numbered by its map; the bonds each map forms,
+ * breaks or changes in the exit *Bond changes*, a table. A product with no
+ * hydrogens, or that does not map one to one, is set aside with why.
+ * `mapped`, where the mapping was worked out already (in a worker): of
+ * `products` with no hydrogens left out, in order.
+ */
+export function reactionSet(reactants: readonly SetEntry[], products: readonly SetEntry[], maps: "first" | "every", mapped?: ProductsMapped): Outcome3D {
+  const refused = reactionRefused(reactants);
+  if (refused) return { ok: false, said: refused };
+  const reactant = reactants[0];
+  const whole = products.filter((p) => !p.skeleton);
+  const out = mapped ?? mapProducts(moleculeOfEntry(reactant), whole.map(moleculeOfEntry), { every: maps === "every" });
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = products.filter((p) => p.skeleton).map((p) => withSaid(p, SET_ASIDE, "it has no hydrogens: every atom must map, hydrogens included"));
+  const counts = new Map<number, number>();
+  for (const m of out.mapped) {
+    const p = whole[m.product];
+    const e = setEntryOfEntry(renumberedEntry(entryOfSet(p, String(m.product)), m.order, `${m.product}:${m.map}`), {
+      compound: m.product,
+      number: (counts.get(m.product) ?? 0) + 1,
+    });
+    if (!e) continue;
+    counts.set(m.product, (counts.get(m.product) ?? 0) + 1);
+    kept.push(e);
+  }
+  // (a product of which no map went through, aside with why - each map's that did not, said on it)
+  const why = new Map<number, string[]>();
+  for (const n of out.notMapped) why.set(n.product, [...(why.get(n.product) ?? []), n.map != null ? `map ${n.map + 1}: ${n.reason}` : n.reason]);
+  whole.forEach((p, k) => {
+    if (!counts.has(k) && why.has(k)) aside.push(withSaid(p, SET_ASIDE, why.get(k)!.join(" ")));
+  });
+  const changes = bondChangesTable(out.mapped, (k) => whole[k].name ?? named(whole[k]));
+  const line = [`${plural(counts.size, "product")} in the reactants' numbering${maps === "every" ? `, ${plural(kept.length, "map")}` : ""}`, `${plural(changes.rows.length, "bond change")}`];
+  if (aside.length) line.push(`${aside.length} not mapped`);
+  return { ok: true, holds: "molecules", kept, aside, said: line.join(" \u00b7 "), tables: { changes } };
 }

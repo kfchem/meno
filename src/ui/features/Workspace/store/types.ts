@@ -870,6 +870,8 @@ export type RunKeptResults = {
   unread?: number;
   restUnread?: number;
   drawn?: { made: DrawnModel[]; rest: DrawnModel[]; core?: SeriesCore };
+  /** The tables its later exits hold, by exit (a Reaction's bond changes). */
+  tables?: Record<string, Table>;
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by

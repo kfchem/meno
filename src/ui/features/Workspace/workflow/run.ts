@@ -26,7 +26,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdTable, TABLE_SET, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
@@ -443,7 +443,7 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
   // (structures drawn it could not make in 3D - Conformers' - in its aside exit's set as they came: there to be followed, and wired on)
   const asideDrawn = "asideDrawn" in outcome && outcome.asideDrawn?.length ? { drawn: { made: [], rest: outcome.asideDrawn.map(drawnModel) } } : {};
-  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn };
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn, ...(outcome.tables ? { tables: { ...outcome.tables } } : {}) };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -516,10 +516,27 @@ export function placeResults(
     return aside ? fillDrawn(doc, step, aside.id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
   }
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
+  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set)
+  for (const [exit, table] of Object.entries(results.tables ?? {})) doc = keepExitsUnder(fillTable(doc, step, exit, table), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
   if (aside && results.drawn?.rest.length) return fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
   if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
   return doc;
+}
+
+/**
+ * `doc` with an exit's set holding `table`, a step's (a Reaction's bond
+ * changes): the set that exit made, what it held gone, as large as a table
+ * set is put down - in its place, or made now.
+ */
+function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, table: Table): WorkspaceDocument {
+  const madeBy = { step: step.id, exit, holds: "table" as const };
+  const was = resultOf(doc, step.id, exit);
+  if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h);
+  if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
+  const id = doc.nextWorkflowId ?? 1;
+  return holdTable(markMade(addSet(doc, frame, madeBy), id, madeBy), id, table);
 }
 
 /**

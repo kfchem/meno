@@ -42,7 +42,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "reaction";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -546,6 +546,37 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
+  },
+  {
+    // (each product mapped onto the one reactant structure, atom for atom, hydrogens too, and written in its numbering - with the bonds each map forms, breaks or changes, as a table; a product that does not map, aside with why)
+    kind: "reaction",
+    name: "Reaction",
+    icon: "reaction",
+    takes: ["molecules", "conformers"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Mapped products",
+    inputs: [
+      { id: "reactants", name: "Reactants", takes: ["molecules", "conformers"] },
+      { id: "products", name: "Products", takes: ["molecules", "conformers"] },
+    ],
+    others: [
+      { id: "rest", name: "Not mapped", gives: "same", of: "rest" },
+      { id: "changes", name: "Bond changes", gives: "table" },
+    ],
+    options: [
+      {
+        id: "maps",
+        label: "Maps",
+        type: "choice",
+        choices: [
+          { value: "first", label: "First map" },
+          { value: "every", label: "Every map" },
+        ],
+        default: "first",
+      },
+    ],
+    how: (v) => (v.maps === "every" ? "Every map of each product, in the reactants' numbering" : "Each product by its first map, in the reactants' numbering"),
   },
 ];
 

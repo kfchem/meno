@@ -83,6 +83,11 @@ export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue 
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));
 }
 
+/** A step's result set holding a table it made (`WorkflowSet.table`; a Reaction's bond changes): nothing on the page among its members, and no molecules of its own. */
+export function holdTable(doc: WorkspaceDocument, id: number, table: Table): WorkspaceDocument {
+  return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], table }));
+}
+
 /** A result set of structures drawn with the atoms its step put on the page (`WorkflowSet.put`) - none, where it put none. */
 export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly number[]): WorkspaceDocument {
   return withSet(doc, id, ({ put: _was, ...b }) => (atoms.length ? { ...b, put: [...atoms] } : b));

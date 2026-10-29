@@ -5,7 +5,7 @@ The workflow steps on structures that Meno does itself
 one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
 `src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
 *Combine* and *Measure* are steps of a workflow, and so are the steps of two
-inputs, *Merge*, *Re-bond* and *Compare bonding* (docs/WORKFLOWS.md, *Kinds of
+inputs, *Merge*, *Re-bond*, *Compare bonding* and *Reaction* (docs/WORKFLOWS.md, *Kinds of
 step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
 entry records, and gives each back as a step's entry - all it held kept
 where it is that entry still, what was worked out at another structure,
@@ -104,14 +104,14 @@ its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
 
 ## Steps of two inputs
 
-*Merge*, *Re-bond* and *Compare bonding* each take two inputs, named on the
+*Merge*, *Re-bond*, *Compare bonding* and *Reaction* each take two inputs, named on the
 step, and will not run until both are wired. Each pairs entries of the two
 in a way said on its card, never by an implicit rule: each with each, or
 *matched on* a property the chemist types - an ID a *Tag* gave, which rides
 along with every entry made from it (`lib/nodes/match.ts`). An entry with
 none to pair with, or more than one, is not paired, and says why. Every
 entry a step sets aside goes out of its second exit with why written on it
-as a property: `set_aside` (Merge, Re-bond), `bonding` (Compare bonding).
+as a property: `set_aside` (Merge, Re-bond, Reaction), `bonding` (Compare bonding).
 Each is a text, to read in the set's table and to filter on.
 
 ## Merge
@@ -219,10 +219,49 @@ Checked:
   its hydrogens swapped does not.
 - cis- and trans-2-butene differ where E or Z is asked.
 
+## Reaction
+
+Each product mapped onto the reactants, atom for atom and every hydrogen
+too, and written in the reactants' numbering (`mapProducts`,
+`lib/chem/reactionMap.ts`; docs/ATOM-MAPPING.md, *For a workflow's
+Reaction step*), so that both ends of a path search, a QST3's sides and an
+IRC's ends are in one numbering without leaving the workflow.
+
+- **As a step.** It takes *Reactants*, one entry: the reactants as one
+  structure, several made one complex first by *Combine*. And *Products*,
+  any number. Both are molecules in 3D with every hydrogen: a structure
+  drawn is given its 3D structure first. *Maps* is *First map* or *Every
+  map*.
+- **Mapped products.** Each product the same entry renumbered
+  (`renumberedEntry`, `src/lib/steps/reaction.ts`): its atoms where they
+  stand in the product, in the order of the reactant atoms they map to, its
+  bonds with them. What names atoms by number is renumbered too: a list
+  per atom, a vibration's modes, restraints, its stereo elements. A value
+  worked out at its geometry still names that geometry, in the new order.
+  Each product is a compound of its own, its maps numbered from 1.
+- **Bond changes**, a table (`bondChangesTable`): a row a bond each map
+  forms, breaks or changes in order - its product, the map where there are
+  several, what changed, its two atoms from 1 (as a card and the 3D view
+  number them) and their elements, and its order before and after, 0
+  where there is none. A step that takes atoms from it reads them so.
+- **Nothing in part.** A product with no hydrogens, or one whose atoms do
+  not all map one to one, goes out of *Not mapped* with why written on it
+  (`set_aside`). Reactants that are not one entry, or have no hydrogens,
+  are refused.
+- **Off the page's thread.** Mapping a product can take seconds; the step
+  maps in a worker of its own, its card saying how many products are done,
+  and stops with the step.
+
+Checked: the Diels-Alder of the mapping tests, as a step and laid out on
+the page - the product in the reactants' numbering, every atom where it
+stands in the product, and six bond changes (two formed, four orders
+changed); two reactant entries refused; a product of other atoms and a
+skeleton set aside, each saying why.
+
 ## Numbering
 
 Atoms in the entry record are numbered from 0, as its bonds are: every
 atom a step takes or gives as data (a measurement's atoms, atoms passed
-over, a bond change's atoms, a restraint's) is from 0. What is said to a
-chemist (a property's name, a reason) numbers them from 1, as a card shows
-them.
+over, a restraint's) is from 0. What is said to a chemist (a property's
+name, a reason, a table on the page - a Reaction's bond changes) numbers them
+from 1, as a card shows them.
