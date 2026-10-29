@@ -43,5 +43,5 @@ Meno が作業を一つのファイルに保つしくみと、ほかのファイ
 
 設定の「Files」の「Opening files」に、Meno で開くようにできる形式（.mol、.sdf、.rxn、.xyz、.pdb、.cube、.pdf）と、いまそれぞれを開くアプリが並びます。.meno は最初から Meno で開きます。
 
-- Mac では、「Use Meno」でその形式を Meno で開くようになります。システムが先に尋ねることがあります。前のアプリにも同じようにして戻せます。
-- Windows では、既定のアプリを選べるのは Windows の設定だけです。「Use Meno」で、その形式について Meno を候補に加えて Windows の設定を開くので、そこで選びます。「Stop offering Meno」で候補から外します。
+- Mac では、「Use Meno」でその形式を Meno で開くようになります。システムが先に尋ねることがあります。前のアプリに戻すには、そのアプリの名前の付いたボタン（「Use Preview again」のように）を押します。
+- Windows では、既定のアプリを選べるのは Windows の設定だけです。「Use Meno」で、その形式について Meno を候補に加えて Windows の設定を開くので、そこで選びます。選ぶまでは、行に「Choose in Settings」（設定をもう一度開きます）と「Stop offering Meno」（候補から外します）が出ます。

@@ -43,5 +43,5 @@ Settings, *Files*, has a table of the kinds of file Meno opens: what reads each,
 
 Settings, *Files*, under *Opening files*, lists the formats Meno can be the app for - .mol, .sdf, .rxn, .xyz, .pdb, .cube and .pdf - and which app opens each now. A .meno opens with Meno from the start.
 
-- On a Mac, *Use Meno* makes Meno the app for that format; the system may ask first. The app it replaced can be given back the same way.
-- On Windows, only Windows' own Settings can choose a default. *Use Meno* offers Meno for that format and opens Settings, where you choose it; *Stop offering Meno* takes the offer back.
+- On a Mac, *Use Meno* makes Meno the app for that format; the system may ask first. The app it replaced can have it back with the button named after it, as *Use Preview again*.
+- On Windows, only Windows' own Settings can choose a default. *Use Meno* offers Meno for that format and opens Settings, where you choose it. Until you have, the row has *Choose in Settings*, to open Settings there again, and *Stop offering Meno*, to take the offer back.
