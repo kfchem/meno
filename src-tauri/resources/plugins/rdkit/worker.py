@@ -1570,17 +1570,22 @@ def floor_pairs(mol):
 
 def contact_pairs(mol, eta=()):
     """The pairs of atoms a conformer of `mol` keeps CONTACT_FLOOR of their contact apart, and that least distance
-    (A): [(i, j, least)] - two heavy atoms with a radius (VDW), neither a star, not bonded to each other nor both to
-    one same atom, and not a metal and an atom of an eta ring on it (`eta`, eta_systems'), which are held at
-    their own lengths."""
+    (A): [(i, j, least)] - two heavy atoms with a radius (VDW), neither a star, of one part of it, not bonded to each
+    other nor both to one same atom, and not a metal and an atom of an eta ring on it (`eta`, eta_systems'), which
+    are held at their own lengths. A part is a fragment, an eta ring one with its metal: two atoms of separate parts
+    - a salt's ions - are placed by nothing but the embedding, and are no pair here."""
     held = {frozenset((m, a)) for m, _, atoms in eta for a in atoms}
+    part = {i: k for k, frag in enumerate(Chem.GetMolFrags(mol)) for i in frag}
+    for m, _, atoms in eta:
+        joined = {part[a] for a in atoms}
+        part = {i: part[m] if k in joined else k for i, k in part.items()}
     heavy = [a for a in mol.GetAtoms() if a.GetAtomicNum() > 1 and a.GetSymbol() in VDW]
     near = {a.GetIdx(): {n.GetIdx() for n in a.GetNeighbors()} for a in mol.GetAtoms()}
     pairs = []
     for x, a in enumerate(heavy):
         for b in heavy[x + 1:]:
             i, j = a.GetIdx(), b.GetIdx()
-            if j in near[i] or near[i] & near[j] or frozenset((i, j)) in held:
+            if part[i] != part[j] or j in near[i] or near[i] & near[j] or frozenset((i, j)) in held:
                 continue
             pairs.append((i, j, CONTACT_FLOOR * (VDW[a.GetSymbol()] + VDW[b.GetSymbol()])))
     return pairs
@@ -2155,10 +2160,10 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
     if not left and dropped:
         m, angle = next((m, angle) for _, m, angle in dropped.values())
         raise ValueError(f"every structure made of it came out with two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} "
-                         f"closer than the {angle:g}\u00b0 they were held apart")
+                         "too near one another")
     if not left:
         raise ValueError("every structure made of it came out with two atoms run into one another, or a bond to a metal "
-                         "far from the length it was held to")
+                         "far from its length")
     # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
     sameness = Sameness(mol)
     places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
@@ -2206,14 +2211,15 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                + floor_words(mol, el, floor)}
               for el, d in sorted(set(metals), key=lambda x: (x[0], x[1] or ""))],
             *([{"label": "Dropped", "text": f"{len(dropped) + len(clashed) + len(off)}: " + "; ".join([
-                *(f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} closer than the {angle:g}\u00b0 floor held"
+                # (what was found, in words - the thresholds are the docs', not the chip's)
+                *(f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} too near one another"
                   f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
-                  for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()})),
-                *(f"two atoms nearer than {CONTACT_FLOOR:g} of their contact (nearest: {mol.GetAtomWithIdx(i).GetSymbol()}"
+                  for m in sorted({m for _, m, _ in dropped.values()}) for angle in [next(a for _, mm, a in dropped.values() if mm == m)]),
+                *(f"two atoms run into one another (nearest: {mol.GetAtomWithIdx(i).GetSymbol()}"
                   f" and {mol.GetAtomWithIdx(j).GetSymbol()}, {d:.2f} \u00c5)"
                   for i, j, d, _ in ([min(clashed.values(), key=lambda c: c[3])] if clashed else [])),
-                *(f"a bond to a metal more than {METAL_BOND_OFF:.0%} from its length (furthest: {mol.GetAtomWithIdx(m).GetSymbol()}-"
-                  f"{mol.GetAtomWithIdx(x).GetSymbol()}, {d:.2f} \u00c5 for {length:.2f})"
+                *(f"a bond to a metal far from its length (furthest: {mol.GetAtomWithIdx(m).GetSymbol()}-"
+                  f"{mol.GetAtomWithIdx(x).GetSymbol()}, {d:.2f} \u00c5)"
                   for m, x, d, length in ([max(off.values(), key=lambda c: abs(c[2] / c[3] - 1))] if off else [])),
             ])}] if dropped or clashed or off else []),
             {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"

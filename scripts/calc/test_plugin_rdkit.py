@@ -585,6 +585,10 @@ class RunIntoItself(unittest.TestCase):
         # (butane: only its ends; a bicyclo[1.1.1]pentane's bridgeheads, 1.87 A apart, both on one carbon: none)
         self.assertEqual([(i, j) for i, j, _ in self.worker.contact_pairs(Chem.AddHs(Chem.MolFromSmiles("CCCC")))], [(0, 3)])
         self.assertEqual(self.worker.contact_pairs(Chem.AddHs(Chem.MolFromSmiles("C1C2CC1C2"))), [])
+        # (a salt's ions, placed by nothing but the embedding: no pair - but an eta ring is one part with its metal)
+        self.assertEqual([(i, j) for i, j, _ in self.worker.contact_pairs(Chem.AddHs(Chem.MolFromSmiles("CCC[NH3+].[Cl-]")))], [(0, 3)])
+        zr = self.worker.read(EtaBound.zirconocene_dichloride())
+        self.assertTrue([p for p in self.worker.contact_pairs(zr, self.worker.eta_systems(zr)) if p[0] == 3 and p[1] >= 5])
         # (ferrocene's iron and its rings' carbons are held at their own lengths: no pair)
         fe = self.worker.read(EtaBound.ferrocene())
         metal = next(a.GetIdx() for a in fe.GetAtoms() if a.GetSymbol() == "Fe")
@@ -600,8 +604,11 @@ class RunIntoItself(unittest.TestCase):
         rows = {r["label"]: r["text"] for r in entry["how"]}
         dropped = int(rows["Dropped"].split(":")[0])
         self.assertEqual(len(entry["frames"]) + dropped, 500)
-        self.assertIn("two atoms nearer than 0.65 of their contact (nearest: Cl and C, ", rows["Dropped"])
-        self.assertIn("a bond to a metal more than 15% from its length (furthest: Zr-Cl, ", rows["Dropped"])
+        # (said in words, with the pair - the thresholds are the docs')
+        self.assertIn("two atoms run into one another (nearest: Cl and C, ", rows["Dropped"])
+        self.assertIn("a bond to a metal far from its length (furthest: Zr-Cl, ", rows["Dropped"])
+        self.assertNotIn("0.65", rows["Dropped"])
+        self.assertNotIn("%", rows["Dropped"])
 
     def test_drops_a_conformer_whose_metal_bond_the_hold_lost(self):
         # (PdCl2(PPh3)2: about one in five pulls a phosphine off, or runs a phenyl into the other)
@@ -613,9 +620,12 @@ class RunIntoItself(unittest.TestCase):
         self.assertIn("Dropped", {r["label"] for r in entry["how"]})
 
     def test_leaves_sound_molecules_as_they_were(self):
-        # (strained, crowded, peri, a cobalt tris-chelate, a ruthenium benzylidene: none dropped)
+        # (strained, crowded, peri, a cobalt tris-chelate, a ruthenium benzylidene - and salts, whose ions the
+        #  embedding may lay on one another, which is no pair of this: none dropped, none refused)
         for smiles in ("CC(C)Cc1ccc(cc1)C(C)C(=O)O", "C12C3C4C1C5C2C3C45", "C1CC2CCC1CC2", "Cc1cccc2cccc(C)c12", "CC(C)(C)C(C(C)(C)C)C(C)(C)C",
-                       "N1CCN[Co+3]123(NCCN2)NCCN3", "Cl[Ru](Cl)(=Cc1ccccc1)([P](C)(C)C)[P](C)(C)C"):
+                       "N1CCN[Co+3]123(NCCN2)NCCN3", "Cl[Ru](Cl)(=Cc1ccccc1)([P](C)(C)C)[P](C)(C)C",
+                       "[Na+].[Cl-]", "C[NH3+].[Cl-]", "CC(=O)[O-].[Na+]", "CCN(CC)CC.Cl", "C[N+](C)(C)Cc1ccccc1.[Br-]", "Cl.CN",
+                       "[Na+].C1COCCOCCOCCOCCO1", "CC(=O)[O-].CC(=O)[O-].[Cu+2]"):
             entry = self.made(Chem.MolToMolBlock(self.mol(smiles), kekulize=False), 50)
             self.assertNotIn("Dropped", {r["label"] for r in entry["how"]}, smiles)
 
@@ -938,7 +948,7 @@ class MetalFloor(unittest.TestCase):
         self.assertTrue(all(abs(a - 90) < 1 for a in angles[:12]), angles)
         self.assertTrue(all(a > 179 for a in angles[12:]), angles)
         rows = {r["label"]: r["text"] for r in entry["how"]}
-        self.assertEqual(rows["Dropped"], "1: two ligands at Os closer than the 75\u00b0 floor held (narrowest 62\u00b0)")
+        self.assertEqual(rows["Dropped"], "1: two ligands at Os too near one another (narrowest 62\u00b0)")
         self.assertEqual(rows["Kept"], "1 of 10 embedded (10 sought), 8 the same as one kept")
         # (the order said once, in the line that says how they were made - not again in a row)
         self.assertTrue(entry["method"].endswith("; ordered by the stand-in field, Fe for Os"), entry["method"])
