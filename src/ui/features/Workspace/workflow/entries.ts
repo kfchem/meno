@@ -17,7 +17,7 @@ import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
-import { numberText } from "../../../../lib/calc/results";
+import { aboveText, numberText } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -492,6 +492,12 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
 
+/** A number as Meno writes one: an energy in kcal/mol as the chips write it ("1.89 kcal/mol"), else with all its digits and its unit. */
+export function numberShown(n: { value: number; unit: string }): string {
+  if (n.unit === "kcal/mol") return aboveText(n.value);
+  return `${numberText(n.value)}${n.unit !== "none" ? ` ${n.unit}` : ""}`;
+}
+
 /** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
 export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
   // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
@@ -505,7 +511,7 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
     : count.holds === "table"
       ? plural(count.entries, "row")
     : count.holds === "number" && b.number
-      ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
+      ? numberShown(b.number)
     : count.holds === "chart"
       ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
     : count.holds === "pictures"

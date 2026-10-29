@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -27,11 +27,12 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
-import type { Table } from "../../../../lib/table";
+import type { NumberValue, Table } from "../../../../lib/table";
+import { addedSet, numberOf } from "./addStep";
 
 /**
  * What a run needs of the canvas: how far a molecule in 3D reaches on the
@@ -78,6 +79,22 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
     const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
     return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+  }
+  // (a number from its options alone: nothing comes in)
+  if (step.kind === "number") {
+    const n = numberOf(optionsOf(kindInfo(step.kind).options ?? [], step.options));
+    if ("why" in n) return fail(n.why);
+    return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberShown(n), input: key, ...as });
+  }
+  // (a sum on each entry of what comes into Molecules - and the number into Number, where one is wired)
+  if (step.kind === "add") {
+    const into = inputOf(doc, id, "in");
+    if (!into) return fail("Nothing comes into Molecules");
+    const numberSet = wireInto(doc, id, "number")?.from;
+    const number = numberSet ? findSet(doc, numberSet.set)?.number : undefined;
+    if (numberSet && !number) return fail("Number holds no number yet");
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, addedSet(setEntries(into.molecules, into.holds as Holds3D), into.holds as Holds3D, o, number), key, w);
   }
   if (!input) return fail("Nothing comes into it");
   // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
@@ -248,6 +265,17 @@ function rowCompounds(table: Table, entries: readonly SetEntry[]): RowCompound[]
 }
 
 /** `doc` with a chart a step made in its result set: the set it made before - emptied of what it held - or one made to the right of it, as large as a chart is drawn. */
+/** `doc` with a Number step's number in its result set (`holdNumber`), placed as a chart's is: where it was, else beside the step. */
+function placeNumber(doc: WorkspaceDocument, step: WorkflowStep, number: NumberValue): WorkspaceDocument {
+  const exit = exitsOf(step.kind)[0].id;
+  const madeBy = { step: step.id, exit, holds: "number" as const };
+  const was = resultOf(doc, step.id, exit);
+  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, NUMBER_SET.w, NUMBER_SET.h);
+  if (was) return holdNumber(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, number);
+  const id = doc.nextWorkflowId ?? 1;
+  return holdNumber(markMade(addSet(doc, frame, madeBy), id, madeBy), id, number);
+}
+
 function placeChart(doc: WorkspaceDocument, step: WorkflowStep, chart: ChartValue | DiagramValue): WorkspaceDocument {
   const exit = exitsOf(step.kind)[0].id;
   const madeBy = { step: step.id, exit, holds: "chart" as const };

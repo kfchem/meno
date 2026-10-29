@@ -40,6 +40,8 @@ describe("a kind's exits, as a list", () => {
       join: [first("Joined", "same"), rest("Not joined", "same")],
       restraints: [first("Restrained", "same"), failed()],
       "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
+      number: [first("Number", "number")],
+      add: [first("{as}", "same"), rest("Not added", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

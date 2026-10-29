@@ -11,6 +11,7 @@ import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps
 import { renderOptions } from "../render/renderOptions";
 import { takeFramesHow, type Which } from "./takeFrames";
 import { joinHow, joinNeeds } from "./joinStep";
+import { addHow, addNeeds, numberHow, numberNeeds } from "./addStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
@@ -44,8 +45,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "held" | "heldAnti" | "join" | "numbered";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -720,6 +721,56 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => torsionsHow(v),
     needs: (v) => torsionsNeeds(v),
+  },
+  {
+    // (a number with its unit and what worked it out - the standard-state term from its temperature, by its formula, or one typed - for a step that takes one: Add's)
+    kind: "number",
+    name: "Number",
+    icon: "number",
+    takes: [],
+    inputs: [],
+    gives: "number",
+    runs: "entries",
+    made: "Number",
+    options: [
+      {
+        id: "what",
+        label: "Number",
+        type: "choice",
+        choices: [
+          { value: "standard state", label: "Standard state, 1 atm to 1 mol/L" },
+          { value: "typed", label: "Typed" },
+        ],
+        default: "standard state",
+      },
+      // (298.15 K: the standard temperature thermochemistry is tabulated at, as Populations' is - the chemist's to change)
+      { id: "temperature", label: "At", type: "number", default: 298.15, min: 1, step: 1, unit: "K", when: { id: "what", in: ["standard state"] } },
+      { id: "value", label: "Value", type: "number", default: 0, step: 0.1, when: { id: "what", in: ["typed"] } },
+      { id: "unit", label: "Unit", type: "text", default: "kcal/mol", when: { id: "what", in: ["typed"] } },
+    ],
+    how: (v) => numberHow(v),
+    needs: (v) => numberNeeds(v),
+  },
+  {
+    // (properties of each entry's own geometry summed, a number wired in besides, into a new one - each part as it was, never one level for the sum: lib/nodes/add)
+    kind: "add",
+    name: "Add",
+    icon: "sum",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "{as}",
+    inputs: [
+      { id: "in", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "number", name: "Number", takes: ["number"], optional: true },
+    ],
+    others: [{ id: "rest", name: "Not added", gives: "same", of: "rest" }],
+    options: [
+      { id: "parts", label: "Add", type: "text", default: "" },
+      { id: "as", label: "As", type: "text", default: "" },
+    ],
+    how: (v) => addHow(v),
+    needs: (v) => addNeeds(v),
   },
 ];
 

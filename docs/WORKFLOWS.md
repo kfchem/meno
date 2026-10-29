@@ -320,6 +320,8 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
+| Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
+| Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -2838,6 +2840,63 @@ of a reaction path's two ends put back on its saddle point, matched on
   still needs. It takes molecules in 3D and conformer sets; a table to
   join from, and joining by identity or by drawn atom (the foundation's
   other two ways), are not built yet.
+### Add and Number (2026-10-29)
+
+*Add* and *Number*, Meno's own, make the free energy at a higher level
+of theory (lib/nodes `add`, `standardState`; WORKFLOWS-FOUNDATION.md,
+case F, steps 31 and 42): a single point's energy, plus a thermal
+correction to G worked out at another level, plus the standard-state
+term.
+
+- ***Number*** takes nothing and gives a number in a set of its own,
+  with its unit and what worked it out:
+  - *Standard state, 1 atm to 1 mol/L*: the free energy of taking a mole
+    of ideal gas from 1 atm to 1 mol/L at temperature T,
+    R T ln(R T c°/p°), with R = 8.314462618 J/(mol K) (CODATA 2018), p° =
+    101325 Pa and c° = 1 mol/L - 1.894 kcal/mol at 298.15 K. Its record
+    says the formula and constants and the temperature: its source is its
+    formula. *At* is 298.15 K unless set, the temperature thermochemistry
+    is tabulated at, as Populations' is - the chemist's to change.
+  - *Typed*: a value and a unit from Meno's units.
+
+  Its card says what was chosen ("standard state", "standard state at
+  310 K", or the number typed); its line and its set, the number as
+  Meno writes one - an energy in kcal/mol as the chips write it, "1.89
+  kcal/mol". The value keeps all its digits.
+- ***Add*** takes *Molecules* and, where wanted, a *Number* (an optional
+  input: it runs without one). Its options: the values to *Add*, one to a
+  line or each after a semicolon ("energy; thermo.g-correction"), and the
+  name the sum is written *As* ("G-DFT") - never a name Meno gives an
+  entry's own values (an energy, a free energy). Each entry gets the sum,
+  in the first value's unit; the number wired in is summed as it is. Its
+  card says the formula ("G-DFT = energy + thermo.g-correction + number",
+  the number where one is wired in); its line, what it gave ("2 of 2
+  entries given G-DFT").
+- **An entry that is no result is never summed** - failed, not converged,
+  its marks unread: set aside saying so ("not added: not converged"),
+  counted on the line.
+- **Only values of one geometry are summed**: each named value must be of
+  the entry's own geometry (its record's geometry key). One of another
+  geometry, or of none, sets the entry aside, saying which ("its
+  thermo.g-correction was worked out at another geometry than its own").
+  A number wired in has no geometry, and is summed. The parts must agree
+  on temperature and pressure where they say them - the standard-state
+  term's temperature among them - or the entry is set aside, naming both.
+- **The sum keeps each part as it was** (`Property.parts`): the property
+  it was, its value, unit, and where and by what it was worked out. Its
+  own record claims no method or basis: it says where it is (the
+  geometry, the thermal part's temperature and pressure, and the solvent
+  where the parts that say one agree - none where two differ, a single
+  point in one and a correction in the gas phase: each part keeps its
+  own), and in words what it is the sum of - "sum: energy
+  (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction
+  (wB97X-D/6-31G(d), Gaussian, 298.15 K, 1 atm, quasi-RRHO) + standard
+  state (...)" - never one level for the whole. A step that takes a free
+  energy (a barrier, a population) reads its parts to check each against
+  another's.
+- An entry with its own value under the name already, or missing a part,
+  is set aside saying so; a number wired in of another dimension refuses
+  the step.
 
 ### Charts (2026-10-22)
 

@@ -138,7 +138,18 @@ export type Property = {
   of?: string;
   by?: By;
   status: PropertyStatus;
+  /**
+   * What it is the sum of, where a step summed it (*Add*): each part as it
+   * was - the property it was, its value, unit, and where and by what it
+   * was worked out - so that a sum of values of several levels says each
+   * one's, never one level for the whole (a free energy: a single point's
+   * energy, a thermal correction of another level, a standard-state term).
+   */
+  parts?: PropertyPart[];
 };
+
+/** One part of a sum (`Property.parts`): the property it was, as it was. */
+export type PropertyPart = { property: string; value: number; unit: Unit | "none"; at?: At; by?: By };
 
 /**
  * An element of an entry that could be stereogenic: a centre (its atom), a
@@ -308,7 +319,7 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
  * cells, modes - which a molecule on the page does not keep as a property.
  */
 export function propertyIn(v: unknown): Property | undefined {
-  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown } | null;
+  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value: PropertyValue | undefined =
     (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean" ? p.value : numberTableIn(p.value);
@@ -318,21 +329,43 @@ export function propertyIn(v: unknown): Property | undefined {
   const status: PropertyStatus | undefined =
     st === "computed" ? "computed" : typeof st === "object" && st ? (typeof st.failed === "string" ? { failed: st.failed } : typeof st.notApplicable === "string" ? { notApplicable: st.notApplicable } : undefined) : undefined;
   if (!status) return undefined;
-  let by: By | undefined;
-  if (p.by != null) {
-    const b = p.by as Record<string, unknown>;
-    if (typeof b !== "object" || BY_FIELDS.some((f) => b[f] != null && typeof b[f] !== "string")) return undefined;
-    by = Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : [])));
-  }
-  let at: At | undefined;
-  if (p.at != null) {
-    const a = p.at as { geometry?: unknown; kelvin?: unknown; atm?: unknown; solvent?: unknown };
-    if (typeof a !== "object" || typeof a.geometry !== "string") return undefined;
-    if ((a.kelvin != null && !Number.isFinite(a.kelvin)) || (a.atm != null && !Number.isFinite(a.atm)) || (a.solvent != null && typeof a.solvent !== "string")) return undefined;
-    at = { geometry: a.geometry, ...(a.kelvin != null ? { kelvin: a.kelvin as number } : {}), ...(a.atm != null ? { atm: a.atm as number } : {}), ...(a.solvent != null ? { solvent: a.solvent as string } : {}) };
-  }
+  const by = byIn(p.by);
+  const at = atIn(p.at);
+  if (by === null || at === null) return undefined;
   if (p.of != null && typeof p.of !== "string") return undefined;
-  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status };
+  // (a sum's parts: each as it was, or none of them - a sum whose parts do not all read is not read as one without them)
+  let parts: PropertyPart[] | undefined;
+  if (p.parts != null) {
+    if (!Array.isArray(p.parts) || !p.parts.length) return undefined;
+    parts = [];
+    for (const raw of p.parts as unknown[]) {
+      const q = raw as { property?: unknown; value?: unknown; unit?: unknown; at?: unknown; by?: unknown } | null;
+      if (!q || typeof q.property !== "string" || !q.property || typeof q.value !== "number" || !Number.isFinite(q.value)) return undefined;
+      if (!(q.unit === "none" || (typeof q.unit === "string" && isUnit(q.unit)))) return undefined;
+      const qBy = byIn(q.by);
+      const qAt = atIn(q.at);
+      if (qBy === null || qAt === null) return undefined;
+      parts.push({ property: q.property, value: q.value, unit: q.unit as Unit | "none", ...(qAt ? { at: qAt } : {}), ...(qBy ? { by: qBy } : {}) });
+    }
+  }
+  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status, ...(parts ? { parts } : {}) };
+}
+
+/** What worked a value out, as a file gives it, read back: each field a text; none where none is given; null where it does not read. */
+function byIn(v: unknown): By | undefined | null {
+  if (v == null) return undefined;
+  const b = v as Record<string, unknown>;
+  if (typeof b !== "object" || BY_FIELDS.some((f) => b[f] != null && typeof b[f] !== "string")) return null;
+  return Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : [])));
+}
+
+/** Where a value was worked out, as a file gives it, read back: its geometry's key, a temperature and pressure, a solvent; none where none is given; null where it does not read. */
+function atIn(v: unknown): At | undefined | null {
+  if (v == null) return undefined;
+  const a = v as { geometry?: unknown; kelvin?: unknown; atm?: unknown; solvent?: unknown };
+  if (typeof a !== "object" || typeof a.geometry !== "string") return null;
+  if ((a.kelvin != null && !Number.isFinite(a.kelvin)) || (a.atm != null && !Number.isFinite(a.atm)) || (a.solvent != null && typeof a.solvent !== "string")) return null;
+  return { geometry: a.geometry, ...(a.kelvin != null ? { kelvin: a.kelvin as number } : {}), ...(a.atm != null ? { atm: a.atm as number } : {}), ...(a.solvent != null ? { solvent: a.solvent as string } : {}) };
 }
 
 /** Properties by name as a file or a plugin gives them, read back (`propertyIn`): those that read; none where none do. */

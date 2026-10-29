@@ -217,6 +217,22 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M8.5 10 H11.5" strokeWidth={2.2} />
     </>
   ),
+  // (two values, summed)
+  sum: (
+    <>
+      <rect x="1.8" y="6" width="5.4" height="8" rx="1.2" />
+      <rect x="12.8" y="6" width="5.4" height="8" rx="1.2" />
+      <path d="M10 7.6 V12.4 M7.6 10 H12.4" />
+    </>
+  ),
+  // (a number typed in a field)
+  number: (
+    <>
+      <rect x="2" y="5.5" width="16" height="9" rx="2" />
+      <path d="M5.2 8.2 L6.6 7.6 V12.4 M8.9 12.4 V12.3 M11 8.4 C11.6 7.4, 13.8 7.4, 13.6 9 C13.4 10.2, 11.2 10.9, 11 12.4 H13.9" strokeWidth={1.3} />
+      <path d="M15.8 7.6 V12.4" strokeWidth={1} />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
