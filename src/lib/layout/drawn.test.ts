@@ -339,9 +339,19 @@ describe("a centre with a lone pair for its fourth group", () => {
     }
   });
 
-  it("is not read where no reader reads it from a wedge - a selenoxide's Se - nor at an atom of three bonds with no lone pair to spare", () => {
-    expect(readStereo(sulfoxide("Se", "up").atoms, sulfoxide("Se", "up").bonds).tetra.has(0)).toBe(false);
-    expect(readStereo(sulfoxide("C", "up").atoms, sulfoxide("C", "up").bonds).tetra.has(0)).toBe(false);
+  it("is not read where a wedge states no configuration - a selenoxide's Se, an amine's N (which inverts), a borane's B - nor at a C of three bonds", () => {
+    for (const el of ["Se", "N", "B", "C"]) expect(readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.has(0), el).toBe(false);
+  });
+
+  it("states no configuration with two of its bonds in line - a T - as a centre with its H left out does not", () => {
+    // (the sulfoxide's O and its wedged methyl straight across the S from
+    // each other, its ring carbon to one side: three bonds a volume could be
+    // worked out from, but a T, which states none)
+    const t = sulfoxide("S", "up");
+    t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
+    t.atoms[2] = { ...t.atoms[2], x: 0, y: -1 };
+    t.atoms[3] = { ...t.atoms[3], x: 1, y: 0 };
+    expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
   });
 
   it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, each way round", () => {

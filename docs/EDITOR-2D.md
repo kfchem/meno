@@ -1521,8 +1521,8 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or on a selenoxide's Se, a centre no reader reads from a wedge -
-     rather than lose it. A centre whose fourth group is a lone pair - a
+     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
+     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
      sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
      read from its wedge and laid out like any other, on one wedge
      (2026-10-29). A wedge

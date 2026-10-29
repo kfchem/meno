@@ -2342,7 +2342,7 @@ All of it is optional. A structure the chemist drew has none.
   lies, which bonds are wedged or which way, whether an H is drawn, nor
   whether a group is written by its label. Clean-up, which draws the same
   structure afresh, keeps a record as it is. Where its wedges cannot be
-  read (drawn crossed, or on a selenoxide's Se) or its identity is
+  read (drawn crossed, or at a three-bonded N, B, Se, Te or Sb) or its identity is
   not worked out in full, the identity does not hold its configuration, so
   the drawing's own key is in `of` too: any change to the drawing is taken
   for a change of structure.

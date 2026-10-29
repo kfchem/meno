@@ -179,7 +179,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
   const { positions, problems: chosen } = positionsOf(template, ids);
   problems.push(...chosen);
   if (template.atoms.some((a) => a.el === "R" || a.el === "R#")) problems.push("The drawing has R groups: enumerate them by R groups first");
-  for (const id of identityInputOf(template).unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or on a selenium, tellurium or antimony atom with a lone pair)`);
+  for (const id of identityInputOf(template).unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration)`);
   const options = groups as OptionRead[];
   if (combine === "one" && options.some((o) => !("problem" in o) && isPlainH(o))) problems.push("H, one position at a time, only remakes the drawing: take it out, or combine the positions together");
   if (problems.length) return { ok: false, problems };

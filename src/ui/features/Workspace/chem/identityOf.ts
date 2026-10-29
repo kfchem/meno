@@ -17,9 +17,9 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 
 /**
  * `part` as identity's input, its atoms in `part`'s order - and the atoms,
- * by id, whose wedges say nothing that can be read (drawn crossed, or on a
- * selenium, tellurium or antimony atom with a lone pair), so whose
- * configuration the input does not hold.
+ * by id, whose wedges say nothing that can be read (drawn crossed, or at an
+ * N, B, Se, Te or Sb atom with three bonds), so whose configuration the
+ * input does not hold.
  */
 export function identityInputOf(part: Model): { input: IdentityInput; unread: number[] } {
   const drawing = drawingOf(part);
