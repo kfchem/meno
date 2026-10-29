@@ -618,6 +618,8 @@ export type SetEntry = {
   keep?: Kept;
   /** The end it is paired with, where it is the start of a pair a step of two inputs works out (workflow/pairs: Path search's). */
   end?: SetEntry;
+  /** How it was paired with its end, in words (workflow/pairs): "in order, by place: start a #2 with end b #2", "each with each", "matched on pc". */
+  paired?: string;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;

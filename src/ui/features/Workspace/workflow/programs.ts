@@ -325,7 +325,7 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
  * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, paired: _paired, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
 /** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
 export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
@@ -438,6 +438,8 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
       ...was.properties,
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),
       "path.E-reverse-barrier": barrier(energies[energies.length - 1], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's end (its last image)`),
+      // (how its start and end were paired: in order is by place, never a match of which is which)
+      ...(entry.paired ? { "path.paired": { value: entry.paired, unit: "none" as const, status: "computed" as const } } : {}),
     },
   };
 }
@@ -484,7 +486,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
  * as its options say (workflow/pairs), those that cannot be worked out
  * refused, with why; or why nothing can be taken. None where nothing comes in.
  */
-export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
+export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[]; paired?: string } | { why: string } | null {
   const ports = inputsOf(kind);
   if (kindInfo(kind).runs === "program" && ports.length === 2) {
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
@@ -499,7 +501,9 @@ export function programEntries(d: Flow, step: number, kind: StepKind, options: O
       String(options.property ?? ""),
       Number.isInteger(most) && most >= 1 ? most : MOST_PAIRS,
     );
-    return "why" in paired ? paired : { ...paired, holds: "molecules" };
+    // (two conformer sets paired in order: by place alone - said on the step's line, so that it is never taken for a match)
+    const byPlace = (options.pairs ?? "order") === "order" && (start.holds === "conformers" || end.holds === "conformers");
+    return "why" in paired ? paired : { ...paired, holds: "molecules", ...(byPlace ? { paired: "paired in order, by place" } : {}) };
   }
   const input = inputOf(d, step);
   if (!input || input.holds === "structures") return null;

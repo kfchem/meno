@@ -81,10 +81,13 @@ export function pairEntries(starts: readonly SetEntry[], ends: readonly SetEntry
       made.push("index" in m ? { start: s, end: ends[m.index] } : { start: s, why: `${named(s)} is paired with no end: ${m.why}` });
     });
   }
+  // (how each was paired, kept with it: in order is by place alone - of two conformer sets, never a match of which is which)
+  const how = (p: { start: SetEntry; end?: SetEntry }) =>
+    pairing === "order" ? `in order, by place: start ${named(p.start)} with end ${named(p.end!)}` : pairing === "each" ? "each with each" : `matched on ${property.trim()}`;
   const entries: SetEntry[] = [];
   const refused: { entry: number; why: string }[] = [];
   made.forEach((p, k) => {
-    entries.push(p.end ? { ...p.start, end: p.end } : { ...p.start });
+    entries.push(p.end ? { ...p.start, end: p.end, paired: how(p) } : { ...p.start });
     const why = p.why ?? (p.end ? unlike(p.start, p.end) : null);
     if (why) refused.push({ entry: k, why });
   });

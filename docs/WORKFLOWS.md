@@ -364,7 +364,11 @@ are a *Frequencies* step's, wired after it.
   own GFN2-xTB took 8 to 10 min on one core (2026-10-30), so 100 pairs are
   about 15 hours of one core. Past it, nothing is run, and the step says
   how many it would make; pairs matched on a property are as many as the
-  starts, and not limited.
+  starts, and not limited. Each path keeps how its start and end were
+  paired (`path.paired`: "in order, by place: start a #2 with end b #2",
+  "each with each", "matched on pc"), and where a conformer set was paired
+  in order the step's line says so ("paired in order, by place"): pairs by
+  place are never a match of which is which.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged

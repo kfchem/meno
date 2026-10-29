@@ -568,6 +568,8 @@ describe("a step that runs a plugin's program", () => {
     // (each conformer of the starts paired with the end in its place: two pairs, each with its end)
     expect((sent[1] as { end?: { atoms: unknown[] } }[]).map((e) => e.end?.atoms.length)).toEqual([3, 3]);
     expect(asked.started).toHaveLength(2);
+    // (each paired by its place - kept with it, and said on the step's line when it ends: never taken for a match)
+    expect(st().steps.find((x) => x.id === step)!.running?.paired).toBe("paired in order, by place");
 
     // (each with each of 11 conformers and 10: 110 pairs, past the most - refused before any job, saying how many)
     const big = editor();
