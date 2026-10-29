@@ -580,7 +580,7 @@ describe("a step that runs a plugin's program", () => {
     big.st().connect({ set: e2 }, step2, "end");
     const before = asked.started.length;
     await big.st().runStep(step2);
-    expect(big.st().steps.find((x) => x.id === step2)!.ran).toMatchObject({ ok: false, said: `Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most ${MOST_PAIRS} - match them on a property instead` });
+    expect(big.st().steps.find((x) => x.id === step2)!.ran).toMatchObject({ ok: false, said: `Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most ${MOST_PAIRS} - match them on a property instead, or raise At most` });
     expect(asked.started).toHaveLength(before);
   });
 

@@ -5,6 +5,7 @@
  * own.
  */
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
+import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -154,6 +155,7 @@ export const KINDS: readonly KindInfo[] = [
         default: "order",
       },
       { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+      { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } },
     ],
   },
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },

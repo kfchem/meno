@@ -358,10 +358,13 @@ are a *Frequencies* step's, wired after it.
   only the rest are sent. A conformer set into either is its conformers,
   each one start or end (2026-10-30): a reactant's conformers, each paired
   with the product made from it, matched on a *Tag*'s ID. *Each with each*
-  makes at most 100 pairs, Meno's own limit, so that one option does not
-  start a job for every pair of two large sets (two of 29 conformers make
-  841): past it, nothing is run, and the step says how many it would make;
-  pairs matched on a property are as many as the starts, and not limited.
+  makes at most as many pairs as *At most* says - 100 unless changed, so
+  that one option does not start a job for every pair of two large sets
+  (two of 29 conformers make 841): a Diels-Alder pair's NEB-TS at ORCA's
+  own GFN2-xTB took 8 to 10 min on one core (2026-10-30), so 100 pairs are
+  about 15 hours of one core. Past it, nothing is run, and the step says
+  how many it would make; pairs matched on a property are as many as the
+  starts, and not limited.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged

@@ -26,6 +26,13 @@ describe("a path search's pairs", () => {
     expect(pairEntries([h2(1)], [h2(2), h2(3)], "order")).toEqual({ why: "Start holds 1 and End 2: in order, each start is paired with the end in its place" });
   });
 
+  it("pairs each with each at most as many as At most says - 100 unless raised", () => {
+    const many = (n: number) => Array.from({ length: n }, (_, k) => h2(k + 1));
+    expect(pairEntries(many(11), many(10), "each")).toEqual({ why: "Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most 100 - match them on a property instead, or raise At most" });
+    const raised = pairEntries(many(11), many(10), "each", "", 110);
+    expect("entries" in raised && raised.entries.length).toBe(110);
+  });
+
   it("pairs each with each, or on a property - one with no end to pair with kept, refused with why", () => {
     const each = pairEntries([h2(1), h2(2)], [h2(3), h2(4)], "each");
     expect("entries" in each && each.entries.length).toBe(4);

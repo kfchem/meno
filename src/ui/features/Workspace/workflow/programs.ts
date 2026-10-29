@@ -17,7 +17,7 @@ import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutpu
 import type { JobFile } from "../../../../lib/jobs";
 import { setEntries, withoutCarried, type SetEntry } from "./entries";
 import { inputOf, type Flow } from "./flow";
-import { levelKey, levelSaid, pairEntries } from "./pairs";
+import { levelKey, levelSaid, pairEntries, MOST_PAIRS } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
@@ -490,7 +490,15 @@ export function programEntries(d: Flow, step: number, kind: StepKind, options: O
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
     if (!start || start.holds === "structures") return null;
     if (!end || end.holds === "structures") return { why: `Nothing comes into ${ports[1].name}` };
-    const paired = pairEntries(setEntries(start.molecules, start.holds), setEntries(end.molecules, end.holds), options.pairs === "each" || options.pairs === "property" ? options.pairs : "order", String(options.property ?? ""));
+    // (each with each, at most as many pairs as the step says)
+    const most = Number(options.most);
+    const paired = pairEntries(
+      setEntries(start.molecules, start.holds),
+      setEntries(end.molecules, end.holds),
+      options.pairs === "each" || options.pairs === "property" ? options.pairs : "order",
+      String(options.property ?? ""),
+      Number.isInteger(most) && most >= 1 ? most : MOST_PAIRS,
+    );
     return "why" in paired ? paired : { ...paired, holds: "molecules" };
   }
   const input = inputOf(d, step);
