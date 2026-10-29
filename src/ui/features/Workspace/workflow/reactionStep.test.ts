@@ -137,7 +137,8 @@ describe("Reaction's bond changes into Measure, on the page", () => {
     const ran = runStep(doc, measure, W);
     expect(ran.steps!.find((s) => s.id === measure)!.ran).toMatchObject({ ok: true, said: "6 measurements on 1 entry" });
     const measured = resultOf(ran, measure, "out")!;
-    const m = ran.molecules3d!.find((x) => x.id === measured.members![0].molecule)!;
+    const member = measured.members![0];
+    const m = ran.molecules3d!.find((x) => "molecule" in member && x.id === member.molecule)!;
     // (C1 and C5 in the reactants' numbering are atoms 1 and 11; their distance in the product as it was drawn, by name)
     const p = (name: string) => da.product.atoms[da.productOrder.indexOf(name)];
     const truth = Math.hypot(p("C1").x - p("C5").x, p("C1").y - p("C5").y, p("C1").z - p("C5").z);
