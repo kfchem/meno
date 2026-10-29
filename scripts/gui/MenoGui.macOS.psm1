@@ -439,6 +439,11 @@ function Get-MenoBuild {
     return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../../src-tauri/target/release/bundle/macos/Meno.app"))
 }
 
+function Get-MenoProfile {
+    # The folder of the Meno under test's settings, its settings.json in it (src-tauri/src/folders.rs, data_dir).
+    return Join-Path $HOME "Library/Application Support/Meno"
+}
+
 function Start-MenoProcess {
     <#
       .SYNOPSIS
@@ -914,7 +919,11 @@ function Invoke-MenoSwipe {
 function Invoke-MenoWheel {
     <#
       .SYNOPSIS
-      Turn the wheel over a point. Positive is away from you: zoom in.
+      Turn the wheel over a point: positive notches upwards, as a page reads
+      a turn (a wheel event's deltaY below 0), negative downwards - the same
+      on every machine. Which way that zooms is Meno's Settings' to say
+      (General, The wheel turned upwards): to zoom by what is meant, in or
+      out, Invoke-MenoZoom.
 
       .DESCRIPTION
       A notch is posted as 100 pixels of scroll, which is what Chromium, and so
@@ -1122,7 +1131,7 @@ function Wait-MenoSettled {
     return $false
 }
 
-Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
+Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,

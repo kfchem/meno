@@ -186,7 +186,7 @@ Send-MenoShortcut 1
 Start-Sleep -Milliseconds 1200
 Invoke-MenoQuickAdd -X 2450 -Y 200 -Item Slide -Pen:$HasPen
 Start-Sleep -Milliseconds 800
-Invoke-MenoWheel -X 660 -Y 1385 -Notches 2
+Invoke-MenoZoom -X 660 -Y 1385 -Notches 2
 Start-Sleep -Milliseconds 1200
 Invoke-MenoQuickAdd -X 2450 -Y 200 -Item Slide -Pen:$HasPen
 Start-Sleep -Milliseconds 800
