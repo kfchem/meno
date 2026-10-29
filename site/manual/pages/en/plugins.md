@@ -4,7 +4,7 @@ What Meno does beyond itself comes from plugins: reading SMILES and making struc
 
 ## The list {#list}
 
-Settings, *Plugins*, has a card for each plugin Meno offers: its name and version, what it does, what it reads and writes, its licence and where it comes from. On the right, *Added* or *Not added*, with *Add* or *Remove*. A plugin made for some systems only says so in place of its button, as "For macOS and Windows only".
+Settings, *Plugins*, has a card for each plugin Meno offers: its name and version, what it does, what it reads and writes, its licence and where it comes from. On the right, *Added* or *Not added*, with *Add* or *Remove*. Some plugins run on some systems only; each card says which, in place of its button.
 
 ## Adding one {#adding}
 
@@ -17,7 +17,7 @@ Press *Add*. Meno asks before it downloads anything, as it does before anything 
 
 ## Programs you install yourself {#installed}
 
-A few plugins work with a program installed separately, under its own licence, which Meno never downloads: ORCA, Gaussian 16, Multiwfn and NCIPLOT. Their cards have a line for the program: where Meno found it, with its version, or "Not found". Press *Locate…* and choose the program itself. Gaussian 16 is run on macOS and Linux only.
+A few plugins work with a program installed on the computer separately: ORCA, Gaussian 16, Multiwfn and NCIPLOT. Their cards have a line for the program: where Meno found it, with its version, or "Not found". Press *Locate…* and choose the program itself.
 
 ## Choosing who does what {#roles}
 
