@@ -98,6 +98,56 @@ function Point {
     return [pscustomobject]@{ X = $X; Y = $Y; Width = 0; Height = 0; CX = $X; CY = $Y }
 }
 
+function New-StepMark {
+    # What steps.json keeps of a step for the page to mark: its kind, the part or point it is done at, a drag's way from there, what is typed or pressed.
+    param([string] $Do, $At, [object[]] $Path = @(), [string] $Text, [switch] $Traced)
+    $mark = [ordered]@{ kind = $Do.ToLowerInvariant() }
+    if ($At) { $mark.x = $At.X; $mark.y = $At.Y; $mark.w = $At.Width; $mark.h = $At.Height }
+    # (what tells where it is - the dialog it is in, its row's words - for the page's picture of round about it)
+    if ($At -and $At.PSObject.Properties["Near"] -and $At.Near) { $mark.near = @($At.Near.X, $At.Near.Y, $At.Near.Width, $At.Near.Height) }
+    if ($Do -eq "Drag") {
+        $mark.kind = if ($Traced) { "trace" } else { "drag" }
+        $mark.path = @(, @($At.CX, $At.CY)) + @($Path | ForEach-Object { , @([int]$_[0], [int]$_[1]) })
+    }
+    if ($Text) { $mark.text = $Text }
+    return $mark
+}
+
+function Get-DragVia {
+    # A drag's points between its first and its last, each a point of its own (two points or a hundred: never unrolled into bare numbers).
+    param([object[]] $Path = @())
+    return , @(for ($i = 0; $i -lt $Path.Count - 1; $i++) { , $Path[$i] })
+}
+
+# A question about the network is the reader's to answer, never a run's:
+# the yes of every one Meno asks (src/ui/network/ConsentDialog.tsx, "Allow
+# and download") is recorded with -NotDone and left.
+$script:ConsentYes = "Allow*"
+
+function Test-PressesConsent {
+    <#
+      .SYNOPSIS
+      Whether a step, done, would answer a question about the network yes:
+      done at a part named as the yes is, or pressed where one of -Yes (the
+      yeses on screen, in shot pixels) is; or keys sent while one is there,
+      but Escape, which answers no.
+    #>
+    param([string] $Do, $At, [object[]] $Path = @(), [string] $Text, [object[]] $Yes = @())
+    if ($At -and $At.PSObject.Properties["Name"] -and $At.Name -like $script:ConsentYes) { return $true }
+    if (-not $Yes.Count) { return $false }
+    if ($Do -in @("Type", "Key", "Shortcut")) { return -not ($Do -eq "Key" -and $Text -eq "Escape") }
+    # (where the button goes down or comes up: a click's spot; a drag's first point and its last - a chain led ends in a click there)
+    $presses = [System.Collections.Generic.List[object]]::new()
+    $presses.Add(@($At.CX, $At.CY))
+    if ($Do -eq "Drag") { $presses.Add(@($Path[-1])) }
+    foreach ($p in $presses) {
+        foreach ($y in $Yes) {
+            if ($p[0] -ge $y.X - 4 -and $p[0] -le $y.X + $y.Width + 4 -and $p[1] -ge $y.Y - 4 -and $p[1] -le $y.Y + $y.Height + 4) { return $true }
+        }
+    }
+    return $false
+}
+
 function Suspend-Steps { $script:Tut.Recording = $false }
 function Resume-Steps { $script:Tut.Recording = $true }
 
@@ -116,7 +166,10 @@ function Step {
       While steps are suspended it is only done. -NotDone records a step
       the run must not take itself - Allow on a question about the
       network, which is the reader's to answer - and leaves it undone:
-      the run goes on from a profile in which it was done.
+      the run goes on from a profile in which it was done. A step that
+      would answer one yes without -NotDone stops the run: at a part
+      named Allow..., pressed on one on screen, or keys sent while one is
+      there (but Escape, a no).
     #>
     param(
         [Parameter(Mandatory, Position = 0)] [ValidatePattern("^[a-z0-9-]+$")] [string] $Id,
@@ -131,21 +184,17 @@ function Step {
     if ($Do -notin @("Type", "Key", "Shortcut") -and -not $At) { throw "step $Id - $Do where? (-At)" }
     if ($Do -eq "Drag" -and $Path.Count -lt 1) { throw "step $Id - a drag goes somewhere (-Path)" }
     if ($Do -in @("Type", "Key", "Shortcut") -and -not $Text) { throw "step $Id - $Do what? (-Text)" }
+    foreach ($p in $Path) { if (@($p).Count -ne 2) { throw "step $Id - each point of -Path is a pair, @(x, y): wrap one point as @(, @(x, y))" } }
+    if (-not $NotDone -and (Test-PressesConsent -Do $Do -At $At -Path $Path -Text $Text -Yes (Get-MenoPartsLike -Role Button -Like $script:ConsentYes))) {
+        throw "step $Id would answer a question about the network yes: that is the reader's - record it with -NotDone, and go on from a profile in which it was answered"
+    }
 
     if ($script:Tut.Recording) {
         if ($script:Tut.Steps | Where-Object { $_.id -eq $Id }) { throw "a second step $Id" }
         $n = $script:Tut.Steps.Count + 1
         $file = "{0:d2}-{1}.png" -f $n, $Id
         Save-MenoShot -Path (Join-Path $script:Tut.Raw $file) | Out-Null
-        $mark = [ordered]@{ kind = $Do.ToLowerInvariant() }
-        if ($At) { $mark.x = $At.X; $mark.y = $At.Y; $mark.w = $At.Width; $mark.h = $At.Height }
-        # (what tells where it is - the dialog it is in, its row's words - for the page's picture of round about it)
-        if ($At -and $At.PSObject.Properties["Near"] -and $At.Near) { $mark.near = @($At.Near.X, $At.Near.Y, $At.Near.Width, $At.Near.Height) }
-        if ($Do -eq "Drag") {
-            $mark.kind = if ($Traced) { "trace" } else { "drag" }
-            $mark.path = @(, @($At.CX, $At.CY)) + @($Path | ForEach-Object { , @([int]$_[0], [int]$_[1]) })
-        }
-        if ($Text) { $mark.text = $Text }
+        $mark = New-StepMark -Do $Do -At $At -Path $Path -Text $Text -Traced:$Traced
         $script:Tut.Steps.Add([ordered]@{ id = $Id; shot = $file; mark = $mark })
         Write-Host "  step $("{0:d2}" -f $n): $Id ($($mark.kind))$(if ($NotDone) { ', not done' })"
     }
@@ -162,8 +211,7 @@ function Step {
                 Move-MenoPointerAlong -Path (@(, @($At.CX, $At.CY)) + $Path)
                 Invoke-MenoClick -X $last[0] -Y $last[1]
             } else {
-                $via = if ($Path.Count -gt 1) { @($Path[0..($Path.Count - 2)]) } else { @() }
-                Invoke-MenoDrag -FromX $At.CX -FromY $At.CY -ToX $last[0] -ToY $last[1] -Via $via
+                Invoke-MenoDrag -FromX $At.CX -FromY $At.CY -ToX $last[0] -ToY $last[1] -Via (Get-DragVia -Path $Path)
             }
         }
         "Type" { Send-MenoText $Text }

@@ -37,6 +37,7 @@ Step lead-ring Drag -At (Point $start[0] $start[1]) -Path $ring -Traced
 Step right-click RightClick -At (Point $start[0] $start[1])
 Step make-3d Click -At (Part MenuItem "3D structure")
 Step allow Click -At (Part Button "Allow and download" -Within "Download RDKit?") -NotDone
+# (Escape answers it no: nothing is downloaded, and a no is not remembered - src/lib/net/network.ts - in a home thrown away after the run)
 Send-MenoKey Escape
 
 if (-not $env:MENO_TUTORIAL_HOME) {

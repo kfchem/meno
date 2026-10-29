@@ -793,9 +793,9 @@ function Find-MenoPart {
       up or down (an Add, in the row of the plugin "Blender"); either, with
       the part, comes back as Near, what tells where it is. -Reveal
       scrolls the window towards it, with the wheel at the window's middle,
-      while it is out of view. It comes back in pixels of the window's shot,
-      like every coordinate here: X, Y, Width, Height, and its middle, CX and
-      CY. It is waited for, up to -TimeoutSec: the web view builds what
+      while it is out of view. It comes back with its Role and Name, in
+      pixels of the window's shot, like every coordinate here: X, Y, Width,
+      Height, and its middle, CX and CY. It is waited for, up to -TimeoutSec: the web view builds what
       Accessibility sees of its page only once asked, and a part may be on
       its way in. Not there, or not the only one, the run stops, saying what
       is there.
@@ -853,6 +853,7 @@ function Find-MenoPart {
                 }
             }
             return [pscustomobject]@{
+                Role = $p.Role; Name = $p.Name
                 X = [int][math]::Round($x); Y = [int][math]::Round($y)
                 Width = [int][math]::Round($p.Width * $k); Height = [int][math]::Round($p.Height * $k)
                 CX = [int][math]::Round($x + $p.Width * $k / 2); CY = [int][math]::Round($y + $p.Height * $k / 2)
@@ -874,6 +875,33 @@ function Find-MenoPart {
     } while ([DateTime]::UtcNow -lt $until)
     $there = ($inView | Where-Object { $_.Role -ne "AXStaticText" } | Select-Object -First 40 | ForEach-Object { "$($_.Role.Substring(2)) '$($_.Name)'" }) -join ", "
     throw "no $what in Meno's window. There is: $there"
+}
+
+function Get-MenoPartsLike {
+    <#
+      .SYNOPSIS
+      The parts of Meno's window, now, of -Role whose names are like -Like (a
+      wildcard: "Allow*"), with their names, in pixels of the window's shot -
+      none waited for, but the page's tree, which the web view builds only
+      once asked.
+    #>
+    param([Parameter(Mandatory)] [string] $Role, [Parameter(Mandatory)] [string] $Like)
+    $axRole = if ($Role.StartsWith("AX")) { $Role } else { "AX$Role" }
+    $until = [DateTime]::UtcNow.AddSeconds(4)
+    do {
+        $all = @([MacGui]::Parts($script:MenoPid))
+        if ($all.Count) { break }
+        Start-Sleep -Milliseconds 300
+    } while ([DateTime]::UtcNow -lt $until)
+    $w = Get-WindowInfo
+    $k = Get-ShotScale
+    return @($all | Where-Object { $_.Role -eq $axRole -and $_.Name -like $Like } | ForEach-Object {
+        [pscustomobject]@{
+            Name = $_.Name
+            X = [int][math]::Round(($_.X - $w.X) * $k); Y = [int][math]::Round(($_.Y - $w.Y) * $k)
+            Width = [int][math]::Round($_.Width * $k); Height = [int][math]::Round($_.Height * $k)
+        }
+    })
 }
 
 function Get-MenoVersion {
@@ -1311,7 +1339,7 @@ function Wait-MenoSettled {
 
 Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
-    ConvertTo-Screen, Find-MenoPart, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
+    ConvertTo-Screen, Find-MenoPart, Get-MenoPartsLike, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
     # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
     Find-SystemWindow, Find-WindowAt

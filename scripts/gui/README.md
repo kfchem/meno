@@ -105,7 +105,8 @@ available:
 | | |
 |---|---|
 | `Start-Meno [-HomeFolder]` | start the app under test, sized and in front; on a Mac, `-HomeFolder` starts it as if that folder were the user's home, in a profile of its own there - settings, plugins and all - which is how a run sees Meno as someone opening it for the first time |
-| `Find-MenoPart -Role -Name [-Within] [-TimeoutSec]` | a part of the window found by what Accessibility calls it, as a reader of the window sees it - `Find-MenoPart Button Settings`, or `-Within` the part it sits in, to tell two apart - in shot pixels: `X`, `Y`, `Width`, `Height` and its middle, `CX`, `CY`. Waited for, since the web view builds what Accessibility sees of its page only once asked; not there, the run stops and says what is. On a Mac only |
+| `Find-MenoPart -Role -Name [-Within] [-TimeoutSec]` | a part of the window found by what Accessibility calls it, as a reader of the window sees it - `Find-MenoPart Button Settings`, or `-Within` the part it sits in, to tell two apart - with its `Role` and `Name`, in shot pixels: `X`, `Y`, `Width`, `Height` and its middle, `CX`, `CY`. Waited for, since the web view builds what Accessibility sees of its page only once asked; not there, the run stops and says what is. On a Mac only |
+| `Get-MenoPartsLike -Role -Like` | every part of the window now of that role whose name is like a wildcard (`Button "Allow*"`), with its name, in shot pixels; nothing waited for but the page's tree. On a Mac only |
 | `Open-MenoFile -Path` | open a structure with Ctrl/Cmd+O: in place of the first tab's blank canvas, or in a tab of its own |
 | `Invoke-MenoQuickAdd -X -Y -Item` | a double-click on empty space there, and one of Quick Add's icons, clicked where Quick Add is seen to stand in a shot (where it stands depends on the plugins added and procedures saved): `Chain` begins a chain at the point, `SMILES` opens its field, `Shapes` and `Calculations` theirs |
 | `Add-MenoSmiles -Smiles [-X -Y] [-WaitSec]` | a structure from a SMILES, by Quick Add, centred at the point (the middle of the canvas unless told), and let go of |
@@ -167,13 +168,15 @@ points unless told otherwise. The verbs are MenoTutorial.psm1's:
 | `New-TutorialHome [-Ready]` | a home for `Start-Meno -HomeFolder`: empty - Meno as someone opening it the first time sees it - or, `-Ready`, a clone of the tutorial profile, a home named by `MENO_TUTORIAL_HOME` in which a Meno has had its plugins added, so every run starts from the same place and none changes it |
 | `Part Button "Add" -Row Blender [-Within] [-Reveal]` | a part of the window by its name (`Find-MenoPart`) |
 | `Point 1200 800` | a point of the window, for the drawing on the page |
-| `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`. `-NotDone` records a step the run must not take - Allow on a question about the network, which is the reader's to answer - and leaves it undone |
+| `Step <id> Click -At <part>` | a step: shot, mark kept, done. Also `DoubleClick`, `RightClick`, `LongPress`, `Drag -Path` (`-Traced`: led with the button up and ended by a click), `Type -Text`, `Key -Text`, `Shortcut -Text`. `-NotDone` records a step the run must not take - Allow on a question about the network, which is the reader's to answer - and leaves it undone. Without it, a step that would answer such a question yes stops the run: one at a part named `Allow...`, one pressed on such a button on screen, or keys sent while one is there (but Escape, which answers no) |
 | `Suspend-Steps`, `Resume-Steps` | steps done unrecorded, as the first thing in a new profile, or again after a change of profile |
 
 A part found `-Within` another (a dialog) or by its `-Row` keeps that one's
 place as well: the page shows the picture near the spot wide enough to take
 it in. A page's steps are its ids; its words, in `en.md` and `ja.md`, carry
 the same ids in the same order, or the website's build refuses them.
+`tests/tutorial.tests.ps1` checks what a step keeps, a drag's way and the
+guard, with no app: `pwsh -NoProfile -File scripts/gui/tests/tutorial.tests.ps1`.
 
 ## What a platform module provides
 

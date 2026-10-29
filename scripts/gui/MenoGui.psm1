@@ -196,6 +196,12 @@ function Find-MenoPart {
     throw "Find-MenoPart is on a Mac only"
 }
 
+function Get-MenoPartsLike {
+    # (as Find-MenoPart)
+    param([string] $Role, [string] $Like)
+    throw "Get-MenoPartsLike is on a Mac only"
+}
+
 function Get-MenoVersion {
     # The version of a build, as its executable says it.
     param([Parameter(Mandatory)] [string] $Path)
@@ -603,5 +609,5 @@ function Wait-MenoSettled {
 
 Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
-    ConvertTo-Screen, Find-MenoPart, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
+    ConvertTo-Screen, Find-MenoPart, Get-MenoPartsLike, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled
