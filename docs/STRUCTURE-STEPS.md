@@ -194,10 +194,13 @@ references, the first it is bonded as (`matchingReference`).
   (*Bonded within*): 1.2 unless set, the maintainer's of 2026-10-22,
   measured over 1,437 molecules laid out by ETKDG and MMFF (1.1 missed 12
   bonds, 9 of them peroxides' O-O; 1.2 missed 1 and made none extra:
-  `BOND_REACH`, `src/utils/structureParsers.ts`). For the smallest radii the
-  reach is at least 0.15 Å over them (`REACH_FLOOR`), as for every geometry
-  Meno reads; where that decides, the difference says so. Which atoms are
-  bonded is compared, not bond orders.
+  `BOND_REACH`, `src/utils/structureParsers.ts`). It is at least a floor
+  over their radii together, on the card too (*And at least … Å over the
+  sum*): 0.15 Å unless set, the maintainer's of 2026-10-13, for H2's
+  0.741 Å bond (`REACH_FLOOR`), as for every geometry Meno reads. Each
+  difference says whether the reach or the floor decided. The reach is
+  taken from 1 to 2, the floor from 0 to 1 Å; outside them the step
+  refuses. Which atoms are bonded is compared, not bond orders.
 - **R or S, where asked.** Because the two share one numbering, a centre has
   the reference's configuration where its neighbours stand round it the same
   way: the sign of the volume its first three neighbours (by number) make

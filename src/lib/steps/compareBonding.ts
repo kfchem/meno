@@ -8,8 +8,9 @@
  *   bonds (`bondedPairs`, src/utils/structureParsers.ts): two atoms closer
  *   than their single-bond covalent radii (Pyykkö's) together, times the
  *   reach - 1.2 (`BOND_REACH`, the maintainer's of 2026-10-22, measured)
- *   unless the chemist sets another. Which atoms are bonded is compared,
- *   not bond orders.
+ *   unless the chemist sets another - and at least the floor over them,
+ *   0.15 Å (`REACH_FLOOR`, the maintainer's of 2026-10-13) unless set.
+ *   Which atoms are bonded is compared, not bond orders.
  * - **Configuration in the fixed numbering.** As the two share one
  *   numbering, a centre has the reference's configuration where its
  *   neighbours stand round it the same way: the sign of the volume their
@@ -35,7 +36,7 @@ import { symmetryOrbits } from "../chem/identity";
 
 export type PassOver = { atoms?: readonly number[]; elements?: readonly string[]; bonds?: readonly (readonly [number, number])[] };
 /** What to compare: R or S, E or Z; what to pass over; and how far, times their covalent radii together, two atoms may stand and be bonded (`BOND_REACH` unless given). */
-export type CompareOptions = { rs?: boolean; ez?: boolean; passOver?: PassOver; reach?: number };
+export type CompareOptions = { rs?: boolean; ez?: boolean; passOver?: PassOver; reach?: number; floor?: number };
 export type BondingCompared = { same: boolean; differences: string[] } | { failed: string };
 
 type V = [number, number, number];
@@ -60,8 +61,8 @@ function cis(xyz: readonly number[], a: number, p: number, q: number, b: number)
 }
 
 /** How far two atoms of these radii together may stand and be bonded, in words: the reach, or the floor where it is the more (`bondingDistance`). */
-const reachSaid = (radii: number, reach: number) =>
-  radii * reach >= radii + REACH_FLOOR ? `${reach} times their covalent radii together` : `their covalent radii together and ${REACH_FLOOR} Å over, more than ${reach} times them`;
+const reachSaid = (radii: number, reach: number, floor: number) =>
+  radii * reach >= radii + floor ? `${reach} times their covalent radii together` : `their covalent radii together and ${floor} Å over, more than ${reach} times them`;
 
 export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = {}): BondingCompared {
   if (e.geometry.kind !== "3d") return { failed: e.geometry.kind === "frames" ? "The entry holds frames: take one frame first (Take frames)." : "The entry has no 3D places to read bonds from." };
@@ -79,7 +80,8 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
 
   const radii = bondRadii(els);
   const reach = o.reach ?? BOND_REACH;
-  const pairs = bondedPairs(xyz, radii, reach);
+  const floor = o.floor ?? REACH_FLOOR;
+  const pairs = bondedPairs(xyz, radii, reach, floor);
   const here = new Set<string>();
   for (let k = 0; k < pairs.length; k += 2) here.add(key(pairs[k], pairs[k + 1]));
   const there = new Set(reference.structure.bonds.map((b) => key(b.a1, b.a2)));
@@ -88,12 +90,12 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
   const said = (p: number, q: number) => `${els[p]}${p + 1}-${els[q]}${q + 1}`;
   for (const b of reference.structure.bonds) {
     if (passed(b.a1, b.a2) || here.has(key(b.a1, b.a2))) continue;
-    differences.push(`${said(b.a1, b.a2)} is bonded in the reference, not here: ${d(b.a1, b.a2).toFixed(2)} Å apart, past ${bondingDistance(radii[b.a1], radii[b.a2], reach).toFixed(2)} Å (${reachSaid(radii[b.a1] + radii[b.a2], reach)}).`);
+    differences.push(`${said(b.a1, b.a2)} is bonded in the reference, not here: ${d(b.a1, b.a2).toFixed(2)} Å apart, past ${bondingDistance(radii[b.a1], radii[b.a2], reach, floor).toFixed(2)} Å (${reachSaid(radii[b.a1] + radii[b.a2], reach, floor)}).`);
   }
   for (let k = 0; k < pairs.length; k += 2) {
     const [p, q] = [pairs[k], pairs[k + 1]];
     if (passed(p, q) || there.has(key(p, q))) continue;
-    differences.push(`${said(p, q)} is bonded here, not in the reference: ${d(p, q).toFixed(2)} Å apart, within ${bondingDistance(radii[p], radii[q], reach).toFixed(2)} Å.`);
+    differences.push(`${said(p, q)} is bonded here, not in the reference: ${d(p, q).toFixed(2)} Å apart, within ${bondingDistance(radii[p], radii[q], reach, floor).toFixed(2)} Å (${reachSaid(radii[p] + radii[q], reach, floor)}).`);
   }
 
   if (o.rs || o.ez) {

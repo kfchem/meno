@@ -116,11 +116,11 @@ export function bondsByDistance(atoms: readonly { el: string; x: number; y: numb
  * their bonds by it as it is opened (Workspace/utils/molecule3d
  * `frameBondsOf`).
  */
-export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>, reach = BOND_REACH): number[] {
+export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>, reach = BOND_REACH, floor = REACH_FLOOR): number[] {
   const n = radii.length;
   const out: number[] = [];
   const bonded = (m: number, k: number) => {
-    const threshold = bondingDistance(radii[m], radii[k], reach);
+    const threshold = bondingDistance(radii[m], radii[k], reach, floor);
     const dx = xyz[3 * m] - xyz[3 * k];
     const dy = xyz[3 * m + 1] - xyz[3 * k + 1];
     const dz = xyz[3 * m + 2] - xyz[3 * k + 2];
@@ -139,7 +139,7 @@ export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>, re
   // (the widest radius by a loop: spread over tens of thousands of atoms, Math.max overruns a web worker's stack)
   let most = 0;
   for (let i = 0; i < n; i++) most = Math.max(most, radii[i]);
-  const side = bondingDistance(most, most, reach);
+  const side = bondingDistance(most, most, reach, floor);
   // each atom's cube, counted from the lowest, a cube to spare all round;
   // an atom that stands nowhere (NaN) is in none, and bonded to nothing
   const cube = new Float64Array(3 * n);
@@ -216,9 +216,9 @@ export const REACH_FLOOR = 0.15;
  */
 export const BOND_REACH = 1.2;
 
-/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a fifth over (`BOND_REACH`), or `reach` times where a step is given another - or, for the smallest, 0.15 Å over (the maintainer, 2026-10-13). */
-export function bondingDistance(r1: number, r2: number, reach = BOND_REACH): number {
-  return Math.max((r1 + r2) * reach, r1 + r2 + REACH_FLOOR);
+/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a fifth over (`BOND_REACH`), or `reach` times where a step is given another - or, for the smallest, 0.15 Å over (`REACH_FLOOR`, the maintainer, 2026-10-13), or `floor` where a step is given another. */
+export function bondingDistance(r1: number, r2: number, reach = BOND_REACH, floor = REACH_FLOOR): number {
+  return Math.max((r1 + r2) * reach, r1 + r2 + floor);
 }
 
 /**

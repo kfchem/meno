@@ -316,6 +316,20 @@ describe("Compare bonding's reach", () => {
     expect(text(ok(runMenoPair("compare-bonding", { entries: [far], holds: "molecules" }, { entries: [h2o2], holds: "molecules" })).aside[0], "bonding")).toBe(
       "different: O1-O2 is bonded in the reference, not here: 1.70 Å apart, past 1.51 Å (1.2 times their covalent radii together).",
     );
+    // (the floor the chemist's too: at none, 1.1 times their radii together decides - 1.39 Å)
+    expect(text(at({ reach: 1.1, floor: 0 }).aside[0], "bonding")).toBe("different: O1-O2 is bonded in the reference, not here: 1.48 Å apart, past 1.39 Å (1.1 times their covalent radii together).");
+    // (the other way round: bonded here, not in the reference - which decided, said too)
+    const unbonded = { ...h2o2, bonds: h2o2.bonds.slice(1) } as SetEntry;
+    expect(text(ok(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [unbonded], holds: "molecules" })).aside[0], "bonding")).toBe(
+      "different: O1-O2 is bonded here, not in the reference: 1.48 Å apart, within 1.51 Å (1.2 times their covalent radii together).",
+    );
+    expect(text(ok(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [unbonded], holds: "molecules" }, { reach: 1.1, floor: 0.3 })).aside[0], "bonding")).toBe(
+      "different: O1-O2 is bonded here, not in the reference: 1.48 Å apart, within 1.56 Å (their covalent radii together and 0.3 Å over, more than 1.1 times them).",
+    );
+    // (out of range: refused by the step itself, whatever sent it)
+    expect(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, { reach: 2.5 })).toEqual({ ok: false, said: "Bonded within must be from 1 to 2 times the sum of the covalent radii" });
+    expect(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, { floor: -0.1 })).toEqual({ ok: false, said: "At least over the sum must be from 0 to 1 Å" });
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1, floor: 0 })).toBe("bonded within 1.1 \u00d7 covalent radii; at least 0 \u00c5 over");
     expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1 })).toBe("bonded within 1.1 \u00d7 covalent radii");
     expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.2 })).toBe("against each reference");
   });

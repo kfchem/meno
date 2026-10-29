@@ -14,7 +14,7 @@ import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
-import { BOND_REACH } from "../../../../utils/structureParsers";
+import { BOND_REACH, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
@@ -545,6 +545,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
       { id: "elements", label: "Pass over elements", type: "text", default: "" },
       { id: "reach", label: "Bonded within \u00d7 the sum of their covalent radii (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
+      { id: "floor", label: "And at least \u00c5 over the sum", type: "number", default: REACH_FLOOR, min: 0, max: 1, step: 0.05 },
     ],
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
@@ -724,11 +725,13 @@ export function compareHow(v: OptionValues): string {
   if (needs) return needs;
   const writes = String(v.writes ?? "matches").trim();
   const reach = v.reach != null ? Number(v.reach) : BOND_REACH;
+  const floor = v.floor != null ? Number(v.floor) : REACH_FLOOR;
   const atoms = String(v.atoms ?? "").trim();
   const elements = String(v.elements ?? "").trim();
   const said = [
     v.reference === "property" ? `matched on ${String(v.property).trim()}` : writes !== "matches" ? `the match as ${writes}` : "",
     reach !== BOND_REACH ? `bonded within ${reach} \u00d7 covalent radii` : "",
+    floor !== REACH_FLOOR ? `at least ${floor} \u00c5 over` : "",
     [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean).join(" and "),
     atoms ? `passing over atoms ${atoms}` : "",
     elements ? `passing over ${elements}` : "",
