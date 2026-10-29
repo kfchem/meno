@@ -327,6 +327,9 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  */
 const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, paired: _paired, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
+/** The property a path search writes on each path: how its start and end were paired ("in order, by place: start a #2 with end b #2"). */
+export const PAIRED = "path.paired";
+
 /** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
 export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
 
@@ -439,7 +442,7 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),
       "path.E-reverse-barrier": barrier(energies[energies.length - 1], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's end (its last image)`),
       // (how its start and end were paired: in order is by place, never a match of which is which)
-      ...(entry.paired ? { "path.paired": { value: entry.paired, unit: "none" as const, status: "computed" as const } } : {}),
+      ...(entry.paired ? { [PAIRED]: { value: entry.paired, unit: "none" as const, status: "computed" as const } } : {}),
     },
   };
 }

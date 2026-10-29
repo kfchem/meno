@@ -595,7 +595,8 @@ describe("a step that runs a plugin's program", () => {
     //  again, its hydrogens elsewhere - and a hydrogen molecule, another molecule)
     const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
     doc.edit("ends", (d) => {
-      const water = { ...d.molecules3d![0], calc };
+      // (the start carrying how an earlier pair was made: replaced by this path's, said on the line)
+      const water = { ...d.molecules3d![0], calc, properties: [{ "path.paired": { value: "matched on an earlier tag", unit: "none" as const, status: "computed" as const } }] };
       const withWater = { ...d, molecules3d: [water, ...d.molecules3d!.slice(1)] };
       return addMolecule3d(addMolecule3d(withWater, { ...water, atoms: water.atoms.map((a, i) => (i === 1 ? { ...a, y: 0.9 } : a)), at: { x: 20, y: 0 } }), { atoms: [{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.74, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], calc, at: { x: 24, y: 0 } });
     });
@@ -633,6 +634,8 @@ describe("a step that runs a plugin's program", () => {
     const path = st().molecules3d.find((m) => m.entryFrames?.length)!;
     expect(path.entryFrames).toEqual([2]);
     expect(st().frames3d[path.id]).toBe(2);
+    expect(st().steps.find((x) => x.id === step)!.ran?.said).toMatch(/ · the path\.paired a pair carried replaced$/);
+    expect(path.properties?.[2]?.["path.paired"]?.value).toBe("each with each");
   });
 
   it("says it was stopped, and brings nothing in", async () => {

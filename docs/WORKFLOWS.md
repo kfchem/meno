@@ -368,7 +368,10 @@ are a *Frequencies* step's, wired after it.
   paired (`path.paired`: "in order, by place: start a #2 with end b #2",
   "each with each", "matched on pc"), and where a conformer set was paired
   in order the step's line says so ("paired in order, by place"): pairs by
-  place are never a match of which is which.
+  place are never a match of which is which. A start that carried a
+  `path.paired` already, an earlier path's, has it replaced by this one's,
+  and the line counts them ("the path.paired a pair carried replaced"),
+  as *Reaction* says of `reaction.product`.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged
