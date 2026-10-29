@@ -133,8 +133,8 @@ const PointedCard3D = forwardRef<HTMLDivElement, { title: string; groups: CardGr
       style={{ opacity: 0 }}
     >
       <div className="text-gh-black font-medium">{title}</div>
-      {/* (the card's most, 18rem, less its sides) */}
-      <ResultGroups groups={groups} most="16.75rem" />
+      {/* (the card's most, 18rem, less its sides: px-2.5 and its border, the card being border-box) */}
+      <ResultGroups groups={groups} most="16.625rem" />
     </div>
   );
 });
