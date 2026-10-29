@@ -2085,17 +2085,18 @@ for it:
 - **Where a stopped optimisation got to.** Where the run stopped once
   under way (ORCA's log says *GEOMETRY OPTIMIZATION CYCLE*, Gaussian's
   *Berny optimization*), its plugin says to read what it wrote, and Meno
-  does: the entry goes out of *Failed* at the last geometry the run
-  worked out an energy for (one it had stepped to and not yet worked
-  out is left out, as the reader leaves it out of any run cut short),
-  its way there as frames beginning with the geometry it came in with -
+  does: the entry goes out of *Failed* at the last geometry whose
+  energy the run had finished working out - one it had stepped to and
+  not yet worked out is left out, as the reader leaves it out of any run
+  cut short; the energy itself is not carried (below) - its way there
+  as frames beginning with the geometry it came in with -
   so *Take frames*' *first* starts it again from the beginning
   (a fault of the machine: memory, a floating point exception) and its
   *last* from where it stopped (an SCF that did not converge, a step the
   optimiser could not take). A run that stopped before it was under way
   goes out as it came in.
-- **Never a result.** Its frames carry no energies - the run's log keeps
-  them - and the entry stays marked failed, so no step takes anything of
+- **Never a result.** Neither the entry nor its frames carry an energy -
+  the run's log keeps them - and the entry stays marked failed, so no step takes anything of
   it for a value, until a step succeeds from it.
 - **A step that takes it starts from its geometry alone**, its old
   energy, calculation and mark dropped; its line says so: *started from a

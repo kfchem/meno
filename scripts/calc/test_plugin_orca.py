@@ -316,6 +316,12 @@ class Collect(unittest.TestCase):
         down = "   Startup error        DIISStart       ....  0.200000\n ... \n               ***  Starting incremental Fock matrix formation  ***\n"
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=down, ended="failed"), {"why": "ORCA stopped without saying why, after: ***  Starting incremental Fock matrix formation  ***"})
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.strip())
+        # (a line that begins ERROR - ORCA 6.1.1's programs print such, "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY" one - or
+        #  FATAL ERROR is its own words, before any other line that says error)
+        unitary = "   Startup error        DIISStart       ....  0.200000\nERROR IN SCHMIDT-MATRIX IS NOT UNITARY\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=unitary, ended="failed")["why"], "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY")
+        fatal = "   Startup error        DIISStart       ....  0.200000\nFATAL ERROR in the integrals\n  .... aborting the run\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=fatal, ended="failed")["why"], "FATAL ERROR in the integrals")
 
     def test_an_optimisation_that_stopped_under_way_is_read_for_where_it_got_to(self):
         cycle = "GEOMETRY OPTIMIZATION CYCLE   3\n ... \nORCA finished by error termination in SCF\n"
