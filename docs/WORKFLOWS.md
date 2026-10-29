@@ -1985,8 +1985,14 @@ them again*; the maintainer's rulings of 2026-10-22):
   either. Another failure (stopped, refused) is no judgement of a
   minimum, and leaves the shares as they were.
 - **The entry record says it too**: `imaginary`, how many imaginary
-  frequencies its calculation judged it has, where it judged any; one
-  that failed carries its reason as its status. *Populations* on free
+  frequencies its calculation judged it has - 0 where its vibrations were
+  worked out and none is, nothing at all where they were not - and
+  `imaginary.first` and `imaginary.second`, the largest and the next, each
+  as its size in cm-1 (120.5 for 120.5i), where it has them (2026-10-27).
+  Meno judges nothing by them: which structure is a saddle point is the
+  chemist's to say, with *Filter* ("imaginary = 1",
+  "imaginary.second < 50 cm-1"). One that failed carries its reason as
+  its status. *Populations* on free
   energies (`lib/nodes/populations`) fails a group with one that is no
   minimum, as Meno's does, each entry saying why.
 - **Meno's steps on energies refuse what they cannot use**: an *Energy

@@ -34,11 +34,12 @@ describe("a step's entry read as Meno's entry record", () => {
     expect(entry.structure.atoms.map((a) => a.el)).toEqual(["O", "H", "H"]);
   });
 
-  it("says how many imaginary frequencies its calculation judged it has - none said where it judged none - and a failure as its status", () => {
+  it("says how many imaginary frequencies its calculation judged it has - 0 where it judged none - and a failure as its status", () => {
     const saddle = entryOfSet(water(1, 0, -76.4, { imaginary: [-382.63] }), "x");
     expect(saddle.properties.imaginary).toEqual({ value: 1, unit: "none", at: { geometry: geometryKey(water(1, 0).xyz) }, status: "computed" });
     expect(entryOfSet(water(1, 0, -76.4), "y").properties.imaginary).toBeUndefined();
-    expect(entryOfSet(water(1, 0, -76.4, { imaginary: [] }), "z").properties.imaginary).toBeUndefined();
+    // (judged none: a count of 0 - never taken for not worked out)
+    expect(entryOfSet(water(1, 0, -76.4, { imaginary: [] }), "z").properties.imaginary).toMatchObject({ value: 0, status: "computed" });
     expect(entryOfSet(water(1, 0, undefined, { failed: { kind: "not-converged", why: "Its optimisation did not converge" } }), "w").status).toEqual({ failed: "Its optimisation did not converge" });
   });
 });
