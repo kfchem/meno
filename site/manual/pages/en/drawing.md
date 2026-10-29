@@ -20,7 +20,8 @@ Point at an atom, and it lights up: what comes next is done to it.
 - Double-click and drag to lead the bond where you want it. It snaps to the usual angles; pause while dragging, and it goes exactly where the pointer is.
 - Drag an atom to move it. Dropped on another atom, it becomes that atom.
 - Lead a bond onto an atom already there, and it closes the ring.
-- Click a bond to change it: a single bond becomes double, a double one single.
+- Click a single bond to make it a wedge, again for a hashed wedge, and again for a plain bond; the next wedge then has its narrow end at the other atom. A wavy, bold, bold dashed, dashed or dative bond clicked becomes plain, a double bond single, and a triple bond double.
+- Double-click a bond to make it double; triple-click it to make it triple.
 
 ## Chains and rings {#chains}
 
