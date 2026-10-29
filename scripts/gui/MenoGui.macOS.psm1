@@ -895,7 +895,8 @@ function Get-MenoPartsLike {
     } while ([DateTime]::UtcNow -lt $until)
     $w = Get-WindowInfo
     $k = Get-ShotScale
-    return @($all | Where-Object { $_.Role -eq $axRole -and $_.Name -like $Like } | ForEach-Object {
+    # (an array however many, none included: never unrolled into nothing)
+    return , @($all | Where-Object { $_.Role -eq $axRole -and $_.Name -like $Like } | ForEach-Object {
         [pscustomobject]@{
             Name = $_.Name
             X = [int][math]::Round(($_.X - $w.X) * $k); Y = [int][math]::Round(($_.Y - $w.Y) * $k)

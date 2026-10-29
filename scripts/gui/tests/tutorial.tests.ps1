@@ -53,6 +53,7 @@ Check "Enter while it is asked" (& $tutorial $guard Key $null @() "Enter" $yes) 
 Check "Escape while it is asked (a no)" (& $tutorial $guard Key $null @() "Escape" $yes) $false
 Check "words typed while it is asked" (& $tutorial $guard Type $null @() "OMe" $yes) $true
 Check "Enter with no question asked" (& $tutorial $guard Key $null @() "Enter" @()) $false
+Check "a click with no question asked, the yeses read as nothing" (& $tutorial $guard Click (Point 400 300) @() "" $null) $false
 
 if ($failed) { Write-Host "$failed failed"; exit 1 }
 Write-Host "all passed"

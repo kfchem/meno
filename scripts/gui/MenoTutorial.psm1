@@ -132,8 +132,10 @@ function Test-PressesConsent {
       yeses on screen, in shot pixels) is; or keys sent while one is there,
       but Escape, which answers no.
     #>
-    param([string] $Do, $At, [object[]] $Path = @(), [string] $Text, [object[]] $Yes = @())
+    param([string] $Do, $At, [object[]] $Path = @(), [string] $Text, [AllowNull()] [object[]] $Yes = @())
     if ($At -and $At.PSObject.Properties["Name"] -and $At.Name -like $script:ConsentYes) { return $true }
+    # (none on screen comes as nothing at all)
+    $Yes = @($Yes | Where-Object { $_ })
     if (-not $Yes.Count) { return $false }
     if ($Do -in @("Type", "Key", "Shortcut")) { return -not ($Do -eq "Key" -and $Text -eq "Escape") }
     # (where the button goes down or comes up: a click's spot; a drag's first point and its last - a chain led ends in a click there)
