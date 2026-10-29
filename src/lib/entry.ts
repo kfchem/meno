@@ -301,7 +301,8 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
 
 /**
  * Restraints as a file gives them, read back (`Restraint`): each row a
- * distance, a dihedral or atoms fixed, its atoms whole numbers from 0, a
+ * distance, a dihedral or atoms fixed, as many atoms as its kind holds,
+ * each a whole number from 0, a
  * finite value and a strength above 0 where its kind has them, none where
  * it has not. None where any row does not read - nothing held in part.
  * Whether its atoms are the entry's is `valueFault`'s, as for any value.
@@ -313,6 +314,8 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
   for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
     if (!r || typeof r !== "object" || (r.kind !== "distance" && r.kind !== "dihedral" && r.kind !== "fixed")) return undefined;
     if (!Array.isArray(r.atoms) || !r.atoms.length || !r.atoms.every((a) => Number.isInteger(a) && (a as number) >= 0)) return undefined;
+    // (as many atoms as its kind holds: a distance two, a dihedral four, atoms fixed one or more)
+    if (r.kind !== "fixed" && r.atoms.length !== RESTRAINT_ATOMS[r.kind]) return undefined;
     if (r.kind === "fixed") {
       if (r.value != null || r.strength != null) return undefined;
       out.push({ kind: "fixed", atoms: [...(r.atoms as number[])] });

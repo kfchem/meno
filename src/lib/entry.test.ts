@@ -135,7 +135,16 @@ describe("restraints read back from a file", () => {
     const p = propertyIn({ value, unit: "none", status: "computed" });
     expect(p).toEqual({ value, unit: "none", status: "computed" });
     // (a row of no kind, a distance with no strength, atoms fixed with a value, an atom not a whole number: none read - nothing held in part)
-    for (const bad of [{ kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 }, { kind: "distance", atoms: [0, 1], value: 2 }, { kind: "fixed", atoms: [0], value: 1 }, { kind: "fixed", atoms: [0.5] }])
+    for (const bad of [
+      { kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 },
+      { kind: "distance", atoms: [0, 1], value: 2 },
+      { kind: "fixed", atoms: [0], value: 1 },
+      { kind: "fixed", atoms: [0.5] },
+      // (the wrong number of atoms for its kind)
+      { kind: "distance", atoms: [0, 1, 2], value: 2, strength: 1 },
+      { kind: "dihedral", atoms: [0, 1, 2], value: 180, strength: 1 },
+      { kind: "fixed", atoms: [] },
+    ])
       expect(propertyIn({ value: { restraints: [value.restraints[0], bad] }, unit: "none", status: "computed" })).toBeUndefined();
   });
 });
