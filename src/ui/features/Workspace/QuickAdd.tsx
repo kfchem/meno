@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
@@ -10,6 +10,8 @@ import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { resolve, type Reading } from "./chem/resolve";
+import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
@@ -165,6 +167,7 @@ export default function QuickAdd({
   onArrow,
   onShape,
   onSmiles,
+  onNamed,
   onCoordinates,
   onStep,
   onProcedure,
@@ -188,6 +191,8 @@ export default function QuickAdd({
   onShape?: (kind: ShapeKind, press: React.PointerEvent) => void;
   /** A SMILES drawn where Quick Add was opened: done, or failing with what to say. */
   onSmiles: (smiles: string) => Promise<void>;
+  /** A molecule the dictionary has, typed in the SMILES field and drawn as the dictionary's (chem/resolve): by its label. */
+  onNamed?: (label: string) => void;
   /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
   onCoordinates?: (structures: CoordinateStructure[]) => void;
   onStep: (kind: StepKind, by: string) => void;
@@ -323,7 +328,7 @@ export default function QuickAdd({
       {!wired && (
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           <div className="overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onCoordinates={onCoordinates} />
+            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} />
           </div>
         </div>
       )}
@@ -409,21 +414,34 @@ export default function QuickAdd({
  * first time, once the plugin that reads SMILES is set up - and what went
  * wrong, if anything, is said under it. Coordinates pasted in it are read
  * whole, their lines' ends and all, which the field itself would drop.
+ * A molecule the dictionary has - DMF, Et3N, THF - is drawn from the
+ * dictionary, its name and formula said under the field as it is typed;
+ * where the text is that and a SMILES too (NBS), each is offered there, the
+ * SMILES first, and Enter draws the one chosen - by a click, or the up and
+ * down arrows (chem/resolve).
  */
 function SmilesField({
   width,
   open,
   onSmiles,
+  onNamed,
   onCoordinates,
 }: {
   width: number;
   open: boolean;
   onSmiles: (smiles: string) => Promise<void>;
+  onNamed?: (label: string) => void;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
+  const named = onNamed != null;
+  const readings = useMemo(() => (named ? resolve(text, "molecule").readings : []), [text, named]);
+  const offered = readings.some((r) => r.as === "label") ? readings : [];
+  const [choice, setChoice] = useState(0);
+  const chosen: Reading | undefined = offered[Math.min(choice, offered.length - 1)];
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
   const input = useRef<HTMLInputElement>(null);
@@ -438,6 +456,10 @@ function SmilesField({
         e.preventDefault();
         const smiles = text.trim();
         if (!smiles || busy || reading.current) return;
+        if (chosen?.as === "label") {
+          onNamed!(chosen.label);
+          return;
+        }
         reading.current = true;
         setBusy(true);
         setError(null);
@@ -454,7 +476,14 @@ function SmilesField({
         value={text}
         onChange={(e) => {
           setText(e.target.value);
+          setChoice(0);
           setError(null);
+        }}
+        onKeyDown={(e) => {
+          if (offered.length < 2 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+          e.preventDefault();
+          const at = Math.min(choice, offered.length - 1);
+          setChoice((at + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
         }}
         onPaste={(e) => {
           const pasted = e.clipboardData.getData("text/plain");
@@ -472,7 +501,36 @@ function SmilesField({
         autoComplete="off"
         className="w-full h-8 rounded-md border border-gh-line px-2 font-mono text-xs outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
       />
+      {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
     </form>
+  );
+}
+
+/**
+ * What the SMILES field's text will be drawn as, under it: each reading -
+ * the SMILES, the dictionary's molecule by its name (or its label) - with
+ * its formula, the one chosen in Meno's colour; a click chooses another.
+ */
+export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Reading[]; chosen: Reading | undefined; onChoose: (i: number) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Draw as" className="flex flex-wrap gap-1 pt-1">
+      {offered.map((r, i) => (
+        <button
+          key={i}
+          type="button"
+          role="radio"
+          aria-checked={r === chosen}
+          // (the field keeps the keys: Enter still draws)
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onChoose(i)}
+          className={`h-6 max-w-full truncate rounded-full border px-2 text-[11px] leading-6 transition-colors duration-150 ease-meno ${r === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
+        >
+          {r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : <FormulaText text={r.as === "label" ? r.label : r.formula} />}
+          {" \u00b7 "}
+          <FormulaText text={r.formula} />
+        </button>
+      ))}
+    </div>
   );
 }

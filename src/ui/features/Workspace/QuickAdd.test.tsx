@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import QuickAdd from "./QuickAdd";
+import QuickAdd, { DrawAs } from "./QuickAdd";
+import { resolve } from "./chem/resolve";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws Quick Add, and what its rows hold is read off that.
@@ -27,5 +28,28 @@ describe("Quick Add", () => {
 
   it("offers as shapes a rectangle - its corners rounded from its menu - an ellipse and a line", () => {
     expect(rows().shapes).toEqual(["Rectangle", "Ellipse", "Line"]);
+  });
+});
+
+describe("what the SMILES field's text will be drawn as", () => {
+  const drawAs = (text: string, choice = 0) => {
+    const { readings } = resolve(text, "molecule");
+    return renderToString(<DrawAs offered={readings} chosen={readings[choice]} onChoose={none} />);
+  };
+
+  it("NBS: the SMILES and N-bromosuccinimide each offered, with its formula, the one chosen in Meno's colour", () => {
+    const html = drawAs("NBS");
+    expect([...html.matchAll(/role="radio" aria-checked="(\w+)"/g)].map((m) => m[1])).toEqual(["true", "false"]);
+    expect(html).toContain("SMILES");
+    expect(html).toContain("N-bromosuccinimide");
+    expect(html.match(/border-accel-base/g)).toHaveLength(1);
+    expect(drawAs("NBS", 1).match(/aria-checked="true"[^>]*>N-bromosuccinimide/)).not.toBeNull();
+  });
+
+  it("a formula's counts set below the line at the drawing's size, never a font's subscript digits", () => {
+    const html = drawAs("DMF");
+    expect(html).toContain("N,N-dimethylformamide");
+    expect(html).toMatch(/font-size:0.75em[^>]*>3</);
+    expect(html).not.toMatch(/[₀-₉]/);
   });
 });
