@@ -1972,9 +1972,11 @@ them again*; the maintainer's rulings of 2026-10-22):
   stand on: a #2: ... ; a #4 refused - take them out first*, *a #2 has 1
   imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
   (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
-  not converged alone before). *Energy window* refuses one that failed or
-  whose marks did not read the same, and, where the window is on free
-  energies, a saddle point too (2026-10-24). *Choose one*,
+  not converged alone before). *Energy window* refuses the same: one that
+  failed or whose marks did not read, and a saddle point on electronic
+  energies as on free ones (2026-10-27; free energies alone from
+  2026-10-24). Kept in a window or set aside from it, a transition state
+  would stand as a conformer it is not. *Choose one*,
   choosing the lowest, and *Duplicates*, ranking by energy which copy it
   keeps, refuse as Populations does; *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,

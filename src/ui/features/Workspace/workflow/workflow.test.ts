@@ -381,8 +381,9 @@ describe("Meno's own steps", () => {
     const minima = set.filter((e) => !e.imaginary);
     expect(runMeno("populations", minima, "conformers", { temperature: 298.15 }).ok).toBe(true);
     expect(notAllMinima(minima)).toBeNull();
-    // (a window on electronic energies weighs no populations: it keeps the saddle point where its energy falls)
-    expect(runMeno("energy-window", set, "conformers", { window: 3 }).ok).toBe(true);
+    // (nor a window, on electronic energies as on free ones: kept or set aside, a saddle point would stand as a conformer it is not)
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first" });
+    expect(runMeno("energy-window", minima, "conformers", { window: 3 }).ok).toBe(true);
   });
 
   it("give no populations, and no window, where one conformer's optimisation did not converge - naming it", () => {
