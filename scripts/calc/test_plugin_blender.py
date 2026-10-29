@@ -532,9 +532,9 @@ class MotionsRender(unittest.TestCase):
                     self.assertEqual(rendered, {"once": 7, "loop": 8}[mode] if liquid else frames)
 
     def test_a_film_shorter_than_its_motion_can_be_read_in_is_refused_saying_how_long_it_needs(self):
-        # (however it was asked for: three molecules' liquid change, Once, in 5 s - each change needs 6 s)
-        why = self.film("change-liquid", "white", frames=5, molecules=(METHYLAMINE, METHANOL, METHYLAMINE), fails=True)
-        self.assertEqual(why, "This film needs at least 12 s for 3 molecules")
+        # (however it was asked for: three molecules' ring change, Once, in 5 s - each change needs 3 s)
+        why = self.film("change-ring", "white", frames=5, molecules=(METHYLAMINE, METHANOL, METHYLAMINE), fails=True)
+        self.assertEqual(why, "This film needs at least 6 s for 3 molecules")
         self.assertEqual(self.film("assemble", "black", "loop", frames=6, fails=True), "This film needs at least 7 s")
 
     def test_a_change_of_one_molecule_says_it_needs_two(self):
