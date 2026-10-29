@@ -43,6 +43,12 @@ Check "a key with nothing that has the keys goes on" (Stops { Assert-NotNetworkY
 $said = try { Assert-NotNetworkYes -Look (Read $winYes) -What "the Enter key"; "" } catch { $_.Exception.Message }
 Check "saying what and which" ($said -like "the Enter key would answer a question about the network yes ('Allow and download')*nothing was sent.") $true
 
+Write-Host "nothing on screen, read as nothing or as none (under StrictMode, as the harness runs)"
+Check "no chain at all is no yes" (Test-NetworkYes -Chain $null) $false
+Check "nor is it the page reached" (Test-PageReached -Chain $null) $false
+Check "a chain given as nothing reads as none" (@((Read-Part { [pscustomobject]@{ Chain = $null } }).Chain).Count) 0
+Check "a key with nothing that has the keys, given as nothing, goes on" (Stops { Assert-NotNetworkYes -Look (Read-Part { [pscustomobject]@{ Chain = $null } }) -What "the Enter key" }) $false
+
 Write-Host "a reading that failed stops it too"
 $look = Read-Part { throw "AXError -25204 asking what has the keys" }
 Check "an error is kept, with why" $look.Unread "AXError -25204 asking what has the keys"

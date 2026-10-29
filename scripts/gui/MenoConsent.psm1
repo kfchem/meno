@@ -28,7 +28,8 @@ function Read-Part {
     param([Parameter(Mandatory)] [scriptblock] $Read)
     try { $r = & $Read } catch { return [pscustomobject]@{ Chain = @(); Unread = "$($_.Exception.Message)" } }
     if ($null -eq $r -or -not $r.PSObject.Properties["Chain"]) { return [pscustomobject]@{ Chain = @(); Unread = "nothing was read" } }
-    return [pscustomobject]@{ Chain = @($r.Chain); Unread = $null }
+    # (a chain given as nothing is an empty one: nothing has the keys)
+    return [pscustomobject]@{ Chain = @($r.Chain | Where-Object { $null -ne $_ }); Unread = $null }
 }
 
 function Test-NetworkYes {
