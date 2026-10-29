@@ -550,13 +550,24 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   RDKit counts a dative bond in its acceptor's valence, so a plain B drawn
   H3N→BH3 was given two hydrogens, where Meno counts three: the molecule
   in 3D came out H3N→BH2 (RDKit plugin to 0.1.11). Its acceptor, not a
-  metal, is now given the hydrogens Meno counts, the dative bond taking
-  none (`acceptors_as_drawn`). Where RDKit then cannot hold it - a neutral
-  B or Al with its three bonds besides - the structure is refused in
-  words: "RDKit cannot hold the coordination bond from N to B as drawn: B
-  takes no further bond there. Draw the two charged instead, N+ bonded to
-  B-." A metal acceptor keeps its ligands' hydrogens as they are
-  (cisplatin drawn with arrows: six). From RDKit plugin 0.1.12.
+  metal, is given the hydrogens Meno counts, the dative bond taking none
+  (`acceptors_as_drawn`), from 0.1.12. A metal acceptor keeps its ligands'
+  hydrogens as they are (cisplatin drawn with arrows: six).
+- **A group-13 adduct is held in its dipolar form inside RDKit.** RDKit
+  cannot hold a dative bond to a full group-13 acceptor: B, Al, Ga, In or
+  Tl, neutral, with three bonds besides. So such a bond, from a donor that
+  can carry a charge (N, P, As, O, S, Se or a halogen), neutral, is held
+  inside RDKit as a single bond, the donor +1 and the acceptor −1
+  (`dipolar_adducts`). The total charge and the electrons are the same as
+  drawn, and the charges reported back are the drawn ones (`drawn_charge`).
+  The force field's energies are for that form, and *How it was made*
+  says so: "N→B as N+–B− in the force field; the charges as drawn".
+  H3N→BH3, Me3N→AlCl3, the BF3 adducts of an ether and a ketone, and
+  Al2Cl6 drawn with its bridges as arrows are each made, with all their
+  atoms. A coordination bond to a main-group acceptor that cannot be held
+  so is refused in words, naming the reason: an acceptor not of group 13,
+  a charged acceptor or donor, a donor that cannot carry the charge, or
+  two such bonds onto one acceptor. From RDKit plugin 0.1.14.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that

@@ -103,11 +103,84 @@ def acceptors_as_drawn(mol):
     return mol
 
 
+#: Acceptors of group 13, neutral with three bonds besides, whose coordination bond RDKit cannot hold as a dative
+#: bond - it counts it in their valence - and so holds as the bond's dipolar form inside it (`dipolar_adducts`).
+DIPOLAR_ACCEPTORS = {"B", "Al", "Ga", "In", "Tl"}
+#: Donors that can carry a +1 charge with one bond more, as that form needs.
+DIPOLAR_DONORS = {"N", "P", "As", "O", "S", "Se", "F", "Cl", "Br", "I"}
+
+
+def adduct_why(mol, b):
+    """Why a coordination bond to a full main-group acceptor cannot be held
+    in its dipolar form, in words; None where it can."""
+    donor, acceptor = b.GetBeginAtom(), b.GetEndAtom()
+    if acceptor.GetSymbol() not in DIPOLAR_ACCEPTORS:
+        return f"{acceptor.GetSymbol()} is not one of B, Al, Ga, In and Tl"
+    if acceptor.GetFormalCharge():
+        return f"{acceptor.GetSymbol()} is drawn charged"
+    if donor.GetFormalCharge():
+        return f"{donor.GetSymbol()} is drawn charged"
+    if donor.GetSymbol() not in DIPOLAR_DONORS:
+        return f"{donor.GetSymbol()} cannot carry the charge"
+    datives = [x for x in acceptor.GetBonds() if x.GetBondType() == Chem.BondType.DATIVE]
+    if len(datives) > 1:
+        return f"{acceptor.GetSymbol()} takes {len(datives)} of them"
+    besides = acceptor.GetNumExplicitHs() + sum(x.GetBondTypeAsDouble() for x in acceptor.GetBonds() if x.GetBondType() != Chem.BondType.DATIVE)
+    if besides != 3:
+        return f"{acceptor.GetSymbol()} has {besides:g} bonds besides, not three"
+    return None
+
+
+def dipolar_adducts(mol):
+    """Each coordination bond to a group-13 acceptor, neutral with three
+    bonds besides, from a donor that can carry a charge, held as its
+    dipolar form: a single bond, the donor +1 and the acceptor -1. Inside
+    RDKit only, which cannot hold it as a dative bond: the charges as drawn
+    are kept on each atom (`DRAWN_CHARGE`) and are what is reported back, and
+    the donor names its acceptor (`LENDS_TO`). The same charge and electrons
+    as drawn. Changed in place; unsanitised in, unsanitised out. Those it
+    held so, as (donor, acceptor)."""
+    held = []
+    for b in list(mol.GetBonds()):
+        if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()) or adduct_why(mol, b):
+            continue
+        donor, acceptor = b.GetBeginAtom(), b.GetEndAtom()
+        for atom in (donor, acceptor):
+            atom.SetIntProp(DRAWN_CHARGE, atom.GetFormalCharge())
+        b.SetBondType(Chem.BondType.SINGLE)
+        donor.SetFormalCharge(donor.GetFormalCharge() + 1)
+        acceptor.SetFormalCharge(acceptor.GetFormalCharge() - 1)
+        donor.SetIntProp(LENDS_TO, acceptor.GetIdx())
+        held.append((donor.GetIdx(), acceptor.GetIdx()))
+    return held
+
+
+#: An atom's charge as drawn, kept where RDKit holds it otherwise (`dipolar_adducts`), and its acceptor's index on a donor.
+DRAWN_CHARGE = "meno_drawn_charge"
+LENDS_TO = "meno_lends_to"
+
+
+def drawn_charge(atom):
+    """An atom's charge as drawn: kept where RDKit holds a dipolar form."""
+    return atom.GetIntProp(DRAWN_CHARGE) if atom.HasProp(DRAWN_CHARGE) else atom.GetFormalCharge()
+
+
+def dipolar_words(mol):
+    """The coordination bonds held in their dipolar form, as a row of *How it
+    was made* says them; None where there are none."""
+    pairs = [(a.GetSymbol(), mol.GetAtomWithIdx(a.GetIntProp(LENDS_TO)).GetSymbol()) for a in mol.GetAtoms() if a.HasProp(LENDS_TO)]
+    if not pairs:
+        return None
+    said = sorted({f"{d}\u2192{x} as {d}+\u2013{x}\u2212" for d, x in pairs})
+    return ", ".join(said) + " in the force field; the charges as drawn"
+
+
 def sanitized(mol):
-    """`mol` sanitised, or why not in words: a coordination bond RDKit cannot
-    hold - its acceptor, not a metal, past what RDKit lets it bond, as a
-    neutral B or Al with three bonds besides - named, with what to draw
-    instead; any other problem as RDKit gives it."""
+    """`mol` sanitised - a coordination bond to a full group-13 acceptor held
+    in its dipolar form first (`dipolar_adducts`) - or why not in words: a
+    coordination bond RDKit cannot hold otherwise, named, with why; any other
+    problem as RDKit gives it."""
+    dipolar_adducts(mol)
     problem = Chem.SanitizeMol(mol, catchErrors=True)
     if problem == Chem.SanitizeFlags.SANITIZE_NONE:
         return mol
@@ -115,10 +188,8 @@ def sanitized(mol):
         if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()):
             continue
         donor, acceptor = b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()
-        raise ValueError(
-            f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {acceptor} takes no further bond there. "
-            f"Draw the two charged instead, {donor}+ bonded to {acceptor}-."
-        )
+        why = adduct_why(mol, b) or f"{acceptor} takes no further bond there"
+        raise ValueError(f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {why}.")
     raise ValueError(f"cannot make sense of the structure ({problem})")
 
 
@@ -2102,7 +2173,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
     shown = Chem.Mol(mol)
     Chem.Kekulize(shown, clearAromaticFlags=True)
     return {
-        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge()} for a in mol.GetAtoms()],
+        # (each charge as drawn, where RDKit held a coordination bond in its dipolar form)
+        "atoms": [{"el": a.GetSymbol(), "charge": drawn_charge(a)} for a in mol.GetAtoms()],
         "bonds": [
             {"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": kekule_order(b)}
             for b in shown.GetBonds()
@@ -2127,6 +2199,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                  else "none: UFF has no parameters for " + " or ".join(untyped or ["it"])},
             ]),
             *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
+            *([{"label": "Coordination bonds", "text": dipolar_words(mol)}] if dipolar_words(mol) else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}

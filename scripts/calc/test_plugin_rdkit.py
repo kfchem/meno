@@ -1613,19 +1613,43 @@ class CoordinationBonds(unittest.TestCase):
         iso = self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
         return "".join(sorted(a["el"] for a in iso["atoms"]))
 
-    def test_a_main_group_adduct_drawn_with_an_arrow_is_refused_in_words_never_a_hydrogen_short(self):
-        # (H3N->BH3 as plain atoms: RDKit gave the B two hydrogens - H3N->BH2 - where Meno draws three)
-        adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
-        with self.assertRaisesRegex(ValueError, r"^RDKit cannot hold the coordination bond from N to B as drawn: B takes no further bond there\. Draw the two charged instead, N\+ bonded to B-\.$"):
-            self.formula(adduct)
-        alane = self.block(
-            [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
-            [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)],
-        )
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to Al as drawn"):
-            self.formula(alane)
-        # (drawn charged, as the words say: made, its six hydrogens all there)
-        self.assertEqual(self.formula(self.block([("N", 0, 0, 1), ("B", 1.6, 0, -1)], [(1, 1, 2)])), "BHHHHHHN")
+    def made(self, molblock):
+        return self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
+
+    def test_a_group_13_adduct_drawn_with_an_arrow_is_held_in_its_dipolar_form_its_charges_reported_as_drawn(self):
+        # (H3N->BH3 as plain atoms: before 0.1.12 RDKit gave the B two hydrogens - H3N->BH2 - and 0.1.12 refused it)
+        iso = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
+        self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), "BHHHHHHN")
+        self.assertEqual([a["charge"] for a in iso["atoms"]], [0] * 8)
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B as N+\u2013B\u2212 in the force field; the charges as drawn"}, iso["how"])
+        n, b = iso["frames"][0][0:3], iso["frames"][0][3:6]
+        self.assertTrue(1.5 < math.dist(n, b) < 1.8, math.dist(n, b))
+        # (an alane, an ether's and a ketone's BF3, and Al2Cl6 drawn with its two bridges as arrows: each made, all its atoms)
+        for name, atoms, bonds, formula in [
+            ("Me3N->AlCl3", [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)], "AlCCCClClClHHHHHHHHHN"),
+            ("Me2O->BF3", [("O", 0, 0, 0), ("B", 1.6, 0, 0), ("F", 2.5, 1, 0), ("F", 2.5, -1, 0), ("F", 1.6, 1.5, 0), ("C", -1, 1, 0), ("C", -1, -1, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7)], "BCCFFFHHHHHHO"),
+            ("Me2C=O->BF3", [("O", 0, 0, 0), ("B", 1.6, 0, 0), ("F", 2.5, 1, 0), ("F", 2.5, -1, 0), ("F", 1.6, 1.5, 0), ("C", -1.2, 0, 0), ("C", -2, 1, 0), ("C", -2, -1, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (2, 1, 6), (1, 6, 7), (1, 6, 8)], "BCCCFFFHHHHHHO"),
+            ("Al2Cl6", [("Al", 0, 0, 0), ("Al", 3, 0, 0), ("Cl", 1.5, 1, 0), ("Cl", 1.5, -1, 0), ("Cl", -1, 1, 0), ("Cl", -1, -1, 0), ("Cl", 4, 1, 0), ("Cl", 4, -1, 0)],
+             [(1, 1, 3), (9, 3, 2), (1, 2, 4), (9, 4, 1), (1, 1, 5), (1, 1, 6), (1, 2, 7), (1, 2, 8)], "AlAlClClClClClCl"),
+        ]:
+            iso = self.made(self.block(atoms, bonds))
+            self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), formula, name)
+            self.assertTrue(all(a["charge"] == 0 for a in iso["atoms"]), name)
+
+    def test_a_main_group_adduct_it_cannot_hold_is_refused_in_words_never_a_hydrogen_short(self):
+        for atoms, bonds, why in [
+            # (Si, not of group 13; a charged acceptor; a charged donor; a donor that cannot carry the charge; two arrows onto one B)
+            ([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)], "Si is not one of B, Al, Ga, In and Tl"),
+            ([("N", 0, 0, 0), ("B", 1.6, 0, -1)], [(9, 1, 2)], "B is drawn charged"),
+            ([("N", 0, 0, 1), ("B", 1.6, 0, 0)], [(9, 1, 2)], "N is drawn charged"),
+            ([("C", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)], "C cannot carry the charge"),
+            ([("N", 0, 0, 0), ("B", 1.6, 0, 0), ("N", 3.2, 0, 0)], [(9, 1, 2), (9, 3, 2)], "B takes 2 of them"),
+        ]:
+            with self.assertRaisesRegex(ValueError, "^RDKit cannot hold the coordination bond from [A-Z][a-z]? to [A-Z][a-z]? as drawn: " + why + r"\.$"):
+                self.made(self.block(atoms, bonds))
 
     def test_a_metal_acceptor_keeps_its_ligands_hydrogens(self):
         # (cis-[PtCl2(NH3)2], each ammine's bond to Pt an arrow: six hydrogens, none taken)
@@ -1633,14 +1657,16 @@ class CoordinationBonds(unittest.TestCase):
         self.assertEqual(self.formula(cisplatin), "ClClHHHHHHNNPt")
 
     def test_a_plugin_entrys_coordination_bond_is_dative_never_a_covalent_single(self):
-        # (H3N->BH3 with all its hydrogens, its B-N bond marked: refused; a Pt ammine's N->Pt: dative)
+        # (H3N->BH3 with all its hydrogens, its B-N bond marked: its dipolar form, the charges as drawn kept; a Pt ammine's N->Pt: dative)
         h = lambda x, k: {"el": "H", "x": x, "y": 0.9 * (k - 1), "z": 0.5}
         borane = {
             "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0}, {"el": "B", "x": 1.66, "y": 0, "z": 0}] + [h(-0.4, k) for k in range(3)] + [h(2.1, k) for k in range(3)],
             "bonds": [{"a1": 0, "a2": 1, "order": 1, "coordination": True}] + [{"a1": 0, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 1, "a2": 5 + k, "order": 1} for k in range(3)],
         }
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to B as drawn"):
-            self.worker.mol_of(borane)
+        held = self.worker.mol_of(borane)
+        bond = held.GetBondBetweenAtoms(0, 1)
+        self.assertEqual((bond.GetBondType(), held.GetAtomWithIdx(0).GetFormalCharge(), held.GetAtomWithIdx(1).GetFormalCharge()), (Chem.BondType.SINGLE, 1, -1))
+        self.assertEqual([self.worker.drawn_charge(a) for a in held.GetAtoms()][:2], [0, 0])
         ammine = {
             "atoms": [{"el": "Pt", "x": 0, "y": 0, "z": 0}, {"el": "N", "x": 2.05, "y": 0, "z": 0}] + [h(2.4, k) for k in range(3)] + [{"el": "Cl", "x": -2.3, "y": 0, "z": 0}],
             "bonds": [{"a1": 1, "a2": 0, "order": 1, "coordination": True}] + [{"a1": 1, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 0, "a2": 5, "order": 1}],
