@@ -240,10 +240,10 @@ strength. Restraints are a label: they name no geometry, and ride along.
   **listed atoms** are fixed where they stand. Both are typed from 1.
 - **No defaults.** The factor and the strength are the chemist's: the card
   says "Set the factor" and "Set the strength" until they are typed. A
-  factor has no source to take a default from. ConfoTS's protocol uses 0.9,
-  and 0.9 of the van der Waals radii together holds an acid and a base in
-  contact, about twice a bond's length (H3N→BH3: 3.21 Å, its B–N bond
-  about 1.6 Å), not at a bond.
+  factor has no source to take a default from. Case F's workflow sets 0.9:
+  0.9 of the van der Waals radii together holds an acid and a base in
+  contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
+  about 1.6 Å).
 - **Replaced, not added to.** What an entry held before is replaced.
 - **Refused, with the reason** (out of *Failed*): an atom the entry does not
   have, an element Alvarez gives no radius for, or an entry with no 3D
@@ -260,8 +260,8 @@ lacks, an element with no radius, and no strength each refused in words.
 
 Each entry against a reference, the product it is to become, in one
 numbering (`torsionsRestrained`): the torsions across the reference's
-double bonds that are trans there, held trans here. The protocol is
-ConfoTS's, its numbers the chemist's.
+double bonds that are trans there, held trans here - case F's restrained
+minimisation (docs/WORKFLOWS-FOUNDATION.md), its numbers the chemist's.
 
 - **Which torsions** (`transTorsions`): each bond of order 2 in the
   reference that is not aromatic, as Meno reads aromaticity (a bond on an
