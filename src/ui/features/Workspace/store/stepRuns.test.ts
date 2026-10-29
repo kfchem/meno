@@ -541,6 +541,29 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
   });
 
+  it("runs a step of two inputs once each step before it is done, not after the first of them alone", async () => {
+    const { st, step: a } = editor();
+    // (two optimisations of the one set, each into Merge's inputs: the second's job ends last)
+    const b = st().addStep("optimise", "xtb", 10, 10);
+    st().connect({ set: st().sets[0].id }, b);
+    const merge = st().addStep("merge", "meno", 30, 0);
+    expect(st().connect({ set: resultOf(st(), a)!.id }, merge, "first")).toBe(true);
+    expect(st().connect({ set: resultOf(st(), b)!.id }, merge, "second")).toBe(true);
+    const all = st().runAll();
+    for (let k = 0; k < 4; k++) await settle();
+    expect(asked.started).toHaveLength(2);
+    const done = (n: number) => Object.assign(jobs.get(idOf(n))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    done(1);
+    await st().lookAtJobs();
+    for (let k = 0; k < 4; k++) await settle();
+    // (the first done, the second still running: Merge waits - never "the step before it failed")
+    expect(st().steps.find((s) => s.id === merge)!.ran).toBeUndefined();
+    done(2);
+    await st().lookAtJobs();
+    await all;
+    expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
+  });
+
   it("runs a path search on pairs - each start with the end in its place - sending each its end, and a pair it cannot work out out of Failed, saying why", async () => {
     useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
