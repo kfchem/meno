@@ -428,7 +428,7 @@ are read as Export reads them (`pluginEntry`), and given with it. *Show
 log* and *Show files* are on the step's menu (right-click), once it has
 run.
 
-Another click on its title, its *Close*, or Escape closes it; a press elsewhere does not - the page is worked on (panned, scrolled, other cards) while its options stay open (2026-10-14). The
+A double-click on its card closes it, as do its *Close* and Escape; it never closes by itself (the maintainer, 2026-10-28): a single click on it again leaves it open, and a press elsewhere, a zoom, the selection changing, or a run starting or ending do not close it - the page is worked on (panned, zoomed, other cards opened) while its options stay open (2026-10-14). A double-click on a closed card opens it and leaves it open (workflow/cardOpen). Zoomed out where its words are too small to read, its options stay open, each line of their words a grey bar where it lies, as a text's words are (workflow/TextBars), and nothing in them can be pressed until they are read again. The
 step's options are its own: it starts with the defaults Settings,
 *Calculations*, has for its kind done by its plugin, and what is changed
 in it changes it alone - the defaults are set in Settings and nowhere
@@ -1078,6 +1078,13 @@ Decided while building it, for the maintainer to confirm:
   hover blue only for a wire under the pointer, as for an atom.
 - **A step's card is 208 px wide** at 100 %, its ports 28 px below its
   top: wires join where they always did as the card opens.
+- **A port** is round at every zoom - a ring a hair thick, or filled in
+  the accent while a wire may join it - and stands exactly at its wire's
+  end. It is 9 hairs across on the screen where the page is near; zoomed
+  out, never more than its own 11 page px - it shrinks with the page from
+  there - nor than a sixth of its set's or card's height, its ring then at
+  most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
+  were far too big for their sets; look `portSize`).
 - **One layer of HTML for all sets and steps**: with a layer for each, a
   step's layer covered the ports of sets under it (ARCHITECTURE.md,
   *Workflows*).
@@ -2690,19 +2697,18 @@ each entry's number, then its energy).
   an energy diagram - is still drawn, its points, levels, lines and axes;
   only its words fade out, as a set's name and count do. A table and a
   number, all words, fade out whole. All of these, and a step's card's
-  words, fade with the zoom, not at once: from fully shown at 1.15 times
-  the least scale words are read at to gone at 1/1.15 of it, about four
-  notches of a mouse wheel (utils/pageScale `wordsShown`, `--words` on the
-  page's layer), as a molecule's chips do. A step's card's large icons,
-  which stand for its words where they are gone, come in over the same
-  band (`standInShown`, `--stand-in`), so that a zoom stopped anywhere in
-  it leaves the card plainly there (the maintainer, 2026-10-25: stopped in
-  the middle, a card had been all but empty, its words gone and its icons
-  not yet come). The two cross over as a power-keeping cross-fade does,
-  each a quarter turn's cosine or sine: laid one over the other, together
-  they are never less than 0.91 opaque, each 0.71 at the band's middle.
-  What is pressed on the words still stops at the least scale they are
-  read at, the band's middle (`wordsTooSmall`).
+  words, go where they are too small, never at once - and never faded with
+  the zoom (the maintainer, 2026-10-28: faded with the zoom, a zoom could
+  stop where words and icons were both half there; before that, 2026-10-25,
+  where both were all but gone). Past a threshold they switch: off below
+  the least scale words are read at, divided by 1.05, and on again only
+  above it times 1.05, so that a zoom stopped at it, or turned a little
+  back, does not switch them back and forth (utils/pageScale
+  `wordsReadAt`, utils/zoomSwitch `switchedAt`). Switched, they fade over
+  Meno's quick time, 120 ms, on its curve (`--words` on the page's layer,
+  a CSS transition), as a molecule's chips do; a step's card's large icons,
+  which stand for its words where they are gone, fade in as they go
+  (`--stand-in`). What is pressed on them switches with them.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

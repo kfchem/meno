@@ -1,6 +1,5 @@
 import PageHtml from "./PageHtml";
 import { PAGE_SIZED } from "../utils/pageScale";
-import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
@@ -59,9 +58,10 @@ const absolute = (e: number) => valueText(e, { quantity: "energy" });
  * its molecule is pointed at or selected, or it is: it fades in and out,
  * keeping its place, so that what is under it stays where it is.
  *
- * Opened with its molecule low on the page - filling the window, as one
- * opened from its file does - it rises as far as it must to stay within
- * the canvas (`area`), over its molecule, and goes back down as it shuts.
+ * It stands where its molecule puts it, and only there: opened by a molecule
+ * low on the page or at the window's edge, it grows past the edge rather
+ * than chase it - the view moved, it moves with the molecule, as one with it
+ * (the maintainer, 2026-10-28: following the edge, it jittered).
  */
 export default function Frames3D({ raised, ...props }: ComponentProps<typeof FramesChip> & { raised?: boolean }) {
   // (opened, above every other thing on the page - its neighbours' chips, their notes - never under them; and so
@@ -120,7 +120,6 @@ export function FramesChip({
   made,
   conformers,
   said: fromText,
-  area,
   title,
   failed,
   marksUnread,
@@ -155,8 +154,6 @@ export function FramesChip({
   said?: { label: string; text: string }[];
   /** Its frames are a conformer set's (`Molecule3D.conformerSet`): shown as a set however many there are, one included. */
   conformers?: boolean;
-  /** What it keeps within: the canvas. */
-  area?: Element;
   /**
    * What the one told is called - a stack's molecule's record's title - said
    * after which it is (utils/stacks); a single geometry called by a name of
@@ -289,54 +286,35 @@ export function FramesChip({
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => unitsHeld(chipLine([about ?? "", energy != null ? absolute(energy) : ""], results));
-  // how far it has risen, and slid aside, to stay within the canvas -
-  // its details as wide as they are, by a molecule at its edge - followed
-  // each frame while it is open, and until it is back in place
+  // (how many device pixels one of its own pixels is drawn as - the page's scale, and the screen's - that its bars are laid on whole ones:
+  //  followed each frame while it is open)
   const chipEl = useRef<HTMLDivElement>(null);
-  // (how many device pixels one of its own pixels is drawn as - the page's scale, and the screen's - that its bars are laid on whole ones)
   const [devicePx, setDevicePx] = useState<number | null>(null);
   const devicePxNow = useRef<number | null>(null);
-  const [lift, setLift] = useState(0);
-  const lifted = useRef(0);
-  const [slide, setSlide] = useState(0);
-  const slid = useRef(0);
   useEffect(() => {
-    if (!area || (!full && lifted.current === 0 && slid.current === 0)) return;
+    if (!full) return;
     let id = 0;
-    const fit = () => {
+    const measure = () => {
       const el = chipEl.current;
       if (el) {
         const r = el.getBoundingClientRect();
-        const a = area.getBoundingClientRect();
         const k = el.offsetWidth ? Math.round((r.width / el.offsetWidth) * window.devicePixelRatio * 1000) / 1000 : null;
         if (k && k !== devicePxNow.current) {
           devicePxNow.current = k;
           setDevicePx(k);
         }
-        const over = r.bottom + EDGE - a.bottom;
-        const next = Math.max(0, Math.round(lifted.current + over));
-        if (next !== lifted.current) {
-          lifted.current = next;
-          setLift(next);
-        }
-        // (from where it would stand, not slid)
-        const aside = asideOf(r.left + slid.current, r.right + slid.current, a.left, a.right);
-        if (aside !== slid.current) {
-          slid.current = aside;
-          setSlide(aside);
-        }
       }
-      if (full || lifted.current > 0 || slid.current !== 0) id = requestAnimationFrame(fit);
+      id = requestAnimationFrame(measure);
     };
-    fit();
+    measure();
     return () => cancelAnimationFrame(id);
-  }, [area, full]);
+  }, [full]);
   return (
     <div
       ref={root}
       className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
       // (the pointer goes through it but for what it shows: a chip hidden keeps its size, and would hide what lies under it - a set's port, a step's card)
-      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px))`, pointerEvents: "none" }}
+      style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1)))`, pointerEvents: "none" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
         else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);

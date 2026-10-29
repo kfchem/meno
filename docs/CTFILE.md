@@ -118,7 +118,7 @@ atoms at its ends, as a dative bond does not: an ammine stays NH3.
 | An alias (A line) | The atom is drawn as - and taken to be - its alias, its letters' case as written: CO is carbon monoxide, Co cobalt, HO a hydroxy. One in small letters only is read as an element's symbol where it is one (co is Co), as a label typed so is. | |
 | A contracted abbreviation (SUP not expanded, or the old G line) | One atom, labelled, where the group's first attachment is, holding the atoms and bonds it stands for (`abbrev`); its bonds out leave from it. *Expand abbreviation*, in its menu, draws them out, turned with its bond. | |
 | An expanded abbreviation | Its atoms. | |
-| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3. |
+| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3.3; reversed when bonded on its right, GR-2.1.6. |
 | The prefixes n-, s-, t-, sec-, tert-, i- (hyphenated) and o-, m-, p- | In italics: *t*-Bu, *s*-Bu, *p*-Ts; iPr and iBu upright, unhyphenated. The canvas leans the label's own letters; an SVG or EMF asks for the typeface's italic. | Table II sets them so, and prefers it (upright is acceptable); the names have them so (isopropyl, *tert*-butyl). |
 | A substituted aryl group named ring last (2,6-diMeBz, 4-MeOC6H4) | As written on either side of its bond - it is not read outward - the ring's group, or a formula's C6, at the bond when that comes in from the right. Positions are no counts: not subscript. | Meno's own: such labels name the ring last. |
 | A valence the file sets (V2000's vvv, V3000's VAL) | Hydrogens counted to it; a carbon of other than four shows its label, CH2. | |
@@ -490,6 +490,10 @@ block's were 0). Enhanced stereo is written as V3000 collections
 An abbreviation is written out - the atoms a file gave it, or the
 dictionary's, laid out by Meno's own engine on from its bond - with an
 abbreviation Sgroup labelling them, so that it reads back contracted. A
+label bonded more than once at the atom it is attached by - an NMe in a
+chain, an NBoc in a ring - has its own bonds there in the widest opening
+between those, on its bisector, as a drawn substituent's are (IUPAC
+GR-4.1.2): an NMe's methyl 120 degrees from each carbon. A
 label on a metal that names a ligand bound in a complex - Cp, Cp*, allyl,
 cod, CO - is written out as bound (lib/chem/boundLigand): a pi system
 through all its atoms, by a multi-centre bond (ENDPTS, ATTACH=ALL) to a

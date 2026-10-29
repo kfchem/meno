@@ -45,9 +45,11 @@ page; a talk is a way through it.
   until a number's disc would be more than a sixth of its slide's
   height on the screen: from there the number shrinks with its slide, and
   the line and its arrowhead with the smaller of the two it joins; and
-  where its figures are too small to read, it fades out, from 1.15 times
-  the least size the page's words are read at (8.25 px) to 1/1.15 of it,
-  evenly with the zoom, never at a jump (presenting/slides `markScale`).
+  where its figures are too small to read - the least size the page's
+  words are read at, 8.25 px - it goes: switched there, a little either
+  way, and faded over Meno's quick time, never faded with the zoom
+  (presenting/slides `markScale`, utils/zoomSwitch; the maintainer,
+  2026-10-28).
   Gone while a talk is given, and never in a picture of the page. A number
   being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around

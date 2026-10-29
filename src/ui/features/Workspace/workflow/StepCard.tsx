@@ -1,3 +1,4 @@
+import TextBars from "./TextBars";
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -10,7 +11,7 @@ import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
-import { CARD_H, CARD_W, PORT_STEP, portDown, PX } from "./look";
+import { CARD_H, CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
 import { clock } from "./programs";
 import { COPYABLE } from "../hooks/useKeepUnselected";
 
@@ -22,23 +23,23 @@ export type PortLook = "plain" | "lit";
 
 /** A hairline on the screen, whatever the zoom: the page's layer of HTML sets it (Workflow2D). */
 export const HAIR = "var(--hair, 1px)";
-/** How large a port is on the screen, in hairlines. */
-const PORT_HAIRS = 9;
-
-/** A port, centred where it stands in its parent: a small ring, a hair thick. */
+/** A port, centred where it stands in its parent: a small ring, a hair thick. `of`: its set's or card's height, on the page, in px. */
 export function Port({
   look,
   style,
   onPointerDown,
   data,
   label,
+  of,
 }: {
   look: PortLook;
   style: CSSProperties;
   onPointerDown: (e: ReactPointerEvent) => void;
   data: Record<string, string>;
   label: string;
+  of?: number;
 }) {
+  const size = portSize(of);
   return (
     <div
       {...data}
@@ -47,15 +48,17 @@ export function Port({
       onPointerDown={onPointerDown}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
-        "absolute rounded-full select-none transition-colors duration-150 ease-meno",
+        // (taken hold of over at least 12 hairs, however small it is drawn: meno-port)
+        "meno-port absolute rounded-full select-none transition-colors duration-150 ease-meno",
         look === "lit" ? "bg-accel-base border-accel-base" : "bg-white border-gh-gray hover:bg-accel-lightbase hover:border-accel-base",
       )}
       style={{
-        width: `calc(${HAIR} * ${PORT_HAIRS})`,
-        height: `calc(${HAIR} * ${PORT_HAIRS})`,
-        marginLeft: `calc(${HAIR} * ${-PORT_HAIRS / 2})`,
-        marginTop: `calc(${HAIR} * ${-PORT_HAIRS / 2})`,
-        borderWidth: HAIR,
+        ["--port" as string]: size,
+        width: size,
+        height: size,
+        marginLeft: `calc(${size} / -2)`,
+        marginTop: `calc(${size} / -2)`,
+        borderWidth: `min(${HAIR}, calc(${size} / 5))`,
         borderStyle: "solid",
         pointerEvents: "auto",
         cursor: "crosshair",
@@ -139,6 +142,8 @@ export type StepCardProps = {
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
+  /** Its options shut: by its Close, or Escape - as by a double-click on it; never by themselves, while the page is worked on. */
+  onClose: () => void;
   /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
@@ -164,8 +169,6 @@ export type StepCardProps = {
   onShowRun: (index: number) => void;
   /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
   onKeepRun: (index: number, keep: boolean) => void;
-  /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
-  onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
@@ -203,8 +206,8 @@ export default function StepCard(p: StepCardProps) {
         className={`rounded-xl bg-white shadow-sm ${p.selected ? "border-accel-base" : "border-gh-line"}`}
         style={{ borderWidth: HAIR, borderStyle: "solid", cursor: "default" }}
       >
-        {/* (its words, and its icons alone large where they are too small to read: one over the other, the words fading out with the zoom as
-            the icons fade in - utils/pageScale `wordsShown`, `standInShown` - never one put for the other at once, nor the card left empty between) */}
+        {/* (its words, and its icons alone large where they are too small to read: one over the other, switched past a threshold - utils/pageScale
+            `wordsReadAt` - the words fading out as the icons fade in, over a short time: never one put for the other at once, nor both half there at a zoom) */}
         <div className="grid">
           <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: CARD_H / PX }} aria-hidden={!p.compact}>
             <StepGlyph icon={p.info.icon} size={28} />
@@ -252,7 +255,7 @@ export default function StepCard(p: StepCardProps) {
         </div>
         {/* (its options open and shut as a card does, never at a jump: the card grows and shrinks with them) */}
         <AnimatePresence initial={false}>
-        {p.open && !p.compact && (
+        {p.open && (
           <motion.div
             key="options"
             initial={{ height: 0, opacity: 0 }}
@@ -261,7 +264,8 @@ export default function StepCard(p: StepCardProps) {
             transition={{ duration: DURATION.base, ease: EASE }}
             style={{ overflow: "hidden" }}
           >
-          <div className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
+          {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
+          <TextBars on={p.compact} className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
             {p.kinds.length > 1 && (
               <div className="mb-3">
                 <OptionsForm
@@ -317,7 +321,7 @@ export default function StepCard(p: StepCardProps) {
                 Close
               </button>
             </div>
-          </div>
+          </TextBars>
           </motion.div>
         )}
         </AnimatePresence>

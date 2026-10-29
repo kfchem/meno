@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { Port } from "./StepCard";
+import { PORT, PORT_SHARE, portSize, PX } from "./look";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer draws the port.
 
@@ -11,5 +12,18 @@ describe("a port", () => {
     // pointer's moves and its release from the gesture under way)
     const html = renderToString(<Port look="plain" label="Set as input" data={{}} onPointerDown={() => {}} style={{}} />);
     expect(html).toMatch(/class="[^"]*\bselect-none\b/);
+  });
+
+  it("is 9 hairlines on the screen near, never more than its own 11 page px zoomed out, nor a sixth of its set's height: round, its ring at most a fifth of it", () => {
+    expect(PORT / PX).toBeCloseTo(11, 9);
+    // (a set 300 px tall: its own 11 px the most)
+    expect(portSize(300)).toBe("min(calc(var(--hair, 1px) * 9), 11.00px)");
+    // (a set 36 px tall: a sixth of it, 6 px)
+    expect(portSize(36)).toBe(`min(calc(var(--hair, 1px) * 9), ${(36 * PORT_SHARE).toFixed(2)}px)`);
+    const html = renderToString(<Port look="plain" label="Into Filter" data={{}} onPointerDown={() => {}} style={{}} of={36} />);
+    expect(html).toContain("width:min(calc(var(--hair, 1px) * 9), 6.00px)");
+    expect(html).toContain("height:min(calc(var(--hair, 1px) * 9), 6.00px)");
+    expect(html).toContain("border-width:min(var(--hair, 1px), calc(min(calc(var(--hair, 1px) * 9), 6.00px) / 5))");
+    expect(html).toMatch(/class="[^"]*\brounded-full\b/);
   });
 });
