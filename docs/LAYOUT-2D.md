@@ -716,8 +716,13 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   with three groups at the end of a single bond in no ring (a ring through
   a metal aside) is such an axis's (`readStereo`) - but for an S, Se, Te,
   P, As or Sb, its fourth group a lone pair (a sulfoxide's S, a
-  phosphine's P): that is a stereocentre, which Clean-up leaves as drawn,
-  since the engine lays out none with a lone pair.
+  phosphine's P): that is a stereocentre.
+- A stereocentre whose fourth group is a lone pair - a sulfoxide's or a
+  sulfonium's S, a phosphine's P, an arsine's As - is drawn as one with its
+  H left out: one wedge, the lone pair the fourth, undrawn group, and read
+  back from it so (`readStereo`). A selenoxide's Se, a telluride's Te or a
+  stibine's Sb is not read from its wedge, as no reader reads one, so
+  Clean-up leaves such a drawing as it is (2026-10-29).
 - A cage drawn in perspective shows its stereochemistry by the drawing
   itself, with no wedges; what it shows is read back from the solid the
   cage is drawn from, fitted to where its atoms are and how deep, and the

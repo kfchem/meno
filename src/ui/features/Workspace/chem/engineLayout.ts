@@ -58,7 +58,8 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
  * The atoms, by their places in the drawing, with a wedge that could make
  * them a stereocentre but says nothing that can be read: wedge and hashes
  * drawn opposite each other, or an atom with a lone pair for its fourth
- * group (a sulfoxide's S).
+ * group that no reader reads from a wedge (a selenoxide's Se; a
+ * sulfoxide's S is read, lib/layout/drawn).
  */
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
   const bondsOf = bondsAt(drawing.bonds);
@@ -99,7 +100,7 @@ export function layoutJob(part: Model): LayoutJob {
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
-        "(drawn crossed, with two of its bonds in line or on top of each other, or on an atom with a lone pair), so nothing was moved",
+        "(drawn crossed, with two of its bonds in line or on top of each other, or on a selenium, tellurium or antimony atom with a lone pair), so nothing was moved",
     );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own
