@@ -17,7 +17,7 @@
  */
 import { geometryKey, type Entry, type Property, type PropertyValue } from "../entry";
 import type { BondChangeRow } from "../chem/reactionMap";
-import type { Table } from "../table";
+import { ATOMS_FROM_1, type Table } from "../table";
 
 /**
  * `e` renumbered: `order[i]` is the atom of `e` that is atom `i` now (from
@@ -80,8 +80,8 @@ export function bondChangesTable(mapped: readonly { product: number; map: number
       { name: "Product", kind: "text" },
       ...(maps ? [{ name: "Map", kind: "number" as const, unit: "none" as const }] : []),
       { name: "Change", kind: "text" },
-      { name: "Atom 1", kind: "number", unit: "none" },
-      { name: "Atom 2", kind: "number", unit: "none" },
+      { name: "Atom 1", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
+      { name: "Atom 2", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
       { name: "Element 1", kind: "text" },
       { name: "Element 2", kind: "text" },
       { name: "Order before", kind: "number", unit: "none" },
