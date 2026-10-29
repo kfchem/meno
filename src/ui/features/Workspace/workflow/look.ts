@@ -206,6 +206,29 @@ export type WireRouted = { pts: Pt[]; way: WireWay; corners?: Pt[] };
  * back (the drawing's; placement goes the one way, as it is now).
  */
 export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = [], was?: WireWay): WireRouted {
+  // (the same wire among the same frames goes the same way: worked out once - a page of sixty steps placed each result set
+  //  routing every wire on it again, each time, the same; and a drag draws each frame the wires it did not move)
+  const key = routeKey(p, q, ends, around, was);
+  const kept = ROUTES.get(key);
+  if (kept) return kept;
+  const routed = routeOf(p, q, ends, around, was);
+  if (ROUTES.size >= ROUTES_MOST) ROUTES.clear();
+  ROUTES.set(key, routed);
+  return routed;
+}
+
+/** Routes worked out (`wireRoute`), by all they depend on; cleared whole once this many are kept. */
+const ROUTES = new Map<string, WireRouted>();
+const ROUTES_MOST = 20_000;
+
+/** All a wire's way depends on, as a key: its ends, the frames it leaves and comes into, its lead, what it goes round, the way it went before. */
+function routeKey(p: Pt, q: Pt, ends: { from?: Side; to?: Side; lead?: number } | undefined, around: readonly Side[], was?: WireWay): string {
+  const side = (f?: Side) => (f ? `${f.x0},${f.x1},${f.y0},${f.y1}` : "-");
+  return `${p.x},${p.y};${q.x},${q.y};${side(ends?.from)};${side(ends?.to)};${ends?.lead ?? "-"};${was ?? "-"};${ends ? "e" : "-"};${around.map(side).join("|")}`;
+}
+
+/** A wire's way, worked out (`wireRoute`, which keeps each). */
+function routeOf(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = [], was?: WireWay): WireRouted {
   // (into an input named beside it: level for as long as its name - under it, never through it - the rest as any wire to where that begins)
   if (ends?.lead) {
     const at = { x: q.x - ends.lead, y: q.y };
