@@ -6,11 +6,11 @@ How to draw structures on the page with the pointer: bonds out of atoms, chains 
 
 - Drag empty space to move the page; a right or middle drag moves it from anywhere. On a trackpad, two fingers move it.
 - Turn the wheel, or pinch, to zoom in and out.
-- *Fit* (⌘1 on a Mac, Ctrl+1 on Windows) brings everything on the page into view.
+- *Fit to content*, on the right-click menu of empty space (⌘1 on a Mac, Ctrl+1 on Windows), brings everything on the page into view.
 
 ## Starting on empty space {#quick-add}
 
-Double-click empty space. *Quick Add* opens there, offering what can be put on the page: a bond, a chain, a structure from its SMILES, words, arrows and more. Choose one, and it begins where you double-clicked.
+Double-click empty space. A row of icons opens there, one for each thing that can be put on the page, and each says its name as the pointer rests on it: *Bond*, *Chain*, *SMILES*, *Text*, *Arrow* and more. Choose one, and it is put down where you double-clicked.
 
 ## Bonds and atoms {#bonds}
 
@@ -20,10 +20,11 @@ Point at an atom, and it lights up: what comes next is done to it.
 - Double-click and drag to lead the bond where you want it. It snaps to the usual angles; pause while dragging, and it goes exactly where the pointer is.
 - Drag an atom to move it. Dropped on another atom, it becomes that atom.
 - Lead a bond onto an atom already there, and it closes the ring.
+- Click a bond to change it: a single bond becomes double, a double one single.
 
 ## Chains and rings {#chains}
 
-Choose *Chain* in Quick Add, or *Chain from here* on an atom's right-click menu. Then move the pointer without pressing the button: the chain follows it a bond at a time, along a honeycomb of the drawing's own lengths and angles. Lead it back, and it takes bonds back. Click to end it; Escape lets it go.
+Double-click empty space and choose *Chain* from the icons, or choose *Chain from here* on an atom's right-click menu. Then move the pointer without pressing the button: the chain follows it a bond at a time, along a honeycomb of the drawing's own lengths and angles. Lead it back, and it takes bonds back. Click to end it; Escape lets it go.
 
 - Lead it round a hexagon, back to where it went through, and it closes a six-membered ring.
 - Lead it on round the next hexagon, over the bond the two share, and it closes that ring too: fused rings - naphthalene, phenanthrene - come in one stroke.
@@ -35,10 +36,10 @@ Point at an atom and type: O, NH2, OMe, Ph. The label is written where it stands
 
 ## Right-click: what an atom or a bond can be {#menus}
 
-Right-click an atom or a bond for what can be done to it. A row of icons comes first, then a list.
+Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list.
 
-- An atom: a charge one up or one down, its structure cleaned up or made in 3D, an electron-pushing arrow or a fishhook from it, its colour, or *Delete*; below them, an unpaired electron, *Chain from here*, *Edit label* and *Select this structure*.
-- A bond: single, double, triple, wedge or hashed wedge, and more kinds (wavy, bold, dashed, dative) in a second row; or *Delete*.
+- An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Electron-pushing arrow*, *Fishhook arrow*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here*, *Unpaired electron*, *Select this structure* and *Magnification*.
+- A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*, which opens a second row of *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*, and *Delete bond*. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.
 
 ## Choosing what to work on {#selecting}
 
