@@ -26,7 +26,7 @@ PDF をダブルクリックするか、右クリックメニューで「Read」
 
 ## 言葉を探す {#find}
 
-何もないところを右クリックして「Find in PDF…」を選びます（⌘F、または Ctrl+F）。欄の上に入力欄が開くので、探す言葉を打ち、「This PDF」か「All PDFs」を選びます。Enter で次に見つかったところへ、Shift+Enter で前へ移り、Escape で入力欄が閉じます。
+ページに PDF があるときは、何もないところを右クリックして「Find in PDF…」を選びます（⌘F、または Ctrl+F）。欄の上に入力欄が開くので、探す言葉を打ち、「This PDF」か「All PDFs」を選びます。Enter で次に見つかったところへ、Shift+Enter で前へ移り、Escape で入力欄が閉じます。
 
 ## 構造を取り出す {#structures}
 
@@ -53,7 +53,7 @@ PDF の右クリックメニューで「Write on it」を選びます。ペン�
 Meno は受け取った PDF を書き換えません。次のどれも新しい PDF を作り、元の PDF の横にアイコンとして置きます。
 
 - 「Page numbers…」：すべてのページの下に番号を付けます。1, 2, 3 か S1, S2, S3 を、選んだ番号から、左・中央・右のどこかに付けます。「Make numbered copy」で作ります。
-- 「Pages…」：ページが一列に並びます。ドラッグで順番を変えられます。ページを選び（クリック、Shift を押しながらクリック、⌘ か Ctrl を押しながらクリック、または「Select pages」に 1-3 のように番号を打ちます）、「Turn left」「Turn right」で回したり、「Take out」で外したりできます。「Make new PDF」で作ります。選んだページだけで作るときは、その横のボタンを使います。
+- 「Pages…」：ページが一列に並びます。ドラッグで順番を変えられます。ページを選び（クリック、Shift を押しながらクリック、⌘ か Ctrl を押しながらクリック、または「Select pages」に 1-3 のように番号を打ちます）、「Turn left」「Turn right」で回したり、「Take out」で外したりできます。「Make new PDF」で作ります。選んだページだけで作るときは、その横のボタンを使います。ボタンには「Extract selected (2)」のように数が出ます。
 - PDF を二つ以上選び、その一つを右クリックして「Combine into one PDF」を選びます。
 - 「Save as PDF…」で、PDF を選んだ場所にファイルとして保存します。
 

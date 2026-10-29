@@ -26,7 +26,7 @@ Double-click a PDF, or choose *Read* on its right-click menu. It opens in a colu
 
 ## Finding words {#find}
 
-Right-click empty space and choose *Find in PDF…* (⌘F, or Ctrl+F). A field opens at the top of the column: type what to find, and choose *This PDF* or *All PDFs*. Enter goes to the next place it is found, Shift+Enter to the one before, and Escape closes the field.
+While a PDF is on the page, right-click empty space and choose *Find in PDF…* (⌘F, or Ctrl+F). A field opens at the top of the column: type what to find, and choose *This PDF* or *All PDFs*. Enter goes to the next place it is found, Shift+Enter to the one before, and Escape closes the field.
 
 ## Taking structures out {#structures}
 
@@ -53,7 +53,7 @@ Choose *Write on it* on the PDF's right-click menu. The pen's card opens, with *
 Meno never changes a PDF it was given: each of these makes a new one, put beside it as an icon.
 
 - *Page numbers…*: numbers at the foot of every page - 1, 2, 3 or S1, S2, S3, from the number you choose, at the left, in the centre or at the right. *Make numbered copy* makes it.
-- *Pages…*: its pages in a row. Drag them into another order; choose some (a click, Shift and a click, ⌘ or Ctrl and a click, or their numbers typed under *Select pages*, such as 1-3); *Turn left*, *Turn right* or *Take out* them. *Make new PDF* makes it - or only the pages chosen, with the button beside it.
+- *Pages…*: its pages in a row. Drag them into another order; choose some (a click, Shift and a click, ⌘ or Ctrl and a click, or their numbers typed under *Select pages*, such as 1-3); *Turn left*, *Turn right* or *Take out* them. *Make new PDF* makes it; for the pages chosen alone, the button beside it says how many, as *Extract selected (2)*.
 - Choose two PDFs or more, right-click one of them, and choose *Combine into one PDF*.
 - *Save as PDF…* saves a PDF as a file, where you choose.
 
