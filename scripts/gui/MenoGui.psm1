@@ -409,6 +409,13 @@ function Read-WinButtons {
     $isButton = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
     $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $pidIs)
     if (-not $windows -or $windows.Count -eq 0) { throw "UI Automation gave no window of Meno's (pid $script:MenoPid)" }
+    $isDocument = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Document)
+    # (the page itself, with something in it: built for UI Automation, whatever it shows - a talk hides the top bar's buttons)
+    $page = $false
+    foreach ($win in $windows) {
+        $doc = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $isDocument)
+        if ($doc -and [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetFirstChild($doc)) { $page = $true }
+    }
     $buttons = foreach ($win in $windows) {
         foreach ($b in $win.FindAll([System.Windows.Automation.TreeScope]::Descendants, $isButton)) {
             $r = $b.Current.BoundingRectangle
@@ -417,7 +424,20 @@ function Read-WinButtons {
             [pscustomobject]@{ Name = $b.Current.Name; X = $r.X; Y = $r.Y; Width = $r.Width; Height = $r.Height }
         }
     }
-    [pscustomobject]@{ Buttons = @($buttons) }
+    [pscustomobject]@{ Buttons = @($buttons); Page = $page }
+}
+
+$script:MenoFamily = @()
+function Get-MenoFamily {
+    # Meno's own processes under it - its web view's (WebView2) - for a point UI Automation answers with one of theirs; read again where a pid is not among them.
+    param([int] $Root, [switch] $Again)
+    if ($Again -or -not $script:MenoFamily.Count -or $script:MenoFamily[0] -ne $Root) {
+        $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId)
+        $family = [System.Collections.Generic.List[int]]::new(); $family.Add($Root)
+        for ($i = 0; $i -lt $family.Count; $i++) { foreach ($p in $all) { if ($p.ParentProcessId -eq $family[$i] -and -not $family.Contains([int]$p.ProcessId)) { $family.Add([int]$p.ProcessId) } } }
+        $script:MenoFamily = $family.ToArray()
+    }
+    return $script:MenoFamily
 }
 
 function Assert-NotYesAt {
@@ -425,11 +445,16 @@ function Assert-NotYesAt {
     param([Parameter(Mandatory)] $At, [string] $What = "a press")
     $label = "$What at ($($At.X), $($At.Y)) px"
     # (the window at the point: Meno's, the one whose buttons are read - not another copy's; UI Automation's own answer there, Tauri's pane included, is the window's process)
-    Assert-OnMeno -MenoPid $script:MenoPid -What $label -Read {
+    $readAt = {
         $el = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y))
         if (-not $el) { throw "UI Automation gave nothing for the point" }
         [int]$el.Current.ProcessId
     }
+    $family = Get-MenoFamily -Root $script:MenoPid
+    # (a process of Meno's started since its family was last read: read again once)
+    $atPid = try { & $readAt } catch { $null }
+    if ($atPid -is [int] -and $atPid -ne $script:MenoPid -and $family -notcontains $atPid) { $family = Get-MenoFamily -Root $script:MenoPid -Again }
+    Assert-OnMeno -MenoPid $script:MenoPid -Family $family -What $label -Read $readAt
     Assert-NotPressingYes -Look (Read-PageButtons -Read { Read-WinButtons }) -At $At -What $label
 }
 

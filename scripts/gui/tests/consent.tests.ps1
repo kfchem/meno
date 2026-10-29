@@ -108,7 +108,7 @@ Check "a press on the page, away from both, goes on" (Stops { Assert-NotPressing
 Check "no question asked: a press goes on" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB) } }) -At (& $at 1410 930) -What "a click" }) $false
 Check "the buttons' reading failing (FindAll throwing) stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { throw [System.InvalidOperationException]::new("FindAll failed") }) -At (& $at 400 300) -What "a click" }) $true
 Check "nothing given stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { $null }) -At (& $at 400 300) -What "a click" }) $true
-Check "no button read at all stops it" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @() } }) -At (& $at 400 300) -What "a click" }) $true
+Check "no button read at all, ever: waited for, then unread" (Stops { Assert-NotPressingYes -Look (Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = @() } }) -At (& $at 400 300) -What "a click" }) $true
 $said = try { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click"; "" } catch { $_.Exception.Message }
 Check "saying which" ($said -like "a click would answer a question about the network yes ('Allow and download')*nothing was sent.") $true
 Check "a yes read with no bounds stops a press anywhere" (Stops { Assert-NotPressingYes -Look (Read-Buttons { [pscustomobject]@{ Buttons = @($settingsB, [pscustomobject]@{ Name = "Allow and download"; X = 0; Y = 0; Width = 0; Height = 0 }) } }) -At (& $at 400 300) -What "a click" }) $true
@@ -125,12 +125,26 @@ $never = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ B
 Check "never there: unread" ($never.Unread -like "no button of Meno's page was read*") $true
 Check "and every press stops" (Stops { Assert-NotPressingYes -Look $never -At (& $at 400 300) -What "a click" }) $true
 Check "a failed reading is not waited out" ((Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { throw "FindAll failed" }).Unread) "FindAll failed"
+$script:calls = 0
+$empty = Read-PageButtons -TimeoutMs 2000 -StepMs 50 -Read { $script:calls++; if ($script:calls -lt 3) { [pscustomobject]@{ Buttons = @() } } else { [pscustomobject]@{ Buttons = @($settingsB) } } }
+Check "a reading of no button at all is waited out too" "$($script:calls) $([bool]$empty.Unread)" "3 False"
+# (during a talk the top bar is hidden from UI Automation: the page itself is there, with few buttons or none)
+$talk = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = @(); Page = $true } }
+Check "a talk: the page there with no button is the page read" "$([bool]$talk.Unread)" "False"
+Check "and a press during it goes on" (Stops { Assert-NotPressingYes -Look $talk -At (& $at 400 300) -What "a click" }) $false
+$talkFrame = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frame; Page = $true } }
+Check "a talk with the frame's buttons alone: the page read too" "$([bool]$talkFrame.Unread)" "False"
+$other = Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = @($frame) + @([pscustomobject]@{ Name = "Next slide"; X = 10; Y = 10; Width = 40; Height = 40 }) } }
+Check "any button not the frame's own is the page read" "$([bool]$other.Unread)" "False"
+Check "the frame's alone, the page not seen: unread" ((Read-PageButtons -TimeoutMs 300 -StepMs 50 -Read { [pscustomobject]@{ Buttons = $frame; Page = $false } }).Unread -like "no button of Meno's page*") $true
 
 Write-Host "Windows: the window at the point"
 Check "Meno's own: goes on" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { 4242 } }) $false
 Check "another copy of Meno's, or another app's: stops" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { 5151 } }) $true
 Check "not told (FromPoint throwing): stops" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { throw "FromPoint failed" } }) $true
 Check "nothing given: stops" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { $null } }) $true
+Check "one of Meno's own processes (its web view's): goes on" (Stops { Assert-OnMeno -MenoPid 4242 -Family @(4242, 4300, 4301) -What "a click" -Read { 4301 } }) $false
+Check "a process not of Meno's family: stops" (Stops { Assert-OnMeno -MenoPid 4242 -Family @(4242, 4300, 4301) -What "a click" -Read { 5151 } }) $true
 
 # (what UI Automation gives for any point of the page: Tauri's resize-border pane, over it)
 $overlay = @("Pane`tTAURI_DRAG_RESIZE_WINDOW", "Window`tMeno", "Pane`t")
@@ -144,6 +158,8 @@ $env:MENO_GUI_ANSWER_NETWORK_YES = "1"
 Check "set by hand, lets the yes through" (Stops { Assert-NotNetworkYes -Look (Read $macYes) -What "a click" }) $false
 Check "and a failed reading" (Stops { Assert-NotNetworkYes -Look (Read-Part { throw "AXError -25204" }) -What "a click" }) $false
 Check "and a press on the yes's button" (Stops { Assert-NotPressingYes -Look $read -At (& $at 1410 930) -What "a click" }) $false
+Check "and a window not told" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { throw "FromPoint failed" } }) $false
+Check "but never a press on another process's window" (Stops { Assert-OnMeno -MenoPid 4242 -What "a click" -Read { 5151 } }) $true
 Remove-Item Env:MENO_GUI_ANSWER_NETWORK_YES -ErrorAction SilentlyContinue
 
 Write-Host "nothing in the repository sets the override"

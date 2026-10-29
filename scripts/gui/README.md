@@ -102,13 +102,14 @@ for its resize borders over the whole page, which lets the mouse through
 but stops UI Automation, so what is at any point reads as that pane. Every
 button of Meno's windows is read instead (`FindAll`, some 40 ms), with its
 bounds, and a press inside one named `Allow...` is stopped. A reading
-is trusted once it holds a button of Meno's page itself - a tab's,
-Settings, the question's - read again for up to 5 s until it does, as the
-web view builds what it shows UI Automation only once asked; one that
-fails, holds no button, never holds the page's, or holds the yes with no
-bounds stops the press. So does a point whose window is not Meno's own -
-another copy's, another app's - and a point read as that pane counts as
-unread.
+is trusted once it holds the page's parts - any button not the window
+frame's own (Minimize, Maximize, Restore, Close), or the page itself with
+something in it, as during a talk, which hides the top bar - read again
+for up to 5 s until it does, as the web view builds what it shows UI
+Automation only once asked; one that fails, never holds them, or holds
+the yes with no bounds stops the press. So does a point whose window is
+not Meno's own or one of its own processes' (its web view's) - another
+copy's, another app's - and a point read as that pane counts as unread.
 What could not be read is never taken for "not the yes": a lookup that
 fails - an error, or nothing given - stops the input as the yes does, and
 only "nothing has the keys" (`kAXErrorNoValue` for the focus) lets a key

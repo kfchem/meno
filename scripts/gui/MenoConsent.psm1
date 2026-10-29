@@ -24,8 +24,8 @@ $script:YesName = "Allow*"
 $script:ButtonRoles = @("AXButton", "Button")
 # (what a Mac's hit test lands on before the web view has built its page's parts: the page itself, or what holds it)
 $script:PageHolders = @("AXWebArea", "AXScrollArea", "AXWindow", "AXApplication", "")
-# (buttons of Meno's page itself, one of them always there - a tab's, Settings - or the question's: read, the page's parts are)
-$script:PageButtons = @("Settings", "New workspace", "Close tab", "Not now")
+# (the window frame's own buttons, there before the page's parts are: any other button read, or the page itself, and they are)
+$script:FrameButtons = @("Minimize", "Maximize", "Restore", "Close")
 
 function Read-Part {
     <#
@@ -56,33 +56,34 @@ function Read-Buttons {
     try { $r = & $Read } catch { return [pscustomobject]@{ Buttons = @(); Unread = "$($_.Exception.Message)" } }
     if ($null -eq $r -or -not $r.PSObject.Properties["Buttons"]) { return [pscustomobject]@{ Buttons = @(); Unread = "nothing was read" } }
     $buttons = @($r.Buttons | Where-Object { $null -ne $_ })
-    # (Meno's window always has buttons - its tabs', Settings: none read is a reading of nothing)
-    if (-not $buttons.Count) { return [pscustomobject]@{ Buttons = @(); Unread = "no button was read in Meno's window" } }
     # (a yes read with no bounds: where it is, unknown)
     $blind = @($buttons | Where-Object { "$($_.Name)" -like $script:YesName -and -not ($_.Width -gt 0 -and $_.Height -gt 0) })
     if ($blind.Count) { return [pscustomobject]@{ Buttons = @(); Unread = "'$($blind[0].Name)' was read with no bounds" } }
-    return [pscustomobject]@{ Buttons = $buttons; Unread = $null }
+    # (Page: whether the reader saw the page itself, with something in it - a talk hides the top bar, and may show no button at all)
+    $page = [bool]($r.PSObject.Properties["Page"] -and $r.Page)
+    return [pscustomobject]@{ Buttons = $buttons; Page = $page; Unread = $null }
 }
 
 function Test-PageButtonsRead {
-    # Whether a reading of Meno's buttons holds the page's own - a tab's, Settings, the question's - and not only the window's frame: then the page's parts were read.
-    param([AllowEmptyCollection()] [object[]] $Buttons = @())
-    return [bool](@($Buttons) | Where-Object { "$($_.Name)" -in $script:PageButtons -or "$($_.Name)" -like $script:YesName })
+    # Whether a reading of Meno's window holds its page's parts, not only the window's frame: any button that is not the frame's own, or the page itself, seen with something in it.
+    param([Parameter(Mandatory)] $Look)
+    if ($Look.PSObject.Properties["Page"] -and $Look.Page) { return $true }
+    return [bool](@($Look.Buttons) | Where-Object { "$($_.Name)" -notin $script:FrameButtons })
 }
 
 function Read-PageButtons {
     <#
       .SYNOPSIS
-      Meno's buttons read (Read-Buttons) until the page's own are among them
-      - a web view builds what it shows UI Automation only once asked, and
-      a first reading may hold the window's frame alone - for up to
-      -TimeoutMs; a reading that never holds them is unread.
+      Meno's buttons read (Read-Buttons) until the reading holds the page's
+      parts - a web view builds what it shows UI Automation only once asked,
+      and a first reading may hold the window's frame alone, or nothing - for
+      up to -TimeoutMs; one that never does is unread.
     #>
     param([Parameter(Mandatory)] [scriptblock] $Read, [int] $TimeoutMs = 5000, [int] $StepMs = 300)
     $until = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
     while ($true) {
         $look = Read-Buttons -Read $Read
-        if ($look.Unread -or (Test-PageButtonsRead -Buttons $look.Buttons)) { return $look }
+        if ($look.Unread -or (Test-PageButtonsRead -Look $look)) { return $look }
         if ([DateTime]::UtcNow -ge $until) { return [pscustomobject]@{ Buttons = @(); Unread = "no button of Meno's page was read in $([int]($TimeoutMs / 1000)) s" } }
         Start-Sleep -Milliseconds $StepMs
     }
@@ -93,11 +94,12 @@ function Assert-OnMeno {
       .SYNOPSIS
       Stop before a press at a point that is not on Meno's window - another
       copy of Meno's, another app's - or whose window could not be told:
-      -Read gives the pid of the process whose window is at the point.
+      -Read gives the pid of the process whose window is at the point, and
+      -Family the processes that are Meno's own (its web view's among them).
     #>
-    param([Parameter(Mandatory)] [scriptblock] $Read, [Parameter(Mandatory)] [int] $MenoPid, [Parameter(Mandatory)] [string] $What)
+    param([Parameter(Mandatory)] [scriptblock] $Read, [Parameter(Mandatory)] [int] $MenoPid, [Parameter(Mandatory)] [string] $What, [int[]] $Family = @())
     $at = try { & $Read } catch { "could not be told ($($_.Exception.Message))" }
-    if ($at -is [int] -and $at -eq $MenoPid) { return }
+    if ($at -is [int] -and ($at -eq $MenoPid -or $Family -contains $at)) { return }
     if ($env:MENO_GUI_ANSWER_NETWORK_YES -eq "1" -and -not ($at -is [int])) { return }
     $whose = if ($at -is [int]) { "pid $at's" } elseif ($null -eq $at) { "nothing's" } else { "a window that $at" }
     throw "$What is not on Meno's window (pid $MenoPid) but on $whose, so input sent there would not go to Meno. Stopping; nothing was sent."
