@@ -171,7 +171,9 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   px-2 text-xs` with a chevron in `gh-gray`, opening a menu as the
   canvas's menus are drawn (`rounded-md border border-gh-line bg-white
   py-1 shadow-lg`, rows `h-8 px-3`, `hover:bg-gh-base`, the chosen one
-  ticked), by keyboard as well as pointer.
+  ticked), by keyboard as well as pointer. The menu shows nine rows whole
+  at most, so a list of nine is never cut by its own padding. A longer
+  one shows half the tenth, so that it can be seen to go on (`LIST_ROWS`).
 - **Segmented choice** (few short choices, all shown): `rounded-md border
   border-gh-line`, segments `h-7 px-2.5 text-xs` parted by `border-l
   border-gh-line`, the chosen one `bg-accel-base text-white`, the others

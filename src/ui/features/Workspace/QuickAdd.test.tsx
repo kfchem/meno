@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import QuickAdd from "./QuickAdd";
+import QuickAdd, { DrawAs } from "./QuickAdd";
+import { resolve } from "./chem/resolve";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws Quick Add, and what its rows hold is read off that.
@@ -27,5 +28,46 @@ describe("Quick Add", () => {
 
   it("offers as shapes a rectangle - its corners rounded from its menu - an ellipse and a line", () => {
     expect(rows().shapes).toEqual(["Rectangle", "Ellipse", "Line"]);
+  });
+
+  it("its rules and its SMILES field span the row whole: each icon, the gaps between them, the divider", () => {
+    const html = renderToString(
+      <QuickAdd x={10} y={10} within={{ width: 800, height: 600 }} steps={[]} onChoose={none} onChain={none} onArrow={none} onShape={none} onSmiles={async () => {}} onStep={none} onClose={none} />,
+    );
+    const first = html.match(/<div class="flex items-center gap-0.5">(.*?)<div class="mx-1/)?.[1] ?? "";
+    // (36 px an icon, the Calculations one after the divider among them, and 2 the gap before each but the first; 8 + 1 px the divider)
+    const icons = (first.match(/<button/g)?.length ?? 0) + 1;
+    const row = icons * (36 + 2) + 9;
+    expect(html).toMatch(new RegExp(`<form class="[^"]*border-t[^"]*" style="width:${row}px"`));
+    expect(html).toMatch(new RegExp(`aria-label="Shapes" class="[^"]*border-t[^"]*" style="width:${row}px"`));
+  });
+});
+
+describe("what the SMILES field's text will be drawn as", () => {
+  const drawAs = (text: string, choice = 0) => {
+    const { readings } = resolve(text, "molecule");
+    return renderToString(<DrawAs offered={readings} chosen={readings[choice]} onChoose={none} />);
+  };
+
+  it("NBS: the SMILES and N-bromosuccinimide each offered, with its formula, the one chosen in Meno's colour", () => {
+    const html = drawAs("NBS");
+    expect([...html.matchAll(/role="radio" aria-checked="(\w+)"/g)].map((m) => m[1])).toEqual(["true", "false"]);
+    expect(html).toContain("SMILES");
+    expect(html).toContain("N-bromosuccinimide");
+    expect(html.match(/border-accel-base/g)).toHaveLength(1);
+    expect(drawAs("NBS", 1).match(/aria-checked="true"[^>]*>N-bromosuccinimide/)).not.toBeNull();
+  });
+
+  it("a formula's counts set below the line at the drawing's size, never a font's subscript digits", () => {
+    const html = drawAs("DMF");
+    expect(html).toContain("N,N-dimethylformamide");
+    expect(html).toMatch(/font-size:0.75em[^>]*>3</);
+    expect(html).not.toMatch(/[\u2080-\u2089]/);
+  });
+
+  it("a label that is its formula said once (PdCl2), one that is not with its formula (Et3N)", () => {
+    const words = (html: string) => html.replace(/<[^>]+>/g, "").replace(/<!-- -->/g, "");
+    expect(words(drawAs("pdcl2"))).toBe("PdCl2");
+    expect(words(drawAs("Et3N"))).toBe("Et3N \u00b7 C6H15N");
   });
 });

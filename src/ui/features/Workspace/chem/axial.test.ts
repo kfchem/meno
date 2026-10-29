@@ -6,7 +6,7 @@ import { layout2D } from "../../../../lib/layout/engine";
 import { torsionSense } from "../../../../lib/layout/stereo";
 import { emptyWorkspaceDocument, expandAbbreviation, relayout } from "../document";
 import type { Model } from "../store/types";
-import { layoutJob, relayoutFrom } from "./engineLayout";
+import { layoutJob, relayoutFrom, sameStereo } from "./engineLayout";
 import { measured } from "../../../../testing/timeouts";
 
 const alone = (el: string): Model => ({ atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el }], bonds: [] });
@@ -88,8 +88,15 @@ describe("an axis of chirality", () => {
         ...ring.map((r, k) => ({ id: 30 + k, a: r.id, b: ring[(k + 1) % 6].id, order: (k % 2 ? 1 : 2) as 1 | 2 })),
       ],
     };
-    // (left as it is drawn: laid out, a centre with a lone pair would be lost)
-    expect(() => layoutJob(m)).toThrow(/lone pair/);
+    // (read as the centre it is, its lone pair the fourth group, and no
+    // axis: laid out, it keeps its configuration on one wedge)
+    const job = layoutJob(m);
+    expect(job.input.atoms[0].tetra?.neighbours).toHaveLength(3);
+    expect(job.input.axes ?? []).toEqual([]);
+    const after = relayout({ ...emptyWorkspaceDocument(), model: m, nextId: 100 }, relayoutFrom(m, m, job, layout2D(job.input))).model;
+    expect(sameStereo(m, after)).toBe(true);
+    expect(wedges(after)).toHaveLength(1);
+    expect([wedges(after)[0].a, wedges(after)[0].b]).toContain(1);
   });
 });
 

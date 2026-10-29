@@ -108,14 +108,14 @@ describe("style presets", () => {
     expect(presetById("nonsense")).toBe(STYLE_PRESETS[0]);
   });
 
-  it("makes Meno's own ACS 1996 with round ends in IBM Plex Sans, R and S written bare, in the palette's black", () => {
+  it("makes Meno's own ACS 1996 with round ends in IBM Plex Sans, R and S written bare, in the palette's black, its hashed wedges short of the atom", () => {
     const { style } = presetById("meno");
     expect(DEFAULT_STYLE_CHOICE.preset).toBe("meno");
-    const { ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, ...rest } = style;
-    const { ends: e, fontFamily: f, stereoDescriptors: d, stereoDescriptorGap: g, bondColor: b, labelColor: l, shortHashes: h, ...acs } = ACS_1996;
+    const { ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, ...rest } = style;
+    const { ends: e, fontFamily: f, stereoDescriptors: d, stereoDescriptorGap: g, bondColor: b, labelColor: l, shortHashes: h, hashedWedgeEnd: w, ...acs } = ACS_1996;
     expect(rest).toEqual(acs);
-    expect([ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes]).toEqual(["round", "IBM Plex Sans", "plain", 0.15, "#141414", "#141414", "three"]);
-    expect([e, f, d, g, b, l, h]).toEqual(["square", "Arial", "parentheses", 0.35, "#000000", "#000000", undefined]);
+    expect([ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd]).toEqual(["round", "IBM Plex Sans", "plain", 0.15, "#141414", "#141414", "three", "short"]);
+    expect([e, f, d, g, b, l, h, w]).toEqual(["square", "Arial", "parentheses", 0.35, "#000000", "#000000", "spaced", "atom"]);
     // the baseline follows the typeface
     expect(style.labelBaseline).toBeUndefined();
   });

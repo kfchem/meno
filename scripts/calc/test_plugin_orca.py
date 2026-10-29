@@ -82,6 +82,25 @@ class Prepare(unittest.TestCase):
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
 
+    def test_frequencies_at_orcas_own_xtb_are_asked_for_numerically_and_said_to_be(self):
+        # (ORCA 6.1.1 has no analytic Hessian for its own xTB, and stops a FREQ run of one: NUMFREQ it runs)
+        native = {**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"}
+        prepared = ask("prepare", step="frequencies", entries=[WATER], options=native)
+        self.assertEqual(prepared["jobs"][0]["files"][0]["text"].splitlines()[0], "! NATIVE-XTB2 NUMFREQ")
+        self.assertEqual(prepared["note"], "frequencies computed numerically")
+        # (in any case, as typed)
+        lower = ask("prepare", step="frequencies", entries=[WATER], options={**native, "method": "native-gfn1-xtb"})
+        self.assertEqual(lower["jobs"][0]["files"][0]["text"].splitlines()[0], "! native-gfn1-xtb NUMFREQ")
+        # (at any other method, or in any other kind of step, as before, and nothing said)
+        for step, options, first in [
+            ("frequencies", {**native, "method": "XTB2"}, "! XTB2 FREQ"),
+            ("frequencies", defaults("frequencies"), "! B3LYP def2-SVP D3BJ FREQ"),
+            ("optimise", {**native}, "! NATIVE-XTB2 OPT"),
+        ]:
+            other = ask("prepare", step=step, entries=[WATER], options=options)
+            self.assertEqual(other["jobs"][0]["files"][0]["text"].splitlines()[0], first)
+            self.assertNotIn("note", other)
+
     def test_a_lone_atom_asked_to_be_optimised_is_run_as_sp(self):
         # (ORCA, given OPT for one atom, warns and stops with no energy)
         sodium = {"name": "sodium", "atoms": [{"el": "Na", "x": 0.0, "y": 0.0, "z": 0.0}], "bonds": [], "charge": 1, "multiplicity": 1}

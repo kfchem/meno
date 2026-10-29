@@ -18,13 +18,14 @@ export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
 export { frameAt, placeFor } from "./place";
-import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
+import { takeFrames, type Which } from "./takeFrames";
+import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
@@ -71,7 +72,18 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "chart") return chartRun(doc, step, w, key);
   // (an energy diagram: molecules' energies as levels, joined as a table says)
   if (step.kind === "energy-diagram") return diagramRun(doc, step, w, key);
+  // (two inputs, each a set's entries: Merge, Re-bond, Compare bonding - whyNot has seen each comes in, as each takes)
+  if (PAIRED.includes(step.kind)) {
+    const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
+    const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
+    return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+  }
   if (!input) return fail("Nothing comes into it");
+  // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
+  if (step.kind === "take-frames") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+  }
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
@@ -123,6 +135,14 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
   if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
+  // (two inputs it cannot run without: its second wired too, as it takes - and Merge's, of the kind its first is)
+  if (PAIRED.includes(step.kind)) {
+    const second = ports[1];
+    const into = inputOf(doc, step.id, second.id);
+    if (!into) return `Nothing comes into ${second.name}`;
+    if (!takenBy(second.takes, into.holds)) return `${second.name} takes ${second.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
+    if (step.kind === "merge" && into.holds !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${second.name} ${SET_NAMES[into.holds]}: Merge makes one set of two of one kind`;
+  }
   return null;
 }
 

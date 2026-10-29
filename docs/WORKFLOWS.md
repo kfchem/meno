@@ -289,7 +289,7 @@ it is shown - so that steps join whoever fills them; plugins fill them,
 each with its own options. A plugin cannot bring a kind of its own; a
 new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 
-| Kind | Icon (Heroicons' outline) | Takes | Gives |
+| Kind | Icon (Heroicons' outline, or drawn as Quick Add's are) | Takes | Gives |
 | --- | --- | --- | --- |
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
@@ -301,6 +301,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
+| Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from; the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
@@ -311,6 +312,9 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
 | Combine | a link | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
 | Measure | arrows apart | molecules in 3D, or a conformer set | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them (STRUCTURE-STEPS.md, *Measure*) |
+| Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
+| Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
+| Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared (STRUCTURE-STEPS.md, *Compare bonding*) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -1968,9 +1972,11 @@ them again*; the maintainer's rulings of 2026-10-22):
   stand on: a #2: ... ; a #4 refused - take them out first*, *a #2 has 1
   imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
   (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
-  not converged alone before). *Energy window* refuses one that failed or
-  whose marks did not read the same, and, where the window is on free
-  energies, a saddle point too (2026-10-24). *Choose one*,
+  not converged alone before). *Energy window* refuses the same: one that
+  failed or whose marks did not read, and a saddle point on electronic
+  energies as on free ones (2026-10-27; free energies alone from
+  2026-10-24). Kept in a window or set aside from it, a transition state
+  would stand as a conformer it is not. *Choose one*,
   choosing the lowest, and *Duplicates*, ranking by energy which copy it
   keeps, refuse as Populations does; *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
@@ -1981,8 +1987,14 @@ them again*; the maintainer's rulings of 2026-10-22):
   either. Another failure (stopped, refused) is no judgement of a
   minimum, and leaves the shares as they were.
 - **The entry record says it too**: `imaginary`, how many imaginary
-  frequencies its calculation judged it has, where it judged any; one
-  that failed carries its reason as its status. *Populations* on free
+  frequencies its calculation judged it has - 0 where its vibrations were
+  worked out and none is, nothing at all where they were not - and
+  `imaginary.first` and `imaginary.second`, the largest and the next, each
+  as its size in cm-1 (120.5 for 120.5i), where it has them (2026-10-27).
+  Meno judges nothing by them: which structure is a saddle point is the
+  chemist's to say, with *Filter* ("imaginary = 1",
+  "imaginary.second < 50 cm-1"). One that failed carries its reason as
+  its status. *Populations* on free
   energies (`lib/nodes/populations`) fails a group with one that is no
   minimum, as Meno's does, each entry saying why.
 - **Meno's steps on energies refuse what they cannot use**: an *Energy
@@ -2339,7 +2351,7 @@ All of it is optional. A structure the chemist drew has none.
   lies, which bonds are wedged or which way, whether an H is drawn, nor
   whether a group is written by its label. Clean-up, which draws the same
   structure afresh, keeps a record as it is. Where its wedges cannot be
-  read (drawn crossed, or on an atom with a lone pair) or its identity is
+  read (drawn crossed, or at a three-bonded N, B, Se, Te or Sb) or its identity is
   not worked out in full, the identity does not hold its configuration, so
   the drawing's own key is in `of` too: any change to the drawing is taken
   for a change of structure.
