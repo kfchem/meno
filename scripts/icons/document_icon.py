@@ -8,7 +8,9 @@ site/assets/favicon.svg draws it) - `meno-document.svg`, and
 `meno-document-small.svg`, bolder, for 16 to 32 pixels. And each format Meno
 can be made the default app for (src-tauri/src/opened.rs, OPENED_WITH), in
 src-tauri/icons/formats/: Meno's sheet and mark with the format's short name
-on a band - `<name>.svg` and `<name>-small.svg`, their words drawn as
+on a band, which overhangs the sheet's sides by the same share of the sheet's
+width in both (about 6%: never ending just short of them) - `<name>.svg` and
+`<name>-small.svg`, their words drawn as
 outlines first (scripts/icons/outline_text.swift), so they are drawn the
 same wherever this runs. Each size is drawn by the Tauri CLI's own `tauri
 icon` (`--png`), the macOS icon put together by the system's `iconutil`
