@@ -210,7 +210,7 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
   const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
   let key = identities.get(drawn);
   if (key == null) {
-    // (wedges identity cannot read - crossed, or on an atom with a lone pair - or a search it could not finish: its configuration
+    // (wedges identity cannot read - crossed, or at a three-bonded N, B, Se, Te or Sb - or a search it could not finish: its configuration
     // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
     const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
     key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);

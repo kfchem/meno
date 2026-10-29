@@ -184,7 +184,7 @@ export function templateRs(template: Model): { rs: Map<number, number[]>; proble
     rs.set(n, [...(rs.get(n) ?? []), a.id]);
   }
   const unread = identityInputOf(template).unread;
-  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or on an atom with a lone pair)`);
+  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration)`);
   return { rs, problems };
 }
 

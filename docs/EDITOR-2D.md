@@ -1536,8 +1536,11 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or on an atom whose fourth group is a lone pair (a sulfoxide's
-     S), which the engine has no way to take - rather than lose it. A wedge
+     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
+     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
+     sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
+     read from its wedge and laid out like any other, on one wedge
+     (2026-10-29). A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an
