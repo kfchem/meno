@@ -224,6 +224,15 @@ describe("the how-to pages", () => {
     expect(markSvg({ kind: "key", text: "Enter" }, size)).toBe("");
   });
 
+  it("show a key pressed as its cap, and a shortcut with the Mac's command key", () => {
+    const m = withHowTo();
+    m.howTo.film.recorded.steps[0].mark = { kind: "key", text: "Enter" };
+    m.howTo.film.recorded.steps[1].mark = { kind: "shortcut", text: "1" };
+    const page = buildManual(m).get("en/how-to/film/index.html");
+    expect(page).toContain('<kbd class="key">Enter</kbd>');
+    expect(page).toContain('<kbd class="key">\u23181</kbd>');
+  });
+
   it("show a step near its spot, with what tells where it is, in the window's proportions", () => {
     const size = { width: 2400, height: 1560 };
     expect(cropAround({ kind: "click", x: 2328, y: 12, w: 56, h: 56 }, size)).toEqual({ x: 1080, y: 0, width: 1320, height: 858 });

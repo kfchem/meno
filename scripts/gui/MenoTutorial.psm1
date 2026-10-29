@@ -111,7 +111,8 @@ function Step {
       Click, DoubleClick, RightClick and LongPress at -At; Drag from -At
       through -Path, the last point where it is let go, or with -Traced led
       there with the button up and ended by a click (a chain); Type -Text
-      into what has the keys, -At marking it; Key -Text, a key (Enter).
+      into what has the keys, -At marking it; Key -Text, a key (Enter);
+      Shortcut -Text, a key with Cmd on a Mac and Ctrl on Windows (1: fit).
       While steps are suspended it is only done. -NotDone records a step
       the run must not take itself - Allow on a question about the
       network, which is the reader's to answer - and leaves it undone:
@@ -119,7 +120,7 @@ function Step {
     #>
     param(
         [Parameter(Mandatory, Position = 0)] [ValidatePattern("^[a-z0-9-]+$")] [string] $Id,
-        [Parameter(Mandatory, Position = 1)] [ValidateSet("Click", "DoubleClick", "RightClick", "LongPress", "Drag", "Type", "Key")] [string] $Do,
+        [Parameter(Mandatory, Position = 1)] [ValidateSet("Click", "DoubleClick", "RightClick", "LongPress", "Drag", "Type", "Key", "Shortcut")] [string] $Do,
         [object] $At,
         [object[]] $Path = @(),
         [string] $Text,
@@ -127,9 +128,9 @@ function Step {
         [switch] $NotDone
     )
     if (-not $script:Tut) { throw "Step is for a tutorial: run.ps1 -Tutorial" }
-    if ($Do -notin @("Type", "Key") -and -not $At) { throw "step $Id - $Do where? (-At)" }
+    if ($Do -notin @("Type", "Key", "Shortcut") -and -not $At) { throw "step $Id - $Do where? (-At)" }
     if ($Do -eq "Drag" -and $Path.Count -lt 1) { throw "step $Id - a drag goes somewhere (-Path)" }
-    if ($Do -in @("Type", "Key") -and -not $Text) { throw "step $Id - $Do what? (-Text)" }
+    if ($Do -in @("Type", "Key", "Shortcut") -and -not $Text) { throw "step $Id - $Do what? (-Text)" }
 
     if ($script:Tut.Recording) {
         if ($script:Tut.Steps | Where-Object { $_.id -eq $Id }) { throw "a second step $Id" }
@@ -167,6 +168,7 @@ function Step {
         }
         "Type" { Send-MenoText $Text }
         "Key" { Send-MenoKey $Text }
+        "Shortcut" { Send-MenoShortcut -Key $Text }
     }
     Start-Sleep -Milliseconds 400
     Wait-MenoSettled -TimeoutMs 4000 | Out-Null

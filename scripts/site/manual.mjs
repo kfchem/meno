@@ -451,7 +451,8 @@ function tutorial({ contents, language, page, t, link }) {
   const h = Math.round((1760 * size.height) / size.width);
   const words = Object.fromEntries(parsed.steps.map((st) => [st.id, st.html]));
   const items = steps.map((st) => {
-    const key = st.mark.kind === "key" ? `<kbd class="key">${escape(st.mark.text)}</kbd>` : "";
+    // (a shortcut, as a Mac writes it: the page's words give Windows' Ctrl beside it)
+    const key = st.mark.kind === "key" ? `<kbd class="key">${escape(st.mark.text)}</kbd>` : st.mark.kind === "shortcut" ? `<kbd class="key">\u2318${escape(st.mark.text)}</kbd>` : "";
     const c = cropAround(st.mark, size);
     const pct = (v) => `${+v.toFixed(3)}%`;
     const place = `width:${pct((100 * size.width) / c.width)};left:${pct((-100 * c.x) / c.width)};top:${pct((-100 * c.y) / c.height)}`;

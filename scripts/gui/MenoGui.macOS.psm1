@@ -315,9 +315,27 @@ public static class MacGui {
     return parts;
   }
 
+  // A control named by nothing but the words inside it - a menu's item, a
+  // button of words - is named by those words, as a reader reads it.
+  static readonly HashSet<string> Controls = new HashSet<string> { "AXButton", "AXMenuItem", "AXRadioButton", "AXCheckBox", "AXLink", "AXPopUpButton", "AXMenuButton", "AXTab" };
+
+  static string Words(IntPtr e, int depth) {
+    if (depth > 3) return "";
+    if ((AxText(e, "AXRole") ?? "") == "AXStaticText") return AxText(e, "AXValue") ?? "";
+    IntPtr kids;
+    if (AXUIElementCopyAttributeValue(e, Str("AXChildren"), out kids) != 0 || kids == IntPtr.Zero) return "";
+    try {
+      var words = new List<string>();
+      long n = CFArrayGetCount(kids);
+      for (long i = 0; i < n; i++) { string w = Words(CFArrayGetValueAtIndex(kids, i), depth + 1); if (w.Length > 0) words.Add(w); }
+      return string.Join(" ", words);
+    } finally { CFRelease(kids); }
+  }
+
   static void Walk(IntPtr e, List<string> within, List<Part> parts, int depth) {
     string role = AxText(e, "AXRole") ?? "";
     string name = AxText(e, "AXTitle") ?? AxText(e, "AXDescription") ?? (role == "AXStaticText" ? AxText(e, "AXValue") : null);
+    if (name == null && Controls.Contains(role)) { string w = Words(e, 0).Trim(); if (w.Length > 0) name = w; }
     if (name != null) {
       CGPoint p; CGSize s;
       if (ReadPoint(e, out p) && ReadSize(e, out s) && s.Width > 0 && s.Height > 0) {
@@ -803,6 +821,10 @@ function Find-MenoPart {
         $shown = { param($p) $p.X -ge $w.X - 0.5 -and $p.Y -ge $w.Y - 0.5 -and $p.X + $p.Width -le $w.X + $w.Width + 0.5 -and $p.Y + $p.Height -le $w.Y + $w.Height + 0.5 }
         $inView = @($all | Where-Object { & $shown $_ })
         $found = @($inView | Where-Object { & $isIt $_ })
+        # (a control named by its words takes its key with them - "Open… ⌘O": the words alone, where nothing is named exactly so)
+        if (-not $found.Count) {
+            $found = @($inView | Where-Object { $_.Role -eq $axRole -and $_.Name.StartsWith("$Name ") -and (-not $Within -or ($_.Within -split "`n") -contains $Within) })
+        }
         $label = $null
         if ($Row) {
             $label = $all | Where-Object { & $isRow $_ } | Select-Object -First 1
