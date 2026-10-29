@@ -18,12 +18,13 @@ export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
 export { frameAt, placeFor } from "./place";
+import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -78,6 +79,11 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
   }
   if (!input) return fail("Nothing comes into it");
+  // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
+  if (step.kind === "take-frames") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+  }
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)

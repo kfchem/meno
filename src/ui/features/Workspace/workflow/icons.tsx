@@ -166,6 +166,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M7 8.8 H13 M7 11.7 H13" />
     </>
   ),
+  // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)
+  frames: (
+    <>
+      <path d="M1.5 13.25 C8 13.25, 12 6.75, 18.5 6.75" strokeWidth={1.5} />
+      <circle cx="5.97" cy="12.24" r="2" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="10" r="2" fill="currentColor" stroke="none" />
+      <circle cx="14.03" cy="7.76" r="2" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
