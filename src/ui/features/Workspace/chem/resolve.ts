@@ -98,7 +98,11 @@ function asGroup(typed: string): Resolved {
  * A whole molecule, read: as a SMILES, where it is one (`smilesMolecule`),
  * and as a molecule the dictionary draws whole - a reagent (DMF, Et3N,
  * NBS), a complex's formula (PdCl2), or a ligand bound only by pairs it
- * lends (THF, py), each given its case by smart labels as on the canvas.
+ * lends (THF, py) - typed as written or in small letters (dmf, et3n), as a
+ * label is given its case on the canvas (smart labels): a formula in
+ * capitals (ET3N) is not, its elements' case being what it says. Named by
+ * the dictionary's name where it has one; a complex's formula and a
+ * formula read by rule, by their label alone.
  * The SMILES first, where the text is both (NBS, BrCN): what the field is
  * for. A group (Me, CN, NO) is no molecule - nor an element's symbol alone,
  * but as a SMILES. None where neither reads: the plugin that reads SMILES
@@ -116,8 +120,9 @@ function asMolecule(typed: string): Resolved {
   const lendsAll = whole && whole.attach.length > 0 && !whole.haptic?.length && whole.attach.every((_, k) => whole.lends?.[k]);
   if (named && whole && (!whole.attach.length || lendsAll)) {
     const formula = structureFormula({ ...whole, attach: [] });
-    // (a formula read by rule is named by its formula: its label says more)
-    readings.push({ typed, as: "label", label, group: { ...whole, attach: [] }, formula, ...(named.name && named.name !== formula ? { name: named.name } : {}) });
+    // (a formula read by rule is named by its formula, and a complex's by its parts - "palladium, 2 Cl": its label says more)
+    const name = named.kind !== "complex" && named.name !== formula ? named.name : undefined;
+    readings.push({ typed, as: "label", label, group: { ...whole, attach: [] }, formula, ...(name ? { name } : {}) });
   }
   return { readings };
 }

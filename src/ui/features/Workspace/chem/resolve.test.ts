@@ -54,10 +54,17 @@ describe("a typed string read where it is typed", () => {
     expect(resolve("*=C", "group").problem).toBe('The "*" is bonded by one single bond to the atom the group is attached by.');
   });
 
-  it("a molecule the dictionary has is named, a formula read by rule only by its label", () => {
+  it("a molecule the dictionary has is named; a formula read by rule and a complex's formula only by their label", () => {
     const [dmf] = resolve("DMF", "molecule").readings;
     expect(dmf).toMatchObject({ as: "label", name: "N,N-dimethylformamide" });
-    expect(resolve("Et3N", "molecule").readings[0]).not.toHaveProperty("name");
+    for (const typed of ["Et3N", "PdCl2", "CuI"]) expect(resolve(typed, "molecule").readings[0]).not.toHaveProperty("name");
+  });
+
+  it("typed as written or in small letters, as a label is on the canvas - a formula in capitals is not the dictionary's", () => {
+    const labels = (typed: string) => resolve(typed, "molecule").readings.map((r) => (r.as === "element" ? r.el : r.label));
+    expect([labels("dmf"), labels("Thf"), labels("et3n"), labels("pdcl2")]).toEqual([["DMF"], ["THF"], ["Et3N"], ["PdCl2"]]);
+    // (its elements' case is what a formula says: ET3N, PDCL2 and NAH are left to the plugin that reads SMILES)
+    expect([labels("ET3N"), labels("PDCL2"), labels("NAH")]).toEqual([[], [], []]);
   });
 
   it("a molecule is attached by none of its atoms, a ligand's donors given up", () => {

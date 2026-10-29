@@ -5,7 +5,8 @@
 # - NBS typed: the SMILES and N-bromosuccinimide offered under the field,
 #   the SMILES chosen; the down arrow chooses the other, and Enter draws
 #   N-bromosuccinimide.
-# - dmf typed (any case): N,N-dimethylformamide offered alone, and drawn.
+# - dmf typed in small letters: N,N-dimethylformamide offered alone, and
+#   drawn; pdcl2: PdCl2, a formula, offered by its label and formula.
 # - CCO typed: a SMILES alone, nothing said under the field.
 #
 # Nothing here needs the plugin that reads SMILES: nothing is drawn from one.
@@ -34,6 +35,14 @@ Save-Step "dmf-offered"
 Send-MenoKey Enter
 Wait-MenoSettled | Out-Null
 Save-Step "dmf-drawn"
+
+# a complex's formula, typed small: offered by its label, not a made-up name
+Invoke-MenoQuickAdd -X ($cx - 400) -Y ($cy + 250) -Item SMILES
+Send-MenoText "pdcl2" -CharMs 30
+Start-Sleep -Milliseconds 400
+Save-Step "pdcl2-offered"
+Send-MenoKey Escape
+Start-Sleep -Milliseconds 300
 
 # a SMILES alone: nothing under the field
 Invoke-MenoQuickAdd -X $cx -Y ($cy + 250) -Item SMILES

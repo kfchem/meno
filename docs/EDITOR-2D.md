@@ -402,9 +402,11 @@ a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
 aromatic ring that cannot alternate. A molecule the dictionary has - a
 reagent, a formula read by rule, a ligand bound only by pairs it lends:
-DMF, Et3N, PdCl2, THF, typed in any case, as a label is on the canvas -
-is drawn from the dictionary, as the canvas draws its label out, with no
-plugin asked; its name (or its label) and formula are said under the
+DMF, Et3N, PdCl2, THF, typed as written or in small letters (dmf,
+et3n), as a label is given its case on the canvas; a formula in capitals
+(ET3N) is not, its elements' case being what it says - is drawn from the
+dictionary, as the canvas draws its label out, with no plugin asked; its
+name - or, for a formula, its label - and formula are said under the
 field as it is typed. Where the text is that and a SMILES too - NBS,
 BrCN - both are offered there, the SMILES first (the field is for
 SMILES), and Enter draws the one chosen, by a
