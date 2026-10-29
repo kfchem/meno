@@ -547,7 +547,7 @@ class MotionsRender(unittest.TestCase):
         asked, poured, free = (float(v) for v in re.search(r"^POUR (\S+) L asked, (\S+) L poured, (\S+) L lie freely", run.stdout, re.M).groups())
         self.assertGreater(asked, free)
         self.assertLessEqual(poured, free)
-        width, depth = (float(v) for v in re.search(r"^POOL reaches (\S+) of the domain's half-width, (\S+) of its half-depth", run.stdout, re.M).groups())
+        width, depth = (float(v) for v in re.search(r"^POOL holds \S+ L, reaches (\S+) of the domain's half-width, (\S+) of its half-depth", run.stdout, re.M).groups())
         self.assertLess(max(width, depth), 0.82, (width, depth))
 
     def test_a_small_molecules_melt_never_shows_the_liquids_domain(self):

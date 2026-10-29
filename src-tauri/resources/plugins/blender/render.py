@@ -700,8 +700,8 @@ def change_piece(s, folder, cfg, script, progress, first):
         with open(os.path.join(folder, name), encoding="utf-8") as f:
             exec(compile(f.read(), name, "exec"), space)
     made = sorted(glob.glob(os.path.join(cfg["out"], "f_*.png")))
-    if len(made) != cfg["frames"]:
-        raise SystemExit(f"render.py: Blender rendered {len(made)} of {cfg['frames']} frames of a change")
+    if len(made) != cfg.get("play", cfg["frames"]):
+        raise SystemExit(f"render.py: Blender rendered {len(made)} of {cfg.get('play', cfg['frames'])} frames of a change")
     return made
 
 
@@ -767,7 +767,11 @@ def liquid_film(s, meno, folder):
     melts, first = [], True
     for i, mol in enumerate(mols):
         out = os.path.join(folder, "frames", f"melt-{i + 1:02d}")
-        cfg = {**piece_settings(s, melt, LIQUID_MELT, out), "molecules": [mol], "stage": "melt", "reach": widest, "bg": "white",
+        # (simulated in the liquid's own time - a frame for each of the film's frames at its own length, 8 s, or more where the
+        # film plays the melt slower - and played over the frames the film gives it: a simulation sped up takes longer steps,
+        # and its inflows pour on through them, pouring more and drawing it out in sheets)
+        sim = max(int(round(LIQUID_MELT * s["fps"])), melt)
+        cfg = {**piece_settings(s, sim, LIQUID_MELT, out), "play": melt, "molecules": [mol], "stage": "melt", "reach": widest, "bg": "white",
                "cache": os.path.join(folder, "cache", f"melt-{i + 1:02d}"), "pool": os.path.join(out, "pool.npz"),
                "piece": i + 1, "pieces": len(mols) + changes}
         os.makedirs(cfg["cache"], exist_ok=True)

@@ -274,10 +274,26 @@ if CFG["stage"] == "melt":
         ev.to_mesh_clear()
         print(f"KEPT the pool at frame {N}: {len(co_) // 3} points", flush=True)
         # (how near the domain's walls it came: the share of the domain's half-width and half-depth its farthest point is at)
-        xy_ = co_.reshape(-1, 3)
-        print(f"POOL reaches {float(np.abs(xy_[:, 0]).max()) / W_:.2f} of the domain's half-width, {float(np.abs(xy_[:, 1]).max()) / Dp:.2f} of its half-depth", flush=True)
+        xy_ = co_.reshape(-1, 3).astype(np.float64)
+        # (and the liquid it holds, as the reform reckons it: its faces fanned into triangles, the volumes they close summed)
+        held_ = 0.0
+        for k_ in range(1, int(tt_.max()) - 1):
+            has_ = tt_ > k_ + 1
+            a_, b_, c_ = xy_[lp_[st_[has_]]], xy_[lp_[st_[has_] + k_]], xy_[lp_[st_[has_] + k_ + 1]]
+            held_ += float(np.einsum("ij,ij->i", a_, np.cross(b_, c_)).sum()) / 6.0
+        print(f"POOL holds {abs(held_) * 1e3:.2f} L, reaches {float(np.abs(xy_[:, 0]).max()) / W_:.2f} of the domain's half-width, "
+              f"{float(np.abs(xy_[:, 1]).max()) / Dp:.2f} of its half-depth", flush=True)
     finish(bloom=0.6, threshold=2.0, glow_size=0.6)
-    render()
+    # (simulated over N frames of its own time, played over the film's `play` of them, evenly: the first and the last - the
+    # pool kept - among them)
+    PLAY = int(CFG.get("play", N))
+    os.makedirs(CFG["out"], exist_ok=True)
+    sc.render.image_settings.file_format = "PNG"; sc.render.image_settings.color_depth = "16"
+    for k_ in range(PLAY):
+        g_ = 1 + k_ * (N - 1) / max(PLAY - 1, 1)
+        sc.frame_set(int(g_), subframe=g_ - int(g_))
+        sc.render.filepath = os.path.join(CFG["out"], f"f_{k_ + 1:04d}.png")
+        bpy.ops.render.render(write_still=True)
 
 
 else:
