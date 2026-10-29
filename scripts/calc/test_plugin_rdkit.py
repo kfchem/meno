@@ -450,6 +450,12 @@ class Metals(unittest.TestCase):
         }
         self.assertEqual(self.worker.RADII, app)
 
+    def test_holds_the_same_van_der_waals_radii_as_the_app(self):
+        import re
+        text = (ROOT / "src/lib/chem/elements.ts").read_text(encoding="utf-8")
+        app = {sym: float(v) for sym, v in re.findall(r'symbol: "(\w+)",[^\n]*?vdw: ([0-9.]+)', text)}
+        self.assertEqual(self.worker.VDW, app)
+
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class RingChairs(unittest.TestCase):
@@ -527,6 +533,91 @@ class RingChairs(unittest.TestCase):
         self.assertEqual(min(equatorial), 0.0)
         # (the axial chair of a phenyl is some 3 kcal/mol up, and a real minimum: in a set of its conformers)
         self.assertLess(min(axial), 4.0)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class RunIntoItself(unittest.TestCase):
+    """No conformer with two atoms run into one another: two heavy atoms nearer than CONTACT_FLOOR of their van
+    der Waals contact, where nothing but the rest of the molecule sets how near - or a metal's bond further than
+    METAL_BOND_OFF from the length it is held to. Such a one is dropped, and counted; a sound molecule loses none."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def mol(self, smiles):
+        m = Chem.MolFromSmiles(smiles, sanitize=False)
+        m.UpdatePropertyCache(strict=False)
+        return m
+
+    def made(self, block, count):
+        return self.worker.op_conformers({"molblock": block, "options": {"sought": "fixed", "count": count}})["isomers"][0]
+
+    def intact(self, block, entry):
+        """The least share of their contact two counted atoms come to, and the furthest a metal's bond goes from
+        its length, in any of the conformers made of `block` - read as `conformers` reads it."""
+        import numpy as np
+        drawn = self.worker.read(block)
+        eta = self.worker.eta_systems(drawn)
+        self.worker.as_ligand_anions(drawn, eta)
+        mol = Chem.AddHs(drawn)
+        pairs = self.worker.contact_pairs(mol, eta)
+        bonds = self.worker.held_bonds(mol)
+        least, off = 9.0, 0.0
+        for frame in entry["frames"]:
+            P = np.array(frame).reshape(-1, 3)
+            for i, j, floor in pairs:
+                least = min(least, float(np.linalg.norm(P[i] - P[j])) / floor * self.worker.CONTACT_FLOOR)
+            for m, x, length in bonds:
+                off = max(off, abs(float(np.linalg.norm(P[m] - P[x])) / length - 1))
+        return least, off
+
+    def test_holds_the_point_donors_beside_an_eta_ligand_apart(self):
+        # (a Zeise-type anion: its alkene one place, its three Cl held apart from each other and never from a carbon)
+        self.assertEqual(self.worker.floor_pairs(Chem.AddHs(self.mol("Cl[Pt-](Cl)(Cl)1CC1"))), [(1, 0, 2, 75.0), (1, 0, 3, 75.0), (1, 2, 3, 75.0)])
+        self.assertEqual([(m, x) for m, x, _ in self.worker.held_bonds(Chem.AddHs(self.mol("Cl[Pt-](Cl)(Cl)1CC1")))], [(1, 0), (1, 2), (1, 3)])
+        # (ferrocene: two rings, nothing else - nothing held)
+        self.assertEqual(self.worker.floor_pairs(self.worker.read(EtaBound.ferrocene())), [])
+
+    def test_counts_no_pair_whose_bonds_or_angles_set_how_near_they_are(self):
+        # (butane: only its ends; a bicyclo[1.1.1]pentane's bridgeheads, 1.87 A apart, both on one carbon: none)
+        self.assertEqual([(i, j) for i, j, _ in self.worker.contact_pairs(Chem.AddHs(Chem.MolFromSmiles("CCCC")))], [(0, 3)])
+        self.assertEqual(self.worker.contact_pairs(Chem.AddHs(Chem.MolFromSmiles("C1C2CC1C2"))), [])
+        # (ferrocene's iron and its rings' carbons are held at their own lengths: no pair)
+        fe = self.worker.read(EtaBound.ferrocene())
+        metal = next(a.GetIdx() for a in fe.GetAtoms() if a.GetSymbol() == "Fe")
+        self.assertFalse([p for p in self.worker.contact_pairs(fe, self.worker.eta_systems(fe)) if metal in p[:2]])
+
+    def test_drops_and_counts_a_bent_metallocene_run_into_itself(self):
+        # (Cp2ZrCl2 made 500 times: a Cl 1.16 A from a ring carbon, a Zr-Cl at 3.06 - never on the page)
+        block = EtaBound.zirconocene_dichloride()
+        entry = self.made(block, 500)
+        least, off = self.intact(block, entry)
+        self.assertGreaterEqual(least, self.worker.CONTACT_FLOOR)
+        self.assertLessEqual(off, self.worker.METAL_BOND_OFF)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        dropped = int(rows["Dropped"].split(":")[0])
+        self.assertEqual(len(entry["frames"]) + dropped, 500)
+        self.assertIn("two atoms nearer than 0.65 of their contact (nearest: Cl and C, ", rows["Dropped"])
+        self.assertIn("a bond to a metal more than 15% from its length (furthest: Zr-Cl, ", rows["Dropped"])
+
+    def test_drops_a_conformer_whose_metal_bond_the_hold_lost(self):
+        # (PdCl2(PPh3)2: about one in five pulls a phosphine off, or runs a phenyl into the other)
+        block = Chem.MolToMolBlock(self.mol("Cl[Pd](Cl)([P](c1ccccc1)(c1ccccc1)c1ccccc1)[P](c1ccccc1)(c1ccccc1)c1ccccc1"), kekulize=False)
+        entry = self.made(block, 100)
+        least, off = self.intact(block, entry)
+        self.assertGreaterEqual(least, self.worker.CONTACT_FLOOR)
+        self.assertLessEqual(off, self.worker.METAL_BOND_OFF)
+        self.assertIn("Dropped", {r["label"] for r in entry["how"]})
+
+    def test_leaves_sound_molecules_as_they_were(self):
+        # (strained, crowded, peri, a cobalt tris-chelate, a ruthenium benzylidene: none dropped)
+        for smiles in ("CC(C)Cc1ccc(cc1)C(C)C(=O)O", "C12C3C4C1C5C2C3C45", "C1CC2CCC1CC2", "Cc1cccc2cccc(C)c12", "CC(C)(C)C(C(C)(C)C)C(C)(C)C",
+                       "N1CCN[Co+3]123(NCCN2)NCCN3", "Cl[Ru](Cl)(=Cc1ccccc1)([P](C)(C)C)[P](C)(C)C"):
+            entry = self.made(Chem.MolToMolBlock(self.mol(smiles), kekulize=False), 50)
+            self.assertNotIn("Dropped", {r["label"] for r in entry["how"]}, smiles)
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
@@ -892,13 +983,14 @@ class MetalFloor(unittest.TestCase):
         # (and none past twelve)
         self.assertIsNone(self.worker.floor_for(13))
 
-    def test_holds_nothing_at_a_bent_metallocene_whose_chlorides_stay_apart(self):
-        # (Cp2ZrCl2: no floor at a metal with eta rings - their own holds keep the Cl off them - and its Cl-Zr-Cl
-        #  still comes out as a bent metallocene's, about 97 degrees in crystal structures)
+    def test_holds_a_bent_metallocenes_chlorides_apart_and_nothing_of_its_rings(self):
+        # (Cp2ZrCl2: no floor to its rings' atoms - their own holds keep the Cl off them - but its two Cl held apart,
+        #  the rings taking a place each, and its Cl-Zr-Cl comes out as a bent metallocene's, about 97 degrees in
+        #  crystal structures, 109.5 with titanium standing in)
         import numpy as np
         block = EtaBound.zirconocene_dichloride()
         drawn = self.worker.read(block)
-        self.assertEqual(self.worker.floor_pairs(drawn), [])
+        self.assertEqual(self.worker.floor_pairs(drawn), [(0, 3, 4, 75.0)])
         entry = self.worker.op_conformers({"molblock": block})["isomers"][0]
         for f in range(len(entry["frames"])):
             P = np.array(entry["frames"][f]).reshape(-1, 3)
@@ -935,12 +1027,18 @@ class MetalFloor(unittest.TestCase):
             self.assertGreater(len(cids), 1)
             self.assertEqual(cids, sorted(cids, key=order.get))
 
-    def test_holds_nothing_at_a_metal_with_an_eta2_ligand(self):
-        # (Zeise's anion: the alkene's carbon and the cis Cl come near 71 degrees in real structures)
-        self.assertEqual(self.worker.floor_pairs(Chem.AddHs(self.mol("Cl[Pt-](Cl)(Cl)1CC1"))), [])
+    def test_holds_nothing_of_an_eta2_ligand_but_the_chlorides_beside_it(self):
+        # (Zeise's anion: the alkene's carbon and the cis Cl come near 71 degrees in real structures - never held -
+        #  its three Cl, cis 90 and trans 180 degrees apart, held as at any metal, the alkene taking one place)
+        pairs = self.worker.floor_pairs(Chem.AddHs(self.mol("Cl[Pt-](Cl)(Cl)1CC1")))
+        self.assertEqual(pairs, [(1, 0, 2, 75.0), (1, 0, 3, 75.0), (1, 2, 3, 75.0)])
         entry = self.made("Cl[Pt-](Cl)(Cl)1CC1")
+        self.assertFalse([p for p in pairs if {entry["atoms"][p[1]]["el"], entry["atoms"][p[2]]["el"]} != {"Cl"}])
         rows = {r["label"]: r["text"] for r in entry["how"]}
-        self.assertIn("no angle held between ligands: a ligand bound through atoms side by side", rows["Pt"])
+        self.assertIn("ligands at least 75\u00b0 apart", rows["Pt"])
+        # (and where only a ligand through atoms side by side is on it, nothing held, and said so: ferrocene)
+        fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene(), "options": {"sought": "fixed", "count": 2}})["isomers"][0]
+        self.assertIn("no angle held between ligands: a ligand bound through atoms side by side", {r["label"]: r["text"] for r in fe["how"]}["Fe"])
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class EtaBound(unittest.TestCase):

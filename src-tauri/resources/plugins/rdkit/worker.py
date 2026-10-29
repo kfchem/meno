@@ -1147,6 +1147,22 @@ RADII = {
     "Lv": (175, None, None), "Ts": (165, None, None), "Og": (157, None, None),
 }
 
+#: Alvarez's van der Waals radii, in angstroms (Dalton Trans. 2013, 42, 8617; for Po to Ra, Mantina and others'):
+#: the same as src/lib/chem/elements.ts (whose comment gives the sources), held so by test_plugin_rdkit.py.
+VDW = {
+    "H": 1.2, "He": 1.43, "Li": 2.12, "Be": 1.98, "B": 1.91, "C": 1.77, "N": 1.66, "O": 1.5, "F": 1.46, "Ne": 1.58,
+    "Na": 2.5, "Mg": 2.51, "Al": 2.25, "Si": 2.19, "P": 1.9, "S": 1.89, "Cl": 1.82, "Ar": 1.83, "K": 2.73,
+    "Ca": 2.62, "Sc": 2.58, "Ti": 2.46, "V": 2.42, "Cr": 2.45, "Mn": 2.45, "Fe": 2.44, "Co": 2.4, "Ni": 2.4,
+    "Cu": 2.38, "Zn": 2.39, "Ga": 2.32, "Ge": 2.29, "As": 1.88, "Se": 1.82, "Br": 1.86, "Kr": 2.25, "Rb": 3.21,
+    "Sr": 2.84, "Y": 2.75, "Zr": 2.52, "Nb": 2.56, "Mo": 2.45, "Tc": 2.44, "Ru": 2.46, "Rh": 2.44, "Pd": 2.15,
+    "Ag": 2.53, "Cd": 2.49, "In": 2.43, "Sn": 2.42, "Sb": 2.47, "Te": 1.99, "I": 2.04, "Xe": 2.06, "Cs": 3.48,
+    "Ba": 3.03, "La": 2.98, "Ce": 2.88, "Pr": 2.92, "Nd": 2.95, "Sm": 2.9, "Eu": 2.87, "Gd": 2.83, "Tb": 2.79,
+    "Dy": 2.87, "Ho": 2.81, "Er": 2.83, "Tm": 2.79, "Yb": 2.8, "Lu": 2.74, "Hf": 2.63, "Ta": 2.53, "W": 2.57,
+    "Re": 2.49, "Os": 2.48, "Ir": 2.41, "Pt": 2.29, "Au": 2.32, "Hg": 2.45, "Tl": 2.47, "Pb": 2.6, "Bi": 2.54,
+    "Po": 1.97, "At": 2.02, "Rn": 2.2, "Fr": 3.48, "Ra": 2.83, "Ac": 2.8, "Th": 2.93, "Pa": 2.88, "U": 2.71,
+    "Np": 2.82, "Pu": 2.81, "Am": 2.83, "Cm": 3.05, "Bk": 3.4, "Cf": 3.05, "Es": 2.7
+}
+
 #: How far a metal's bond may be from its covalent length while embedding (A).
 METAL_BOND_SLACK = 0.05
 #: The narrowest angle two atoms bonded to one metal, of different ligands, are let make while embedding and
@@ -1160,10 +1176,13 @@ METAL_BOND_SLACK = 0.05
 #:   63.4 (arctan 2). No common polyhedron of ten or eleven points was: there the margin rests on the
 #:   icosahedron alone, 3.4 degrees;
 #: - more: none.
-#: Only between point donors (floor_pairs): none at a metal with a ligand bound through atoms side by side
+#: Only between point donors (floor_pairs): never to an atom of a ligand bound through atoms side by side
 #: (eta), whose atoms spread round where it sits - Cp2TiCl2's Cp carbon and Cl come near 76 degrees, a
-#: Zeise-type alkene's carbon and its cis Cl near 71; never within one ligand, whose own bonds set its bite (en
-#: on a lanthanide bites about 65); nor for a hydride, which may sit closer to another (cis H-M-H).
+#: Zeise-type alkene's carbon and its cis Cl near 71 - though the point donors beside such a ligand are held
+#: apart as at any metal, the ligand counting as one of the places round it (Cp2ZrCl2's Cl-Zr-Cl is near 97
+#: degrees, a piano stool's OC-M-CO near 90: without it, two chlorides of Cp2ZrCl2 came out 1.96 A apart);
+#: never within one ligand, whose own bonds set its bite (en on a lanthanide bites about 65); nor for a
+#: hydride, which may sit closer to another (cis H-M-H).
 NARROWEST_AT_METAL = 75.0
 #: The most atoms bonded to a metal at which NARROWEST_AT_METAL holds.
 FLOOR_MOST_BONDED = 6
@@ -1178,6 +1197,24 @@ FLOORS = ((FLOOR_MOST_BONDED, NARROWEST_AT_METAL), (FLOOR_MOST_CROWDED, NARROWES
 #: over 1230 embeddings of [OsCl6]2-, PdCl2(PPh3)2 and OsCl4(PEt3)2 none came within 4 degrees of the 75
 #: degree floor but the one stuck in a well 13 under it. Five degrees keeps the first and drops the last.
 FLOOR_SLACK = 5.0
+#: How near two heavy atoms of a conformer may come, as a share of their van der Waals contact (the sum of their
+#: radii, VDW), where nothing but the rest of the molecule sets how near: not bonded to each other nor both to one
+#: same atom (whose bonds and angles, or a metal's floor, set that) - a conformer with two nearer is no shape the
+#: method allows, two parts of it run into one another, and is dropped and counted, as one under a floor is. Of
+#: [Cp2ZrCl2] made 500 times, one came out with a Cl 1.16 A from a ring carbon (0.32 of their contact); of
+#: PdCl2(PPh3)2, 41 with a P, Cl or Pd within 0.65 of a phenyl carbon of the other phosphine (a P 1.99 A from
+#: one, 0.54). Of normal molecules none came under 0.69: 1.87 A between a bicyclo[1.1.1]pentane's bridgeheads
+#: is no such pair (both are bonded to one carbon), and the nearest seen, of seventeen molecules made up to 500
+#: times each - strained, crowded, hydrogen-bonded, metal complexes - were a ruthenium benzylidene's Ru and an
+#: ortho carbon (0.73), a bicyclo[2.2.2]octane's bridgeheads (0.735) and cubane's opposite corners (0.75).
+#: Between heavy atoms alone: a hydrogen bond brings its hydrogen nearer its acceptor than that.
+CONTACT_FLOOR = 0.65
+#: How far a metal's bond to a point donor may come out from the covalent length it is embedded at and held to, as
+#: a share of it: one further is a bond the hold lost, and its conformer is dropped and counted. Of
+#: Pd(PPh3)4 made 300 times, 47 came out with one 0.62 to 2.07 of its length - a phosphine pulled off, or into
+#: the metal - and of PdCl2(PPh3)2, 36; of [Cp2ZrCl2] made 300 times, a Zr-Cl at 1.21. The rest, and every
+#: conformer of Ru, Os, Co, Zr and Pd complexes otherwise, kept theirs within 0.92 to 1.07.
+METAL_BOND_OFF = 0.15
 
 
 def floor_for(bonded):
@@ -1458,12 +1495,51 @@ def ligands_apart(mol):
     return held
 
 
+def point_donors(mol, metal):
+    """A metal's point donors - the atoms bonded to it alone of their ligands, in order of index - and how many
+    places round it they and its eta ligands take, each eta ligand (one through a star, or through atoms bonded
+    to each other) one."""
+    import itertools
+
+    near = sorted(metal.GetNeighbors(), key=lambda x: x.GetIdx())
+    side = {x.GetIdx() for j, k in itertools.combinations(near, 2) if mol.GetBondBetweenAtoms(j.GetIdx(), k.GetIdx()) for x in (j, k)}
+    eta = [x for x in near if x.GetAtomicNum() == 0 or x.GetIdx() in side]
+    points = [x for x in near if x not in eta]
+    groups, seen = 0, set()
+    for x in eta:
+        if x.GetIdx() in seen:
+            continue
+        groups += 1
+        todo = [x.GetIdx()]
+        while todo:
+            i = todo.pop()
+            if i in seen:
+                continue
+            seen.add(i)
+            todo += [n for n in side if n not in seen and mol.GetBondBetweenAtoms(i, n)]
+    return points, len(points) + groups
+
+
+def held_bonds(mol):
+    """Each bond from a metal to a point donor with a covalent length, and that length (A): [(metal, atom, length)] -
+    the lengths a metal's bonds are embedded at (metal_bounds) and held to."""
+    out = []
+    for metal in (a for a in mol.GetAtoms() if is_metal(a)):
+        for x in point_donors(mol, metal)[0]:
+            d = covalent_length(mol.GetBondBetweenAtoms(metal.GetIdx(), x.GetIdx()))
+            if d is not None:
+                out.append((metal.GetIdx(), x.GetIdx(), d))
+    return out
+
+
 def floor_pairs(mol):
     """The atoms a floor holds apart, as seen from their metal, and the
-    angle: [(metal, j, k, angle)] - at a metal with as many atoms bonded to
-    it as a floor holds at (floor_for) and no eta ligand on it (one through a star, or through atoms
-    bonded to each other), each two of different ligands - joined by no
-    path but through a metal - neither a hydride."""
+    angle: [(metal, j, k, angle)] - at a metal with as many places round it
+    as a floor holds at (floor_for), each two of its point donors of
+    different ligands - joined by no path but through a metal - neither a
+    hydride. A point donor is an atom bonded to it alone of its ligand; an
+    eta ligand (one through a star, or through atoms bonded to each other)
+    takes one place, and none of its atoms is held."""
     import itertools
 
     metals = [a for a in mol.GetAtoms() if is_metal(a) and a.GetDegree()]
@@ -1481,16 +1557,32 @@ def floor_pairs(mol):
 
     pairs = []
     for metal in metals:
-        near = sorted(metal.GetNeighbors(), key=lambda x: x.GetIdx())
-        angle = floor_for(len(near))
-        if len(near) < 2 or angle is None or any(x.GetAtomicNum() == 0 for x in near):
+        points, places = point_donors(mol, metal)
+        angle = floor_for(places)
+        if len(points) < 2 or angle is None:
             continue
-        if any(mol.GetBondBetweenAtoms(j.GetIdx(), k.GetIdx()) for j, k in itertools.combinations(near, 2)):
-            continue
-        for j, k in itertools.combinations(near, 2):
+        for j, k in itertools.combinations(points, 2):
             if hops[j.GetIdx()][k.GetIdx()] <= whole or hydride(j) or hydride(k):
                 continue
             pairs.append((metal.GetIdx(), j.GetIdx(), k.GetIdx(), angle))
+    return pairs
+
+
+def contact_pairs(mol, eta=()):
+    """The pairs of atoms a conformer of `mol` keeps CONTACT_FLOOR of their contact apart, and that least distance
+    (A): [(i, j, least)] - two heavy atoms with a radius (VDW), neither a star, not bonded to each other nor both to
+    one same atom, and not a metal and an atom of an eta ring on it (`eta`, eta_systems'), which are held at
+    their own lengths."""
+    held = {frozenset((m, a)) for m, _, atoms in eta for a in atoms}
+    heavy = [a for a in mol.GetAtoms() if a.GetAtomicNum() > 1 and a.GetSymbol() in VDW]
+    near = {a.GetIdx(): {n.GetIdx() for n in a.GetNeighbors()} for a in mol.GetAtoms()}
+    pairs = []
+    for x, a in enumerate(heavy):
+        for b in heavy[x + 1:]:
+            i, j = a.GetIdx(), b.GetIdx()
+            if j in near[i] or near[i] & near[j] or frozenset((i, j)) in held:
+                continue
+            pairs.append((i, j, CONTACT_FLOOR * (VDW[a.GetSymbol()] + VDW[b.GetSymbol()])))
     return pairs
 
 
@@ -1512,12 +1604,10 @@ def floor_words(mol, symbol, floor):
     if held:
         return ", ligands at least " + " or ".join(f"{x:g}\u00b0" for x in held) + " apart"
     a = metals[0]
-    if floor_for(a.GetDegree()) is None:
-        return f", no angle held between ligands: {a.GetDegree()} atoms bonded to it"
-    near = list(a.GetNeighbors())
-    if any(x.GetAtomicNum() == 0 for x in near) or any(
-        mol.GetBondBetweenAtoms(x.GetIdx(), y.GetIdx()) for i, x in enumerate(near) for y in near[i + 1:]
-    ):
+    points, places = point_donors(mol, a)
+    if floor_for(places) is None:
+        return f", no angle held between ligands: {places} " + ("atoms bonded to it" if places == a.GetDegree() else "places round it")
+    if len(points) < a.GetDegree():
         return ", no angle held between ligands: a ligand bound through atoms side by side"
     return ""
 
@@ -2037,11 +2127,38 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         under = min(((angle_at(mol, cid, m, j, k) - angle, m, angle) for m, j, k, angle in floor), default=None)
         if under and under[0] < -FLOOR_SLACK:
             dropped[cid] = under
-    left = [cid for cid in ids if cid not in dropped]
-    if not left:
+    # (and one with two atoms run into one another, nearer than CONTACT_FLOOR of their contact - [Cp2ZrCl2] once
+    # had a Cl 1.16 A from a ring carbon - or with a bond to a metal further than METAL_BOND_OFF from the length it
+    # is held to, which the hold lost: dropped, and counted on the rows)
+    import numpy as np
+
+    contact, bonded = contact_pairs(mol, eta), held_bonds(mol)
+    clashed, off = {}, {}
+    for cid in ids:
+        if cid in dropped:
+            continue
+        p = mol.GetConformer(cid).GetPositions()
+        if contact:
+            I, J, least = (np.array(v) for v in zip(*contact))
+            d = np.linalg.norm(p[I] - p[J], axis=1)
+            q = int(np.argmin(d / least))
+            if d[q] < least[q]:
+                clashed[cid] = (int(I[q]), int(J[q]), float(d[q]), float(d[q] / least[q] * CONTACT_FLOOR))
+                continue
+        if bonded:
+            M, X, length = (np.array(v) for v in zip(*bonded))
+            share = np.linalg.norm(p[M] - p[X], axis=1) / length
+            q = int(np.argmax(np.abs(share - 1)))
+            if abs(share[q] - 1) > METAL_BOND_OFF:
+                off[cid] = (int(M[q]), int(X[q]), float(share[q] * length[q]), float(length[q]))
+    left = [cid for cid in ids if cid not in dropped and cid not in clashed and cid not in off]
+    if not left and dropped:
         m, angle = next((m, angle) for _, m, angle in dropped.values())
         raise ValueError(f"every structure made of it came out with two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} "
                          f"closer than the {angle:g}\u00b0 they were held apart")
+    if not left:
+        raise ValueError("every structure made of it came out with two atoms run into one another, or a bond to a metal "
+                         "far from the length it was held to")
     # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
     sameness = Sameness(mol)
     places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
@@ -2088,10 +2205,17 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
               for el, d in sorted(set(metals), key=lambda x: (x[0], x[1] or ""))],
-            *([{"label": "Dropped", "text": f"{len(dropped)}: " + "; ".join(
-                f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} closer than the {angle:g}\u00b0 floor held"
-                f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
-                for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()}))}] if dropped else []),
+            *([{"label": "Dropped", "text": f"{len(dropped) + len(clashed) + len(off)}: " + "; ".join([
+                *(f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} closer than the {angle:g}\u00b0 floor held"
+                  f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
+                  for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()})),
+                *(f"two atoms nearer than {CONTACT_FLOOR:g} of their contact (nearest: {mol.GetAtomWithIdx(i).GetSymbol()}"
+                  f" and {mol.GetAtomWithIdx(j).GetSymbol()}, {d:.2f} \u00c5)"
+                  for i, j, d, _ in ([min(clashed.values(), key=lambda c: c[3])] if clashed else [])),
+                *(f"a bond to a metal more than {METAL_BOND_OFF:.0%} from its length (furthest: {mol.GetAtomWithIdx(m).GetSymbol()}-"
+                  f"{mol.GetAtomWithIdx(x).GetSymbol()}, {d:.2f} \u00c5 for {length:.2f})"
+                  for m, x, d, length in ([max(off.values(), key=lambda c: abs(c[2] / c[3] - 1))] if off else [])),
+            ])}] if dropped or clashed or off else []),
             {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"
              + (f", {len(left) - len(kept)} the same as one kept" if len(left) > len(kept) else "")},
             {"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
