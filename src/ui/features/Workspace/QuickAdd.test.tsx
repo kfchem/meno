@@ -50,6 +50,6 @@ describe("what the SMILES field's text will be drawn as", () => {
     const html = drawAs("DMF");
     expect(html).toContain("N,N-dimethylformamide");
     expect(html).toMatch(/font-size:0.75em[^>]*>3</);
-    expect(html).not.toMatch(/[₀-₉]/);
+    expect(html).not.toMatch(/[\u2080-\u2089]/);
   });
 });
