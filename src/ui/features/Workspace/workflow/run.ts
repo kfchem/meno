@@ -516,12 +516,13 @@ export function placeResults(
     return aside ? fillDrawn(doc, step, aside.id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
   }
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
-  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set)
-  for (const [exit, table] of Object.entries(results.tables ?? {})) doc = keepExitsUnder(fillTable(doc, step, exit, table), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
-  if (aside && results.drawn?.rest.length) return fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
-  if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
-  return doc;
+  if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
+  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set: under the others as they have grown)
+  const tables = Object.entries(results.tables ?? {});
+  for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);
+  return tables.length ? keepExitsUnder(doc, step) : doc;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "../../../../lib/chem/molecule";
-import { dielsAlder } from "../../../../lib/chem/reactionMap.fixtures";
+import { dielsAlder, sn2 } from "../../../../lib/chem/reactionMap.fixtures";
 import type { SetEntry } from "./entries";
 import { kindInfo } from "./kinds";
 import { runMenoPair } from "./meno";
@@ -42,7 +42,7 @@ describe("Reaction, as a step", () => {
       ["cyclohexene", "order changed"],
       ["cyclohexene", "order changed"],
     ]);
-    expect(o.said).toBe("1 product in the reactants' numbering · 6 bond changes");
+    expect(o.said).toBe("1 product in the reactants' numbering \u00b7 6 bond changes");
     expect(o.aside).toEqual([]);
   });
 
@@ -67,6 +67,7 @@ describe("Reaction, as a step", () => {
     const mol = (m: Molecule, x: number) => ({ at: { x, y: 0 }, atoms: m.atoms, bonds: m.bonds });
     let doc = addMolecule3d(emptyWorkspaceDocument(), mol(da.reactants[0], 0));
     doc = addMolecule3d(doc, mol(da.product, 20));
+    doc = addMolecule3d(doc, mol(sn2().product, 22));
     const a = doc.nextWorkflowId ?? 1;
     doc = addSet(doc, { x0: -4, y0: -4, x1: 4, y1: 4 });
     const b = doc.nextWorkflowId!;
@@ -76,11 +77,15 @@ describe("Reaction, as a step", () => {
     const [r, p] = kindInfo("reaction").inputs!.map((port) => port.id);
     doc = connect(connect(doc, { set: a }, step, r), { set: b }, step, p);
     const ran = runStep(doc, step, W);
-    expect(ran.steps!.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 product in the reactants' numbering · 6 bond changes" });
+    expect(ran.steps!.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 product in the reactants' numbering \u00b7 6 bond changes \u00b7 1 not mapped" });
     const changes = resultOf(ran, step, "changes")!;
     expect(changes.made).toMatchObject({ holds: "table" });
     expect(changes.table!.rows).toHaveLength(6);
     expect(resultOf(ran, step, "out")!.members?.length).toBe(1);
+    // (the table under the products not mapped, as that set has grown: clear of it)
+    const rest = resultOf(ran, step, "rest")!;
+    expect(rest.members?.length).toBe(1);
+    expect(changes.y1).toBeLessThan(rest.y0);
   });
 });
 
