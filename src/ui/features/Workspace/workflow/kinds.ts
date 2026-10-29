@@ -544,7 +544,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "ez", label: "E or Z too", type: "switch", default: false },
       { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
       { id: "elements", label: "Pass over elements", type: "text", default: "" },
-      { id: "reach", label: "Bonded within, times their covalent radii together (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
+      { id: "reach", label: "Bonded within \u00d7 the sum of their covalent radii (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
     ],
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
@@ -713,12 +713,25 @@ export function compareNeeds(v: OptionValues): string | undefined {
   return "why" in atoms ? atoms.why : undefined;
 }
 
-/** *Compare bonding*'s line: against what, and what it compares besides bonds. */
+/**
+ * *Compare bonding*'s line: what was chosen, defaults unsaid - matched on a
+ * property, the match written under another name, a reach not the default,
+ * R or S and E or Z, what is passed over; "against each reference" where
+ * all is as it comes.
+ */
 export function compareHow(v: OptionValues): string {
   const needs = compareNeeds(v);
   if (needs) return needs;
-  const against = v.reference === "property" ? `Against the reference of the same ${String(v.property).trim()}` : `Against each reference, the match as ${String(v.writes ?? "matches").trim()}`;
-  const also = [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean);
-  const reach = v.reach != null && Number(v.reach) !== BOND_REACH ? `; bonded within ${Number(v.reach)} \u00d7 covalent radii` : "";
-  return `${also.length ? `${against}; ${also.join(" and ")} too` : against}${reach}`;
+  const writes = String(v.writes ?? "matches").trim();
+  const reach = v.reach != null ? Number(v.reach) : BOND_REACH;
+  const atoms = String(v.atoms ?? "").trim();
+  const elements = String(v.elements ?? "").trim();
+  const said = [
+    v.reference === "property" ? `matched on ${String(v.property).trim()}` : writes !== "matches" ? `the match as ${writes}` : "",
+    reach !== BOND_REACH ? `bonded within ${reach} \u00d7 covalent radii` : "",
+    [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean).join(" and "),
+    atoms ? `passing over atoms ${atoms}` : "",
+    elements ? `passing over ${elements}` : "",
+  ].filter(Boolean);
+  return said.length ? said.join("; ") : "against each reference";
 }

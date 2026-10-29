@@ -142,7 +142,11 @@ describe("what the steps of two inputs say on their cards", () => {
       expect(kindInfo(kind).inputs?.map((p) => p.name)).toEqual(inputs);
     expect(kindInfo("merge").needs?.({ keep: "one", property: "" })).toBe("Name the property to keep one of each");
     expect(kindInfo("rebond").how?.({ pairs: "property", property: "id" })).toBe("Paired on id");
-    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", rs: true })).toBe("Against each reference, the match as matches; R or S too");
+    // (what was chosen, defaults unsaid)
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", rs: true })).toBe("R or S");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches" })).toBe("against each reference");
+    expect(kindInfo("compare-bonding").how?.({ reference: "property", property: "product", rs: true, ez: true, atoms: "3" })).toBe("matched on product; R or S and E or Z; passing over atoms 3");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "is", elements: "Pd" })).toBe("the match as is; passing over Pd");
   });
 });
 
@@ -312,8 +316,8 @@ describe("Compare bonding's reach", () => {
     expect(text(ok(runMenoPair("compare-bonding", { entries: [far], holds: "molecules" }, { entries: [h2o2], holds: "molecules" })).aside[0], "bonding")).toBe(
       "different: O1-O2 is bonded in the reference, not here: 1.70 Å apart, past 1.51 Å (1.2 times their covalent radii together).",
     );
-    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1 })).toBe("Against each reference, the match as matches; bonded within 1.1 \u00d7 covalent radii");
-    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.2 })).toBe("Against each reference, the match as matches");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1 })).toBe("bonded within 1.1 \u00d7 covalent radii");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.2 })).toBe("against each reference");
   });
 });
 
