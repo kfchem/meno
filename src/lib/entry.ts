@@ -101,7 +101,11 @@ export type At = { geometry: string; kelvin?: number; atm?: number; solvent?: st
  * What worked a property out: the step and its run; the plugin and its
  * version; the program, method and basis, or the model and its version;
  * and, for a thermal quantity (a free energy, an enthalpy), the treatment
- * of its vibrations, as the program says it (none said: not known).
+ * of its vibrations, as the program says it (none said: not known), and
+ * the symmetry it took - the point group and the rotational symmetry
+ * number its rotational entropy counts, as the program printed them (none
+ * printed: not known). They are the molecule's, not a way of working out:
+ * two molecules' differ by right, so they never keep two values apart.
  */
 export type By = {
   step?: string;
@@ -113,6 +117,8 @@ export type By = {
   basis?: string;
   model?: string;
   treatment?: string;
+  pointGroup?: string;
+  symmetryNumber?: number;
 };
 
 /** Whether a property was worked out: computed, failed (why), or not applicable (why). */
@@ -267,7 +273,7 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
 }
 
 
-const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment"] as const;
+const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment", "pointGroup"] as const;
 
 /**
  * A table of numbers as a file gives one, read back: its columns, each a
@@ -313,7 +319,10 @@ export function propertyIn(v: unknown): Property | undefined {
   if (p.by != null) {
     const b = p.by as Record<string, unknown>;
     if (typeof b !== "object" || BY_FIELDS.some((f) => b[f] != null && typeof b[f] !== "string")) return undefined;
-    by = Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : [])));
+    // (a symmetry number: a whole number, 1 or more)
+    const sigma = b.symmetryNumber;
+    if (sigma != null && !(typeof sigma === "number" && Number.isInteger(sigma) && sigma >= 1)) return undefined;
+    by = { ...Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : []))), ...(sigma != null ? { symmetryNumber: sigma as number } : {}) };
   }
   let at: At | undefined;
   if (p.at != null) {

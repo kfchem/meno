@@ -262,6 +262,15 @@ class Collect(unittest.TestCase):
         # (and the symmetry it took, as its box printed it: its point group, and the rotational symmetry number counted)
         self.assertEqual((thermo["thermo.point-group"], thermo["thermo.symmetry-number"]), ("c2v", 2))
 
+    def test_of_several_thermochemistry_prints_takes_the_last_whole(self):
+        # (a log with an earlier print, of another symmetry and free energy: the last one's, its symmetry with its own free energy)
+        earlier = THERMO.replace("c2v", "c1 ").replace("rotational number                       2", "rotational number                       1").replace("-8.613409150740", "-8.600000000000")
+        dump = json.dumps({"total energy": -5.0, "vibrational frequencies / rcm": [0.0] * 6 + [1500.0, 3600.0], "reduced masses": [1] * 8, "IR intensities / km/mol": [0] * 8})
+        out = ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + earlier + THERMO, ended="done")["outputs"][0]
+        thermo = {r["id"]: r["value"] for r in out["results"] if r["on"] == "molecule"}
+        self.assertEqual((thermo["thermo.point-group"], thermo["thermo.symmetry-number"]), ("c2v", 2))
+        self.assertAlmostEqual(thermo["thermo.free-energy"], -8.613409150740)
+
     def test_warns_of_frequencies_at_a_geometry_not_fully_optimised_in_xtb_s_words(self):
         # (the block xtb 6.7.1 ends a --hess run with on a geometry not optimised: a warning, never a failure)
         warned = "\n########################################################################\n[WARNING] Runtime exception occurred\n-1- hessian_numhess: Hessian on incompletely optimized geometry!\n########################################################################\n"

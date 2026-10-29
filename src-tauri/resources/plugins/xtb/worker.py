@@ -452,15 +452,15 @@ def results_of(dump, n, log="", charge=0, masses=None, start=None, end=None):
 
 
 def thermo_of(log):
-    """The thermochemistry a frequency job printed: its summary's free energy, zero-point energy and G(RRHO) contribution, and the table's H(T) and T*S at the temperature used."""
+    """The thermochemistry a frequency job printed: its summary's free energy, zero-point energy and G(RRHO) contribution, and the table's H(T) and T*S at the temperature used - of several prints, each the last, so that all are of one."""
     out = []
 
     def add(id_, label, value, rank=None, **measure):
         out.append({"id": id_, "on": "molecule", "group": "Thermochemistry", "label": label, "value": value, **measure, **({"rank": rank} if rank else {})})
 
     def summary(label):
-        m = re.search(r"::\s*" + re.escape(label) + r"\s+(" + FLOAT + r")\s+Eh", log)
-        return number(m.group(1)) if m else None
+        m = re.findall(r"::\s*" + re.escape(label) + r"\s+(" + FLOAT + r")\s+Eh", log)
+        return number(m[-1]) if m else None
 
     free = summary("total free energy")
     if free is not None:
@@ -472,9 +472,9 @@ def thermo_of(log):
     if contrib is not None:
         add("thermo.g-correction", "Correction to Gibbs free energy", contrib, quantity="energy")
     # (the closing summary's: the total energy and H(T))
-    enthalpy = re.search(r"\|\s*TOTAL ENTHALPY\s+(" + FLOAT + r")\s+Eh", log)
+    enthalpy = re.findall(r"\|\s*TOTAL ENTHALPY\s+(" + FLOAT + r")\s+Eh", log)
     if enthalpy:
-        add("thermo.enthalpy", "Enthalpy", number(enthalpy.group(1)), quantity="energy")
+        add("thermo.enthalpy", "Enthalpy", number(enthalpy[-1]), quantity="energy")
     # the table under its last heading: the row of the temperature used - marked so, or the last
     at = log.rfind("H(0)-H(T)+PV")
     row = re.compile(r"^\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s*(\(used\))?\s*$")
@@ -497,13 +497,14 @@ def thermo_of(log):
     treatment = treatment_of(log)
     if treatment and out:
         add("thermo.treatment", "Treatment", treatment)
-    # (the symmetry its thermochemistry took, as xtb's box prints it: ":  symmetry   c1  :", ":  rotational number   1  :")
-    group = re.search(r":\s*symmetry\s+(\S+)\s*:", log)
-    rotational = re.search(r":\s*rotational number\s+(\d+)\s*:", log)
-    if out and group:
-        add("thermo.point-group", "Point group", group.group(1))
+    # (the symmetry its thermochemistry took, as xtb's box prints it: ":  symmetry   c1  :", ":  rotational number   1  :" -
+    #  of several prints, the last, as ORCA's and Gaussian's are read)
+    groups = re.findall(r":\s*symmetry\s+(\S+)\s*:", log)
+    rotational = re.findall(r":\s*rotational number\s+(\d+)\s*:", log)
+    if out and groups:
+        add("thermo.point-group", "Point group", groups[-1])
     if out and rotational:
-        add("thermo.symmetry-number", "Symmetry number", int(rotational.group(1)), unit="none", digits=0)
+        add("thermo.symmetry-number", "Symmetry number", int(rotational[-1]), unit="none", digits=0)
     return out
 
 
