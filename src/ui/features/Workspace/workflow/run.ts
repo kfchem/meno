@@ -548,13 +548,15 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
 function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
   let above = resultOf(doc, step.id, exits[0].id);
-  for (const exit of exits.slice(1)) {
+  for (const [k, exit] of exits.slice(1).entries()) {
     const b = resultOf(doc, step.id, exit.id);
     if (!above || !b) break;
     const reach = above.y0 - BETWEEN;
-    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set)
+    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set -
+    //  but the step's sets of exits after it, which go under it in turn)
     const under = b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN;
-    const self = { set: b.id, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
+    const after = new Set(exits.slice(k + 2).flatMap((e) => resultOf(doc, step.id, e.id)?.id ?? []));
+    const self = { set: b.id, sets: after, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
     if (under || !clearOf(doc, b, self)) {
       const to = placeBelow(doc, b.x0, Math.min(b.y1, reach), b.x1 - b.x0, b.y1 - b.y0, self);
       doc = moveSet(doc, b.id, to.x0 - b.x0, to.y1 - b.y1);

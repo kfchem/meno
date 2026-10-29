@@ -9,6 +9,7 @@ import { addSet, addStep, connect } from "./model";
 import { resultOf } from "./flow";
 import { runStep, type RunWith } from "./run";
 import { setName } from "./doers";
+import { BETWEEN } from "./look";
 
 /** A molecule in 3D as a step's entry: its atoms, bonds and places. */
 const entryOf = (m: Molecule, compound = 0, extra: Partial<SetEntry> = {}): SetEntry =>
@@ -82,10 +83,15 @@ describe("Reaction, as a step", () => {
     expect(changes.made).toMatchObject({ holds: "table" });
     expect(changes.table!.rows).toHaveLength(6);
     expect(resultOf(ran, step, "out")!.members?.length).toBe(1);
-    // (the table under the products not mapped, as that set has grown: clear of it)
+    // (each exit's set under the one before, as it has grown: clear of it, and no further down than the room between two sets -
+    //  a set further down, not yet moved, no hindrance)
+    const out = resultOf(ran, step, "out")!;
     const rest = resultOf(ran, step, "rest")!;
     expect(rest.members?.length).toBe(1);
+    expect(rest.y1).toBeLessThan(out.y0);
+    expect(rest.y1).toBeGreaterThan(out.y0 - 2 * BETWEEN);
     expect(changes.y1).toBeLessThan(rest.y0);
+    expect(changes.y1).toBeGreaterThan(rest.y0 - 2 * BETWEEN);
   });
 });
 
