@@ -12,6 +12,7 @@ import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps
 import { renderOptions } from "../render/renderOptions";
 import { takeFramesHow, type Which } from "./takeFrames";
 import { joinHow, joinNeeds } from "./joinStep";
+import { barrierHow, barrierNeeds, FREE_ENERGY } from "./barrierStep";
 import { addHow, addNeeds, numberHow, numberNeeds } from "./addStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
@@ -47,7 +48,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "height";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -727,6 +728,37 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => joinHow(v),
     needs: (v) => joinNeeds(v),
+  },
+  {
+    // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs: those it cannot have one out of Failed, each saying why)
+    kind: "barrier",
+    name: "Barrier",
+    icon: "height",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "entries",
+    made: "With barriers",
+    inputs: [
+      { id: "saddles", name: "Saddle points", takes: ["molecules"] },
+      { id: "starts", name: "Starts", takes: ["molecules"] },
+    ],
+    others: [FAILED],
+    options: [
+      {
+        id: "energy",
+        label: "Of",
+        type: "choice",
+        choices: [
+          { value: "G", label: "Free energy G" },
+          { value: "E", label: "Electronic energy E" },
+        ],
+        default: "G",
+      },
+      { id: "free", label: "G is", type: "text", default: FREE_ENERGY, when: { id: "energy", in: ["G"] } },
+      ...PAIRS_OWN,
+    ],
+    how: (v) => barrierHow(v),
+    needs: (v) => barrierNeeds(v),
   },
   {
     // (each entry's restraints from itself: its coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - those it cannot have out of Failed, saying why)

@@ -234,6 +234,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M8.5 10 H11.5" strokeWidth={2.2} />
     </>
   ),
+  // (a barrier's height above its start, measured)
+  height: (
+    <>
+      <path d="M6 16.5 H7.5 C10 16.5, 10.3 5, 13 5 C15.4 5, 15.8 12.5, 18 12.5" />
+      <path d="M3 16.5 V5.4 M1.5 7.2 L3 5.2 L4.5 7.2 M1.5 16.5 H4.5" />
+      <path d="M5.2 5 H10.6" strokeDasharray="1.2 1.6" strokeWidth={1.1} />
+    </>
+  ),
   // (two values, summed)
   sum: (
     <>
