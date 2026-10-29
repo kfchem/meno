@@ -93,6 +93,28 @@ describe("an Energy step's single point", () => {
     expect(isFailure(w) && [w.kind, w.why]).toEqual(["failed", "Its atoms moved in what was to be a single point: its energy is of another geometry"]);
   });
 
+  it("fails where it read back no energy - never leaving the energy the entry came with beside its calculation", () => {
+    const f = freq();
+    const w = workedOf("energy", f, { ...singlePoint(f.xyz, -76.4), energies: undefined } as unknown as ReaderOutput, ["cclib 1.9rc1"]);
+    expect(isFailure(w) && [w.kind, w.why]).toEqual(["failed", "It read back no energy"]);
+    // (an optimisation or frequencies that read back none: no energy, not the one it came with)
+    for (const kind of ["optimise", "frequencies"] as const) {
+      const o = worked(workedOf(kind, f, { ...singlePoint(f.xyz, -76.4), energies: undefined, optimised: true } as unknown as ReaderOutput, ["cclib 1.9rc1"]));
+      expect(o.energy).toBeUndefined();
+    }
+  });
+
+  it("fails where the program gave back its mirror image: of the other hand, though every distance is the same", () => {
+    const nh3 = { ...water(), atoms: [{ el: "N" }, { el: "H" }, { el: "H" }, { el: "H" }], bonds: [1, 2, 3].map((a2) => ({ a1: 0, a2, order: 1 })), xyz: [0, 0, 0.1, 0.94, 0, -0.28, -0.47, 0.814, -0.28, -0.47, -0.814, -0.28], energy: -4.4 } as unknown as SetEntry;
+    const out = (xyz: number[]) => ({ ...singlePoint(xyz, -56.5), atoms: ["N", "H", "H", "H"] }) as ReaderOutput;
+    // (the same, turned: one shape)
+    expect(isFailure(workedOf("energy", nh3, out(reoriented(nh3.xyz)), ["cclib 1.9rc1"]))).toBe(false);
+    // (its mirror image - each z turned over, then turned as a whole: every distance the same, the other hand)
+    const mirror = reoriented(nh3.xyz.map((v, i) => (i % 3 === 2 ? -v : v)));
+    const w = workedOf("energy", nh3, out(mirror), ["cclib 1.9rc1"]);
+    expect(isFailure(w) && w.kind).toBe("failed");
+  });
+
   it("an optimisation still takes the geometry it reached, and nothing of the calculation it came from", () => {
     const f = freq();
     const moved = [...f.xyz];
