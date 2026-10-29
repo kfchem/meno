@@ -24,6 +24,7 @@
  */
 import { geometryKey, type Property, type PropertyPart } from "../../../../lib/entry";
 import { workedOutAs } from "../../../../lib/nodes/base";
+import { R_GAS } from "../../../../lib/nodes/standardState";
 import { convert, isUnit, sameDimension, type Unit } from "../../../../lib/units";
 import { convergedOf } from "./converged";
 import { compoundLetter, entryOfSet, imaginaryOf, THERMO_PROPERTIES, type SetEntry } from "./entries";
@@ -33,7 +34,9 @@ import { pairEntries, type Pairing } from "./pairs";
 
 /** Which energy a barrier is of: the free energy G, or the electronic energy E. */
 export type BarrierEnergy = "G" | "E";
-export type BarrierOptions = { energy: BarrierEnergy; free: string; pairs: Pairing; property: string };
+/** How a G barrier counts each side's rotational symmetry: as each program read it, or left out - sigma 1 on both sides. */
+export type BarrierSymmetry = "as-read" | "left-out";
+export type BarrierOptions = { energy: BarrierEnergy; free: string; pairs: Pairing; property: string; symmetry?: BarrierSymmetry };
 
 /** The property a barrier is written under. */
 export const BARRIER = "barrier";
@@ -110,6 +113,17 @@ function unlikeValues(s: Property, t: Property, name: string, start: string, g: 
   return null;
 }
 
+/** The rotational symmetry number and temperature a G was worked out with - of a sum, its thermal part's. */
+function sigmaOf(p: Property): { sigma?: number; kelvin?: number } {
+  const part = p.parts ? p.parts.find((q) => thermal(q.property)) : undefined;
+  const by = part ? part.by : p.by;
+  const kelvin = part ? part.at?.kelvin : p.at?.kelvin;
+  return { ...(by?.symmetryNumber != null ? { sigma: by.symmetryNumber } : {}), ...(kelvin != null ? { kelvin } : {}) };
+}
+
+/** RT ln sigma in kcal/mol: what a rotational symmetry number of sigma takes off a G's rotational entropy, at `kelvin` (R CODATA 2018, exact; the thermochemical calorie). */
+const rtLnSigma = (sigma: number, kelvin: number) => ((R_GAS * kelvin) / 4184) * Math.log(sigma);
+
 /** Each one's point group and symmetry number, as its G was worked out with: "D3h, σ 6" - of a sum, its thermal part's. */
 function symmetrySaid(p: Property): string {
   const by = p.parts ? p.parts.find((q) => thermal(q.property))?.by : p.by;
@@ -149,12 +163,19 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
   const unlike = unlikeValues(sv, tv, name, t, g);
   if (unlike) return `${s}: ${unlike}`;
   const kcal = (p: Property) => convert(p.value as number, p.unit as Unit, "kcal/mol");
+  // (sigma left out, where asked: each side's RT ln sigma taken off its G by Meno, at the temperature its G was worked out at - sigma 1 on both)
+  const leftOut = g && o.symmetry === "left-out";
+  const [ss, ts] = [sigmaOf(sv), sigmaOf(tv)];
+  if (leftOut && (ss.kelvin == null || ts.kelvin == null)) return `${s}: the temperature ${name} was worked out at is not said, so its rotational symmetry cannot be left out`;
+  const lessSigma = leftOut ? rtLnSigma(ss.sigma!, ss.kelvin!) - rtLnSigma(ts.sigma!, ts.kelvin!) : 0;
   const what = g ? `free energy G (${name}${sv.by?.treatment && !sv.parts ? `; ${sv.by.treatment}` : ""})` : "electronic energy E";
-  const symmetry = g ? `; point group and rotational symmetry number: ${symmetrySaid(sv)} (saddle point), ${symmetrySaid(tv)} (start)` : "";
+  const symmetry = g
+    ? `; point group and rotational symmetry number: ${symmetrySaid(sv)} (saddle point), ${symmetrySaid(tv)} (start)${leftOut ? `; rotational symmetry left out - σ 1 on both sides, each side's RT ln σ taken off by Meno (R = ${R_GAS} J/(mol K))` : ""}`
+    : "";
   const imaginary = !g && ti !== "not computed" && ti.length ? `; its start has ${ti.length} imaginary ${ti.length === 1 ? "frequency" : "frequencies"}` : "";
   const level = sv.parts ? {} : { ...(sv.by?.program ? { program: sv.by.program } : {}), ...(sv.by?.method ? { method: sv.by.method } : {}), ...(sv.by?.basis ? { basis: sv.by.basis } : {}) };
   return {
-    value: kcal(sv) - kcal(tv),
+    value: kcal(sv) - kcal(tv) - lessSigma,
     unit: "kcal/mol",
     at: { geometry: geometryKey(saddle.xyz), ...(sv.at?.kelvin != null ? { kelvin: sv.at.kelvin } : {}), ...(sv.at?.atm != null ? { atm: sv.at.atm } : {}), ...(sv.at?.solvent != null ? { solvent: sv.at.solvent } : {}) },
     by: { ...level, treatment: `${what}: the saddle point's less its start ${t}'s${symmetry}${imaginary}` },
@@ -187,7 +208,7 @@ export function barrierSet(saddles: readonly SetEntry[], starts: readonly SetEnt
   const symbol = o.energy === "E" ? "ΔE‡" : "ΔG‡";
   const values = kept.map((e) => e.properties![BARRIER].value as number);
   const first = kept[0]?.properties?.[BARRIER];
-  const of = first ? ofWords(entryOfSet(kept[0], "x").properties[o.energy === "E" ? "energy" : o.free.trim()] ?? first, o.energy, o.free.trim()) : "";
+  const of = first ? ofWords(entryOfSet(kept[0], "x").properties[o.energy === "E" ? "energy" : o.free.trim()] ?? first, o.energy, o.free.trim()) + (o.energy !== "E" && o.symmetry === "left-out" ? ", σ left out" : "") : "";
   const shown =
     values.length === 1
       ? `${symbol} ${values[0].toFixed(2)} kcal/mol (${of})`

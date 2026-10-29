@@ -127,6 +127,7 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         free: String(o.free ?? ""),
         pairs: o.pairs === "each" ? "each" : o.pairs === "property" ? "property" : "order",
         property: String(o.property ?? ""),
+        symmetry: o.symmetry === "left-out" ? "left-out" : "as-read",
       });
     case "torsion-restraints":
       return torsionsSet(a.entries, b.entries, a.holds, o);

@@ -755,6 +755,17 @@ export const KINDS: readonly KindInfo[] = [
         default: "G",
       },
       { id: "free", label: "G is", type: "text", default: FREE_ENERGY, when: { id: "energy", in: ["G"] } },
+      {
+        id: "symmetry",
+        label: "Rotational symmetry",
+        type: "choice",
+        choices: [
+          { value: "as-read", label: "As each program read it" },
+          { value: "left-out", label: "Left out (σ = 1 on both sides)" },
+        ],
+        default: "as-read",
+        when: { id: "energy", in: ["G"] },
+      },
       ...PAIRS_OWN,
     ],
     how: (v) => barrierHow(v),

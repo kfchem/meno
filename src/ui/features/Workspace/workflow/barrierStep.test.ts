@@ -66,6 +66,20 @@ describe("a Barrier step", () => {
     expect(kept(o).said).toBe("ΔG‡ 6.16 kcal/mol (G at GFN2-xTB, 298.15 K)");
   });
 
+  it("leaves the rotational symmetry out where asked - sigma 1 on both sides, each side's RT ln sigma taken off - so that the program's tolerance no longer moves it", () => {
+    // (the reference's sigma 1 on both sides: 5.098 kcal/mol)
+    const o = run([saddle()], [minimum()], { symmetry: "left-out" });
+    expect(barrier(o).value as number).toBeCloseTo(5.098, 3);
+    expect(barrier(o).by?.treatment).toMatch(/; rotational symmetry left out - σ 1 on both sides, each side's RT ln σ taken off by Meno \(R = 8\.314462618 J\/\(mol K\)\)$/);
+    expect(kept(o).said).toBe("ΔG‡ 5.10 kcal/mol (G at GFN2-xTB, 298.15 K, σ left out)");
+    // (another run, the same two read otherwise - the point refined Cs, sigma 1; the minimum C3v, sigma 3: 4.45 as read, 5.10 left out, as the other)
+    const other = { saddle: saddle({ g: -4.40362848, group: "Cs", sigma: 1 }), minimum: minimum({ g: -4.41071972, group: "C3v", sigma: 3 }) };
+    expect(barrier(run([other.saddle], [other.minimum])).value as number).toBeCloseTo(4.45, 2);
+    expect(barrier(run([other.saddle], [other.minimum], { symmetry: "left-out" })).value as number).toBeCloseTo(5.101, 3);
+    // (E counts no rotation: the option is G's alone)
+    expect(barrier(run([saddle()], [minimum()], { energy: "E", symmetry: "left-out" })).value as number).toBeCloseTo(6.11, 2);
+  });
+
   it("gives the electronic energy's height where E is asked", () => {
     const o = run([saddle()], [minimum()], { energy: "E" });
     expect(barrier(o).value as number).toBeCloseTo(6.11, 2);
