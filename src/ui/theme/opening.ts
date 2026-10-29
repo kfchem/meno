@@ -49,15 +49,30 @@ function timeAt(curve: readonly [number, number, number, number], value: number)
   return (lo + hi) / 2;
 }
 
-/** What is seen of a part `time` along its way: coming in with Meno's curve (`EASE`), going with its going one (`EASE_LEAVE`). */
-function seenAt(opening: boolean, time: number): number {
+/** A part of an opening: the card growing, or its new lines fading in. */
+type Part = "grow" | "show";
+
+/**
+ * The curve a part goes on: growing, Meno's curve (`EASE`), as a card's
+ * width and height ease everywhere; shrinking, and the lines fading either
+ * way, its going one (`EASE_LEAVE`). Quick out of its start, `EASE` took
+ * the lines half-way in their first frame, and they read as there at once
+ * (seen in the built app, 2026-10-29).
+ */
+function curveOf(part: Part, opening: boolean): readonly [number, number, number, number] {
+  return part === "grow" && opening ? EASE : EASE_LEAVE;
+}
+
+/** What is seen of a part `time` along its way. */
+function seenAt(part: Part, opening: boolean, time: number): number {
   if (time >= 1 - THERE) return opening ? 1 : 0;
-  return opening ? eased(EASE, time) : 1 - eased(EASE_LEAVE, time);
+  const along = eased(curveOf(part, opening), time);
+  return opening ? along : 1 - along;
 }
 
 /** How far along the way `opening` a part is that is seen at `value`: where a turn back mid-way takes it on from. */
-function timeOf(opening: boolean, value: number): number {
-  return opening ? timeAt(EASE, value) : timeAt(EASE_LEAVE, 1 - value);
+function timeOf(part: Part, opening: boolean, value: number): number {
+  return timeAt(curveOf(part, opening), opening ? value : 1 - value);
 }
 
 /**
@@ -68,7 +83,7 @@ function timeOf(opening: boolean, value: number): number {
  */
 export function openingAfter(at: Opening, open: boolean, ms: number): Opening {
   const way = open ? "opening" : "shutting";
-  let [grow, show] = at.way === way ? at.times : [timeOf(open, at.grown), timeOf(open, at.shown)];
+  let [grow, show] = at.way === way ? at.times : [timeOf("grow", open, at.grown), timeOf("show", open, at.shown)];
   if (ms > 0) {
     // (the part that goes first takes the time, and what it leaves over goes to the other)
     const firstTotal = open ? GROW_MS : SHOW_MS;
@@ -83,7 +98,7 @@ export function openingAfter(at: Opening, open: boolean, ms: number): Opening {
     then = Math.min(then, 1);
     [grow, show] = open ? [first, then] : [then, first];
   }
-  return { grown: seenAt(open, grow), shown: seenAt(open, show), way, times: [grow, show] };
+  return { grown: seenAt("grow", open, grow), shown: seenAt("show", open, show), way, times: [grow, show] };
 }
 
 /** Whether an opening has come to rest, opened or shut. */

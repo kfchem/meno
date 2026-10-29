@@ -37,6 +37,14 @@ describe("a card opening: it grows, and only then its new lines come in", () => 
     }
   });
 
+  it("fades its lines in as gently as out: their first frame, either way, takes them only a little way", () => {
+    const grown = openingAfter(SHUT, true, GROW_MS);
+    expect(openingAfter(grown, true, 1000 / 60).shown).toBeLessThan(0.1);
+    expect(1 - openingAfter(OPENED, false, 1000 / 60).shown).toBeLessThan(0.1);
+    // (half-way through their time, half there: the same curve both ways)
+    expect(openingAfter(grown, true, SHOW_MS / 2).shown).toBeCloseTo(1 - openingAfter(OPENED, false, SHOW_MS / 2).shown, 6);
+  });
+
   it("carries a frame's time past its growing into its lines, not lost", () => {
     const nearly = openingAfter(SHUT, true, GROW_MS - 4);
     const next = openingAfter(nearly, true, 16);
@@ -56,10 +64,11 @@ describe("a card opening: it grows, and only then its new lines come in", () => 
 
   it("asked the other way mid-way, goes back from where it is - in either part, no jump, and no quicker than from rest", () => {
     const step = 1000 / 60;
-    // (each part on its own from rest, its first frame at its start: the most a frame of it moves either way)
+    // (each part on its own from rest: the most any frame's time of it moves, wherever in its time that frame falls)
     const moves = (from: Opening, open: boolean, key: "grown" | "shown", ms: number) => {
-      const frames = [from, ...run(from, open, ms, step)];
-      return Math.max(...frames.slice(1).map((o, k) => Math.abs(o[key] - frames[k][key])));
+      let most = 0;
+      for (let t = 0; t <= ms; t += 0.25) most = Math.max(most, Math.abs(openingAfter(from, open, t + step)[key] - openingAfter(from, open, t)[key]));
+      return most;
     };
     const grownLess = { grown: 1, shown: 0 } as const;
     const atGrown = openingAfter(SHUT, true, GROW_MS);

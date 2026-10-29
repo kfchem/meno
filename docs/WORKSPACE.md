@@ -558,7 +558,8 @@ Taken on 2026-10-13:
   was made* takes no room: the card it is on is as wide as what it shows,
   no wider (the maintainer, 2026-10-28). Opened, the card first grows to
   it, wider and taller together in 160 ms, and only then do its lines fade
-  in, in 120 ms; shut, they fade out first and the card then shrinks back.
+  in, in 120 ms, as gently at first as at the end; shut, they fade out
+  first, the same way, and the card then shrinks back.
   A frames chip opens to its details the same way. Opened or shut again
   part way, it goes back from where it is (the maintainer, 2026-10-29;
   `theme/opening`). An eta complex's
