@@ -284,10 +284,11 @@ export const KINDS: readonly KindInfo[] = [
       },
       {
         id: "lists",
-        label: "R groups, one to a line",
+        label: "R groups",
         type: "lines",
         default: "R1:\n",
         rows: 6,
+        note: "Each R and its groups, as R1: Me, Et",
         when: { id: "way", in: ["rgroups"] },
         // (read as the step runs them, beside each line - asked when shown: the reader is the canvas's)
         readAs: (text) => listsReadAs(text),
