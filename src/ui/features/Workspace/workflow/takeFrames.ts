@@ -7,7 +7,9 @@
  * its frame held - its energy, its marks, its properties - and the molecule
  * it was a frame of. Nothing is chosen where it cannot be told: the highest
  * of a molecule whose frames do not all have an energy is refused, naming
- * it, never the highest of those that do.
+ * it, never the highest of those that do. Nothing is chosen silently
+ * either: where frames are equally high, the first is taken, and the line
+ * says which were.
  */
 import type { Molecule3D } from "../store/types";
 import { framesOf, setEntries } from "./entries";
@@ -39,7 +41,7 @@ const named = (m: Molecule3D, i: number) => m.title || m.name || `molecule ${i +
 /** Of `molecules`, the frames `which` asks for, each a molecule of one geometry; or why none can be taken. */
 export function takeFrames(molecules: readonly Molecule3D[], which: Which, either = 1): Outcome3D {
   if (!molecules.length) return { ok: false, said: "Nothing came in" };
-  if (which === "around" && !(Number.isInteger(either) && either >= 1)) return { ok: false, said: "Either side must be 1 frame or more" };
+  if (which === "around" && !(Number.isInteger(either) && either >= 1)) return { ok: false, said: "Either side must be a whole number of frames, 1 or more" };
   const byEnergy = which === "highest" || which === "around";
   // (the highest, of a molecule whose frames do not all have one, cannot be told: refused, every such molecule named)
   if (byEnergy) {
@@ -50,6 +52,14 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
     if (without.length) return { ok: false, said: `Not every frame of ${without.join(", ")} has an energy: the highest cannot be told` };
   }
   const highest = (m: Molecule3D) => m.energies!.reduce((h, e, k) => (e > m.energies![h] ? k : h), 0);
+  // (frames equally high - the first taken - said, each molecule named, its frames counted from 1)
+  const ties = byEnergy
+    ? molecules.flatMap((m, i) => {
+        const top = m.energies![highest(m)];
+        const at = m.energies!.flatMap((e, k) => (e === top ? [k + 1] : []));
+        return at.length > 1 ? [` · frames ${at.slice(0, -1).join(", ")} and ${at[at.length - 1]} of ${named(m, i)} are equally high: the first is taken`] : [];
+      })
+    : [];
   const chosen = (m: Molecule3D): number[] => {
     const n = framesOf(m);
     switch (which) {
@@ -69,5 +79,5 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
     }
   };
   const kept = setEntries(molecules, "molecules", chosen);
-  return { ok: true, holds: "molecules", kept, aside: [], said: `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either).toLowerCase()}` };
+  return { ok: true, holds: "molecules", kept, aside: [], said: `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either).toLowerCase()}${ties.join("")}` };
 }

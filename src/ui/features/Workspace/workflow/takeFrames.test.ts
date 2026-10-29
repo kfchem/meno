@@ -57,7 +57,23 @@ describe("Take frames", () => {
     expect(takeFrames([path([0, 5, null, 3, -2])], "around", 1)).toMatchObject({ ok: false });
     // (the first, the last, the entry frame need none)
     expect(frames(ok(takeFrames([path([0, 5, null, 3, -2])], "first")))).toEqual([0]);
-    expect(takeFrames([path()], "around", 0)).toEqual({ ok: false, said: "Either side must be 1 frame or more" });
+    // (fewer energies than frames: not every frame has one)
+    const short = { ...path(), energies: path().energies!.slice(0, 3) };
+    expect(takeFrames([short], "highest")).toEqual({ ok: false, said: "Not every frame of path a has an energy: the highest cannot be told" });
+    expect(takeFrames([path()], "around", 0)).toEqual({ ok: false, said: "Either side must be a whole number of frames, 1 or more" });
+    expect(takeFrames([path()], "around", 1.5)).toEqual({ ok: false, said: "Either side must be a whole number of frames, 1 or more" });
+  });
+
+  it("takes the first of frames equally high - and says which were, never choosing silently", () => {
+    const o = ok(takeFrames([path([0, 5, 2, 5, 1])], "highest"));
+    expect(frames(o)).toEqual([1]);
+    expect(o.said).toBe("1 frame of 1 molecule: the highest in energy · frames 2 and 4 of path a are equally high: the first is taken");
+    // (around the first of them; each molecule with a tie named)
+    const two = ok(takeFrames([path([5, 0, 5, 0, 5]), path(undefined, "path b")], "around", 1));
+    expect(frames(two)).toEqual([0, 1, 1, 2, 3]);
+    expect(two.said).toBe("5 frames of 2 molecules: the highest in energy and 1 frame either side · frames 1, 3 and 5 of path a are equally high: the first is taken");
+    // (the first, the last, the entry frame are not chosen by energy: no word of it)
+    expect(ok(takeFrames([path([0, 5, 2, 5, 1])], "first")).said).toBe("1 frame of 1 molecule: the first");
   });
 
   it("runs on a set wired into it, on the page", () => {
