@@ -18,7 +18,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { restraintsOf, torsionsRestrained } from "../../../../lib/steps/restraints";
+import { restraintsOf, TORSION_STEP, torsionsRestrained } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { restraintsTyped, torsionsNeeds } from "./kinds";
 import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
@@ -344,7 +344,7 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
 export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
   const needs = torsionsNeeds(v);
   if (needs) return { ok: false, said: needs };
-  const step = Number(String(v.step).trim());
+  const step = Number(String(v.step ?? TORSION_STEP).trim());
   const byProperty = v.reference === "property";
   if (!byProperty && references.length !== 1) return { ok: false, said: `Against the one reference, but ${references.length} came into Reference: match them on a property` };
   const es = entries.map((e, i) => entryOfSet(e, String(i)));

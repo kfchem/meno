@@ -15,7 +15,7 @@ import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
-import type { RestraintsAsked } from "../../../../lib/steps/restraints";
+import { DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
@@ -596,7 +596,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "factor", label: "Kept at \u00d7 the sum of their van der Waals radii (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
       { id: "distances", label: "Pairs kept at their distance, atoms from 1 (3-7, 1-12)", type: "text", default: "" },
       { id: "fixed", label: "Atoms fixed, from 1 (1, 4-6)", type: "text", default: "" },
-      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: "" },
+      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: String(DISTANCE_STRENGTH) },
     ],
     how: (v) => restraintsHow(v),
     needs: (v) => restraintsNeeds(v),
@@ -627,7 +627,7 @@ export const KINDS: readonly KindInfo[] = [
         default: "one",
       },
       { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
-      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: "" },
+      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP) },
     ],
     how: (v) => torsionsHow(v),
     needs: (v) => torsionsNeeds(v),
@@ -655,7 +655,7 @@ export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked } | {
   const fixed = atomsFromOne(String(v.fixed ?? ""));
   if ("why" in fixed) return { why: fixed.why };
   if (!coordination && !typed.atoms.length && !fixed.length) return { why: "Nothing to hold yet" };
-  const strength = aboveZero(String(v.strength ?? ""), "The strength");
+  const strength = aboveZero(String(v.strength ?? DISTANCE_STRENGTH), "The strength");
   if ((coordination || typed.atoms.length) && strength == null) return { why: "Set the strength" };
   if (strength && typeof strength === "object") return { why: strength.why };
   return {
@@ -684,13 +684,14 @@ export function restraintsHow(v: OptionValues): string {
     distances?.length ? `${distances.length} ${distances.length === 1 ? "pair" : "pairs"} at their distance` : "",
     fixed?.length ? `${fixed.length} ${fixed.length === 1 ? "atom" : "atoms"} fixed` : "",
   ].filter(Boolean);
-  return `${said.join("; ")}${strength != null ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
+  // (the strength where it is not the default: what was chosen, said)
+  return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
 }
 
 /** What a Torsion restraints step still needs of its options. */
 export function torsionsNeeds(v: OptionValues): string | undefined {
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
-  const step = aboveZero(String(v.step ?? ""), "The strength added");
+  const step = aboveZero(String(v.step ?? TORSION_STEP), "The strength added");
   if (step == null) return "Set the strength added";
   return typeof step === "object" ? step.why : undefined;
 }
@@ -702,7 +703,7 @@ export function torsionsHow(v: OptionValues): string {
   // (the one reference is the default: left unsaid)
   const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
   // (the + says it adds each time - the option's own label says it whole)
-  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
+  return `held at 180\u00b0, +${String(v.step ?? TORSION_STEP).trim()} kcal/mol/rad\u00b2${matched}`;
 }
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
