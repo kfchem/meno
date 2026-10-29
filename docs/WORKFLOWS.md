@@ -1756,6 +1756,14 @@ Foundation PR 5 (WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*):
   answers worked out by hand.
 - **A procedure keeps its steps' exits** as empty frames, the wires
   leading on from them.
+- **A later input may be optional - *where wanted*** (`StepPort.optional`,
+  2026-10-29): the step runs with nothing wired into it - an Energy
+  diagram's *Connects*, Add's *Number*. A kind's first input is always
+  needed; every later one not marked optional is too ("Nothing comes into
+  Second"). Two optional inputs may go together (`together`): both wired,
+  or neither ("Reactant side is wired: wire Product side too, or
+  neither"). An optional input looks as any other: the card's line names
+  what is needed, and never an optional one (`kinds` `laterPortsNeed`).
 
 Not read from a workspace saved before this: a wire into a step by its
 number alone, or out of a step, and a result set that does not say which
@@ -2750,7 +2758,7 @@ each entry's number, then its energy).
 
 **Energy diagram** (PR 10, fourth part: `src/lib/energyDiagram.ts`) is
 Meno's own step with two inputs: *Levels*, molecules or conformer sets,
-and *Connects*, a table, where wired. It gives a chart in a set
+and *Connects*, a table, where wanted (an optional input). It gives a chart in a set
 of its own. *Levels* reads what comes in as a table, each molecule as it
 is, so it takes a set that mixes a saddle point's conformer set with
 molecules of one geometry - which a step that works on entries refuses
