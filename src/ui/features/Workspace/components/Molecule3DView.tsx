@@ -45,6 +45,7 @@ import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
+import { refinedFrame } from "../workflow/takeFrames";
 import MagnifiedMark from "./MagnifiedMark";
 
 /**
@@ -2032,6 +2033,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               {...(m.marksUnread ? { marksUnread: true } : {})}
               {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
               {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
+              {...(refinedFrame(m) != null ? { fromStart: true } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>

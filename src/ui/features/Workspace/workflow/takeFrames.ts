@@ -9,7 +9,9 @@
  * of a molecule whose frames do not all have an energy is refused, naming
  * it, never the highest of those that do. Nothing is chosen silently
  * either: where frames are equally high, the first is taken, and the line
- * says which were.
+ * says which were. A path search's molecule's highest is the point it
+ * refined (`refinedFrame`), as its frame says it is - whatever image may
+ * stand higher - and the step's line says so.
  */
 import type { Molecule3D } from "../store/types";
 import { framesOf, setEntries } from "./entries";
@@ -35,6 +37,18 @@ export function takeFramesHow(which: Which, either: number): string {
   }
 }
 
+/** What a path search writes on each of its path's frames (ORCA's worker: `PATH_FRAME`), and on the point it refined. */
+export const PATH_FRAME = "path.frame";
+export const REFINED_SAID = "highest point refined";
+
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export function refinedFrame(m: Pick<Molecule3D, "calc">): number | null {
+  const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
+  if (!said || said.on !== "frames") return null;
+  const k = said.values.indexOf(REFINED_SAID);
+  return k >= 0 && said.values.lastIndexOf(REFINED_SAID) === k ? k : null;
+}
+
 /** A molecule as a step's line names it: its title, its name, or its place among those that came in. */
 const named = (m: Molecule3D, i: number) => m.title || m.name || `molecule ${i + 1}`;
 
@@ -51,10 +65,12 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
     });
     if (without.length) return { ok: false, said: `Not every frame of ${without.join(", ")} has an energy: the highest cannot be told` };
   }
-  const highest = (m: Molecule3D) => m.energies!.reduce((h, e, k) => (e > m.energies![h] ? k : h), 0);
-  // (frames equally high - the first taken - said, each molecule named, its frames counted from 1)
+  // (the highest: a path search's point refined, where it is one - else the frame of the highest energy)
+  const highest = (m: Molecule3D) => refinedFrame(m) ?? m.energies!.reduce((h, e, k) => (e > m.energies![h] ? k : h), 0);
+  // (frames equally high - the first taken - said, each molecule named, its frames counted from 1; a path search's point refined is none of them)
   const ties = byEnergy
     ? molecules.flatMap((m, i) => {
+        if (refinedFrame(m) != null) return [];
         const top = m.energies![highest(m)];
         const at = m.energies!.flatMap((e, k) => (e === top ? [k + 1] : []));
         return at.length > 1 ? [` · frames ${at.slice(0, -1).join(", ")} and ${at[at.length - 1]} of ${named(m, i)} are equally high: the first is taken`] : [];
@@ -79,5 +95,7 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
     }
   };
   const kept = setEntries(molecules, "molecules", chosen);
-  return { ok: true, holds: "molecules", kept, aside: [], said: `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either).toLowerCase()}${ties.join("")}` };
+  const refined = byEnergy ? molecules.filter((m) => refinedFrame(m) != null).length : 0;
+  const said = `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either).toLowerCase()}`;
+  return { ok: true, holds: "molecules", kept, aside: [], said: `${refined ? `${said} (of ${refined === molecules.length ? "each" : plural(refined, "path search")}, its ${REFINED_SAID})` : said}${ties.join("")}` };
 }

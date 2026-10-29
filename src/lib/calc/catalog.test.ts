@@ -76,6 +76,7 @@ describe("the readers Meno knows of", () => {
       ["optimise", ["orca"]],
       ["energy", ["orca"]],
       ["frequencies", ["orca"]],
+      ["path-search", ["orca"]],
     ]);
     expect(orca.installed).toEqual([
       {
