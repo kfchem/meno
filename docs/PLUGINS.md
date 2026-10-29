@@ -582,7 +582,7 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   cis dihydride's hydrides, though there the force field's own angles
   stayed above it (77° and 88° here, as now).
 - **A structure of more than one part, its parts side by side** (RDKit
-  plugin 0.1.12). A salt's ions, or a mixture's molecules, are embedded
+  plugin 0.1.15). A salt's ions, or a mixture's molecules, are embedded
   each where the others are and optimised with nothing between them
   counted, so that they lay on one another - NaCl's two ions 0.00 Å
   apart, two benzenes' rings through each other. Each conformer's parts

@@ -509,6 +509,8 @@ class PartsApart(unittest.TestCase):
         self.assertEqual(len(self.made("CC(=O)[O-].[Na+]")["frames"]), len(self.made("CC(=O)[O-]")["frames"]))
         self.assertEqual(len(self.made("c1ccccc1.c1ccccc1")["frames"]), 1)
         self.assertEqual(len(self.made("C[NH3+].[Cl-]")["frames"]), 1)
+        # (two parts that each turn: water with ethanol, as many as ethanol alone - water's one shape adds none)
+        self.assertEqual(len(self.made("O.CCO", 30)["frames"]), len(self.made("CCO", 30)["frames"]))
 
     def test_says_nothing_of_parts_of_a_structure_of_one(self):
         for block in (Chem.MolToMolBlock(Chem.MolFromSmiles("CCO")), EtaBound.ferrocene()):
