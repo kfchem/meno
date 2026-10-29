@@ -661,6 +661,7 @@ def motion_film(s, meno, folder):
 # made in stages: each molecule's melt, then each change between two melts' pools (`liquid_film`).
 CHANGE_NOMINAL = {"change-ring": 5.0, "change-scan": 5.0, "change-shatter": 5.0}
 LIQUID_MELT, LIQUID_REFORM = 8.0, 1.6
+REFORM_LEAST = 1.0
 
 
 def molecules_to_change(s, meno):
@@ -744,16 +745,23 @@ def reach(mol):
     return max(math.hypot(a["p"][0] - cx, a["p"][2] - cz) for a in mol["atoms"])
 
 
+def liquid_share(frames, changes, fps):
+    """The frames of each melt and of each reform, for a liquid film of `frames` in `changes`: each change A's melt, the
+    reform, B's melt backward - in the lengths the liquid takes, 8 s, 1.6 s and 8 s - the reform never shorter than a second
+    where the change has the frames for it (shorter, the pool would snap into the drop), the melts sharing the rest."""
+    per = int(round(frames / changes))
+    reform = max(int(round(per * LIQUID_REFORM / (2 * LIQUID_MELT + LIQUID_REFORM))), min(int(round(REFORM_LEAST * fps)), per - 4))
+    melt = max(2, (per - reform) // 2)
+    return melt, max(1, per - 2 * melt)
+
+
 def liquid_film(s, meno, folder):
     """The liquid change: each molecule's melt rendered once (its pool kept), each change between two pools after; the film
     plays a molecule's melt forward as it changes away, backward as it is changed into - the first melt from its first
     frame, each one after from its second, so that no frame is shown twice."""
     mols, pairs, loop = molecules_to_change(s, meno)
     changes = len(pairs)
-    # (each change: A's melt, the reform, B's melt backward - in the lengths the liquid takes, 8 s, 1.6 s and 8 s)
-    per = s["frames"] / changes
-    melt = max(2, int(round(per * LIQUID_MELT / (2 * LIQUID_MELT + LIQUID_REFORM))))
-    reform = max(1, int(round(per)) - 2 * melt)
+    melt, reform = liquid_share(s["frames"], changes, s["fps"])
     progress = Progress(len(mols) * melt + changes * reform)
     widest = max(reach(m) for m in mols)
     melts, first = [], True

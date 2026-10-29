@@ -116,6 +116,49 @@ if CFG["stage"] == "melt":
     def frame_of(b): return M + int(round(b * SPAN / NB * FPSM))
     pad = CFG.get("pad", 0.0015)
     FAT, BFAT = CFG.get("fat", 1.6), CFG.get("bfat", 2.5)      # heated, it softens and swells: the liquid starts from the swollen shape
+    # (the liquid poured is at most what lies freely on the paper - a pool of the liquid's own depth over the middle of the
+    # domain, clear of its walls: a large molecule swells less, and pours for fewer frames, so that its pool spreads as a
+    # small one's does and is never penned in, piling against the walls. The domain, and so the framing every melt ends in,
+    # stay as they are)
+    POUR = CFG.get("pour", 3)
+    CELL = 2.0 * max(CFG["dom_w"], CFG["dom_d"]) / CFG.get("res", 96)
+    def poured(fat, bfat, pour):
+        """The liquid the bands pour: the cells of the solver's grid inside the swollen shape, as it seeds them - filled
+        again on each frame its inflow is on, as what was poured runs off it (`refill` more each frame, as measured)."""
+        xs = np.arange(-CFG["dom_w"] + CELL / 2, CFG["dom_w"], CELL)
+        ys = np.arange(-CFG["dom_d"] + CELL / 2, CFG["dom_d"], CELL)
+        zs = np.arange(zf + CELL / 2, ztop + 0.06, CELL)
+        inside = np.zeros((len(xs), len(ys), len(zs)), bool)
+        def mark(lo, hi, test):
+            i = [np.searchsorted(g, l) for g, l in zip((xs, ys, zs), lo)]
+            j = [np.searchsorted(g, h, "right") for g, h in zip((xs, ys, zs), hi)]
+            if any(b <= a for a, b in zip(i, j)): return
+            X, Y, Z = np.meshgrid(xs[i[0]:j[0]], ys[i[1]:j[1]], zs[i[2]:j[2]], indexing="ij")
+            inside[i[0]:j[0], i[1]:j[1], i[2]:j[2]] |= test(np.stack([X, Y, Z], -1))
+        for a in ATOMS:
+            c = np.array(a["p"]); r = a["r"] * fat + pad
+            mark(c - r, c + r, lambda P, c=c, r=r: ((P - c) ** 2).sum(-1) <= r * r)
+        for ob, bi, off in BOND_OBJ:
+            ax = np.array(ob.rotation_quaternion.to_matrix() @ Vector((0, 0, 1))) * ob.scale.z
+            p0, p1 = np.array(ob.location) - ax, np.array(ob.location) + ax; r = ob["rad"] * bfat + pad
+            def near(P, p0=p0, d=p1 - p0, r=r):
+                t = np.clip(((P - p0) @ d) / (d @ d), 0.0, 1.0)
+                return ((P - p0 - t[..., None] * d) ** 2).sum(-1) <= r * r
+            mark(np.minimum(p0, p1) - r, np.maximum(p0, p1) + r, near)
+        return float(inside.sum()) * CELL ** 3 * (1.0 + CFG.get("refill", 0.42) * pour)
+    FREE = math.pi * (CFG.get("free", 0.55) ** 2) * CFG["dom_w"] * CFG["dom_d"] * CFG.get("free_depth", 0.022)
+    ASKED = poured(FAT, BFAT, POUR)
+    if ASKED > FREE:
+        # (it swells less - not below its drawn size - and, where that is not enough, pours for fewer frames)
+        lo_, hi_ = 0.0, 1.0
+        for _ in range(12):
+            t_ = 0.5 * (lo_ + hi_)
+            lo_, hi_ = (t_, hi_) if poured(1 + (FAT - 1) * t_, 1 + (BFAT - 1) * t_, POUR) <= FREE else (lo_, t_)
+        FAT, BFAT = 1 + (FAT - 1) * lo_, 1 + (BFAT - 1) * lo_
+        while POUR > 0 and poured(FAT, BFAT, POUR) > FREE:
+            POUR -= 1
+    print(f"POUR {ASKED * 1e3:.2f} L asked, {poured(FAT, BFAT, POUR) * 1e3:.2f} L poured, {FREE * 1e3:.2f} L lie freely "
+          f"(swelling {FAT:.2f} and {BFAT:.2f}, {POUR + 1} frames)", flush=True)
     geo = [bmesh.new() for _ in range(NB)]
     # (the colliders are the solid as drawn, a little thinner: the swollen liquid of a band must not start inside a neighbour's
     # collider, where the solver takes it away)
@@ -132,6 +175,9 @@ if CFG["stage"] == "melt":
         bmesh.ops.create_cone(sgeo[ob["band"]], cap_ends=True, segments=10, radius1=ob["rad"] * SOL, radius2=ob["rad"] * SOL, depth=ob.scale.z * 2 * 0.8,
                               matrix=Matrix.Translation(ob.location) @ ob.rotation_quaternion.to_matrix().to_4x4())
     for ob in ATOM_OBJ: ob["band"] = ATOMS[ob["idx"]]["band"]
+    # (the first frame there is liquid: the first band that has anything in it pours - a small molecule's top band can be
+    # empty, and until something is poured the solver has no surface, and draws its domain whole)
+    F_LIQ = min(frame_of(b) for b in range(NB) if geo[b].verts)
     for b in range(NB):
         if not geo[b].verts: continue
         fb = frame_of(b)
@@ -143,7 +189,7 @@ if CFG["stage"] == "melt":
                 # (inflow, switched on for a few frames: a "geometry" flow seeds only a sim's first frame, so later bands would add nothing)
                 mf.fluid_type = "FLOW"; fs = mf.flow_settings; fs.flow_type = "LIQUID"; fs.flow_behavior = "INFLOW"; fs.flow_source = "MESH"
                 fs.surface_distance = 0.0; fs.volume_density = 1.0
-                for f, on in ((1, False), (fb - 1, False), (fb, True), (fb + CFG.get("pour", 2), True), (fb + CFG.get("pour", 2) + 1, False)):
+                for f, on in ((1, False), (fb - 1, False), (fb, True), (fb + POUR, True), (fb + POUR + 1, False)):
                     fs.use_inflow = on; fs.keyframe_insert("use_inflow", frame=max(1, f))
             else:
                 mf.fluid_type = "EFFECTOR"; es = mf.effector_settings; es.effector_type = "COLLISION"; es.surface_distance = 0.0
@@ -178,7 +224,7 @@ if CFG["stage"] == "melt":
         ss_ = dom.modifiers.new("subsurf", "SUBSURF"); ss_.levels = ss_.render_levels = int(CFG["post_subsurf"])
     # the liquid is seen from its first frame; the solid until then
     dom.hide_render = True; dom.keyframe_insert("hide_render", frame=1)
-    dom.hide_render = False; dom.keyframe_insert("hide_render", frame=M)
+    dom.hide_render = False; dom.keyframe_insert("hide_render", frame=F_LIQ)
     # the swelling, keyed on the solid: from its drawn size to the liquid's first shape, over the heat's lead before its band melts
     for ob in ATOM_OBJ + [b[0] for b in BOND_OBJ]:
         fb = frame_of(ob["band"]); f0 = fb - int(round((T_MELT - T_HEAT) * FPSM))
@@ -227,6 +273,9 @@ if CFG["stage"] == "melt":
         np.savez(CFG["pool"], co=co_, loops=lp_, starts=st_, totals=tt_, smooth=sm_)
         ev.to_mesh_clear()
         print(f"KEPT the pool at frame {N}: {len(co_) // 3} points", flush=True)
+        # (how near the domain's walls it came: the share of the domain's half-width and half-depth its farthest point is at)
+        xy_ = co_.reshape(-1, 3)
+        print(f"POOL reaches {float(np.abs(xy_[:, 0]).max()) / W_:.2f} of the domain's half-width, {float(np.abs(xy_[:, 1]).max()) / Dp:.2f} of its half-depth", flush=True)
     finish(bloom=0.6, threshold=2.0, glow_size=0.6)
     render()
 
@@ -346,7 +395,8 @@ else:
         for ob, g in ((PA, ga), (PB, 1 - gb)):
             ob.data.shape_keys.key_blocks["drop"].value = g; ob.data.shape_keys.key_blocks["drop"].keyframe_insert("value", frame=f)
             ob.data.shape_keys.key_blocks["tall"].value = max(0.0, wob) * g; ob.data.shape_keys.key_blocks["tall"].keyframe_insert("value", frame=f)
-    XF = CFG.get("dissolve", 6)                           # frames over which A fades out over B, about the swap
+    # (the frames over which A fades out over B, about the swap: within the drop's hold, however few frames the reform has)
+    XF = max(2, min(CFG.get("dissolve", 6), int(N * HOLD)))
     f0, f1 = F_SWAP - XF // 2, F_SWAP - XF // 2 + XF
     PA.hide_render = False; PA.keyframe_insert("hide_render", frame=1)
     PA.hide_render = True; PA.keyframe_insert("hide_render", frame=f1)
