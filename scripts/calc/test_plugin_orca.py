@@ -222,6 +222,28 @@ Number of SCF / gradient calculations:
 """
 # (and where one image's SCF did not converge, ORCA carrying on with the band)
 SCF_FAILED = "[file orca_leanscf/orca_leanscf.cpp, line 306]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged. There may be a way out but we have to stop here \n"
+class SaddlePoint(unittest.TestCase):
+    def test_a_guess_optimised_to_a_saddle_point_its_first_hessian_computed_unless_asked_not_no_sides(self):
+        options = defaults("saddle-point")
+        nh3 = {"name": "nh3", "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0.1}, {"el": "H", "x": 1.01, "y": 0, "z": 0}, {"el": "H", "x": -0.505, "y": 0.8747, "z": 0}, {"el": "H", "x": -0.505, "y": -0.8747, "z": 0}], "bonds": [], "charge": 0, "multiplicity": 1}
+        said = ask("prepare", step="saddle-point", entries=[nh3], options={**options, "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"})
+        lines = said["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "! NATIVE-XTB2 OPTTS")
+        self.assertIn("%geom Calc_Hess true end", lines)
+        # (at ORCA's own xTB its first Hessian is a numerical one: said on the step's line; no wavefunction kept)
+        self.assertEqual(said.get("note"), "its first Hessian computed numerically")
+        self.assertEqual(said["jobs"][0]["reads"], [])
+        dft = ask("prepare", step="saddle-point", entries=[nh3], options={**options, "hessian": "model"})
+        self.assertEqual(dft["jobs"][0]["files"][0]["text"].splitlines()[0], "! B3LYP def2-SVP D3BJ OPTTS")
+        self.assertFalse(any("Calc_Hess" in l for l in dft["jobs"][0]["files"][0]["text"].splitlines()))
+        self.assertNotIn("note", dft)
+        # (sides wired beside it: ORCA's OptTS takes none - refused, never dropped)
+        with self.assertRaisesRegex(AssertionError, "takes no sides"):
+            ask("prepare", step="saddle-point", entries=[{**nh3, "sides": {"reactant": nh3, "product": nh3}}], options=options)
+        with self.assertRaises(AssertionError):
+            ask("prepare", step="saddle-point", entries=[nh3], options={**options, "hessian": "guessed"})
+
+
 H2 = {"name": "h2", "atoms": [{"el": "H", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 0.74, "y": 0, "z": 0}], "bonds": [], "charge": 0, "multiplicity": 1}
 H2_END = {**H2, "atoms": [{"el": "H", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 1.10, "y": 0, "z": 0}]}
 

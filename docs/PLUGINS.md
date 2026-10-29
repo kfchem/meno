@@ -985,6 +985,15 @@ point, words of the plugin's own for the rest (ORCA's: "NEB image 3 of
 frequencies were worked out. Meno works out the barriers itself, and calls
 no frame a saddle point.
 
+### Optimise to a saddle point
+
+A plugin filling *Optimise to a saddle point* is sent each guess as any
+entry is; where the step's sides are wired, with them beside it (`sides`,
+`reactant` and `product`, each an entry of the guess's atoms in one
+numbering, of one charge and spin - Meno has checked both). A plugin whose
+program takes no sides refuses a guess sent with them, saying so. What it
+reads back is an optimisation's output, as *Optimise*'s is.
+
 ### Generate
 
 *Generate* makes new structures from nothing that comes in, so it has no

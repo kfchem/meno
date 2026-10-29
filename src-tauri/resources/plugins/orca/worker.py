@@ -75,7 +75,10 @@ WAVEFUNCTION_KIND = "molden"
 # what ORCA's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "orca"
 
-RUNS = {"optimise": "OPT", "energy": "SP", "frequencies": "FREQ"}
+RUNS = {"optimise": "OPT", "energy": "SP", "frequencies": "FREQ", "saddle-point": "OPTTS"}
+#: A saddle point's first Hessian (its *First Hessian* option): computed at the start - the manual's 4.3.2.1, *Hessians
+#: for Transition State Calculations*, "the most straightforward option" - or ORCA's own model one.
+HESSIANS = {"computed": "%geom Calc_Hess true end", "model": ""}
 # ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
 # one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
 NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
@@ -87,6 +90,16 @@ NUMERICAL_SAID = "frequencies computed numerically"
 def numerical(step, options):
     """Whether a step's frequencies are asked for numerically: a Frequencies step at ORCA's own xTB."""
     return step == "frequencies" and any(NATIVE_XTB.fullmatch(w) for w in str(options.get("method", "")).split())
+
+
+#: Said on a saddle point's line where ORCA computes its first Hessian numerically: at ORCA's own xTB, which has no
+#: analytic one, ORCA 6.1.1 says so ("Switching to Numerical Hessian") and does.
+NUMERICAL_HESSIAN_SAID = "its first Hessian computed numerically"
+
+
+def numerical_hessian(step, options):
+    """Whether a saddle point's first Hessian is computed numerically: computed, at ORCA's own xTB."""
+    return step == "saddle-point" and options.get("hessian", "computed") == "computed" and any(NATIVE_XTB.fullmatch(w) for w in str(options.get("method", "")).split())
 DISPERSIONS = {"none": "", "D3BJ": "D3BJ", "D4": "D4"}
 SOLVATIONS = {"none", "CPCM", "SMD"}
 # the solvents offered, as ORCA names them - one word each, for a simple input line
@@ -153,6 +166,12 @@ def orca_input(step, entry, options, cores):
     run = RUNS.get(step)
     if run is None:
         raise Refused(f"this plugin does no {step!r}")
+    # (ORCA's OptTS takes a guess alone: no sides beside it, as a three-structure search would)
+    if entry.get("sides"):
+        raise Refused("ORCA's OptTS takes no sides: wire neither, or have a program that does fill the step")
+    hessian = HESSIANS.get(options.get("hessian", "computed")) if step == "saddle-point" else ""
+    if hessian is None:
+        raise Refused(f"no first Hessian is called {options.get('hessian')!r}")
     # (a lone atom: its energy where it is)
     if step == "optimise" and len(elements_of(entry)) == 1:
         run = RUNS["energy"]
@@ -182,6 +201,8 @@ def orca_input(step, entry, options, cores):
         lines.append(f"%pal nprocs {int(cores)} end")
     if maxcore:
         lines.append(f"%maxcore {maxcore}")
+    if hessian:
+        lines.append(hessian)
     lines.append(f"* xyz {charge} {multiplicity}")
     for el, a in zip(elements_of(entry), entry["atoms"]):
         x, y, z = (float(a.get(k, 0.0)) for k in ("x", "y", "z"))
@@ -322,7 +343,8 @@ def path_input(entry, options, cores):
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
-    keep = keeps_wavefunction(options)
+    # (a saddle point's step offers no wavefunction kept: none written)
+    keep = keeps_wavefunction(options) and step != "saddle-point"
     memory = memory_of(options, m.get("cores"))
     jobs = []
     if step == "path-search":
@@ -354,7 +376,8 @@ def op_prepare(m):
         })
     if not jobs:
         raise Refused("nothing came in")
-    return {"jobs": jobs, **({"note": NUMERICAL_SAID} if numerical(step, options) else {})}
+    note = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
+    return {"jobs": jobs, **({"note": note} if note else {})}
 
 
 def output_name(entry):

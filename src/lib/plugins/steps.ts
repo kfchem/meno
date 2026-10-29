@@ -35,6 +35,7 @@ export const STEP_KINDS = [
   "compare-bonding",
   "take-frames",
   "path-search",
+  "saddle-point",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 

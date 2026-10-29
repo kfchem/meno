@@ -52,36 +52,78 @@ function unlike(start: SetEntry, end: SetEntry): string | null {
   return null;
 }
 
-/** Each start paired with an end as `pairing` says (`property`, the name matched on); or why they cannot be paired at all. */
-export function pairEntries(starts: readonly SetEntry[], ends: readonly SetEntry[], pairing: Pairing, property = ""): Paired {
-  if (!starts.length) return { why: "Nothing comes into Start" };
-  if (!ends.length) return { why: "Nothing comes into End" };
-  const made: { start: SetEntry; end?: SetEntry; why?: string }[] = [];
+/**
+ * What a kind's two inputs are called - each port's name, and what one of
+ * each is - and why two of them cannot be worked out together: a path's
+ * start and end (`unlike`), or a guess and one of its sides (`sideUnlike`).
+ */
+export type PairAs = { first: string; second: string; one: string; other: string; unlike: (a: SetEntry, b: SetEntry) => string | null };
+
+/** A path search's start and end. */
+export const PATH_PAIR: PairAs = { first: "Start", second: "End", one: "start", other: "end", unlike };
+
+/**
+ * Why a guess and one of its sides - `other`, "reactant side" - cannot be
+ * one saddle point's, taken by its program as a geometry beside it: other
+ * atoms, or another order of them; another charge or spin. None where they
+ * can: a side need be no optimisation, nor at any level.
+ */
+export const sideUnlike =
+  (other: string) =>
+  (guess: SetEntry, side: SetEntry): string | null => {
+    if (guess.atoms.length !== side.atoms.length || guess.atoms.some((a, i) => a.el !== side.atoms[i].el))
+      return `${named(guess)} and its ${other} ${named(side)} are not the same atoms in one numbering`;
+    if (speciesOf(guess) !== speciesOf(side)) return `${named(guess)} and its ${other} ${named(side)} are not of one charge and spin`;
+    return null;
+  };
+
+/** Which of the second each of the first is paired with, by their places - a list each, empty where it is paired with none, with why - or why none can be. */
+export type Matches = { ends: number[][]; why: (string | undefined)[] } | { why: string };
+
+/** Each of the first matched with the second as `pairing` says (`property`, the name matched on): by their places. */
+export function matchesOf(starts: readonly SetEntry[], ends: readonly SetEntry[], pairing: Pairing, property: string, as: PairAs): Matches {
+  if (!starts.length) return { why: `Nothing comes into ${as.first}` };
+  if (!ends.length) return { why: `Nothing comes into ${as.second}` };
   if (pairing === "order") {
-    if (starts.length !== ends.length) return { why: `Start holds ${starts.length} and End ${ends.length}: in order, each start is paired with the end in its place` };
-    starts.forEach((s, k) => made.push({ start: s, end: ends[k] }));
-  } else if (pairing === "each") {
-    for (const s of starts) for (const e of ends) made.push({ start: s, end: e });
-  } else {
-    const name = property.trim();
-    if (!name) return { why: "Name the property to pair them on" };
-    const matched = matchedOn(
-      starts.map((e, i) => entryOfSet(e, String(i))),
-      ends.map((e, i) => entryOfSet(e, String(i))),
-      name,
-      "End",
-    );
-    starts.forEach((s, k) => {
-      const m = matched[k];
-      made.push("index" in m ? { start: s, end: ends[m.index] } : { start: s, why: `${named(s)} is paired with no end: ${m.why}` });
-    });
+    if (starts.length !== ends.length) return { why: `${as.first} holds ${starts.length} and ${as.second} ${ends.length}: in order, each ${as.one} is paired with the ${as.other} in its place` };
+    return { ends: starts.map((_, k) => [k]), why: starts.map(() => undefined) };
   }
+  if (pairing === "each") return { ends: starts.map(() => ends.map((_, j) => j)), why: starts.map(() => undefined) };
+  const name = property.trim();
+  if (!name) return { why: "Name the property to pair them on" };
+  const matched = matchedOn(
+    starts.map((e, i) => entryOfSet(e, String(i))),
+    ends.map((e, i) => entryOfSet(e, String(i))),
+    name,
+    as.second,
+  );
+  return {
+    ends: starts.map((_, k) => ("index" in matched[k] ? [(matched[k] as { index: number }).index] : [])),
+    why: starts.map((s, k) => {
+      const m = matched[k];
+      return "index" in m ? undefined : `${named(s)} is paired with no ${as.other}: ${m.why}`;
+    }),
+  };
+}
+
+/** Each of the first paired with one of the second as `pairing` says (`property`, the name matched on), and checked as `as` says; or why they cannot be paired at all. */
+export function pairEntries(starts: readonly SetEntry[], ends: readonly SetEntry[], pairing: Pairing, property = "", as: PairAs = PATH_PAIR): Paired {
+  const m = matchesOf(starts, ends, pairing, property, as);
+  if ("ends" in m === false) return { why: (m as { why: string }).why };
+  const { ends: to, why: none } = m as { ends: number[][]; why: (string | undefined)[] };
   const entries: SetEntry[] = [];
   const refused: { entry: number; why: string }[] = [];
-  made.forEach((p, k) => {
-    entries.push(p.end ? { ...p.start, end: p.end } : { ...p.start });
-    const why = p.why ?? (p.end ? unlike(p.start, p.end) : null);
-    if (why) refused.push({ entry: k, why });
+  starts.forEach((start, k) => {
+    if (!to[k].length) {
+      refused.push({ entry: entries.length, why: none[k] ?? `${named(start)} is paired with no ${as.other}` });
+      entries.push({ ...start });
+      return;
+    }
+    for (const j of to[k]) {
+      const why = as.unlike(start, ends[j]);
+      if (why) refused.push({ entry: entries.length, why });
+      entries.push({ ...start, end: ends[j] });
+    }
   });
   return { entries, refused };
 }
