@@ -13,10 +13,11 @@ import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import type { LostText, PdfFind, PdfItem, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
+import Select from "../../controls/Select";
 import StructuresTableBody from "./workflow/StructuresTableBody";
 import { readAsTable } from "./workflow/entries";
 import { setName } from "./workflow/doers";
-import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
+import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, jobStateSaid, lostSaid, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
@@ -220,6 +221,16 @@ function Column({
   const setFilled = useEditor((s) => s.setColumnFilled);
   const [error, setError] = useState<string | null>(null);
   // (a Markdown text read formatted, or its source written)
+  // (the tabs' row, and its ends faded where tabs lie past them)
+  const tabRow = useRef<HTMLDivElement>(null);
+  const tabsFade = useTabsFade(tabRow);
+  // (the text shown, a step's log of several jobs: its jobs and the one it shows)
+  const jobsSeen = useEditor((st) => st.jobsSeen);
+  const logOf = shown?.of && "step" in shown.of ? shown.of : null;
+  const logJobs = logOf?.jobs && logOf.jobs.length > 1 ? { jobs: logOf.jobs, job: logOf.job ?? 0 } : null;
+  // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
+  const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
+  const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
@@ -235,7 +246,8 @@ function Column({
     // (the column's body, where a PDF is read, is the canvas's: see-through, the canvas drawing it under it)
     <aside aria-label="Texts" style={{ width }} className="h-full border-l border-gh-line flex flex-col">
       <header className="flex items-center gap-1 pl-2 pr-1.5 h-11 border-b border-gh-line bg-white">
-        <div role="tablist" aria-label="Texts" className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto">
+        {/* (its ends faded where tabs lie past them, so that it is seen there are more: TabsFade) */}
+        <div ref={tabRow} role="tablist" aria-label="Texts" className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto" style={tabsFade}>
           {/* (those read here: a text's sheet on the page, its tab closed, is not) */}
           {texts
             .filter((t) => t.reading !== false)
@@ -253,6 +265,17 @@ function Column({
             <Name key={`set-${b.id}`} name={setName(b, steps)} title={setName(b, steps)} chosen={b.id === table?.id} onShow={() => showSetTable(b.id)} onClose={() => stopReadingSetTable(b.id)} />
           ))}
         </div>
+        {/* (a step's log of several jobs: which of them it shows, chosen here - one tab for the step, not one for each job) */}
+        {shown && logJobs && (
+          <Select
+            label="Job"
+            value={String(logJobs.job)}
+            options={logJobs.jobs.map((id, k) => ({ value: String(k), label: `Job ${k + 1} of ${logJobs.jobs.length}${jobState(id) ? ` · ${jobState(id)}` : ""}` }))}
+            onChange={(v) => void store.getState().showStepLogJob(shown.id, Number(v))}
+            className="shrink-0 max-w-[11rem]"
+            variant="quiet"
+          />
+        )}
         {shown && markdown && (
           <button
             onClick={() => setShowsSource(store, shown.id, !source, shown.text)}
@@ -474,9 +497,61 @@ const AROUND = 40;
 
 /** A text's or a PDF's name along the column's top: shown by a click, closed by its cross. */
 /** A tab: a text's or a PDF's name, shown when pressed, closed by its cross - one that could not be read (`unread`) marked so. */
+/** How far a row's end fades where more lies past it, in pixels. */
+const FADE_PX = 16;
+
+/**
+ * The mask that fades a scrolled row's ends where more of it lies past
+ * them - neither, either or both - followed as it scrolls or changes size.
+ */
+function useTabsFade(row: React.RefObject<HTMLDivElement | null>): React.CSSProperties {
+  const [past, setPast] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = row.current;
+    if (!el) return;
+    const look = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setPast((p) => (p.left === left && p.right === right ? p : { left, right }));
+    };
+    look();
+    el.addEventListener("scroll", look, { passive: true });
+    const watch = new ResizeObserver(look);
+    watch.observe(el);
+    for (const c of el.children) watch.observe(c);
+    const kids = new MutationObserver(() => {
+      for (const c of el.children) watch.observe(c);
+      look();
+    });
+    kids.observe(el, { childList: true });
+    return () => {
+      el.removeEventListener("scroll", look);
+      watch.disconnect();
+      kids.disconnect();
+    };
+  }, [row]);
+  if (!past.left && !past.right) return {};
+  const mask = `linear-gradient(to right, ${past.left ? "transparent" : "black"} 0, black ${FADE_PX}px, black calc(100% - ${FADE_PX}px), ${past.right ? "transparent" : "black"} 100%)`;
+  return { maskImage: mask, WebkitMaskImage: mask };
+}
+
 function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: string; title: string; chosen: boolean; onShow: () => void; onClose: () => void; unread?: boolean }) {
+  // (chosen - a log just opened, say, its tab past the row's end - its row scrolled, eased, until it is seen whole: the row alone, nothing round it)
+  const tab = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = tab.current;
+    const row = el?.parentElement;
+    if (!chosen || !el || !row) return;
+    // (by the boxes on screen, not offsetLeft: holds if anything between them is positioned)
+    const at = el.getBoundingClientRect();
+    const left = at.left - row.getBoundingClientRect().left - row.clientLeft + row.scrollLeft;
+    const right = left + at.width;
+    const to = left < row.scrollLeft ? left - 4 : right > row.scrollLeft + row.clientWidth ? right - row.clientWidth + 4 : null;
+    if (to != null) row.scrollTo({ left: Math.max(0, to), behavior: "smooth" });
+  }, [chosen]);
   return (
     <div
+      ref={tab}
       role="tab"
       aria-selected={chosen}
       title={title}

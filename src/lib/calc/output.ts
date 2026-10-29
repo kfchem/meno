@@ -121,9 +121,9 @@ export type CalcInfo = {
   adopted?: number;
 };
 
-/** A program's imaginary frequencies as Meno keeps them: each a number below 0, in cm-1; none, where they are not that. */
+/** A program's imaginary frequencies as Meno keeps them: each a number below 0, in cm-1 - none judged (`[]`) as well as some, which is not "not judged"; nothing, where they are not that. */
 export function imaginaryOf(v: unknown): number[] | undefined {
-  return Array.isArray(v) && v.length && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
+  return Array.isArray(v) && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
 }
 
 /** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 382.6i cm-1". */
