@@ -905,6 +905,8 @@ export type StepRunning = {
   adopted?: Record<string, number>;
   /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
   over?: string;
+  /** What its plugin says of how it prepared its jobs, in plain words (programs `readNote`): said on its line when it ends. */
+  note?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
 };

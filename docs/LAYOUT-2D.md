@@ -475,6 +475,12 @@ rings, which lies on the lattice no way round and is set on it only by
 its bonds out (proline's carboxyl level, its ring symmetric about it) -
 the drawing takes the one that reads best (section 4).
 
+A molecule with no ring that can lie square is then turned the little way
+that brings its bonds out nearest the lattice. One drawn as its own mirror
+image is square by that mirror instead: N-bromosuccinimide is set with its
+N-Br upright and its two C=O alike either side. It is never tilted to bring
+one C=O onto the lattice at the other's cost.
+
 ## 4. Reading order
 
 - **The long axis level.** A drawing is wider than it is tall, and its
@@ -716,8 +722,13 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   with three groups at the end of a single bond in no ring (a ring through
   a metal aside) is such an axis's (`readStereo`) - but for an S, Se, Te,
   P, As or Sb, its fourth group a lone pair (a sulfoxide's S, a
-  phosphine's P): that is a stereocentre, which Clean-up leaves as drawn,
-  since the engine lays out none with a lone pair.
+  phosphine's P): that is a stereocentre.
+- A stereocentre whose fourth group is a lone pair - a sulfoxide's or a
+  sulfonium's S, a phosphine's P, an arsine's As - is drawn as one with its
+  H left out: one wedge, the lone pair the fourth, undrawn group, and read
+  back from it so (`readStereo`). A selenoxide's Se, a telluride's Te or a
+  stibine's Sb is not read from its wedge, as no reader reads one, so
+  Clean-up leaves such a drawing as it is (2026-10-29).
 - A cage drawn in perspective shows its stereochemistry by the drawing
   itself, with no wedges; what it shows is read back from the solid the
   cage is drawn from, fitted to where its atoms are and how deep, and the

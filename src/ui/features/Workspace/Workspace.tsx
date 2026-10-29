@@ -172,7 +172,7 @@ import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
-import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
+import { FollowCover, PAGE_HTML_LAYER, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
 import { useKeepUnselected } from "./hooks/useKeepUnselected";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
@@ -205,7 +205,7 @@ import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt, clipItems } from "./utils/copyPaste";
-import { putDownSmiles } from "./utils/quickAddSmiles";
+import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
@@ -1902,6 +1902,10 @@ function WorkspaceContent({
               const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
               if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
             }}
+            onNamed={(label) => {
+              // (a molecule the dictionary has, drawn from it - no plugin asked - and put down as a SMILES read is: chem/resolve)
+              putDownSmiles(store, quickAdd, namedDrawn(label));
+            }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
@@ -2711,7 +2715,7 @@ function WorkspaceContent({
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
-      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={pageHtmlLayerStyle(cover)} />
+      <div ref={setHtmlLayer} data-presenting={talking || undefined} className={`absolute inset-0 pointer-events-none ${PAGE_HTML_LAYER}`} style={pageHtmlLayerStyle(cover)} />
       {/* where a guide's step points at a structure: kept over it (GuideStructure) */}
       <div ref={guideStructure} data-guide="structure" className="absolute left-0 top-0 pointer-events-none" style={{ display: "none" }} />
       {/* what a talk is given on: over everything while it is (docs/PRESENTING.md) */}

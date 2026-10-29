@@ -72,6 +72,7 @@ import { readMolfile } from "../../../../lib/chem/ctfile";
 import { setEntries, setMembers, type SetEntry } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind, isSetKind } from "../workflow/kinds";
+import { PAIRED } from "../workflow/meno";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
 import { measured } from "../../../../testing/timeouts";
@@ -421,12 +422,14 @@ const chem = {
  * Render gives pictures, and Chart and Energy diagram charts, which have no charge; a kind that takes nothing in (Generate) is given no
  * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
  * alone. Species sets them, as it is asked, and Combine makes the parts one complex, its charge and multiplicity theirs
- * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test).
+ * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test). Merge, Re-bond and
+ * Compare bonding take two inputs, which this wires one of: each against its own (workflow/pairedSteps.test) - Merge and Compare
+ * bonding give back the entries that came in, Re-bond its bonding entry's charge and multiplicity.
  */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine" && !PAIRED.includes(kind));
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -512,7 +515,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
     // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

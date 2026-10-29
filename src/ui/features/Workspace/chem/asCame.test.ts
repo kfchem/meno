@@ -21,30 +21,32 @@ describe("a plugin's drawing that cannot be laid out", () => {
     expect(asCameSaid(drawn)).toBe("Drawn as it came: it could not be laid out without putting one atom on another.");
     // (and what goes onto the page carries none of it)
     expect("asCame" in withoutStereoOpen(drawn)).toBe(false);
-    // (a chiral sulfoxide, wedged at its S - pasted, drawn by no one crossed: said plainly, of its stereochemistry,
+    // (a selenoxide, wedged at its Se - a centre no reader reads from a wedge: said plainly, of its stereochemistry,
     // never of how wedges are read)
-    const sulfoxide = [
-      "",
-      "  test",
-      "",
-      "  5  4  0  0  0  0  0  0  0  0999 V2000",
-      "    0.0000    0.0000    0.0000 S   0  0  0  0  0  0  0  0  0  0  0  0",
-      "    0.0000    1.5000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
-      "    1.2990   -0.7500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
-      "   -1.2990   -0.7500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
-      "   -2.5981    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
-      "  1  2  2  0",
-      "  1  3  1  1",
-      "  1  4  1  0",
-      "  4  5  1  0",
-      "M  END",
-      "",
-    ].join("\n");
-    // (until a stereocentre with a lone pair can be laid out - the Clean-up engine work)
-    const s = await drawingOf(sulfoxide);
+    const wedgedAt = (el: string) =>
+      [
+        "",
+        "  test",
+        "",
+        "  5  4  0  0  0  0  0  0  0  0999 V2000",
+        `    0.0000    0.0000    0.0000 ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`,
+        "    0.0000    1.5000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+        "    1.2990   -0.7500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+        "   -1.2990   -0.7500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+        "   -2.5981    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0",
+        "  1  2  2  0",
+        "  1  3  1  1",
+        "  1  4  1  0",
+        "  4  5  1  0",
+        "M  END",
+        "",
+      ].join("\n");
+    const s = await drawingOf(wedgedAt("Se"));
     expect(s.asCame).toBeDefined();
     expect(asCameSaid(s)).toBe("Drawn as it came: it could not be laid out keeping its stereochemistry.");
     expect(asCameSaid(s)).not.toMatch(/wedge|crossed|lone pair|Clean-up/);
+    // (a chiral sulfoxide, wedged at its S, is laid out, its centre kept: it says nothing)
+    expect(asCameSaid(await drawingOf(wedgedAt("S")))).toBeNull();
     // (one laid out says nothing)
     expect(asCameSaid(await drawingOf(roundMolblock("CCCC")))).toBeNull();
   });

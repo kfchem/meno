@@ -1,14 +1,14 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Role3D, Style3D } from "../../../lib/chem/style3d";
 import { setCursor } from "../../theme/cursors";
 import KeyLight3D from "../Workspace/components/KeyLight3D";
 import Molecule3DView from "../Workspace/components/Molecule3DView";
-import type { Turn3D } from "../Workspace/store/types";
 import { watchShaderErrors } from "../Workspace/utils/menoShader";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
+import { idleClockWhileSeen } from "./idleClock";
 import { markTurning } from "./sampleTurn";
 
 // --- Preview -------------------------------------------------------------------
@@ -99,7 +99,8 @@ function Framing({ style, look }: { style: Style3D; look: Role3D }) {
 
 /** The sample, turned by a drag as a molecule on the canvas is - at the speed, and with the coasting, the style sets. */
 function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: Role3D; onTap?: () => void; turnOn: "anywhere" | "molecule"; idle: boolean }) {
-  const [turn, setTurn] = useState<Turn3D>(SAMPLE_TURN);
+  // (how it is turned: read by the view as each frame is drawn - a turn, by hand or its own, draws the frame alone)
+  const turn = useRef(new THREE.Quaternion(...SAMPLE_TURN));
   const { gl, invalidate, camera, scene, raycaster } = useThree();
   const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
   const styleRef = useRef(style);
@@ -111,11 +112,14 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
   const own = useRef(1);
   // (seen: on the screen, and the window in front - drawn not a frame more while it is not)
   const seen = useRef(true);
-  const turnBy = (axis: THREE.Vector3, angle: number) =>
-    setTurn((was) => {
-      const q = new THREE.Quaternion(...was).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
-      return [q.x, q.y, q.z, q.w];
-    });
+
+  const turnBy = useCallback(
+    (axis: THREE.Vector3, angle: number) => {
+      turn.current.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
+      invalidate();
+    },
+    [invalidate],
+  );
 
   useEffect(() => {
     const dom = gl.domElement;
@@ -187,18 +191,31 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       dom.removeEventListener("pointerup", onUp);
       dom.removeEventListener("pointercancel", onUp);
     };
-  }, [gl, invalidate, camera, scene, raycaster, turnOn]);
+  }, [gl, invalidate, camera, scene, raycaster, turnOn, turnBy]);
 
-  // seen or not: on the screen (an IntersectionObserver) and in a window in front; seen again, drawn again
+  // seen or not: on the screen (an IntersectionObserver) and in a window in front; seen again, drawn again. Its own
+  // turn - slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again eased
+  // after - is stepped by its own clock (idleClock) while it is seen, on every other frame, not each: a step drawn asks
+  // for a frame, and the screen's every frame would be drawn again. With no slot seen, no clock at all
   useEffect(() => {
     if (!idle) return;
     const dom = gl.domElement;
     let onScreen = true;
+    const clock = idleClockWhileSeen((d) => {
+      if (held.current || spin.current) {
+        own.current = 0;
+        return;
+      }
+      own.current = 1 - (1 - own.current) * Math.exp(-d / IDLE_TAU);
+      turnBy(UPRIGHT, IDLE * own.current * d);
+    });
     const now = () => {
       const was = seen.current;
       seen.current = onScreen && document.visibilityState === "visible";
+      clock.seen(seen.current);
       if (seen.current && !was) invalidate();
     };
+    now();
     const watch = new IntersectionObserver((es) => {
       onScreen = es.some((x) => x.isIntersecting);
       now();
@@ -208,21 +225,9 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     return () => {
       watch.disconnect();
       document.removeEventListener("visibilitychange", now);
+      clock.stop();
     };
-  }, [idle, gl, invalidate]);
-
-  // its own turn, slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again eased after
-  useFrame((_, dt) => {
-    if (!idle || !seen.current) return;
-    const d = Math.min(dt, 1 / 20);
-    if (held.current || spin.current) {
-      own.current = 0;
-      return;
-    }
-    own.current = 1 - (1 - own.current) * Math.exp(-d / IDLE_TAU);
-    turnBy(UPRIGHT, IDLE * own.current * d);
-    invalidate();
-  });
+  }, [idle, gl, invalidate, turnBy]);
 
   // let go while turning, it turns on, slowing as the style says
   useFrame((_, dt) => {
@@ -240,7 +245,8 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
       style={style}
       look={look}
       frame={0}
-      turn={turn}
+      turn={SAMPLE_TURN}
+      turning={turn}
       lit={0}
       selected={false}
       chosen={NONE}

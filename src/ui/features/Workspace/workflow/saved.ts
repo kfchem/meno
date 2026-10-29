@@ -309,6 +309,7 @@ function readRunning(v: unknown): StepRunning | undefined {
   }, "job");
   const kind = (r as { kind?: unknown }).kind;
   const over = (r as { over?: unknown }).over;
+  const note = (r as { note?: unknown }).note;
   const adopted = adoptedIn((r as { adopted?: unknown }).adopted);
   // (those its plugin refused as it prepared the others' jobs: kept to be said failed when it ends)
   const refused = readRefused({ refused: (r as { refused?: unknown }).refused }, Number.MAX_SAFE_INTEGER);
@@ -320,6 +321,7 @@ function readRunning(v: unknown): StepRunning | undefined {
         jobs,
         ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}),
         ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}),
+        ...(typeof note === "string" && note ? { note: note.slice(0, 300) } : {}),
         ...(refused.length ? { refused } : {}),
         ...(adopted ? { adopted } : {}),
       }

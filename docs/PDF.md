@@ -740,6 +740,7 @@ Built:
   - the view moves by half as much, eased, so that what was in the middle of what could be seen stays there;
   - fitting, pasting and bringing a PDF into view use the part it does not cover;
   - what is on the page in HTML (a step's card, words being written) is cut off where the column begins.
+  - that HTML is laid in a layer clipped to the canvas, not hidden past it (`overflow: clip`): no box that can be scrolled, so a focus or a selection never moves what it holds off where the page has it. A frames chip's card opened past the canvas's foot stays where it hangs, below its molecule, and runs past the edge (2026-10-29).
 - **Reading a PDF there.** A double-click on its stack, or *Read* in its menu, opens it in the column. Its page rises from the stack, growing to the column's width as the column opens. Closed by its ×, or the column hidden, the page lifts from where it is and goes back down to the stack.
   - A PDF is read in three quarters of the canvas, a page being for reading; a text keeps the column's narrower width. Each keeps its own width once dragged, up to 85 % of the canvas.
   - The column hidden on a PDF and shown again (*Show texts*) opens on it, its page rising again.

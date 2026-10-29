@@ -3,9 +3,11 @@ import { PAGE_SIZED } from "../utils/pageScale";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
-import { ResultGroups, type CardGroups } from "./PointedCard3D";
+import { ResultGroups, type CardGroups, type Fold } from "./PointedCard3D";
 import { EASED } from "../../../theme/motion";
+import { GROW_MS, SHOW_MS, useEasedTo, useOpening } from "../../../theme/opening";
 import { barsAbove } from "../utils/barsAbove";
+import { chipShiftOf, chipWidthOf } from "../utils/chipWidth";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 import { imaginaryWords } from "../../../../lib/calc/output";
@@ -16,6 +18,8 @@ import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
 const WIDTH = 196;
 const BARS = 30;
 const SIDE = 10;
+/** The room either side of what its details say, in pixels. */
+const DETAILS_SIDE = 10;
 /** Past this many frames the energies have more room; narrower than this, a bar gives way to a profile. */
 const MANY = 60;
 const WIDE = 300;
@@ -24,8 +28,8 @@ const LEAST_BAR = 3;
 const LINGER_MS = 400;
 /** How far below its molecule it hangs, in page pixels (utils/molecule3d, which places it). */
 const GAP = FRAMES_CHIP_GAP;
-/** How long it stays over the rest once shut, while it shrinks back: the length of its own easing, and a little more. */
-const SHUTTING_MS = 260;
+/** How long it stays over the rest once shut, while its lines go and it shrinks back: the length of its own easing, and a little more. */
+const SHUTTING_MS = SHOW_MS + GROW_MS + 100;
 
 /** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
 function share(p: number): string {
@@ -203,6 +207,12 @@ export function FramesChip({
   }, [opened]);
   // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
   const reading = opened;
+  // (opened, it grows to what it opens to and then its new lines come in; shut, they go first - theme/opening)
+  const read = useOpening(reading);
+  // (how it was made, folded under its name in the details: opened the same way, the chip growing to its rows)
+  const [madeOpen, setMadeOpen] = useState(false);
+  const madeAt = useOpening(madeOpen);
+  const [madeWidth, setMadeWidth] = useState(0);
   useEffect(() => {
     onOpened?.(opened);
   }, [opened, onOpened]);
@@ -232,6 +242,18 @@ export function FramesChip({
     measure();
     watchDetails.current = new ResizeObserver(measure);
     watchDetails.current.observe(el);
+  }, []);
+  const watchMade = useRef<ResizeObserver | null>(null);
+  const madeMeasured = useCallback((el: HTMLDivElement | null) => {
+    watchMade.current?.disconnect();
+    watchMade.current = null;
+    if (!el) return;
+    const measure = () => {
+      if (el.offsetWidth) setMadeWidth(el.offsetWidth);
+    };
+    measure();
+    watchMade.current = new ResizeObserver(measure);
+    watchMade.current.observe(el);
   }, []);
   const watch = useRef<ResizeObserver | null>(null);
   const said = useCallback((el: HTMLDivElement | null) => {
@@ -286,6 +308,30 @@ export function FramesChip({
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => unitsHeld(chipLine([about ?? "", energy != null ? absolute(energy) : ""], results));
+  // How wide it is: as wide as what it says, or its bars, eased as that
+  // changes; opened, as wide as its details as well, and how it was made
+  // with them once that is opened - grown to as they open, wide and tall
+  // together, and back as they shut, after their lines have gone. (Frame
+  // by frame, from where each part is: a CSS transition of the whole
+  // chased what was itself still widening, and was still growing as the
+  // lines came in.)
+  // (a set's bars are what it opens to, with its details; a single geometry's
+  // chip, which has none, is as wide as its slider's room only pointed at)
+  const shutWidth = useEasedTo((single && full ? Math.max(width, saidWidth) : saidWidth) + 2 * SIDE);
+  const openWidth = useEasedTo(single ? 0 : Math.max(width, saidWidth) + 2 * SIDE);
+  const detailsOwn = useEasedTo(details.length > 0 ? detailsWidth : 0);
+  const widths = {
+    shut: shutWidth,
+    open: openWidth,
+    details: detailsOwn,
+    made: details.length > 0 ? madeWidth + 2 * DETAILS_SIDE : 0,
+    grown: read.grown,
+    madeGrown: madeAt.grown,
+  };
+  const chipWidth = chipWidthOf(widths);
+  // (how it was made opening, it widens to the right only: its toggle, at its left, stays where it was pressed)
+  const chipShift = chipShiftOf(widths);
+  const fold: Fold = { open: madeOpen, at: madeAt, toggle: () => setMadeOpen((o) => !o), measured: madeMeasured };
   // (how many device pixels one of its own pixels is drawn as - the page's scale, and the screen's - that its bars are laid on whole ones:
   //  followed each frame while it is open)
   const chipEl = useRef<HTMLDivElement>(null);
@@ -309,6 +355,7 @@ export function FramesChip({
     measure();
     return () => cancelAnimationFrame(id);
   }, [full]);
+  const drawnPx = devicePx ?? (typeof window === "undefined" ? 1 : window.devicePixelRatio);
   return (
     <div
       ref={root}
@@ -331,18 +378,19 @@ export function FramesChip({
           <div
             ref={chipEl}
             // (shut, it lets the page show through a little; open, nothing shows through it - what lies under it would read as part of it)
-            className={`rounded-2xl border border-gh-line shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity,background-color] ${full || reading ? "bg-white" : "bg-white/85 backdrop-blur"}`}
+            className={`rounded-2xl border border-gh-line shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[opacity,background-color] ${full || reading ? "bg-white" : "bg-white/85 backdrop-blur"}`}
             style={{
               ...EASED,
               opacity: shown ? (full ? 1 : 0.75) : 0,
               pointerEvents: shown ? "auto" : "none",
-              width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
+              // (as wide as what it shows, and no wider: the details' own room either side is the chip's)
+              width: chipWidth,
+              // (on whole device pixels, that its bars stay sharp)
+              transform: chipShift ? `translateX(${Math.round(chipShift * drawnPx) / drawnPx}px)` : undefined,
             }}
           >
-            <div
-              className="grid transition-[grid-template-rows,opacity]"
-              style={{ ...EASED, gridTemplateRows: full ? "1fr" : "0fr", opacity: full ? 1 : 0 }}
-            >
+            {/* (a set's bars and slider: opened with its details, and the same way - a single geometry has none) */}
+            <div className="grid" style={{ gridTemplateRows: `${read.grown}fr`, opacity: read.shown }}>
               <div className="overflow-hidden flex flex-col items-center" style={{ width }}>
                 {/* (what the bars are, named over them) */}
                 {above && !single && (
@@ -356,7 +404,7 @@ export function FramesChip({
                     frame={frame}
                     pointed={pointed}
                     width={width}
-                    devicePx={devicePx ?? (typeof window === "undefined" ? 1 : window.devicePixelRatio)}
+                    devicePx={drawnPx}
                     onPoint={setPointed}
                     onFrame={onFrame}
                   />
@@ -419,14 +467,18 @@ export function FramesChip({
             {/* (what the calculation found, in the chip itself: it grows downward, away from the molecule, and back -
                 nothing covers the structure) */}
             {details.length > 0 && (
-              <div
-                className="grid w-full transition-[grid-template-rows,opacity]"
-                style={{ ...EASED, gridTemplateRows: reading ? "1fr" : "0fr", opacity: reading ? 1 : 0 }}
-              >
-                <div className="overflow-hidden flex justify-center">
+              <div className="grid w-full" style={{ gridTemplateRows: `${read.grown}fr`, opacity: read.shown }}>
+                {/* (at the chip's left, what is past its right edge cut there as it widens: never centred, cut at both ends, ahead of the chip - LOOK, 2026-10-28;
+                    at its left too where they fit, under the bars' name: centred, how it was made's toggle went from under the pointer as it opened) */}
+                <div className="overflow-hidden flex justify-start">
                   {/* (never shrunk to the chip as it widens: measured so, its width would follow the chip's, a frame behind, and the chip would creep after it) */}
-                  <div ref={detailed} className="w-max max-w-[20rem] shrink-0 px-2.5 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums">
-                    <ResultGroups groups={details} />
+                  <div
+                    ref={detailed}
+                    className="w-max max-w-[20rem] shrink-0 pt-1 pb-1 text-left text-[11px] leading-[16px] tabular-nums"
+                    style={{ paddingInline: DETAILS_SIDE }}
+                  >
+                    {/* (its one folded group, how it was made: opened as the chip says, no wider than the details' most, 20rem, less their sides) */}
+                    <ResultGroups groups={details} fold={fold} most="18.75rem" />
                   </div>
                 </div>
               </div>

@@ -341,8 +341,11 @@ larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
 
-**A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
-first press only: the second of a double-click held still waits to be
+**A long press** is a press held still for as long as Settings says
+(*General*, *A long press*: shorter 0.22 s, normal 0.26 s, longer 0.4 s;
+`LONG_PRESSES`, `longPressMs`; 0.32 s until 2026-10-28, when the maintainer
+asked for about a quarter of a second and a choice), on the first press
+only: the second of a double-click held still waits to be
 dragged - on a bond as on an atom or empty space (until 2026-10-13 a
 bond's second press began one: `pressOnBond`). It is counted while the button is held.
 As it is held, the selection's shade spreads out from the atom along the
@@ -400,7 +403,22 @@ brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
 an atom and an aromatic one), an H written as an atom ("H is left out of
 a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
-aromatic ring that cannot alternate. Drawn once however fast Enter is pressed
+aromatic ring that cannot alternate. A molecule the dictionary has - a
+reagent, a formula read by rule, a ligand bound only by pairs it lends:
+DMF, Et3N, PdCl2, THF, typed as written or in small letters (dmf,
+et3n), as a label is given its case on the canvas; a formula in capitals
+(ET3N) is not, its elements' case being what it says - is drawn from the
+dictionary, as the canvas draws its label out, with no plugin asked; its
+name - or, for a formula, its label - and formula are said under the
+field as it is typed (a label that is the formula itself, PdCl2, once). Where the text is that and a SMILES too - NBS,
+BrCN - both are offered there, the SMILES first (the field is for
+SMILES), and Enter draws the one chosen, by a
+click or the up and down arrows; never one of them without the other
+shown. A SMILES alone is drawn as before, nothing said under it. Text is
+read as a structure by one reader wherever it is typed (`chem/resolve`):
+here as a whole molecule, in Enumerate's lists and Substituents' groups
+as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
+an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
@@ -611,6 +629,14 @@ Both go together, because both touch every layer.
   it; a journal's keeps its spacing exactly, as its specification has it
   (2026-10-27), and a style saved before the setting is drawn at the
   spacing.
+- **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
+  atom at its wide end in Meno's own style, the bonds on from the atom
+  starting there on their own (the maintainer, 2026-10-29). In the journals'
+  styles it reaches the atom: none of their specifications says otherwise.
+  The setting is "Hashed wedge: widest hash" (At the atom, Short of the
+  atom). At a label the hashes stop at the label in every style. A style
+  saved before the setting reaches the atom, as it was drawn then; a
+  picture draws it as the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
   is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
@@ -1510,8 +1536,11 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or on an atom whose fourth group is a lone pair (a sulfoxide's
-     S), which the engine has no way to take - rather than lose it. A wedge
+     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
+     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
+     sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
+     read from its wedge and laid out like any other, on one wedge
+     (2026-10-29). A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an

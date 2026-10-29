@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { longPressMs } from "../longPress";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -8,7 +9,7 @@ import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
 import { carriedByCycle, CycleChange, CycleEase, cyclePointed, cycleThings, membersOn, thingKey } from "../utils/cycles";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { COLORS } from "../../../theme/colors";
 import ReactionArrow2D from "./ReactionArrow2D";
 import { useDrawnZoom } from "./drawnLayoutContext";
@@ -128,7 +129,7 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
       s2.clearSel();
       s2.selectCycles([c.id]);
       move(ev);
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     const onMoveDrag = (mv: PointerEvent) => {
       if (moved || Math.hypot(mv.clientX - from.x, mv.clientY - from.y) < CLICK_PX) return;
       moved = true;
