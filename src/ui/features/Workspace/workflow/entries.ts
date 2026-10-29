@@ -622,6 +622,8 @@ export type SetEntry = {
    */
   calc?: CalcInfo;
   keep?: Kept;
+  /** The end it is paired with, where it is the start of a pair a step of two inputs works out (workflow/pairs: Path search's). */
+  end?: SetEntry;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -774,9 +776,24 @@ export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUn
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
 export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
 
-/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
+/** What a path search writes on each of its path's frames (ORCA's worker: `PATH_FRAME`), and on the point it refined. */
+export const PATH_FRAME = "path.frame";
+export const REFINED_SAID = "highest point refined";
+
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export function refinedFrame(m: Pick<Molecule3D, "calc">): number | null {
+  const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
+  if (!said || said.on !== "frames") return null;
+  const k = said.values.indexOf(REFINED_SAID);
+  return k >= 0 && said.values.lastIndexOf(REFINED_SAID) === k ? k : null;
+}
+
+/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, its path going on past it. */
+const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? n - 1;
+
+/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
-  (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
+  (m.imaginary?.length === n ? m.imaginary[f] : f === calcFrame(m, n) ? m.calc?.imaginary : undefined) ?? undefined;
 
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers", frames?: (m: Molecule3D) => readonly number[]): SetEntry[] {
   const out: SetEntry[] = [];
@@ -820,7 +837,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
-        ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        ...(m.calc ? { calc: f === calcFrame(m, n) ? m.calc : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
