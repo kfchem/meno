@@ -32,7 +32,7 @@ import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wire
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -374,7 +374,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!step) return;
     const before = new Set((d.molecules3d ?? []).map((m) => m.id));
     // (what it did before kept among its runs)
-    if (!worked.length && !asideDrawn.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
+    // (nothing it gave and nothing set aside: its run alone - those that failed out of its Failed exit even where none was done,
+    //  for a run again to start from)
+    if (!worked.length && !aside.length && !asideDrawn.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
     const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said, ...(asideDrawn.length ? { asideDrawn } : {}) };
     const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
     doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
@@ -1339,6 +1341,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       //  for its Failed exit as it came in; one that came in changed while it ran, counted alone)
       const failures: Failure[] = [];
       const failedOnes: Worked[] = [];
+      // (those that stopped and left where they got to, out of Failed: something to go on with - Runs again)
+      let reached = 0;
       const fails = (these: readonly (SetEntry | undefined)[], kind: FailureKind, why: string) => {
         for (const e of these) {
           failures.push({ kind, why });
@@ -1407,7 +1411,20 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           continue;
         }
         if ("why" in said) {
-          fails(mine, said.kind ?? "failed", said.why);
+          // (a run that stopped: where its plugin says to, what it wrote read for the geometry it reached alone - its entry
+          //  out of Failed there, its way there as frames from where it came in, no energy of it a result; one whose
+          //  writing holds no geometry, as it came in)
+          for (const [i, r] of (said.partial ?? []).entries()) {
+            const text = "log" in r ? log : files[r.file];
+            const read = text ? await readWithReaders(r, text) : null;
+            const at = read && typeof read !== "string" ? stoppedAt(kind, mine[i], read.output, read.readers, read.source) : null;
+            if (at) {
+              gave(mine[i], { ...at, failed: { kind: said.kind ?? "failed", why: said.why } });
+              reached++;
+            }
+            else fails([mine[i]], said.kind ?? "failed", said.why);
+          }
+          if (!said.partial) fails(mine, said.kind ?? "failed", said.why);
           continue;
         }
         // (an output for Meno's readers: read as one opened is, and kept as it is)
@@ -1469,13 +1486,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       });
       // (done where anything was: those it could not do go out of its Failed exit, counted by why, and what follows
       //  runs on what was done - failed only where nothing was, saying why in the program's own words)
-      const ok = worked.length > 0;
+      // (done where anything was - or where a run that stopped left the geometry it reached, for a run again to start
+      //  from: a step after it starts there, never running this one again first)
+      const ok = worked.length > 0 || reached > 0;
       // (a search says how many conformers it found, of how many compounds)
       const found =
         kind === "conformers"
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
       const warned = worked.filter((w) => w.calc?.warnings?.length).length;
+      // (those it started from a failed run's geometry - Runs again: said, as its start was no result)
+      const restarted = entries.filter((e) => e?.failed).length;
       // (jobs whose key ran to the end before: not run again, what they gave taken up again - said, counted)
       const again = run.jobs.filter((j) => j.reused).length;
       const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
@@ -1483,7 +1504,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const said = `${
         !ok && failures.length && total === 1
           ? failures[0].why
-          : [...(ok ? [found] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : [])].join(" \u00b7 ")
+          : [...(ok ? [found] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
       }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.note && ok ? ` \u00b7 ${run.note}` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)

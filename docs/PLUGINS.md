@@ -824,6 +824,14 @@ The same for every plugin and for Meno's own parts:
     step's *Failed* exit with its why. A step whose every entry is
     refused, or whose options cannot be done, is refused as a whole, as
     before (an error);
+  - `collect` may answer that a job as a whole stopped, `{"why": "..."}`,
+    and add what to read of what it wrote, one for each entry, as
+    `read` says it - `"partial": [{"kind": "orca", "log": true, "name":
+    "water.out"}]` - where the run stopped once under way: Meno reads it
+    for the geometry the run reached alone, the entry going out of
+    *Failed* there, its frames from where it came in, no energy of it a
+    result (WORKFLOWS.md, *Runs again*). ORCA's and Gaussian's plugins
+    say so for an optimisation;
   - `collect` may answer, for one entry of a job, why that entry alone
     failed - `{"why": "...", "kind": "no-geometry"}` in its place among
     the outputs - the others taken as they are. A `kind` is one of

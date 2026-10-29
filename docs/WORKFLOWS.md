@@ -2075,6 +2075,40 @@ them again*; the maintainer's rulings of 2026-10-22):
 A workspace saved before this opens as it was: a calculation in it has
 no *Failed* set until it next runs, when it is given one.
 
+### Runs again (2026-10-30)
+
+A run that stopped is run again by a drawn chain, as case F's step 38
+has it (WORKFLOWS-FOUNDATION.md): *Failed* → a calculation again, its
+options holding the remedy, merged with what was done. What Meno does
+for it:
+
+- **Where a stopped optimisation got to.** Where the run stopped once
+  under way (ORCA's log says *GEOMETRY OPTIMIZATION CYCLE*, Gaussian's
+  *Berny optimization*), its plugin says to read what it wrote, and Meno
+  does: the entry goes out of *Failed* at the last geometry the run
+  reached, its way there as frames beginning with the geometry it came
+  in with - so *Take frames*' *first* starts it again from the beginning
+  (a fault of the machine: memory, a floating point exception) and its
+  *last* from where it stopped (an SCF that did not converge, a step the
+  optimiser could not take). A run that stopped before it was under way
+  goes out as it came in.
+- **Never a result.** Its frames carry no energies - the run's log keeps
+  them - and the entry stays marked failed, so no step takes anything of
+  it for a value, until a step succeeds from it.
+- **A step that takes it starts from its geometry alone**, its old
+  energy, calculation and mark dropped; its line says so: *started from a
+  failed run's geometry*.
+- **A step whose stopped runs left where they got to is done**, though
+  none finished: a step after it starts there, never running this one
+  again first. One that left nothing is failed, as before.
+- **Why it failed is something to select on**: `failure`, Meno's own name
+  (no property of the chemist's takes it), its program's words - *ORCA
+  finished by error termination in SCF* - for a *Filter* to send each
+  kind of failure its own way.
+- **The remedy is the chemist's**: another step's options (another SCF
+  algorithm, force constants computed first, more steps), saved as a part
+  with the chain and put down again where wanted.
+
 ### Where a result set goes, and how many structures it shows (2026-10-23)
 
 A generative chain - *Generate*, *Check structures*, *Stereoisomers*,

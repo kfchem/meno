@@ -258,28 +258,11 @@ function surfacesOf(v: unknown): ToSurfaces | null {
   return { name, rows };
 }
 
-/**
- * What a plugin read back of a job: an output for each of its entries, in
- * Meno's own form - or, for each, an output for Meno's readers to read
- * (ORCA's, Gaussian's: a program installed separately), or surfaces in
- * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
- * An output may be why that entry alone failed (`{why, kind}`: its kind
- * one of core's, else `failed` - its words kept), the rest of the job's
- * taken as they are.
- */
-export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind } {
-  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown } | null;
-  // (the job as a whole did not give what it was for: its program's words, as its plugin read them)
-  if (typeof r?.why === "string") return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error" };
-  if (r?.surfaces !== undefined) {
-    if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
-    const surfaces = r.surfaces.map(surfacesOf);
-    return surfaces.every((s): s is ToSurfaces => s != null) ? { surfaces } : { why: "It said to read what Meno cannot" };
-  }
-  if (r?.read !== undefined) {
-    if (!Array.isArray(r.read) || r.read.length !== count) return { why: "It read back nothing for it" };
-    const read: ToRead[] = [];
-    for (const x of r.read as Record<string, unknown>[]) {
+/** What a plugin said to read, one for each entry, each its kind and where (a file, or the job's log); or why that cannot be read. */
+function readsOf(list: unknown, count: number): { read: ToRead[] } | { why: string } {
+  if (!Array.isArray(list) || list.length !== count) return { why: "It read back nothing for it" };
+  const read: ToRead[] = [];
+  for (const x of list as Record<string, unknown>[]) {
       const kind = typeof x?.kind === "string" && KIND_ID.test(x.kind) ? x.kind : null;
       const file = typeof x?.file === "string" && inside(x.file) ? x.file : null;
       const name = typeof x?.name === "string" && inside(x.name) ? x.name : file;
@@ -292,10 +275,35 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
             : null;
       if (!kind || !name || (!file && x?.log !== true) || wavefunction === null) return { why: "It said to read what Meno cannot" };
       read.push({ ...(file ? { kind, name, file } : { kind, name, log: true as const }), ...(wavefunction ? { wavefunction } : {}) });
-    }
-    return { read };
   }
+  return { read };
+}
+
+/**
+ * What a plugin read back of a job: an output for each of its entries, in
+ * Meno's own form - or, for each, an output for Meno's readers to read
+ * (ORCA's, Gaussian's: a program installed separately), or surfaces in
+ * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
+ * An output may be why that entry alone failed (`{why, kind}`: its kind
+ * one of core's, else `failed` - its words kept), the rest of the job's
+ * taken as they are.
+ */
+export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind; partial?: ToRead[] } {
+  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown; partial?: unknown } | null;
+  // (the job as a whole did not give what it was for: its program's words, as its plugin read them - and, where it says to,
+  //  what the run wrote, read for the geometry it reached alone: one it cannot read leaves the failure as it is)
+  if (typeof r?.why === "string") {
+    const partial = r.partial === undefined ? null : readsOf(r.partial, count);
+    return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error", ...(partial && !("why" in partial) ? { partial: partial.read } : {}) };
+  }
+  if (r?.surfaces !== undefined) {
+    if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
+    const surfaces = r.surfaces.map(surfacesOf);
+    return surfaces.every((s): s is ToSurfaces => s != null) ? { surfaces } : { why: "It said to read what Meno cannot" };
+  }
+  if (r?.read !== undefined) return readsOf(r.read, count);
   if (!Array.isArray(r?.outputs) || r.outputs.length !== count) return { why: "It read back nothing for it" };
+
   const outs: (ReaderOutput | Failure)[] = [];
   for (const o of r.outputs as ReaderOutput[]) {
     // (that entry alone failed, saying why)
@@ -326,6 +334,12 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * the new one reads again, or is no longer so.
  */
 const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+
+/** A failed run's entry as a step starts from it (docs/WORKFLOWS.md, *Runs again*): its geometry alone - worked out anew, and without the energy it came with, as no result. */
+const startOnly = (entry: SetEntry): SetEntry => {
+  const { energy: _energy, ...rest } = anew(entry);
+  return rest;
+};
 
 /** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
 export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
@@ -385,7 +399,8 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const calc = calcOf(out, readers, source);
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   return {
-    ...anew(entry),
+    // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
+    ...(entry.failed ? startOnly(entry) : anew(entry)),
     // (what it came as - its structure drawn - where it still is that compound)
     ...keptAnew(entry, last, calc?.charge),
     xyz: [...last],
@@ -394,6 +409,22 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     calc,
     ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
   };
+}
+
+/**
+ * Where a run that stopped got to (docs/WORKFLOWS.md, *Runs again*): what
+ * it wrote, read, as its entry - its way there as frames, beginning with
+ * the geometry it came in with, so that *Take frames*' first is a start
+ * from the beginning and its last a start from where it stopped - for a
+ * step after it to start from; never a result: no energy of the run's is
+ * on it, its frames' none, since a frame's energy stands as its entry's
+ * where a step takes it. None where what it wrote holds no geometry.
+ */
+export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | null {
+  const w = workedOf(kind, entry, { ...out, energies: undefined }, readers, source);
+  if (isFailure(w)) return null;
+  const { energy: _energy, pathEnergies: _pathEnergies, failed: _failed, ...at } = w as Worked & { pathEnergies?: number[] };
+  return { ...at, path: [[...entry.xyz], ...(w.path ?? [])] };
 }
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
