@@ -94,6 +94,27 @@ describe("a path search's molecule", () => {
     expect([entry.frame, entry.energy, entry.xyz[3]]).toEqual([2, -1.09, 0.97]);
   });
 
+  it("puts its calculation on the point refined - any other molecule's, an opened run's of one entry frame too, on its last", () => {
+    const m = molecule([-812.5, 4100.25]);
+    const all = () => [0, 1, 2, 3];
+    const at = (x: Molecule3D) => setEntries([x], "molecules", all).map((e) => [e.frame, e.calc === x.calc, e.imaginary ?? null]);
+    expect(at(m)).toEqual([
+      [0, false, null],
+      [1, false, null],
+      [2, true, [-812.5]],
+      [3, false, null],
+    ]);
+    // (no path search's - an opened run, one entry frame chosen: its frames saying nothing of a point refined, nor marked one by one)
+    const opened: Molecule3D = { ...m, imaginary: undefined, calc: { ...m.calc!, results: m.calc!.results!.filter((r) => r.id !== "path.frame") } };
+    expect(refinedFrame(opened)).toBeNull();
+    expect(at(opened)).toEqual([
+      [0, false, null],
+      [1, false, null],
+      [2, false, null],
+      [3, true, [-812.5]],
+    ]);
+  });
+
   it("carries the barriers each way, worked out by Meno from the energies printed, each saying from which", () => {
     const [entry] = setEntries([molecule()], "molecules");
     const p = entryOfSet(entry, "x").properties;

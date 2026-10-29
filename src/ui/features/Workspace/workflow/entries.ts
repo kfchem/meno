@@ -770,8 +770,20 @@ export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUn
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
 export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
 
-/** The frame of `n` a molecule's calculation is of: its last - or, where a path goes on past it, its one entry frame (a path search's point refined). */
-const calcFrame = (m: Molecule3D, n: number): number => (!m.path && m.entryFrames?.length === 1 ? m.entryFrames[0] : n - 1);
+/** What a path search writes on each of its path's frames (ORCA's worker: `PATH_FRAME`), and on the point it refined. */
+export const PATH_FRAME = "path.frame";
+export const REFINED_SAID = "highest point refined";
+
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export function refinedFrame(m: Pick<Molecule3D, "calc">): number | null {
+  const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
+  if (!said || said.on !== "frames") return null;
+  const k = said.values.indexOf(REFINED_SAID);
+  return k >= 0 && said.values.lastIndexOf(REFINED_SAID) === k ? k : null;
+}
+
+/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, its path going on past it. */
+const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? n - 1;
 
 /** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>

@@ -243,8 +243,21 @@ class PathSearch(unittest.TestCase):
         # (at GFN2-xTB through the xtb program, the xTB plugin's xtb asked for; a method and its basis set as given)
         xtb = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options={**options, "method": "XTB2"})["jobs"][0]
         self.assertEqual((xtb["files"][0]["text"].splitlines()[0], xtb["needs"]), ("! XTB2 NEB-TS", ["xtb"]))
-        dft = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options={**options, "method": "B3LYP", "basis": "def2-SVP", "keywords": "D3BJ"})["jobs"][0]
-        self.assertEqual(dft["files"][0]["text"].splitlines()[0], "! B3LYP def2-SVP NEB-TS D3BJ")
+        kept = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options={**options, "method": "gfn2-xtb", "keywords": "TightSCF"})["jobs"][0]
+        self.assertEqual(kept["files"][0]["text"].splitlines()[0], "! gfn2-xtb NEB-TS TightSCF")
+        # (for now at a tight-binding level alone, with no dispersion correction or solvation added: its ends' level says
+        #  neither, so a path given one could be at a level they were not - ends optimised with D3BJ, a path without it)
+        for method, basis, keywords, why in [
+            ("B3LYP", "def2-SVP", "", "tight-binding level only"),
+            ("B3LYP", "def2-SVP", "D3BJ", "tight-binding level only"),
+            ("NATIVE-XTB2", "", "CPCM(water)", "no dispersion correction or solvation"),
+            ("NATIVE-XTB2", "", "TightSCF smd(water)", "no dispersion correction or solvation"),
+            ("XTB2", "", "ALPB(water)", "no dispersion correction or solvation"),
+            ("NATIVE-XTB2", "", "D4", "no dispersion correction or solvation"),
+            ("XTB2 GBSA(water)", "", "", "tight-binding level only"),
+        ]:
+            with self.assertRaisesRegex(AssertionError, why, msg=(method, keywords)):
+                ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options={**options, "method": method, "basis": basis, "keywords": keywords})
         # (no end, or an end of other atoms: refused)
         with self.assertRaises(AssertionError):
             ask("prepare", step="path-search", entries=[H2], options=options)

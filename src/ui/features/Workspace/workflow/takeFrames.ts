@@ -14,7 +14,7 @@
  * stand higher - and the step's line says so.
  */
 import type { Molecule3D } from "../store/types";
-import { framesOf, setEntries } from "./entries";
+import { framesOf, refinedFrame, REFINED_SAID, setEntries } from "./entries";
 import type { Outcome3D } from "./meno";
 
 export type Which = "highest" | "first" | "last" | "entry" | "around";
@@ -37,17 +37,8 @@ export function takeFramesHow(which: Which, either: number): string {
   }
 }
 
-/** What a path search writes on each of its path's frames (ORCA's worker: `PATH_FRAME`), and on the point it refined. */
-export const PATH_FRAME = "path.frame";
-export const REFINED_SAID = "highest point refined";
-
-/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
-export function refinedFrame(m: Pick<Molecule3D, "calc">): number | null {
-  const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
-  if (!said || said.on !== "frames") return null;
-  const k = said.values.indexOf(REFINED_SAID);
-  return k >= 0 && said.values.lastIndexOf(REFINED_SAID) === k ? k : null;
-}
+// (a path search's point refined, as its frames say: ./entries, where its calculation is put on that frame)
+export { PATH_FRAME, REFINED_SAID, refinedFrame } from "./entries";
 
 /** A molecule as a step's line names it: its title, its name, or its place among those that came in. */
 const named = (m: Molecule3D, i: number) => m.title || m.name || `molecule ${i + 1}`;

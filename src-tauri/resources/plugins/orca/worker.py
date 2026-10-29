@@ -259,6 +259,27 @@ XTB_NAMES = {
 }
 
 
+#: Words of a dispersion correction or a solvation among ORCA's simple keywords (the manual's table of simple input
+#: keywords), each with or without its "(solvent)": a path search takes neither for now. Its ends' level is said by their
+#: method, basis set and solvation alone, not their dispersion, so a path given one could be at a level its ends were not.
+PATH_REFUSED_WORDS = {
+    "D2", "D3", "D3BJ", "D3ZERO", "D3TZ", "D4", "NL", "SCNL", "ABC",
+    "CPCM", "CPCMC", "CPCMX", "SMD", "ALPB", "GBSA", "DDCOSMO", "COSMO", "COSMORS", "DRACO",
+}
+
+
+def path_refusal(method, more):
+    """Why a path search cannot be run as asked - or None. For now it runs at a tight-binding level alone (`XTB_NAMES`),
+    with no dispersion correction or solvation added: a path's level must be its ends', and of their level Meno is told
+    their method, basis set and solvation, not their dispersion."""
+    if method.upper() not in XTB_NAMES:
+        return f"a path search runs at a tight-binding level only for now, such as NATIVE-XTB2 or XTB2: {method} is not one"
+    added = [w for w in f"{method} {more}".split() if w.split("(")[0].upper() in PATH_REFUSED_WORDS]
+    if added:
+        return f"a path search takes no dispersion correction or solvation for now, as its ends' level cannot say them: {', '.join(added)}"
+    return None
+
+
 def path_level(options):
     """A path search's method and basis, as its output says them: a tight-binding method by its name (`XTB_NAMES`), with
     no basis; else the method and basis as given."""
@@ -282,6 +303,9 @@ def path_input(entry, options, cores):
         raise Refused("there is no method")
     basis = words(options.get("basis", ""), "The basis set")
     more = words(options.get("keywords", ""), "The keywords")
+    why = path_refusal(method, more)
+    if why:
+        raise Refused(why)
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity", 1)
     maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)

@@ -366,6 +366,14 @@ are a *Frequencies* step's, wired after it.
   pair fails, naming both. A tight-binding method is named as the xtb
   program names it, whichever runs it, so ORCA's NATIVE-XTB2 and XTB2 and
   the xTB plugin's GFN2 are one level.
+- **A tight-binding level alone, for now** (2026-10-29). The ends' level is
+  told by their method, basis set and solvation, not by their dispersion
+  correction: ends optimised with D3BJ and a path without it would pass as
+  one level. So ORCA's plugin runs a path search at a tight-binding method
+  alone (NATIVE-XTB2, XTB2 and the like), refusing any other in plain words,
+  and refuses a dispersion correction or a solvation in its method or *More
+  keywords* (D3BJ, D4, CPCM, SMD, ALPB and their kin): the path takes neither
+  until the ends' level can say them.
 - **One molecule for each pair.** Its frames are the path, in the order its
   program gives them: its images, and the highest point it refined where it
   puts it (ORCA's PATH SUMMARY order). Each frame has its energy and says
