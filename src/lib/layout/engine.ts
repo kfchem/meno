@@ -35,6 +35,7 @@ import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from ".
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
+import { misreadCentres, turnedDoubleBonds } from "./readBack";
 import { atomClasses, byStructure, canonicalRanks } from "./ranks";
 import { canonicalRanks as canonicalOrderRanks, reordered, restored, walkOrder } from "./canonical";
 import { greatest, least } from "../chem/lists";
@@ -93,7 +94,7 @@ export function layout2D(input: LayoutInput): Layout2D {
     laidOutBefore.delete(key);
     laidOutBefore.set(key, laid);
   } else {
-    laid = layoutInOrder(own);
+    laid = laidOutKeepingToday(own);
     laidOutBefore.set(key, laid);
     if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
   }
@@ -132,6 +133,45 @@ function bestFirst(mol: Molecule, piece: readonly number[]): (p: { pos: Grown; s
     return labels.reduce((s, a) => s + pos.get(a)!.x - mean, 0);
   };
   return (p, q) => (Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : rightward(q.pos) - rightward(p.pos));
+}
+
+/**
+ * Whether the choices made where finished drawings are compared go by what
+ * a drawing misstates and its faults first (`flawsIn`), and a macrocycle
+ * bridged across small rings is offered drawn from them (`fromSmallRings`)
+ * - and whether either took part in the drawing being made.
+ */
+const rules = { on: true, engaged: false };
+
+/**
+ * `input` laid out by those rules - and, where they took part, by today's
+ * choices as well, the drawing they make kept only where it is no worse
+ * than today's on anything a reader cannot miss (what it misstates, a
+ * double bond turned or a centre no longer shown as given; its faults) and
+ * better on one of them. Never a drawing that gains a fault or reads as
+ * another molecule for what the rules change (the maintainer, 2026-10-29).
+ */
+function laidOutKeepingToday(input: LayoutInput): Layout2D {
+  const was = { ...rules };
+  rules.on = true;
+  rules.engaged = false;
+  try {
+    const fresh = layoutInOrder(input);
+    if (!rules.engaged) return fresh;
+    rules.on = false;
+    const today = layoutInOrder(input);
+    const counts = (out: Layout2D) => {
+      const m = measureLaidOut(input, out);
+      return [turnedDoubleBonds(input, out).length + misreadCentres(input, out).length, faultsIn(m)];
+    };
+    const [f, t] = [counts(fresh), counts(today)];
+    const noWorse = f.every((c, k) => c <= t[k]);
+    const better = f.some((c, k) => c < t[k]);
+    return noWorse && better ? fresh : today;
+  } finally {
+    rules.on = was.on;
+    rules.engaged = was.engaged;
+  }
 }
 
 function layoutInOrder(input: LayoutInput): Layout2D {
@@ -294,12 +334,25 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   // could be drawn as one whole solid instead)
   const solidToo: number[] = [];
   const wholeToo: number[] = [];
-  const variantsOf = (i: number) => {
+  // (a macrocycle bridged across small rings offered drawn from them as
+  // well, as one shape more - chosen among the others by the drawing it
+  // makes, not by its rings alone: fromSmallRings)
+  const alsoFromSmallRings = (i: number) => {
+    if (!rules.on || etaOf.has(i) || unitOf.has(i) || cageViews.has(i)) return null;
+    const sys = mol.systems[i];
+    const rings = sys.rings.map((r) => mol.rings[r]);
+    if (!rings.some((r) => r.length >= 9) || !bridgedRings(rings) || metalHub(mol, rings)) return null;
+    // (only where its shape, placed as it is, crowds or stretches it)
+    if (flatCost(mol, sys, placeRingSystem(mol, sys, 0)) < 1) return null;
+    return fromSmallRings(mol, sys);
+  };
+  const shapesOf = (i: number) => {
     const e = etaOf.get(i);
     const u = unitOf.get(i);
     const views = cageViews.get(i);
     return views ? views.length : e ? etaSpins(mol, e) : u ? unitVariants(mol, u) : ringSystemVariants(mol, mol.systems[i]);
   };
+  const variantsOf = (i: number) => shapesOf(i) + (alsoFromSmallRings(i) ? 1 : 0);
   const setVariant = (i: number, v: number) => {
     const views = cageViews.get(i);
     if (views) {
@@ -318,27 +371,12 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // (a metal's chelates set round it one way or another: eased as laid flat)
     if (!e && !u) {
       const sys = mol.systems[i];
-      const rings = sys.rings.map((r) => mol.rings[r]);
-      const hub = metalHub(mol, rings);
-      if (hub) return void local.set(i, layoutFlat(mol, sys, v).pos);
-      const raw = placeRingSystem(mol, sys, v);
-      // (a bridged one - a macrocycle bridged across a small ring as well -
-      // where its shape placed as it is crowds or stretches it, eased and
-      // laid from each of its rings as layoutFlat lays one, where that is
-      // better and keeps its double bonds as given: placed raw, a
-      // 2,5-bridged tetrahydropyran's chain lay on its ring O)
-      if (bridgedRings(rings)) {
-        const before = flatCost(mol, sys, raw);
-        if (before >= 1) {
-          const flat = layoutFlat(mol, sys, v);
-          if (flatCost(mol, sys, flat.pos, flat.depth) < before && keepsDoubleBonds(mol, flat.pos)) {
-            local.set(i, flat.pos);
-            flat.depth?.forEach((d, a) => (depth[a] = d));
-            return;
-          }
-        }
-      }
-      return void local.set(i, raw);
+      const hub = metalHub(mol, sys.rings.map((r) => mol.rings[r]));
+      // (the shape more of a macrocycle bridged across small rings: drawn
+      // from them - placed as its shapes are, a 2,5-bridged
+      // tetrahydropyran's chain lay on its ring O)
+      if (v === shapesOf(i)) return void local.set(i, alsoFromSmallRings(i)!);
+      return void local.set(i, hub ? layoutFlat(mol, sys, v).pos : placeRingSystem(mol, sys, v));
     }
     const laid = u ? placeUnit(mol, u, v, u.chelate && layoutFlat(mol, u.chelate).pos) : placeEta(mol, e!, v);
     local.set(i, laid.pos);
@@ -412,6 +450,15 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     let best = 0;
     let bestScore = Infinity;
     let bestFlaws = Infinity;
+    // (and the one today's choice takes - by the measure alone, among the
+    // shapes it offered: where the rules choose another, they took part)
+    let today = 0;
+    let todayScore = Infinity;
+    const shapes = shapesOf(i);
+    // (a system of one shape, offered drawn from its small rings as well,
+    // keeps the drawing it was laid out as where that is not taken: today
+    // it is not chosen among at all)
+    const initial = local.get(i);
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
@@ -468,7 +515,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         // blades, so that a fault here says nothing of the drawing it
         // becomes - PdCl2(dppf)'s)
         const m = draft.metrics(done.pos);
-        const f = etaOf.has(i) || unitOf.has(i) ? MISSTATES * m.wrongDoubles : flawsIn(m);
+        const f = !rules.on ? 0 : etaOf.has(i) || unitOf.has(i) ? MISSTATES * m.wrongDoubles : flawsIn(m);
         // (only where clearly better: whatever is tried here - a
         // macrocycle's shapes, a cage's views, the spins of a ring bound
         // face-on to a metal - those alike on the measure keep the order
@@ -480,9 +527,15 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
           bestScore = s;
           best = v;
         }
+        if (v < shapes && s < todayScore - 1e-9) {
+          todayScore = s;
+          today = v;
+        }
       }
     }
-    setVariant(i, best);
+    if (best !== today) rules.engaged = true;
+    if (shapes < 2 && best !== shapes && initial) local.set(i, initial);
+    else setVariant(i, best);
   });
 
   // the drawing each system ended up as
@@ -636,7 +689,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // and chosen among as before)
     let pool = set;
     const done = new Map<(typeof set)[number], ReturnType<typeof finish>>();
-    if (set.some((c) => c.flaws !== set[0].flaws)) {
+    if (rules.on && set.some((c) => c.flaws !== set[0].flaws)) {
       const flaws = set.map((c) => {
         const f = finish(c);
         done.set(c, f);
@@ -653,6 +706,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // those, the one that reads best with its stereochemistry drawn as it
     // will be; still alike, the first.
     const tied = pool.filter((c) => c.score <= pool[0].score + 1e-9);
+    // (where the rules leave other drawings to choose among than today's choice does, they took part)
+    const todayTied = set.filter((c) => c.score <= set[0].score + 1e-9);
+    if (tied.length !== todayTied.length || tied.some((c, k) => c !== todayTied[k])) rules.engaged = true;
     const centres = piece.filter((a) => mol.tetra.has(a) && !solid[a]);
     if (tied.length > 1 && centres.length) {
       const each = tied.map(finished);
@@ -1261,6 +1317,49 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
+/**
+ * A macrocycle bridged across small rings, laid out from each of those
+ * small rings in turn - each regular, the macrocycle round it - eased, and
+ * the one that reads best of those that keep its double bonds as given; or
+ * none. Its macrocycle laid round a small ring takes no shape of its own
+ * (`ringSystemVariants`), so it is worked out once for the system and
+ * offered for each shape that crowds or stretches it.
+ */
+function fromSmallRings(mol: Molecule, sys: RingSystem): Map<number, Point> | null {
+  // (a copy each time: what is set from it may be moved)
+  if (smallRingsFirst.has(sys)) {
+    const kept = smallRingsFirst.get(sys)!;
+    return kept && new Map(kept);
+  }
+  const rings = sys.rings.map((r) => mol.rings[r]);
+  const cost = (pos: Map<number, Point>) => flatCost(mol, sys, pos) + 20 * misshapen(mol, sys, pos) + 3 * narrowGap(mol, sys, pos);
+  let best: Map<number, Point> | null = null;
+  let least = Infinity;
+  for (let k = 0; k < sys.rings.length; k++) {
+    const ring = rings[k];
+    if (ring.length >= 9 || !rings.some((q) => q.length >= 9 && q.filter((a) => ring.includes(a)).length >= 3)) continue;
+    const trial = placeRingSystem(mol, sys, 0, sys.rings[k]);
+    if (flatCost(mol, sys, trial) >= 1 || narrowGap(mol, sys, trial)) {
+      const eased = new Map(trial);
+      regularize(mol, sys, eased);
+      if (cost(eased) < cost(trial) - 1e-9) for (const [a, p] of eased) trial.set(a, p);
+    }
+    if (!keepsDoubleBonds(mol, trial)) continue;
+    const c = cost(trial);
+    if (c < least - 1e-9) {
+      least = c;
+      best = trial;
+    }
+    // (the first with nothing crowded or stretched will do)
+    if (flatCost(mol, sys, trial) < 1) break;
+  }
+  smallRingsFirst.set(sys, best);
+  return best && new Map(best);
+}
+
+/** Each bridged system's drawing from its small rings (`fromSmallRings`), once worked out. */
+const smallRingsFirst = new WeakMap<RingSystem, Map<number, Point> | null>();
+
 /** Whether each double bond given as cis or trans, its ends and refs all placed in `pos`, is drawn so. */
 function keepsDoubleBonds(mol: Molecule, pos: ReadonlyMap<number, Point>): boolean {
   return mol.bonds.every((b) => {
@@ -1310,17 +1409,6 @@ export function layoutFlat(mol: Molecule, sys: RingSystem, variant?: number): Sy
   // the macrocycle round it taking the strain (GR-3.3.4), where that reads
   // better and keeps its double bonds as given
   const large = rings.some((r) => r.length >= 9);
-  if (bridged && large && flatCost(mol, sys, flat) >= 1) {
-    let least = cost(flat);
-    for (const r of sys.rings) {
-      const trial = eased(placeRingSystem(mol, sys, variant ?? 0, r));
-      const c = cost(trial);
-      if (c < least - 1e-9 && keepsDoubleBonds(mol, trial)) {
-        least = c;
-        flat = trial;
-      }
-    }
-  }
   // a bridged system laid flat from each of its rings in turn: which ring
   // stays regular and which arcs round it decides whether it reads
   if (bridged && !large) {
