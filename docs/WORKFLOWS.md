@@ -2706,11 +2706,23 @@ term.
     formula. *At* is 298.15 K unless set, the temperature thermochemistry
     is tabulated at, as Populations' is - the chemist's to change.
   - *Typed*: a value and a unit from Meno's units.
+
+  Its card says what was chosen ("standard state", "standard state at
+  310 K", or the number typed); its line and its set, the number as
+  Meno writes one - an energy in kcal/mol as the chips write it, "1.89
+  kcal/mol". The value keeps all its digits.
 - ***Add*** takes *Molecules* and, where wanted, a *Number* (an optional
   input: it runs without one). Its options: the values to *Add*, one to a
   line or each after a semicolon ("energy; thermo.g-correction"), and the
-  name the sum is written *As* ("G-DFT"). Each entry gets the sum, in the
-  first value's unit; the number wired in is summed as it is.
+  name the sum is written *As* ("G-DFT") - never a name Meno gives an
+  entry's own values (an energy, a free energy). Each entry gets the sum,
+  in the first value's unit; the number wired in is summed as it is. Its
+  card says the formula ("G-DFT = energy + thermo.g-correction + number",
+  the number where one is wired in); its line, what it gave ("2 of 2
+  entries given G-DFT").
+- **An entry that is no result is never summed** - failed, not converged,
+  its marks unread: set aside saying so ("not added: not converged"),
+  counted on the line.
 - **Only values of one geometry are summed**: each named value must be of
   the entry's own geometry (its record's geometry key). One of another
   geometry, or of none, sets the entry aside, saying which ("its
@@ -2721,8 +2733,10 @@ term.
 - **The sum keeps each part as it was** (`Property.parts`): the property
   it was, its value, unit, and where and by what it was worked out. Its
   own record claims no method or basis: it says where it is (the
-  geometry, the thermal part's temperature and pressure, the first part's
-  solvent), and in words what it is the sum of - "sum: energy
+  geometry, the thermal part's temperature and pressure, and the solvent
+  where the parts that say one agree - none where two differ, a single
+  point in one and a correction in the gas phase: each part keeps its
+  own), and in words what it is the sum of - "sum: energy
   (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction
   (wB97X-D/6-31G(d), Gaussian, 298.15 K, 1 atm, quasi-RRHO) + standard
   state (...)" - never one level for the whole. A step that takes a free

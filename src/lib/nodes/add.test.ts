@@ -38,6 +38,14 @@ describe("Add", () => {
     expect(out.said).toBe("1 of 1 entry given G-DFT = energy + thermo.g-correction + standard state");
   });
 
+  it("says the solvent where the parts that say one agree, and none where two differ - each part keeps its own", () => {
+    const gasCorr: Property = { ...gcorr(0.12), at: { ...gcorr(0.12).at!, solvent: "none" } };
+    const out = add([entry("x", { energy: sp(-1), "thermo.g-correction": gasCorr })], { parts: ["energy", "thermo.g-correction"], as: "G" });
+    const g = out.ok ? out.exits.done[0].properties.G : undefined;
+    expect(g?.at?.solvent).toBeUndefined();
+    expect(g?.parts?.map((p) => p.at?.solvent)).toEqual(["SMD(chloroform)", "none"]);
+  });
+
   it("sums only values of the entry's own geometry: one of another, or of none, sets it aside", () => {
     const other = entry("x", { energy: sp(-1), "thermo.g-correction": gcorr(0.1, 298.15, "elsewhere") });
     const none = entry("y", { energy: sp(-1), "thermo.g-correction": { value: 0.1, unit: "Eh", status: "computed" } });

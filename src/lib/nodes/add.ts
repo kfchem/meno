@@ -107,7 +107,9 @@ function sumOf(e: Entry, names: readonly string[], given: readonly GivenPart[], 
   const atms = parts.flatMap((p) => (p.at?.atm != null ? [{ name: p.property, a: p.at.atm }] : []));
   const otherA = atms.find((x) => x.a !== atms[0].a);
   if (otherA) return `its parts are of different pressures: ${atms[0].name} at ${atms[0].a} atm and ${otherA.name} at ${otherA.a} atm`;
-  const solvent = parts.find((p) => p.at?.solvent != null)?.at?.solvent;
+  // (the solvent the parts say, where all that say one say the same; where two differ - a single point in one, a correction in the gas phase - none: each part keeps its own)
+  const solvents = [...new Set(parts.flatMap((p) => (p.at?.solvent != null ? [p.at.solvent] : [])))];
+  const solvent = solvents.length === 1 ? solvents[0] : undefined;
   return {
     value: sum,
     unit,

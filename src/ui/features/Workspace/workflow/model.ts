@@ -78,8 +78,8 @@ export function holdCollection(
 /** How large a set holding a chart is made, on the page: its axes, labels and points. */
 export const CHART_SET = { w: CHART_PX.w * PX + 2 * SET_PAD, h: SET_TOP + CHART_PX.h * PX + SET_PAD };
 
-/** How large a set holding a number is made, on the page: its title and its value, on one line. */
-export const NUMBER_SET = { w: 220 * PX + 2 * SET_PAD, h: SET_TOP + SET_PAD };
+/** How large a set holding a number is made, on the page: its title and its value, on one line, as an empty set's is. */
+export const NUMBER_SET = { w: 220 * PX + 2 * SET_PAD, h: SET_TOP };
 
 /** A step's result set holding a number it gave (`WorkflowSet.number`): nothing on the page among its members. */
 export function holdNumber(doc: WorkspaceDocument, id: number, number: NumberValue): WorkspaceDocument {

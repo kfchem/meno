@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -32,7 +32,7 @@ import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
 import type { NumberValue, Table } from "../../../../lib/table";
-import { addedSet, numberHow, numberOf } from "./addStep";
+import { addedSet, numberOf } from "./addStep";
 
 /**
  * What a run needs of the canvas: how far a molecule in 3D reaches on the
@@ -84,7 +84,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "number") {
     const n = numberOf(optionsOf(kindInfo(step.kind).options ?? [], step.options));
     if ("why" in n) return fail(n.why);
-    return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberHow(optionsOf(kindInfo(step.kind).options ?? [], step.options)), input: key, ...as });
+    return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberShown(n), input: key, ...as });
   }
   // (a sum on each entry of what comes into Molecules - and the number into Number, where one is wired)
   if (step.kind === "add") {
