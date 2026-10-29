@@ -129,6 +129,7 @@ export function FramesChip({
   marksUnread,
   warnings,
   imaginary,
+  fromStart,
   onOpened,
 }: {
   count: number;
@@ -173,6 +174,8 @@ export function FramesChip({
   warnings?: readonly Warning[];
   /** The imaginary frequencies each frame's calculation judged it has, in cm-1 (null, none): the one told's said on it - a mark that it is no minimum. */
   imaginary?: readonly (readonly number[] | null)[];
+  /** Its frames are a path a step found (workflow/takeFrames `refinedFrame`): the one told's energy said from the path's start, its first frame - as its barriers are - never from its lowest, the path's other end it may be. */
+  fromStart?: boolean;
   /** Told as it is opened by a click, and as it shuts: its molecule takes it clear of its set (Molecule3DView), and it goes above the rest. */
   onOpened?: (opened: boolean) => void;
 }) {
@@ -458,7 +461,7 @@ export function FramesChip({
                   {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
                   {told + 1} / {count}
                   {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
-                  {above && <span className="text-gh-black"> · {above[told] != null ? relative(above[told]!) : bars?.why ? bars.why : bars?.noBaseline ? "none finished: no lowest to stand above" : "not finished"}</span>}
+                  {above && <span className="text-gh-black"> · {above[told] != null ? (fromStart && above[0] != null ? `ΔE ${relative(above[told]! - above[0]!)} from its start` : relative(above[told]!)) : bars?.why ? bars.why : bars?.noBaseline ? "none finished: no lowest to stand above" : "not finished"}</span>}
                   {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
                   {marks && <span className="text-accel-accent"> · {marks}</span>}
                 </>
