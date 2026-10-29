@@ -386,7 +386,7 @@ NO_MPI = re.compile(r"mpirun: (?:command )?not found", re.I)
 #: That said plainly, and what to do: ORCA runs on more than one core with Open MPI on Linux and Mac alone, its mpirun on
 #: the PATH (the ORCA 6.1 manual, 2.5.2.1, *Single Node Runs*).
 NO_MPI_SAID = ("ORCA runs on more than one core only with Open MPI, whose mpirun this computer does not have "
-               "(the ORCA manual, 2.5.2.1): set Cores to 1 in Settings, or install Open MPI")
+               "(the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or install Open MPI")
 
 
 def not_ended_why(log, ended):
