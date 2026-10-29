@@ -10,7 +10,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 # (a question about the network is answered by the person at the computer, never by a run)
-Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1")
 
 Add-Type -TypeDefinition @'
 using System;
@@ -279,29 +279,52 @@ public static class MacGui {
     } finally { CFRelease(sys); }
   }
 
-  // The part of a window at a point, as Accessibility names it, and what it
-  // sits in: "role\tname" each, itself first, a few levels up - for the
-  // guard against answering a question about the network (MenoConsent.psm1).
-  // Empty where Accessibility cannot tell.
-  public static string[] ChainAt(double x, double y) {
-    IntPtr sys = AXUIElementCreateSystemWide();
-    if (sys == IntPtr.Zero) return new string[0];
-    try {
-      IntPtr el;
-      if (AXUIElementCopyElementAtPosition(sys, (float)x, (float)y, out el) != 0 || el == IntPtr.Zero) return new string[0];
-      try { return Chain(el); } finally { CFRelease(el); }
-    } finally { CFRelease(sys); }
+  // What Accessibility read of a part, for the guard against answering a
+  // question about the network (MenoConsent.psm1): the part and what it sits
+  // in, "role\tname" each, itself first, a few levels up - or why it could
+  // not be read, which is never taken for a part that is not the yes.
+  public class Lookup { public string[] Chain = new string[0]; public string Error; }
+
+  const int AXNoValue = -25212;   // kAXErrorNoValue: no value there - for the focus, nothing has the keys
+
+  // Why a lookup failed, or null where it did not: for the focus, no value is
+  // nothing focused, which is no failure.
+  public static string LookupError(int err, bool focus, string what) {
+    if (err == 0) return null;
+    if (focus && err == AXNoValue) return null;
+    return "AXError " + err + " " + what;
   }
 
-  // The same of the part of an app that has the keys.
-  public static string[] FocusedChain(int pid) {
-    IntPtr app = AXUIElementCreateApplication(pid);
-    if (app == IntPtr.Zero) return new string[0];
+  // The part of a window at a point.
+  public static Lookup ChainAt(double x, double y) {
+    var r = new Lookup();
+    IntPtr sys = AXUIElementCreateSystemWide();
+    if (sys == IntPtr.Zero) { r.Error = "no system-wide Accessibility element"; return r; }
     try {
       IntPtr el;
-      if (AXUIElementCopyAttributeValue(app, Str("AXFocusedUIElement"), out el) != 0 || el == IntPtr.Zero) return new string[0];
-      try { return Chain(el); } finally { CFRelease(el); }
+      int err = AXUIElementCopyElementAtPosition(sys, (float)x, (float)y, out el);
+      r.Error = LookupError(err, false, "asking what is at the point");
+      if (r.Error == null && el == IntPtr.Zero) r.Error = "nothing given for the point";
+      if (r.Error != null) return r;
+      try { r.Chain = Chain(el); } finally { CFRelease(el); }
+    } finally { CFRelease(sys); }
+    return r;
+  }
+
+  // The part of an app that has the keys: an empty chain where nothing has.
+  public static Lookup FocusedChain(int pid) {
+    var r = new Lookup();
+    IntPtr app = AXUIElementCreateApplication(pid);
+    if (app == IntPtr.Zero) { r.Error = "no Accessibility element for the app"; return r; }
+    try {
+      IntPtr el;
+      int err = AXUIElementCopyAttributeValue(app, Str("AXFocusedUIElement"), out el);
+      r.Error = LookupError(err, true, "asking what has the keys");
+      if (r.Error != null || err == AXNoValue) return r;
+      if (el == IntPtr.Zero) { r.Error = "nothing given for what has the keys"; return r; }
+      try { r.Chain = Chain(el); } finally { CFRelease(el); }
     } finally { CFRelease(app); }
+    return r;
   }
 
   static string[] Chain(IntPtr el) {
@@ -507,6 +530,8 @@ Assert-MenoAccess
 
 $script:Window = [uint32] 0
 $script:MenoPid = 0
+# (whether the web view has built its page's parts for Accessibility, which it does only once asked: the guard's first lookup in a run waits for them)
+$script:PageRead = $false
 # Pixels of a shot per point of screen: 2 on a Retina display. Measured off a
 # real shot rather than assumed; see Get-ShotScale.
 $script:Scale = 0.0
@@ -556,6 +581,8 @@ function Get-MenoWindow {
         foreach ($p in @(Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)) {
             $w = [MacGui]::MainWindowOf($p.Id)
             if ($w) {
+                # (a new copy of Meno: its page's parts asked for again before the guard trusts a lookup)
+                if ($script:MenoPid -ne $p.Id) { $script:PageRead = $false }
                 $script:MenoPid = $p.Id
                 $script:Window = $w.Id
                 return $script:Window
@@ -693,16 +720,48 @@ function Assert-MenoFront {
     }
 }
 
+function Read-MacPart([scriptblock] $Lookup) {
+    # A lookup of [MacGui]'s, as the guard takes it (Read-Part): its error, or its chain.
+    Read-Part {
+        $l = & $Lookup
+        if ($l.Error) { throw $l.Error }
+        [pscustomobject]@{ Chain = $l.Chain }
+    }
+}
+
+function Wait-PageRead {
+    <#
+      .SYNOPSIS
+      Before the guard's first lookup in a run: the page's parts asked for at
+      the window's middle until the hit test reaches one (some 3 s the first
+      time), or a failed reading where it never does - a lookup that lands
+      on the page itself then says nothing of what is on it.
+    #>
+    if ($script:PageRead) { return $null }
+    $w = Get-WindowInfo
+    $until = (Get-Date).AddSeconds(5)
+    do {
+        $look = Read-MacPart { [MacGui]::ChainAt($w.X + $w.Width / 2, $w.Y + $w.Height / 2) }
+        if (-not $look.Unread -and (Test-PageReached -Chain $look.Chain)) { $script:PageRead = $true; return $null }
+        Start-Sleep -Milliseconds 300
+    } while ((Get-Date) -lt $until)
+    return [pscustomobject]@{ Chain = @(); Unread = "the page's parts were not there to read in 5 s" }
+}
+
 function Assert-NotYesAt {
-    # A press at a point, in global points, that would answer a question about the network yes, stopped before it is sent (MenoConsent.psm1).
+    # A press at a point, in global points, that would answer a question about the network yes - or that could not be read - stopped before it is sent (MenoConsent.psm1).
     param([Parameter(Mandatory)] $At, [string] $What = "a press")
-    Assert-NotNetworkYes -Chain ([MacGui]::ChainAt($At.X, $At.Y)) -What "$What at ($([int]$At.X), $([int]$At.Y)) pt"
+    $look = Wait-PageRead
+    if (-not $look) { $look = Read-MacPart { [MacGui]::ChainAt($At.X, $At.Y) } }
+    Assert-NotNetworkYes -Look $look -What "$What at ($([int]$At.X), $([int]$At.Y)) pt"
 }
 
 function Assert-NotYesKeys {
-    # Keys sent while a question about the network has its yes in focus, stopped before they are sent (MenoConsent.psm1).
+    # Keys sent while a question about the network has its yes in focus - or while what has the keys could not be read - stopped before they are sent (MenoConsent.psm1).
     param([Parameter(Mandatory)] [string] $What)
-    Assert-NotNetworkYes -Chain ([MacGui]::FocusedChain($script:MenoPid)) -What $What
+    $look = Wait-PageRead
+    if (-not $look) { $look = Read-MacPart { [MacGui]::FocusedChain($script:MenoPid) } }
+    Assert-NotNetworkYes -Look $look -What $What
 }
 
 function Set-MenoWindow {

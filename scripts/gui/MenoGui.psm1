@@ -179,7 +179,7 @@ public static class NativeGui {
 # (a question about the network is answered by the person at the computer,
 # never by a run: MenoConsent.psm1 decides, from what UI Automation names
 # the part a press lands on, or the part that has the keys)
-Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1")
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
 
 $script:Window = [IntPtr]::Zero
@@ -401,19 +401,25 @@ function Get-UiaChain($Element) {
 }
 
 function Assert-NotYesAt {
-    # A press at a point, in screen pixels, that would answer a question about the network yes, stopped before it is sent.
+    # A press at a point, in screen pixels, that would answer a question about the network yes - or that could not be read - stopped before it is sent.
     param([Parameter(Mandatory)] $At, [string] $What = "a press")
-    $el = try { [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y)) } catch { $null }
-    $chain = if ($el) { Get-UiaChain $el } else { @() }
-    Assert-NotNetworkYes -Chain $chain -What "$What at ($($At.X), $($At.Y)) px"
+    $look = Read-Part {
+        $el = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y))
+        if (-not $el) { throw "UI Automation gave nothing for the point" }
+        [pscustomobject]@{ Chain = (Get-UiaChain $el) }
+    }
+    Assert-NotNetworkYes -Look $look -What "$What at ($($At.X), $($At.Y)) px"
 }
 
 function Assert-NotYesKeys {
-    # Keys sent while a question about the network has its yes in focus, stopped before they are sent.
+    # Keys sent while a question about the network has its yes in focus - or while what has the keys could not be read - stopped before they are sent.
     param([Parameter(Mandatory)] [string] $What)
-    $el = try { [System.Windows.Automation.AutomationElement]::FocusedElement } catch { $null }
-    $chain = if ($el) { Get-UiaChain $el } else { @() }
-    Assert-NotNetworkYes -Chain $chain -What $What
+    $look = Read-Part {
+        $el = [System.Windows.Automation.AutomationElement]::FocusedElement
+        if (-not $el) { throw "UI Automation gave nothing for what has the keys" }
+        [pscustomobject]@{ Chain = (Get-UiaChain $el) }
+    }
+    Assert-NotNetworkYes -Look $look -What $What
 }
 
 function Invoke-WinClick([int] $X, [int] $Y, [int] $Count, [bool] $Right) {
