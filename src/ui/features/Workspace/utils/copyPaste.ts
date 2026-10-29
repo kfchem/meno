@@ -14,11 +14,11 @@ import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image"
 import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { ARROW_KINDS, ARROW_SETTINGS, WEIGHT_SHARE, type ArrowLook } from "../../../../lib/chem/reactionArrow";
-import { acceptValue, fieldOf } from "../../../../lib/chem/styleFields";
+import { acceptValue, fieldOf, isTypefaceName } from "../../../../lib/chem/styleFields";
 import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
-import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
+import { marksOf, stylesOf, WORDS_SIZE_RANGE, WORDS_SPACING_RANGE, type WordsMark } from "../../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, roundedBeforePt, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
@@ -355,6 +355,9 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
         ...(from ? { from } : {}),
         // (its own size, within reason; its letters' marks where they read, inside its text - colours only as colours)
         ...(isNum(c.size) && c.size >= WORDS_SIZE_RANGE[0] && c.size <= WORDS_SIZE_RANGE[1] ? { size: c.size } : {}),
+        // (its own typeface, where it is a typeface's name; its own line spacing, within reason)
+        ...(typeof c.font === "string" && isTypefaceName(c.font) ? { font: c.font } : {}),
+        ...(isNum(c.lines) && c.lines !== 1 && c.lines >= WORDS_SPACING_RANGE[0] && c.lines <= WORDS_SPACING_RANGE[1] ? { lines: c.lines } : {}),
         ...(() => {
           const marks = marksRead(c.marks, c.text.length);
           return marks.length ? { marks } : {};
@@ -868,14 +871,14 @@ function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | null | 
   return out.some(Boolean) ? out : undefined;
 }
 
-/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them: none where none is marked; null where the marks do not read (`failedOf`). */
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them - a list of none where its calculation judged none, null where none judged it: none where none is marked; null where the marks do not read (`failedOf`). */
 function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | null | undefined {
   if (given === undefined) return undefined;
   if (!Array.isArray(given) || given.length !== keep.length) return null;
-  const read = given.map((f) => (f === null || (Array.isArray(f) && !f.length) ? null : (imaginaryOf(f) ?? undefined)));
+  const read = given.map((f) => (f === null ? null : (imaginaryOf(f) ?? undefined)));
   if (read.some((f) => f === undefined)) return null;
   const out = (read as (number[] | null)[]).filter((_, i) => keep[i]);
-  return out.some(Boolean) ? out : undefined;
+  return out.some((f) => f !== null) ? out : undefined;
 }
 
 /** The hydrogens a molecule was given that its file left out (Molecule3D `hydrogensAdded`): each part's, chosen or the CCD's, by its atoms - of `atoms`. */

@@ -447,6 +447,19 @@ describe("an abbreviation", () => {
     for (const b of before) if (b.id !== topIds[3]) expect(out.model.atoms.find((a) => a.id === b.id)).toMatchObject({ x: b.x, y: b.y });
   });
 
+  it("is drawn out in the widest opening between its bonds when it has two: an NMe in a chain, its methyl 120 degrees from each carbon", () => {
+    const c = (L * Math.sqrt(3)) / 2;
+    let d = emptyWorkspaceDocument();
+    for (const [x, y, el] of [[-2 * c, 0], [-c, L / 2], [0, 0, "NMe"], [c, L / 2], [2 * c, 0]] as [number, number, string?][]) d = ops.addAtom(d, x, y, el);
+    const ids = d.model.atoms.map((a) => a.id);
+    for (let k = 0; k < 4; k++) d = ops.addBond(d, ids[k], ids[k + 1], 1);
+    const out = ops.expandAbbreviation(d, ids[2]);
+    const methyl = out.model.atoms.find((a) => !ids.includes(a.id))!;
+    // (straight down from the N, away from both carbons)
+    expect(methyl.x).toBeCloseTo(0, 6);
+    expect(methyl.y).toBeCloseTo(-L, 6);
+  });
+
   it("is gone with what it stood for once relabelled", () => {
     const { d, o } = withOMe({ atoms: [{ el: "O", x: 0, y: 0 }], bonds: [], attach: [0] });
     const out = ops.setAtomChemistry(d, o, { el: "N" });

@@ -603,7 +603,16 @@ Both go together, because both touch every layer.
   bonds; whether implicit hydrogens and terminal carbons are written; rings
   as circles or as Kekulé structures; colour, bold and italic.
 - **Hashes at a fixed spacing.** A longer hashed bond gets more hashes, not
-  wider gaps (PR #33).
+  wider gaps (PR #33). A short one - a hashed wedge to a label - gets three,
+  closer together but a line width clear, set at even steps from the narrow
+  atom (or its label) to the wide end, where three fit, in a style that
+  asks for it ("Shortest hashed bond: Three hashes at least"): two read as
+  a pair of lines (the maintainer, 2026-10-24). Meno's own style asks for
+  it; a journal's keeps its spacing exactly, as its specification has it
+  (2026-10-27), and a style saved before the setting is drawn at the
+  spacing.
+- **A bold bond's free end** is square, its corners rounded as a line's end
+  is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
   wavy: a plain bold bond, a bold dashed bond, a thin dashed bond, and a
   dative (coordinate) bond. A wedge, hashes or a wavy line belong to a
@@ -883,7 +892,9 @@ All hover-based, as above.
   the style's bond length, whatever length it was drawn at, so a structure
   put down too large or too small comes right; one shown magnified stays
   as magnified, at the style's length at its true size. The maintainer,
-  2026-10-27.)
+  2026-10-27. A structure Clean-up cannot lay out - its stereochemistry not
+  kept, an atom put on another - is left as drawn and named by its formula
+  and why, the others laid out all the same, as one undo step.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
@@ -913,7 +924,7 @@ All hover-based, as above.
     a pseudo-asymmetric centre; an axis's a upright and set below, Ra and
     Sa (IUPAC 2013, P-91.2.1.1). Bare in Meno's style, and in RSC's,
     Wiley's and Nature's, as IUPAC's recommendations for structure
-    diagrams draw them (Brecher 2008, GR-11; the journals say nothing of
+    diagrams draw them (Brecher 2008, GR-11.1; the journals say nothing of
     them in drawings, and Wiley's point to those recommendations). In
     parentheses, (R), in ACS 1996's, as ACS writes them in names. A
     setting of the drawing style: *R, S, E and Z*.
@@ -967,11 +978,14 @@ All hover-based, as above.
     alone might make it another or none. On a molecule in 3D, not yet.
   - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
     and floated round a structure a few pixels across). Their letters keep
-    to 9 px at the least; past that they fade as the view goes out, eased
-    with the zoom, and are gone where 9 px is twice the size they would be
-    (`marksSeenAt`). On a drawing and on a molecule in 3D alike; atom
-    numbers on a molecule in 3D fade below their own least size the same
-    way.
+    to 9 px at the least; past that they go once 9 px would be a third
+    larger than they are (`MARKS_LEAST_PX`) - switched there, not faded with
+    the zoom (the maintainer, 2026-10-28: a fade with the zoom left them half
+    there at a zoom), a little either way so that a zoom stopped at it does
+    not switch them back and forth, and faded over Meno's quick time, 120 ms
+    (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
+    alike. Atom numbers on a molecule in 3D still fade below their own least
+    size with the zoom, atom by atom, in the 3D view's shaders.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -1154,12 +1168,17 @@ All hover-based, as above.
   - **Corners**, any kind (the maintainer, 2026-10-12: corners anywhere,
     not curves): the arrow under the pointer shows a handle at each corner
     and a smaller one in the middle of each stretch. One dragged moves its
-    corner, or makes one there; a corner let go in line with what is
-    either side of it is taken away; *Straighten* in its menu takes them
+    corner, or makes one there - at a right angle, an L, its corner on the
+    circle whose diameter joins what is either side of it, until the
+    pointer pauses, and then freely (2026-10-28); a corner let go in line
+    with what is either side of it is taken away; *Straighten* in its menu takes them
     all away. A corner is kept as a share along the arrow and a distance
     across it, so that it goes with the arrow as it is moved, drawn out by
     an end or grown by its words. Words put by it go over its longest
-    stretch. Words already by it go with the point of its line they are
+    stretch. While an end or a corner is dragged, the arrow is drawn going
+    over to each place it snaps to - an end's 15-degree steps, a corner's
+    right angle - as a bond moved is, never jumping there
+    (`utils/arrowGlide`). Words already by it go with the point of its line they are
     by, as a corner is made, moved or taken away, or an end is drawn
     out. They keep the same share of the way along the line, and the
     same distance from that point, measured along and across its
@@ -1365,7 +1384,9 @@ All hover-based, as above.
     in place of a slide program's): words on the page with a size of
     their own, letters marked, and lists.
     - *A size of their own*, in points as the drawing's labels are: their
-      menu's *Size…* shows a card of *Label* (the drawing's labels' size,
+      menu's *Font…* shows a card - beside them, clear of them, so that
+      what it changes is seen changing (to their right, else below, to
+      their left or above) - of *Label* (the drawing's labels' size,
       10 points in ACS 1996's style, as words have had), *Text* 14,
       *Heading* 20 and *Title* 28 - the one they have ringed - and any
       other typed, 4 to 288 points, given with Enter. While they are
@@ -1373,6 +1394,25 @@ All hover-based, as above.
       8 ... 28, 32, 36, 44 ... 96). One undo step; saved, copied and drawn
       so in pictures (SVG, EMF and PNG). Without one, they are the labels'
       size, as the drawing style says.
+    - *Line spacing of their own* (the maintainer, 2026-10-27), on the same
+      card: *1* (single, as words have had: 1.25 ems baseline to
+      baseline), *1.15*, *1.5* and *2*, the one they have ringed, or any
+      other typed, 0.5 to 4 times single, given with Enter. Their lines
+      move apart or together eased, and so on an undo; a box given a
+      width keeps its top. One undo step; saved, copied and drawn so in
+      pictures.
+    - *A typeface of their own* (the maintainer, 2026-10-27), on the same
+      card, picked as the drawing style's is (the same list: those that
+      come with Meno and stand for a journal's, then every one on this
+      computer, each shown in itself). It is theirs over the drawing
+      style's: the style changed, they keep it. The drawing's typeface,
+      first in the list, picked again, they follow the style once more.
+      Given once its letters are read, so that they are not drawn in
+      another first; the words in the typeface they had fade out as those
+      in the new one fade in. One undo step; saved, copied, and written so
+      in pictures (SVG and PNG by its name, EMF with its own font
+      records), laid out by the typeface's own widths. One that cannot be
+      had on a computer is drawn there in IBM Plex Sans, as a style's is.
     - *Letters marked*: bold, italic, a colour, raised or lowered (kcal
       mol⁻¹, ΔG‡, r²SCAN). While they are written, Ctrl/Cmd+B and +I set
       what is selected bold or in italics, Ctrl/Cmd with + raises it and
@@ -1480,6 +1520,21 @@ lipids each have their own way of being drawn, which it should know.
      a SMILES was refused, 2026-10-13). A chain of three cumulated double
      bonds (hexa-2,3,4-triene) does have a cis or trans across it, end to
      end; that is not read, before or after Clean-up.
+   - **A configuration the drawing does not state is not drawn in** (the
+     maintainer, 2026-10-27). Read by IUPAC's recommendations (Brecher,
+     Pure Appl. Chem. 78, 1897, 2006), with "linear" within 10 degrees of
+     a straight line (ST-0.1), a drawing states no configuration at a
+     centre with three bonds and its H left out whose two bonds are in
+     line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
+     with a group straight on from it (ST-4.4, the linear drawing of a
+     double bond whose configuration is not given). Clean-up would draw
+     one or the other configuration there, so it refuses: a wedge on such
+     a centre as a wedge it cannot carry, and a double bond so drawn
+     because the new drawing would state a configuration the old one did
+     not (`lib/layout/drawn.ts#IN_LINE`). A structure not yet drawn - its
+     atoms all on one point, as a SMILES's are before it is laid out - is
+     not held to this: it is laid out as before, a double bond whose
+     configuration the SMILES does not give drawn one way or the other.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
@@ -1491,7 +1546,10 @@ lipids each have their own way of being drawn, which it should know.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
      (*Expand abbreviation*) puts the group in free space: away from all
-     the atom's bonds, out of a ring from a ring's atom, and clear of the
+     the atom's bonds, in the widest opening between them as a drawn
+     substituent is (GR-4.1.2; an NMe in a chain, its methyl 120 degrees
+     from each carbon, as a file is written), out of a ring from a ring's
+     atom, and clear of the
      drawing's atoms, bonds and labels as far as their letters are set -
      turned, or seen in a mirror where it has no stereo of its own, only
      where it is not clear as laid out; nothing else moves

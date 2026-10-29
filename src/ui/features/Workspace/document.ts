@@ -649,14 +649,13 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
   const touching = doc.model.bonds.filter((b) => b.a === id || b.b === id);
   const out = touching[0] ? atoms.find((x) => x.id === (touching[0].a === id ? touching[0].b : touching[0].a)) : undefined;
   const now = out ? { x: out.x - a.x, y: out.y - a.y } : null;
-  // (laid out away from all the atom's bonds together - out of a ring, from a ring's atom, as its bonds open - not on along the first alone)
+  // (laid out away from all the atom's bonds together - out of a ring, from a ring's atom, in the widest opening between its bonds - not on
+  // along the first alone)
   const all = touching.flatMap((b) => {
     const o = atoms.find((x) => x.id === (b.a === id ? b.b : b.a));
-    const l = o ? Math.hypot(o.x - a.x, o.y - a.y) : 0;
-    return o && l ? [{ x: (o.x - a.x) / l, y: (o.y - a.y) / l }] : [];
+    return o ? [{ x: o.x - a.x, y: o.y - a.y }] : [];
   });
-  const sum = all.reduce((p, q) => ({ x: p.x + q.x, y: p.y + q.y }), { x: 0, y: 0 });
-  const inward = all.length > 1 && Math.hypot(sum.x, sum.y) > 1e-6 ? sum : now;
+  const inward = all.length > 1 ? all : now;
   const s = group ? placedStructure(group, inward, NOMINAL_BOND_LENGTH) : (a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH));
   if (!s || !s.atoms.length) return doc;
   // a file's: turned by as much as its bond out has turned since
@@ -1984,7 +1983,7 @@ export function updateCaption(
   const captions = doc.captions ?? [];
   const index = captions.findIndex((c) => c.id === id);
   if (index < 0) return doc;
-  const { arrow, width, align, size, marks, ...rest } = patch;
+  const { arrow, width, align, size, font, lines, marks, ...rest } = patch;
   const was = captions[index];
   // (over the arrow it was over, unless said; as wide as it was, unless said - none, as its words)
   const link = arrow === undefined ? was.arrow : (arrow ?? undefined);
@@ -1993,8 +1992,11 @@ export function updateCaption(
   const lie = align === undefined ? was.align : align === "center" ? undefined : align;
   // (its own size, unless said - none, the labels'; its letters marked as they were, unless said - none, plain)
   const sized = size === undefined ? was.size : size != null && size > 0 ? size : undefined;
+  // (its own typeface and line spacing, unless said - none, the labels' and single)
+  const face = font === undefined ? was.font : font || undefined;
+  const spaced = lines === undefined ? was.lines : lines != null && lines > 0 && lines !== 1 ? lines : undefined;
   const marked = marks === undefined ? was.marks : marks.length ? marks : undefined;
-  const { arrow: _was, width: _wide, align: _lie, size: _size, marks: _marks, ...kept } = was;
+  const { arrow: _was, width: _wide, align: _lie, size: _size, font: _font, lines: _lines, marks: _marks, ...kept } = was;
   const next: Caption = {
     ...kept,
     ...rest,
@@ -2002,10 +2004,12 @@ export function updateCaption(
     ...(wide != null ? { width: wide } : {}),
     ...(lie ? { align: lie } : {}),
     ...(sized != null ? { size: sized } : {}),
+    ...(face ? { font: face } : {}),
+    ...(spaced != null ? { lines: spaced } : {}),
     ...(marked ? { marks: marked } : {}),
   };
   const sameMarks = JSON.stringify(next.marks ?? []) === JSON.stringify(was.marks ?? []);
-  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align && next.size === was.size && sameMarks) return doc;
+  if (next.text === was.text && next.x === was.x && next.y === was.y && next.arrow === was.arrow && next.width === was.width && next.align === was.align && next.size === was.size && next.font === was.font && next.lines === was.lines && sameMarks) return doc;
   const out = captions.slice();
   out[index] = next;
   return { ...doc, captions: out };

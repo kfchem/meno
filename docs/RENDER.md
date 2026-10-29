@@ -217,6 +217,11 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
 
 ## On the page
 
+The frame is moved as anything on the page is: a drag on it - not on its
+button - carries it, kept clear of where it now stands, and what the
+render makes lands where it stands as it ends (the maintainer,
+2026-10-28; `moveRender`).
+
 While it renders, a dashed frame stands where what it makes will lie,
 as large as it will be - beside the molecules, on the right, as large as
 they are drawn; or, where something lies there, in the free space nearest
@@ -357,7 +362,8 @@ uv, no package), and the script Blender runs, `render.py`.
   4 cm an ångström - a product on a table - as the canvas shows them, in
   the motions' own finish (each element's colour under a clear coat;
   carbon near black): a perspective camera with an 85 mm lens and depth of
-  field, motion blur, a finishing compositor. The Look and its parts are
+  field - its sensor across the frame's width, a portrait film's too, so
+  that a tall molecule is framed whole - motion blur, a finishing compositor. The Look and its parts are
   not used for them: a motion has its own. The Background choice picks
   the studio: **White** (or Transparent, a film having none) the white
   studio - a paper sweep the camera sees, lit only by a soft source above
@@ -407,12 +413,17 @@ uv, no package), and the script Blender runs, `render.py`.
     It is made in stages: each molecule's melt once, its pool's last
     surface kept in the job's folder, then each change between two pools.
     Each melt is a simulation of its own: the longest of all to render.
+    Every melt ends with the camera where every reform stays: at the
+    least distance from which the whole of the liquid's domain - sized for
+    the widest molecule - is in the frame, so no pool is ever cut.
   - Each piece is made in a Blender of its own - the studio, the part the
     changes share (`change.py`) and the change's script - after the one
     before. Every molecule stands on the same floor, turned as the canvas
     shows it; the camera is one move through the whole film - turning one
     way (Once) or swinging and back (Loop) - so one piece's last frame is
-    the next one's first. Shaders that glow are not sampled as lights,
+    the next one's first. The film is put together in the sequencer as
+    runs of frames, one image strip for each run from one piece's folder
+    (every piece's files have the same names). Shaders that glow are not sampled as lights,
     which would change how a molecule at rest is rendered between pieces.
   - Each change is timed in a length of its own (Ring, Scan and Shatter
     5 s; the liquid 8 s a melt and 1.6 s a reform), and the film's length

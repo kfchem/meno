@@ -5,6 +5,7 @@
  * the screen - and their words go where they would be too small to read.
  */
 import type { CSSProperties } from "react";
+import { switchedAt } from "./zoomSwitch";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 /**
@@ -27,24 +28,12 @@ export const pageScale = (zoom: number) => zoom * PAGE_PX;
 /** The scales a molecule's notes are drawn at, as the page is between them (Molecule3DView): never smaller than three quarters, nor larger than half as large again. */
 export const NOTES_SCALE = { least: 0.75, most: 1.5 } as const;
 
-/** Whether the words of chips and cards on the page are too small to read at `zoom`. */
-export const wordsTooSmall = (zoom: number) => pageScale(zoom) < WORDS_LEAST;
-
 /**
- * How far either side of `WORDS_LEAST` words and what stands for them
- * fade, as a factor of the scale: words out from `WORDS_LEAST` × 1.15 to
- * `WORDS_LEAST`, what stands for them - a step's card's large icons - in
- * from there to `WORDS_LEAST` / 1.15; about four notches of a mouse wheel
- * in all (each e^(40 px × 0.0016) = 1.066 times - PanZoom2D), so that they
- * come and go with the zoom, never at once, and never both at once.
+ * Whether the words of chips and cards on the page are read at `zoom`, they
+ * having been (`was`) or not: from a little above `WORDS_LEAST`, and no
+ * longer from a little below it (utils/zoomSwitch `switchedAt`). Not faded
+ * with the zoom: switched there, and faded over a short time - the words
+ * out as what stands for them, a step's card's large icons, comes in, or
+ * back (App.css `.meno-words`, `--words`).
  */
-export const WORDS_FADE = 1.15;
-
-/** How far through `WORDS_FADE`'s band from `WORDS_LEAST` the scale is at `zoom`, evenly in the zoom's own steps: 1 at its top, 0 at `WORDS_LEAST`, -1 at its foot, beyond them as far. */
-const throughFade = (zoom: number) => Math.log(pageScale(zoom) / WORDS_LEAST) / Math.log(WORDS_FADE);
-
-/** How much of the words of chips and cards on the page is shown at `zoom`, 0 to 1: all where they read, none where they are too small, faded with the zoom between (`WORDS_FADE`'s upper half). */
-export const wordsShown = (zoom: number): number => Math.min(1, Math.max(0, throughFade(zoom)));
-
-/** How much of what stands for those words where they are too small - a step's card's large icons - is shown at `zoom`, 0 to 1: none while any of the words are, coming in with the zoom after (`WORDS_FADE`'s lower half). */
-export const standInShown = (zoom: number): number => Math.min(1, Math.max(0, -throughFade(zoom)));
+export const wordsReadAt = (zoom: number, was: boolean): boolean => switchedAt(was, pageScale(zoom), WORDS_LEAST);

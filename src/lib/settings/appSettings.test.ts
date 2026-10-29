@@ -63,6 +63,10 @@ describe("the settings file", () => {
     expect(
       acceptAppSettings({ chemistry: { valenceWarnings: "on", stereoLabels: true } }).chemistry,
     ).toEqual({ valenceWarnings: true });
+    // the 3D energy window: a number from 0 to the widest taken, else the default (unset)
+    expect(acceptAppSettings({ chemistry: { valenceWarnings: true, window3d: 45 } }).chemistry).toEqual({ valenceWarnings: true, window3d: 45 });
+    for (const window3d of [-1, "30", 1e9, Number.NaN, null])
+      expect(acceptAppSettings({ chemistry: { valenceWarnings: true, window3d } }).chemistry).toEqual({ valenceWarnings: true });
     // a file from before readers were chosen: none chosen; one from before Files, its readers chosen as they were;
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });

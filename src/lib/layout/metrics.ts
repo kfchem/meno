@@ -1711,8 +1711,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       else if (y[oxo[0]] < y[a] + 0.2 * L) readingOrder += 0.5;
     }
     // and a double-bonded O on a cross above the chain through it, as
-    // IUPAC puts double-bonded substituents on a chain (P-3.2.2): never
-    // below it
+    // IUPAC puts a double-bonded branch on a chain (GR-3.2.2, where below
+    // is acceptable): never below it, by the maintainer's ruling (an acid's
+    // C=O up)
     for (let a = 0; a < n; a++) {
       if (!cross(a)) continue;
       const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);

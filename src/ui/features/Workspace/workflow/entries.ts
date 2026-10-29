@@ -752,7 +752,8 @@ export type FrameMarks = { failed?: Failure | null; imaginary?: number[] | null;
 export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed" | "imaginary" | "marksUnread"> {
   return {
     ...(frames.some((f) => f.failed) ? { failed: frames.map((f) => f.failed ?? null) } : {}),
-    ...(frames.some((f) => f.imaginary?.length) ? { imaginary: frames.map((f) => (f.imaginary?.length ? f.imaginary : null)) } : {}),
+    // (each frame's as its calculation judged it - none, [], as well as some - null where none judged it)
+    ...(frames.some((f) => Array.isArray(f.imaginary)) ? { imaginary: frames.map((f) => (Array.isArray(f.imaginary) ? f.imaginary : null)) } : {}),
     ...(frames.some((f) => f.marksUnread) ? { marksUnread: true as const } : {}),
   };
 }
@@ -760,7 +761,7 @@ export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed
 /** A molecule's own marks of frame `f` of `n` (`FrameMarks`). */
 export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUnread">, f: number, n: number): FrameMarks => ({
   ...(m.failed?.length === n && m.failed[f] ? { failed: m.failed[f] } : {}),
-  ...(m.imaginary?.length === n && m.imaginary[f]?.length ? { imaginary: m.imaginary[f] } : {}),
+  ...(m.imaginary?.length === n && Array.isArray(m.imaginary[f]) ? { imaginary: m.imaginary[f]! } : {}),
   ...(m.marksUnread ? { marksUnread: true as const } : {}),
 });
 
@@ -961,11 +962,12 @@ export function freeEnergyOf(e: SetEntry): Property | undefined {
 }
 
 /**
- * An entry's imaginary frequencies (cm-1): as its calculation judged them;
- * else, where its vibrations were worked out - its calculation's, or those
- * it carries (`calcProperties`) - those the table lists as negative, none
- * where it lists none: a table with one never reads as none; "not computed"
- * where they were not worked out.
+ * An entry's imaginary frequencies (cm-1): as its calculation judged them,
+ * where it judged some; else, where its vibrations were worked out - its
+ * calculation's, or those it carries (`calcProperties`) - those the table
+ * lists as negative, none where it lists none: a table with one never reads
+ * as none; else none, where its calculation judged none with no table read
+ * beside it; "not computed" where none was worked out or judged.
  */
 export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties">): number[] | "not computed" {
   if (e.imaginary?.length) return [...e.imaginary];
@@ -975,7 +977,8 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties
     return k < 0 ? [] : list.rows.map((r) => r.cells[k]).filter((f): f is number => typeof f === "number" && f < 0);
   }
   const table = e.properties?.vibrations?.value;
-  if (!e.properties?.vibrations) return "not computed";
+  // (none read: its calculation's verdict of none, where it gave one)
+  if (!e.properties?.vibrations) return Array.isArray(e.imaginary) ? [] : "not computed";
   const rows = typeof table === "object" && table && "table" in table ? table.table.rows : [];
   return rows.map((r) => r[0]).filter((f): f is number => typeof f === "number" && f < 0);
 }

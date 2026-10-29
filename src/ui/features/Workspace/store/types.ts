@@ -232,15 +232,19 @@ export type Caption = {
   from?: WordsFrom;
   /** Its own size, in points; unset, the drawing's labels' (lib/chem/captions `wordsFontPx`). */
   size?: number;
+  /** Its own typeface, by name; unset, the drawing's labels' (lib/chem/captions `wordsLabelSet`). */
+  font?: string;
+  /** Its own line spacing, as a multiple of single spacing; unset, single (lib/chem/captions `wordsLineEms`). */
+  lines?: number;
   /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
   marks?: WordsMark[];
 };
 /**
  * A change to words on the page: written anew, moved, put over an arrow or
  * taken from one (`arrow` null), made as wide as something or as their
- * words (`width` null), laid otherwise, given a size of their own or the
- * labels' (`size` null), their letters marked otherwise (`marks`, none
- * for plain).
+ * words (`width` null), laid otherwise, given a size, a typeface or a line
+ * spacing of their own or the labels' (`size`, `font`, `lines` null),
+ * their letters marked otherwise (`marks`, none for plain).
  */
 export type CaptionPatch = {
   text?: string;
@@ -250,6 +254,8 @@ export type CaptionPatch = {
   width?: number | null;
   align?: "left" | "center" | "right" | "justify";
   size?: number | null;
+  font?: string | null;
+  lines?: number | null;
   marks?: WordsMark[];
 };
 /** Where words taken out of a PDF came from (docs/PDF.md, *Taking things out*): the PDF, by its SHA-256, and the places they ran between. */
@@ -689,7 +695,8 @@ export type WorkspaceText = { id: number; name: string; text: string; path?: str
  */
 export type LostText = Omit<WorkspaceText, "text" | "path"> & { sha256: string };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
-export type TextOf = { step: number } | { molecule: number };
+/** What a text is the text of: a step - its log; where the step ran several jobs, all of them (`jobs`) and the one shown (`job`, its place among them) - or a molecule. */
+export type TextOf = { step: number; jobs?: string[]; job?: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
@@ -820,6 +827,8 @@ export type StepRan = {
   keys?: string[];
   /** What each of `jobs` gave as it was read, as one digest (lib/jobs `jobDigest`) - none where it was not read: a job taken up again must give the same. */
   gave?: (string | null)[];
+  /** How each of `jobs` ended, as its record said as the run ended - where there were several: what its log's chooser says of each, the workspace reopened (TextColumn). */
+  states?: JobState[];
   /** Stopped on output Meno cannot account for: the jobs it could not, by id, and the run as it stood - for *Adopt* to take up again. */
   unaccounted?: string[];
   held?: StepRunning;
@@ -1684,6 +1693,8 @@ export type EditorState = {
   showRun: (id: number, index: number) => void;
   /** A step's logs opened in the column of texts, following its jobs while they run. */
   showStepLog: (id: number) => Promise<void>;
+  /** A step's log of several jobs (`TextOf.jobs`), by its text: showing the `k`th of them. */
+  showStepLogJob: (text: number, k: number) => Promise<void>;
   /** The folder of a step's last job shown where the system shows files. */
   /** A step's job's files shown - written back out first, where its folder is not on this computer: what is said of those not written back, if anything. */
   showStepFiles: (id: number) => Promise<string | null | void>;

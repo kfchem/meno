@@ -255,6 +255,15 @@ class Steps(unittest.TestCase):
         self.assertEqual(died, {"why": "Gaussian stopped without saying why, after: Berny optimization."})
         self.assertEqual(ask("collect", step="energy", entries=[ENTRY], options={}, files={}, log="", ended="failed"), {"why": "Gaussian said nothing"})
 
+    def test_a_job_its_runner_saw_end_well_but_whose_output_does_not_say_normal_termination_failed(self):
+        # (an error its exit code did not tell: failed, in Gaussian's words)
+        why = ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=FAILED, ended="done")
+        self.assertEqual(why, {"why": "Some atoms are too close together."})
+        # (cut off, saying nothing of how it ended; a normal termination then an error one)
+        self.assertEqual(ask("collect", step="frequencies", entries=[ENTRY], options={}, files={}, log=DIED, ended="done"), {"why": "Gaussian stopped without saying why, after: Berny optimization."})
+        both = " Normal termination of Gaussian 16\n" + FAILED
+        self.assertIn("why", ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=both, ended="done"))
+
 
 if __name__ == "__main__":
     unittest.main()

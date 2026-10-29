@@ -26,8 +26,33 @@ FPSM = FPS / SCALE
 # (the domain the liquid runs in: wide enough for the widest molecule's pool; the camera's last place frames it)
 REACH = max(0.42, 1.35 * CFG.get("reach", 8.0) * K)
 CFG["dom_w"], CFG["dom_d"] = REACH, REACH * 0.76
-D_POOL = 3.5 * REACH
 Z_POOL = 0.07 * REACH / 0.42
+END_YAW, END_PITCH = 2.0, 10.0           # (where every melt's camera ends, and each reform's stays)
+
+def pool_distance(margin=0.94):
+    """The least distance at which all the domain's floor - all a pool can cover - and a pool's height over it are in the
+    frame, from where every melt ends (the camera's yaw and pitch then, the studio's pitch added): the largest molecule's
+    pool, however far it spreads, is never cut."""
+    hw = CAM.sensor_width / 2 / CAM.lens; hh = hw * sc.render.resolution_y / sc.render.resolution_x
+    y, pt = math.radians(END_YAW), math.radians(END_PITCH + CFG.get("pitch_add", 18.0 if WHITE else 0.0))
+    look = Vector((0, 0, Z_POOL)); away = Vector((math.sin(y) * math.cos(pt), -math.cos(y) * math.cos(pt), math.sin(pt)))
+    W, D, H = CFG["dom_w"], CFG["dom_d"], 0.12 * REACH
+    corners = [Vector((sx * W, sy * D, z)) for sx in (-1, 1) for sy in (-1, 1) for z in (0.0, H)]
+    def inside(d):
+        pos = look + away * d
+        inv = (look - pos).to_track_quat("-Z", "Y").to_matrix().inverted()
+        for c in corners:
+            q = inv @ (c - pos)
+            if q.z >= 0 or abs(q.x / -q.z) > hw * margin or abs(q.y / -q.z) > hh * margin:
+                return False
+        return True
+    lo, hi = 0.2 * REACH, 40.0 * REACH
+    for _ in range(40):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (lo, mid) if inside(mid) else (mid, hi)
+    return hi
+
+D_POOL = pool_distance()
 
 def fit(atoms, look_z, margin=0.62):
     hw = CAM.sensor_width / 2 / CAM.lens; hh = hw * sc.render.resolution_y / sc.render.resolution_x
@@ -36,7 +61,7 @@ def fit(atoms, look_z, margin=0.62):
 
 def pool_camera(f, e, d0=D_POOL, z0=Z_POOL):
     """The camera, `e` of the way from the molecule's framing (`d0`, looking at `z0`) to the pool's, where every melt ends."""
-    camera_at(f, -6.0 + 8.0 * e, 8.0 + 2.0 * e, d0 + (D_POOL - d0) * e, look=Vector((0, 0, z0 + (Z_POOL - z0) * e)), fstop=CFG.get("fstop", 5.0))
+    camera_at(f, -6.0 + (END_YAW + 6.0) * e, 8.0 + (END_PITCH - 8.0) * e, d0 + (D_POOL - d0) * e, look=Vector((0, 0, z0 + (Z_POOL - z0) * e)), fstop=CFG.get("fstop", 5.0))
 
 if CFG["stage"] == "melt":
     T = CFG["seconds"]

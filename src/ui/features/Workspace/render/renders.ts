@@ -299,13 +299,15 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     if (!file || (made?.media !== "image/png" && made?.media !== "video/mp4")) return fail("It said it made nothing Meno can show");
     const bytes = await readFile(await join(await jobFolder(job), file));
     const name = renderName(store, ids, made.media === "video/mp4" ? "mp4" : "png");
+    // (where its frame stands now - moved since, as anything on the page is: what it made lands there)
+    const there = renders.getState().list.find((r) => r.key === key)?.at ?? at;
     let picture: Omit<PictureItem, "id"> | null = null;
     if (made.media === "image/png") {
       const held = await pictureToAdd(name, bytes);
-      if (held) picture = { name, sha256: held.sha256, media: held.media, px: [held.width, held.height], ...at };
+      if (held) picture = { name, sha256: held.sha256, media: held.media, px: [held.width, held.height], ...there };
     } else {
       const held = await holdFilm(bytes);
-      if (held) picture = { name, sha256: held.sha256, media: "video/mp4", px: [rendered.width, rendered.height], ...at };
+      if (held) picture = { name, sha256: held.sha256, media: "video/mp4", px: [rendered.width, rendered.height], ...there };
     }
     if (!picture) return fail("What it made cannot be shown");
     // (its workspace closed meanwhile: put on no page, and kept in its job's folder)
@@ -316,6 +318,11 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   } catch (e) {
     fail(message(e));
   }
+}
+
+/** A render's frame moved to stand about (x, y), in the page's units: what it makes will land there (a drag on it, Renders2D). */
+export function moveRender(store: EditorStore, key: number, x: number, y: number): void {
+  rendersOf(store).setState((s) => ({ list: s.list.map((r) => (r.key === key ? { ...r, at: { ...r.at, x, y } } : r)) }));
 }
 
 /**

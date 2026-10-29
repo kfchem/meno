@@ -38,6 +38,17 @@ shots, and is checked against this page (*The look check*, below).
    selection. Text fields, and the words in the column, stay selectable;
    on the canvas, only what a chemist copies - a step card's failure, its
    program's line, a run's line (`COPYABLE`, with `select-text`).
+7. **On the page, WebGL draws; HTML is for what a person handles** (the
+   maintainer, 2026-10-27). What sits on the page and moves with it - a
+   mark, a label, a note, a frame, R/S - is drawn by WebGL, with the page,
+   so it never lags a pan or fades apart from it. HTML over the page is
+   kept for controls (a button, a slider, a field, a handle to drag) and
+   for words a person may copy (`COPYABLE`). A thing with both draws its
+   ink in WebGL and lays only its control over it in HTML, and only while
+   it can be used - a measure's field while it is being edited, a tip
+   while it is pointed at. The valence and "either way" boxes and R/S, in
+   2D and beside a molecule in 3D, are drawn so (`MarkBoxes2D`, `Texts2D`,
+   `StereoInk3D`); the rest of the page's HTML moves over in turn.
 
 ## Colours
 
@@ -187,6 +198,27 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   `accel-accent`.
 
 Each is reachable by keyboard and shows focus with an `accel-base` border.
+
+## Icons
+
+- **Read without their names** (the maintainer, 2026-10-28). Every icon
+  says what it does without a word under it. Where none would, a menu item
+  is words alone ("Reset orientation"), or the icon is the letters
+  themselves, as a chemist writes them ("3D", "R/S").
+- **Each its own.** No two actions share an icon: Energy window and Check
+  structures, Populations and Descriptors, As conformers and Enumerate each
+  have their own; sparkles are Generate's alone, a funnel is Filter's.
+- **Drawn as Quick Add's are**, where Heroicons' outline set has nothing
+  that is the thing itself: a 20-unit square, lines 1.8 wide (as heavy as a
+  Heroicon at 2.1 on its 24), ends and corners round; solid where a solid
+  reads better at 20 px (the balls of a ball-and-stick, a space-filling
+  model). `menuIcons.tsx`, `workflow/icons.tsx`.
+- **What a stock picture already means elsewhere is not borrowed**: no
+  sparkles for Clean-up (a broom), no cube for 3D, no refresh arrows for an
+  orientation, no Wi-Fi bars for frequencies (a spring), no bolt for an
+  energy, no cloud for NCI's surfaces in place of the thing itself.
+- **A file Meno opens** shows Meno's sheet, its folded corner and mark,
+  with the format's short name on a dark band (`src-tauri/icons/formats`).
 
 ## The look check
 

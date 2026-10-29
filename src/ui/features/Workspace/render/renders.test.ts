@@ -58,7 +58,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 }));
 
 import { PX } from "../workflow/look";
-import { boxOf, progressOf, rendersOf, startRender, stopRender, stopRenders, withWords } from "./renders";
+import { boxOf, moveRender, progressOf, rendersOf, startRender, stopRender, stopRenders, withWords } from "./renders";
 import { askOf, renderOptions } from "./renderOptions";
 import type { RenderAsk } from "./renderScene";
 import { valuesOf } from "../../../../lib/options";
@@ -294,5 +294,22 @@ describe("where a render lands", () => {
     expect(films.map(({ x, y, w, h }) => ({ x, y, w, h }))).toEqual(expect.arrayContaining([r.at, r2.at]));
     // (landed: their frames kept clear no more)
     expect(one.st().renderFrames).toEqual([]);
+  });
+
+  it("moved as anything on the page is, its frame kept clear where it now stands, and what it makes lands there", async () => {
+    const one = workspace();
+    const ran = startRender(one.store, [one.id], FILM, {});
+    await vi.advanceTimersByTimeAsync(0);
+    const [r] = rendersOf(one.store).getState().list;
+    moveRender(one.store, r.key, r.at.x + 12, r.at.y - 5);
+    const moved = rendersOf(one.store).getState().list[0].at;
+    expect(moved).toEqual({ ...r.at, x: r.at.x + 12, y: r.at.y - 5 });
+    expect(one.st().renderFrames).toEqual([withWords(moved)]);
+    Object.assign(jobs.get(r.job!)!, { state: "done", ended: Date.now() });
+    madeFiles.set(`/jobs/${r.job}/film.mp4`, mp4(3));
+    await vi.advanceTimersByTimeAsync(5 * LOOK_MS);
+    await ran;
+    const film = one.st().pictures.find((p) => p.media === "video/mp4")!;
+    expect({ x: film.x, y: film.y, w: film.w, h: film.h }).toEqual(moved);
   });
 });

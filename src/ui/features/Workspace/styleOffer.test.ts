@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STYLE_3D_CHOICE, withRole } from "../../../lib/chem/style3d";
 import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
-import { drawingName, keyOf, settingsStylesOf, styleAsk } from "./styleOffer";
+import { drawingName, keyOf, settingsDiffer, settingsStylesOf, styleAsk } from "./styleOffer";
 import { connectStoreToDocument, createEditorStore } from "./store";
 import { createWorkspaceDocument } from "./document";
 
@@ -56,5 +56,13 @@ describe("a workspace offered Settings' styles", () => {
     doc.undo();
     expect(doc.getState().style).toEqual(was.style);
     expect(doc.getState().style3d).toEqual(was.style3d);
+  });
+
+  it("tells which of a workspace's styles differ from Settings' - none where they are its own", () => {
+    expect(settingsDiffer(ws, opened)).toBeNull();
+    expect(settingsDiffer({ ...ws, style: RSC }, opened)).toEqual({ drawing: true, d3: false });
+    const swapped = settingsStylesOf(ACS, withRole(DEFAULT_STYLE_3D_CHOICE, "primary", DEFAULT_STYLE_3D_CHOICE.secondary));
+    expect(settingsDiffer(ws, swapped)).toEqual({ drawing: false, d3: true });
+    expect(settingsDiffer({ ...ws, style: MENO }, swapped)).toEqual({ drawing: true, d3: true });
   });
 });

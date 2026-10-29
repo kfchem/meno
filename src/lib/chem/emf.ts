@@ -520,11 +520,12 @@ export function layoutEmf(
   // in 3D - in fonts made as they are first wanted, by size and slant
   const set = labelSetOf(opts);
   const family = set.fontFamily ?? "Arial";
-  const face = family.slice(0, 31);
-  const font = labelFont(family);
   const fonts = new Map<string, number>();
   let textColor: number | null = null;
-  const writeRun = (run: { x: number; y: number; size: number; italic?: boolean; bold?: boolean; text: string }, color: number) => {
+  // (in the labels' typeface - or words' own, where they have one)
+  const writeRun = (run: { x: number; y: number; size: number; italic?: boolean; bold?: boolean; text: string }, color: number, own = family) => {
+    const face = own.slice(0, 31);
+    const font = labelFont(own);
     if (textColor == null) w.add(EMR.SETTEXTALIGN, 4, (v) => v.setUint32(0, 24, true)); // TA_BASELINE | TA_LEFT
     if (textColor !== color) {
       w.add(EMR.SETTEXTCOLOR, 4, (v) => v.setUint32(0, color, true));
@@ -533,7 +534,7 @@ export function layoutEmf(
     const height = L(run.size);
     const italic = !!run.italic;
     const bold = !!run.bold;
-    const key = `${height}${italic ? " italic" : ""}${bold ? " bold" : ""}`;
+    const key = `${height}${italic ? " italic" : ""}${bold ? " bold" : ""}${own === family ? "" : ` ${own}`}`;
     let h = fonts.get(key);
     if (h == null) {
       h = w.handle();
@@ -621,9 +622,10 @@ export function layoutEmf(
       const color = t.color ? colorRef(t.color) : ink;
       // (words given a size of their own: at it)
       const size = t.ownSize ? (opts.units === "world" ? t.fontPx : t.fontPx / zoom) : fontSize;
-      for (const run of placeLabel(t, size, set)) {
+      // (and in a typeface of their own: in it)
+      for (const run of placeLabel(t, size, t.family ? { ...set, fontFamily: t.family } : set)) {
         if (run.mark || !run.text) continue; // (a mark is drawn with the lines and shapes)
-        writeRun(run, run.color ? colorRef(run.color) : color);
+        writeRun(run, run.color ? colorRef(run.color) : color, t.family);
       }
     }
   }

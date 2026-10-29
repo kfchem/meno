@@ -123,6 +123,27 @@ async function typefaceBytes(family: string): Promise<ArrayBuffer | null> {
   return null;
 }
 
+/**
+ * Once reading `family` - started now, if it was not - has come to an end,
+ * as it went: ready, or not to be had (then drawn in the default typeface,
+ * which is read too).
+ */
+export function typefaceRead(family: string): Promise<void> {
+  requestTypeface(family);
+  const read = () => {
+    const state = useLabelFonts.getState().state[family];
+    return state !== undefined && state !== "loading";
+  };
+  if (read()) return Promise.resolve();
+  return new Promise((done) => {
+    const stop = useLabelFonts.subscribe(() => {
+      if (!read()) return;
+      stop();
+      done();
+    });
+  });
+}
+
 /** Whether any of `texts` has a character outside printable ASCII. */
 export function needsFallback(texts: Iterable<string>): boolean {
   for (const t of texts) if (/[^\x20-\x7e]/.test(t)) return true;
