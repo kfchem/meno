@@ -8,6 +8,7 @@ import Molecule3DView from "../Workspace/components/Molecule3DView";
 import { watchShaderErrors } from "../Workspace/utils/menoShader";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
+import { onIdleClock } from "./idleClock";
 import { markTurning } from "./sampleTurn";
 
 // --- Preview -------------------------------------------------------------------
@@ -20,33 +21,6 @@ const UPRIGHT = new THREE.Vector3(0, 1, 0);
 const IDLE = 0.2;
 /** How gently it takes up its own turn again once let go - by hand, or its coast ended - in seconds (eased, never a jump). */
 const IDLE_TAU = 0.8;
-/**
- * How often its own turn is drawn, a second: at this speed under a pixel a frame either way, at half the cost of every
- * frame the screen has (a turn by hand, and its coast, drawn at every one).
- */
-const IDLE_FPS = 30;
-
-// (one clock for every sample turning on its own: each steps in the same moment, and all are drawn in one frame)
-const turning = new Set<(d: number) => void>();
-let clock: number | null = null;
-function onClock(step: (d: number) => void): () => void {
-  turning.add(step);
-  if (clock == null) {
-    let was = performance.now();
-    clock = window.setInterval(() => {
-      const now = performance.now();
-      const d = Math.min((now - was) / 1000, 1 / 20);
-      was = now;
-      for (const f of turning) f(d);
-    }, 1000 / IDLE_FPS);
-  }
-  return () => {
-    turning.delete(step);
-    if (turning.size || clock == null) return;
-    window.clearInterval(clock);
-    clock = null;
-  };
-}
 /** How far, in pixels, a press goes before it turns the sample: short of it, it is a click, which picks it (`onTap`). */
 const TURN_PX = 4;
 
@@ -242,11 +216,11 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
   }, [idle, gl, invalidate]);
 
   // its own turn, slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again
-  // eased after. Stepped by a clock of its own, not each frame: a step drawn asks for a frame, and the screen's every
-  // frame would be drawn again
+  // eased after. Stepped by its own clock (idleClock), on every other frame, not each: a step drawn asks for a
+  // frame, and the screen's every frame would be drawn again
   useEffect(() => {
     if (!idle) return;
-    return onClock((d) => {
+    return onIdleClock((d) => {
       if (!seen.current) return;
       if (held.current || spin.current) {
         own.current = 0;
