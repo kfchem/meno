@@ -4,7 +4,7 @@
 
 ## スライド {#slides}
 
-スライドはページの上の枠です。その下にあるものが、聞き手に見えるものになります。スライドに入れたいものを選んで右クリックし、「Slide around these」を選びます。または、何もないところをダブルクリックして開くアイコンから、いま見えている範囲のスライドを作れます。新しいスライドは、発表の最後に加わります。
+スライドはページの上の枠です。その下にあるものが、聞き手に見えるものになります。スライドに入れたいものを選んで右クリックし、「Slide around these」を選びます。または、何もないところをダブルクリックして出てくるものから、いま見えている範囲のスライドを作れます。新しいスライドは、発表の最後に加わります。
 
 - 左上に番号が付き、次のスライドへ破線の矢印が伸びます。どちらも発表中には出ず、ページのどの画像にも入りません。
 - 番号をほかのスライドへドラッグすると、その位置に移ります。右クリックメニューの「Earlier in the talk」「Later in the talk」で、一つ前後に移ります。
@@ -27,7 +27,7 @@
 
 ## 言葉 {#words}
 
-何もないところをダブルクリックして開くアイコンの「Text」で、そこに言葉を置きます。打ち込んだら、Enter で確定、Shift+Enter で改行、Escape で取りやめます。
+何もないところをダブルクリックして出てくるものの「Text」で、そこに言葉を置きます。打ち込んだら、Enter で確定、Shift+Enter で改行、Escape で取りやめます。
 
 - 化学式は打つそばから整います。K2CO3 の数字は下付きに、NH4+ のプラスは上付きに、t-BuOK の t は斜体になります。
 - 設定の「General」にある「Write words on the page as they are meant」がオンなら、略記がその意味の形になります。たとえば 60dc は 60 °C になります。
@@ -38,7 +38,7 @@
 
 「Arrow」は、クリックで一本置き、ドラッグで引いて描きます。矢印を右クリックすると、種類（「Reaction arrow」「Equilibrium」「Retrosynthetic」「No reaction」）、矢じり、「Dashed line」、太さ（「Thin line」「Regular line」「Thick line」）、そしてすべての矢印の見た目を決める「Arrow style…」を選べます。
 
-触媒サイクルも同じアイコンから作れます。言葉を載せる矢印の輪です。その線を右クリックすると、「Arrow coming in」と「Arrow going out」（その場で言葉を打ちます）、「Turn clockwise」か「Turn anticlockwise」、矢印が載せた言葉の手前でどれだけ切れるか（「Arrows close」から「Arrows well apart」まで）を選べます。
+触媒サイクルも、何もないところをダブルクリックして出てくるものから作れます。言葉を載せる矢印の輪です。その線を右クリックすると、「Arrow coming in」と「Arrow going out」（その場で言葉を打ちます）、「Turn clockwise」か「Turn anticlockwise」、矢印が載せた言葉の手前でどれだけ切れるか（「Arrows close」から「Arrows well apart」まで）を選べます。
 
 ## 図形と手書き {#shapes}
 

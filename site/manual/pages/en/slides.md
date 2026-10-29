@@ -4,7 +4,7 @@ How to make a talk of what is on the page - slides, and presenting them - and ho
 
 ## Slides {#slides}
 
-A slide is a frame on the page: what lies under it is what the audience sees. Choose what a slide should hold, right-click, and choose *Slide around these*; or make one of what is in view, from the icons a double-click on empty space opens. A new slide goes last in the talk.
+A slide is a frame on the page: what lies under it is what the audience sees. Choose what a slide should hold, right-click, and choose *Slide around these*; or make one of what is in view, from what a double-click on empty space offers. A new slide goes last in the talk.
 
 - Its number stands at its upper left, and a dashed arrow leads on to the next slide. Neither shows in the talk, nor in any picture of the page.
 - Drag its number onto another slide to put it in that place; *Earlier in the talk* and *Later in the talk*, on its right-click menu, move it one place.
@@ -27,7 +27,7 @@ To give a slide to Word or PowerPoint, choose *Select what is on it* and copy (â
 
 ## Words {#words}
 
-*Text*, among the icons a double-click on empty space opens, puts words there. Type them: Enter keeps them, Shift+Enter starts a new line, and Escape lets them go.
+*Text*, from what a double-click on empty space offers, puts words there. Type them: Enter keeps them, Shift+Enter starts a new line, and Escape lets them go.
 
 - Chemical formulas set themselves as they are typed: the numbers of K2CO3 go down, the plus of NH4+ goes up, and the t of t-BuOK slants.
 - Typed shorthand becomes what it means, such as 60dc for 60 Â°C, while Settings, *General*, *Write words on the page as they are meant* is on.
@@ -38,7 +38,7 @@ To give a slide to Word or PowerPoint, choose *Select what is on it* and copy (â
 
 *Arrow* puts one down with a click, or draws it with a drag. Right-click an arrow to choose its kind - *Reaction arrow*, *Equilibrium*, *Retrosynthetic* or *No reaction* - its heads, *Dashed line*, its thickness (*Thin line*, *Regular line*, *Thick line*), and *Arrow styleâ€¦* for every arrow's look.
 
-A catalytic cycle, from the same icons, is a ring of arrows with words on it. Right-click its line for *Arrow coming in* and *Arrow going out* - type their words at once - *Turn clockwise* or *Turn anticlockwise*, and how far its arrows stop short of the words on it, from *Arrows close* to *Arrows well apart*.
+A catalytic cycle, also from what a double-click on empty space offers, is a ring of arrows with words on it. Right-click its line for *Arrow coming in* and *Arrow going out* - type their words at once - *Turn clockwise* or *Turn anticlockwise*, and how far its arrows stop short of the words on it, from *Arrows close* to *Arrows well apart*.
 
 ## Shapes and writing by hand {#shapes}
 
