@@ -104,6 +104,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         ez: o.ez === true,
         atoms: String(o.atoms ?? ""),
         elements: String(o.elements ?? ""),
+        reach: Number(o.reach),
+        floor: Number(o.floor),
       });
     case "join":
       return joinedSet(a.entries, b.entries, a.holds, String(o.on ?? ""), String(o.carry ?? ""));
