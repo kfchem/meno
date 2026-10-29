@@ -475,6 +475,12 @@ rings, which lies on the lattice no way round and is set on it only by
 its bonds out (proline's carboxyl level, its ring symmetric about it) -
 the drawing takes the one that reads best (section 4).
 
+A molecule with no ring that can lie square is then turned the little way
+that brings its bonds out nearest the lattice. One drawn as its own mirror
+image is square by that mirror instead: N-bromosuccinimide is set with its
+N-Br upright and its two C=O alike either side. It is never tilted to bring
+one C=O onto the lattice at the other's cost.
+
 ## 4. Reading order
 
 - **The long axis level.** A drawing is wider than it is tall, and its

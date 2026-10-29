@@ -22,7 +22,7 @@ import {
   type Frame,
   type Grown,
 } from "./assemble";
-import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
+import { angleOf, dist, mirror, mirrorLines, rad, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, hydrogenWritten, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
@@ -1465,12 +1465,18 @@ function crossingsOf(bonds: readonly [number, number][], p: Grown): number {
 
 /** The most atoms a side turned over may have and still be set right within. */
 const SMALL_SIDE = 10;
+/** How near, in bond lengths, an atom's mirror image must land on its partner for a drawing to be its own mirror image. */
+const MIRROR_TOL = 0.05;
 
 /**
  * A piece with no ring that can lie square - its rings all five-membered,
  * say, or none - has nothing setting it on the lattice but its other bonds:
  * turn it the little way that brings them nearest, as they lie in `ref`
- * (the drawing before its last small moves).
+ * (the drawing before its last small moves). One drawn as its own mirror
+ * image - an N-substituted succinimide, its N between the two C=O - is
+ * square by its own shape instead: turned the little way that sets that
+ * mirror level or upright, never tilted off it to bring one more bond onto
+ * the lattice.
  */
 function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos): void {
   const here = new Set(piece);
@@ -1506,7 +1512,20 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
       turn = t;
     }
   }
-  if (!turn) return;
+  // (a mirror the little way from level or upright: the turn that sets it so,
+  // and of two, the one that leaves its bonds nearer the lattice)
+  const at = new Map(piece.map((a, i) => [a, i]));
+  const mirrors = mirrorLines(
+    piece.map((a) => ref.get(a)!),
+    piece.map((a) => `${mol.el[a]}${mol.charge[a] || ""}`),
+    mol.bonds.filter((b) => here.has(b.a)).map((b) => [at.get(b.a)!, at.get(b.b)!, `${b.order}`] as const),
+    MIRROR_TOL,
+  );
+  const squaring = mirrors
+    .flatMap((t) => [t, t - Math.PI / 2, t - Math.PI, t + Math.PI / 2])
+    .filter((t) => Math.abs(t) <= rad(15) + 1e-9);
+  if (squaring.length) turn = squaring.reduce((best, t) => (off(t) < off(best) - 1e-9 ? t : best));
+  if (Math.abs(turn) < 1e-9) return;
   const c = Math.cos(-turn);
   const sn = Math.sin(-turn);
   for (const a of piece) {
