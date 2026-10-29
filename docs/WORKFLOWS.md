@@ -2763,9 +2763,11 @@ doubled quotes); a byte-order mark before it is left out.
   name stays its key - what rows are matched on, what a condition names -
   and hovering on the head says both ("Product · reaction.product"). A
   number column's head stands at the right, over its numbers, and its
-  numbers are written with one count of decimals - the most any of those
-  shown needs - so that their points line up ("0.00" over "0.37"); the
-  value kept is as it came.
+  numbers are written with one count of decimals, so that their points
+  line up ("0.00" over "0.37"): an energy in kcal/mol with two, as a
+  molecule's chip writes it, so the same value reads the same in both;
+  any other with as many as the one shown that needs most. The value
+  kept is as it came.
 - **A table's set is as tall as the rows it shows** (`tableSetSize`): its
   heads, up to six rows, and the line saying what it is, with nothing
   under it.
