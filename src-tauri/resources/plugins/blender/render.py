@@ -525,8 +525,9 @@ def render(scene, s, folder):
 def strip_runs(frames):
     """The frames a film plays, as the sequencer's image strips take them: a strip reads all its files from one folder - its
     first file's - so each run of frames from one folder is a strip of its own, (folder, the files' names, the film frame it
-    starts at). A change's pieces each have their own folder, their files the same names (f_0001.png...), and a melt is
-    played backward as well as forward: never one strip for them all, which would play the first folder's throughout."""
+    starts at). A change's pieces each have their own folder, their files the same names (f_0001.png...), and a cycle's
+    Loop plays its frames forward, then back: never one strip for them all, which would play the first folder's
+    throughout, and the names kept in the order they are played."""
     runs = []
     for k, f in enumerate(frames):
         d, name = os.path.split(f)
