@@ -317,6 +317,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared (STRUCTURE-STEPS.md, *Compare bonding*) |
+| Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -2797,6 +2798,44 @@ the first in each path (step 48).
   no path to be ranked within)").
 - It takes molecules in 3D and conformer sets; structures drawn are not
   ranked yet.
+### Join (2026-10-29)
+
+*Join*, Meno's own, puts values of one set's entries onto another's
+(lib/nodes `join`, WORKFLOWS-FOUNDATION.md, *Meno's own nodes*): the names
+of a reaction path's two ends put back on its saddle point, matched on
+*path* (case F, steps 27 and 50), a docking score back onto its ligand.
+
+- **Two inputs**: *Onto*, whose entries come out with what is put on, and
+  *From*, whose properties are put on. Each of *Onto*'s entries is matched
+  with the one entry of *From* that has the same value of the property
+  named in *Matched on* - an ID a Tag gave, which rides along with every
+  entry made from it (lib/nodes `matchedOn`, as Re-bond and Compare
+  bonding match) - never by an implicit rule.
+- **What is put on** is typed in *Put on*, one to a line or each after a
+  semicolon: a property's name ("species"), or a name and the one it is
+  put on as ("species as first end"). Each keeps its record as it was:
+  its value, its unit, where (its geometry, temperature, solvent) and by
+  what it was worked out. A value worked out at From's geometry stays one
+  of that geometry; nothing put on is read as worked out at Onto's.
+- **Nothing is put on silently.** An entry with no match, or more than
+  one ("2 entries of From have its path, q"), goes out of *Not joined*
+  saying so; so does one whose match is no result - failed, not
+  converged, its marks unread ("its match is not finished: not
+  converged"): its values are not to be trusted - one whose match lacks a
+  property asked for, and one that has its own under the name it would be
+  put on as: nothing of its own is overwritten. From's entries that
+  matched none are counted on the line.
+- **Meno's own names are never put on**: an energy, a state, a thermal
+  correction, vibrations - the names an entry's own record gives its own
+  values, worked out at its own geometry. A value put on under one would
+  read as of the entry's geometry; *Put on* refuses it ("put it on under
+  another name"), whether the entry has one or not.
+- A property whose name holds " as " cannot be put on: *Put on* reads it
+  as a name and the one it goes on as.
+- Its card says it in a line ("species as first end, matched on path"), or what it
+  still needs. It takes molecules in 3D and conformer sets; a table to
+  join from, and joining by identity or by drawn atom (the foundation's
+  other two ways), are not built yet.
 
 ### Charts (2026-10-22)
 

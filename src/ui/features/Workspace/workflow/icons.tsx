@@ -187,6 +187,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
   ),
   // (a list numbered: entries in order, their places)
   numbered: NumberedListIcon,
+  // (two tables, a row of each linked: put on by a key)
+  join: (
+    <>
+      <rect x="2" y="3.5" width="6.5" height="13" rx="1.3" />
+      <rect x="11.5" y="3.5" width="6.5" height="13" rx="1.3" />
+      <path d="M2 7.8 H8.5 M2 12.2 H8.5 M11.5 7.8 H18 M11.5 12.2 H18" strokeWidth={1} />
+      <path d="M8.5 10 H11.5" strokeWidth={2.2} />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */

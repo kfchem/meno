@@ -15,6 +15,7 @@ import { enumerated } from "./enumerate";
 import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, speciesSet, taggedSet } from "./structureSteps";
 import { positionIds, substituted } from "./substituents";
 import { rankedSet } from "./valueSteps";
+import { joinedSet } from "./joinStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -78,8 +79,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps): *Merge*, *Re-bond* and *Compare bonding*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding"];
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding* and *Join*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "join"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
@@ -102,6 +103,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         atoms: String(o.atoms ?? ""),
         elements: String(o.elements ?? ""),
       });
+    case "join":
+      return joinedSet(a.entries, b.entries, a.holds, String(o.on ?? ""), String(o.carry ?? ""));
     default:
       return { ok: false, said: "Meno does not do this itself on two inputs" };
   }
