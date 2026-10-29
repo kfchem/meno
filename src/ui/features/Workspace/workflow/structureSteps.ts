@@ -1,7 +1,8 @@
 /**
  * Meno's steps on structures, as a workflow's steps run them
- * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine* and *Measure*, and
- * those of two inputs, *Merge*, *Re-bond* and *Compare bonding* - each
+ * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine*, *Measure* and
+ * *Restraints*, and those of two inputs, *Merge*, *Re-bond*, *Compare
+ * bonding* and *Torsion restraints* - each
  * a set's entries read as Meno's entry record (`entryOfSet`), the step's own
  * function done on them (lib/nodes, lib/steps), and each entry given back as
  * a step's entry (`setEntryOfEntry`) - all it held kept where it is that
@@ -17,6 +18,9 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
+import { restraintsOf, torsionsRestrained } from "../../../../lib/steps/restraints";
+import type { OptionValues } from "../../../../lib/options";
+import { restraintsTyped, torsionsNeeds } from "./kinds";
 import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -283,4 +287,78 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   }
   const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : [])];
   return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
+}
+
+/** An entry with its restraints as a step left them. */
+const withRestraints = (e: SetEntry, restraints: NonNullable<SetEntry["properties"]>[string]): SetEntry => ({ ...e, properties: { ...e.properties, restraints } });
+
+/**
+ * *Restraints* (lib/steps `restraintsOf`): each entry with its restraints
+ * from itself - its coordination bonds at the factor given, the pairs
+ * typed at their distance, the atoms typed fixed - whatever it held before
+ * replaced; one it cannot have them out of *Failed*, saying why.
+ */
+export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
+  const typed = restraintsTyped(v);
+  if ("why" in typed) return { ok: false, said: typed.why };
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const total = { coordination: 0, distances: 0, fixed: 0 };
+  entries.forEach((was, i) => {
+    const r = restraintsOf(entryOfSet(was, String(i)), typed.asked);
+    if ("failed" in r) {
+      aside.push({ ...was, failed: { kind: "refused", why: r.failed } });
+      return;
+    }
+    total.coordination += r.count.coordination;
+    total.distances += r.count.distances;
+    total.fixed += r.count.fixed;
+    kept.push(withRestraints(was, r.property));
+  });
+  const said = [`${plural(kept.length, "entry", "entries")} restrained`];
+  if (typed.asked.coordination != null) said.push(total.coordination ? `${plural(total.coordination, "coordination bond")} held` : "no coordination bonds");
+  if (total.distances) said.push(`${plural(total.distances, "pair")} at their distance`);
+  if (total.fixed) said.push(`${plural(total.fixed, "atom")} fixed`);
+  if (aside.length) said.push(`${aside.length} failed`);
+  return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
+}
+
+/**
+ * *Torsion restraints* (lib/steps `torsionsRestrained`): each entry against
+ * its reference - the one of *Reference*, or the one with the same value of
+ * a property - each torsion trans there and not trans here held at 180°,
+ * stronger by the step each time; out of *Restrained*. One with every such
+ * torsion trans already out of *Trans already*, as it came. Where any entry
+ * cannot be set against a reference, nothing is done, saying why: none is
+ * passed on as trans that was never looked at.
+ */
+export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
+  const needs = torsionsNeeds(v);
+  if (needs) return { ok: false, said: needs };
+  const step = Number(String(v.step).trim());
+  const byProperty = v.reference === "property";
+  if (!byProperty && references.length !== 1) return { ok: false, said: `Against the one reference, but ${references.length} came into Reference: match them on a property` };
+  const es = entries.map((e, i) => entryOfSet(e, String(i)));
+  const rs = references.map((e, i) => entryOfSet(e, String(i)));
+  const matched = byProperty ? matchedOn(es, rs, String(v.property).trim(), "Reference") : es.map(() => ({ index: 0 }));
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const problems: string[] = [];
+  let added = 0;
+  let raised = 0;
+  entries.forEach((e, i) => {
+    const m = matched[i];
+    if ("why" in m) return problems.push(`${named(e)}: ${m.why}`);
+    const r = torsionsRestrained(es[i], rs[m.index], step);
+    if ("failed" in r) return problems.push(`${named(e)}: ${r.failed}`);
+    if (!r.count.wrong) return aside.push(e);
+    added += r.count.added;
+    raised += r.count.raised;
+    kept.push(withRestraints(e, r.property));
+  });
+  if (problems.length) return { ok: false, said: `${plural(problems.length, "entry", "entries")} could not be set against a reference. ${problems[0]}` };
+  const said = [`${kept.length} restrained`, `${aside.length} trans already`];
+  if (added) said.push(`${plural(added, "torsion")} newly held`);
+  if (raised) said.push(`${plural(raised, "torsion")} held stronger`);
+  return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
 }

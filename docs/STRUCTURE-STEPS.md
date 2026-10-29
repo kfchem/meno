@@ -4,9 +4,9 @@ The workflow steps on structures that Meno does itself
 (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures). Each does
 one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
 `src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
-*Combine* and *Measure* are steps of a workflow, and so are the steps of two
-inputs, *Merge*, *Re-bond* and *Compare bonding* (docs/WORKFLOWS.md, *Kinds of
-step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
+*Combine*, *Measure* and *Restraints* are steps of a workflow, and so are the
+steps of two inputs, *Merge*, *Re-bond*, *Compare bonding* and *Torsion
+restraints* (docs/WORKFLOWS.md, *Kinds of step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
 entry records, and gives each back as a step's entry - all it held kept
 where it is that entry still, what was worked out at another structure,
 places or state never carried (`setEntryOfEntry`). The rest follow. Each is tested against answers known by construction,
@@ -151,7 +151,12 @@ start of a restrained minimisation towards the product.
   (`Property`, `src/lib/entry.ts`):
   - a value of a geometry (`at`) still says the geometry it was worked out
     at;
-  - a label (a Tag's ID, restraints) rides as it is;
+  - a label (a Tag's ID) rides as it is;
+  - restraints (`restraints`) are the bonding entry's alone: they hold its
+    bonds, its coordination bonds and the torsions across its double bonds,
+    and the entry is bonded as it is. The geometry entry's, of the bonding
+    it had, are dropped, and this is said. A reactant conformer's own
+    restraints from its search never stand in for the product's;
   - a value of a structure (`of`, a descriptor's molar mass) whose structure
     is not the new entry's is kept, marked not applicable ("worked out on the
     structure before Re-bond"), and said - never shown as current
@@ -218,6 +223,74 @@ Checked:
 - CHFClBr and its mirror image differ where R or S is asked; CH2FCl with
   its hydrogens swapped does not.
 - cis- and trans-2-butene differ where E or Z is asked.
+
+## Restraints
+
+Each entry's restraints from itself (`restraintsOf`): the property
+`restraints`, rows of the entry record's `Restraint`, with atoms from 0,
+each held by the energy the record states (`src/lib/entry.ts`): a distance
+by E = k d²/2, k in kcal mol⁻¹ Å⁻²; atoms fixed with neither value nor
+strength. Restraints are a label: they name no geometry, and ride along.
+
+- **Coordination bonds**, the bonds the entry marks as such, are kept at a
+  factor of their atoms' van der Waals radii together. The radii are
+  Alvarez's (`elements.ts`; S. Alvarez, Dalton Trans. 2013, 42, 8617,
+  doi:10.1039/c3dt50599e), named on the card.
+- **Listed pairs of atoms** are kept at their distance in the entry, and
+  **listed atoms** are fixed where they stand. Both are typed from 1.
+- **No defaults.** The factor and the strength are the chemist's: the card
+  says "Set the factor" and "Set the strength" until they are typed. A
+  factor has no source to take a default from. ConfoTS's protocol uses 0.9,
+  and 0.9 of the van der Waals radii together holds an acid and a base in
+  contact, about twice a bond's length (H3N→BH3: 3.21 Å, its B–N bond
+  about 1.6 Å), not at a bond.
+- **Replaced, not added to.** What an entry held before is replaced.
+- **Refused, with the reason** (out of *Failed*): an atom the entry does not
+  have, an element Alvarez gives no radius for, or an entry with no 3D
+  places or with frames.
+- **Its line** counts what it held: "12 entries restrained · 3 coordination
+  bonds held". Coordination bonds asked and none marked are said ("no
+  coordination bonds"), not passed over.
+
+Checked: H3N→BH3's B–N coordination bond kept at 0.9 × (1.91 + 1.66) Å,
+from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
+lacks, an element with no radius, and no strength each refused in words.
+
+## Torsion restraints
+
+Each entry against a reference, the product it is to become, in one
+numbering (`torsionsRestrained`): the torsions across the reference's
+double bonds that are trans there, held trans here. The protocol is
+ConfoTS's, its numbers the chemist's.
+
+- **Which torsions** (`transTorsions`): each bond of order 2 in the
+  reference that is not aromatic, as Meno reads aromaticity (a bond on an
+  alternating cycle, `aromaticForm`), with at least one other neighbour at
+  each end; each pair of the ends' neighbours by single bonds, hydrogens
+  among them, whose dihedral in the reference is over 90° either way. A
+  cis one is never taken: a ring's own torsion across its double bond is
+  cis, and its exocyclic ones are trans.
+- **Held**: each such torsion that is not trans in the entry (90° or under)
+  is held at 180°, by E = k φ²/2 (φ in radians, the shorter way round,
+  k in kcal mol⁻¹ rad⁻²).
+- **Stronger each time.** Its strength is the step typed more than the entry
+  held it at, or the step where it held it at none. A torsion held once
+  stays held at the strength it reached, even when it is trans now. What
+  else the entry holds rides along.
+- **Exits.** Entries with a torsion not trans go out of *Restrained*, the
+  rest out of *Trans already*, as they came. Its line counts them: "5
+  restrained · 7 trans already · 7 torsions newly held".
+- **Against** the one reference, or the reference with the same value of a
+  property. Where any entry cannot be set against a reference (none to pair
+  with, another numbering, no 3D places), nothing is done and the step says
+  why: no entry goes on as trans that was never looked at.
+- **No default** for the step: "Set the strength added".
+
+Checked: (E)- and (Z)-but-2-ene, with their hydrogens: methyl to methyl and
+H to H are the E isomer's trans torsions, methyl to H the Z's. Flat
+cyclobutene's two exocyclic torsions are taken and its ring torsion is not.
+Benzene's Kekulé double bonds give none. Z against E: two torsions held at
+the step, then at twice it; a torsion held and trans now keeps its strength.
 
 ## Numbering
 

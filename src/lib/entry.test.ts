@@ -105,19 +105,23 @@ describe("a property's value, checked against its entry", () => {
     expect(valueFault({ modes: [Array(9).fill(0.1), Array(6).fill(0.2)] }, water3())).toBe("Mode 2 has 6 numbers for 3 atoms");
   });
 
-  it("holds restraints to the entry's atoms, as many as each kind holds, with a value where the kind has one", () => {
+  it("holds restraints to the entry's atoms, as many as each kind holds, with a value and a strength where the kind has them", () => {
     const ok = { restraints: [
-      { kind: "distance" as const, atoms: [0, 1], value: 0.96, strength: 1 },
-      { kind: "fixed" as const, atoms: [0], strength: 1 },
+      { kind: "distance" as const, atoms: [0, 1], value: 0.96, strength: 1000 },
+      { kind: "dihedral" as const, atoms: [1, 0, 2, 1], value: 180, strength: 50 },
+      { kind: "fixed" as const, atoms: [0] },
     ] };
     expect(valueFault(ok, water3())).toBeNull();
-    const fault = (r: { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength: number }) => valueFault({ restraints: [r] }, water3());
+    const fault = (r: { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength?: number }) => valueFault({ restraints: [r] }, water3());
     expect(fault({ kind: "dihedral", atoms: [0, 1, 2], value: 60, strength: 1 })).toBe("Restraint 1, a dihedral, has 3 atoms");
     // (atoms by their number from 0: water's are 0, 1 and 2)
     expect(fault({ kind: "distance", atoms: [1, 3], value: 1.5, strength: 1 })).toBe("Restraint 1 names an atom the entry does not have");
     expect(fault({ kind: "distance", atoms: [0, 1], strength: 1 })).toBe("Restraint 1, a distance, has no value");
-    expect(fault({ kind: "fixed", atoms: [], strength: 1 })).toBe("Restraint 1, a fixed, has 0 atoms");
+    expect(fault({ kind: "fixed", atoms: [] })).toBe("Restraint 1, a fixed, has 0 atoms");
     expect(fault({ kind: "distance", atoms: [0, 1], value: 0.96, strength: 0 })).toBe("Restraint 1 has a strength of 0");
+    expect(fault({ kind: "dihedral", atoms: [0, 1, 2, 0], value: 180 })).toBe("Restraint 1 has a strength of undefined");
+    // (atoms fixed are fixed: nothing to hold them to, nothing to hold them by)
+    expect(fault({ kind: "fixed", atoms: [0], strength: 1 })).toBe("Restraint 1 fixes atoms, so it has neither value nor strength");
   });
 });
 

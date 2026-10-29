@@ -58,14 +58,18 @@ export type Column = { name: string; unit: Unit | "none" };
 export const FREQUENCY: Column = { name: "frequency", unit: "cm-1" };
 
 /**
- * A restraint a step holds a geometry to: a distance between two atoms (in
- * ångströms), a dihedral of four (in degrees), or atoms fixed where they
- * are (no value); atoms by their number, from 0, as a bond's are. Its
- * strength is relative, 1 by default: each plugin turns it into a force
- * constant of its own and says its base constant, with its units, in
- * docs/PLUGINS.md.
+ * A restraint a step holds a geometry to, atoms by their number, from 0, as
+ * a bond's are - each its own energy, added to the force field's, as
+ * docs/PLUGINS.md states it for every plugin that takes restraints:
+ * - a **distance** between two atoms, `value` in ångströms, held by
+ *   E = k d² / 2 (d its distance from the value), `strength` k in
+ *   kcal mol⁻¹ Å⁻²;
+ * - a **dihedral** of four atoms, `value` in degrees, held by
+ *   E = k φ² / 2 (φ its angle from the value, the shorter way round, in
+ *   radians), `strength` k in kcal mol⁻¹ rad⁻²;
+ * - atoms **fixed** where they are: neither value nor strength.
  */
-export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength: number };
+export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength?: number };
 
 /**
  * A property's value: a number, a text, true or false, another entry's id,
@@ -236,7 +240,8 @@ const RESTRAINT_ATOMS = { distance: 2, dihedral: 4 } as const;
  * nothing is. A list as long as what it is per - the entry's atoms, or its
  * frames; a table's rows each as wide as its columns; each mode three
  * numbers for each atom; each restraint's atoms in the entry, as many as
- * its kind holds, its value where its kind has one, its strength above 0.
+ * its kind holds, and its value and a strength above 0 where its kind has
+ * them (atoms fixed have neither).
  */
 export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" | "geometry">): string | null {
   if (typeof value !== "object" || "entry" in value || "vector" in value) return null;
@@ -260,8 +265,12 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
     const n = r.kind === "fixed" ? null : RESTRAINT_ATOMS[r.kind];
     if (n != null ? r.atoms.length !== n : r.atoms.length < 1) return `Restraint ${k + 1}, a ${r.kind}, has ${r.atoms.length} atoms`;
     if (r.atoms.some((a) => !Number.isInteger(a) || a < 0 || a >= atoms)) return `Restraint ${k + 1} names an atom the entry does not have`;
-    if (r.kind !== "fixed" && !Number.isFinite(r.value)) return `Restraint ${k + 1}, a ${r.kind}, has no value`;
-    if (!(r.strength > 0)) return `Restraint ${k + 1} has a strength of ${r.strength}`;
+    if (r.kind === "fixed") {
+      if (r.value != null || r.strength != null) return `Restraint ${k + 1} fixes atoms, so it has neither value nor strength`;
+      continue;
+    }
+    if (!Number.isFinite(r.value)) return `Restraint ${k + 1}, a ${r.kind}, has no value`;
+    if (!(r.strength! > 0) || !Number.isFinite(r.strength)) return `Restraint ${k + 1} has a strength of ${r.strength}`;
   }
   return null;
 }
