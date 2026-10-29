@@ -139,14 +139,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M6.8 8 L4.6 10 L6.8 12 M13.2 8 L15.4 10 L13.2 12" />
     </>
   ),
-  // (a path, frames taken along it - none at its top, none larger)
+  // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)
   frames: (
     <>
-      <path d="M1.5 16 C6 16, 6.5 5, 10 5 C13.5 5, 14 16, 18.5 16" />
-      <circle cx="5.44" cy="12.1" r="1.9" fill="currentColor" stroke="none" />
-      <circle cx="7.81" cy="6.74" r="1.9" fill="currentColor" stroke="none" />
-      <circle cx="12.19" cy="6.74" r="1.9" fill="currentColor" stroke="none" />
-      <circle cx="14.56" cy="12.1" r="1.9" fill="currentColor" stroke="none" />
+      <path d="M1.5 13 C8 13, 12 7.5, 18.5 7.5" strokeWidth={1.2} />
+      <circle cx="3.75" cy="12.78" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="7.99" cy="11.28" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12.01" cy="9.22" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="16.25" cy="7.72" r="1.6" fill="currentColor" stroke="none" />
     </>
   ),
 };
