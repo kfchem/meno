@@ -38,6 +38,8 @@ describe("a kind's exits, as a list", () => {
       "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       rank: [first("The first {keep}", "same"), rest("The rest", "same")],
       join: [first("Joined", "same"), rest("Not joined", "same")],
+      restraints: [first("Restrained", "same"), failed()],
+      "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

@@ -15,6 +15,10 @@
  *   of a name, each still saying the geometry it was worked out at. A
  *   value of a structure (a descriptor's) that is no longer the entry's is
  *   marked not applicable, and said (./restructure).
+ * - **Restraints** (`restraints`, ./restraints) are the bonding entry's
+ *   alone: they hold its bonds - its coordination bonds, the torsions
+ *   across its double bonds - and the entry is bonded as it is. The
+ *   geometry entry's, of the bonding it had, are dropped, and said.
  * - **Group**: *a → b*, the geometry entry's group and the bonding entry's
  *   (each its own id where it has none).
  * - **Lineage**: both entries.
@@ -53,11 +57,15 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
     species: bonding.species ? { ...bonding.species, from: { ...bonding.species.from } } : null,
     properties: {
       ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
-      ...Object.fromEntries(Object.entries(geometry.properties).map(([k, p]) => [k, { ...p }])),
+      ...Object.fromEntries(Object.entries(geometry.properties).flatMap(([k, p]) => (k === "restraints" ? [] : [[k, { ...p }]]))),
+      ...(bonding.properties.restraints ? { restraints: { ...bonding.properties.restraints } } : {}),
       group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", status: "computed" },
     },
     status: "done",
   };
+  // (restraints of the bonding the geometry had: not the entry's bonds now)
+  if (geometry.properties.restraints)
+    said.push(`The geometry's restraints were dropped: restraints hold a bonding's bonds, and the entry takes ${bonding.properties.restraints ? "the bonding's" : "the bonding's, which has none"}.`);
   // (values of the structure either was, now another: kept, marked, and said - never shown as current)
   const { entry, stale } = restructured(made, "Re-bond");
   if (stale.length) said.push(`${stale.join(", ")} ${stale.length === 1 ? "was" : "were"} worked out on another structure, so ${stale.length === 1 ? "it is" : "they are"} marked not applicable.`);
