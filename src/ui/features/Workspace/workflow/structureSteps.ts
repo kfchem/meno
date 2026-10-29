@@ -136,7 +136,7 @@ export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: 
 /** A property written on an entry by a step: a text, of no unit - why it was set aside, how it is bonded, what it matches. */
 const said = (value: string) => ({ value, unit: "none" as const, status: "computed" as const });
 /** An entry with a text property of a step's written on it. */
-const withSaid = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: said(value) } });
+export const withSaid = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: said(value) } });
 /** An entry as a step's line names it: its compound's letter and its number, "b #2". */
 const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
 /** Why an entry was set aside, as the steps of two inputs write it on it (`set_aside`): to read in its set's table, and to filter on. */

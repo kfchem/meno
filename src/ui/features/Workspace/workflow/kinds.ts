@@ -41,8 +41,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -261,6 +261,45 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => filterHow(String(v.conditions ?? ""), v.match === "any" ? "any" : "all"),
     needs: (v) => filterNeeds(String(v.conditions ?? "")),
+  },
+  {
+    // (entries ordered by a value they carry and the first N kept - in each group, each value of a property, or of all - lib/nodes/rank; the rest saying their place)
+    kind: "rank",
+    name: "Rank",
+    icon: "numbered",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "The first {keep}",
+    others: [{ id: "rest", name: "The rest", gives: "same", of: "rest" }],
+    options: [
+      { id: "property", label: "By", type: "text", default: "energy" },
+      {
+        id: "order",
+        label: "Order",
+        type: "choice",
+        choices: [
+          { value: "lowest first", label: "Lowest first" },
+          { value: "highest first", label: "Highest first" },
+        ],
+        default: "lowest first",
+      },
+      { id: "keep", label: "Keep the first", type: "number", default: 1, min: 1, step: 1 },
+      {
+        id: "within",
+        label: "Within",
+        type: "choice",
+        choices: [
+          { value: "each group", label: "Each group" },
+          { value: "each value", label: "Each value of a property" },
+          { value: "all", label: "All together" },
+        ],
+        default: "each group",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
+    ],
+    how: (v) => rankHow(v),
+    needs: (v) => rankNeeds(v),
   },
   {
     // (from molecules with frames - a path, an optimisation's way down, a scan - the frames asked for, each a molecule of its one geometry)
@@ -655,6 +694,21 @@ export function filterHow(text: string, match: "all" | "any"): string {
   const read = conditionsIn(text);
   if (needs != null || "why" in read) return needs ?? "";
   return read.conditions.map(conditionText).join(match === "any" ? " or " : " and ");
+}
+
+/** What a Rank step still needs of its options: a property to rank by, and - within each value of one - which property. */
+export function rankNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  if (!String(v.property ?? "").trim()) return "Name the property to rank by";
+  if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
+  return undefined;
+}
+
+/** How a Rank step does its work, in a line: "the lowest 1 by energy in each group" - or what it still needs. */
+export function rankHow(v: Record<string, string | number | boolean>): string {
+  const needs = rankNeeds(v);
+  if (needs) return needs;
+  const within = v.within === "all" ? "of all" : v.within === "each value" ? `in each ${String(v.groupBy).trim()}` : "in each group";
+  return `the ${v.order === "highest first" ? "highest" : "lowest"} ${Number(v.keep)} by ${String(v.property).trim()} ${within}`;
 }
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;

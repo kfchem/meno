@@ -3,6 +3,7 @@ import {
   CpuChipIcon,
   CursorArrowRaysIcon,
   FunnelIcon,
+  NumberedListIcon,
   PhotoIcon,
   PresentationChartLineIcon,
   QueueListIcon,
@@ -184,6 +185,8 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="10" cy="6.5" r="2" fill="currentColor" stroke="none" />
     </>
   ),
+  // (a list numbered: entries in order, their places)
+  numbered: NumberedListIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
