@@ -14,6 +14,7 @@ import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
+import { BOND_REACH } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
@@ -543,6 +544,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "ez", label: "E or Z too", type: "switch", default: false },
       { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
       { id: "elements", label: "Pass over elements", type: "text", default: "" },
+      { id: "reach", label: "Bonded within, times their covalent radii together (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
     ],
     how: (v) => compareHow(v),
     needs: (v) => compareNeeds(v),
@@ -717,5 +719,6 @@ export function compareHow(v: OptionValues): string {
   if (needs) return needs;
   const against = v.reference === "property" ? `Against the reference of the same ${String(v.property).trim()}` : `Against each reference, the match as ${String(v.writes ?? "matches").trim()}`;
   const also = [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean);
-  return also.length ? `${against}; ${also.join(" and ")} too` : against;
+  const reach = v.reach != null && Number(v.reach) !== BOND_REACH ? `; bonded within ${Number(v.reach)} \u00d7 covalent radii` : "";
+  return `${also.length ? `${against}; ${also.join(" and ")} too` : against}${reach}`;
 }

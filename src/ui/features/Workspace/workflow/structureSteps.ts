@@ -225,6 +225,8 @@ export type CompareStep = {
   ez: boolean;
   atoms: string;
   elements: string;
+  /** How far, times their covalent radii together, two atoms may stand and be bonded. */
+  reach: number;
 };
 
 /**
@@ -243,7 +245,8 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   const elements = o.elements.split(/[\s,]+/).filter(Boolean);
   if (o.reference === "property" && !o.property.trim()) return { ok: false, said: "Name the property to pair them on" };
   if (o.reference === "each" && !o.writes.trim()) return { ok: false, said: "Name the property the match is written as" };
-  const options: CompareOptions = { rs: o.rs, ez: o.ez, passOver: { atoms, elements } };
+  if (!(o.reach >= 1)) return { ok: false, said: "Bonded within must be 1 or more times the covalent radii" };
+  const options: CompareOptions = { rs: o.rs, ez: o.ez, passOver: { atoms, elements }, reach: o.reach };
   const es = entries.map((e, i) => entryOfSet(e, String(i)));
   const rs = references.map((e, i) => entryOfSet(e, String(i)));
   const kept: SetEntry[] = [];

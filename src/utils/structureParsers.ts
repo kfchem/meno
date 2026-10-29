@@ -108,17 +108,19 @@ export function bondsByDistance(atoms: readonly { el: string; x: number; y: numb
 
 /**
  * The pairs of atoms `bondsByDistance` bonds, from where they stand - x, y
- * and z in turn, `xyz` - and their radii (`bondRadii`): each pair once, the
+ * and z in turn, `xyz` - and their radii (`bondRadii`), at `reach` times
+ * their radii together (`BOND_REACH`, unless a step is given another):
+ * each pair once, the
  * lower first, by the first and then the second, as their two indices in
  * turn. Nothing made for each atom: a trajectory's frames are each given
  * their bonds by it as it is opened (Workspace/utils/molecule3d
  * `frameBondsOf`).
  */
-export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>): number[] {
+export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>, reach = BOND_REACH): number[] {
   const n = radii.length;
   const out: number[] = [];
   const bonded = (m: number, k: number) => {
-    const threshold = bondingDistance(radii[m], radii[k]);
+    const threshold = bondingDistance(radii[m], radii[k], reach);
     const dx = xyz[3 * m] - xyz[3 * k];
     const dy = xyz[3 * m + 1] - xyz[3 * k + 1];
     const dz = xyz[3 * m + 2] - xyz[3 * k + 2];
@@ -137,7 +139,7 @@ export function bondedPairs(xyz: ArrayLike<number>, radii: ArrayLike<number>): n
   // (the widest radius by a loop: spread over tens of thousands of atoms, Math.max overruns a web worker's stack)
   let most = 0;
   for (let i = 0; i < n; i++) most = Math.max(most, radii[i]);
-  const side = bondingDistance(most, most);
+  const side = bondingDistance(most, most, reach);
   // each atom's cube, counted from the lowest, a cube to spare all round;
   // an atom that stands nowhere (NaN) is in none, and bonded to nothing
   const cube = new Float64Array(3 * n);
@@ -200,7 +202,7 @@ export const ONE_PLACE = 0.1;
  * Å) lay beyond (0.704). A fifth over reaches 0.768 Å, within which H2 now
  * lies without it; it is kept for the smallest radii all the same.
  */
-const REACH_FLOOR = 0.15;
+export const REACH_FLOOR = 0.15;
 
 /**
  * How many times their single-bond radii together two atoms may stand
@@ -214,9 +216,9 @@ const REACH_FLOOR = 0.15;
  */
 export const BOND_REACH = 1.2;
 
-/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a fifth over (`BOND_REACH`) - or, for the smallest, 0.15 Å over (the maintainer, 2026-10-13). */
-export function bondingDistance(r1: number, r2: number): number {
-  return Math.max((r1 + r2) * BOND_REACH, r1 + r2 + REACH_FLOOR);
+/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a fifth over (`BOND_REACH`), or `reach` times where a step is given another - or, for the smallest, 0.15 Å over (the maintainer, 2026-10-13). */
+export function bondingDistance(r1: number, r2: number, reach = BOND_REACH): number {
+  return Math.max((r1 + r2) * reach, r1 + r2 + REACH_FLOOR);
 }
 
 /**

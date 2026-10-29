@@ -92,6 +92,7 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         ez: o.ez === true,
         atoms: String(o.atoms ?? ""),
         elements: String(o.elements ?? ""),
+        reach: Number(o.reach),
       });
     default:
       return { ok: false, said: "Meno does not do this itself on two inputs" };
