@@ -137,6 +137,19 @@ export function readRefused(raw: unknown, count: number): Refusal[] {
 }
 
 /**
+ * What a plugin says of how it prepared a step's jobs, in a line of plain
+ * words beside them (`"note": "frequencies computed numerically"`) - said
+ * on the step's line, so that nothing it chose for the chemist is hidden;
+ * none where it says none, or what it says is no line of words.
+ */
+export function readNote(raw: unknown): string | undefined {
+  const note = (raw as { note?: unknown } | null)?.note;
+  if (typeof note !== "string") return undefined;
+  const line = note.replace(/\s+/g, " ").trim().slice(0, WORDS_MOST);
+  return line || undefined;
+}
+
+/**
  * The jobs a plugin prepared for `count` entries, checked: each its entries
  * among those, every entry in one - or refused (`readRefused`), and then in
  * none; its program a name; its files inside its folder. Why not, where

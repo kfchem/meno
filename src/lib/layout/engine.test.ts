@@ -1305,3 +1305,40 @@ describe("a macrocycle bridged across a small ring", () => {
     }
   }, measured(2_000));
 });
+
+describe("a piece drawn as its own mirror image, with no ring that lies square", () => {
+  // (the angle of the bond from a to b, in degrees, 0 to 180)
+  const lineOf = (x: readonly number[], y: readonly number[], a: number, b: number) =>
+    ((((Math.atan2(y[b] - y[a], x[b] - x[a]) * 180) / Math.PI) % 180) + 180) % 180;
+
+  it("is set with its mirror upright or level - N-bromosuccinimide's N-Br upright, its two C=O alike - never tilted to bring one C=O onto the lattice", () => {
+    for (const smiles of ["O=C1CCC(=O)N1Br", "O=C1C=CC(=O)N1C", "O=C1CCC(=O)N1"]) {
+      const input = fromSmiles(smiles);
+      const { x, y } = layout2D(input);
+      // (its N, and the two carbonyl C's either side of it)
+      const n = input.atoms.findIndex((a) => a.el === "N");
+      const [c1, c2] = input.bonds
+        .filter((b) => b.a === n || b.b === n)
+        .map((b) => (b.a === n ? b.b : b.a))
+        .filter((c) => input.atoms[c].el === "C" && input.bonds.some((b) => (b.a === c || b.b === c) && b.order === 2));
+      // the mirror runs through N and the middle of the C-C bond across the ring from it
+      const across = input.bonds.find((b) => b.a !== c1 && b.b !== c1 && b.a !== c2 && b.b !== c2 && input.atoms[b.a].el === "C" && input.atoms[b.b].el === "C")!;
+      const mx = (x[across.a] + x[across.b]) / 2;
+      const my = (y[across.a] + y[across.b]) / 2;
+      const mirror = ((((Math.atan2(y[n] - my, x[n] - mx) * 180) / Math.PI) % 180) + 180) % 180;
+      expect(Math.min(mirror % 90, 90 - (mirror % 90)), smiles).toBeLessThan(0.5);
+      // and the two C=O alike either side of it
+      const o1 = input.bonds.find((b) => (b.a === c1 || b.b === c1) && b.order === 2)!;
+      const o2 = input.bonds.find((b) => (b.a === c2 || b.b === c2) && b.order === 2)!;
+      const t1 = lineOf(x, y, c1, o1.a === c1 ? o1.b : o1.a);
+      const t2 = lineOf(x, y, c2, o2.a === c2 ? o2.b : o2.a);
+      expect(Math.abs(((t1 + t2) % 180) - (2 * mirror) % 180) % 180, smiles).toBeLessThan(0.5);
+    }
+  });
+
+  it("is still turned the little way that brings its bonds nearest the lattice where it has no mirror", () => {
+    // (methylcyclopentane: its one bond out of the ring level, as before)
+    const { x, y } = layout2D(fromSmiles("CC1CCCC1"));
+    expect(Math.min(lineOf(x, y, 0, 1), 180 - lineOf(x, y, 0, 1))).toBeLessThan(0.5);
+  });
+});

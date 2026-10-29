@@ -49,7 +49,7 @@ export type Fold = { open: boolean; at: Opening; toggle: () => void; measured: (
  * maintainer, 2026-10-29). Its opening is its card's, `fold`, where the card
  * holds it; its own otherwise.
  */
-function FoldedGroup({ group, rows, fold }: { group: string; rows: CardGroups[number]["rows"]; fold?: Fold }) {
+function FoldedGroup({ group, rows, most, fold }: { group: string; rows: CardGroups[number]["rows"]; most: string; fold?: Fold }) {
   const [own, setOwn] = useState(false);
   const ownAt = useOpening(own);
   const open = fold ? fold.open : own;
@@ -73,7 +73,7 @@ function FoldedGroup({ group, rows, fold }: { group: string; rows: CardGroups[nu
         // (no width of its own: what it is on is as wide as the rest, and the card that holds it grows to its rows)
         <div className="grid grid-cols-[0px]" style={{ gridTemplateRows: `${grown}fr`, opacity: shown }}>
           <div className="min-h-0" style={{ overflowX: "visible", overflowY: "clip" }}>
-            <div ref={fold.measured} className="w-max max-w-[18.75rem]">
+            <div ref={fold.measured} className="w-max" style={{ maxWidth: most }}>
               <Rows rows={rows} />
             </div>
           </div>
@@ -82,7 +82,7 @@ function FoldedGroup({ group, rows, fold }: { group: string; rows: CardGroups[nu
         <div className="grid" style={{ gridTemplateRows: `${grown}fr`, gridTemplateColumns: `minmax(0, ${grown}fr)`, opacity: shown }}>
           <div className="overflow-hidden min-w-0">
             {/* (laid out at its own width as it opens, and cut on the right until the card has widened to it - never squeezed, its words a letter a line) */}
-            <div className="w-max max-w-[18.75rem]">
+            <div className="w-max" style={{ maxWidth: most }}>
               <Rows rows={rows} />
             </div>
           </div>
@@ -96,16 +96,16 @@ function FoldedGroup({ group, rows, fold }: { group: string; rows: CardGroups[nu
  * Results said group by group - under each reader's name, where there are
  * two - each group's name, then its rows, each its name and value; a group
  * `folded`, shut under its name, opened as `fold` says where the card holds
- * its opening.
+ * its opening, and no wider than `most`: the room inside the card it is on.
  */
-export function ResultGroups({ groups, fold }: { groups: CardGroups; fold?: Fold }) {
+export function ResultGroups({ groups, most, fold }: { groups: CardGroups; most: string; fold?: Fold }) {
   return (
     <>
       {groups.map((g, k) => (
         <div key={`${k}:${g.group}`} className="mt-1">
           {g.source && <div className="mt-1.5 text-[10px] font-medium text-gh-black">{g.source}</div>}
           {g.folded ? (
-            <FoldedGroup group={g.group} rows={g.rows} fold={fold} />
+            <FoldedGroup group={g.group} rows={g.rows} most={most} fold={fold} />
           ) : (
             <>
               <div className="text-[10px] text-gh-gray">{g.group}</div>
@@ -133,7 +133,8 @@ const PointedCard3D = forwardRef<HTMLDivElement, { title: string; groups: CardGr
       style={{ opacity: 0 }}
     >
       <div className="text-gh-black font-medium">{title}</div>
-      <ResultGroups groups={groups} />
+      {/* (the card's most, 18rem, less its sides: px-2.5 and its border, the card being border-box) */}
+      <ResultGroups groups={groups} most="16.625rem" />
     </div>
   );
 });

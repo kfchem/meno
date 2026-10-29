@@ -47,7 +47,7 @@ export default function PointerSettings() {
         <div className="min-w-0 flex-1">
           <div className="text-sm text-gh-black">A long press</div>
           <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">
-            How long a press is held still to select a whole structure, or to begin a box on empty space: {LONG_PRESSES[pointer.longPress ?? "normal"]} ms. A click is never taken for one.
+            How long a press is held still to select a whole structure, or to begin a box on empty space: {LONG_PRESSES[pointer.longPress ?? "normal"]} ms. A click never starts one.
           </p>
         </div>
         <div className="shrink-0 flex rounded-md border border-gh-line overflow-hidden" role="radiogroup" aria-label="A long press">

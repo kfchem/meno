@@ -834,6 +834,12 @@ The same for every plugin and for Meno's own parts:
     as the program itself judged them (xtb's "significant" ones,
     Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
     marks the molecule as no minimum;
+  - `prepare` may say, in a line of plain words beside its jobs, what
+    it chose for the chemist in preparing them (`{"jobs": [...],
+    "note": "frequencies computed numerically"}`: ORCA's own xTB, which
+    has no analytic Hessian, asked for its frequencies by NUMFREQ). It is
+    said on the step's line when the step ends, so that nothing is
+    hidden; it changes nothing Meno does;
   - a job `prepare` gives may declare the memory it takes, in MiB
     (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
     times its processes, Gaussian's %Mem - counted against what this

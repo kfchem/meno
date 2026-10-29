@@ -32,7 +32,7 @@ import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wire
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -939,12 +939,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what its worker says it runs: the program's version where none installed separately says its own)
     let said = "";
     let refused: Refusal[] = [];
+    let note: string | undefined;
     try {
       const client = await pluginClient(plugin);
       const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
       const raw = await client.prepare(step.kind, sent, options, cores);
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
+      note = readNote(raw);
       said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -1021,7 +1023,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, `It could not be started: ${message(e)}`, at, key);
     }
     if (gone(id)) return forgetStarted(jobs);
-    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(over ? { over } : {}), ...(refused.length ? { refused } : {}) }), { unsaved: true });
+    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(over ? { over } : {}), ...(note ? { note } : {}), ...(refused.length ? { refused } : {}) }), { unsaved: true });
     set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: j.reused ? "done" : "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
@@ -1466,7 +1468,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         !ok && failures.length && total === 1
           ? failures[0].why
           : [...(ok ? [found] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : [])].join(" \u00b7 ")
-      }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
+      }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.note && ok ? ` \u00b7 ${run.note}` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
       const adopted = run.adopted && Object.keys(run.adopted).length ? { adopted: run.adopted } : {};

@@ -13,77 +13,33 @@
  * Meno's identity (lib/chem/identity `identity`), the first by number is
  * made and each later one set aside, saying which it is the same as.
  */
-import { abbreviationOf, abbreviationStructure, smilesGroup, structureProblem } from "../../../../lib/chem/abbreviations";
 import { identity } from "../../../../lib/chem/identity";
-import type { GroupStructure } from "../../../../lib/chem/ligands";
-import { structureFormula } from "../../../../lib/chem/ligands";
-import { readSmiles } from "../../../../lib/chem/smiles";
-import { keptLabel } from "../../../../lib/chem/smartLabel";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
 import { identityInputOf } from "../chem/identityOf";
 import { degrees, narrowEnd } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
-import { labelReading, readLabel } from "../utils/labelTyping";
+import { resolve, type Reading } from "../chem/resolve";
 import { changedAt, wedgesHeld } from "./stereoKept";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
 export const MOST_COMBINATIONS = 10_000;
 
 /** What a typed line was read as: an element's atom, or a group - a label's, or a SMILES with its "*" - with its formula. */
-export type OptionRead =
-  | { typed: string; as: "element"; el: string; charge?: number; isotope?: number; formula: string }
-  | { typed: string; as: "label" | "smiles"; label: string; group: GroupStructure; formula: string };
+export type OptionRead = Reading;
 
 /** A line that could not be read, or reads as something an R group cannot be: why, in words. */
 export type OptionProblem = { typed: string; problem: string };
 
-/** A group's formula, its bond out counted as a bond (structureFormula counts no star): CH3 for Me. */
-function groupFormula(g: GroupStructure): string {
-  const star = g.atoms.length;
-  return structureFormula({ ...g, atoms: [...g.atoms, { el: "*" }], bonds: [...g.bonds, { a1: g.attach[0], a2: star, order: 1 }] });
-}
-
 /**
- * A line of a list, read: as a SMILES where it has a "*" - exactly one,
- * bonded by one single bond to the atom the group is attached by, read as
- * a chemist's own abbreviation is (`structureProblem`) - and otherwise as
- * a label typed on the canvas is: given its case by smart labels (`otbs`
- * is OTBS), then an element's symbol as that atom (Cl, H), and else a
- * group by the dictionary, its label grammar and the chemist's own
- * abbreviations (`abbreviationStructure`). A line without a "*" is never
- * read as a SMILES. Or why it cannot be an R group: it reads as nothing, or
- * as a group attached by none of its atoms or by more than one, a ligand
- * that lends a pair, or a pi system.
+ * A line of a list, read as an R group is wherever one is typed
+ * (chem/resolve, `"group"`): its one reading, or why it cannot be an R
+ * group.
  */
 export function readOption(typed: string): OptionRead | OptionProblem {
-  const text = typed.normalize("NFKC").trim();
-  if (text.includes("*")) {
-    const problem = structureProblem(text);
-    if (problem) return { typed, problem };
-    const read = readSmiles(text);
-    const star = read.atoms.findIndex((a) => a.el === "*");
-    if (read.bonds.find((b) => b.a1 === star || b.a2 === star)!.order !== 1) return { typed, problem: 'The "*" is bonded by one single bond to the atom the group is attached by.' };
-    const group = smilesGroup(text);
-    return { typed, as: "smiles", label: text, group, formula: groupFormula(group) };
-  }
-  const label = keptLabel(text, labelReading);
-  const read = readLabel(label, isElementSymbol);
-  // (an element's symbol that is a group's name too - Ac, Pr, Ts - is the group, as on the canvas)
-  const named = read.kind === "element" && isElementSymbol(label) && abbreviationOf(label);
-  if (read.kind === "element" && !named) {
-    const formula = `${read.isotope ? `${read.isotope}` : ""}${read.el}${read.charge ? (read.charge > 0 ? "+" : "-").repeat(Math.abs(read.charge)) : ""}`;
-    return { typed, as: "element", el: read.el, ...(read.charge ? { charge: read.charge } : {}), ...(read.isotope ? { isotope: read.isotope } : {}), formula };
-  }
-  const group = read.kind === "charge" ? null : abbreviationStructure(label);
-  if (!group) return { typed, problem: `"${text}" is not an element, a group Meno knows, or a SMILES with a "*"` };
-  if (!group.attach.length) return { typed, problem: `${label} is a whole molecule, not a group: it is attached by none of its atoms` };
-  if (group.attach.length > 1) return { typed, problem: `${label} is attached by ${group.attach.length} atoms: an R group is attached by one` };
-  if (group.lends?.[0]) return { typed, problem: `${label} is a ligand, bound by a pair it lends: an R group is bonded by one single bond` };
-  if (group.haptic?.length) return { typed, problem: `${label} is bound through a pi system: an R group is bonded by one single bond` };
-  return { typed, as: "label", label, group, formula: groupFormula(group) };
+  const { readings, problem } = resolve(typed, "group");
+  return readings[0] ?? { typed, problem: problem! };
 }
 
 /** A line that starts an R number's list - R1:, r1: - and what follows on it. */
@@ -228,7 +184,7 @@ export function templateRs(template: Model): { rs: Map<number, number[]>; proble
     rs.set(n, [...(rs.get(n) ?? []), a.id]);
   }
   const unread = identityInputOf(template).unread;
-  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or on an atom with a lone pair)`);
+  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration)`);
   return { rs, problems };
 }
 

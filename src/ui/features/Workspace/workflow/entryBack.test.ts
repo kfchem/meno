@@ -84,7 +84,7 @@ describe("an entry record as a step's entry again", () => {
     const reading = (id: string, value: number) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, quantity: "energy" });
     const vibrations = { id: "vibrations", on: "list", group: "Vibrations", label: "Vibrations", columns: [{ label: "Frequency", quantity: "wavenumber" }], rows: [{ cells: [-120], move: Array(9).fill(0.1) }] };
     const calc = { readers: ["a-plugin 1.0"], results: [...["thermo.free-energy", "thermo.enthalpy", "thermo.zpve", "thermo.g-correction"].map((id) => reading(id, -76)), vibrations] };
-    const full = held({ calc: calc as never, mirror: [0, 1, 2] });
+    const full = held({ calc: calc as never, mirror: [0, 1, 2], imaginary: [-120, -35] });
     const record = entryOfSet(full, "x");
     expect(Object.keys(record.properties).sort()).toEqual([...MENO_OWN].sort());
     expect(setEntryOfEntry(record, { compound: 0, number: 1 }, full)!.properties).toBeUndefined();

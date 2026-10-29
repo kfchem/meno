@@ -35,7 +35,7 @@ import math
 import bpy
 import mathutils
 
-IDS = ("gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray", "clay")
+IDS = ("gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "neon", "slime", "xray", "clay")
 
 
 # --- nodes -----------------------------------------------------------------
@@ -315,67 +315,6 @@ def porcelain(nt, out, c, kind, o):
     link(nt, pr, "BSDF", out, "Surface")
 
 
-def ice(nt, out, c, kind, o):
-    """Melting ice, never a perfect clean sphere: refracting glass (IOR 1.31) that shows the studio through it; the surface in gentle lumps (displacement from a low-frequency noise, so the outline is no circle), wet sharp highlights and a few droplets; a faint cyan that deepens with the thickness (volume absorption, nearly colourless where thin); bubbles and white streaks inside, densest at the centre."""
-    tc = node(nt, "ShaderNodeTexCoord")
-    patch = node(nt, "ShaderNodeTexNoise", Scale=5.0, Detail=4.0, Distortion=0.4)
-    link(nt, tc, "Object", patch, "Vector")
-    wet = ramp_of(nt, [(0.5, (0.0, 0.0, 0.0, 1)), (0.8, (0.12, 0.12, 0.12, 1))])  # mostly smooth: wet
-    link(nt, patch, "Fac", wet, "Fac")
-    pr = principled(nt, IOR=1.31, **{"Base Color": (0.97, 0.99, 1.0, 1), "Transmission Weight": 1.0, "Coat Weight": 0.3, "Coat Roughness": 0.02})
-    link(nt, wet, "Color", pr, "Roughness")
-    # lumps by displacement, and droplets as sharp small bumps
-    lumps = node(nt, "ShaderNodeTexNoise", Scale=1.5, Detail=2.0, Roughness=0.5)
-    link(nt, tc, "Object", lumps, "Vector")
-    drops = node(nt, "ShaderNodeTexVoronoi", Scale=26.0, feature="F1")
-    link(nt, tc, "Object", drops, "Vector")
-    dome = ramp_of(nt, [(0.0, (1, 1, 1, 1)), (0.18, (0, 0, 0, 1))])
-    link(nt, drops, "Distance", dome, "Fac")
-    bump = node(nt, "ShaderNodeBump", Strength=0.6, Distance=0.02)
-    link(nt, dome, "Color", bump, "Height")
-    link(nt, bump, "Normal", pr, "Normal")
-    disp = node(nt, "ShaderNodeDisplacement", Scale=0.35, Midlevel=0.5)
-    link(nt, lumps, "Fac", disp, "Height")
-    link(nt, disp, "Displacement", out, "Displacement")
-    link(nt, pr, "BSDF", out, "Surface")
-    # the volume: absorption (pale cyan, deeper the longer the path), and scatter: bubbles and white streaks, densest at the centre
-    absorb = node(nt, "ShaderNodeVolumeAbsorption", Color=(0.45, 0.85, 0.95, 1), Density=2.5)
-    gen = node(nt, "ShaderNodeTexCoord")
-    centre = node(nt, "ShaderNodeVectorMath", operation="SUBTRACT")
-    centre.inputs[1].default_value = (0.5, 0.5, 0.5)
-    link(nt, gen, "Generated", centre, 0)
-    dist = node(nt, "ShaderNodeVectorMath", operation="LENGTH")
-    link(nt, centre, "Vector", dist, 0)
-    core = maths(nt, "SUBTRACT", 1.0, (maths(nt, "MULTIPLY", (dist, "Value"), 2.2), "Value"), True)
-    bubbles = node(nt, "ShaderNodeTexNoise", Scale=25.0, Detail=3.0)
-    link(nt, tc, "Object", bubbles, "Vector")
-    cloud = ramp_of(nt, [(0.35, (0.1, 0.1, 0.1, 1)), (0.6, (1, 1, 1, 1))])
-    link(nt, bubbles, "Fac", cloud, "Fac")
-    streak = node(nt, "ShaderNodeTexNoise", Scale=6.0, Detail=2.0)
-    sm = node(nt, "ShaderNodeMapping")
-    sm.inputs["Scale"].default_value = (1.0, 1.0, 9.0)
-    link(nt, tc, "Object", sm, "Vector")
-    link(nt, sm, "Vector", streak, "Vector")
-    sr = ramp_of(nt, [(0.5, (0, 0, 0, 1)), (0.75, (1, 1, 1, 1))])
-    link(nt, streak, "Fac", sr, "Fac")
-    d1 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
-    link(nt, core, "Value", d1, 0)
-    d1.inputs[1].default_value = 20.0
-    d2 = node(nt, "ShaderNodeMath", operation="MULTIPLY")
-    link(nt, d1, "Value", d2, 0)
-    link(nt, cloud, "Color", d2, 1)
-    d3 = node(nt, "ShaderNodeMath", operation="MULTIPLY_ADD")
-    link(nt, sr, "Color", d3, 0)
-    d3.inputs[1].default_value = 12.0
-    link(nt, d2, "Value", d3, 2)
-    scat = node(nt, "ShaderNodeVolumeScatter", Color=(1, 1, 1, 1), Anisotropy=0.3)
-    link(nt, d3, "Value", scat, "Density")
-    add = node(nt, "ShaderNodeAddShader")
-    link(nt, absorb, "Volume", add, 0)
-    link(nt, scat, "Volume", add, 1)
-    link(nt, add, "Shader", out, "Volume")
-
-
 def neon(nt, out, c, kind, o):
     """A lit tube: a saturated colour, strongest at the edges, so every edge glows; the bonds in their own cyan."""
     mx, mn = max(c[:3]), min(c[:3])
@@ -562,14 +501,13 @@ STUDIO = {
     "slime": (0.5, 0.5, (0.05, 0.06, 0.08)),
     "neon": (0.0, 0.3, (0.0, 0.0, 0.0)),
     "xray": (0.0, 0.5, (0.5, 0.5, 0.5)),
-    "ice": (1.0, 0.7, (0.04, 0.05, 0.07)),
 }
 SOFT = (0.18, 0.5, (0.05, 0.06, 0.08))     # the looks that are mostly matte: dim panels, or a diffuse surface is over-exposed
 MARBLE = (0.1, 0.5, (0.05, 0.06, 0.08))
 
 BUILD = {
     "gold": gold, "silver": silver, "copper": copper, "bubble": bubble, "wood": wood, "marble": marble, "fur": fur, "porcelain": porcelain,
-    "ice": ice, "neon": neon, "slime": slime, "clay": clay,
+    "neon": neon, "slime": slime, "clay": clay,
 }
 
 
@@ -731,11 +669,6 @@ def apply(scene, camera, look, options, background):
         else:
             ob.data.materials.append(m)
         made[ob.data.name] = m
-        if look == "ice":
-            m.displacement_method = "BOTH"
-            sub = ob.modifiers.new("lumps", "SUBSURF")
-            sub.levels = 0
-            sub.render_levels = 3
     if look == "fur":
         for ob in molecules:  # (each object has hair of its own, though shapes share a mesh's material)
             if ob.data.name in made and ob.data.materials[0] is not made[ob.data.name]:
@@ -743,7 +676,7 @@ def apply(scene, camera, look, options, background):
         fur_on(molecules, colours, o.get("pile", "long"))
     c = scene.cycles
     c.max_bounces, c.glossy_bounces, c.diffuse_bounces, c.transmission_bounces, c.transparent_max_bounces = 6, 4, 2, 4, 8
-    c.volume_bounces = 6 if look == "ice" else 0
+    c.volume_bounces = 0
     c.use_adaptive_sampling = True
     c.adaptive_threshold = 0.02
     c.adaptive_min_samples = 8

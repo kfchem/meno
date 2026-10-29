@@ -435,9 +435,10 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
   const basis = basisOf(entries);
   if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
-  // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
-  //  frequencies refuse it too where the window is on free energies - a saddle point's G is no minimum's)
-  const unconverged = notAllMinima(basis.free ? entries : entries.filter((e) => e.failed || e.marksUnread));
+  // (one that did not converge is no minimum: its energy is where its optimisation stopped. One its calculation found
+  //  imaginary frequencies of - a transition state, a saddle point - is none either, on electronic energies as on free
+  //  ones: kept in a window, or set aside from it, as if it were a conformer, it would stand for a population it has not)
+  const unconverged = notAllMinima(entries);
   if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];

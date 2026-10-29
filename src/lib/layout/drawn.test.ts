@@ -7,6 +7,8 @@ import { layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
 import cages from "./testdata/cages.json";
 import { measured } from "../../testing/timeouts";
+import { fromSmiles } from "./testdata/fromSmiles";
+import { misreadCentres } from "./readBack";
 
 const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
 
@@ -307,5 +309,55 @@ describe("what a drawing says of its stereochemistry only by luck", () => {
     expect(unsureStereo(pts(5), bonds).bonds).toEqual([0]);
     expect(unsureStereo(pts(0), bonds).bonds).toEqual([]);
     expect(unsureStereo(pts(60), bonds).bonds).toEqual([]);
+  });
+});
+
+describe("a centre with a lone pair for its fourth group", () => {
+  // (methyl phenyl sulfoxide's S at the origin: its O up, its methyl left on
+  // a wedge, its ring carbon right; and the same with another element)
+  const sulfoxide = (el: string, stereo: "up" | "down"): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+    atoms: [
+      { x: 0, y: 0, el, hs: 0 },
+      { x: 0, y: 1, el: "O", hs: 0 },
+      { x: -0.87, y: -0.5, el: "C", hs: 3 },
+      { x: 0.87, y: -0.5, el: "C", hs: 2 },
+    ],
+    bonds: [
+      { a: 0, b: 1, order: 2 },
+      { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo } },
+      { a: 0, b: 3, order: 1 },
+    ],
+  });
+
+  it("is read from its wedge where every reader reads it - a sulfoxide's S, a phosphine's P, an arsine's As - the two ways round told apart", () => {
+    for (const el of ["S", "P", "As"]) {
+      const up = readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.get(0);
+      const down = readStereo(sulfoxide(el, "down").atoms, sulfoxide(el, "down").bonds).tetra.get(0);
+      expect(up?.neighbours, el).toHaveLength(3);
+      expect(down?.neighbours, el).toHaveLength(3);
+      expect(sameConfiguration(up!, down!), el).toBe(false);
+    }
+  });
+
+  it("is not read where a wedge states no configuration - a selenoxide's Se, an amine's N (which inverts), a borane's B - nor at a C of three bonds", () => {
+    for (const el of ["Se", "N", "B", "C"]) expect(readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.has(0), el).toBe(false);
+  });
+
+  it("states no configuration with two of its bonds in line - a T - as a centre with its H left out does not", () => {
+    // (the sulfoxide's O and its wedged methyl straight across the S from
+    // each other, its ring carbon to one side: three bonds a volume could be
+    // worked out from, but a T, which states none)
+    const t = sulfoxide("S", "up");
+    t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
+    t.atoms[2] = { ...t.atoms[2], x: 0, y: -1 };
+    t.atoms[3] = { ...t.atoms[3], x: 1, y: 0 };
+    expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
+  });
+
+  it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, each way round", () => {
+    for (const smiles of ["C[S@](=O)c1ccccc1", "C[S@@](=O)c1ccccc1", "CC(C)(C)[S@](=O)N", "CC[P@](C)c1ccccc1", "CC[P@@](C)c1ccccc1", "C[S@+](CC)c1ccccc1", "C[S@@](=O)C[C@H](N)C(=O)O"]) {
+      const input = fromSmiles(smiles);
+      expect(misreadCentres(input, layout2D(input)), smiles).toEqual([]);
+    }
   });
 });

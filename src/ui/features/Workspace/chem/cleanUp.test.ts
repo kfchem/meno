@@ -11,7 +11,7 @@ import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } f
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
 import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
-import { overlapsMade } from "./engineLayout";
+import { overlapsMade, sameStereo } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
 import { MENO } from "../../../../lib/chem/style";
@@ -453,18 +453,43 @@ describe("cleanUp", () => {
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
-    // methyl phenyl sulfoxide's S, wedged: its fourth group a lone pair
-    const sulfoxide: Model = {
-      atoms: [atom(1, 0, 0, "S"), atom(2, 0, 1, "O"), atom(3, -1, -0.5), atom(4, 1, -0.5)],
+    // a selenoxide's Se, wedged: a centre with a lone pair that a wedge
+    // states to no reader, so none that Clean-up can lay out and keep
+    const selenoxide: Model = {
+      atoms: [atom(1, 0, 0, "Se"), atom(2, 0, 1, "O"), atom(3, -1, -0.5), atom(4, 1, -0.5)],
       bonds: [
         { id: 5, a: 1, b: 2, order: 2 },
         { id: 6, a: 1, b: 3, order: 1, stereo: "up" },
         { id: 7, a: 1, b: 4, order: 1 },
       ],
     };
-    const { store } = canvas(sulfoxide);
+    const { store } = canvas(selenoxide);
     await expect(cleanUp(store)).rejects.toThrow(/nothing was moved/);
-    expect(store.getState().model).toEqual(sulfoxide);
+    expect(store.getState().model).toEqual(selenoxide);
+  });
+
+  it("lays out a centre with a lone pair for its fourth group, keeping its configuration on one wedge", async () => {
+    // methyl ethyl sulfoxide's S, a phosphine's P, a sulfonium's S: each
+    // wedged, each the other way round too
+    const centre = (el: string, stereo: "up" | "down", charge?: number, doubled = true): Model => ({
+      atoms: [{ ...atom(1, 0, 0, el), ...(charge ? { charge } : {}) }, atom(2, 0, 1, doubled ? "O" : "C"), atom(3, -1, -0.5), atom(4, 1, -0.5), atom(5, 2, 0)],
+      bonds: [
+        { id: 6, a: 1, b: 2, order: doubled ? 2 : 1 },
+        { id: 7, a: 1, b: 3, order: 1, stereo },
+        { id: 8, a: 1, b: 4, order: 1 },
+        { id: 9, a: 4, b: 5, order: 1 },
+      ],
+    });
+    for (const [el, charge, doubled] of [["S", 0, true], ["P", 0, false], ["S", 1, false]] as const) {
+      for (const stereo of ["up", "down"] as const) {
+        const before = centre(el, stereo, charge, doubled);
+        const { store } = canvas(before);
+        await cleanUp(store);
+        const after = store.getState().model;
+        expect(sameStereo(before, after), `${el}${charge ? "+" : ""} ${stereo}`).toBe(true);
+        expect(after.bonds.filter((b) => b.stereo === "up" || b.stereo === "down")).toHaveLength(1);
+      }
+    }
   });
 
   it("drops a wedge that says nothing, on a CH2", async () => {

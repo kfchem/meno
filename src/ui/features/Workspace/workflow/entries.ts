@@ -210,7 +210,7 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
   const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
   let key = identities.get(drawn);
   if (key == null) {
-    // (wedges identity cannot read - crossed, or on an atom with a lone pair - or a search it could not finish: its configuration
+    // (wedges identity cannot read - crossed, or at a three-bonded N, B, Se, Te or Sb - or a search it could not finish: its configuration
     // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
     const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
     key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
@@ -772,7 +772,7 @@ export const MARKS_UNREAD = "its frames' marks could not be read, so whether it 
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
   (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
 
-export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
+export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers", frames?: (m: Molecule3D) => readonly number[]): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
     const n = framesOf(m);
@@ -793,8 +793,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
-    // (a path: its last frame alone; an opened optimisation or scan, the frames it converged on)
-    const taken = m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
+    // (those asked for - Take frames' - else a path's last frame alone; an opened optimisation or scan, the frames it converged on)
+    const taken = frames ? frames(m) : m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
     for (const f of taken) {
       const xyz = frameXyz(m, f);
       const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });
@@ -984,10 +984,10 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
-const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name", "state"] as const;
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state"] as const;
 export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
 
-/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name, its state. */
+/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has and the two largest, its name, its state. */
 function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
@@ -1002,11 +1002,31 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
     ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
     ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
-    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
-    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
+    ...imaginaryProperties(e, at),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
     // (whether it is a result to stand on: finished - converged, not failed, its marks read - or why not, in a step's line's words)
     state: { value: entryState(e), unit: "none", status: "computed" },
+  };
+}
+
+/**
+ * An entry's imaginary frequencies as properties, for a chemist to select on
+ * with Filter ("imaginary = 1", "imaginary.second < 50 cm-1"): how many its
+ * calculation judged it has - 0 where its vibrations were worked out and
+ * none is, none at all where they were not (`imaginaryOf`) - and the largest
+ * and the next, each as its size in cm-1 (120.5 for 120.5i), where it has
+ * them. Meno judges nothing by them: whether one is a minimum, or a saddle
+ * point, is the chemist's to say.
+ */
+function imaginaryProperties(e: SetEntry, at: At): Partial<Record<"imaginary" | "imaginary.first" | "imaginary.second", Property>> {
+  const found = imaginaryOf(e);
+  if (found === "not computed") return {};
+  const sizes = found.map(Math.abs).sort((p, q) => q - p);
+  const of = (value: number, unit: "none" | "cm-1"): Property => ({ value, unit, at, status: "computed" });
+  return {
+    imaginary: of(sizes.length, "none"),
+    ...(sizes.length > 0 ? { "imaginary.first": of(sizes[0], "cm-1") } : {}),
+    ...(sizes.length > 1 ? { "imaginary.second": of(sizes[1], "cm-1") } : {}),
   };
 }
 
