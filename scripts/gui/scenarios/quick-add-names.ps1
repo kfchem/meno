@@ -26,13 +26,9 @@ Save-Step "nbs-chosen"
 Send-MenoKey Enter
 Wait-MenoSettled | Out-Null
 Save-Step "nbs-drawn"
-# (what was drawn stays chosen: a click on empty space lets it go first, or
-# that is all the next double-click's first click does)
-Invoke-MenoClick -X ($cx + 300) -Y ($cy + 500)
-Start-Sleep -Milliseconds 600
 
 # a reagent typed small: offered alone, by its name, and drawn
-Invoke-MenoQuickAdd -X ($cx + 300) -Y ($cy - 200) -Item SMILES
+Invoke-MenoQuickAdd -X ($cx - 400) -Y ($cy + 250) -Item SMILES
 Send-MenoText "dmf" -CharMs 30
 Start-Sleep -Milliseconds 400
 Save-Step "dmf-offered"
@@ -41,14 +37,14 @@ Wait-MenoSettled | Out-Null
 Save-Step "dmf-drawn"
 
 # a complex's formula, typed small: offered by its label, not a made-up name
-Invoke-MenoQuickAdd -X ($cx - 400) -Y ($cy + 250) -Item SMILES
+Invoke-MenoQuickAdd -X $cx -Y ($cy + 250) -Item SMILES
 Send-MenoText "pdcl2" -CharMs 30
 Start-Sleep -Milliseconds 400
 Save-Step "pdcl2-offered"
 Send-MenoKey Escape
 Start-Sleep -Milliseconds 300
 
-# a SMILES alone: nothing under the field
+# a SMILES alone, where pdcl2 was let go: nothing under the field
 Invoke-MenoQuickAdd -X $cx -Y ($cy + 250) -Item SMILES
 Send-MenoText "CCO" -CharMs 30
 Start-Sleep -Milliseconds 400
