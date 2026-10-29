@@ -139,6 +139,33 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M6.8 8 L4.6 10 L6.8 12 M13.2 8 L15.4 10 L13.2 12" />
     </>
   ),
+  // (two lists made one, the first's then the second's)
+  merge: (
+    <>
+      <path d="M2.5 4 H7 M2.5 7 H7 M2.5 13 H7 M2.5 16 H7" />
+      <path d="M8.5 5.5 C10.2 5.5, 10 10, 11.5 10 M8.5 14.5 C10.2 14.5, 10 10, 11.5 10" />
+      <path d="M13.5 4 H17.5 M13.5 8 H17.5 M13.5 12 H17.5 M13.5 16 H17.5" />
+    </>
+  ),
+  // (three atoms where they stand, then the same atoms bonded)
+  rebond: (
+    <>
+      <circle cx="4" cy="6.5" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="2.8" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="6.5" r="2.1" fill="currentColor" stroke="none" />
+      <path d="M4 17 L10 13.3 L16 17" />
+      <circle cx="4" cy="17" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="13.3" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="17" r="2.1" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // (a chain as drawn, the same as its reference)
+  compare: (
+    <>
+      <path d="M3 6 L7.5 2.5 L12.5 6 L17 2.5 M3 17.5 L7.5 14 L12.5 17.5 L17 14" />
+      <path d="M7 8.8 H13 M7 11.7 H13" />
+    </>
+  ),
   // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)
   frames: (
     <>

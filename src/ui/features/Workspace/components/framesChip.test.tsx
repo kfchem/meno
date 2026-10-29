@@ -90,13 +90,17 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain('<div class="text-[10px] text-gh-gray">Energies</div>');
   });
 
-  it("eases its width and its rows' height in one time and one curve, and measures what its details say whole - never as squeezed by its own width", () => {
+  it("grows and shrinks frame by frame as it opens (theme/opening) - no CSS transition of its width or its rows - and measures what its details say whole", () => {
     const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
     const html = renderToString(<FramesChip count={3} frame={0} energies={[0, 0.001, 0.002]} open={false} onFrame={none} made={made} conformers />);
-    // (the chip's width, its bars' rows, its details' rows and the fold: each 160 ms on Meno's curve, none other)
-    expect(html.match(/transition-duration:160ms;transition-timing-function:var\(--ease-meno\)/g)?.length).toBeGreaterThanOrEqual(5);
+    // (none of its width, its bars' rows, its details' rows or the fold is a CSS transition, which would chase what is still widening)
+    expect(html).not.toMatch(/transition-\[[^\]]*(width|grid-template)/);
+    expect(html).toContain("transition-[opacity,background-color]");
     expect(html).not.toMatch(/duration-200|ease-out/);
     expect(html).toMatch(/class="w-max max-w-\[20rem\] shrink-0/);
+    // (how it was made, held by the chip: no width of its own in its details, its rows drawn whole and cut by the chip until it has grown to them; shut, no height and not seen)
+    expect(html).toMatch(/class="grid grid-cols-\[0px\]" style="grid-template-rows:0fr;opacity:0"/);
+    expect(html).toContain("overflow-x:visible;overflow-y:clip");
   });
 
   it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {

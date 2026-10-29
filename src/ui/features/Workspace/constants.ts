@@ -22,13 +22,17 @@ export const DOUBLE_CLICK_MS = 500;
 export const MOV_PX = 5;
 
 /**
- * How long a press held still takes to be a long press: it selects the
- * whole structure on an atom or a bond, and on empty space begins a box. It
- * is counted while the button is held - a click's label edit waits
- * DOUBLE_CLICK_MS after it comes up - and only on the first press of
- * clicks: the second of a double-click held still waits to be dragged.
+ * How long a press held still takes to be a long press, in ms, as Settings
+ * (*General*, *A long press*) says: it selects the whole structure on an
+ * atom or a bond, and on empty space begins a box. It is counted while the
+ * button is held - a click's label edit waits DOUBLE_CLICK_MS after it comes
+ * up - and only on the first press of clicks: the second of a double-click
+ * held still waits to be dragged. Normal was 320 ms until 2026-10-28 (the
+ * maintainer: about 260). Each is well past a click's press - a tenth of a
+ * second or so, and past `LONG_PRESS_SHOW_MS` before anything shows - and
+ * short of `DOUBLE_CLICK_MS` and `FREE_MS` (Workspace/longPress.test).
  */
-export const LONG_PRESS_MS = 320;
+export const LONG_PRESSES = { shorter: 220, normal: 260, longer: 400 } as const;
 /** A long press shows nothing for its first part, so that a click shows nothing. */
 export const LONG_PRESS_SHOW_MS = 120;
 

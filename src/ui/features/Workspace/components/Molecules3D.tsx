@@ -1,4 +1,5 @@
 import { addAfterEffect, useFrame, useThree } from "@react-three/fiber";
+import { longPressMs } from "../longPress";
 import { setCursor } from "../../../theme/cursors";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -6,7 +7,7 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import KeyLight3D from "./KeyLight3D";
 import ScreenShade3D from "./ScreenShade3D";
-import { LONG_PRESS_MS, MOV_PX } from "../constants";
+import { MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
 import { atomAt, bondAt, frameOf, lookOf, nearestAtom, onMolecule, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
@@ -116,7 +117,7 @@ type Going = Exclude<Gesture, { kind: "press" }>;
  * pointer.
  * - Hovered, a molecule's outline lights up, faintly. A drag on it turns it
  *   about its centre, and let go it turns on a little.
- * - Held still (LONG_PRESS_MS), a press selects it, the selection's outline
+ * - Held still (longPressMs()), a press selects it, the selection's outline
  *   spreading out from the atom pressed on as it is held; a drag on a
  *   molecule selected moves it - and all that is selected with it - on the
  *   page. The selection's handle turns them (Selection2D).
@@ -551,7 +552,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             g.timer = null;
             setHold(null);
             store.getState().selectMolecules3d([g.id], g.add);
-          }, LONG_PRESS_MS);
+          }, longPressMs());
       if (!selected) {
         const from = atom ?? (bond != null ? m.bonds[bond].a1 : nearestAtom(pose, eyeOf(camera), p.x, p.y));
         setHold({ id: m.id, from, start: performance.now() });

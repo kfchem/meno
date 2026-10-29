@@ -5,13 +5,15 @@
 # job's runner (`--job`, jobs.rs `JOB_FLAG`), which outlives the app; the PDF
 # reader the app starts for itself (`--pdf`, pdf.rs `PDF_FLAG`); and, on
 # Windows, the installer's Office registration (`--register-ole`,
-# `--unregister-ole`, lib.rs `registration_asked`). None of them has the
-# window a run drives, and any of them may belong to another copy of Meno -
-# another session's - so the harness never counts or closes them.
+# `--unregister-ole`) and the uninstaller's removal of what is left of
+# Meno's listing in Default apps (`--unregister-defaults`, defaults.rs),
+# each lib.rs `registration_asked`, run from windows/hooks.nsh. None of them
+# has the window a run drives, and any of them may belong to another copy of
+# Meno - another session's - so the harness never counts or closes them.
 # tests/modes.tests.ps1 checks this list against the flags the Rust side
 # defines.
 
-$script:MenoWorkerFlags = @("--job", "--pdf", "--register-ole", "--unregister-ole")
+$script:MenoWorkerFlags = @("--job", "--pdf", "--register-ole", "--unregister-ole", "--unregister-defaults")
 
 function Get-MenoWorkerFlags {
     # The flags that start Meno's executable as something other than the app.

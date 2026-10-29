@@ -229,7 +229,7 @@ Taken on 2026-10-03:
     the pointer swells a little on a spring. No frame: the maintainer
     asked for a highlight along the outline, in a modern way, rather than
     a rectangle round it.
-  - **Held still, a press selects the molecule** (0.32 s, as in 2D), the
+  - **Held still, a press selects the molecule** (a long press, as in 2D), the
     selection's outline spreading out from the atom pressed on as it is
     held; a drag from there moves it. A molecule selected moves when
     dragged, with all that is selected; one not selected turns. (Agreed
@@ -554,7 +554,17 @@ Taken on 2026-10-13:
   have. How it was made is said in one line with it, in the plugin's
   words (`method`: "ETKDG v3 + UFF; restrained: eta rings: metal-ring
   atom distances, rings ≥ 2.9 Å apart"), first under *How it was made*
-  where it is pointed at, and kept with it in a workspace. An eta complex's
+  where it is pointed at, and kept with it in a workspace. Shut, *How it
+  was made* takes no room: the card it is on is as wide as what it shows,
+  no wider (the maintainer, 2026-10-28). Opened, the card first grows to
+  it, wider and taller together in 160 ms, and only then do its lines fade
+  in, in 120 ms, as gently at first as at the end; shut, they fade out
+  first, the same way, and the card then shrinks back. It widens to the
+  right only as *How it was made* opens, and back, so the toggle at its
+  left stays under the pointer that pressed it.
+  A frames chip opens to its details the same way. Opened or shut again
+  part way, it goes back from where it is (the maintainer, 2026-10-29;
+  `theme/opening`). An eta complex's
   shape most of all is held, not modelled: a real geometry comes from
   optimising it - an xTB or DFT step of a workflow.
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
