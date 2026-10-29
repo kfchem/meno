@@ -84,12 +84,12 @@ before building, and a build on a computer of one's own needs it once.
    job waits for the Windows one: each reads `latest.json`, adds its own
    and puts it back whole. Each job then checks that its update's
    signature names the version it is released as (see below).
-4. If the run passed: try the draft's installers, write the release notes
-   on the release page if you like, and publish it. The Menos installed
-   find it the next time they look - as they start, and once a day while they run.
-   Never publish the draft of a run that failed. (Editing the notes does
-   not change `latest.json`, whose `notes` were written as the workflow
-   ran; Meno does not show them for now.)
+4. If the run passed: try the draft's installers, write the release notes on
+   the release page if you like, and publish it. The Menos installed find it
+   the next time they look - shortly after they start, and once a day while
+   they run. Never publish the draft of a run that failed. (Editing the
+   notes does not change `latest.json`, whose `notes` were written as the
+   workflow ran; Meno does not show them for now.)
 5. Publishing also rebuilds the website (`.github/workflows/pages.yml`):
    its download buttons, the version and the files' sizes come from the
    release just published. If the release's files are ever named

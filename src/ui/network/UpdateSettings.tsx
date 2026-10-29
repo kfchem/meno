@@ -24,7 +24,7 @@ function status(u: UpdateState, offline: boolean, allowed: boolean): string {
   if (offline) return "Meno works offline: it does not look for newer versions.";
   if (u.phase === "current") return `Up to date${u.checked ? ` - looked ${when(u.checked)}` : ""}.`;
   if (u.phase === "failed") return `The last look did not work: ${u.error ?? "no reason given"}.`;
-  return "Meno looks as it starts and once a day while it runs.";
+  return "Meno looks for one shortly after it starts and once a day while it runs.";
 }
 
 /**
