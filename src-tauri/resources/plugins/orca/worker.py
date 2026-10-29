@@ -334,6 +334,14 @@ IRC_STARTED_SAID = "the point it started from"
 IRC_CAPPED = "MAXIMUM NUMBER OF ITERATIONS REACHED"
 
 
+def capped_said(capped):
+    """Which sides of a reaction path stopped, in words: "The forward side", "The forward and backward sides" - or "A
+    side" where ORCA said one did and which cannot be told."""
+    if capped == ["one"]:
+        return "A side"
+    return f"The {' and '.join(capped)} {'side' if len(capped) == 1 else 'sides'}"
+
+
 def irc_output(entry, files, log, options):
     """A reaction path's output, in Meno's form: its frames one end to the other, as ORCA wrote them, each with its
     energy and what it is, the point it started from marked as the run's converged geometry; its level, as given; and,
@@ -351,6 +359,9 @@ def irc_output(entry, files, log, options):
     fwd, back = log.find("FORWARD IRC"), log.find("BACKWARD IRC")
     sides = {"forward": log[fwd:back] if 0 <= fwd < back else "", "backward": log[back:at] if 0 <= back < at else ""}
     capped = [side for side, text in sides.items() if IRC_CAPPED in text]
+    # (ORCA said a side stopped, but which cannot be told from where it said it: a side, never read as complete)
+    if not capped and IRC_CAPPED in log:
+        capped = ["one"]
     method, basis = path_level(options)
     return {
         "schema": 1,
@@ -361,7 +372,7 @@ def irc_output(entry, files, log, options):
         "frames": [places for places, _ in frames],
         "energies": [energy for _, energy in frames],
         "converged": [i == k for i in range(len(frames))],
-        **({"optimised": False, "warnings": [{"kind": "other", "text": f"The {' and '.join(capped)} {'side' if len(capped) == 1 else 'sides'} stopped at ORCA's iteration cap before reaching an end (\"{IRC_CAPPED}\"): {'its end is' if len(capped) == 1 else 'their ends are'} no minimum"}]} if capped else {}),
+        **({"optimised": False, "warnings": [{"kind": "other", "text": f"{capped_said(capped)} stopped at ORCA's iteration cap before reaching an end (\"{IRC_CAPPED}\"): {'its end is' if len(capped) == 1 else 'their ends are'} no minimum"}]} if capped else {}),
         "results": [{"id": PATH_FRAME, "on": "frames", "group": "Path", "label": "What it is", "values": said}],
     }
 

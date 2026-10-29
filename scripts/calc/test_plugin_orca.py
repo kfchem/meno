@@ -253,8 +253,12 @@ class ReactionPath(unittest.TestCase):
         self.assertEqual(lines[0], "! NATIVE-XTB2 IRC")
         self.assertFalse(any(l.startswith("%irc") for l in lines))
         self.assertEqual(job["reads"], ["input_IRC_Full_trj.xyz"])
-        more = ask("prepare", step="reaction-path", entries=[H2], options={**options, "maxiter": 256})["jobs"][0]
+        more = ask("prepare", step="reaction-path", entries=[H2], options={**options, "method": "XTB2", "maxiter": 256})["jobs"][0]
         self.assertIn("%irc maxiter 256 end", more["files"][0]["text"].splitlines())
+        # (no level of its own unless set: the chemist sets the start's)
+        self.assertEqual((options["method"], options["basis"], options["dispersion"]), ("", "", "none"))
+        with self.assertRaisesRegex(AssertionError, "there is no method"):
+            ask("prepare", step="reaction-path", entries=[H2], options=options)
 
     def test_reads_the_path_end_to_end_its_start_marked_each_side_said(self):
         options = {**defaults("reaction-path"), "method": "NATIVE-XTB2", "basis": ""}
@@ -268,6 +272,12 @@ class ReactionPath(unittest.TestCase):
         capped = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=irc_log(("forward",)), ended="done")["outputs"][0]
         self.assertEqual(capped["optimised"], False)
         self.assertIn("The forward side stopped at ORCA's iteration cap", capped["warnings"][0]["text"])
+        # (ORCA said a side stopped, but not where: a side, never read as complete)
+        unsaid = irc_log().replace("THE IRC HAS CONVERGED", "").replace("FORWARD IRC", "").replace("BACKWARD IRC", "") + "MAXIMUM NUMBER OF ITERATIONS REACHED - STOPPING IRC RUN\n"
+        unsaid = unsaid.replace("****ORCA TERMINATED NORMALLY****", "") + "****ORCA TERMINATED NORMALLY****\n"
+        one = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=unsaid, ended="done")["outputs"][0]
+        self.assertEqual(one["optimised"], False)
+        self.assertTrue(one["warnings"][0]["text"].startswith("A side stopped at ORCA's iteration cap"))
         # (a summary that does not list the frames written, or marks no start: not read)
         bad = ask("collect", step="reaction-path", entries=[H2], options=options, files={"input_IRC_Full_trj.xyz": xyz([(0.74, -1.17)])}, log=irc_log(), ended="done")["outputs"][0]
         self.assertEqual(bad["kind"], "no-geometry")

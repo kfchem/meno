@@ -6,9 +6,9 @@ import { isFailure, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
 import { takeFrames } from "./takeFrames";
 
-/** H2, as a step's entry, its bond `d` A long. */
-const h2 = (d = 0.97): SetEntry =>
-  ({ compound: 0, number: 1, atoms: [{ el: "H" }, { el: "H" }], bonds: [{ a1: 0, a2: 1, order: 1 }], xyz: [0, 0, 0, d, 0, 0] }) as unknown as SetEntry;
+/** H2, as a step's entry, its bond `d` A long - found at `method` (a saddle point's frequencies, say). */
+const h2 = (d = 0.97, method = "GFN2-xTB", basis?: string): SetEntry =>
+  ({ compound: 0, number: 1, atoms: [{ el: "H" }, { el: "H" }], bonds: [{ a1: 0, a2: 1, order: 1 }], xyz: [0, 0, 0, d, 0, 0], calc: { readers: ["orca"], program: "ORCA", method, ...(basis ? { basis } : {}) } }) as unknown as SetEntry;
 
 /** What ORCA's IRC read back, one end to the other, its start marked; a side stopped at its cap where `stopped`. */
 const irc = (stopped?: string): ReaderOutput =>
@@ -43,6 +43,14 @@ describe("Follow the reaction path", () => {
   it("puts a path one of whose sides stopped before its end out of Failed, the path as far as it came, in its program's words", () => {
     const w = workedOf("reaction-path", h2(), irc("The forward side stopped at ORCA's iteration cap before reaching an end"), ["orca"]) as Worked;
     expect([w.failed?.kind, w.failed?.why, w.after?.length]).toEqual(["not-converged", "The forward side stopped at ORCA's iteration cap before reaching an end", 1]);
+  });
+
+  it("is a path only at the level its start was found at: else it fails, naming both", () => {
+    expect(isFailure(workedOf("reaction-path", h2(0.97, "GFN2-xTB"), irc(), ["orca"]))).toBe(false);
+    const other = workedOf("reaction-path", h2(0.97, "B3LYP", "def2-SVP"), irc(), ["orca"]);
+    expect(isFailure(other) && [other.kind, other.why]).toEqual(["failed", "The path is at GFN2-xTB, its start was found at B3LYP/def2-SVP: run it at the start's level"]);
+    const none = workedOf("reaction-path", { ...h2(), calc: undefined } as SetEntry, irc(), ["orca"]);
+    expect(isFailure(none) && none.why).toBe("The path is at GFN2-xTB, its start was found at no level said: run it at the start's level");
   });
 
   it("keeps the charge and multiplicity of the point it was given", () => {

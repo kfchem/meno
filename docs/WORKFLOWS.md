@@ -425,9 +425,14 @@ after it. Meno calls none of it a saddle point or a minimum.
   reached - leaves the path as far as it came out of *Failed*, in its
   program's words: that end is no minimum. *Take frames* on *Failed*, and
   an *Optimise*, carry on from it where the chemist wires them.
+- **At its start's level.** A saddle point at one level is no stationary
+  point at another, so the path's own level, as its output says it, must be
+  the one its start was found at (its frequencies', say): else it fails,
+  naming both. The step has no level of its own unless set: the chemist
+  sets the start's.
 - **ORCA's plugin** runs IRC (the ORCA 6.1 manual, 4.4 *Intrinsic Reaction
   Coordinate*), both ways in one job, the manual's default direction, at
-  any method and basis set. *Steps each way* is its `%irc` MaxIter, ORCA's
+  the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
   own unless said (the manual's 4.4.2 states none; ORCA 6.1.1 prints 20).
   The first Hessian is ORCA's: computed where none comes with the point.
 
