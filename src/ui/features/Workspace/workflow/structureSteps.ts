@@ -318,5 +318,5 @@ export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { 
   });
   const line = [`${holds === "conformers" ? plural(kept.length, "frame") : plural(kept.length, "entry", "entries")} displaced`];
   if (aside.length) line.push(`${aside.length} not displaced`);
-  return { ok: true, holds, kept, aside, said: [line.join(" · "), ...notes].join(". ") };
+  return { ok: true, holds, kept, aside, said: [line.join(" \u00b7 "), ...notes].join(". ") };
 }
