@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DURATION } from "../theme/motion";
 import { listKey, opensList } from "./keys";
-import { LIST_MOST_HEIGHT, placeList, pressedAway } from "./place";
+import { listStyle, placeList, pressedAway, type ListPlace } from "./place";
 
 /** A choice of a Select: its value, and what it is called. */
 export type SelectOption<T extends string = string> = { value: T; label: string };
@@ -54,13 +54,15 @@ export default function Select<T extends string>({
   // (kept a moment after it closes, as it fades out)
   const [shown, setShown] = useState(false);
   const [lit, setLit] = useState(0);
-  const [place, setPlace] = useState<{ left: number; top: number; minWidth: number; maxHeight: number } | null>(null);
+  const [place, setPlace] = useState<ListPlace | null>(null);
   const chosen = options.findIndex((o) => o.value === value);
   const current = chosen >= 0 ? options[chosen] : null;
 
   const openList = () => {
     if (disabled || !options.length) return;
     setLit(Math.max(0, chosen));
+    // (measured afresh as it opens: at its own height, not the room it was held to last - ./place, listStyle)
+    setPlace(null);
     setOpen(true);
     setShown(true);
   };
@@ -76,7 +78,10 @@ export default function Select<T extends string>({
 
   useEffect(() => {
     if (open || !shown) return;
-    const t = window.setTimeout(() => setShown(false), DURATION.quick * 1000);
+    const t = window.setTimeout(() => {
+      setShown(false);
+      setPlace(null);
+    }, DURATION.quick * 1000);
     return () => window.clearTimeout(t);
   }, [open, shown]);
 
@@ -170,13 +175,9 @@ export default function Select<T extends string>({
               "fixed z-[120] overflow-y-auto rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none",
               open ? "meno-fade-in" : "meno-fade-out pointer-events-none",
             )}
-            // (nine rows whole at most, or half the tenth showing there is more: ./place, LIST_ROWS; and no taller than the
-            // room on the side it opens)
-            style={
-              place
-                ? { left: place.left, top: place.top, minWidth: place.minWidth, maxHeight: `min(${LIST_MOST_HEIGHT}, ${place.maxHeight}px)` }
-                : { left: -9999, top: -9999, maxHeight: LIST_MOST_HEIGHT }
-            }
+            // (nine rows whole at most, or half the tenth showing there is more, and no taller than the room on the side it
+            // opens: ./place, listStyle)
+            style={listStyle(place)}
             onKeyDown={(e) =>
               listKey(
                 e,

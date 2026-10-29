@@ -16,7 +16,7 @@ export function placeList(
   button: Box,
   list: Pick<Box, "width" | "height">,
   window: { width: number; height: number },
-): { left: number; top: number; minWidth: number; maxHeight: number } {
+): ListPlace {
   const below = button.bottom + GAP;
   const roomBelow = window.height - EDGE - below;
   const roomAbove = button.top - GAP - EDGE;
@@ -49,4 +49,19 @@ export const LIST_MOST_HEIGHT = `calc(${LIST_ROWS} * 2rem + 0.25rem + 2px)`;
 /** Whether a press is away from all of these - neither in an open list nor on its button - and so closes it. */
 export function pressedAway(target: unknown, parts: readonly ({ contains: (node: never) => boolean } | null | undefined)[]): boolean {
   return !parts.some((p) => p?.contains(target as never));
+}
+
+/** Where an open list has been put (placeList), once it has. */
+export type ListPlace = { left: number; top: number; minWidth: number; maxHeight: number };
+
+/**
+ * An open list's style: where it was put, held to the room there; not yet
+ * put - as it opens, each time - off screen at its own height, nine and a
+ * half rows at most, so that it is measured as it is and never as the room
+ * it was last held to.
+ */
+export function listStyle(place: ListPlace | null): { left: number; top: number; minWidth?: number; maxHeight: string } {
+  return place
+    ? { left: place.left, top: place.top, minWidth: place.minWidth, maxHeight: `min(${LIST_MOST_HEIGHT}, ${place.maxHeight}px)` }
+    : { left: -9999, top: -9999, maxHeight: LIST_MOST_HEIGHT };
 }
