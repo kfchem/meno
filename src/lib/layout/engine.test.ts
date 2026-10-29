@@ -1258,6 +1258,22 @@ describe("a macrocycle bridged across a small ring", () => {
     }
   }, measured(2_000));
 
+  it("never reads as another molecule for fewer faults: a cyclotetradecadienone's double bonds as given, each way round", () => {
+    // (the dienone with its first C=C cis and its second trans was drawn
+    // with the cis one trans - a shape of the ring with no fault chosen over
+    // the one that read as the molecule - DESK, #744)
+    for (const smiles of [
+      "O=C1/C=C\\C=C/CCCCCCCCC1",
+      "O=C1/C=C\\C=C\\CCCCCCCCC1",
+      "O=C1/C=C/C=C/CCCCCCCCC1",
+      "O=C1/C=C/C=C\\CCCCCCCCC1",
+      "O=C1\\C=C/C=C\\CCCCCCCCC1",
+    ]) {
+      const input = fromSmiles(smiles);
+      expect(turnedDoubleBonds(input, layout2D(input)), smiles).toEqual([]);
+    }
+  }, measured(2_000));
+
   it("reads back as the molecule given: its centres as given, none turned by a chain laid over them", () => {
     for (const smiles of family) {
       const input = fromSmiles(smiles);

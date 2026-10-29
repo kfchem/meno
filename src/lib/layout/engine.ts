@@ -411,7 +411,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const piece = mol.pieces.find((p) => p.includes(sys.atoms[0]))!;
     let best = 0;
     let bestScore = Infinity;
-    let bestFaults = Infinity;
+    let bestFlaws = Infinity;
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
@@ -460,20 +460,23 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         const views = cageViews.get(i);
         const done = untangle(mol, piece, better.pos, better.score, score, fixed);
         const s = done.score + (views && v && !views[v].tied ? CAGE_VIEW_MARGIN : 0);
-        // (the fewest faults first, whatever else they cost - a macrocycle's
-        // shape that lays an atom on a bond loses to any that does not; not
-        // a metal's, whose chelates and rings bound face-on are set right
-        // after this, turned as a propeller's blades, so that a fault here
-        // says nothing of the drawing it becomes - PdCl2(dppf)'s)
-        const f = etaOf.has(i) || unitOf.has(i) ? 0 : faultsIn(draft.metrics(done.pos));
+        // (what it misstates first - a double bond turned, never chosen for
+        // fewer faults - then the fewest faults, whatever else they cost: a
+        // macrocycle's shape that lays an atom on a bond loses to any that
+        // does not; a metal's faults not counted, its chelates and rings
+        // bound face-on set right after this, turned as a propeller's
+        // blades, so that a fault here says nothing of the drawing it
+        // becomes - PdCl2(dppf)'s)
+        const m = draft.metrics(done.pos);
+        const f = etaOf.has(i) || unitOf.has(i) ? MISSTATES * m.wrongDoubles : flawsIn(m);
         // (only where clearly better: whatever is tried here - a
         // macrocycle's shapes, a cage's views, the spins of a ring bound
         // face-on to a metal - those alike on the measure keep the order
         // they are offered in, not the one the rounding of a sum favoured:
         // a ring with nothing on it reads as well in each shape, and takes
         // the one that lies best, offered first)
-        if (f < bestFaults || (f === bestFaults && s < bestScore - 1e-9)) {
-          bestFaults = f;
+        if (f < bestFlaws || (f === bestFlaws && s < bestScore - 1e-9)) {
+          bestFlaws = f;
           bestScore = s;
           best = v;
         }
@@ -512,7 +515,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const draft = scorer(mol, piece, d, q, 0, false);
       return {
         score: kept(draft),
-        faults: (pos: Grown) => faultsIn(draft.metrics(pos)),
+        flaws: (pos: Grown) => flawsIn(draft.metrics(pos)),
         scoreH: kept(scorer(mol, piece, d, q, 1)),
         scoreFan: kept(scorer(mol, piece, d, q, 1, undefined, true)),
         scoreRoom: kept(scorer(mol, piece, d, q, 1, undefined, undefined, 1, LABEL_ROOM)),
@@ -590,7 +593,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       .map((cand) => {
         const joined = rejoin(mol, piece, cand.pos, cand.score, cand.m.score, fixed);
         const done = untangle(mol, piece, joined.pos, joined.score, cand.m.score, fixed);
-        return { ...done, faults: cand.m.faults(done.pos), m: cand.m, start: cand.start, mirrored: cand.mirrored };
+        return { ...done, flaws: cand.m.flaws(done.pos), m: cand.m, start: cand.start, mirrored: cand.mirrored };
       })
       .sort(bestFirst(mol, piece));
     // (each set right to the end - its sugars faced, room made for its
@@ -626,20 +629,21 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const settled = settleFans(mol, piece, roomy, scoreFan(roomy), scoreFan, fixed).pos;
       return { pos: settled, score: scoreH(settled), m: faced.m, mirrored: faced.mirrored, drafted };
     };
-    // (where they differ in faults, each finished and those with the
-    // fewest kept, whatever else they cost - counted on the finished
+    // (where they differ in what they misstate or in faults, each finished
+    // and those with the fewest flaws kept, whatever else they cost - a
+    // double bond turned first, then faults - counted on the finished
     // drawing, not the draft: a clash the finishing clears is no fault -
     // and chosen among as before)
     let pool = set;
     const done = new Map<(typeof set)[number], ReturnType<typeof finish>>();
-    if (set.some((c) => c.faults !== set[0].faults)) {
-      const faults = set.map((c) => {
+    if (set.some((c) => c.flaws !== set[0].flaws)) {
+      const flaws = set.map((c) => {
         const f = finish(c);
         done.set(c, f);
-        return c.m.faults(f.pos);
+        return c.m.flaws(f.pos);
       });
-      const least = Math.min(...faults);
-      pool = set.filter((_, i) => faults[i] === least);
+      const least = Math.min(...flaws);
+      pool = set.filter((_, i) => flaws[i] === least);
     }
     const finished = (c: (typeof set)[number]) => done.get(c) ?? finish(c);
     // Drawings that read as well as each other here - phorbol's skeleton
@@ -1925,8 +1929,8 @@ function stereoScore(
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
 type Measures = {
   score: (pos: Grown) => number;
-  /** Its faults (`faultsIn`), as the drawing has its depth. */
-  faults: (pos: Grown) => number;
+  /** What it misstates, then its faults (`flawsIn`), as the drawing has its depth. */
+  flaws: (pos: Grown) => number;
   scoreH: (pos: Grown) => number;
   scoreFan: (pos: Grown) => number;
   /** As scoreH, with a label on a bare vertex counted too (`roomForHydrogens`). */
@@ -2468,3 +2472,15 @@ type Scorer = ((pos: Grown) => number) & { metrics: (pos: Grown) => LayoutMetric
  * steer it off.
  */
 const faultsIn = (m: LayoutMetrics) => m.overlaps + m.crossings + m.clashes;
+
+/**
+ * What a drawing gets wrong, in order: first what it misstates - a double
+ * bond drawn the other way round, a different molecule - then its faults
+ * (`faultsIn`). One number, lower better, a misstatement outweighing any
+ * count of faults: no drawing that reads as another molecule is chosen
+ * over one that reads as this one, for fewer faults or anything else.
+ */
+const flawsIn = (m: LayoutMetrics) => MISSTATES * m.wrongDoubles + faultsIn(m);
+
+/** What one misstatement counts for in `flawsIn`: more than any drawing's faults. */
+const MISSTATES = 1_000_000;
