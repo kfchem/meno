@@ -1165,12 +1165,17 @@ All hover-based, as above.
   - **Corners**, any kind (the maintainer, 2026-10-12: corners anywhere,
     not curves): the arrow under the pointer shows a handle at each corner
     and a smaller one in the middle of each stretch. One dragged moves its
-    corner, or makes one there; a corner let go in line with what is
-    either side of it is taken away; *Straighten* in its menu takes them
+    corner, or makes one there - at a right angle, an L, its corner on the
+    circle whose diameter joins what is either side of it, until the
+    pointer pauses, and then freely (2026-10-28); a corner let go in line
+    with what is either side of it is taken away; *Straighten* in its menu takes them
     all away. A corner is kept as a share along the arrow and a distance
     across it, so that it goes with the arrow as it is moved, drawn out by
     an end or grown by its words. Words put by it go over its longest
-    stretch. Words already by it go with the point of its line they are
+    stretch. While an end or a corner is dragged, the arrow is drawn going
+    over to each place it snaps to - an end's 15-degree steps, a corner's
+    right angle - as a bond moved is, never jumping there
+    (`utils/arrowGlide`). Words already by it go with the point of its line they are
     by, as a corner is made, moved or taken away, or an end is drawn
     out. They keep the same share of the way along the line, and the
     same distance from that point, measured along and across its
