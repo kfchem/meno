@@ -8,8 +8,8 @@
  * how it is outlined. Each look fills in those parts, which are shown folded
  * under it and are the chemist's to change for the one render.
  */
-import type { Option, OptionValues } from "../../../../lib/options";
-import { MENO_MOTIONS, type LookDecl, type MotionDecl, type Shortest } from "../../../../lib/plugins/manifest";
+import type { Option, OptionSection, OptionValues } from "../../../../lib/options";
+import { MENO_MOTIONS, type FixedChoice, type LookDecl, type MotionDecl, type Shortest } from "../../../../lib/plugins/manifest";
 import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, Sticks, SurfaceMaterial } from "./renderScene";
 
 /** What a render is: a picture, or a film. */
@@ -64,6 +64,18 @@ const OUTLINE_COLOURS = [
 /** How short a film of each of Meno's own motions can be and still be read, in seconds; those a renderer makes declare theirs. */
 const MENO_SHORTEST: Record<string, Shortest> = { turn: { film: 3 }, frames: { film: 2 }, vibration: { film: 2 } };
 
+/** Once or Loop, a film's: Meno's own, for every motion that can come back to its start - turning, and those a renderer makes. */
+const ONCE_LOOP = [
+  { value: "once", label: "Once: eases in and comes to rest" },
+  { value: "loop", label: "Loop: seamless, over and over" },
+];
+const LOOPING_OWN = ["turn"];
+
+/** Whether a film of a motion can loop: Meno's turning, or one a renderer declares. */
+function loops(motion: string | undefined, declared: readonly MotionDecl[] | undefined): boolean {
+  return !!motion && (LOOPING_OWN.includes(motion) || !!declared?.some((d) => d.id === motion));
+}
+
 /** The longest a film is asked to be, in seconds - unless its shortest is longer, as many molecules' changes can be. */
 const LONGEST = 60;
 
@@ -83,24 +95,41 @@ export function shortestFilm(motion: string | undefined, declared: readonly Moti
 export type Length = { shortest: number; molecules?: number; raised?: boolean };
 
 /**
- * A film's length as the card asks it: the shortest its motion, the renderer's options (Loop, where `loopWhen` says) and the
- * `molecules` allow - and Render's choices with the length raised to it, where it was chosen shorter. A picture's, unbounded.
+ * A film's length as the card asks it: the shortest its motion, Once or Loop and the `molecules` allow - and Render's choices
+ * with the length raised to it, where it was chosen shorter. A picture's, unbounded.
  */
-export function filmLength(
-  kind: Kind,
-  picked: OptionValues,
-  theirs: OptionValues,
-  declared: readonly MotionDecl[] | undefined,
-  loopWhen: { id: string; in: readonly (string | number | boolean)[] } | undefined,
-  molecules: number,
-): { length: Length; values: OptionValues } {
+export function filmLength(kind: Kind, picked: OptionValues, declared: readonly MotionDecl[] | undefined, molecules: number): { length: Length; values: OptionValues } {
   if (kind !== "film") return { length: { shortest: 1 }, values: picked };
   const motion = typeof picked.motion === "string" ? picked.motion : undefined;
-  const loop = !!loopWhen && loopWhen.in.includes(theirs[loopWhen.id]);
+  const loop = picked.mode === "loop" && loops(motion, declared);
   const shortest = shortestFilm(motion, declared, molecules, loop);
   const raised = Number(picked.seconds) < shortest;
   const counted = declared?.find((d) => d.id === motion)?.shortest?.change != null;
   return { length: { shortest, ...(counted ? { molecules } : {}), raised }, values: raised ? { ...picked, seconds: shortest } : picked };
+}
+
+/**
+ * Options with the choices a motion is always made with fixed (`fixed` of its declaration): each such choice offered alone,
+ * saying why, and its value that one - whatever was chosen. What it names that is not among them, or not a choice of it, is
+ * left as it is.
+ */
+export function withFixed(options: readonly Option[], values: OptionValues, fixed: readonly FixedChoice[] | undefined): { options: Option[]; values: OptionValues } {
+  const out = { ...values };
+  const shown = options.map((o) => {
+    const f = fixed?.find((x) => x.id === o.id);
+    const only = f && o.type === "choice" ? o.choices.find((c) => c.value === f.value) : undefined;
+    if (!f || !only || o.type !== "choice") return o;
+    out[o.id] = only.value;
+    return { ...o, choices: [only], default: only.value, note: f.why };
+  });
+  return { options: shown, values: out };
+}
+
+/** Options by the part of the card each is shown in; those that say none, apart (`own`: the renderer's own part). */
+export function bySection(options: readonly Option[]): Record<OptionSection | "own", Option[]> {
+  const out: Record<OptionSection | "own", Option[]> = { look: [], render: [], scene: [], motion: [], own: [] };
+  for (const o of options) out[o.section ?? "own"].push(o);
+  return out;
 }
 
 /** What the card says under a film's length: its shortest, and what it is for; or that the length was raised to it. */
@@ -169,8 +198,12 @@ export function renderOptions(
   const choices = lookChoices(offered);
   const seeThrough = offered.filter((l) => l.seeThrough).map((l) => l.id);
   const adjust = "Adjust this look";
+  const looping = moving.map((m) => m.value).filter((m) => loops(m, declaredMotions));
   return [
-    ...(film && moving.length ? [{ id: "motion", label: "Moving", type: "choice" as const, choices: moving, default: moving[0].value }] : []),
+    ...(film && moving.length ? [{ id: "motion", label: "Moving", type: "choice" as const, choices: moving, default: moving[0].value, section: "motion" as const }] : []),
+    ...(film && looping.length
+      ? [{ id: "mode", label: "Once or Loop", type: "choice" as const, choices: ONCE_LOOP, default: "once", section: "motion" as const, when: { id: "motion", in: looping } }]
+      : []),
     ...(film
       ? [
           {
@@ -182,22 +215,23 @@ export function renderOptions(
             max: Math.max(LONGEST, length.shortest),
             step: 1,
             unit: "s",
+            section: "motion" as const,
             ...(lengthNote(length) ? { note: lengthNote(length) } : {}),
           },
-          { id: "fps", label: "Frames a second", type: "choice" as const, choices: ["24", "30", "60"].map((v) => ({ value: v, label: v })), default: "30" },
+          { id: "fps", label: "Frames a second", type: "choice" as const, choices: ["24", "30", "60"].map((v) => ({ value: v, label: v })), default: "30", section: "render" as const },
         ]
       : []),
-    { id: "width", label: "Width", type: "number", default: film ? 1920 : 2400, min: 16, max: film ? 3840 : 8192, step: film ? 16 : 100, unit: "px" },
-    { id: "shape", label: "Shape", type: "choice", choices: SHAPES, default: film ? "16:9" : "fit" },
-    { id: "look", label: "Look", type: "choice", choices, default: choices[0]?.value ?? "meno" },
-    { id: "molecules", label: "Molecules made of", type: "choice", choices: MOLECULES, default: "meno", group: adjust },
-    ...(surfaces ? [{ id: "surfaces", label: "Surfaces made of", type: "choice" as const, choices: SURFACES, default: "meno", group: adjust }] : []),
-    ...(seeThrough.length ? [{ id: "sticks", label: "Sticks inside the balls", type: "choice" as const, choices: STICKS, default: "shown", group: adjust, when: { id: "look", in: seeThrough } }] : []),
-    { id: "shading", label: "Shading", type: "choice", choices: SHADINGS, default: "lit", group: adjust },
-    { id: "band", label: "Size of the lit band", type: "number", default: 0.5, min: 0.05, max: 1, step: 0.05, group: adjust, when: { id: "shading", in: ["toon"] } },
-    { id: "outlines", label: "Outlines", type: "choice", choices: OUTLINES, default: "none", group: adjust },
-    { id: "outline", label: "Outline width", type: "number", default: 3, min: 0.5, max: 20, step: 0.5, unit: "px", group: adjust, when: { id: "outlines", in: ["outer", "mixed"] } },
-    { id: "outline_colour", label: "Outline colour", type: "choice", choices: OUTLINE_COLOURS, default: "black", group: adjust, when: { id: "outlines", in: ["thin", "outer", "mixed"] } },
+    { id: "width", label: "Width", type: "number", default: film ? 1920 : 2400, min: 16, max: film ? 3840 : 8192, step: film ? 16 : 100, unit: "px", section: "render" },
+    { id: "shape", label: "Shape", type: "choice", choices: SHAPES, default: film ? "16:9" : "fit", section: "render" },
+    { id: "look", label: "Look", type: "choice", choices, default: choices[0]?.value ?? "meno", section: "look" },
+    { id: "molecules", label: "Molecules made of", type: "choice", choices: MOLECULES, default: "meno", group: adjust, section: "look" },
+    ...(surfaces ? [{ id: "surfaces", label: "Surfaces made of", type: "choice" as const, choices: SURFACES, default: "meno", group: adjust, section: "look" as const }] : []),
+    ...(seeThrough.length ? [{ id: "sticks", label: "Sticks inside the balls", type: "choice" as const, choices: STICKS, default: "shown", group: adjust, section: "look" as const, when: { id: "look", in: seeThrough } }] : []),
+    { id: "shading", label: "Shading", type: "choice", choices: SHADINGS, default: "lit", group: adjust, section: "look" },
+    { id: "band", label: "Size of the lit band", type: "number", default: 0.5, min: 0.05, max: 1, step: 0.05, group: adjust, section: "look", when: { id: "shading", in: ["toon"] } },
+    { id: "outlines", label: "Outlines", type: "choice", choices: OUTLINES, default: "none", group: adjust, section: "look" },
+    { id: "outline", label: "Outline width", type: "number", default: 3, min: 0.5, max: 20, step: 0.5, unit: "px", group: adjust, section: "look", when: { id: "outlines", in: ["outer", "mixed"] } },
+    { id: "outline_colour", label: "Outline colour", type: "choice", choices: OUTLINE_COLOURS, default: "black", group: adjust, section: "look", when: { id: "outlines", in: ["thin", "outer", "mixed"] } },
   ];
 }
 
@@ -220,9 +254,9 @@ export function finishEntry(f: Finish | undefined) {
   return { look: g.look, shading: g.shading, outlines: g.outlines, outline: g.outline, outline_colour: g.outlineColour, band: g.band };
 }
 
-/** A film's motion as an entry says it to the renderer: a motion it declares, by id, which it makes itself; none for Meno's own, keyed into the scene. */
-export function motionEntry(ask: Pick<RenderAsk, "kind" | "motion">): { motion?: string } {
-  return ask.kind === "film" && ask.motion && !(MENO_MOTIONS as readonly string[]).includes(ask.motion) ? { motion: ask.motion } : {};
+/** A film's motion as an entry says it to the renderer: a motion it declares, by id, which it makes itself, and Once or Loop; none for Meno's own, keyed into the scene. */
+export function motionEntry(ask: Pick<RenderAsk, "kind" | "motion" | "mode">): { motion?: string; mode?: "once" | "loop" } {
+  return ask.kind === "film" && ask.motion && !(MENO_MOTIONS as readonly string[]).includes(ask.motion) ? { motion: ask.motion, mode: ask.mode ?? "once" } : {};
 }
 
 /** What a render is asked to make, from Render's own choices. */
@@ -231,7 +265,7 @@ export function askOf(kind: Kind, v: OptionValues): RenderAsk {
     kind,
     width: Number(v.width),
     shape: v.shape as Shape,
-    ...(kind === "film" ? { motion: v.motion as Motion, seconds: Number(v.seconds), fps: Number(v.fps) } : {}),
+    ...(kind === "film" ? { motion: v.motion as Motion, mode: v.mode === "loop" ? ("loop" as const) : ("once" as const), seconds: Number(v.seconds), fps: Number(v.fps) } : {}),
     molecules: (v.molecules as MoleculeMaterial) ?? "meno",
     surfaces: (v.surfaces as SurfaceMaterial) ?? "meno",
     finish: finishOf(v),

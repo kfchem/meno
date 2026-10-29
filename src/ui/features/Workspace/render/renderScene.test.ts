@@ -5,7 +5,7 @@ import { WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD } from "../utils/vibration3d";
 import type { Carried3D } from "../store/types";
 import * as THREE from "three";
-import { halvesOf, ordinal, renderScene, RIBBON_FILM_MOST_POINTS, type RenderAsk } from "./renderScene";
+import { halvesOf, ordinal, renderScene, RIBBON_FILM_MOST_POINTS, turnAt, type RenderAsk } from "./renderScene";
 
 type Json = Record<string, any>;
 
@@ -156,6 +156,19 @@ describe("molecules in 3D written as a scene to render", () => {
     expect(g.accessors[a.samplers[0].input]).toMatchObject({ count: 60, min: [0], max: [Math.fround(59 / 30)] });
     // (the frame holds it whichever way it is turned)
     expect(r.page.maxX - r.page.minX).toBeGreaterThan(0);
+  });
+
+  it("turns it once, easing in and coming to rest where it began, or as a Loop at one speed", () => {
+    // (Once: still at either end, back to where it began, fastest halfway)
+    expect(turnAt(0, 60, "once")).toBe(0);
+    expect(turnAt(59, 60, "once")).toBeCloseTo(2 * Math.PI, 9);
+    expect(turnAt(1, 60, "once")).toBeLessThan(0.01);
+    expect(turnAt(30, 60, "once") - turnAt(29, 60, "once")).toBeGreaterThan((2 * Math.PI) / 60);
+    // (Loop: a step short of where it began, every step the same)
+    expect(turnAt(59, 60, "loop")).toBeCloseTo((2 * Math.PI * 59) / 60, 9);
+    expect(turnAt(1, 60, "loop")).toBeCloseTo(turnAt(31, 60, "loop") - turnAt(30, 60, "loop"), 9);
+    // (none said: Once)
+    expect(turnAt(30, 60, undefined)).toBe(turnAt(30, 60, "once"));
   });
 
   it("swings it in its vibration for whole periods, its atoms and sticks moving", () => {

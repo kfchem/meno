@@ -60,6 +60,22 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
 - The plugin's options, as its manifest declares them (the Blender
   plugin's below).
 
+**The card's parts** (the maintainer, 2026-10-29): one model for a picture
+and a film alike, in four parts, in this order - **Look** (the look, its own
+choices just under it, *Adjust this look* folded), **Render** (the
+renderer, its samples, noise, where it renders, its colours, the width and
+shape, a film's frames a second and quality), **Scene** (the background, the
+lights) and, for a film, **Motion** (the motion, *Once or Loop*, the
+length). Meno's own choices each have their part; a plugin's option says
+which part it belongs to (`section`, docs/PLUGINS.md), and one that says
+none is shown last, under the plugin's name. *Once or Loop* is Meno's, for
+every motion that can come back to its start - turning, and those a
+renderer makes: *turning once round* Once eases in and comes to rest where
+it began, as the canvas's *Turn once* does; as a Loop it turns at one speed,
+seamlessly. A choice a motion is always made with - the Blender plugin's
+motions are made with light traced, in Cycles - is shown as that one alone,
+saying why, whatever was chosen (`fixed`, docs/PLUGINS.md, *Motions*).
+
 Each is remembered: Meno's for a picture and a film apart, the plugin's as
 the role's options, which Settings, *Chemistry*, shows as well, on its *3D* card.
 
@@ -156,8 +172,8 @@ a label and a description (docs/PLUGINS.md, *Motions*); Meno keeps no list
 of them. The card's *Moving* offers Meno's own motions the molecules can
 make, then the declared ones; chosen, the entry says the motion's id
 (`motion`), and Meno writes the scene still, with the molecules' atoms and
-bonds in its extras. The options that adjust a motion are the role's,
-each `when` it is chosen - Once or Loop among them.
+bonds in its extras, and *Once or Loop* (`mode`: `once` or `loop`). The
+options that adjust a motion are the role's, each `when` it is chosen.
 
 ### How long a film can be
 
@@ -167,8 +183,8 @@ maintainer, 2026-10-28): each motion says its shortest - Meno's own
 renderer's in its manifest (`shortest`, docs/PLUGINS.md, *Motions*). A
 motion that changes one molecule into the next says each change's
 shortest, and Meno multiplies it by the changes - one fewer than the
-molecules, or as many where the film loops back to the first (the role's
-`loopWhen` says when). The card's *Length* is bounded by it, and says so
+molecules, or as many where the film loops back to the first (*Once or
+Loop*). The card's *Length* is bounded by it, and says so
 under it ("At least 12 s for 3 molecules"); a length chosen before that is
 shorter is raised to it, and the card says that instead. The longest it
 asks is 60 s, or the shortest where that is longer. However a film is
@@ -385,7 +401,7 @@ uv, no package), and the script Blender runs, `render.py`.
   carried by colour and shadow rather than glow - **Black** or **Grey**
   the dark studio: a pool of light on a dark cyclorama, coloured rims,
   bloom. Each motion has its own tuning on each. *Once or Loop* (the
-  option `mode`): Once eases in and holds a composed last frame; Loop
+  entry's `mode`, Meno's choice): Once eases in and holds a composed last frame; Loop
   repeats seamlessly - Pulse and Scan, and Reveal in the dark studio, loop
   of themselves (three waves a period; a sheet up and down as the molecule
   turns once; the rims circling); the others loop as a cycle, played

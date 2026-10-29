@@ -38,7 +38,6 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
           </span>
         )}
       </span>
-      {option.note && <span className="mt-1 block text-xs text-gh-gray">{option.note}</span>}
     </label>
   );
 }
@@ -128,9 +127,9 @@ export default function OptionsForm({
                 )}
                 {o.type === "number" && o.unit && <span className="shrink-0 whitespace-nowrap text-xs text-gh-gray">{o.unit}</span>}
               </span>
-              {o.type === "number" && o.note && <span className="mt-1 block text-xs text-gh-gray">{o.note}</span>}
             </label>
           )}
+          {o.note && <span className="mt-1 block text-xs text-gh-gray">{o.note}</span>}
         </div>
   );
   return (

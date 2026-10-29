@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
-import { askOf, filmLength, finishEntry, lengthNote, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
+import { askOf, bySection, filmLength, finishEntry, lengthNote, withFixed, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -89,7 +89,7 @@ describe("a film's motion: Meno's own, then those the renderer declares", () => 
   });
 
   it("tells the renderer the motion only where it is the renderer's own: Meno's are keyed into the scene", () => {
-    expect(motionEntry({ kind: "film", motion: "ripple" })).toEqual({ motion: "ripple" });
+    expect(motionEntry({ kind: "film", motion: "ripple" })).toEqual({ motion: "ripple", mode: "once" });
     expect(motionEntry({ kind: "film", motion: "turn" })).toEqual({});
     expect(motionEntry({ kind: "picture", motion: "ripple" })).toEqual({});
   });
@@ -134,17 +134,51 @@ describe("a film's shortest length, by its motion and its molecules", () => {
     expect(lengthNote({ shortest: 12, molecules: 3, raised: true })).toBe("Raised to 12 s, the shortest for 3 molecules");
   });
 
-  it("raises a length chosen shorter, counting a Loop as its renderer's option says", () => {
-    const loopWhen = { id: "mode", in: ["loop"] };
-    const once = filmLength("film", { motion: "pour", seconds: 5 }, { mode: "once" }, DECLARED_MOTIONS, loopWhen, 3);
+  it("raises a length chosen shorter, counting a Loop as Meno's Once or Loop says", () => {
+    const once = filmLength("film", { motion: "pour", mode: "once", seconds: 5 }, DECLARED_MOTIONS, 3);
     expect(once.values.seconds).toBe(12);
     expect(once.length).toEqual({ shortest: 12, molecules: 3, raised: true });
-    const loop = filmLength("film", { motion: "pour", seconds: 20 }, { mode: "loop" }, DECLARED_MOTIONS, loopWhen, 3);
+    const loop = filmLength("film", { motion: "pour", mode: "loop", seconds: 20 }, DECLARED_MOTIONS, 3);
     expect(loop.values.seconds).toBe(20);
     expect(loop.length).toEqual({ shortest: 18, molecules: 3, raised: false });
-    // (a motion that changes nothing counts no molecules; a renderer that says nothing of a Loop, none)
-    expect(filmLength("film", { motion: "glow", seconds: 8 }, { mode: "loop" }, DECLARED_MOTIONS, undefined, 3).length).toEqual({ shortest: 4, raised: false });
+    // (a motion that changes nothing counts no molecules; its Loop's own shortest)
+    expect(filmLength("film", { motion: "glow", mode: "loop", seconds: 8 }, DECLARED_MOTIONS, 3).length).toEqual({ shortest: 6, raised: false });
+    // (one that cannot loop - Meno's frames - counts none, whatever was chosen)
+    expect(filmLength("film", { motion: "frames", mode: "loop", seconds: 8 }, DECLARED_MOTIONS, 3).length).toEqual({ shortest: 2, raised: false });
     // (a picture: no length)
-    expect(filmLength("picture", { width: 100 }, {}, DECLARED_MOTIONS, loopWhen, 3)).toEqual({ length: { shortest: 1 }, values: { width: 100 } });
+    expect(filmLength("picture", { width: 100 }, DECLARED_MOTIONS, 3)).toEqual({ length: { shortest: 1 }, values: { width: 100 } });
+  });
+});
+
+describe("the card's parts: Look, Render, Scene, Motion", () => {
+  const options = renderOptions("film", ["turn", "frames"], true, [], [{ id: "glow", label: "Glow" }]);
+  const parts = bySection(options);
+
+  it("puts each of Meno's own choices in its part", () => {
+    expect(parts.motion.map((o) => o.id)).toEqual(["motion", "mode", "seconds"]);
+    expect(parts.render.map((o) => o.id)).toEqual(["fps", "width", "shape"]);
+    expect(parts.look.map((o) => o.id)).toEqual(["look", "molecules", "surfaces", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(parts.scene).toEqual([]);
+    // (a picture has no motion)
+    expect(bySection(renderOptions("picture", [], false)).motion).toEqual([]);
+  });
+
+  it("offers Once or Loop for every motion that can come back to its start - turning, and those a renderer makes - not its frames", () => {
+    const mode = options.find((o) => o.id === "mode")!;
+    expect(mode.when).toEqual({ id: "motion", in: ["turn", "glow"] });
+    expect(askOf("film", { ...valuesOf(options), motion: "glow", mode: "loop" })).toMatchObject({ motion: "glow", mode: "loop" });
+    expect(motionEntry({ kind: "film", motion: "glow", mode: "loop" })).toEqual({ motion: "glow", mode: "loop" });
+    expect(motionEntry({ kind: "film", motion: "turn", mode: "loop" })).toEqual({});
+  });
+
+  it("shows a choice a motion is always made with as that one alone, saying why, whatever was chosen", () => {
+    const theirs = [{ id: "engine", label: "Renderer", type: "choice" as const, choices: [{ value: "cycles", label: "Cycles" }, { value: "eevee", label: "EEVEE" }], default: "cycles", section: "render" as const }];
+    const fixed = withFixed(theirs, { engine: "eevee" }, [{ id: "engine", value: "cycles", why: "This motion is made with light traced" }, { id: "nothing", value: "x", why: "Not an option" }]);
+    expect(fixed.values.engine).toBe("cycles");
+    expect(fixed.options[0]).toMatchObject({ choices: [{ value: "cycles", label: "Cycles" }], note: "This motion is made with light traced" });
+    // (none fixed: as they were)
+    expect(withFixed(theirs, { engine: "eevee" }, undefined)).toEqual({ options: theirs, values: { engine: "eevee" } });
+    // (a renderer's option that says no part: its own)
+    expect(bySection([{ ...theirs[0], section: undefined }]).own.map((o) => o.id)).toEqual(["engine"]);
   });
 });

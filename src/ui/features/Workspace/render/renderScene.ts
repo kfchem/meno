@@ -11,6 +11,7 @@
  * it stands there.
  */
 import * as THREE from "three";
+import { turnOnceAngle } from "../utils/turnOnce";
 import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, type MoleculeLook, type Style3D } from "../../../../lib/chem/style3d";
 import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, type GltfMesh, type GltfNode, type GltfScene, type Quat, type Vec3 } from "../../../../lib/scene/gltf";
 import { tubeAlong, unitCylinder, unitRing, unitSphere, type Shape as Solid } from "../../../../lib/scene/shapes";
@@ -46,6 +47,8 @@ export type RenderAsk = {
   width: number;
   shape: Shape;
   motion?: Motion;
+  /** A film's: easing in and coming to rest (`once`), or seamless, over and over (`loop`) - where its motion can loop. */
+  mode?: "once" | "loop";
   seconds?: number;
   fps?: number;
   molecules?: MoleculeMaterial;
@@ -164,6 +167,15 @@ export function halvesOf<P extends { a: THREE.Vector3; b: THREE.Vector3; r: numb
   return [[...pieces], []];
 }
 
+/**
+ * How far round a film turning its molecules has come at its frame `s` of `count`, in radians. Once: easing in and coming to
+ * rest just as it began, as the canvas's turn once does. Loop: at one speed, its last frame a step short of its first, so that
+ * the film plays on round without a seam.
+ */
+export function turnAt(s: number, count: number, mode: RenderAsk["mode"]): number {
+  return mode === "loop" ? (2 * Math.PI * s) / count : turnOnceAngle(count > 1 ? s / (count - 1) : 0);
+}
+
 export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: RenderAsk): Rendered {
   const film = ask.kind === "film";
   const fps = film ? Math.max(1, Math.round(ask.fps ?? 30)) : 1;
@@ -254,7 +266,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     const sampleAt = (s: number): Sample => {
       const u = count > 1 ? s / (count - 1) : 0;
       if (turning) {
-        const spin = new THREE.Quaternion().setFromAxisAngle(up, (2 * Math.PI * s) / count);
+        const spin = new THREE.Quaternion().setFromAxisAngle(up, turnAt(s, count, ask.mode));
         return { places: frames[shownFrame], turn: spin.multiply(turned), presence: presenceAt(shownFrame) };
       }
       if (moving) {

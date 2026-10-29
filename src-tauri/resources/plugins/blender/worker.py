@@ -168,7 +168,7 @@ def settings_of(entry, options):
         "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
         "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
         # (a film's motion, where it is one of this plugin's: none for Meno's own, keyed into the scene; Once or Loop)
-        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(options.get("mode", "once"), "mode", MODES),
+        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(entry.get("mode", "once"), "mode", MODES),
             "shortest": SHORTEST.get(entry["motion"], {})} if film and entry.get("motion") is not None else {}),
     }
 
