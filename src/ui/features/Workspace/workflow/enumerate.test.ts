@@ -41,7 +41,7 @@ describe("a list's lines, read", () => {
       [expect.stringMatching(/^OTBS · /), false],
       ["Cl", false],
       ["C3H6NO", false],
-      ['"Qqx" is not an element, a group Meno knows, or a SMILES with a "*"', true],
+      ['"Qqx" is not a group, an element or a SMILES with "*"', true],
       ["", false],
       ["R2", false],
     ]);
@@ -195,7 +195,7 @@ describe("Enumerate's known answers", () => {
 describe("what stops Enumerate before it runs, each said", () => {
   const benzene = () => template("*c1ccccc1");
   it("a line that reads as nothing, named, with what was tried", () => {
-    expect(problems(enumerated(benzene(), "R1: Me\nQqx"))).toEqual(['R1, option 2 ("Qqx"): "Qqx" is not an element, a group Meno knows, or a SMILES with a "*"']);
+    expect(problems(enumerated(benzene(), "R1: Me\nQqx"))).toEqual(['R1, option 2 ("Qqx"): "Qqx" is not a group, an element or a SMILES with "*"']);
   });
   it("a group attached by more than one atom, or by none - a chelating ligand, a whole molecule", () => {
     expect(problems(enumerated(benzene(), "R1: THF"))[0]).toMatch(/^R1, option 1 \("THF"\): THF is a ligand, bound by a pair it lends|^R1, option 1 \("THF"\): THF is a whole molecule/);
