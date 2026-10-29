@@ -543,6 +543,20 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     distances from the centre, sorted, is a bound the conformers cannot be
     under, and each way's own atoms laid over alone is another. Only pairs
     and ways under 0.01 Å by both are laid over in full.
+- **A coordination bond is RDKit's dative bond, taking no hydrogen.** A
+  drawn dative arrow or coordination bond (a MOL block's type 9), or a
+  plugin entry's bond marked `coordination`, is read as RDKit's dative
+  bond, from the atom that lends its pair - never as a covalent single.
+  RDKit counts a dative bond in its acceptor's valence, so a plain B drawn
+  H3N→BH3 was given two hydrogens, where Meno counts three: the molecule
+  in 3D came out H3N→BH2 (RDKit plugin to 0.1.11). Its acceptor, not a
+  metal, is now given the hydrogens Meno counts, the dative bond taking
+  none (`acceptors_as_drawn`). Where RDKit then cannot hold it - a neutral
+  B or Al with its three bonds besides - the structure is refused in
+  words: "RDKit cannot hold the coordination bond from N to B as drawn: B
+  takes no further bond there. Draw the two charged instead, N+ bonded to
+  B-." A metal acceptor keeps its ligands' hydrogens as they are
+  (cisplatin drawn with arrows: six). From RDKit plugin 0.1.12.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
@@ -1069,7 +1083,7 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   "schema": 1,
   "name": "...",                      (where it has one)
   "atoms": [{"el", "x", "y", "z", "charge"?, "radical"?, "isotope"?, "mass"?}],
-  "bonds": [{"a1", "a2", "order"}],
+  "bonds": [{"a1", "a2", "order", "coordination"?}],
   "charge": 0,
   "multiplicity": 1,
   "files": [{"kind", "name", "text"}]  (where the step takes some)
@@ -1084,6 +1098,12 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   fixed*), mapping back any its program reorders.
 - Places are in ångströms. `mass` is the isotope's in daltons, where
   Meno knows it.
+- A coordination bond - a dative arrow or a coordination bond as drawn, a
+  file's bond of type 9 - is `order` 1 with `coordination: true`, `a1` the
+  atom that lends its pair (the entry record's `EntryBond`). A plugin
+  maps it to what its program has (the RDKit plugin: RDKit's dative bond)
+  or refuses the entry in words; it never takes it as a covalent single.
+  A program given only atoms and places has no bonds to map.
 - `charge` and `multiplicity` are by Meno's one rule
   (`src/lib/io/writers.ts`, `speciesOf`): what the calculation the
   molecule was read from said, where it said; else what its atoms say.
