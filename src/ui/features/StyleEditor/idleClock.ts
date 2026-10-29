@@ -37,3 +37,22 @@ export function onIdleClock(step: (d: number) => void): () => void {
     clock = null;
   };
 }
+
+/**
+ * A sample on the clock only while it is seen - on the screen, in a window in front: `seen` puts it on and takes it off,
+ * `stop` takes it off for good. With no sample seen, there is no clock at all.
+ */
+export function idleClockWhileSeen(step: (d: number) => void): { seen: (on: boolean) => void; stop: () => void } {
+  let leave: (() => void) | null = null;
+  const off = () => {
+    leave?.();
+    leave = null;
+  };
+  return {
+    seen: (on) => {
+      if (on && !leave) leave = onIdleClock(step);
+      else if (!on) off();
+    },
+    stop: off,
+  };
+}

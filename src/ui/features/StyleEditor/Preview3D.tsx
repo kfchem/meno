@@ -8,7 +8,7 @@ import Molecule3DView from "../Workspace/components/Molecule3DView";
 import { watchShaderErrors } from "../Workspace/utils/menoShader";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
-import { onIdleClock } from "./idleClock";
+import { idleClockWhileSeen } from "./idleClock";
 import { markTurning } from "./sampleTurn";
 
 // --- Preview -------------------------------------------------------------------
@@ -193,16 +193,29 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     };
   }, [gl, invalidate, camera, scene, raycaster, turnOn, turnBy]);
 
-  // seen or not: on the screen (an IntersectionObserver) and in a window in front; seen again, drawn again
+  // seen or not: on the screen (an IntersectionObserver) and in a window in front; seen again, drawn again. Its own
+  // turn - slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again eased
+  // after - is stepped by its own clock (idleClock) while it is seen, on every other frame, not each: a step drawn asks
+  // for a frame, and the screen's every frame would be drawn again. With no slot seen, no clock at all
   useEffect(() => {
     if (!idle) return;
     const dom = gl.domElement;
     let onScreen = true;
+    const clock = idleClockWhileSeen((d) => {
+      if (held.current || spin.current) {
+        own.current = 0;
+        return;
+      }
+      own.current = 1 - (1 - own.current) * Math.exp(-d / IDLE_TAU);
+      turnBy(UPRIGHT, IDLE * own.current * d);
+    });
     const now = () => {
       const was = seen.current;
       seen.current = onScreen && document.visibilityState === "visible";
+      clock.seen(seen.current);
       if (seen.current && !was) invalidate();
     };
+    now();
     const watch = new IntersectionObserver((es) => {
       onScreen = es.some((x) => x.isIntersecting);
       now();
@@ -212,24 +225,9 @@ function Turnable({ style, look, onTap, turnOn, idle }: { style: Style3D; look: 
     return () => {
       watch.disconnect();
       document.removeEventListener("visibilitychange", now);
+      clock.stop();
     };
-  }, [idle, gl, invalidate]);
-
-  // its own turn, slow and calm, about the screen's upright: none while it is turned by hand or coasting, taken up again
-  // eased after. Stepped by its own clock (idleClock), on every other frame, not each: a step drawn asks for a
-  // frame, and the screen's every frame would be drawn again
-  useEffect(() => {
-    if (!idle) return;
-    return onIdleClock((d) => {
-      if (!seen.current) return;
-      if (held.current || spin.current) {
-        own.current = 0;
-        return;
-      }
-      own.current = 1 - (1 - own.current) * Math.exp(-d / IDLE_TAU);
-      turnBy(UPRIGHT, IDLE * own.current * d);
-    });
-  }, [idle, turnBy]);
+  }, [idle, gl, invalidate, turnBy]);
 
   // let go while turning, it turns on, slowing as the style says
   useFrame((_, dt) => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IDLE_FPS, onIdleClock } from "./idleClock";
+import { IDLE_FPS, idleClockWhileSeen, onIdleClock } from "./idleClock";
 
 /** The screen's frames, by hand: each `frame(ms)` runs what waits for the next one at `ms`. */
 let waiting: Map<number, FrameRequestCallback>;
@@ -59,6 +59,34 @@ describe("the clock a style card's samples turn by", () => {
     frame(10 * (1000 / 60));
     expect([a.length, b.length]).toEqual([4, 5]);
     stopB();
+    expect(waiting.size).toBe(0);
+  });
+
+  it("runs only while a sample on it is seen: none seen, no frame asked for - and it starts again as one is", () => {
+    const a: number[] = [];
+    const b: number[] = [];
+    const slotA = idleClockWhileSeen((d) => a.push(d));
+    const slotB = idleClockWhileSeen((d) => b.push(d));
+    expect(waiting.size).toBe(0);
+    slotA.seen(true);
+    slotB.seen(true);
+    for (let k = 1; k <= 4; k++) frame((k * 1000) / 60);
+    expect([a.length, b.length]).toEqual([2, 2]);
+    // (one out of sight: the other on alone)
+    slotA.seen(false);
+    for (let k = 5; k <= 8; k++) frame((k * 1000) / 60);
+    expect([a.length, b.length]).toEqual([2, 4]);
+    // (none seen - the window behind another, or both scrolled away: the clock gone)
+    slotB.seen(false);
+    expect(waiting.size).toBe(0);
+    // (seen again, and said so twice: on the clock once)
+    slotA.seen(true);
+    slotA.seen(true);
+    expect(waiting.size).toBe(1);
+    for (let k = 9; k <= 12; k++) frame((k * 1000) / 60);
+    expect([a.length, b.length]).toEqual([4, 4]);
+    slotA.stop();
+    slotB.stop();
     expect(waiting.size).toBe(0);
   });
 });
