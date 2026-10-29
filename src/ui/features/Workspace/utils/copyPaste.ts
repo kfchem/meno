@@ -871,14 +871,14 @@ function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | null | 
   return out.some(Boolean) ? out : undefined;
 }
 
-/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them: none where none is marked; null where the marks do not read (`failedOf`). */
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them - a list of none where its calculation judged none, null where none judged it: none where none is marked; null where the marks do not read (`failedOf`). */
 function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | null | undefined {
   if (given === undefined) return undefined;
   if (!Array.isArray(given) || given.length !== keep.length) return null;
-  const read = given.map((f) => (f === null || (Array.isArray(f) && !f.length) ? null : (imaginaryOf(f) ?? undefined)));
+  const read = given.map((f) => (f === null ? null : (imaginaryOf(f) ?? undefined)));
   if (read.some((f) => f === undefined)) return null;
   const out = (read as (number[] | null)[]).filter((_, i) => keep[i]);
-  return out.some(Boolean) ? out : undefined;
+  return out.some((f) => f !== null) ? out : undefined;
 }
 
 /** The hydrogens a molecule was given that its file left out (Molecule3D `hydrogensAdded`): each part's, chosen or the CCD's, by its atoms - of `atoms`. */

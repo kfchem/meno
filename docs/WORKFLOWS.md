@@ -575,10 +575,14 @@ once (*Several at once*).
 
 *Show log* opens the job's log in the workspace's column of texts (PR
 #172), updating while the job runs - its last lines kept in view unless
-the chemist scrolled up. A step that ran several jobs has a log for
-each job, named for the step's kind and numbered in the order the jobs
-were made (*Optimise log 1*, *Optimise log 2*); one job's is *Optimise
-log*. A log is a text of the workspace like any other,
+the chemist scrolled up. A step's log is one text, *Optimise log*,
+however many jobs it ran (the maintainer, 2026-10-28: a tab for each of
+many jobs filled the column). Of several, it shows the first, and a
+compact chooser in the column's header - *Job 2 of 12 · failed* -
+shows another in its place, followed while it runs; the jobs and the one
+shown are kept with the workspace (`TextOf.jobs`, `job`). Run again, it
+shows the first of its new jobs. A log is a text of the workspace like
+any other,
 but with no sheet on the page: its step is its body, and it rises out of
 the step's card into the column, and goes back into it as the column
 shuts (docs/PDF.md, step 5).

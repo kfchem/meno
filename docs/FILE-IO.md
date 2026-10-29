@@ -1238,6 +1238,20 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     is registered"). So nothing is registered for them until the user asks
     for a format in Meno's own Settings (*Meno as the default app*, below).
     A file opened with Meno by the user's own choice is taken as on macOS.
+- **Each format's own icon** (2026-10-28): where Meno opens a format by
+  default, its files show that format's icon - Meno's sheet and mark with
+  the format's short name on a band (`src-tauri/icons/formats`, drawn for
+  Meno; their words as outlines of IBM Plex Sans SemiBold, SIL OFL 1.1,
+  `scripts/icons/outline_text.swift`; made by
+  `scripts/icons/document_icon.py`) - not Meno's own app icon. One for
+  each of the formats Meno can be made the default for (`OPENED_WITH`),
+  a cube file's `.cube` and `.cub` sharing one. On macOS each format is a
+  document type of its own in `Info.plist`, its icon named by
+  `CFBundleTypeIconFile` and put in the app's Resources; on Windows each
+  has its own ProgID (above), whose `DefaultIcon` is its `.ico`, installed
+  in `icons\formats` beside Meno. A format chosen for Meno on Windows
+  before this keeps earlier versions' one ProgID, and Meno's icon, until
+  it is chosen again in Settings, Files.
 - **Meno as the default app, chosen in Settings** (2026-10-21; Settings,
   Files, *Opening files*; `src-tauri/src/defaults.rs`, `lib/defaultApps.ts`):
   each of those formats with the app that opens it now, read again each
@@ -1265,8 +1279,9 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     for Use with Default Programs*): `Software\Meno\Capabilities` with
     `ApplicationDescription` (required) and `ApplicationName`; under its
     `FileAssociations`, one value for each format asked for, `.sdf` =
-    `Meno.File`; the ProgID `Software\Classes\Meno.File`, with its icon and
-    `shell\open\command`; and one value, `Meno`, in the shared
+    `Meno.File.sdf`; that format's own ProgID, `Software\Classes\
+    Meno.File.sdf`, with its `shell\open\command` and its icon (*Each
+    format's own icon*, below); and one value, `Meno`, in the shared
     `Software\RegisteredApplications`. Then `SHChangeNotify`. Never
     `OpenWithProgids`, never `Applications\Meno.exe`.
   - What opens a format now is asked of Windows, never read from the
@@ -1287,7 +1302,8 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     only when the user asks for it, and the page says what Windows does
     next.
   - *Stop offering Meno* takes that format's value out; with the last,
-    the rest goes too: the ProgID, the Capabilities, the value in
+    the rest goes too: each format's ProgID (and `Meno.File`, the one
+    ProgID earlier versions wrote for all of them), the Capabilities, the value in
     `RegisteredApplications` (never the key), and `Software\Meno` where
     nothing is left in it. The uninstaller does the same with whatever is
     left (`--unregister-defaults`, `windows/hooks.nsh`). On the last

@@ -342,10 +342,11 @@ describe("a conformer search", () => {
     const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-382.63] : []), ["xtb 6.7.1"]));
     if (done.some(isFailure)) throw new Error("not done");
     const [m] = resultsOf({ ok: true, holds: "conformers", kept: done as Worked[], aside: [], said: "" }, "frequencies").molecules;
-    expect(m.imaginary).toEqual([null, [-382.63]]);
+    // (the first judged none: none, apart from not judged)
+    expect(m.imaginary).toEqual([[], [-382.63]]);
     expect(m.calc?.imaginary).toBeUndefined();
     // (taken on: the second named as no minimum)
-    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([undefined, [-382.63]]);
+    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([[], [-382.63]]);
     expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.calc?.imaginary)).toEqual([undefined, undefined]);
   });
 
