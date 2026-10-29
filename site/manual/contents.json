@@ -1,6 +1,6 @@
 {
   "languages": ["en", "ja"],
-  "pages": ["installing"],
+  "pages": ["installing", "settings"],
   "words": {
     "en": {
       "language": "English",
