@@ -1,8 +1,11 @@
+import { jobStateSaid } from "../utils/texts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job, JobAsk } from "../../../../lib/jobs";
 
 /** The jobs, as the test has them: each one's record, its log and its files; and what was asked. */
 const jobs = new Map<string, Job & { log: string; files: Record<string, string> }>();
+/** Where set, how long a job's log takes to read, in ms: a log read late. */
+const logDelay = new Map<string, number>();
 const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[] };
 let next = 1;
 /** A file's text, as the test has it, that stands for one too large to read. */
@@ -32,6 +35,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   listJobs: async () => [...jobs.values()],
   jobOf: async (id: string) => jobs.get(id)!,
   readJobLog: async (id: string, from: number) => {
+    const wait = logDelay.get(id);
+    if (wait) await new Promise((go) => setTimeout(go, wait));
     const log = jobs.get(id)?.log ?? "";
     return { text: log.slice(from), next: log.length };
   },
@@ -633,6 +638,77 @@ describe("a step that runs a plugin's program", () => {
     expect(st().textFlight).toBeNull();
     const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
     expect(ws?.texts.find((t) => t.name === log.name)?.of).toEqual({ step });
+  });
+
+  it("shows the log of a step of several jobs in one text - the first, then another chosen - never a text for each", async () => {
+    const { st, step, doc } = editor();
+    // (three waters in its set: a job each)
+    for (const x of [-1.5, 1.5])
+      doc.edit("water", (d) =>
+        addMolecule3d(d, {
+          atoms: [
+            { el: "O", x: 0, y: 0, z: 0 },
+            { el: "H", x: 0, y: 0.76, z: 0.59 },
+            { el: "H", x: 0, y: -0.76, z: 0.59 },
+          ],
+          bonds: [
+            { a1: 0, a2: 1, order: 1 },
+            { a1: 0, a2: 2, order: 1 },
+          ],
+          at: { x, y: 0 },
+        }),
+      );
+    const ran = st().runStep(step);
+    for (let k = 0; k < 6; k++) await settle();
+    const ids = [...jobs.keys()];
+    expect(ids).toHaveLength(3);
+    ids.forEach((id, k) => Object.assign(jobs.get(id)!, { state: "failed", started: 1000, ended: 2000, code: 1, log: `job ${k + 1}\n` }));
+    await st().lookAtJobs();
+    await ran;
+    await st().showStepLog(step);
+    const logs = st().texts.filter((t) => t.name.endsWith("log"));
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ text: "job 1\n", of: { step, jobs: ids, job: 0 } });
+    await st().showStepLogJob(logs[0].id, 2);
+    expect(st().texts.find((t) => t.id === logs[0].id)).toMatchObject({ text: "job 3\n", of: { step, jobs: ids, job: 2 } });
+    // (shown again: the same text, still one)
+    await st().showStepLog(step);
+    expect(st().texts.filter((t) => t.name.endsWith("log"))).toHaveLength(1);
+    // (kept with the workspace: its jobs and the one shown)
+    const ws = readWorkspace(workspaceText(st(), new Set(), st().texts.map(() => "a".repeat(64))));
+    expect(ws?.texts.find((t) => t.name === logs[0].name)?.of).toEqual({ step, jobs: ids, job: 2 });
+    // (how each ended, kept with its run: said in its chooser in a workspace reopened, none looked at there)
+    const ended = st().steps.find((x) => x.id === step)!.ran!;
+    expect(ended.states).toEqual(["failed", "failed", "failed"]);
+    const reopened = ws!.workflow!.steps.find((x) => x.id === step)!.ran!;
+    expect(reopened.states).toEqual(["failed", "failed", "failed"]);
+    expect(jobStateSaid(ids[1], {}, reopened)).toBe("failed");
+    // (looked at in this session: as last looked at)
+    expect(jobStateSaid(ids[1], { [ids[1]]: { state: "running" } }, reopened)).toBe("running");
+    // (two chosen quickly, the first read late: the last chosen is the one shown)
+    logDelay.set(ids[0], 50);
+    const first = st().showStepLogJob(logs[0].id, 0);
+    const second = st().showStepLogJob(logs[0].id, 1);
+    await Promise.all([first, second]);
+    logDelay.clear();
+    expect(st().texts.find((t) => t.id === logs[0].id)).toMatchObject({ text: "job 2\n", of: { job: 1 } });
+    // (a log of one of several jobs as it was named before, shown again: named as the step's log)
+    doc.amend((x) => ({ ...x, texts: (x.texts ?? []).map((t) => (t.id === logs[0].id ? { ...t, name: `${t.name} 1` } : t)) }));
+    await st().showStepLog(step);
+    expect(st().texts.find((t) => t.id === logs[0].id)!.name).toBe(logs[0].name);
+  });
+
+  it("reads a step's log as a file keeps it: its jobs where they are jobs' ids and the one shown among them - else a log of one job, as one before them was", () => {
+    const read = (of: unknown) => readWorkspace(JSON.stringify({ format: "meno-workspace", version: 2, atoms: [], bonds: [], texts: [{ name: "Optimise log", sha256: "a".repeat(64), text: "x", of }] }))?.texts[0]?.of;
+    const good = [idOf(1), idOf(2)];
+    expect(read({ step: 3, jobs: good, job: 1 })).toEqual({ step: 3, jobs: good, job: 1 });
+    // (the one shown past its jobs: the first)
+    expect(read({ step: 3, jobs: good, job: 5 })).toEqual({ step: 3, jobs: good, job: 0 });
+    // (a job's id not as jobs are named - a path, markup: none of them taken)
+    expect(read({ step: 3, jobs: [idOf(1), "../../etc"], job: 0 })).toEqual({ step: 3 });
+    expect(read({ step: 3, jobs: [idOf(1), "<b>x</b>"] })).toEqual({ step: 3 });
+    // (from before: a step's log with no jobs)
+    expect(read({ step: 3 })).toEqual({ step: 3 });
   });
 
   it("is its plugin's: its calculation changed to another the plugin does, with the options it takes for that one, those they share kept - never to one it does not", () => {
