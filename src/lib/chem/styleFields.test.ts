@@ -27,6 +27,7 @@ const EVERY_SETTING: (keyof DrawingStyle)[] = [
   "tripleGap",
   "wedgeBroadEnd",
   "shortHashes",
+  "hashedWedgeEnd",
   "hashStartOffset",
   "labelBaseline",
   "reactionArrowThickness",
@@ -178,10 +179,43 @@ describe("the shortest hashed bond, a style's own setting", () => {
     expect(styleOf(read).shortHashes).toBe("three");
     // (a workspace in Meno's style saved before the setting: Meno's, three; a journal's: at the spacing)
     expect(styleOf(acceptStyleChoice({ preset: "meno", changes: {} })).shortHashes).toBe("three");
-    expect(styleOf(acceptStyleChoice({ preset: "rsc", changes: {} })).shortHashes).toBeUndefined();
+    expect(styleOf(acceptStyleChoice({ preset: "rsc", changes: {} })).shortHashes).toBe("spaced");
     // (and an own style saved before it, at the spacing it was drawn at then - not Meno's)
-    expect(acceptDrawingStyle({ ...presetById("rsc").style }).shortHashes).toBeUndefined();
+    expect(acceptDrawingStyle({ ...presetById("rsc").style }).shortHashes).toBe("spaced");
+    expect(acceptDrawingStyle({ ...presetById("rsc").style, shortHashes: undefined }).shortHashes).toBeUndefined();
     expect(acceptDrawingStyle({ ...presetById("meno").style }).shortHashes).toBe("three");
     expect(acceptValue(STYLE_FIELDS.find((f) => f.key === "shortHashes")!, "sometimes", 14.4)).toBeUndefined();
+  });
+});
+
+describe("a hashed wedge's widest hash, a style's own setting", () => {
+  it("stops short in Meno's own style, and reaches the atom in every journal's, whose specifications do not say", () => {
+    const short = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, layoutOptionsFor(p.style, 1).hashedWedgeShort]));
+    expect(short).toEqual({ meno: true, acs1996: undefined, rsc: undefined, wiley: undefined, nature: undefined });
+    const end = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, p.style.hashedWedgeEnd]));
+    expect(end).toEqual({ meno: "short", acs1996: "atom", rsc: "atom", wiley: "atom", nature: "atom" });
+    expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("atom");
+  });
+
+  it("comes back as it was through a save and an open: a workspace's style, an own style, and a change of it", () => {
+    for (const p of STYLE_PRESETS) {
+      const want = p.id === "meno" ? true : undefined;
+      // (a workspace drawn in the preset)
+      const read = acceptStyleChoice(JSON.parse(JSON.stringify({ preset: p.id, changes: {} })));
+      expect(layoutOptionsFor(styleOf(read), 1).hashedWedgeShort, p.id).toBe(want);
+      // (an own style made from it, kept whole)
+      const own = acceptDrawingStyle(JSON.parse(JSON.stringify(p.style)));
+      expect(layoutOptionsFor(own, 1).hashedWedgeShort, p.id).toBe(want);
+    }
+    // (an own style saved before the setting reaches the atom, as it was drawn then - a journal's above all)
+    const before = { ...presetById("acs1996").style, hashedWedgeEnd: undefined };
+    expect(layoutOptionsFor(acceptDrawingStyle(JSON.parse(JSON.stringify(before))), 1).hashedWedgeShort).toBeUndefined();
+    // (a change either way, kept)
+    const toAtom = withSetting({ preset: "meno", changes: {} }, "hashedWedgeEnd", "atom");
+    const back = acceptStyleChoice(JSON.parse(JSON.stringify(toAtom)));
+    expect(back).toEqual(toAtom);
+    expect(layoutOptionsFor(styleOf(back), 1).hashedWedgeShort).toBeUndefined();
+    const toShort = withSetting({ preset: "rsc", changes: {} }, "hashedWedgeEnd", "short");
+    expect(layoutOptionsFor(styleOf(acceptStyleChoice(JSON.parse(JSON.stringify(toShort)))), 1).hashedWedgeShort).toBe(true);
   });
 });
