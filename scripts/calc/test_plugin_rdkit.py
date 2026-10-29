@@ -1720,6 +1720,19 @@ class MinimiseWithRestraints(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"^A conformer search holds restraints only where the molecule has no metal"):
             self.worker.conformers(Chem.MolFromSmiles("N[Pt](N)(Cl)Cl"), count=2, rows=rows)
 
+    def test_a_search_embeds_a_distance_held_at_its_value(self):
+        # (pyridine's N and BH3's B, two parts, held at 0.9 of Alvarez's radii together, 3.21 A: laid where ETKDG
+        #  lays parts, a hold never brought them together - 17 A off at any strength)
+        mol = Chem.AddHs(Chem.MolFromSmiles("c1ccncc1.B"))
+        n = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "N")
+        b = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "B")
+        made = self.worker.conformers(mol, count=5, rows=[{"kind": "distance", "atoms": [n, b], "value": 3.213, "strength": 500.0}])
+        for f in made["frames"]:
+            self.assertAlmostEqual(math.dist(f[3 * n : 3 * n + 3], f[3 * b : 3 * b + 3]), 3.213, delta=0.01)
+        # (a distance no structure can have with the rest - a bond held at 5 A - refused in words)
+        with self.assertRaisesRegex(ValueError, r"^The distances held cannot all be met together in one structure$"):
+            self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=2, rows=[{"kind": "distance", "atoms": [0, 1], "value": 5.0, "strength": 500.0}])
+
     def test_an_acid_held_at_its_base_by_its_restraint_alone(self):
         # (H3N->BH3, its coordination bond held at 0.9 of Alvarez's radii together, 3.21 A: no bond of the force
         #  field's between them - the restraint holds them - so B and N are each as their hydrogens make them)

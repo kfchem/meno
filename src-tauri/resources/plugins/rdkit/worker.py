@@ -2019,6 +2019,12 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
     params.pruneRmsThresh = -1.0
     params.numThreads = 0  # (every core)
     bounds = metal_bounds(mol, eta)
+    # (each distance held, embedded at its value: an acid held at its base is a part of its own, placed there, not
+    #  wherever ETKDG lays a part - laid apart, a weak hold never brought them together, pyridine's BH3 17 A off)
+    held = [r for r in rows if r["kind"] == "distance"]
+    if held:
+        bounds = held_bounds(mol, held, bounds)
+        params.embedFragmentsSeparately = False
     if bounds is not None:
         params.SetBoundsMat(bounds)
     if eta:
@@ -2400,6 +2406,21 @@ def minimised(mol, rows, field="MMFF94", iters=STEPS, start=None):
     # (its energy the force field's own, at the places reached: the restraints' not counted in)
     energy = make(-1, ()).CalcEnergy(places)
     return {"frame": [round(v, 5) for v in places], "energy": energy / KCAL_PER_HARTREE, "field": field, "converged": converged, "iters": iters}
+
+
+def held_bounds(mol, held, bounds=None):
+    """A molecule's bounds for embedding (its own, or `bounds`, a metal's
+    already set) with each distance held at its value, upper and lower, and
+    smoothed; or why the distances held cannot all be met together."""
+    from rdkit import DistanceGeometry
+
+    bounds = rdDistGeom.GetMoleculeBoundsMatrix(mol) if bounds is None else bounds.copy()
+    for r in held:
+        i, j = sorted(r["atoms"])
+        bounds[i][j] = bounds[j][i] = float(r["value"])
+    if not DistanceGeometry.DoTriangleSmoothing(bounds):
+        raise ValueError("The distances held cannot all be met together in one structure")
+    return bounds
 
 
 def restraints_words(rows):

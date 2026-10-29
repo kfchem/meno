@@ -566,7 +566,11 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   F15). Its conformer search holds an entry's restraints too, as each
   conformer is optimised, where the molecule has no metal (a metal's own
   holds are not yet combined with them); none fixed, since a search moves
-  every atom. Either refusal is in words. A coordination bond that a
+  every atom. A distance held is embedded at its value too
+  (`held_bounds`): laid where ETKDG lays a molecule's parts, an acid and
+  its base were left apart - pyridine's BH3 17 Å off at any strength -
+  and embedded at it they hold within 0.02 Å at 239 kcal mol⁻¹ Å⁻² and
+  within 0.01 Å at 500, over eight acid–base pairs. Either refusal is in words. A coordination bond that a
   distance restraint holds - case F's acid held at its base at a factor
   of their van der Waals radii - is held by that restraint alone: the
   force field has no bond for it, so the acid and the base are each as
