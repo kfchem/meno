@@ -359,9 +359,11 @@ are a *Frequencies* step's, wired after it.
 - **Pairs.** Each start is paired with an end as the step's *Pairs* says:
   *In order* (the k-th with the k-th; other numbers refused), *Each with
   each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
-  no end to match, a pair of other atoms or another order of them (*Re-bond
-  them first*), or of another charge or spin, goes out of *Failed* with why;
-  only the rest are sent.
+  no end to match, a pair of other atoms or another order of them, or of
+  another charge or spin, goes out of *Failed* with why; only the rest are
+  sent. Ends in one numbering come today from a drawn reaction: its arrow's
+  *Atom map*, then *Export reaction in 3D…*, which writes the products in
+  the reactants' numbering - opened, then optimised.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged
@@ -412,6 +414,11 @@ are a *Frequencies* step's, wired after it.
 - **Take frames** takes a path search's point refined as its *highest*,
   whatever image stands higher, and says so; its ends and the images beside
   them as they are.
+- **What it does not catch.** The numbering is checked atom by atom, by
+  element alone: ends numbered otherwise but with the same elements in the
+  same places (two hydrogens swapped, say) pass, and the path found is
+  then between other atoms than meant. A *Reaction* step that writes the
+  products in the reactants' numbering comes later.
 
 ### Who does a step
 
