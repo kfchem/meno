@@ -166,6 +166,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M7 8.8 H13 M7 11.7 H13" />
     </>
   ),
+  // (a minimum, held: Optimise's well, its floor hatched as Restraints' wall)
+  heldMinimum: (
+    <>
+      <path d="M2.5 4 C5 16.5, 15 16.5, 17.5 4" />
+      <circle cx="10" cy="11.5" r="1.9" fill="currentColor" stroke="none" />
+      <path d="M6.4 14.6 l-1.6 2.2 M8.9 15.3 l-1.6 2.2 M11.4 15.3 l-1.6 2.2 M13.9 14.6 l-1.6 2.2" />
+    </>
+  ),
   // (two atoms held to a wall: restraints)
   held: (
     <>

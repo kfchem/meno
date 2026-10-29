@@ -43,7 +43,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "held" | "heldAnti";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "held" | "heldAnti" | "heldMinimum";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -121,6 +121,8 @@ export const KINDS: readonly KindInfo[] = [
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
+  // (each entry minimised in a force field with its restraints held - Restraints', Torsion restraints' - as its plugin holds them: docs/PLUGINS.md)
+  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
   { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)

@@ -1991,7 +1991,7 @@ def conformers_of(iso, how, made):
     return entry
 
 
-def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
+def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=()):
     """A stereoisomer's conformers, embedded (ETKDG) and optimised (MMFF94,
     MMFF94s or UFF, as asked - UFF where MMFF has no parameters), lowest
     energy first, the same conformer twice kept once (SAME_CONFORMER), and
@@ -2038,7 +2038,26 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
     eta_metals = {mol.GetAtomWithIdx(metal).GetSymbol() for metal, _, _ in eta}
     stood = None
     untyped = sorted({el for el, digit in metals if digit is None})
-    if eta:
+    if rows:
+        # (its restraints held while each conformer is optimised, as Minimise with restraints holds them: none
+        #  fixed - a search moves every atom - and only where it has no metal, whose own holds are not yet
+        #  combined with them)
+        if any(r["kind"] == "fixed" for r in rows):
+            raise ValueError("A conformer search moves every atom, so it holds no atoms fixed: take them out of its restraints, or minimise with them instead")
+        if metals or eta:
+            raise ValueError("A conformer search holds restraints only where the molecule has no metal: search without them, then minimise with them")
+        field, make = restrained_field(mol, rows, field)
+        stood_in, results = False, []
+        for cid in ids:
+            ff = make(cid, rows)
+            more = ff.Minimize(maxIts=iters)
+            places = list(ff.Positions())
+            conf = mol.GetConformer(cid)
+            for i in range(mol.GetNumAtoms()):
+                conf.SetAtomPosition(i, Point3D(places[3 * i], places[3 * i + 1], places[3 * i + 2]))
+            # (its energy the force field's own: the restraints' not counted in)
+            results.append((more, make(cid, ()).CalcEnergy(places)))
+    elif eta:
         # (the stars and the systems' bonds are not UFF's: held, as uff_stood_in holds them, with no energies)
         field, results = None, None
         stood = uff_stood_in(mol, ids, iters, eta)
@@ -2127,6 +2146,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                  else "none: UFF has no parameters for " + " or ".join(untyped or ["it"])},
             ]),
             *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
+            *([{"label": "Held", "text": restraints_words(rows)}] if rows else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
@@ -2288,10 +2308,19 @@ BOND_TYPES = {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE, 3: Chem.BondType
 RADICALS = {"doublet": 1, "triplet": 2, "singlet": 2}
 
 
-def mol_of(entry):
+def held_apart(entry, rows):
+    """The coordination bonds of an entry a distance restraint holds, as
+    pairs of atoms: held by that restraint alone - no bond of the force
+    field's - as case F's protocol holds an acid at a base (docs/PLUGINS.md)."""
+    pairs = {frozenset(r["atoms"]) for r in rows if r["kind"] == "distance"}
+    return {frozenset((int(b["a1"]), int(b["a2"]))) for b in entry.get("bonds") or [] if b.get("coordination") and frozenset((int(b["a1"]), int(b["a2"]))) in pairs}
+
+
+def mol_of(entry, apart=()):
     """A molecule in 3D as Meno gives one: its atoms - element, place in
     angstroms, charge, radical - and its bonds by index with their orders;
-    its stereo read from where its atoms are."""
+    its stereo read from where its atoms are. A coordination bond in
+    `apart` (`held_apart`) is left out: a restraint holds it."""
     atoms = entry.get("atoms") or []
     if not atoms:
         raise ValueError("a molecule has no atoms")
@@ -2304,6 +2333,8 @@ def mol_of(entry):
             atom.SetNoImplicit(True)
         rw.AddAtom(atom)
     for b in entry.get("bonds") or []:
+        if b.get("coordination") and frozenset((int(b["a1"]), int(b["a2"]))) in apart:
+            continue
         # (a coordination bond as RDKit's dative, from the atom that lends its pair - never a covalent single)
         kind = Chem.BondType.DATIVE if b.get("coordination") else BOND_TYPES.get(int(b.get("order", 1)), Chem.BondType.SINGLE)
         rw.AddBond(int(b["a1"]), int(b["a2"]), kind)
@@ -2317,22 +2348,131 @@ def mol_of(entry):
     return mol
 
 
+MINIMISE_JOB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "minimise_job.py")
+#: What a restrained minimisation's job writes, for `collect` to read back.
+MINIMISE_OUT = "minimised.json"
+
+#: RDKit's torsion constraint holds by k (the angle off, in degrees) squared; the entry record's dihedral by
+#: k (the angle off, in radians) squared, halved (src/lib/entry.ts `Restraint`): the record's k, times this, is RDKit's.
+TORSION_K = 0.5 * (math.pi / 180.0) ** 2
+
+
+def restraint_rows(rows, n):
+    """An entry's restraints (the entry record's `Restraint`, docs/PLUGINS.md)
+    as they are held here, each checked - or why one cannot be, in words."""
+    held = []
+    for k, r in enumerate(rows or []):
+        kind, atoms = r.get("kind"), list(r.get("atoms") or [])
+        want = {"distance": 2, "dihedral": 4}.get(kind)
+        if kind not in ("distance", "dihedral", "fixed") or (want and len(atoms) != want) or not atoms:
+            raise ValueError(f"Restraint {k + 1} is no distance, dihedral or atoms fixed that can be held")
+        if any(not isinstance(a, int) or a < 0 or a >= n for a in atoms):
+            raise ValueError(f"Restraint {k + 1} names an atom the molecule does not have")
+        if kind != "fixed":
+            value, strength = r.get("value"), r.get("strength")
+            if not isinstance(value, (int, float)) or not math.isfinite(value) or not isinstance(strength, (int, float)) or not strength > 0:
+                raise ValueError(f"Restraint {k + 1}, a {kind}, has no value or strength to hold it by")
+        held.append({"kind": kind, "atoms": atoms, "value": r.get("value"), "strength": r.get("strength")})
+    return held
+
+
+def minimised(mol, rows, field="MMFF94", iters=STEPS, start=None):
+    """`mol` minimised in a force field with its restraints held (Minimise
+    with restraints): a distance by RDKit's distance constraint, k d^2 / 2 as
+    the record has it (kcal mol-1 A-2, the same k); a dihedral by RDKit's
+    torsion constraint, its k the record's times TORSION_K; atoms fixed as
+    fixed points. MMFF94 or MMFF94s as asked, UFF where MMFF has no
+    parameters; none where UFF has none either - said. From `start`, the
+    places the restraints were first held at, where given; else from where
+    its atoms are. Nothing between its parts is left out. Its energy is the
+    force field's, without the restraints' own. Whether it converged within
+    `iters` steps is said."""
+    conf = mol.GetConformer()
+    if start is not None:
+        if len(start) != 3 * mol.GetNumAtoms():
+            raise ValueError("Where its restraints were first held is not the molecule's atoms")
+        for i in range(mol.GetNumAtoms()):
+            conf.SetAtomPosition(i, Point3D(float(start[3 * i]), float(start[3 * i + 1]), float(start[3 * i + 2])))
+    field, make = restrained_field(mol, rows, field)
+    ff = make(-1, rows)
+    converged = ff.Minimize(maxIts=iters) == 0
+    places = list(ff.Positions())
+    # (its energy the force field's own, at the places reached: the restraints' not counted in)
+    energy = make(-1, ()).CalcEnergy(places)
+    return {"frame": [round(v, 5) for v in places], "energy": energy / KCAL_PER_HARTREE, "field": field, "converged": converged, "iters": iters}
+
+
+def restraints_words(rows):
+    """What restraints were held, in a row's words: "2 distances, 1 torsion"."""
+    count = lambda kind: sum(1 for r in rows if r["kind"] == kind)
+    said = [f"{n} {word}{'' if n == 1 else 's'}" for n, word in ((count("distance"), "distance"), (count("dihedral"), "torsion")) if n]
+    fixed = sum(len(r["atoms"]) for r in rows if r["kind"] == "fixed")
+    if fixed:
+        said.append(f"{fixed} atom{'' if fixed == 1 else 's'} fixed")
+    return ", ".join(said) + " held, the energies without them"
+
+
+def restrained_field(mol, rows, field="MMFF94"):
+    """The force field a molecule is minimised in with restraints held - MMFF94
+    or MMFF94s as asked, UFF where MMFF has no parameters, neither said where
+    UFF has none - and how to make it for a conformer with restraints held
+    (`make(cid, rows)`, initialised), each as the entry record states it: a
+    distance by RDKit's distance constraint (k d^2 / 2, the same k), a
+    dihedral by its torsion constraint (the record's k times TORSION_K),
+    atoms fixed as fixed points. Nothing between the molecule's parts is
+    left out."""
+    if field in ("MMFF94", "MMFF94s") and rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
+        props = rdForceFieldHelpers.MMFFGetMoleculeProperties(mol, mmffVariant=field)
+        base = lambda cid: rdForceFieldHelpers.MMFFGetMoleculeForceField(mol, props, confId=cid, ignoreInterfragInteractions=False)
+        distance, torsion = "MMFFAddDistanceConstraint", "MMFFAddTorsionConstraint"
+    elif rdForceFieldHelpers.UFFHasAllMoleculeParams(mol):
+        field = "UFF"
+        base = lambda cid: rdForceFieldHelpers.UFFGetMoleculeForceField(mol, confId=cid, ignoreInterfragInteractions=False)
+        distance, torsion = "UFFAddDistanceConstraint", "UFFAddTorsionConstraint"
+    else:
+        raise ValueError("No force field here has parameters for it: neither MMFF94 nor UFF")
+
+    def make(cid, held):
+        ff = base(cid)
+        for r in held:
+            a = r["atoms"]
+            if r["kind"] == "distance":
+                getattr(ff, distance)(a[0], a[1], False, float(r["value"]), float(r["value"]), float(r["strength"]))
+            elif r["kind"] == "dihedral":
+                getattr(ff, torsion)(a[0], a[1], a[2], a[3], False, float(r["value"]), float(r["value"]), float(r["strength"]) * TORSION_K)
+            else:
+                for i in a:
+                    ff.AddFixedPoint(i)
+        ff.Initialize()
+        return ff
+
+    return field, make
+
+
 def op_prepare(m):
-    """A conformer search's jobs: one for each molecule, its molecule and the
-    options written into its folder, run by this environment's Python."""
-    if m.get("step") != "conformers":
-        raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
+    """A conformer search's jobs, or a restrained minimisation's: one for
+    each molecule, its molecule - its restraints with it, and where they
+    were first held - and the options written into its folder, run by this
+    environment's Python."""
+    step = m.get("step")
+    if step not in ("conformers", "minimise"):
+        raise ValueError(f"There is no step {step!r} to run as a job.")
     options = m.get("options") or {}
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
-        mol_of(entry)  # (one RDKit cannot make sense of, said now - not in its job)
+        rows = restraint_rows(entry.get("restraints"), len(entry.get("atoms") or []))
+        mol_of(entry, held_apart(entry, rows))  # (one RDKit cannot make sense of, said now - not in its job)
         given = {"atoms": entry["atoms"], "bonds": entry.get("bonds") or [], "options": options}
+        if rows:
+            given["restraints"] = rows
+        if step == "minimise" and entry.get("start") is not None:
+            given["start"] = entry["start"]
         jobs.append({
             "entries": [i],
             "program": "python",
-            "args": ["-u", CONFORMERS_JOB, "molecule.json"],
+            "args": ["-u", MINIMISE_JOB if step == "minimise" else CONFORMERS_JOB, "molecule.json"],
             "files": [{"name": "molecule.json", "text": json.dumps(given)}],
-            "reads": [CONFORMERS_OUT],
+            "reads": [MINIMISE_OUT if step == "minimise" else CONFORMERS_OUT],
         })
     if not jobs:
         raise ValueError("nothing came in")
@@ -2341,12 +2481,30 @@ def op_prepare(m):
 
 def op_collect(m):
     """What a conformer search's job wrote, as Meno's output form: each
-    conformer a geometry, lowest energy first, with its energy."""
-    if m.get("step") != "conformers":
+    conformer a geometry, lowest energy first, with its energy. Or a
+    restrained minimisation's: the geometry it reached, its energy, and
+    whether it converged."""
+    if m.get("step") not in ("conformers", "minimise"):
         raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
     if m.get("ended") != "done":
         lines = [line.strip() for line in (m.get("log") or "").splitlines() if line.strip()]
         return {"why": lines[-1] if lines else "it said nothing"}
+    if m.get("step") == "minimise":
+        text = (m.get("files") or {}).get(MINIMISE_OUT)
+        if not text:
+            raise ValueError("the minimisation wrote nothing")
+        made = json.loads(text)
+        return {"outputs": [{
+            "schema": 1,
+            "program": "RDKit",
+            "version": made.get("version"),
+            "method": f"{made['field']}, restrained",
+            "atoms": [a["el"] for a in made["atoms"]],
+            "frames": [made["frame"]],
+            "energies": [made["energy"]],
+            "optimised": bool(made.get("converged")),
+            "results": [],
+        } for _ in m.get("entries") or []]}
     text = (m.get("files") or {}).get(CONFORMERS_OUT)
     if not text:
         raise ValueError("the search wrote no conformers")

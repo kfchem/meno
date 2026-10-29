@@ -77,7 +77,9 @@ export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number
  * table (one row per vibration or excited state, each column with its
  * unit), a vibration's modes (one row per mode, in its table's row order,
  * x, y and z by atom in turn - as the program gave them, their scale not
- * relied on), or restraints.
+ * relied on), or restraints - and the places they were first held at by a
+ * minimisation (`start`, x, y and z by atom in turn), for a later one to
+ * start from again.
  */
 export type PropertyValue =
   | number
@@ -88,7 +90,7 @@ export type PropertyValue =
   | { vector: number[] }
   | { table: { columns: Column[]; rows: (number | string | null)[][] } }
   | { modes: number[][] }
-  | { restraints: Restraint[] };
+  | { restraints: Restraint[]; start?: number[] };
 
 /**
  * Where a property was worked out: the geometry (its key, `geometryKey`),
@@ -261,6 +263,7 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
     const k = value.modes.findIndex((m) => m.length !== 3 * atoms);
     return k < 0 ? null : `Mode ${k + 1} has ${value.modes[k].length} numbers for ${atoms} atoms`;
   }
+  if (value.start && (value.start.length !== 3 * atoms || !value.start.every(Number.isFinite))) return `Where the restraints were first held has ${value.start.length} numbers for ${atoms} atoms`;
   for (const [k, r] of value.restraints.entries()) {
     const n = r.kind === "fixed" ? null : RESTRAINT_ATOMS[r.kind];
     if (n != null ? r.atoms.length !== n : r.atoms.length < 1) return `Restraint ${k + 1}, a ${r.kind}, has ${r.atoms.length} atoms`;

@@ -1649,3 +1649,106 @@ class CoordinationBonds(unittest.TestCase):
         bond = mol.GetBondBetweenAtoms(0, 1)
         self.assertEqual((bond.GetBondType(), bond.GetBeginAtomIdx()), (Chem.BondType.DATIVE, 1))
         self.assertEqual(mol.GetAtomWithIdx(1).GetTotalNumHs(includeNeighbors=True), 3)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class MinimiseWithRestraints(unittest.TestCase):
+    """A molecule minimised with its restraints held, each by the energy the entry record states (src/lib/entry.ts):
+    a distance by k d^2 / 2 (kcal mol-1 A-2), a dihedral by k phi^2 / 2 (phi in radians, kcal mol-1 rad-2), atoms
+    fixed where they are - known answers on butane, its torsion and its ends' distance set by hand."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def butane(self, dihedral):
+        from rdkit.Chem import AllChem, rdMolTransforms
+        mol = Chem.AddHs(Chem.MolFromSmiles("CCCC"))
+        AllChem.EmbedMolecule(mol, randomSeed=11)
+        rdMolTransforms.SetDihedralDeg(mol.GetConformer(), 0, 1, 2, 3, dihedral)
+        return mol
+
+    def dihedral(self, frame):
+        import numpy as np
+        P = np.array(frame).reshape(-1, 3)[:4]
+        b1, b2, b3 = P[1] - P[0], P[2] - P[1], P[3] - P[2]
+        n1, n2 = np.cross(b1, b2), np.cross(b2, b3)
+        return math.degrees(math.atan2(np.linalg.norm(b2) * np.dot(b1, n2), np.dot(n1, n2)))
+
+    def test_holds_a_torsion_at_180_where_it_would_stay_gauche(self):
+        free = self.worker.minimised(self.butane(60.0), [])
+        self.assertLess(abs(self.dihedral(free["frame"])), 90)
+        held = self.worker.minimised(self.butane(60.0), [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 100.0}])
+        self.assertGreater(abs(self.dihedral(held["frame"])), 175)
+        self.assertTrue(held["converged"])
+        self.assertEqual(held["field"], "MMFF94")
+
+    def test_holds_a_distance_and_fixes_atoms_and_gives_the_force_fields_own_energy(self):
+        from rdkit.Chem import rdForceFieldHelpers
+        mol = self.butane(180.0)
+        before = mol.GetConformer().GetPositions()
+        made = self.worker.minimised(mol, [{"kind": "distance", "atoms": [0, 3], "value": 3.2, "strength": 500.0}, {"kind": "fixed", "atoms": [0]}])
+        P = [made["frame"][3 * i : 3 * i + 3] for i in range(mol.GetNumAtoms())]
+        self.assertAlmostEqual(math.dist(P[0], P[3]), 3.2, delta=0.05)
+        # (where it stood, to the 1e-5 A the frame is written to)
+        self.assertLess(math.dist(P[0], list(before[0])), 1e-4)
+        # (its energy the force field's own at the places reached, the restraints' not in it)
+        plain = rdForceFieldHelpers.MMFFGetMoleculeForceField(mol, rdForceFieldHelpers.MMFFGetMoleculeProperties(mol), ignoreInterfragInteractions=False)
+        self.assertAlmostEqual(made["energy"], plain.CalcEnergy(made["frame"]) / self.worker.KCAL_PER_HARTREE, places=6)
+
+    def test_starts_from_where_its_restraints_were_first_held_where_given(self):
+        gauche, anti = self.butane(60.0), self.butane(180.0)
+        start = [round(v, 6) for p in gauche.GetConformer().GetPositions() for v in p]
+        made = self.worker.minimised(anti, [], start=start)
+        self.assertLess(abs(self.dihedral(made["frame"])), 90)
+
+    def test_refuses_in_words_a_restraint_it_cannot_hold(self):
+        with self.assertRaisesRegex(ValueError, r"^Restraint 1 names an atom the molecule does not have$"):
+            self.worker.restraint_rows([{"kind": "distance", "atoms": [0, 99], "value": 2.0, "strength": 1.0}], 14)
+        with self.assertRaisesRegex(ValueError, r"^Restraint 2, a dihedral, has no value or strength to hold it by$"):
+            self.worker.restraint_rows([{"kind": "fixed", "atoms": [0]}, {"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0}], 14)
+
+    def test_a_conformer_search_holds_its_restraints_where_there_is_no_metal(self):
+        rows = [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 100.0}]
+        made = self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=10, rows=rows)
+        self.assertTrue(all(abs(self.dihedral(f)) > 175 for f in made["frames"]))
+        self.assertIn({"label": "Held", "text": "1 torsion held, the energies without them"}, made["how"])
+        with self.assertRaisesRegex(ValueError, r"^A conformer search moves every atom, so it holds no atoms fixed"):
+            self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=2, rows=[{"kind": "fixed", "atoms": [0]}])
+        with self.assertRaisesRegex(ValueError, r"^A conformer search holds restraints only where the molecule has no metal"):
+            self.worker.conformers(Chem.MolFromSmiles("N[Pt](N)(Cl)Cl"), count=2, rows=rows)
+
+    def test_an_acid_held_at_its_base_by_its_restraint_alone(self):
+        # (H3N->BH3, its coordination bond held at 0.9 of Alvarez's radii together, 3.21 A: no bond of the force
+        #  field's between them - the restraint holds them - so B and N are each as their hydrogens make them)
+        h = lambda x, k, s: {"el": "H", "x": x, "y": 0.9 * (k - 1), "z": 0.5 * s}
+        entry = {
+            "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0}, {"el": "B", "x": 1.66, "y": 0, "z": 0}] + [h(-0.4, k, 1) for k in range(3)] + [h(2.1, k, -1) for k in range(3)],
+            "bonds": [{"a1": 0, "a2": 1, "order": 1, "coordination": True}] + [{"a1": 0, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 1, "a2": 5 + k, "order": 1} for k in range(3)],
+        }
+        rows = [{"kind": "distance", "atoms": [0, 1], "value": 0.9 * (1.66 + 1.91), "strength": 500.0}]
+        self.assertEqual(self.worker.held_apart(entry, rows), {frozenset((0, 1))})
+        mol = self.worker.mol_of(entry, self.worker.held_apart(entry, rows))
+        self.assertIsNone(mol.GetBondBetweenAtoms(0, 1))
+        made = self.worker.minimised(mol, rows)
+        self.assertAlmostEqual(math.dist(made["frame"][0:3], made["frame"][3:6]), 3.213, delta=0.05)
+        # (unheld, the same entry is refused as RDKit cannot hold it, as #759 says)
+        with self.assertRaisesRegex(ValueError, r"coordination bond from N to B as drawn"):
+            self.worker.mol_of(entry)
+
+    def test_prepares_a_job_with_the_entrys_restraints_and_start(self):
+        import json as _json
+        mol = self.butane(60.0)
+        entry = {
+            "atoms": [{"el": a.GetSymbol(), "x": p[0], "y": p[1], "z": p[2]} for a, p in zip(mol.GetAtoms(), mol.GetConformer().GetPositions())],
+            "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": 1} for b in mol.GetBonds()],
+            "restraints": [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 50.0}],
+            "start": [0.0] * (3 * mol.GetNumAtoms()),
+        }
+        job = self.worker.op_prepare({"step": "minimise", "entries": [entry], "options": {"field": "MMFF94", "steps": 2000, "start": "first"}})["jobs"][0]
+        given = _json.loads(job["files"][0]["text"])
+        self.assertEqual((job["args"][1].endswith("minimise_job.py"), job["reads"]), (True, ["minimised.json"]))
+        self.assertEqual(given["restraints"][0]["strength"], 50.0)
+        self.assertEqual(len(given["start"]), 3 * mol.GetNumAtoms())
