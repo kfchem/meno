@@ -32,7 +32,7 @@ import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wire
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -448,9 +448,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (Object.keys(open).length) set((prev) => ({ ...prev, lists3d: { ...prev.lists3d, ...open } }));
   }
 
-  /** Molecules new on the page that are an optimisation's path, shown at their ends. */
+  /** Molecules new on the page that are an optimisation's path, shown at their ends; and those of one entry frame - a path search's point refined, among its images - at it: what the step gave, as a set takes it. */
   function atTheirEnds(before: ReadonlySet<number>) {
-    for (const m of doc.getState().molecules3d ?? []) if (!before.has(m.id) && m.path && m.frames?.length) get().setFrame3d(m.id, m.frames.length);
+    for (const m of doc.getState().molecules3d ?? []) {
+      if (before.has(m.id) || !m.frames?.length) continue;
+      if (m.path) get().setFrame3d(m.id, m.frames.length);
+      else if (m.entryFrames?.length === 1) get().setFrame3d(m.id, m.entryFrames[0]);
+    }
   }
 
   /** How a step's results are first turned, where they are what came in worked out: each laid over what it was worked out from, turned as that is (workflow/run `laidOver`). */
@@ -964,15 +968,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
     const input = inputOf(d, id)!;
-    const entries = jobEntries(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds);
+    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    // (what it takes: what came in - or, a kind of two inputs, each start paired with an end, those that cannot be worked out refused with why)
+    const taking = programEntries(d, id, step.kind, options);
+    if (taking && "why" in taking) return void fail(id, taking.why, at, key);
+    const entries = taking?.entries ?? [];
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    const unpaired = taking?.refused ?? [];
     // (skeletons, their hydrogens not there, refused before anything is sent - each to the Failed exit, the rest run:
     //  lib/chem/skeleton. All of them skeletons, the step itself refused)
-    const skeletons = skeletonEntries(step.kind, entries);
+    const skeletons = skeletonEntries(step.kind, entries).filter((i) => !unpaired.some((u) => u.entry === i));
     if (skeletons.length === entries.length) return void fail(id, skeletonWhy(entries.length), at, key);
-    const sendIdx = entries.flatMap((_, i) => (skeletons.includes(i) ? [] : [i]));
-    taken.set(id, { at, entries, holds: input.holds });
-    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const sendIdx = entries.flatMap((_, i) => (skeletons.includes(i) || unpaired.some((u) => u.entry === i) ? [] : [i]));
+    // (every pair refused: nothing to send - why the first was, and how many)
+    if (!sendIdx.length) return void fail(id, unpaired.length > 1 ? `${unpaired[0].why}; and ${unpaired.length - 1} more cannot be worked out` : (unpaired[0]?.why ?? "Nothing came in"), at, key);
+    taken.set(id, { at, entries, holds: taking?.holds ?? (input.holds as Holds3D) });
     const { cores } = runningOf(useAppSettings.getState().calculations);
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
     const paths = new Map<string, string>();
@@ -1008,7 +1018,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
     // (what the plugin was given, by its places among all that came in; and the skeletons refused beside)
     prepared = prepared.map((p) => ({ ...p, entries: p.entries.map((k) => sendIdx[k]) }));
-    refused = [...refused.map((r) => ({ ...r, entry: sendIdx[r.entry] })), ...skeletons.map((entry): Refusal => ({ entry, kind: "refused", why: skeletonWhy() }))];
+    refused = [
+      ...refused.map((r) => ({ ...r, entry: sendIdx[r.entry] })),
+      ...skeletons.map((entry): Refusal => ({ entry, kind: "refused", why: skeletonWhy() })),
+      ...unpaired.map((u): Refusal => ({ entry: u.entry, kind: "refused", why: u.why })),
+    ];
     // (each program installed separately as it is now, for its jobs' keys - one replaced gives other keys, though it
     //  says the same version or none: one that cannot be told, and no job is taken up again)
     let stamps: string[] | null = [];
@@ -1369,8 +1383,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       taken.delete(id);
       const input = snap ? null : inputOf(d, id);
       const same = !snap && inputKey(d, { ...step, kind, options: run.options }, by) === run.input;
-      const entries: SetEntry[] = snap ? snap.entries : same && input && input.holds !== "structures" ? jobEntries(kind, setEntries(input.molecules, input.holds), input.holds) : [];
-      const holds = snap?.holds ?? input?.holds;
+      // (taken now as the run took them: a kind of two inputs, its pairs - workflow/programs `programEntries`)
+      const now = !snap && same ? programEntries(d, id, kind, optionsOf(optionsFor(kind, by), run.options)) : null;
+      const entries: SetEntry[] = snap ? snap.entries : now && !("why" in now) ? now.entries : [];
+      const holds = snap?.holds ?? (now && !("why" in now) ? now.holds : input?.holds);
       const total = run.jobs.reduce((n, j) => n + j.entries.length, 0) + (run.refused?.length ?? 0);
       const worked: Worked[] = [];
       // (each entry it could not do, with why - a job that failed fails each entry it was for - counted, and kept

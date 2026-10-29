@@ -437,6 +437,9 @@ export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
 export type Worked = SetEntry & {
   path?: number[][];
   pathEnergies?: number[];
+  /** The path's frames after it, where it is a point the path goes on past - the highest a path search refined - and their energies: its entry is then that point, not the path's last. */
+  after?: number[][];
+  afterEnergies?: number[];
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
@@ -904,25 +907,35 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
   if (outcome.holds !== "conformers") {
     return (outcome.kept as Worked[]).map((e) => {
       const path = e.path?.length ? e.path : undefined;
-      const energies = path ? (e.pathEnergies?.length === path.length && e.energy != null ? [...e.pathEnergies, e.energy] : undefined) : e.energy != null ? [e.energy] : undefined;
+      // (a path that goes on past it - a path search's, its point refined between its ends: frames after it, and it the molecule's entry)
+      const after = path && e.after?.length ? e.after : [];
+      const afterEnergies = after.length && e.afterEnergies?.length === after.length ? e.afterEnergies : after.length ? undefined : [];
+      const energies = path
+        ? e.pathEnergies?.length === path.length && e.energy != null && afterEnergies
+          ? [...e.pathEnergies, e.energy, ...afterEnergies]
+          : undefined
+        : e.energy != null
+          ? [e.energy]
+          : undefined;
+      const tail = after.map(() => ({}));
       return {
         atoms: atomsAt(e, path ? path[0] : e.xyz),
         bonds: e.bonds.map((b) => ({ ...b })),
-        ...(path ? { frames: [...path.slice(1).map((f) => [...f]), [...e.xyz]], path: true as const } : {}),
+        ...(path ? { frames: [...path.slice(1).map((f) => [...f]), [...e.xyz], ...after.map((f) => [...f])], ...(after.length ? { entryFrames: [path.length] } : { path: true as const }) } : {}),
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
         // (its properties, as its last frame's: none for a path's frames before it)
-        ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties] } : {}),
+        ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties, ...tail] } : {}),
         ...keptKnown(e),
         // (how many it stands for, and its mirror image's atoms where one was counted in - of its last geometry; a path's
         //  frames before it, one each, none)
-        ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy] } : {}),
-        ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror]] } : {}),
+        ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
+        ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
-        ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }]),
+        ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
         ...e.keep,
       };
     });

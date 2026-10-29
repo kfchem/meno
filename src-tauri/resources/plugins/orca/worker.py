@@ -222,12 +222,124 @@ def needs_xtb(options):
     return any(word.upper() in XTB_KEYWORDS for word in said.split())
 
 
+#: A path search (ORCA's NEB-TS: the ORCA 6.1 manual, Nudged Elastic Band Method,
+#: https://www.faccts.de/docs/orca/6.1/manual/contents/structurereactivity/neb.html): the path between an entry and the
+#: end it is paired with, its highest point refined, and - where asked - that point's frequencies. Its files, as ORCA
+#: 6.1.1 writes them for an input named input.inp: the path as images, the point refined.
+PATH_RUN = "NEB-TS"
+END = "end.xyz"
+MEP = f"{BASE}_MEP_trj.xyz"
+REFINED = f"{BASE}_NEB-TS_converged.xyz"
+#: What each of a path's frames is, as the step says it on each: Meno judges none of them.
+PATH_FRAME = "path.frame"
+REFINED_SAID = "highest point refined"
+
+
+def xyz_block(entry):
+    """An entry's atoms as an XYZ file's lines: its elements and places."""
+    lines = []
+    for el, a in zip(elements_of(entry), entry["atoms"]):
+        x, y, z = (float(a.get(k, 0.0)) for k in ("x", "y", "z"))
+        if not all(math.isfinite(v) for v in (x, y, z)):
+            raise Refused("an atom has no place")
+        lines.append(f"{el:<3}{x:>18.10f}{y:>18.10f}{z:>18.10f}")
+    return lines
+
+
+#: The tight-binding methods among ORCA's simple keywords, each by the name the xtb program gives it: those it runs through
+#: the xtb program (`XTB_KEYWORDS`; the manual's 3.5.2, its table of simple input keywords), and its own (3.5.3) - one
+#: method whichever runs it. A path search says its level by it, as its ends' are said (Meno compares them).
+XTB_NAMES = {
+    "XTB0": "GFN0-xTB", "GFN0-XTB": "GFN0-xTB",
+    "XTB1": "GFN1-xTB", "GFN1-XTB": "GFN1-xTB", "GFN-XTB": "GFN1-xTB",
+    "XTB": "GFN2-xTB", "XTB2": "GFN2-xTB", "GFN2-XTB": "GFN2-xTB",
+    "XTBFF": "GFN-FF", "GFN-FF": "GFN-FF",
+    "NATIVE-GFN-XTB": "GFN1-xTB", "NATIVE-GFN1-XTB": "GFN1-xTB", "NATIVE-XTB1": "GFN1-xTB",
+    "NATIVE-XTB": "GFN2-xTB", "NATIVE-GFN2-XTB": "GFN2-xTB", "NATIVE-XTB2": "GFN2-xTB",
+}
+
+
+#: Words of a dispersion correction or a solvation among ORCA's simple keywords (the manual's table of simple input
+#: keywords), each with or without its "(solvent)": a path search takes neither for now. Its ends' level is said by their
+#: method, basis set and solvation alone, not their dispersion, so a path given one could be at a level its ends were not.
+PATH_REFUSED_WORDS = {
+    "D2", "D3", "D3BJ", "D3ZERO", "D3TZ", "D4", "NL", "SCNL", "ABC",
+    "CPCM", "CPCMC", "CPCMX", "SMD", "ALPB", "GBSA", "DDCOSMO", "COSMO", "COSMORS", "DRACO",
+}
+
+
+def path_refusal(method, more):
+    """Why a path search cannot be run as asked - or None. For now it runs at a tight-binding level alone (`XTB_NAMES`),
+    with no dispersion correction or solvation added: a path's level must be its ends', and of their level Meno is told
+    their method, basis set and solvation, not their dispersion."""
+    if method.upper() not in XTB_NAMES:
+        return f"a path search runs at a tight-binding level only for now, such as NATIVE-XTB2 or XTB2: {method} is not one"
+    added = [w for w in f"{method} {more}".split() if w.split("(")[0].upper() in PATH_REFUSED_WORDS]
+    if added:
+        return f"a path search takes no dispersion correction or solvation for now, as its ends' level cannot say them: {', '.join(added)}"
+    return None
+
+
+def path_level(options):
+    """A path search's method and basis, as its output says them: a tight-binding method by its name (`XTB_NAMES`), with
+    no basis; else the method and basis as given."""
+    method = " ".join(str(options.get("method", "")).split())
+    basis = " ".join(str(options.get("basis", "")).split())
+    named = XTB_NAMES.get(method.upper())
+    return (named, None) if named else (method or None, basis or None)
+
+
+def path_input(entry, options, cores):
+    """A path search's input: from the entry to the end it is paired with (`end`), ORCA's NEB-TS alone - the path, and
+    its highest point refined - with the method, basis set and keywords given. Its point's frequencies are a
+    Frequencies step's, after it (one role to a step)."""
+    end = entry.get("end")
+    if not isinstance(end, dict):
+        raise Refused("a path search needs an end for each entry")
+    if elements_of(end) != elements_of(entry):
+        raise Refused("the start and the end are not the same atoms in one numbering")
+    method = words(options.get("method", ""), "The method")
+    if not method:
+        raise Refused("there is no method")
+    basis = words(options.get("basis", ""), "The basis set")
+    more = words(options.get("keywords", ""), "The keywords")
+    why = path_refusal(method, more)
+    if why:
+        raise Refused(why)
+    charge = whole(entry.get("charge", 0), "The charge")
+    multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity", 1)
+    maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)
+    lines = ["! " + " ".join(k for k in [method, basis, PATH_RUN, more] if k)]
+    if cores and whole(cores, "The cores", 1) > 1:
+        lines.append(f"%pal nprocs {int(cores)} end")
+    if maxcore:
+        lines.append(f"%maxcore {maxcore}")
+    lines += ["%neb", f'  neb_end_xyzfile "{END}"', "end", f"* xyz {charge} {multiplicity}", *xyz_block(entry), "*"]
+    end_lines = xyz_block(end)
+    return "\n".join(lines) + "\n", f"{len(end_lines)}\nend\n" + "\n".join(end_lines) + "\n"
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
     keep = keeps_wavefunction(options)
     memory = memory_of(options, m.get("cores"))
     jobs = []
+    if step == "path-search":
+        for i, entry in enumerate(m.get("entries") or []):
+            text, end = path_input(entry, options, m.get("cores"))
+            jobs.append({
+                "entries": [i],
+                "program": PROGRAM,
+                "args": [INPUT],
+                "files": [{"name": INPUT, "text": text}, {"name": END, "text": end}],
+                "reads": [MEP, REFINED],
+                **({"memory": memory} if memory else {}),
+                **({"needs": ["xtb"]} if needs_xtb(options) else {}),
+            })
+        if not jobs:
+            raise Refused("nothing came in")
+        return {"jobs": jobs}
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
             "entries": [i],
@@ -277,8 +389,178 @@ def not_ended_why(log, ended):
     return "ORCA's log does not say it ended normally" + (f"; it last said: {lines[-1]}" if lines else "")
 
 
+def xyz_frames(text, n):
+    """An XYZ file's frames, each its places and the energy its comment line gives ("... E -4.426151532280"), as ORCA
+    writes a path's images and the point it refines; none where it does not read as frames of `n` atoms."""
+    lines = text.splitlines()
+    frames = []
+    i = 0
+    while i < len(lines):
+        if not lines[i].strip():
+            i += 1
+            continue
+        if lines[i].strip() != str(n) or i + 2 + n > len(lines):
+            return None
+        said = re.search(r"\bE\s+(-?\d+\.\d+)", lines[i + 1])
+        places = []
+        for line in lines[i + 2:i + 2 + n]:
+            parts = line.split()
+            if len(parts) < 4:
+                return None
+            places += [float(v) for v in parts[1:4]]
+        if len(places) != 3 * n or not said:
+            return None
+        frames.append((places, float(said.group(1))))
+        i += 2 + n
+    return frames or None
+
+
+def summary_order(log):
+    """The rows of ORCA's PATH SUMMARY FOR NEB-TS, in its order: each image's number, and "TS" for the point it
+    refined; none where the log has none."""
+    at = log.rfind("PATH SUMMARY FOR NEB-TS")
+    if at < 0:
+        return None
+    rows = []
+    for line in log[at:].splitlines()[1:]:
+        m = re.match(r"\s*(\d+|TS)\s+-?\d+\.\d+\s", line)
+        if m:
+            rows.append(m.group(1))
+        elif rows and not line.strip():
+            break
+        elif rows and line.strip().startswith("-"):
+            break
+    return rows if "TS" in rows else None
+
+
+def frequencies_of(log):
+    """The vibrations ORCA listed last, in cm-1 as it prints them - an imaginary one negative - its zeros (the molecule's
+    translations and rotations) left out; none where it worked out no frequencies (Freq off)."""
+    at = log.rfind("VIBRATIONAL FREQUENCIES")
+    if at < 0:
+        return None
+    found = []
+    for line in log[at:].splitlines()[1:]:
+        if "NORMAL MODES" in line:
+            break
+        m = re.match(r"\s*\d+:\s+(-?\d+\.\d+)\s+cm\*\*-1", line)
+        if m and float(m.group(1)) != 0.0:
+            found.append(float(m.group(1)))
+    return found
+
+
+def imaginary_of(log):
+    """The frequencies ORCA marked imaginary in its last list of them, each negative as it prints it; none where it
+    worked out no frequencies (Freq off)."""
+    at = log.rfind("VIBRATIONAL FREQUENCIES")
+    if at < 0:
+        return None
+    found = []
+    for line in log[at:].splitlines()[1:]:
+        if "NORMAL MODES" in line:
+            break
+        m = re.match(r"\s*\d+:\s+(-?\d+\.\d+)\s+cm\*\*-1\s*\*\*\*imaginary mode\*\*\*", line)
+        if m:
+            found.append(float(m.group(1)))
+    return found
+
+
+#: What ORCA says where its band did not converge in the iterations it allows ("NEB not converged. Skipping NEB-TS run
+#: here."), and where an image's SCF did not ("Error (ORCA_LEANSCF): unfortunately, the SCF has not converged. ..."),
+#: after which it carries on with the band.
+NEB_NOT_CONVERGED = "NEB not converged"
+IMAGE_SCF_FAILED = re.compile(r"^.*\bSCF has not converged\b.*$", re.M)
+
+
+def path_iterations(log):
+    """How many iterations each part of a NEB-TS run took, as ORCA's STATISTICS counts them ("NEB ... 5", "TS
+    optimization ... 4"), in its order; none where it gives none."""
+    at = log.rfind("Number of iterations:")
+    if at < 0:
+        return []
+    parts = []
+    for line in log[at:].splitlines()[1:]:
+        m = re.match(r"\s+(\S.*?)\s+\.\.\.\s+(\d+)\b", line)
+        if not m:
+            break
+        parts.append((m.group(1), int(m.group(2))))
+    return parts
+
+
+def iterations_said(parts):
+    """A run's iterations in words: "NEB 5 · TS optimization 4"."""
+    return " \u00b7 ".join(f"{name} {n}" for name, n in parts)
+
+
+def path_not_converged(log):
+    """Why a path search's band is not read, where ORCA says it did not converge: plainly, with how far it went."""
+    parts = path_iterations(log)
+    neb = next((n for name, n in parts if name == "NEB"), None)
+    went = f" in {neb} iterations" if neb is not None else ""
+    return f"Its band did not converge{went}: ORCA stopped before refining a highest point (\"{NEB_NOT_CONVERGED}\")"
+
+
+def path_output(entry, files, log, method=None, basis=None):
+    """A path search's output, in Meno's form: its frames in the order of ORCA's PATH SUMMARY - the images, and the
+    point it refined where the summary has it - each with its energy and what it is, the refined one marked as the
+    run's converged geometry; its level, as given (`path_level`); and that point's imaginary frequencies, where ORCA
+    worked out frequencies (asked for among the keywords)."""
+    n = len(entry["atoms"])
+    images = xyz_frames(files.get(MEP, ""), n)
+    refined = xyz_frames(files.get(REFINED, ""), n)
+    order = summary_order(log)
+    if not images or not refined or not order:
+        return {"why": "ORCA wrote no path and point refined that can be read", "kind": "no-geometry"}
+    numbered = [r for r in order if r != "TS"]
+    if numbered != [str(k) for k in range(len(images))]:
+        return {"why": "ORCA's path summary does not list the images it wrote", "kind": "failed"}
+    frames, energies, said, converged = [], [], [], []
+    for r in order:
+        places, energy = refined[-1] if r == "TS" else images[int(r)]
+        frames.append(places)
+        energies.append(energy)
+        said.append(REFINED_SAID if r == "TS" else f"NEB image {int(r) + 1} of {len(images)}")
+        converged.append(r == "TS")
+    imaginary = imaginary_of(log)
+    parts = path_iterations(log)
+    failed = IMAGE_SCF_FAILED.findall(log)
+    vibrations = frequencies_of(log)
+    # (the point refined's vibrations, where they were worked out: what Meno counts its imaginary ones from - none among them is none)
+    listed = [{"id": "vibrations", "on": "list", "group": "Vibrations", "label": "Vibrations", "columns": [{"label": "Frequency", "quantity": "wavenumber"}],
+               "rows": [{"cells": [f]} for f in vibrations]}] if vibrations is not None else []
+    return {
+        "schema": 1,
+        "program": "ORCA",
+        **({"method": method} if method else {}),
+        **({"basis": basis} if basis else {}),
+        "atoms": elements_of(entry),
+        "frames": frames,
+        "energies": energies,
+        "converged": converged,
+        **({"imaginary": imaginary} if imaginary is not None else {}),
+        "results": [
+            {"id": PATH_FRAME, "on": "frames", "group": "Path", "label": "What it is", "values": said},
+            # (how far each part went, as ORCA counts it: its band converged, and the point refined - else it is not read)
+            *([{"id": "path.iterations", "on": "molecule", "group": "Path", "label": "Converged, iterations", "value": iterations_said(parts)}] if parts else []),
+            *listed,
+        ],
+        # (an image whose SCF did not converge, ORCA carrying on with the band: said, in its words - it moves nothing)
+        **({"warnings": [{"kind": "other", "text": f"{len(failed)} of the band's SCF calculations did not converge, ORCA carrying on: {failed[0].strip()}"}]} if failed else {}),
+    }
+
+
 def op_collect(m):
     step = m.get("step")
+    if step == "path-search":
+        log = m.get("log") or ""
+        # (a band that did not converge: said plainly - ORCA ends it by an error return, whose words say nothing of it)
+        if NEB_NOT_CONVERGED in log:
+            return {"why": path_not_converged(log), "kind": "not-converged"}
+        # (read only where ORCA says it ended well, as every step's job is: its exit code is no word on it)
+        if m.get("ended") != "done" or not ended_well(log):
+            return {"why": not_ended_why(log, m.get("ended"))}
+        method, basis = path_level(m.get("options") or {})
+        return {"outputs": [path_output(e, m.get("files") or {}, log, method, basis) for e in m.get("entries") or []]}
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
     log = m.get("log") or ""
