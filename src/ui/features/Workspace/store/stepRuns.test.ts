@@ -541,6 +541,55 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
   });
 
+  it("runs a path search on pairs - each start with the end in its place - sending each its end, and a pair it cannot work out out of Failed, saying why", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 NEB-TS FREQ\n" }], reads: [] }] }) as never);
+    const { doc, st } = editor();
+    // (each an optimisation, converged, at one level: a path's ends must be - and a second set beside the first: water
+    //  again, its hydrogens elsewhere - and a hydrogen molecule, another molecule)
+    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
+    doc.edit("ends", (d) => {
+      const water = { ...d.molecules3d![0], calc };
+      const withWater = { ...d, molecules3d: [water, ...d.molecules3d!.slice(1)] };
+      return addMolecule3d(addMolecule3d(withWater, { ...water, atoms: water.atoms.map((a, i) => (i === 1 ? { ...a, y: 0.9 } : a)), at: { x: 20, y: 0 } }), { atoms: [{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.74, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], calc, at: { x: 24, y: 0 } });
+    });
+    const ends = st().addSet({ x0: 17, y0: -3, x1: 27, y1: 3 });
+    const starts = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 6 });
+    // (each with each: water onto water, and water onto the hydrogen molecule - which no path joins)
+    const step = st().addStep("path-search", "orca", 40, 0);
+    st().updateStep(step, { options: { pairs: "each" } });
+    st().connect({ set: starts }, step, "start");
+    st().connect({ set: ends }, step, "end");
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    const sent = worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1];
+    expect(sent[0]).toBe("path-search");
+    // (only the pair that can be worked out sent, with its end beside it)
+    expect((sent[1] as { end?: { atoms: unknown[] } }[]).map((e) => e.end?.atoms.length)).toEqual([3]);
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "orca", program: "orca" })]);
+
+    // (done: its path read back - two images, the point refined, the last - and brought in, shown at the point refined)
+    const water = st().molecules3d[0];
+    const at = water.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const frames = [0, 0.1, 0.2, 0.3].map((dy) => at.map((v, i) => (i % 3 === 1 ? v + dy : v)));
+    worker.collect.mockImplementationOnce(
+      async () =>
+        ({
+          outputs: [
+            { schema: 1, program: "ORCA", method: "GFN2-xTB", atoms: water.atoms.map((a) => a.el), frames, energies: [-5.07, -5.06, -5.05, -5.069], converged: [false, false, true, false] },
+          ],
+        }) as never,
+    );
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: {} });
+    await st().lookAtJobs();
+    await ran;
+    const path = st().molecules3d.find((m) => m.entryFrames?.length)!;
+    expect(path.entryFrames).toEqual([2]);
+    expect(st().frames3d[path.id]).toBe(2);
+  });
+
   it("says it was stopped, and brings nothing in", async () => {
     const { st, step } = editor();
     const ran = st().runStep(step);
