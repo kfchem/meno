@@ -1,6 +1,5 @@
 import {
   AdjustmentsHorizontalIcon,
-  ArrowPathIcon,
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
   BoldIcon,
@@ -8,17 +7,13 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ClipboardIcon,
-  CubeIcon,
   DocumentDuplicateIcon,
-  EyeIcon,
-  ForwardIcon,
   ItalicIcon,
   ListBulletIcon,
   PencilIcon,
   PhotoIcon,
   PlayIcon,
   ScissorsIcon,
-  SparklesIcon,
   StopIcon,
   SwatchIcon,
   TrashIcon,
@@ -59,20 +54,39 @@ export const MENU_ICONS = {
   copy: hero(DocumentDuplicateIcon),
   paste: hero(ClipboardIcon),
   delete: hero(TrashIcon),
-  cleanUp: hero(SparklesIcon),
-  make3d: hero(CubeIcon),
+  // (a broom: the drawing tidied)
+  cleanUp: own(
+    <>
+      <path d="M17 3 L10.6 9.4" />
+      <path d="M8.6 8.4 L11.6 11.4 L7.6 17 L3 13.6 Z" />
+      <path d="M6.4 12.6 L4.9 15 M8.4 13.4 L6.8 16" />
+    </>,
+  ),
+  // (the letters themselves: "3D")
+  make3d: (
+    <svg viewBox="0 0 20 20" width={20} height={20} aria-hidden>
+      <text x="10" y="14.4" textAnchor="middle" fontWeight={700} fontSize={10.5} fill="currentColor" style={{ fontFamily: "inherit" }}>
+        3D
+      </text>
+    </svg>
+  ),
   read: hero(BookOpenIcon),
   previous: hero(ChevronLeftIcon),
   next: hero(ChevronRightIcon),
   toIcon: hero(ArrowsPointingInIcon),
   fullSize: hero(ArrowsPointingOutIcon),
   run: hero(PlayIcon),
-  runFrom: hero(ForwardIcon),
+  // (run, from a mark: a bar, then the play sign)
+  runFrom: own(
+    <>
+      <path d="M4.5 4.5 V15.5" />
+      <path d="M8.5 4.5 L16.5 10 L8.5 15.5 Z" />
+    </>,
+  ),
   stop: hero(StopIcon),
   options: hero(AdjustmentsHorizontalIcon),
   edit: hero(PencilIcon),
   picture: hero(PhotoIcon),
-  resetTurn: hero(ArrowPathIcon),
   // (once round about an upright axis - broken where the near side passes in front of it - the near side going right)
   turnOnce: own(
     <>
@@ -101,7 +115,13 @@ export const MENU_ICONS = {
   ),
   earlier: hero(ChevronLeftIcon),
   later: hero(ChevronRightIcon),
-  around: hero(EyeIcon),
+  // (a slide's frame, and the page round it, dashed)
+  around: own(
+    <>
+      <rect x="6" y="7" width="8" height="6" rx="0.8" />
+      <rect x="2" y="3" width="16" height="14" rx="1.5" strokeDasharray="2 2" />
+    </>,
+  ),
   // (a charge's circled sign, as the drawing marks one)
   chargeUp: own(
     <>
@@ -135,18 +155,27 @@ export const MENU_ICONS = {
   alignCentre: own(<path d="M3.5 5 H16.5 M5.5 8.3 H14.5 M3.5 11.7 H16.5 M6.5 15 H13.5" />),
   alignRight: own(<path d="M3.5 5 H16.5 M7.5 8.3 H16.5 M3.5 11.7 H16.5 M9 15 H16.5" />),
   justify: own(<path d="M3.5 5 H16.5 M3.5 8.3 H16.5 M3.5 11.7 H16.5 M3.5 15 H16.5" />),
-  // (a molecule in 3D as balls and sticks, or its atoms as spheres - the look it is turned to)
+  // (a molecule in 3D as balls and sticks - three small solid balls on two sticks - or its atoms as spheres, three
+  // solid ones overlapping, the nearest cut clear of the others: the look it is turned to)
   balls: own(
     <>
-      <circle cx="5.5" cy="13.5" r="2.4" />
-      <circle cx="14.5" cy="6.5" r="2.4" />
-      <path d="M7.4 12 L12.6 8" />
+      <path d="M5.5 14 L10 8 L14.5 14" />
+      <circle cx="10" cy="7" r="2.6" fill="currentColor" />
+      <circle cx="5" cy="14.5" r="2.2" fill="currentColor" />
+      <circle cx="15" cy="14.5" r="2.2" fill="currentColor" />
     </>,
   ),
-  space: own(
-    <>
-      <circle cx="7.6" cy="11.6" r="4.6" />
-      <path d="M10.4 7.3 A4.6 4.6 0 1 1 12.2 15.9" />
-    </>,
+  space: (
+    <svg viewBox="0 0 20 20" width={20} height={20} aria-hidden>
+      <mask id="meno-space-cut">
+        <rect width="20" height="20" fill="white" />
+        <circle cx="10" cy="8.4" r="6" fill="black" />
+      </mask>
+      <g fill="currentColor">
+        <circle cx="5.8" cy="13" r="4" mask="url(#meno-space-cut)" />
+        <circle cx="14.2" cy="13" r="4" mask="url(#meno-space-cut)" />
+        <circle cx="10" cy="8.4" r="5.4" />
+      </g>
+    </svg>
   ),
 } as const;
