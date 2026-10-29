@@ -576,7 +576,7 @@ export const KINDS: readonly KindInfo[] = [
         default: "first",
       },
     ],
-    how: (v) => (v.maps === "every" ? "Every map of each product, in the reactants' numbering" : "Each product by its first map, in the reactants' numbering"),
+    how: (v) => (v.maps === "every" ? "every map of each product" : "each product's first map"),
   },
 ];
 

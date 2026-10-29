@@ -404,9 +404,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       menoStops.delete(id);
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
+    // (no time said: Meno's own steps say none)
     const outcome = reactionSet(reactants, products, every ? "every" : "first", mapped);
-    const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
-    doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
+    doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
   }
 
   /**
