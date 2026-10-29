@@ -2086,8 +2086,10 @@ for it:
   under way (ORCA's log says *GEOMETRY OPTIMIZATION CYCLE*, Gaussian's
   *Berny optimization*), its plugin says to read what it wrote, and Meno
   does: the entry goes out of *Failed* at the last geometry the run
-  reached, its way there as frames beginning with the geometry it came
-  in with - so *Take frames*' *first* starts it again from the beginning
+  worked out an energy for (one it had stepped to and not yet worked
+  out is left out, as the reader leaves it out of any run cut short),
+  its way there as frames beginning with the geometry it came in with -
+  so *Take frames*' *first* starts it again from the beginning
   (a fault of the machine: memory, a floating point exception) and its
   *last* from where it stopped (an SCF that did not converge, a step the
   optimiser could not take). A run that stopped before it was under way
@@ -2104,7 +2106,9 @@ for it:
 - **Why it failed is something to select on**: `failure`, Meno's own name
   (no property of the chemist's takes it), its program's words - *ORCA
   finished by error termination in SCF* - for a *Filter* to send each
-  kind of failure its own way.
+  kind of failure its own way. Where the program said no error, as a run
+  brought down under way, it says so, and the last thing the program
+  said: *ORCA stopped without saying why, after: ...*.
 - **The remedy is the chemist's**: another step's options (another SCF
   algorithm, force constants computed first, more steps), saved as a part
   with the chain and put down again where wanted.

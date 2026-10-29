@@ -369,13 +369,16 @@ def output_name(entry):
 
 
 def why_of(log):
-    """Why ORCA stopped, as it says: the line it says it ended by an error on, else the first that says error or aborting, else its last."""
+    """Why ORCA stopped, as it says: the line it says it ended by an error on, else the first of its error words ("Error
+    (ORCA_LEANSCF): ...", "INPUT ERROR", "... aborting the run"); else - where it stopped with no word of an error, as a
+    run brought down does - the last thing it said. Not every line with "error" in it: its SCF settings print one
+    ("Startup error   DIISStart   ....  0.200000")."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
-    for pick in (r"error termination", r"\berror\b|aborting"):
+    for pick in (r"error termination", r"\berror\s*[(:]|\binput error\b|error return|\baborting\b"):
         for line in lines:
             if re.search(pick, line, re.I):
                 return line
-    return lines[-1] if lines else "ORCA said nothing"
+    return f"ORCA stopped without saying why, after: {lines[-1]}" if lines else "ORCA said nothing"
 
 
 def ended_well(log):
