@@ -116,13 +116,20 @@ export function mayLook(): boolean {
   return !net.offline && net.granted.includes(UPDATE_PURPOSE);
 }
 
+/** Where no look is due: none in this Meno, one under way, or an update ready - which a look would only report again. */
+const NOT_DUE: ReadonlySet<UpdatePhase> = new Set(["unavailable", "checking", "downloading", "ready"]);
+
 /**
  * Whether a look is due at `now` (ms since the epoch): allowed, none under
- * way, and a day gone by the wall clock since GitHub was last asked - or
- * never asked yet, a look missed while offline among them.
+ * way, no update ready already, and a day gone by the wall clock since
+ * GitHub was last asked - or never asked yet, a look missed while offline
+ * among them. `checked` is set as GitHub answers, or fails to: a failure
+ * before that - Meno's network not up, the updater not built, the look
+ * refused a start - leaves it as it was, and the next tick tries again,
+ * with nothing sent meanwhile.
  */
 export function lookDue(u: UpdateState | null, now: number, allowed: boolean): boolean {
-  if (!allowed || !u || u.phase === "unavailable" || u.phase === "checking" || u.phase === "downloading") return false;
+  if (!allowed || !u || NOT_DUE.has(u.phase)) return false;
   return u.checked == null || now - u.checked >= EVERY_MS;
 }
 

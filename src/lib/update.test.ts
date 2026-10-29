@@ -83,12 +83,15 @@ describe("looking once a day, by the wall clock", () => {
     useUpdate.setState(null, true);
   });
 
-  it("is due a day after GitHub was last asked - or never asked - and not while one is under way, nor where it may not", () => {
+  it("is due a day after GitHub was last asked - or never asked - and not while one is under way, with an update ready, nor where it may not", () => {
     expect(lookDue(at(T0), T0 + DAY - 1, true)).toBe(false);
     expect(lookDue(at(T0), T0 + DAY, true)).toBe(true);
     expect(lookDue(at(null, "idle"), T0, true)).toBe(true);
     expect(lookDue(at(T0), T0 + 3 * DAY, false)).toBe(false);
     for (const phase of ["checking", "downloading", "unavailable"] as const) expect(lookDue(at(null, phase), T0 + DAY, true)).toBe(false);
+    // (an update ready: a look would only say so again - Meno asks GitHub no more until it is installed)
+    expect(lookDue(at(T0, "ready"), T0 + 3 * DAY, true)).toBe(false);
+    expect(lookDue(at(T0, "failed"), T0 + DAY, true)).toBe(true);
     expect(lookDue(null, T0, true)).toBe(false);
   });
 
