@@ -62,6 +62,21 @@ describe("options a plugin declares", () => {
     ]);
     expect(acceptOptions("not a list")).toEqual([]);
   });
+
+  it("read a whole number alone where the plugin says so - only by true - and hold what is remembered to it", () => {
+    const read = acceptOptions([
+      { id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true },
+      { id: "t", label: "Temperature", type: "number", default: 298.15, min: 1, step: 1, whole: "yes" },
+      // (none: its default is no whole number)
+      { id: "bad", label: "Bad", type: "number", default: 2.5, whole: true },
+    ]);
+    expect(read).toEqual([
+      { id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true },
+      { id: "t", label: "Temperature", type: "number", default: 298.15, min: 1, step: 1 },
+    ]);
+    expect(valuesOf(read, { count: 12.5, t: 300.5 })).toEqual({ count: 200, t: 300.5 });
+    expect(valuesOf(read, { count: 600 })).toEqual({ count: 600, t: 298.15 });
+  });
 });
 
 describe("options that apply to one choice only, and choices that fill in others' values", () => {

@@ -117,7 +117,7 @@ export default function OptionsForm({
               {/* (a number and its unit both within the card: the field narrows to leave the unit room) */}
               <span className="flex items-center gap-1.5">
                 {o.type === "number" ? (
-                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} onChange={(n) => set(o.id, n)} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
+                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
                 ) : (
                   <input
                     type="text"

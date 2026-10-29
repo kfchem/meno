@@ -604,6 +604,9 @@ class HowManySought(unittest.TestCase):
         fields = {o["id"]: o for r in manifest["roles"] if r["role"] == "conformers" for o in r["options"]}
         self.assertEqual(set(self.worker.SAID), set(fields))
         self.assertEqual(tuple(c["value"] for c in fields["field"]["choices"]), self.worker.FIELDS)
+        # (each number a whole one, as the worker takes them: the field refuses one with a fraction before any run)
+        self.assertEqual({k for k, o in fields.items() if o["type"] == "number"}, {"count", "iters", "seed"})
+        self.assertTrue(all(o.get("whole") is True for o in fields.values() if o["type"] == "number"))
         # (left out, its default - the manifest's, which Settings starts from)
         self.assertEqual(self.worker.options_of({"options": {}}), {"count": None, "seed": fields["seed"]["default"], "field": fields["field"]["default"], "iters": fields["iters"]["default"]})
         # (at its bounds, as asked)

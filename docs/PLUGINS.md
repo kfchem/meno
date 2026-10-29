@@ -239,7 +239,9 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 A plugin that does nothing - reads, writes, fills, colours, guides and
 suggests nothing - is none. Options are in the general form (`lib/options`:
 a choice, a number, a text or a switch, each with a label and a default it
-takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
+takes; a number's `min`, `max`, `step`, `unit`, and `whole` (true: a
+whole number alone - a count, a seed - its field refusing one with a
+fraction as it refuses one out of range); `from` the molecule's
 charge, multiplicity or name, for a writer's).
 
 A step's options are saved with its workspace, and a workspace may come

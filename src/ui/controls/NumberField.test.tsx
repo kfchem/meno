@@ -78,6 +78,25 @@ describe("Meno's own number field", () => {
     expect(rangeSaid({ min: 1, max: 100 })).toBe("From 1 to 100");
     expect(rangeSaid({ min: 0 })).toBe("At least 0");
     expect(rangeSaid({})).toBe("");
+    expect(rangeSaid({ min: 1, max: 5000, whole: true })).toBe("A whole number from 1 to 5000");
+    expect(rangeSaid({ min: 0, whole: true })).toBe("A whole number, at least 0");
+    expect(rangeSaid({ max: 5, whole: true })).toBe("A whole number, at most 5");
+    expect(rangeSaid({ whole: true })).toBe("A whole number");
+  });
+
+  it("takes a whole number alone where it is one, refusing one with a fraction as one out of range - never cutting it", () => {
+    const whole: NumberRange = { min: 1, max: 5000, step: 1, whole: true };
+    for (const text of ["12.5", "0.5", "12,5"]) expect(after(200, [{ kind: "typed", text }, { kind: "commit" }], whole)).toEqual({ text: "200", value: 200, refused: true });
+    expect(after(200, [{ kind: "typed", text: "12" }, { kind: "commit" }], whole).value).toBe(12);
+    expect(after(200, [{ kind: "typed", text: "1e3" }, { kind: "commit" }], whole).value).toBe(1000);
+    // (nothing set as it goes from one it does not take)
+    expect(setAsItGoes({ text: "12.5", value: 200, refused: false }, true, whole)).toBeNull();
+    // (an arrow from one typed with a fraction: the whole number on its side)
+    expect(after(200, [{ kind: "typed", text: "12.5" }, { kind: "step", by: 1 }], whole).value).toBe(13);
+    expect(after(200, [{ kind: "typed", text: "12.5" }, { kind: "step", by: -1 }], whole).value).toBe(12);
+    expect(after(2000, [{ kind: "step", by: 1 }], { min: 10, max: 100000, step: 10, whole: true }).value).toBe(2010);
+    // (a field that takes fractions keeps them: a temperature)
+    expect(after(298, [{ kind: "typed", text: "298.15" }, { kind: "commit" }], { min: 1, step: 1 }).value).toBe(298.15);
   });
 });
 
@@ -90,6 +109,14 @@ describe("a number among a role's options", () => {
       expect(html).toContain('inputMode="decimal"');
       expect(html).toContain('value="25"');
       expect(html).toContain('title="At least 0"');
+    }
+  });
+
+  it("says a whole number where its option takes one alone", () => {
+    const count: Option[] = [{ id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true }];
+    for (const html of [renderToString(<OptionsForm options={count} values={{ count: 600 }} onChange={() => {}} />), renderToString(<OptionRows options={count} values={{ count: 600 }} onChange={() => {}} />)]) {
+      expect(html).toContain('title="A whole number from 1 to 5000"');
+      expect(html).toContain('value="600"');
     }
   });
 });
