@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { pageHtmlLayerStyle, viewBesideColumn } from "./coverLayer";
+import { PAGE_HTML_LAYER, pageHtmlLayerStyle, viewBesideColumn } from "./coverLayer";
 import { COLUMN_NARROWEST, COLUMN_WIDTH, columnWidthFor, TABLE_COLUMN_WIDTH } from "../utils/texts";
 
 const size = { width: 1280, height: 800 };
@@ -56,10 +56,19 @@ describe("the view as the column opens on a PDF", () => {
 // own stacking context, clipped to the canvas.
 describe("the page's HTML, under what is beside and over the page", () => {
   it("is laid in a layer of its own stacking context, clipped to the canvas, cut off at the column", () => {
-    expect(pageHtmlLayerStyle(0)).toEqual({ isolation: "isolate", overflow: "hidden" });
-    expect(pageHtmlLayerStyle(240)).toEqual({ isolation: "isolate", overflow: "hidden", clipPath: "inset(0 240px 0 0)" });
+    expect(pageHtmlLayerStyle(0)).toEqual({ isolation: "isolate" });
+    expect(pageHtmlLayerStyle(240)).toEqual({ isolation: "isolate", clipPath: "inset(0 240px 0 0)" });
     const workspace = readFileSync(join(__dirname, "..", "Workspace.tsx"), "utf8");
-    expect(workspace).toMatch(/ref=\{setHtmlLayer\}[^>]*style=\{pageHtmlLayerStyle\(cover\)\}/);
+    expect(workspace).toMatch(/ref=\{setHtmlLayer\}[^>]*className=\{`[^`]*\$\{PAGE_HTML_LAYER\}`\}[^>]*style=\{pageHtmlLayerStyle\(cover\)\}/);
+  });
+
+  it("is clipped, not hidden: no box that can be scrolled, so nothing in it is ever moved off where the canvas places it", () => {
+    const css = readFileSync(join(__dirname, "..", "..", "..", "..", "App.css"), "utf8");
+    const rule = css.match(new RegExp(`\\.${PAGE_HTML_LAYER}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+    // (hidden first, for a WebView without clip; clip after it, which one with it takes)
+    expect(rule.replace(/\s+/g, " ").trim()).toBe("overflow: hidden; overflow: clip;");
+    // (and nothing laid on the layer itself overrides it)
+    expect(JSON.stringify(pageHtmlLayerStyle(240))).not.toContain("overflow");
   });
 
   it("is put in that layer however it is drawn: drei's Html only through PageHtml, and PageHtml into the layer", () => {
