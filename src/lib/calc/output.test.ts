@@ -59,8 +59,12 @@ describe("what a reader hands back", () => {
     expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm-1");
     expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm-1");
     expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
-    // (judged none, or not numbers below 0: no mark)
-    for (const imaginary of [[], [382.63], [Number.NaN], null]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
+    // (judged none: kept as none, apart from not judged - and read back so)
+    const none = calcOf({ ...water, imaginary: [] }, ["xtb 6.7.1"]);
+    expect(none.imaginary).toEqual([]);
+    expect(readCalc(JSON.parse(JSON.stringify(none)), 3, 2)).toEqual(none);
+    // (not numbers below 0, or not judged: no mark)
+    for (const imaginary of [[382.63], [Number.NaN], null, undefined]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
   });
 
   it("says an adopted output is one first, and reads back as it was - when with it", () => {
@@ -224,6 +228,17 @@ describe("what several readers found in one output", () => {
     // (a reader saying why none is, kept with its marks)
     const cut = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: water.frames.map(() => false), unmarked: "cut" } }]).output;
     expect(cut.unmarked).toBe("cut");
+  });
+
+  it("keeps the imaginary frequencies the program judged the last geometry has, and what it warned of (2026-10-28: found in the app, left out here)", () => {
+    const warnings = [{ kind: "hessian-not-stationary", text: "the gradient is not small" }];
+    const saddle = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, imaginary: [-927.98], warnings } }, { from: "nbo", version: "7", output: nbo }]).output;
+    expect([saddle.imaginary, saddle.warnings]).toEqual([[-927.98], warnings]);
+    // (none judged, as some: kept - and none said where no reader judged)
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, imaginary: [] } }]).output.imaginary).toEqual([]);
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }]).output).not.toHaveProperty("imaginary");
+    // (of a reader that read other geometries: not of the last of these)
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }, { from: "nbo", version: "7", output: { ...nbo, imaginary: [-50] } }]).output).not.toHaveProperty("imaginary");
   });
 
   it("keeps each geometry's mark with it where one before it does not read - never all marks dropped with one geometry", () => {

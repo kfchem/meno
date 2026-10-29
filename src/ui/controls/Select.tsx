@@ -29,6 +29,7 @@ export default function Select<T extends string>({
   className,
   disabled = false,
   size = "xs",
+  variant = "field",
 }: {
   /** The choice made - none, where none is yet (`placeholder` shown). */
   value: T | null;
@@ -43,6 +44,8 @@ export default function Select<T extends string>({
   disabled?: boolean;
   /** Its letters: a control's (`xs`), or a form's whose fields are set larger (`sm`), to match those beside it. */
   size?: "xs" | "sm";
+  /** A form's field, framed (`field`); or, in a header among tabs and icon buttons, as quiet as they are - no frame, their height and hover (`quiet`). Its list the same either way. */
+  variant?: "field" | "quiet";
 }) {
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -87,9 +90,19 @@ export default function Select<T extends string>({
     list.current?.focus();
   }, [open]);
 
+  // (opened: the chosen row in the middle, those either side of it seen; moved through by the keys, only as far as it must)
+  const centred = useRef(false);
   useEffect(() => {
-    if (!open) return;
-    list.current?.querySelector<HTMLElement>(`[data-row="${lit}"]`)?.scrollIntoView({ block: "nearest" });
+    if (!open) {
+      centred.current = false;
+      return;
+    }
+    const box = list.current;
+    const row = box?.querySelector<HTMLElement>(`[data-row="${lit}"]`);
+    // (the list itself scrolled, nothing round it: a scroll of the page under it would shut it)
+    if (box && row && !centred.current) box.scrollTop = Math.max(0, row.offsetTop - (box.clientHeight - row.offsetHeight) / 2);
+    else row?.scrollIntoView({ block: "nearest" });
+    centred.current = true;
   }, [open, lit]);
 
   useEffect(() => {
@@ -133,10 +146,11 @@ export default function Select<T extends string>({
           }
         }}
         className={clsx(
-          "h-7 inline-flex min-w-0 items-center justify-between gap-1.5 rounded-md border bg-white px-2 text-gh-black outline-none",
+          "h-7 inline-flex min-w-0 items-center justify-between gap-1.5 rounded-md px-2 text-gh-black outline-none",
           size === "sm" ? "text-sm" : "text-xs",
-          "hover:bg-gh-base focus-visible:border-accel-base disabled:opacity-50 disabled:hover:bg-white",
-          open ? "border-accel-base" : "border-gh-line",
+          variant === "quiet"
+            ? clsx("hover:bg-gh-base focus-visible:ring-2 focus-visible:ring-accel-lightbase disabled:opacity-50", open && "bg-gh-base")
+            : clsx("border bg-white hover:bg-gh-base focus-visible:border-accel-base disabled:opacity-50 disabled:hover:bg-white", open ? "border-accel-base" : "border-gh-line"),
           className,
         )}
       >
