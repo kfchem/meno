@@ -20,12 +20,13 @@ export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycl
 type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
 const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "shapes"];
 
-/** Each icon's size, in px. */
+/** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
+const GAP = 2;
 /** How wide the name of who does a row of steps stands, beside its kinds: "Gaussian 16" and "Procedures" whole. */
 const LABEL_W = 84;
-/** How tall the SMILES field stands below the row, its rule above it, in px; and the row of shapes. */
-const SMILES_H = 32 + 9;
+/** How tall the SMILES field stands below the row, its rule above it and room for its focus ring below, in px; and the row of shapes. */
+const SMILES_H = 32 + 9 + 2;
 const SHAPES_H = 36 + 9;
 
 /** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). An arrow is not one: the row's own *Arrow* draws it. */
@@ -233,7 +234,8 @@ export default function QuickAdd({
   const offered = wired ? [] : procedures;
   const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
   const calcWidth = LABEL_W + most * SIZE + 8;
-  const rowWidth = (ROW.length + 1) * SIZE + 8 + 9;
+  // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
+  const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
   const width = wired ? (steps.length ? calcWidth : 200) : calcOpen ? Math.max(rowWidth, calcWidth) : rowWidth;
   const rows = Math.max(1, steps.length) + (offered.length ? 1 : 0);
@@ -327,7 +329,8 @@ export default function QuickAdd({
       {/* (the SMILES field, likewise) */}
       {!wired && (
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
-          <div className="overflow-hidden" inert={open !== "smiles"}>
+          {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
+          <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
             <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} />
           </div>
         </div>
@@ -450,7 +453,7 @@ function SmilesField({
   }, [open]);
   return (
     <form
-      className="mt-1 pt-1 border-t border-gh-line"
+      className="mt-1 pt-1 pb-0.5 border-t border-gh-line"
       style={{ width }}
       onSubmit={(e) => {
         e.preventDefault();

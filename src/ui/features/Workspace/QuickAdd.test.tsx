@@ -29,6 +29,18 @@ describe("Quick Add", () => {
   it("offers as shapes a rectangle - its corners rounded from its menu - an ellipse and a line", () => {
     expect(rows().shapes).toEqual(["Rectangle", "Ellipse", "Line"]);
   });
+
+  it("its rules and its SMILES field span the row whole: each icon, the gaps between them, the divider", () => {
+    const html = renderToString(
+      <QuickAdd x={10} y={10} within={{ width: 800, height: 600 }} steps={[]} onChoose={none} onChain={none} onArrow={none} onShape={none} onSmiles={async () => {}} onStep={none} onClose={none} />,
+    );
+    const first = html.match(/<div class="flex items-center gap-0.5">(.*?)<div class="mx-1/)?.[1] ?? "";
+    // (36 px an icon, the Calculations one after the divider among them, and 2 the gap before each but the first; 8 + 1 px the divider)
+    const icons = (first.match(/<button/g)?.length ?? 0) + 1;
+    const row = icons * (36 + 2) + 9;
+    expect(html).toMatch(new RegExp(`<form class="[^"]*border-t[^"]*" style="width:${row}px"`));
+    expect(html).toMatch(new RegExp(`aria-label="Shapes" class="[^"]*border-t[^"]*" style="width:${row}px"`));
+  });
 });
 
 describe("what the SMILES field's text will be drawn as", () => {
