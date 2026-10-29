@@ -134,6 +134,14 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(one(false)).not.toContain("1<!-- --> / <!-- -->1");
   });
 
+  it("says a path's frame's energy from the path's start, as its barrier is - never from its lowest, the path's other end", () => {
+    // (a Diels-Alder's path: its start, the point refined 6.75 kcal/mol above it, and cyclohexene 68.03 below it)
+    const kcal = (e: number) => e / 627.509474;
+    const path = [0, kcal(6.75), kcal(-68.03)];
+    expect(renderToString(<FramesChip count={3} frame={1} energies={path} open={false} onFrame={none} fromStart />)).toContain("ΔE 6.75 kcal/mol from its start");
+    expect(renderToString(<FramesChip count={3} frame={1} energies={path} open={false} onFrame={none} />)).toContain("74.8 kcal/mol");
+  });
+
   it("writes a conformer's energy and share by what they round to: 10.0 kcal/mol, not 10.00; >99%, not 100%, beside another", () => {
     const kcal = (e: number) => e / 627.509474;
     const at = (frame: number, energies: number[], populations: number[]) =>

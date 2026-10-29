@@ -8,17 +8,21 @@
 import { isId } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
-import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
+import { ENTRY_SCHEMA, geometryKey, type By, type Property } from "../../../../lib/entry";
+import { factor } from "../../../../lib/units";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
-import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
+import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
-import { withoutCarried, type SetEntry } from "./entries";
+import { setEntries, withoutCarried, type SetEntry } from "./entries";
+import { inputOf, type Flow } from "./flow";
+import { levelKey, levelSaid, pairEntries } from "./pairs";
+import type { OptionValues } from "../../../../lib/options";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
-import type { StepKind } from "./kinds";
+import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
 
 /**
  * An entry as a plugin is given it: Meno's plain data - its atoms, each its
@@ -27,7 +31,7 @@ import type { StepKind } from "./kinds";
  * reads them (lib/io/writers `speciesOf`).
  */
 /** An entry as a plugin is given it: the entry's version (lib/entry `ENTRY_SCHEMA`); its molecule - each isotope's mass with it, in daltons, where Meno knows it - its charge and multiplicity, and its files (docs/PLUGINS.md, *The entry a plugin is given*). */
-export type PluginEntry = Omit<WrittenMolecule, "atoms"> & { schema: number; atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[]; charge: number; multiplicity: number; files?: EntryFile[] };
+export type PluginEntry = Omit<WrittenMolecule, "atoms"> & { schema: number; atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[]; charge: number; multiplicity: number; files?: EntryFile[]; end?: PluginEntry };
 
 /** A file an entry is given besides its geometry (a step's `files`): its kind, by id, its name and its text - the output its molecule was read from. */
 export type EntryFile = { kind: string; name: string; text: string };
@@ -77,7 +81,8 @@ export function pluginEntry(e: SetEntry): PluginEntry {
   // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
   if (!species) throw new Error(skeletonWhy());
   const { charge, multiplicity } = species;
-  return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity };
+  // (the end it is paired with, where it is a pair's start: given as it is, beside it - Path search's)
+  return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity, ...(e.end ? { end: pluginEntry(e.end) } : {}) };
 }
 
 /**
@@ -320,7 +325,7 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
  * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
 /** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
 export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
@@ -378,6 +383,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const last = frames[frames.length - 1];
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
+  if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   return {
     ...anew(entry),
     // (what it came as - its structure drawn - where it still is that compound)
@@ -387,6 +393,52 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
     ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+  };
+}
+
+/** Kilocalories per mole in a hartree (Meno's units table). */
+const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
+
+/**
+ * A path search's pair, as its program worked it out (docs/WORKFLOWS.md,
+ * *Path search*): one molecule, its frames the path in the order the
+ * program gave them - its images, and the highest point it refined where
+ * it put it - each with its energy, its entry the point refined (the run's
+ * one converged geometry). On that point, the barriers each way, worked
+ * out by Meno from the energies printed: its own, less the first frame's
+ * (`path.E-barrier`), and less the last frame's (`path.E-reverse-barrier`), in
+ * kcal/mol, each saying so - electronic, at the path's level, which must be
+ * its ends' (as they were optimised: pairs `unlike`), else that pair fails,
+ * naming both. Meno calls none of it a saddle point: the chemist does, by
+ * its frequencies, where they were worked out.
+ */
+function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
+  const k = out.converged?.length === frames.length ? out.converged.indexOf(true) : -1;
+  if (k < 0 || out.converged!.lastIndexOf(true) !== k) return { kind: "no-geometry", why: "It read back no one point refined on its path" };
+  if (!energies || frames.length < 3 || k === 0 || k === frames.length - 1) return { kind: "no-geometry", why: "It read back no path with energies, its point refined between its ends" };
+  // (a barrier from its start is one only where its start is a minimum at the path's own level)
+  if (!calc.method) return { kind: "failed", why: "It did not say the path's level: whether it is its ends' cannot be told" };
+  if (levelKey(calc) !== levelKey(entry.calc))
+    return { kind: "failed", why: `The path is at ${levelSaid(calc)}, its ends were optimised at ${levelSaid(entry.calc)}: optimise them at the path's level first` };
+  const at = { geometry: geometryKey(frames[k]) };
+  const by = (treatment: string): By => ({ ...(calc.program ? { program: calc.program } : {}), ...(calc.method ? { method: calc.method } : {}), treatment });
+  const barrier = (e: number, treatment: string): Property => ({ value: (energies[k] - e) * KCAL_PER_HARTREE, unit: "kcal/mol", at, by: by(treatment), status: "computed" });
+  const was = anew(entry);
+  return {
+    ...was,
+    ...keptAnew(entry, frames[k], calc.charge),
+    xyz: [...frames[k]],
+    energy: energies[k],
+    path: frames.slice(0, k),
+    pathEnergies: energies.slice(0, k),
+    after: frames.slice(k + 1),
+    afterEnergies: energies.slice(k + 1),
+    calc,
+    properties: {
+      ...was.properties,
+      "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),
+      "path.E-reverse-barrier": barrier(energies[energies.length - 1], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's end (its last image)`),
+    },
   };
 }
 
@@ -423,6 +475,27 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
     ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
     calc: k === 0 ? calc : { ...calc, results: undefined },
   }));
+}
+
+/**
+ * What a program step takes as its entries now, from the flow `d`: what
+ * came into its one input (`jobEntries`) - or, for a kind of two inputs
+ * whose program works on pairs (Path search), each start paired with an end
+ * as its options say (workflow/pairs), those that cannot be worked out
+ * refused, with why; or why nothing can be taken. None where nothing comes in.
+ */
+export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
+  const ports = inputsOf(kind);
+  if (kindInfo(kind).runs === "program" && ports.length === 2) {
+    const [start, end] = ports.map((p) => inputOf(d, step, p.id));
+    if (!start || start.holds === "structures") return null;
+    if (!end || end.holds === "structures") return { why: `Nothing comes into ${ports[1].name}` };
+    const paired = pairEntries(setEntries(start.molecules, start.holds), setEntries(end.molecules, end.holds), options.pairs === "each" || options.pairs === "property" ? options.pairs : "order", String(options.property ?? ""));
+    return "why" in paired ? paired : { ...paired, holds: "molecules" };
+  }
+  const input = inputOf(d, step);
+  if (!input || input.holds === "structures") return null;
+  return { entries: jobEntries(kind, setEntries(input.molecules, input.holds), input.holds), holds: input.holds, refused: [] };
 }
 
 /** The entries a step's jobs are prepared for: each that came in - but a conformer search on a conformer set searches each compound once, from its first conformer. */

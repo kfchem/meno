@@ -65,8 +65,7 @@ describe("a program's verdict on imaginary frequencies, from its output to the s
     expect(kept.ok && kept.kept.map((e) => e.number)).toEqual([1]);
   });
 
-  // (enabled once Energy window refuses a saddle point among its conformers, and a Filter reads none judged as 0: #682, #684)
-  it.skip("is refused by Energy window; and a Filter on none keeps the minimum, with its vibrations read or not", () => {
+  it("is refused by Energy window; and a Filter on none keeps the minimum, with its vibrations read or not", () => {
     const conformers = [minimum, saddle].map((e) => ({ ...e, compound: 0 }));
     expect(runMeno("energy-window", conformers, "conformers", { window: 10 })).toMatchObject({ ok: false });
     for (const m of [minimum, through(2, verdictAlone(pyramid as unknown as ReaderOutput))]) {
