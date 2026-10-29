@@ -350,6 +350,13 @@ plugin's xtb (XTB2; PLUGINS.md, `needs`), the one level either way. It
 runs NEB-TS alone (one role to a step, 2026-10-27): the point's frequencies
 are a *Frequencies* step's, wired after it.
 
+- **Its options** (ORCA's plugin; the ORCA 6.1 manual, *Nudged Elastic Band
+  Method*): the method and basis set; *Path*, a band with its highest point
+  refined (NEB-TS), or a band, a finer one about its highest point, that
+  refined (ZOOM-NEB-TS, 4.5.12); *Images between the ends*, ORCA's NImages,
+  8 unless said (4.5.16); and the steps refining its highest point, the
+  `%geom` block's MaxIter (4.5.13), ORCA's own unless said. Each is the
+  chemist's to change on the card.
 - **Pairs.** Each start is paired with an end as the step's *Pairs* says:
   *In order* (the k-th with the k-th; other numbers refused), *Each with
   each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
