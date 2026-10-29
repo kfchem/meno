@@ -33,7 +33,7 @@ function water(): Entry {
 describe("an entry renumbered as the reactants are", () => {
   // (atom 0 now is its oxygen, then its first hydrogen, then its second)
   const order = [1, 0, 2];
-  const e = renumberedEntry(water(), order, "r");
+  const e = renumberedEntry(water(), order, "r") as Entry;
 
   it("holds the same atoms and bonds, in the new order, each where it stood", () => {
     expect(e.structure.atoms.map((a) => a.el)).toEqual(["O", "H", "H"]);
@@ -59,9 +59,9 @@ describe("an entry renumbered as the reactants are", () => {
     expect(e.properties.energy.at?.geometry).not.toBe(water().properties.energy.at?.geometry);
   });
 
-  it("refuses an order that is not each atom once", () => {
-    expect(() => renumberedEntry(water(), [0, 0, 2], "r")).toThrow();
-    expect(() => renumberedEntry(water(), [0, 1], "r")).toThrow();
+  it("refuses an order that is not each atom once, saying so", () => {
+    expect(renumberedEntry(water(), [0, 0, 2], "r")).toEqual({ failed: "The map does not give each of its 3 atoms one place in the reactants' numbering." });
+    expect(renumberedEntry(water(), [0, 1], "r")).toHaveProperty("failed");
   });
 });
 

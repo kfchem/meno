@@ -37,7 +37,7 @@ import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
-import { moleculeOfEntry, reactionRefused, reactionSet } from "../../workflow/structureSteps";
+import { mappable, moleculeOfEntry, reactionRefused, reactionSet } from "../../workflow/structureSteps";
 import { mapProductsOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
@@ -376,7 +376,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const refused = reactionRefused(reactants);
     if (refused) return void fail(id, refused, at, key);
     const every = optionsOf(kindInfo("reaction").options ?? [], step.options).maps === "every";
-    const whole = products.filter((e) => !e.skeleton);
+    const whole = products.filter(mappable);
     const working = (patch: { done: number } | null) =>
       set((prev) => {
         const rest = { ...prev.menoWorking };

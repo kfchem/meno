@@ -21,11 +21,13 @@ import type { Table } from "../table";
 
 /**
  * `e` renumbered: `order[i]` is the atom of `e` that is atom `i` now (from
- * 0), every atom once. Its bonds kept in order of their atoms.
+ * 0), every atom once. Its bonds kept in order of their atoms. Why not,
+ * where `order` is not each of its atoms once.
  */
-export function renumberedEntry(e: Entry, order: readonly number[], id: string): Entry {
+export function renumberedEntry(e: Entry, order: readonly number[], id: string): Entry | { failed: string } {
   const n = e.structure.atoms.length;
-  if (order.length !== n || new Set(order).size !== n || order.some((j) => !(j >= 0 && j < n))) throw new Error(`An order of ${order.length} atoms for ${n}`);
+  if (order.length !== n || new Set(order).size !== n || order.some((j) => !(Number.isInteger(j) && j >= 0 && j < n)))
+    return { failed: `The map does not give each of its ${n} atoms one place in the reactants' numbering.` };
   // (where each of its atoms is now)
   const now = new Array<number>(n);
   order.forEach((j, i) => (now[j] = i));

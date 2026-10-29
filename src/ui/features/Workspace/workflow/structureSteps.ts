@@ -21,7 +21,7 @@ import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/s
 import { bondChangesTable, renumberedEntry } from "../../../../lib/steps/reaction";
 import { mapProducts } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
-import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -298,6 +298,9 @@ export const moleculeOfEntry = (e: SetEntry): Molecule => ({
 /** What the atom mapper made of a Reaction's products (lib/chem/reactionMap `mapProducts`), worked out here or in a worker. */
 export type ProductsMapped = ReturnType<typeof mapProducts>;
 
+/** Whether a Reaction maps a product: finished, its hydrogens there - one not finished never comes out as one that is. */
+export const mappable = (p: SetEntry): boolean => !p.skeleton && entryState(p) === FINISHED;
+
 /**
  * Why a Reaction cannot map what came in at all - not one reactant entry,
  * or one without its hydrogens - or none where it can. Its products are
@@ -314,8 +317,12 @@ export function reactionRefused(reactants: readonly SetEntry[]): string | null {
  * product mapped onto the one reactant entry, atom for atom and hydrogens
  * too, and written in its numbering - by its first map, or by every map -
  * each its own compound, numbered by its map; the bonds each map forms,
- * breaks or changes in the exit *Bond changes*, a table. A product with no
- * hydrogens, or that does not map one to one, is set aside with why.
+ * breaks or changes in the exit *Bond changes*, a table. A product not
+ * finished (failed, or its marks not read), with no hydrogens, or that does
+ * not map one to one, is set aside with why - never passed on as finished.
+ * A product mapped keeps its energy and its imaginary frequencies, of its
+ * geometry however it is numbered; its calculation is not carried, and the
+ * line says so.
  * `mapped`, where the mapping was worked out already (in a worker): of
  * `products` with no hydrogens left out, in order.
  */
@@ -323,29 +330,42 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
   const refused = reactionRefused(reactants);
   if (refused) return { ok: false, said: refused };
   const reactant = reactants[0];
-  const whole = products.filter((p) => !p.skeleton);
+  const whole = products.filter(mappable);
   const out = mapped ?? mapProducts(moleculeOfEntry(reactant), whole.map(moleculeOfEntry), { every: maps === "every" });
   const kept: SetEntry[] = [];
-  const aside: SetEntry[] = products.filter((p) => p.skeleton).map((p) => withSaid(p, SET_ASIDE, "it has no hydrogens: every atom must map, hydrogens included"));
+  const aside: SetEntry[] = products.flatMap((p) =>
+    entryState(p) !== FINISHED
+      ? [withSaid(p, SET_ASIDE, `not finished: ${entryState(p)}`)]
+      : p.skeleton
+        ? [withSaid(p, SET_ASIDE, "it has no hydrogens: every atom must map, hydrogens included")]
+        : [],
+  );
   const counts = new Map<number, number>();
+  const notMapped = [...out.notMapped];
+  const done: typeof out.mapped = [];
   for (const m of out.mapped) {
     const p = whole[m.product];
-    const e = setEntryOfEntry(renumberedEntry(entryOfSet(p, String(m.product)), m.order, `${m.product}:${m.map}`), {
-      compound: m.product,
-      number: (counts.get(m.product) ?? 0) + 1,
-    });
+    const r = renumberedEntry(entryOfSet(p, String(m.product)), m.order, `${m.product}:${m.map}`);
+    if ("failed" in r) {
+      notMapped.push({ product: m.product, map: m.map, reason: r.failed });
+      continue;
+    }
+    const e = setEntryOfEntry(r, { compound: m.product, number: (counts.get(m.product) ?? 0) + 1 });
     if (!e) continue;
+    done.push(m);
     counts.set(m.product, (counts.get(m.product) ?? 0) + 1);
-    kept.push(e);
+    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried; its calculation not)
+    kept.push({ ...e, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) });
   }
   // (a product of which no map went through, aside with why - each map's that did not, said on it)
   const why = new Map<number, string[]>();
-  for (const n of out.notMapped) why.set(n.product, [...(why.get(n.product) ?? []), n.map != null ? `map ${n.map + 1}: ${n.reason}` : n.reason]);
+  for (const n of notMapped) why.set(n.product, [...(why.get(n.product) ?? []), n.map != null ? `map ${n.map + 1}: ${n.reason}` : n.reason]);
   whole.forEach((p, k) => {
     if (!counts.has(k) && why.has(k)) aside.push(withSaid(p, SET_ASIDE, why.get(k)!.join(" ")));
   });
-  const changes = bondChangesTable(out.mapped, (k) => whole[k].name ?? named(whole[k]));
+  const changes = bondChangesTable(done, (k) => whole[k].name ?? named(whole[k]));
   const line = [`${plural(counts.size, "product")} in the reactants' numbering${maps === "every" ? `, ${plural(kept.length, "map")}` : ""}`, `${plural(changes.rows.length, "bond change")}`];
   if (aside.length) line.push(`${aside.length} not mapped`);
+  if (done.some((m) => whole[m.product].calc)) line.push("calculations not carried");
   return { ok: true, holds: "molecules", kept, aside, said: line.join(" \u00b7 "), tables: { changes } };
 }

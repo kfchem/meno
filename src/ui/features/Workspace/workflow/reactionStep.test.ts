@@ -63,6 +63,17 @@ describe("Reaction, as a step", () => {
     ]);
   });
 
+  it("never passes on a product not finished as one that is; a finished one keeps its energy and imaginary frequencies, its calculation said not carried", () => {
+    const unfinished = { ...product, energy: -5.5, failed: { kind: "not-converged", why: "100 cycles" } } as SetEntry;
+    const o = ok(runMenoPair("reaction", { entries: [reactant], holds: "molecules" }, { entries: [unfinished], holds: "molecules" }));
+    expect(o.kept).toEqual([]);
+    expect(o.aside.map((e) => [String(e.properties?.set_aside?.value), e.energy])).toEqual([["not finished: not converged", -5.5]]);
+    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { program: "xtb", readers: ["xtb 1"] } } as unknown as SetEntry;
+    const f = ok(runMenoPair("reaction", { entries: [reactant], holds: "molecules" }, { entries: [finished], holds: "molecules" }));
+    expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([-5.5, [-412.3], undefined]);
+    expect(f.said).toBe("1 product in the reactants' numbering \u00b7 6 bond changes \u00b7 calculations not carried");
+  });
+
   it("is laid out on the page: the mapped products, those not mapped, and the bond changes, a table, in their exits' sets", () => {
     const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
     const mol = (m: Molecule, x: number) => ({ at: { x, y: 0 }, atoms: m.atoms, bonds: m.bonds });
