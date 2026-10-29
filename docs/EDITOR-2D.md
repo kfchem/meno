@@ -932,6 +932,13 @@ All hover-based, as above.
     that it is checked by its bonds to the rest, none or the one it has as
     usual. One with two bonds to carbons is marked still, metal or not
     (chem/marks `bridgesMetals`).
+  - **An atom a dative bond is drawn into** - BH3 in H3N→BH3, AlCl3
+    taking an ether's O - is not marked for it: the pair is the donor's,
+    so the bond takes none of the acceptor's valence, as Meno counts its
+    hydrogens. It is checked by its bonds to the rest; a coordination bond
+    drawn as a plain line counts alike, from the atom it was drawn from.
+    One with too many bonds besides is marked still (chem/marks
+    `takesArrows`).
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
