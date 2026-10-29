@@ -176,6 +176,12 @@ public static class NativeGui {
 # Before any window is measured or any pixel read.
 [NativeGui]::BeDpiAware()
 
+# (a question about the network is answered by the person at the computer,
+# never by a run: MenoConsent.psm1 decides, from what UI Automation names
+# the part a press lands on, or the part that has the keys)
+Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1") -Force
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
+
 $script:Window = [IntPtr]::Zero
 
 function Get-MenoBuild {
@@ -381,8 +387,38 @@ function Invoke-MenoClick {
     try { Invoke-WinClick $X $Y $Count $Right } finally { [NativeGui]::Hold($keys, $true) }
 }
 
+function Get-UiaChain($Element) {
+    # A part as UI Automation names it, and what it sits in: "role<TAB>name" each, itself first, a few levels up.
+    $links = @()
+    $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+    $e = $Element
+    for ($i = 0; $i -lt 6 -and $e; $i++) {
+        $role = $e.Current.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+        $links += "$role`t$($e.Current.Name -replace "`t", ' ')"
+        $e = $walker.GetParent($e)
+    }
+    return , $links
+}
+
+function Assert-NotYesAt {
+    # A press at a point, in screen pixels, that would answer a question about the network yes, stopped before it is sent.
+    param([Parameter(Mandatory)] $At, [string] $What = "a press")
+    $el = try { [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y)) } catch { $null }
+    $chain = if ($el) { Get-UiaChain $el } else { @() }
+    Assert-NotNetworkYes -Chain $chain -What "$What at ($($At.X), $($At.Y)) px"
+}
+
+function Assert-NotYesKeys {
+    # Keys sent while a question about the network has its yes in focus, stopped before they are sent.
+    param([Parameter(Mandatory)] [string] $What)
+    $el = try { [System.Windows.Automation.AutomationElement]::FocusedElement } catch { $null }
+    $chain = if ($el) { Get-UiaChain $el } else { @() }
+    Assert-NotNetworkYes -Chain $chain -What $What
+}
+
 function Invoke-WinClick([int] $X, [int] $Y, [int] $Count, [bool] $Right) {
     $p = ConvertTo-Screen $X $Y
+    Assert-NotYesAt -At $p -What "a click"
     if ($Right) {
         [NativeGui]::RightDown($p.X, $p.Y)
         Start-Sleep -Milliseconds 30
@@ -455,6 +491,9 @@ function Get-DragPath {
 
 function Invoke-WinDrag([int] $FromX, [int] $FromY, [int] $ToX, [int] $ToY, $path, [int] $StepMs, [int] $PressMs, [scriptblock] $AtStep, [bool] $Right) {
     $a = ConvertTo-Screen $FromX $FromY
+    # (where the button goes down and where it comes up)
+    Assert-NotYesAt -At $a -What "a drag's press"
+    Assert-NotYesAt -At (ConvertTo-Screen $ToX $ToY) -What "a drag's end"
     [NativeGui]::MoveTo($a.X, $a.Y)
     Start-Sleep -Milliseconds 80
     if ($Right) { [NativeGui]::RightDown($a.X, $a.Y) } else { [NativeGui]::LeftDown($a.X, $a.Y) }
@@ -535,6 +574,7 @@ function Invoke-MenoWheel {
 
 function Send-MenoText {
     param([Parameter(Mandatory)] [string] $Text, [int] $CharMs = 8)
+    Assert-NotYesKeys -What "typing"
     foreach ($c in $Text.ToCharArray()) {
         [NativeGui]::TypeChar($c)
         Start-Sleep -Milliseconds $CharMs
@@ -543,6 +583,8 @@ function Send-MenoText {
 
 function Send-MenoKey {
     param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace")] [string] $Key, [switch] $Shift)
+    # (Escape answers a question no: always let through)
+    if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
     $vk = @{ Enter = 0x0D; Escape = 0x1B; Tab = 0x09; Backspace = 0x08 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [NativeGui]::Chord([uint16[]] @(0x10), [uint16] $vk) }
@@ -557,6 +599,7 @@ function Send-MenoShortcut {
       or a digit, and Shift if asked: Send-MenoShortcut Z is undo.
     #>
     param([Parameter(Mandatory)] [ValidatePattern("^[A-Za-z0-9]$")] [string] $Key, [switch] $Shift)
+    Assert-NotYesKeys -What "a shortcut"
     $mods = @([uint16] 0x11)                  # VK_CONTROL
     if ($Shift) { $mods += [uint16] 0x10 }    # VK_SHIFT
     # A letter's or digit's virtual key is its upper-case ASCII code.

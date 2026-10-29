@@ -87,6 +87,21 @@ recording dot, the pointer - no larger than 64x64 pt, are no such window. The tw
 of their own, run by hand on a Mac with no app started:
 `pwsh -NoProfile -File scripts/gui/tests/guard.tests.ps1`.
 
+A question Meno asks before it uses the network - "Download RDKit?", "Keep
+Meno up to date?" (`src/ui/network/ConsentDialog.tsx`) - is answered by the
+person at the computer, never by a run, on either desktop. Every such
+question has one yes, *Allow and download*. A click or a drag whose press
+or release would land on it, or a key, a shortcut or typing sent while it
+has the focus, stops the run before anything is sent; Escape, which answers
+no, always goes. The platform module reads the part at the point, or the
+one with the focus, and what it sits in (`[MacGui]::ChainAt` and
+`FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
+on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`.
+`MENO_GUI_ANSWER_NETWORK_YES=1`, set by hand for one run, lets such input
+through, saying so; nothing in the repository sets it, and
+`tests/consent.tests.ps1` checks that, with what is taken for the yes:
+`pwsh -NoProfile -File scripts/gui/tests/consent.tests.ps1`.
+
 macOS will not let a process capture another app's window or post input until
 it has **Screen & System Audio Recording** and **Accessibility**, both in
 System Settings > Privacy & Security. They are granted not to `pwsh` but to
