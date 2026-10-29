@@ -491,18 +491,32 @@ class SquarePlanarOrNot(unittest.TestCase):
             out.append((shares, angles[-2:]))
         return out
 
+    def read(self, smiles):
+        """A molecule as the worker reads one: from a MOL block (read: a donor drawn with charges, as [C-]#[O+], made
+        a dative bond)."""
+        return self.worker.read(Chem.MolToMolBlock(self.mol(smiles), kekulize=False))
+
     def test_counts_a_metals_d_electrons_by_its_donors(self):
-        d = lambda smiles: self.worker.d_electrons(self.mol(smiles), next(a for a in self.mol(smiles).GetAtoms() if self.worker.is_metal(a)))
+        def d(smiles):
+            mol = self.read(smiles)
+            return self.worker.d_electrons(mol, next(a for a in mol.GetAtoms() if self.worker.is_metal(a)))
         self.assertEqual(d(self.PDCL2_PPH3_2), 8)
         self.assertEqual(d(self.PD_PPH3_4), 10)
-        # (the dative bonds drawn as charges: the same count)
+        # (the dative bonds drawn as charges: the same count - a CO as [C-]#[O+], read as a dative bond, neutral)
         self.assertEqual(d("Cl[Pd-2](Cl)([P+](C)(C)C)[P+](C)(C)C"), 8)
         self.assertEqual(d("[Ni]([C-]#[O+])([C-]#[O+])([C-]#[O+])[C-]#[O+]"), 10)
         self.assertEqual(d(self.PALLADACYCLE), 8)
         # (an ammine drawn as N, given a hydrogen short by RDKit's valence, reads as an amide - so cisplatin is no d10
         #  the count is sure of, and stays square planar)
-        self.assertEqual(self.worker.tetrahedral(self.mol("N[Pt](N)(Cl)Cl")), set())
-        self.assertEqual(self.worker.tetrahedral(self.mol(self.PD_PPH3_4)), {0})
+        self.assertEqual(self.worker.tetrahedral(self.read("N[Pt](N)(Cl)Cl")), set())
+        self.assertEqual(self.worker.tetrahedral(self.read(self.PD_PPH3_4)), {0})
+        self.assertEqual(self.worker.tetrahedral(self.read("[Ni]([C-]#[O+])([C-]#[O+])([C-]#[O+])[C-]#[O+]")), {0})
+
+    def test_lies_nickel_tetracarbonyls_four_tetrahedral(self):
+        # (Ni(CO)4, Ni(0), drawn with its CO as [C-]#[O+]: tetrahedral through the worker's own reading)
+        entry = self.made("[Ni]([C-]#[O+])([C-]#[O+])([C-]#[O+])[C-]#[O+]", 5)
+        for _, widest in self.shapes(entry):
+            self.assertLess(max(widest), 140)
 
     def test_lies_a_d10_palladiums_four_phosphines_tetrahedral(self):
         entry = self.made(self.PD_PPH3_4, 20)

@@ -612,7 +612,16 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     valence that no chemist drew. Only a d10 count the donors are sure of
     takes a metal out of square planar: an ammine drawn as N, given a
     hydrogen short, or a CO drawn with no charges, reads as anionic, and its
-    metal stays as it was.
+    metal stays as it was. A bond the drawing makes dative - a CO drawn
+    [C-]#[O+], which the worker reads as one - is a neutral donor's,
+    whatever its charge: Ni(CO)4 drawn so is Ni(0), tetrahedral.
+  - **What it does not do.** Square planar is UFF's typing and the d8
+    count's, not the ligands': NiCl2(PPh3)2, Ni(II) d8 but tetrahedral in
+    its crystal structures (weak-field ligands), is embedded square planar
+    as before - the count knows no ligand field. And only a structure with
+    one square-planar metal is embedded so: with two or more (a
+    chloride-bridged dimer, [PdCl2(PR3)]2), its metals are held square
+    planar while UFF optimises alone, as before.
   - **A metal's bonds held, where its ring would not let them be held so
     tightly.** Each metal bond is embedded within 0.05 Å of its covalent
     length - or, where that and RDKit's own bounds for the rest of the

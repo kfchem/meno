@@ -1470,7 +1470,9 @@ def d_electrons(mol, metal):
         return None
     ox = metal.GetFormalCharge()
     for x in near:
-        c = donor_charge(x, mol.GetBondBetweenAtoms(metal.GetIdx(), x.GetIdx()).GetBondTypeAsDouble())
+        bond = mol.GetBondBetweenAtoms(metal.GetIdx(), x.GetIdx())
+        # (a dative bond is a neutral donor's, whatever its charge says: as read() reads a CO drawn [C-]#[O+] on Ni)
+        c = 0 if bond.GetBondType() == Chem.BondType.DATIVE else donor_charge(x, bond.GetBondTypeAsDouble())
         if c is None:
             return None
         ox += c
