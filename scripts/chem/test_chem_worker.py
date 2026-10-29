@@ -264,6 +264,16 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(odd["field"], "MMFF94")
         self.assertIn("at most 10 steps", {r["label"]: r["text"] for r in odd["how"]}["Optimised"])
 
+    def test_makes_as_many_conformers_as_asked_and_refuses_more_than_it_takes(self):
+        propanol = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("C", 2.6, 0), ("O", 3.9, 0.75)], [(0, 1, 1, None), (1, 2, 1, None), (2, 3, 1, None)])
+        # (more than the 500 a number was once cut to, unsaid: as many as asked)
+        made = ask("conformers", molblock=propanol, options={"sought": "fixed", "count": 600})["result"]["isomers"][0]
+        self.assertRegex({r["label"]: r["text"] for r in made["how"]}["Kept"], r"^\d+ of 600 embedded \(600 sought\)")
+        most = worker.MOST_CONFORMERS
+        said = ask("conformers", molblock=propanol, options={"sought": "fixed", "count": most + 1})
+        self.assertFalse(said["ok"])
+        self.assertEqual(said["error"], f"How many conformers is {most + 1}: it takes a whole number from 1 to {most}")
+
     def test_makes_conformers_keeping_the_atoms_and_the_drawn_wedge(self):
         made = ask("conformers", molblock=PCPA, count=8)["result"]["isomers"]
         self.assertEqual(len(made), 1)
