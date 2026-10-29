@@ -10,7 +10,7 @@ import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
-import { resolve, type Reading } from "./chem/resolve";
+import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
@@ -510,7 +510,8 @@ function SmilesField({
 /**
  * What the SMILES field's text will be drawn as, under it: each reading -
  * the SMILES, the dictionary's molecule by its name (or its label) - with
- * its formula, the one chosen in Meno's colour; a click chooses another.
+ * its formula (once, where the label is the formula), the one chosen in
+ * Meno's colour; a click chooses another.
  */
 export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Reading[]; chosen: Reading | undefined; onChoose: (i: number) => void }) {
   return (
@@ -527,8 +528,13 @@ export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Readin
           className={`h-6 max-w-full truncate rounded-full border px-2 text-[11px] leading-6 transition-colors duration-150 ease-meno ${r === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
         >
           {r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : <FormulaText text={r.as === "label" ? r.label : r.formula} />}
-          {" \u00b7 "}
-          <FormulaText text={r.formula} />
+          {/* (a label that is its formula, PdCl2, is said once) */}
+          {!(r.as === "label" && !r.name && sameFormula(r.label, r.formula)) && (
+            <>
+              {" \u00b7 "}
+              <FormulaText text={r.formula} />
+            </>
+          )}
         </button>
       ))}
     </div>

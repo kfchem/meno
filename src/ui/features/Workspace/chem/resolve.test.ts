@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolve, type Reading, type Where } from "./resolve";
+import { resolve, sameFormula, type Reading, type Where } from "./resolve";
 
 /** A reading as the table says it: how it reads, and as what - its label (or element) and formula. */
 function said(r: Reading): string {
@@ -76,5 +76,16 @@ describe("a typed string read where it is typed", () => {
 
   it("an empty string reads as nothing, and says no problem", () => {
     expect(resolve("  ", "molecule")).toEqual({ readings: [] });
+  });
+});
+
+describe("two formulas the same", () => {
+  it("the same atoms in any order, never a label or a charge", () => {
+    expect(sameFormula("PdCl2", "Cl2Pd")).toBe(true);
+    expect(sameFormula("CuI", "CuI")).toBe(true);
+    expect(sameFormula("PdCl2", "ClPd")).toBe(false);
+    expect(sameFormula("CH3Cl", "CH4Cl")).toBe(false);
+    expect(sameFormula("Et3N", "C6H15N")).toBe(false);
+    expect(sameFormula("NH4+", "H4N+")).toBe(false);
   });
 });

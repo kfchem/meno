@@ -52,4 +52,10 @@ describe("what the SMILES field's text will be drawn as", () => {
     expect(html).toMatch(/font-size:0.75em[^>]*>3</);
     expect(html).not.toMatch(/[\u2080-\u2089]/);
   });
+
+  it("a label that is its formula said once (PdCl2), one that is not with its formula (Et3N)", () => {
+    const words = (html: string) => html.replace(/<[^>]+>/g, "").replace(/<!-- -->/g, "");
+    expect(words(drawAs("pdcl2"))).toBe("PdCl2");
+    expect(words(drawAs("Et3N"))).toBe("Et3N \u00b7 C6H15N");
+  });
 });

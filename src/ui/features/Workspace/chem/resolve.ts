@@ -162,3 +162,18 @@ function smilesMolecule(text: string): GroupStructure | null {
     attach: [],
   };
 }
+
+/**
+ * Whether two plain formulas hold the same atoms, in any order: PdCl2 and
+ * Cl2Pd. Anything else - a group's label (Et3N), a charge - is not one.
+ */
+export function sameFormula(a: string, b: string): boolean {
+  const counts = (f: string) => {
+    if (!/^([A-Z][a-z]?\d*)+$/.test(f)) return null;
+    const by = new Map<string, number>();
+    for (const [, el, n] of f.matchAll(/([A-Z][a-z]?)(\d*)/g)) by.set(el, (by.get(el) ?? 0) + (n ? Number(n) : 1));
+    return by;
+  };
+  const x = counts(a), y = counts(b);
+  return x != null && y != null && x.size === y.size && [...x].every(([el, n]) => y.get(el) === n);
+}
