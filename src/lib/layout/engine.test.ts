@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
-import { layout2D, roomForHydrogens, scorer } from "./engine";
+import { layout2D, measureLaidOut, roomForHydrogens, scorer } from "./engine";
+import { misreadCentres, turnedDoubleBonds } from "./readBack";
 import { macrocycleShape } from "./macrocycle";
 import { hydrogenSpot, LABEL_VERTEX, labelsCrowding, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
@@ -1229,4 +1230,115 @@ describe("a macrocycle's groups", () => {
     expect(end).toBeGreaterThanOrEqual(0);
     expect(insidePolygon({ x: out.x[end], y: out.y[end] }, polygon)).toBe(false);
   }, 60_000);
+});
+
+describe("a macrocycle bridged across a small ring", () => {
+  // (a tetrahydropyran bridged 2,5 by chains of 7 to 9 atoms, and 3,5 by
+  // one; a cyclohexane bridged 1,4; [8]paracyclophane; one with stereo)
+  const family = [
+    "C1CCCCC2CCC(CO2)CCCCCCCC1",
+    "C1CCCCCC2CCC(CO2)CCCCCCCC1",
+    "C1CCCCC2CCC(CO2)CCCCCCC1",
+    "C1CCCC2CCC(CO2)CCCCCCC1",
+    "C1CCCCC2CCC(CC2)CCCCCCCC1",
+    "C1CCCCCCC2=CC=C(C=C2)CCCCCC1",
+    "C1CCCCC[C@H]2CC[C@@H](CO2)CCCCCCCC1",
+  ];
+
+  it("is drawn with no atom on another or on a bond, no bonds crossing - the small ring regular, the macrocycle round it taking the strain (GR-3.3.4)", () => {
+    for (const smiles of family) {
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      const m = measureLaidOut(input, out);
+      expect([m.overlaps, m.clashes, m.crossings], smiles).toEqual([0, 0, 0]);
+      // (the six-membered ring a regular hexagon: each atom a bond from its middle)
+      const six = perceive(input).rings.find((r) => r.length === 6)!;
+      const c = { x: six.reduce((t, a) => t + out.x[a], 0) / 6, y: six.reduce((t, a) => t + out.y[a], 0) / 6 };
+      for (const a of six) expect(dist({ x: out.x[a], y: out.y[a] }, c), smiles).toBeCloseTo(1, 1);
+    }
+  }, measured(2_000));
+
+  it("never reads as another molecule for fewer faults: a cyclotetradecadienone's double bonds as given, each way round", () => {
+    // (the dienone with its first C=C cis and its second trans was drawn
+    // with the cis one trans - a shape of the ring with no fault chosen over
+    // the one that read as the molecule - found in review)
+    for (const smiles of [
+      "O=C1/C=C\\C=C/CCCCCCCCC1",
+      "O=C1/C=C\\C=C\\CCCCCCCCC1",
+      "O=C1/C=C/C=C/CCCCCCCCC1",
+      "O=C1/C=C/C=C\\CCCCCCCCC1",
+      "O=C1\\C=C/C=C\\CCCCCCCCC1",
+    ]) {
+      const input = fromSmiles(smiles);
+      expect(turnedDoubleBonds(input, layout2D(input)), smiles).toEqual([]);
+    }
+  }, measured(2_000));
+
+  it("never loses a centre or turns a double bond for fewer faults or a tidier ring: cases found in review, each read back as given", () => {
+    for (const smiles of [
+      // (two macrocycles' cis C=C, once drawn trans for a shape with no fault)
+      "CO[C@H]1CCOC/C=C\\CCC/C=C\\C(=O)C1",
+      "C/C1=C/CN[C@H](CO)CCOC/C=C\\COC1",
+      // (two small bridged systems, a 3-oxa-8-azabicyclo[3.2.1]octane, whose centre with depth was once lost)
+      "Fc1ccc(N2[C@@H]3COC[C@H]2C[C@H](OCCN2CCOCC2)C3)cc1",
+      "CCc1cc2c(cc1/C=C\\N1[C@@H]3COC[C@H]1C[C@H](N)C3)OCCO2",
+    ]) {
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      expect([...turnedDoubleBonds(input, out), ...misreadCentres(input, out)], smiles).toEqual([]);
+    }
+    // (a macrocycle through three benzene rings whose centre was once lost
+    // for a benzene's bond drawn true: every centre shown, no double bond
+    // outside a ring turned)
+    const ring = "CO[C@H]1[C@H](C)[C@H](O)[C@@H](O)C#CC(=O)N[C@@H](C)c2ccc(cc2)CN(C)[C@H](C)Cc2ccc(cc2)Oc2ccc(cc2)C[C@H](O)[C@@H](O)[C@H]1N1CCN(C)CC1";
+    const input = fromSmiles(ring);
+    const out = layout2D(input);
+    expect(misreadCentres(input, out)).toEqual([]);
+    expect(turnedDoubleBonds(input, out).filter((t) => !/ in a \d+-membered ring/.test(t))).toEqual([]);
+  }, measured(4_000));
+
+  it("reads back as the molecule given: its centres as given, none turned by a chain laid over them", () => {
+    for (const smiles of family) {
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      expect([...turnedDoubleBonds(input, out), ...misreadCentres(input, out)], smiles).toEqual([]);
+    }
+  }, measured(2_000));
+});
+
+describe("a piece drawn as its own mirror image, with no ring that lies square", () => {
+  // (the angle of the bond from a to b, in degrees, 0 to 180)
+  const lineOf = (x: readonly number[], y: readonly number[], a: number, b: number) =>
+    ((((Math.atan2(y[b] - y[a], x[b] - x[a]) * 180) / Math.PI) % 180) + 180) % 180;
+
+  it("is set with its mirror upright or level - N-bromosuccinimide's N-Br upright, its two C=O alike - never tilted to bring one C=O onto the lattice", () => {
+    for (const smiles of ["O=C1CCC(=O)N1Br", "O=C1C=CC(=O)N1C", "O=C1CCC(=O)N1"]) {
+      const input = fromSmiles(smiles);
+      const { x, y } = layout2D(input);
+      // (its N, and the two carbonyl C's either side of it)
+      const n = input.atoms.findIndex((a) => a.el === "N");
+      const [c1, c2] = input.bonds
+        .filter((b) => b.a === n || b.b === n)
+        .map((b) => (b.a === n ? b.b : b.a))
+        .filter((c) => input.atoms[c].el === "C" && input.bonds.some((b) => (b.a === c || b.b === c) && b.order === 2));
+      // the mirror runs through N and the middle of the C-C bond across the ring from it
+      const across = input.bonds.find((b) => b.a !== c1 && b.b !== c1 && b.a !== c2 && b.b !== c2 && input.atoms[b.a].el === "C" && input.atoms[b.b].el === "C")!;
+      const mx = (x[across.a] + x[across.b]) / 2;
+      const my = (y[across.a] + y[across.b]) / 2;
+      const mirror = ((((Math.atan2(y[n] - my, x[n] - mx) * 180) / Math.PI) % 180) + 180) % 180;
+      expect(Math.min(mirror % 90, 90 - (mirror % 90)), smiles).toBeLessThan(0.5);
+      // and the two C=O alike either side of it
+      const o1 = input.bonds.find((b) => (b.a === c1 || b.b === c1) && b.order === 2)!;
+      const o2 = input.bonds.find((b) => (b.a === c2 || b.b === c2) && b.order === 2)!;
+      const t1 = lineOf(x, y, c1, o1.a === c1 ? o1.b : o1.a);
+      const t2 = lineOf(x, y, c2, o2.a === c2 ? o2.b : o2.a);
+      expect(Math.abs(((t1 + t2) % 180) - (2 * mirror) % 180) % 180, smiles).toBeLessThan(0.5);
+    }
+  });
+
+  it("is still turned the little way that brings its bonds nearest the lattice where it has no mirror", () => {
+    // (methylcyclopentane: its one bond out of the ring level, as before)
+    const { x, y } = layout2D(fromSmiles("CC1CCCC1"));
+    expect(Math.min(lineOf(x, y, 0, 1), 180 - lineOf(x, y, 0, 1))).toBeLessThan(0.5);
+  });
 });

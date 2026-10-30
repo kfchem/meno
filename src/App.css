@@ -185,6 +185,14 @@ body {
   animation: meno-fade-in 160ms var(--ease-meno) 220ms both;
 }
 
+/* The layer the page's HTML goes in (Workspace/components/coverLayer): clipped, so that it is no box that can be
+   scrolled - by a focus, a scrollIntoView, a selection - and what is in it stays where the canvas places it. Hidden
+   first, for a WebView without clip; Meno's own (macOS 13 and later, WebView2) all have it. */
+.meno-page-html-layer {
+  overflow: hidden;
+  overflow: clip;
+}
+
 /* A chip on the page - a molecule's frames chip, a measurement's value -
    grows and shrinks with the page, as its cards and sets do: drawn at the
    page's scale, `--page` (components/PageScale), from where it hangs; and

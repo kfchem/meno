@@ -244,6 +244,7 @@ Property
   by          the step and run that gave it; the plugin and version; the
               program, method and basis, or the model and its version;
               for a thermal quantity, the treatment of its vibrations
+              and the symmetry it took (point group, symmetry number)
   status      computed, failed (why), or not applicable (why)
 ```
 
@@ -262,8 +263,16 @@ reading's own id, the one name every plugin that reads it gives it:
   (`thermo.pressure`, atm) the program said it used - none where it said
   none, never one assumed - and in its solvation; by what worked it out,
   with the treatment of its vibrations as the program said it
-  (`thermo.treatment`). A reading that is not an energy in hartrees is
-  not taken;
+  (`thermo.treatment`), and the symmetry it took as the program printed
+  it: `by.pointGroup` and `by.symmetryNumber`, the rotational symmetry
+  number its rotational entropy counts (`thermo.point-group`,
+  `thermo.symmetry-number`; 2026-10-30). A G is worked out with its own
+  sigma, so its sigma is on it: wherever the value goes - carried by a
+  later step, copied as a part of a sum - its symmetry goes with it, one
+  source. None printed, none said, never one assumed. Being the
+  molecule's, not a way of working out, it never keeps two values apart
+  as program or treatment do: two molecules' differ by right. A reading
+  that is not an energy in hartrees is not taken;
 - `vibrations`, a table of each vibration's frequency (`FREQUENCY`, cm-1,
   an imaginary one negative) in the program's order, from the list whose
   column is a wavenumber; and `modes`, in the same order, where every
@@ -287,10 +296,12 @@ its entry):
   as the programs print it;
 - **modes** are as the program gave them, in the vibrations table's row
   order; no step relies on how they are scaled;
-- **a restraint** is a distance between two atoms (Å), a dihedral of four
-  (°), or atoms fixed; atoms by their number from 0, as a bond's; a
-  strength relative to 1, which each plugin turns into its own force
-  constant and states in PLUGINS.md;
+- **a restraint** is a distance between two atoms (Å), held by
+  E = k d²/2 with k in kcal mol⁻¹ Å⁻²; a dihedral of four (°), held by
+  E = k φ²/2, φ in radians the shorter way round, with k in
+  kcal mol⁻¹ rad⁻²; or atoms fixed, with neither value nor strength. Atoms are by their number from 0, as a
+  bond's. Every plugin that takes restraints holds them by these energies,
+  or refuses them in words (PLUGINS.md);
 - **a coordination bond** is marked so, from a drawing or a reader that
   knows it, so that a restraint keeps it as one.
 
@@ -582,12 +593,16 @@ way:
 Charge and multiplicity are each entry's *species*, not options. A *Species*
 node sets them where the atoms do not say it.
 
-**Restraints are a table**, made by the *Restraints* node, wired into the
-steps whose plugins apply them. Each row is one restraint:
-- distance, angle, torsion, or fixed atom;
+**Restraints are a property** (`restraints`), made by the *Restraints* and
+*Torsion restraints* nodes, riding with each entry to the steps whose
+plugins apply them. Each row is one restraint:
+- distance, torsion, or fixed atoms;
 - the atoms, in the entry's numbering;
 - the target, with its unit;
-- the force constant.
+- the force constant, with its unit.
+
+A label, not a value of a geometry: it names none, and rides through
+*Re-bond* from the bonding entry (docs/STRUCTURE-STEPS.md).
 
 ### Meno's own nodes
 
@@ -629,11 +644,12 @@ of highest weight stands for it, carrying the results.
 | **Species** | molecules | the same, charge and multiplicity set |
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
 | **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
-| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
+| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
 | **Reaction** | *reactants* (one entry, 3D, every hydrogen present; a complex is made first by *Combine*) and *products* (3D, every hydrogen present) | *mapped products*: each product a complete 3D structure in the reactants' numbering, every atom mapped one to one, hydrogens included (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
-| **Restraints** | molecules (the reference), and a table of atoms where wanted | a table of restraints: listed atoms or coordination bonds kept at a distance; double bonds' cis or trans kept as in the reference; listed atoms fixed |
+| **Restraints** | molecules | the same, each with its restraints from itself: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
+| **Torsion restraints** | molecules, 3D, and *reference* (molecules) | *restrained*: each torsion trans across the reference's double bonds and not trans here held at 180°, stronger by a step each time; *trans already*: the rest, as they came |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
 | **Displace** | molecules with vibrations | the same, the geometry moved along a vibration (the imaginary one, or a chosen one) by an amplitude |
@@ -1215,8 +1231,9 @@ one complex by *Combine*); set **P** holds the products drawn.
 **F2. Conformers of each species** (step 1, first part)
 2. **Merge** (Meno): R and P′ into S (*a*, *b*, *c*). **Tag** (Meno): S's
    entries with *species*, which their conformers carry from here.
-3. **Restraints** (Meno): from S, coordination bonds kept at 0.9 of the van
-   der Waals distance, giving T1 [`lewis_distance_scaling`].
+3. **Restraints** (Meno): on S, coordination bonds kept at 0.9 of the van
+   der Waals distance at a strength the workflow sets, giving T1
+   [`lewis_distance_scaling`, `lewis_force_constant`].
 4. **Conformers** (a plugin) on S, with T1 where the plugin takes
    restraints. Each conformer's group is its species [100; ConfoTS uses a
    force-field search of 10,000 steps].
@@ -1238,19 +1255,26 @@ one complex by *Combine*); set **P** holds the products drawn.
     second *Re-bond* (*geometry* PC, *bonding* R) and the same chain after
     it, merged before F4. ConfoTS chooses the direction from the conformer
     counts [`path_flag`]; here it is wired.
-12. **Restraints** (Meno): from P′, coordination bonds and the double bonds'
-    cis or trans, giving T2.
-13. **Minimise with restraints** (a force-field plugin): E with T2.
-14. **Compare bonding** (Meno) against P′, matched on *product*, E or Z only.
-    *same* goes on.
-15. **Its *different*, again, drawn:** **Restraints** with the torsions 50
-    units stronger, **Minimise with restraints**, **Compare bonding**, and a
-    **Merge** with 14's *same*. Pasted once more for each further attempt
-    [`max_cycle_of_force_mini`; the showcase used three rounds,
+12. **Restraints** (Meno): on P′, its coordination bonds as in step 3. They
+    ride through *Re-bond* onto E, which takes the bonding entry's
+    restraints.
+13. **Minimise with restraints** (a force-field plugin): E, its coordination
+    bonds held, no torsions yet.
+14. **Torsion restraints** (Meno) against P′, matched on *product*: each
+    torsion trans across P′'s double bonds (hydrogens' included) and not
+    trans after the minimisation is held at 180°, at the step the workflow
+    sets. *Trans already* goes on [ConfoTS's trans-torsion check].
+15. **Its *restrained*, again, drawn:** **Minimise with restraints** from
+    the geometry the first minimisation started from, then **Torsion
+    restraints**, each torsion still not trans a step stronger (a
+    torsion held once stays held), and a **Merge** with 14's *trans
+    already*. Pasted once more for each further attempt; the last
+    attempt's *restrained* goes on too, as ConfoTS passes it on
+    [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
-17. **Compare bonding** (Meno) against P′, on *product*, with R or S and E or Z:
-    *same* [`check_chirality`].
+17. **Compare bonding** (Meno) against P′, on *product*, with R or S, E or Z
+    and every centre by its atoms' numbers: *same* [`check_chirality`].
 
 **F4. Paths and saddle points at the semiempirical level**
 18. **Path search** (ORCA plugin: NEB with GFN2-xTB, 8 images). *start* is RC
@@ -1265,7 +1289,8 @@ one complex by *Combine*); set **P** holds the products drawn.
 24. **Follow the reaction path** (ORCA plugin, IRC with xTB) [125_F, 125_B].
 25. **Take frames** twice (Meno): the first, and the last.
 26. **Compare bonding** twice (Meno): each end against S, naming the
-    species it matches (*a*, *b*, *c* or none) [128].
+    species it matches (*a*, *b*, *c* or none), with every centre by its
+    atoms' numbers [128; `check_irc_chirality`].
 27. **Join** (Meno) on *path*: both names put back on the saddle points as
     *first end* and *last end*.
 28. **Filter** (Meno): one end is *a* and the other the product the saddle
@@ -1329,7 +1354,7 @@ one complex by *Combine*); set **P** holds the products drawn.
     joins the species it claims.
 
 **The nodes F uses:**
-- **Meno's** (20): Reaction, Merge, Tag, Restraints, Relative, Filter, Rank,
+- **Meno's** (21): Reaction, Merge, Tag, Restraints, Torsion restraints, Relative, Filter, Rank,
   Re-bond, Take frames, Measure, Join, Displace, Number, Add, Populations,
   Ensemble energy, Energy diagram, Duplicates, Compare bonding, Mode on atoms.
 - **Program plugins'** (8): Conformers, Optimise, Minimise with restraints,
@@ -1378,7 +1403,7 @@ can be saved and put down again (question C).
     - *Reaction*, with Meno's atom mapping, and *Compare bonding* are
       Meno's;
     - *Minimise with restraints* is a force-field plugin's;
-    - *Restraints* and *Re-bond* are Meno's.
+    - *Restraints*, *Torsion restraints* and *Re-bond* are Meno's.
 
 ### G. A conformer ensemble to NMR and ECD
 

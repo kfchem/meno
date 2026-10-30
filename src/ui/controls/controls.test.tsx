@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Checkbox from "./Checkbox";
 import { answersEnter, checkboxKey, escapeLeft, listKey, nextChoice, nextLit, opensList, type Pressed } from "./keys";
-import { EDGE, GAP, placeList, pressedAway } from "./place";
+import { EDGE, GAP, LIST_MOST_HEIGHT, listStyle, placeList, pressedAway, rowsShown } from "./place";
 import RadioGroup from "./Radio";
 import Select from "./Select";
 
@@ -149,7 +151,7 @@ describe("where an open list goes (placeList)", () => {
   const button = (left: number, top: number) => ({ left, top, bottom: top + 28, width: 120, height: 28 });
 
   it("under its button, as wide at least, its left edge with the button's", () => {
-    expect(placeList(button(100, 100), { width: 200, height: 160 }, window)).toEqual({ left: 100, top: 128 + GAP, minWidth: 120 });
+    expect(placeList(button(100, 100), { width: 200, height: 160 }, window)).toEqual({ left: 100, top: 128 + GAP, minWidth: 120, maxHeight: 600 - EDGE - 128 - GAP });
   });
 
   it("above it where the window has no room below and has above", () => {
@@ -160,9 +162,52 @@ describe("where an open list goes (placeList)", () => {
     expect(placeList(button(100, 100), { width: 200, height: 560 }, window).top).toBe(128 + GAP);
   });
 
+  it("where it fits on neither side, on the side with the more room, held to that room", () => {
+    // (a window 500 tall, a button 318-346, a list of ten rows and more, 310 tall: 142 below, 306 above)
+    const small = { width: 800, height: 500 };
+    const at = placeList({ left: 100, top: 318, bottom: 346, width: 120, height: 28 }, { width: 200, height: 310 }, small);
+    expect(at.top).toBe(EDGE);
+    expect(at.maxHeight).toBe(318 - GAP - EDGE);
+    expect(at.top + at.maxHeight).toBe(318 - GAP);
+    // (and where it fits below, below at its own height, the room there never less than it)
+    const fits = placeList(button(100, 100), { width: 200, height: 160 }, window);
+    expect(fits.top).toBe(128 + GAP);
+    expect(fits.maxHeight).toBeGreaterThanOrEqual(160);
+  });
+
   it("never past the window's sides", () => {
     expect(placeList(button(700, 100), { width: 200, height: 160 }, window).left).toBe(800 - 200 - EDGE);
     expect(placeList(button(-20, 100), { width: 200, height: 160 }, window).left).toBe(EDGE);
+  });
+});
+
+describe("how tall an open list is (Select)", () => {
+  it("shows nine rows whole - one of nine never cut and scrolled by its padding - and past nine, half the tenth", () => {
+    expect(rowsShown(9)).toBe(9);
+    expect(rowsShown(10)).toBe(9.5);
+    expect(rowsShown(30)).toBe(9.5);
+    expect(rowsShown(3)).toBe(3);
+    // (its rows 2rem each, the padding above them and the line round it, at nine and a half rows: half the tenth, no more)
+    expect(LIST_MOST_HEIGHT).toBe("calc(9.5 * 2rem + 0.25rem + 2px)");
+  });
+
+  it("is held to that and to the room where it was put, and to no fixed height that cuts a row of nine", () => {
+    expect(listStyle({ left: 10, top: 20, minWidth: 120, maxHeight: 306 })).toEqual({ left: 10, top: 20, minWidth: 120, maxHeight: `min(${LIST_MOST_HEIGHT}, 306px)` });
+    const select = readFileSync(join(__dirname, "Select.tsx"), "utf8");
+    expect(select).toMatch(/style=\{listStyle\(place\)\}/);
+    expect(select).not.toMatch(/max-h-/);
+  });
+
+  it("is measured at its own height each time it opens, never at the room it was held to the last time", () => {
+    // (not yet put: off screen, at its own height - what placeList is given to measure)
+    expect(listStyle(null)).toEqual({ left: -9999, top: -9999, maxHeight: LIST_MOST_HEIGHT });
+    // (and it is not yet put each time it opens, and once it has gone: Vitest has no page to open one on)
+    const select = readFileSync(join(__dirname, "Select.tsx"), "utf8");
+    const opening = select.slice(select.indexOf("const openList"), select.indexOf("const close"));
+    expect(opening.indexOf("setPlace(null)")).toBeGreaterThan(-1);
+    expect(opening.indexOf("setPlace(null)")).toBeLessThan(opening.indexOf("setOpen(true)"));
+    const gone = select.slice(select.indexOf("setShown(false)") - 80, select.indexOf("setShown(false)") + 80);
+    expect(gone).toMatch(/setPlace\(null\)/);
   });
 });
 

@@ -1,4 +1,5 @@
 import { singleClickPatch } from "../utils/bondKinds";
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef } from "react";
@@ -6,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { pressOnBond, type BondPress } from "../utils/clickCount";
 import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
@@ -343,7 +344,7 @@ export default function BondsPick2D() {
               store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
               endPanHold(ev.pointerId ?? pid);
             });
-          }, LONG_PRESS_MS);
+          }, longPressMs());
           // (another button pressed with it: no press at all, nor a click of the bond's - utils/press#onChord)
           const offChord = onChord(1, () => {
             letGo();

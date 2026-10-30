@@ -5,14 +5,21 @@
  * own.
  */
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
+import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
-import type { Option, OptionValues } from "../../../../lib/options";
+import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
+import { takeFramesHow, type Which } from "./takeFrames";
+import { joinHow, joinNeeds } from "./joinStep";
+import { addHow, addNeeds, numberHow, numberNeeds } from "./addStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
+import { atomsFromOne } from "../../../../lib/steps/compareBonding";
+import { BOND_REACH, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
+import type { RestraintsAsked } from "../../../../lib/steps/restraints";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
@@ -39,8 +46,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -55,7 +62,34 @@ export type StepPort = {
   takes: readonly ValueKind[];
   /** It reads what comes in as a table (lib/table `moleculesAsTable`) - each molecule as it is, a conformer set's frames its conformers - not as a step's entries: a set mixing conformer sets with other molecules goes in (`readsAsTable`). */
   asTable?: true;
+  /**
+   * The step runs with nothing wired into it (*where wanted*): an Energy
+   * diagram's *Connects*, Add's *Number*. A kind's first input is never
+   * so; every later one not marked is needed (`laterPortsNeed`). Its look
+   * is a port's like any other: the card's line names what is needed, and
+   * never this one.
+   */
+  optional?: true;
+  /** Another optional port's id, wired with it or not at all - a saddle point's two sides: both, or neither. */
+  together?: string;
 };
+
+/**
+ * What a step's later inputs still need, as `isWired` says which are
+ * wired: the first one not marked optional with nothing wired into it
+ * ("Nothing comes into Second"), or an optional one wired without the one
+ * it goes together with ("Product side is wired: wire Reactant side too,
+ * or neither"). None, where they are as they may be.
+ */
+export function laterPortsNeed(ports: readonly StepPort[], isWired: (id: string) => boolean): string | null {
+  for (const port of ports.slice(1)) {
+    if (isWired(port.id)) continue;
+    if (!port.optional) return `Nothing comes into ${port.name}`;
+    const other = port.together ? ports.find((p) => p.id === port.together) : undefined;
+    if (other && isWired(other.id)) return `${other.name} is wired: wire ${port.name} too, or neither`;
+  }
+  return null;
+}
 
 /**
  * An exit a kind gives. Every exit is a result set of its own, made with the
@@ -92,6 +126,8 @@ export type KindInfo = {
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
   made: string;
+  /** What it is called instead where an option counting what it keeps is 1: "The first", not "The first 1". */
+  madeOne?: { option: string; name: string };
   /** Its inputs, where it takes more than one, or names the one it takes otherwise than `ONE_INPUT`. */
   inputs?: readonly StepPort[];
   /** Its exits beyond the first, which is `made`, in order: entries it sets aside (*rest*), or could not do (*failed*) - at most one such - and anything else it gives. */
@@ -113,6 +149,25 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
+/** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
+const PAIRS_OWN: readonly Option[] = [
+  {
+    id: "pairs",
+    label: "Pairs",
+    type: "choice",
+    choices: [
+      { value: "order", label: "In order" },
+      { value: "each", label: "Each with each" },
+      { value: "property", label: "Matched on" },
+    ],
+    default: "order",
+  },
+  { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+];
+
+/** How many pairs *Path search*'s each with each makes at most: its own, as every pair is a path search run (workflow/mostPairs). */
+const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } };
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
@@ -123,6 +178,46 @@ export const KINDS: readonly KindInfo[] = [
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
   { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
+  {
+    // (a path between two structures of the same atoms in one numbering - each start paired with an end, as its own options say - its highest
+    //  point refined: one molecule each, its frames the path, its entry the point refined; Meno judges none of them - docs/WORKFLOWS.md)
+    kind: "path-search",
+    name: "Path search",
+    icon: "path",
+    takes: ["molecules", "conformers"],
+    gives: "molecules",
+    runs: "program",
+    made: "Refined structures",
+    inputs: [
+      { id: "start", name: "Start", takes: ["molecules", "conformers"] },
+      { id: "end", name: "End", takes: ["molecules", "conformers"] },
+    ],
+    others: [FAILED],
+    whole: true,
+    own: [...PAIRS_OWN, MOST_OWN],
+  },
+  {
+    // (a guess optimised to a saddle point by its program - with the reactant and product sides, where both are wired, each paired with
+    //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
+    kind: "saddle-point",
+    name: "Optimise to a saddle point",
+    icon: "saddle",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "program",
+    made: "Optimised structures",
+    inputs: [
+      { id: "guesses", name: "Guesses", takes: ["molecules"] },
+      { id: "reactant", name: "Reactant side", takes: ["molecules"], optional: true, together: "product" },
+      { id: "product", name: "Product side", takes: ["molecules"], optional: true, together: "reactant" },
+    ],
+    others: [FAILED],
+    whole: true,
+    own: PAIRS_OWN,
+  },
+  // (from each point given - a saddle point, as its frequencies say - down both ways, as its program follows the reaction path: one molecule
+  //  each, its frames the path from one end to the other, its entry the point it started from; Meno judges none of them - docs/WORKFLOWS.md)
+  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",
@@ -201,6 +296,73 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => filterHow(String(v.conditions ?? ""), v.match === "any" ? "any" : "all"),
     needs: (v) => filterNeeds(String(v.conditions ?? "")),
+  },
+  {
+    // (entries ordered by a value they carry and the first N kept - in each group, each value of a property, or of all - lib/nodes/rank; the rest saying their place)
+    kind: "rank",
+    name: "Rank",
+    icon: "numbered",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "The first {keep}",
+    madeOne: { option: "keep", name: "The first" },
+    others: [{ id: "rest", name: "The rest", gives: "same", of: "rest" }],
+    options: [
+      { id: "property", label: "By", type: "text", default: "energy" },
+      {
+        id: "order",
+        label: "Order",
+        type: "choice",
+        choices: [
+          { value: "lowest first", label: "Lowest first" },
+          { value: "highest first", label: "Highest first" },
+        ],
+        default: "lowest first",
+      },
+      { id: "keep", label: "Keep the first", type: "number", default: 1, min: 1, step: 1 },
+      {
+        id: "within",
+        label: "Within",
+        type: "choice",
+        choices: [
+          { value: "each group", label: "Each group" },
+          { value: "each value", label: "Each value of a property" },
+          { value: "all", label: "All together" },
+        ],
+        default: "each group",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
+    ],
+    how: (v) => rankHow(v),
+    needs: (v) => rankNeeds(v),
+  },
+  {
+    // (from molecules with frames - a path, an optimisation's way down, a scan - the frames asked for, each a molecule of its one geometry)
+    kind: "take-frames",
+    name: "Take frames",
+    icon: "frames",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Frames",
+    options: [
+      {
+        id: "which",
+        label: "Take",
+        type: "choice",
+        choices: [
+          { value: "highest", label: "The highest in energy" },
+          { value: "first", label: "The first" },
+          { value: "last", label: "The last" },
+          { value: "entry", label: "Its entry frame" },
+          { value: "around", label: "The highest, and either side" },
+        ],
+        default: "highest",
+      },
+      { id: "either", label: "Either side", type: "number", default: 1, min: 1, step: 1, when: { id: "which", in: ["around"] } },
+    ],
+    how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1)),
   },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
@@ -354,7 +516,7 @@ export const KINDS: readonly KindInfo[] = [
     made: "Energy diagram",
     inputs: [
       { id: "levels", name: "Levels", takes: ["molecules", "conformers"], asTable: true },
-      { id: "connects", name: "Connects", takes: ["table"] },
+      { id: "connects", name: "Connects", takes: ["table"], optional: true },
     ],
     // (on its card, each a list of what comes into Levels - its energies, its levels: workflow/diagramOptions)
     options: [
@@ -415,14 +577,409 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Measured",
-    options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
-    how: (v) => measureHow(String(v.measurements ?? "")),
+    // (the atoms typed, or each row's of a table wired in where wanted - a Reaction's bond changes - its columns saying how they count them)
+    inputs: [
+      { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
+    ],
+    options: [
+      {
+        id: "from",
+        label: "Atoms",
+        type: "choice",
+        choices: [
+          { value: "typed", label: "Typed" },
+          { value: "table", label: "From the table" },
+        ],
+        default: "typed",
+      },
+      { id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "", when: { id: "from", in: ["typed"] } },
+      { id: "rows", label: "Rows matched on (blank: every row)", type: "text", default: "", when: { id: "from", in: ["table"] } },
+    ],
+    how: (v) =>
+      v.from === "table"
+        ? String(v.rows ?? "").trim()
+          ? `atoms from the table, rows by ${String(v.rows).trim()}`
+          : "atoms from the table"
+        : measureHow(String(v.measurements ?? "")),
     needs: (v) => {
+      if (v.from === "table") return undefined;
       const typed = measurementsTyped(String(v.measurements ?? ""));
       return "why" in typed ? typed.why : undefined;
     },
   },
+  {
+    // (two sets of one kind made one, First's then Second's - all, or one of each value of a property - the rest out of the second exit, each naming the one kept)
+    kind: "merge",
+    name: "Merge",
+    icon: "merge",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Merged",
+    inputs: [
+      { id: "first", name: "First", takes: ["molecules", "conformers"] },
+      { id: "second", name: "Second", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "The rest", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "keep",
+        label: "Keep",
+        type: "choice",
+        choices: [
+          { value: "all", label: "All" },
+          { value: "one", label: "One of each" },
+        ],
+        default: "all",
+      },
+      { id: "property", label: "Of each", type: "text", default: "", when: { id: "keep", in: ["one"] } },
+    ],
+    how: (v) => (v.keep === "one" ? (String(v.property ?? "").trim() ? `First's, then Second's: one of each ${String(v.property).trim()}` : "Name the property to keep one of each") : "First's, then Second's: all"),
+    needs: (v) => (v.keep === "one" && !String(v.property ?? "").trim() ? "Name the property to keep one of each" : undefined),
+  },
+  {
+    // (each geometry given a bonding entry's bonds and charges - each with each, or paired on a property - those that cannot be out of the second exit, saying why)
+    kind: "rebond",
+    name: "Re-bond",
+    icon: "rebond",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Re-bonded",
+    inputs: [
+      { id: "geometry", name: "Geometry", takes: ["molecules", "conformers"] },
+      { id: "bonding", name: "Bonding", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Not re-bonded", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "pairs",
+        label: "Pairs",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each with each" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "each",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+    ],
+    how: (v) => (v.pairs === "property" ? (String(v.property ?? "").trim() ? `Paired on ${String(v.property).trim()}` : "Name the property to pair them on") : "Each geometry with each bonding"),
+    needs: (v) => (v.pairs === "property" && !String(v.property ?? "").trim() ? "Name the property to pair them on" : undefined),
+  },
+  {
+    // (whether each geometry is bonded as its reference - paired on a property, or against each, the match named - the same out of the first exit, the rest with their differences out of the second)
+    kind: "compare-bonding",
+    name: "Compare bonding",
+    icon: "compare",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Same",
+    inputs: [
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Different", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "each",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      { id: "writes", label: "The match as", type: "text", default: "matches", when: { id: "reference", in: ["each"] } },
+      { id: "from", label: "Its value of (blank: its number)", type: "text", default: "", when: { id: "reference", in: ["each"] } },
+      { id: "rs", label: "R or S too", type: "switch", default: false },
+      { id: "ez", label: "E or Z too", type: "switch", default: false },
+      { id: "numbered", label: "Every centre by number too", type: "switch", default: false },
+      { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
+      { id: "elements", label: "Pass over elements", type: "text", default: "" },
+      { id: "reach", label: "Bonded within \u00d7 the sum of their covalent radii (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
+      { id: "floor", label: "At least the sum plus, \u00c5", type: "number", default: REACH_FLOOR, min: 0, max: 1, step: 0.05 },
+    ],
+    how: (v) => compareHow(v),
+    needs: (v) => compareNeeds(v),
+  },
+  {
+    // (Onto's entries with properties of From's put on, matched on a property both carry - lib/nodes/join - each record as it was; those with nothing put on out of the second exit, each saying why)
+    kind: "join",
+    name: "Join",
+    icon: "join",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Joined",
+    inputs: [
+      { id: "onto", name: "Onto", takes: ["molecules", "conformers"] },
+      { id: "from", name: "From", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Not joined", gives: "same", of: "rest" }],
+    options: [
+      { id: "on", label: "Matched on", type: "text", default: "" },
+      { id: "carry", label: "Put on", type: "text", default: "" },
+    ],
+    how: (v) => joinHow(v),
+    needs: (v) => joinNeeds(v),
+  },
+  {
+    // (each entry's restraints from itself: its coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - those it cannot have out of Failed, saying why)
+    kind: "restraints",
+    name: "Restraints",
+    icon: "held",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Restrained",
+    others: [FAILED],
+    options: [
+      { id: "coordination", label: "Coordination bonds", type: "switch", default: true },
+      { id: "factor", label: "Kept at \u00d7 the sum of their van der Waals radii (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
+      { id: "distances", label: "Pairs kept at their distance, atoms from 1 (3-7, 1-12)", type: "text", default: "" },
+      { id: "fixed", label: "Atoms fixed, from 1 (1, 4-6)", type: "text", default: "" },
+      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: "" },
+    ],
+    how: (v) => restraintsHow(v),
+    needs: (v) => restraintsNeeds(v),
+  },
+  {
+    // (each torsion trans across its reference's double bonds that is not trans in the entry held at 180, stronger each time - those already trans out of the second exit)
+    kind: "torsion-restraints",
+    name: "Torsion restraints",
+    icon: "heldAnti",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Restrained",
+    inputs: [
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
+    ],
+    others: [{ id: "rest", name: "Trans already", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "one", label: "The one reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "one",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: "" },
+    ],
+    how: (v) => torsionsHow(v),
+    needs: (v) => torsionsNeeds(v),
+  },
+  {
+    // (a number with its unit and what worked it out - the standard-state term from its temperature, by its formula, or one typed - for a step that takes one: Add's)
+    kind: "number",
+    name: "Number",
+    icon: "number",
+    takes: [],
+    inputs: [],
+    gives: "number",
+    runs: "entries",
+    made: "Number",
+    options: [
+      {
+        id: "what",
+        label: "Number",
+        type: "choice",
+        choices: [
+          { value: "standard state", label: "Standard state, 1 atm to 1 mol/L" },
+          { value: "typed", label: "Typed" },
+        ],
+        default: "standard state",
+      },
+      // (298.15 K: the standard temperature thermochemistry is tabulated at, as Populations' is - the chemist's to change)
+      { id: "temperature", label: "At", type: "number", default: 298.15, min: 1, step: 1, unit: "K", when: { id: "what", in: ["standard state"] } },
+      { id: "value", label: "Value", type: "number", default: 0, step: 0.1, when: { id: "what", in: ["typed"] } },
+      { id: "unit", label: "Unit", type: "text", default: "kcal/mol", when: { id: "what", in: ["typed"] } },
+    ],
+    how: (v) => numberHow(v),
+    needs: (v) => numberNeeds(v),
+  },
+  {
+    // (properties of each entry's own geometry summed, a number wired in besides, into a new one - each part as it was, never one level for the sum: lib/nodes/add)
+    kind: "add",
+    name: "Add",
+    icon: "sum",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "{as}",
+    inputs: [
+      { id: "in", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "number", name: "Number", takes: ["number"], optional: true },
+    ],
+    others: [{ id: "rest", name: "Not added", gives: "same", of: "rest" }],
+    options: [
+      { id: "parts", label: "Add", type: "text", default: "" },
+      { id: "as", label: "As", type: "text", default: "" },
+    ],
+    how: (v) => addHow(v),
+    needs: (v) => addNeeds(v),
+  },
+  {
+    // (each product mapped onto the one reactant structure, atom for atom, hydrogens too, and written in its numbering - with the bonds each map forms, breaks or changes, as a table; a product that does not map, aside with why)
+    kind: "reaction",
+    name: "Reaction",
+    icon: "reaction",
+    takes: ["molecules", "conformers"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Mapped products",
+    inputs: [
+      { id: "reactants", name: "Reactants", takes: ["molecules", "conformers"] },
+      { id: "products", name: "Products", takes: ["molecules", "conformers"] },
+    ],
+    others: [
+      { id: "rest", name: "Not mapped", gives: "same", of: "rest" },
+      { id: "changes", name: "Bond changes", gives: "table" },
+    ],
+    options: [
+      {
+        id: "maps",
+        label: "Maps",
+        type: "choice",
+        choices: [
+          { value: "first", label: "First map" },
+          { value: "every", label: "Every map" },
+        ],
+        default: "first",
+      },
+    ],
+    how: (v) => (v.maps === "every" ? "every map of each product" : "each product's first map"),
+  },
+  {
+    // (each geometry moved along a vibration - its imaginary one, or one chosen - by an amplitude, the atom moving most by exactly that; one that cannot be, aside with why)
+    kind: "displace",
+    name: "Displace",
+    icon: "moved",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Displaced",
+    others: [{ id: "rest", name: "Not displaced", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "vibration",
+        label: "Along",
+        type: "choice",
+        choices: [
+          { value: "imaginary", label: "The imaginary vibration" },
+          { value: "number", label: "A vibration by number" },
+        ],
+        default: "imaginary",
+      },
+      { id: "number", label: "Vibration, from 1", type: "number", default: 1, min: 1, step: 1, when: { id: "vibration", in: ["number"] } },
+      // (0, which moves nothing, until one is given: no amplitude is right for every system, and none is given without a basis)
+      { id: "amplitude", label: "Amplitude (negative: against the mode as written)", type: "number", default: 0, step: 0.05, unit: "\u00c5", unset: 0 },
+    ],
+    how: (v) => displaceHow(v),
+    needs: (v) => displaceNeeds(v),
+  },
 ];
+
+/** A number typed on a card, above 0, or why it is not one; null where nothing is typed. */
+function aboveZero(text: string, what: string): number | { why: string } | null {
+  const t = text.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n > 0 && /^[0-9.eE+-]+$/.test(t) ? n : { why: `${what} must be a number above 0` };
+}
+
+/** *Restraints*' options as read from its card: what it holds, or why they do not read (its run refuses the same). */
+export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked } | { why: string } {
+  const coordination = v.coordination !== false;
+  const factor = aboveZero(String(v.factor ?? ""), "The factor");
+  if (coordination && factor == null) return { why: "Set the factor" };
+  if (factor && typeof factor === "object") return { why: factor.why };
+  const typed = String(v.distances ?? "").trim() ? measurementsTyped(String(v.distances)) : { atoms: [] };
+  if ("why" in typed) return { why: typed.why };
+  const pair = typed.atoms.find((a) => a.length !== 2);
+  if (pair) return { why: `"${pair.map((a) => a + 1).join("-")}" is not a pair of atoms` };
+  const fixed = atomsFromOne(String(v.fixed ?? ""));
+  if ("why" in fixed) return { why: fixed.why };
+  if (!coordination && !typed.atoms.length && !fixed.length) return { why: "Nothing to hold yet" };
+  const strength = aboveZero(String(v.strength ?? ""), "The strength");
+  if ((coordination || typed.atoms.length) && strength == null) return { why: "Set the strength" };
+  if (strength && typeof strength === "object") return { why: strength.why };
+  return {
+    asked: {
+      ...(coordination ? { coordination: factor as number } : {}),
+      ...(typed.atoms.length ? { distances: typed.atoms.map((a) => [a[0], a[1]] as const) } : {}),
+      ...(fixed.length ? { fixed } : {}),
+      ...(typeof strength === "number" ? { strength } : {}),
+    },
+  };
+}
+
+/** What a Restraints step still needs of its options: as its run would refuse them. */
+export function restraintsNeeds(v: OptionValues): string | undefined {
+  const typed = restraintsTyped(v);
+  return "why" in typed ? typed.why : undefined;
+}
+
+/** A Restraints step's line: what it holds, and how strongly. */
+export function restraintsHow(v: OptionValues): string {
+  const typed = restraintsTyped(v);
+  if ("why" in typed) return typed.why;
+  const { coordination, distances, fixed, strength } = typed.asked;
+  const said = [
+    coordination != null ? `Coordination bonds at ${coordination} \u00d7 van der Waals (Alvarez 2013)` : "",
+    distances?.length ? `${distances.length} ${distances.length === 1 ? "pair" : "pairs"} at their distance` : "",
+    fixed?.length ? `${fixed.length} ${fixed.length === 1 ? "atom" : "atoms"} fixed` : "",
+  ].filter(Boolean);
+  return `${said.join("; ")}${strength != null ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
+}
+
+/** What a Torsion restraints step still needs of its options. */
+export function torsionsNeeds(v: OptionValues): string | undefined {
+  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
+  const step = aboveZero(String(v.step ?? ""), "The strength added");
+  if (step == null) return "Set the strength added";
+  return typeof step === "object" ? step.why : undefined;
+}
+
+/** A Torsion restraints step's line: what it adds each time, and what it matches on where it does. */
+export function torsionsHow(v: OptionValues): string {
+  const needs = torsionsNeeds(v);
+  if (needs) return needs;
+  // (the one reference is the default: left unsaid)
+  const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
+  // (the + says it adds each time - the option's own label says it whole)
+  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
+}
+
+/** *Displace*'s options as read: its amplitude (Å, not 0), and the vibration (from 0) where one is chosen by number - or what it still needs. */
+export function displaceRead(v: OptionValues): { amplitude: number; vibration: "imaginary" | number } | { why: string } {
+  const amplitude = Number(v.amplitude ?? 0);
+  if (!Number.isFinite(amplitude) || amplitude === 0) return { why: "Give the amplitude" };
+  if (v.vibration !== "number") return { amplitude, vibration: "imaginary" };
+  const n = Number(v.number ?? 1);
+  if (!Number.isInteger(n) || n < 1) return { why: `${n} is no vibration's number, from 1` };
+  return { amplitude, vibration: n - 1 };
+}
+const displaceNeeds = (v: OptionValues): string | undefined => {
+  const r = displaceRead(v);
+  return "why" in r ? r.why : undefined;
+};
+/** *Displace*'s card line: its amplitude, and the vibration where it is not the imaginary one. */
+function displaceHow(v: OptionValues): string {
+  const r = displaceRead(v);
+  if ("why" in r) return r.why;
+  return `${r.amplitude} \u00c5${r.vibration === "imaginary" ? "" : ` along vibration ${r.vibration + 1}`}`;
+}
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
 const NO_LISTS = "No lists yet";
@@ -474,6 +1031,21 @@ export function filterHow(text: string, match: "all" | "any"): string {
   return read.conditions.map(conditionText).join(match === "any" ? " or " : " and ");
 }
 
+/** What a Rank step still needs of its options: a property to rank by, and - within each value of one - which property. */
+export function rankNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  if (!String(v.property ?? "").trim()) return "Name the property to rank by";
+  if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
+  return undefined;
+}
+
+/** How a Rank step does its work, in a line: "the lowest 1 by energy in each group" - or what it still needs. */
+export function rankHow(v: Record<string, string | number | boolean>): string {
+  const needs = rankNeeds(v);
+  if (needs) return needs;
+  const within = v.within === "all" ? "of all" : v.within === "each value" ? `in each ${String(v.groupBy).trim()}` : "in each group";
+  return `the ${v.order === "highest first" ? "highest" : "lowest"} ${Number(v.keep)} by ${String(v.property).trim()} ${within}`;
+}
+
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
 /** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
 export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
@@ -497,10 +1069,12 @@ export function optionsOf(options: readonly Option[], own: Record<string, string
 /** What a step's result set is called, its options' values put in. */
 export function madeName(kind: StepKind, options: readonly Option[], own: Record<string, string | number | boolean> | undefined): string {
   const values = optionsOf(options, own);
-  return kindInfo(kind).made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
+  const { made, madeOne } = kindInfo(kind);
+  if (madeOne && Number(values[madeOne.option]) === 1) return madeOne.name;
+  return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }
 
-/** How a step does its work, in a line: each option's value, a number with its unit, a choice by its name - one of none left out; or as `said` says it (a kind's `how`, where Meno does it). */
+/** How a step does its work, in a line: each option that applies (`shownOptions`) by its value, a number with its unit, a choice by its name - one of none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it). */
 export function howOf(
   options: readonly Option[],
   own: Record<string, string | number | boolean> | undefined,
@@ -508,10 +1082,10 @@ export function howOf(
 ): string {
   const values = optionsOf(options, own);
   if (said) return said(values);
-  return options
+  return shownOptions(options, values)
     .flatMap((o) => {
       const v = values[o.id];
-      if (o.type === "number") return [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
+      if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
       if (o.type === "choice") return v === "none" ? [] : [o.choices.find((c) => c.value === v)?.label ?? String(v)];
       if (o.type === "switch") return v ? [o.label] : [];
       return v ? [String(v)] : [];
@@ -576,4 +1150,36 @@ export const readsAsTable = (kind: StepKind, port: string): boolean => {
 export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
   return exits.find((e) => e.id === exit) ?? exits[0];
+}
+
+/** What *Compare bonding* still needs of its options before it can run: a property to pair on, or to write the match as; atoms that read. */
+export function compareNeeds(v: OptionValues): string | undefined {
+  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
+  if (v.reference !== "property" && !String(v.writes ?? "matches").trim()) return "Name the property the match is written as";
+  const atoms = atomsFromOne(String(v.atoms ?? ""));
+  return "why" in atoms ? atoms.why : undefined;
+}
+
+/**
+ * *Compare bonding*'s line: what was chosen, defaults unsaid - matched on a
+ * property, the match written under another name, a reach not the default,
+ * R or S, E or Z and every centre by number, what is passed over; "against
+ * each reference" where all is as it comes.
+ */
+export function compareHow(v: OptionValues): string {
+  const needs = compareNeeds(v);
+  if (needs) return needs;
+  const writes = String(v.writes ?? "matches").trim();
+  const reach = v.reach != null ? Number(v.reach) : BOND_REACH;
+  const floor = v.floor != null ? Number(v.floor) : REACH_FLOOR;
+  const atoms = String(v.atoms ?? "").trim();
+  const elements = String(v.elements ?? "").trim();
+  const said = [
+    v.reference === "property" ? `matched on ${String(v.property).trim()}` : writes !== "matches" ? `the match as ${writes}` : "",
+    reach !== BOND_REACH || floor !== REACH_FLOOR ? `bonded within ${reach} \u00d7 covalent radii${floor !== REACH_FLOOR ? `, at least +${floor} \u00c5` : ""}` : "",
+    [v.rs ? "R or S" : "", v.ez ? "E or Z" : "", v.numbered ? "every centre by number" : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1"),
+    atoms ? `passing over atoms ${atoms}` : "",
+    elements ? `passing over ${elements}` : "",
+  ].filter(Boolean);
+  return said.length ? said.join("; ") : "against each reference";
 }

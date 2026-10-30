@@ -239,12 +239,6 @@ public static class MacGui {
     return app != IntPtr.Zero && SendBool(app, sel_registerName("terminate")) != 0;
   }
 
-  public static int FrontmostPid() {
-    IntPtr ws = Send(Cls("NSWorkspace"), sel_registerName("sharedWorkspace"));
-    IntPtr app = Send(ws, sel_registerName("frontmostApplication"));
-    return app == IntPtr.Zero ? 0 : SendInt(app, sel_registerName("processIdentifier"));
-  }
-
   public static string AppName(int pid) {
     IntPtr app = Running(pid);
     if (app == IntPtr.Zero) return "pid " + pid;
@@ -541,6 +535,11 @@ function Get-MenoBuild {
     return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../../src-tauri/target/release/bundle/macos/Meno.app"))
 }
 
+function Get-MenoProfile {
+    # The folder of the Meno under test's settings, its settings.json in it (src-tauri/src/folders.rs, data_dir).
+    return Join-Path $HOME "Library/Application Support/Meno"
+}
+
 function Start-MenoProcess {
     <#
       .SYNOPSIS
@@ -600,11 +599,31 @@ function Get-WindowInfo {
     return $w
 }
 
+function Get-FrontPid {
+    <#
+      .SYNOPSIS
+      The process of the app in front now, as Launch Services has it (0 where
+      none is to be had).
+
+      .DESCRIPTION
+      Asked of lsappinfo each time, not of NSWorkspace's frontmostApplication:
+      that is kept up to date by notifications on a run loop this process
+      never runs, and stayed on a Meno that had quit for as long as it was
+      asked (2026-10-29) - a Meno started again, and in front, was taken for
+      one that would not come forward.
+    #>
+    $asn = ((& /usr/bin/lsappinfo front) -join "").Trim()
+    if (-not $asn) { return 0 }
+    $info = (& /usr/bin/lsappinfo info -only pid $asn) -join " "
+    if ($info -match '\bpid"?\s*=\s*(\d+)') { return [int]$Matches[1] }
+    return 0
+}
+
 function Wait-MenoFront {
     param([int] $TimeoutMs = 2000)
     $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
     do {
-        if ([MacGui]::FrontmostPid() -eq $script:MenoPid) { return $true }
+        if ((Get-FrontPid) -eq $script:MenoPid) { return $true }
         Start-Sleep -Milliseconds 100
     } while ((Get-Date) -lt $deadline)
     return $false
@@ -683,8 +702,8 @@ function Assert-MenoFront {
     # Input goes to whichever app is in front and to whichever window is
     # under the pointer, not to Meno by name. If Meno has lost the front, the
     # next keystroke lands in some other app, so stop rather than send it.
-    if ([MacGui]::FrontmostPid() -ne $script:MenoPid) {
-        $front = [MacGui]::AppName([MacGui]::FrontmostPid())
+    if ((Get-FrontPid) -ne $script:MenoPid) {
+        $front = [MacGui]::AppName((Get-FrontPid))
         throw "Meno is no longer in front - '$front' is - and input sent now would go there. Stopping."
     }
     # (a system window - a password prompt - can float over Meno with Meno
@@ -795,7 +814,7 @@ function Set-MenoWindow {
     if (-not (Wait-MenoFront)) {
         [MacGui]::Activate($script:MenoPid) | Out-Null
         if (-not (Wait-MenoFront)) {
-            throw "the window would not come to the front, so input would go to '$([MacGui]::AppName([MacGui]::FrontmostPid()))' instead. Check that the screen is unlocked."
+            throw "the window would not come to the front, so input would go to '$([MacGui]::AppName((Get-FrontPid)))' instead. Check that the screen is unlocked."
         }
     }
     # The window may have moved to another display.
@@ -1066,7 +1085,11 @@ function Invoke-MenoSwipe {
 function Invoke-MenoWheel {
     <#
       .SYNOPSIS
-      Turn the wheel over a point. Positive is away from you: zoom in.
+      Turn the wheel over a point: positive notches upwards, as a page reads
+      a turn (a wheel event's deltaY below 0), negative downwards - the same
+      on every machine. Which way that zooms is Meno's Settings' to say
+      (General, The wheel turned upwards): to zoom by what is meant, in or
+      out, Invoke-MenoZoom.
 
       .DESCRIPTION
       A notch is posted as 100 pixels of scroll, which is what Chromium, and so
@@ -1097,12 +1120,12 @@ function Send-MenoText {
 }
 
 function Send-MenoKey {
-    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace")] [string] $Key, [switch] $Shift)
+    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
     Assert-MenoFront
     # (Escape answers a question no: always let through)
     if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
-    # Virtual key codes of the ANSI layout; these four are the same on all of them.
-    $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51 }[$Key]
+    # Virtual key codes of the ANSI layout; these are the same on all of them.
+    $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51; Up = 126; Down = 125 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [MacGui]::Chord([uint16[]] @(56), [uint64[]] @(0x20000), [uint16] $code) }
     else { [MacGui]::TapKey([uint16] $code) }
@@ -1278,7 +1301,7 @@ function Wait-MenoSettled {
     return $false
 }
 
-Export-ModuleMember -Function Get-MenoBuild, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
+Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,

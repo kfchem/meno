@@ -6,7 +6,7 @@ import type { Molecule3D } from "../store/types";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { reachOverFrames } from "../utils/molecule3d";
 import { setMembers, type Frame } from "./entries";
-import { BETWEEN, SET_TOP } from "./look";
+import { BETWEEN, CHIP, SET_PAD, SET_TOP } from "./look";
 import { addSet, addStep } from "./model";
 import { resultOf } from "./flow";
 import { chipWide, fitResultSets, placeResults, type RunWith } from "./run";
@@ -227,5 +227,19 @@ describe("a result set of molecules narrower than their frames chips", () => {
     const set = { ...four, energies: [-1, -1, -1, -1], conformerSet: true };
     expect(chipWide(set)).toBeGreaterThan(chipWide({ ...four, energies: [-1, -1, -1, -1] }));
     expect(chipWide({ ...set, partOf: true })).toBe(chipWide({ ...four, energies: [-1, -1, -1, -1] }));
+  });
+
+  // (Rank's "The first 1": a compound of a conformer set, one conformer kept, says "1 / 1 · 0.00 kcal/mol · 100%" under it -
+  //  laid out with no room for it, its chip ran over the set's frame)
+  it("gives a conformer set's compound of one conformer its chip's room, as a compound of several", () => {
+    const kept = { ...bent(), energies: [-1], shares: [1], conformerSet: true };
+    expect(chipWide(kept)).toBeGreaterThan(0);
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    d = placeResults(d, d.steps![0], { molecules: [kept, { ...kept, atoms: bent("S").atoms }], rest: [], holds: "molecules" }, { extentOf: reaching(1) });
+    const set = d.sets![0];
+    const m = d.molecules3d![0];
+    // (its chip below its reach, and the frame's pad below that)
+    expect(m.at.y - 1 - CHIP - SET_PAD).toBeCloseTo(set.y0, 6);
+    for (const n of d.molecules3d!) expect(n.at.x - chipWide(n) / 2).toBeGreaterThanOrEqual(set.x0 + SET_PAD - 1e-6);
   });
 });

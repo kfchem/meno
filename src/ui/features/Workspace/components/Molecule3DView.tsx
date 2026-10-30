@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { longPressMs } from "../longPress";
 import { PAGE_SIZED } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -16,7 +17,7 @@ import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend
 import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
-import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
+import { LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
 import Frames3D from "./Frames3D";
@@ -44,6 +45,7 @@ import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
+import { refinedFrame } from "../workflow/takeFrames";
 import MagnifiedMark from "./MagnifiedMark";
 
 /**
@@ -181,6 +183,11 @@ export type Molecule3DViewProps = {
   look: Look3D;
   frame: number;
   turn: Turn3D | undefined;
+  /**
+   * How it is turned, read as each frame is drawn, in place of `turn`: a turn that changes all the time, changed
+   * without anything drawn again but the frame (StyleEditor/Preview3D's samples).
+   */
+  turning?: { readonly current: THREE.Quaternion };
   /** How lit its outline is: 0 not at all, 1 hovered or turning, 2 moving. */
   lit: number;
   selected: boolean;
@@ -875,10 +882,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (seen) dolly.current.matrix.copy(seen);
     else dolly.current.matrix.identity();
     dolly.current.matrixWorldNeedsUpdate = true;
-    if (!shownTurn.current || shownTurn.current.angleTo(quaternion) < TURN_FOLLOWED) {
-      shownTurn.current = quaternion.clone();
+    const turnTo = props.turning?.current ?? quaternion;
+    if (!shownTurn.current || shownTurn.current.angleTo(turnTo) < TURN_FOLLOWED) {
+      shownTurn.current = turnTo.clone();
     } else {
-      shownTurn.current.slerp(quaternion, 1 - Math.exp(-step / PLACE_TAU));
+      shownTurn.current.slerp(turnTo, 1 - Math.exp(-step / PLACE_TAU));
       moving = true;
     }
     turned.current.quaternion.copy(shownTurn.current);
@@ -1057,7 +1065,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     let holdTo = 0;
     if (holding && spread) {
       const t = performance.now() - holding.start;
-      const u = Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (LONG_PRESS_MS - LONG_PRESS_SHOW_MS)));
+      const u = Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (longPressMs() - LONG_PRESS_SHOW_MS)));
       for (let i = 0; i < n; i++) h[i] = Math.min(1, Math.max(0, u * (spread.deepest + 1) - spread.level[i]));
       holdTo = 1;
       moving = true;
@@ -2025,6 +2033,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               {...(m.marksUnread ? { marksUnread: true } : {})}
               {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
               {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
+              {...(refinedFrame(m) != null ? { fromStart: true } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>

@@ -149,7 +149,8 @@ available:
 | `Invoke-MenoDrag -FromX -FromY -ToX -ToY [-Steps] [-PressMs] [-Count] [-AtStep] [-Right] [-Hold] [-Via]` | press, travel, release; `-PressMs 600` holds the button still first - a long press; `-Count 2` after an `Invoke-MenoClick` there is a double-click that drags, `-Count 3` after an `Invoke-MenoClick -Count 2` a triple; `-Right` with the other button; `-Hold` as for a click; `-Via @(@(x, y), ...)` passes through those points on the way - a lasso |
 | `Move-MenoPointer -X -Y` | hover |
 | `Move-MenoPointerAlong -Path @(@(x, y), ...) [-StepMs] [-AtStep]` | the pointer led through points with no button down - a chain traced with the button up |
-| `Invoke-MenoWheel -X -Y -Notches` | zoom; positive is away from you, in - out where Settings has the wheel turned the other way, as the settings the run starts from may |
+| `Invoke-MenoWheel -X -Y -Notches` | the wheel turned over a point: positive upwards, as a page reads a turn (deltaY below 0), the same on every machine - which way that zooms is Meno's setting's to say; over what takes the wheel itself, a frames chip |
+| `Invoke-MenoZoom -X -Y -Notches` | zoom the page with the wheel: positive in, negative out, on every machine - the wheel turned the way the Meno under test's Settings (General, The wheel turned upwards) have it zoom as meant, read from its `settings.json` |
 | `Invoke-MenoSwipe -X -Y [-DX] [-DY] [-Steps] [-Held]` | two fingers on a trackpad: moves the view; positive DY scrolls down; `-Held` swipes where the pointer is without moving it there first - in a drag's `-AtStep`, with the button down |
 | `Send-MenoText`, `Send-MenoKey` | typing (`Send-MenoKey Enter -Shift` for Shift+Enter) |
 | `Send-MenoShortcut -Key [-Shift]` | Ctrl (Windows) or Cmd (Mac) with a key: `Z` is undo, `1` fits the drawing to the view |
@@ -191,6 +192,7 @@ Besides the verbs above that come from it, `run.ps1` asks the module for:
 | | |
 |---|---|
 | `Get-MenoBuild` | where `npm run tauri build` leaves the app on this platform |
+| `Get-MenoProfile` | the folder of the Meno under test's settings (`settings.json`), for what a run reads of them - the wheel's way, `MenoSettings.psm1` |
 | `Start-MenoProcess -Path` | start a build |
 | `Close-MenoProcess -Process` | ask a running copy to quit, and put it down if it will not |
 | `Get-MenoWindow`, `Set-MenoWindow` | find the main window; put it at a known size, in front |

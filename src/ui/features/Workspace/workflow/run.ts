@@ -12,24 +12,28 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
-import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
+import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
 export { frameAt, placeFor } from "./place";
-import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { takeFrames, type Which } from "./takeFrames";
+import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
+import { measuredSet } from "./structureSteps";
+import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
-import type { Table } from "../../../../lib/table";
+import type { NumberValue, Table } from "../../../../lib/table";
+import { addedSet, numberOf } from "./addStep";
 
 /**
  * What a run needs of the canvas: how far a molecule in 3D reaches on the
@@ -71,7 +75,44 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "chart") return chartRun(doc, step, w, key);
   // (an energy diagram: molecules' energies as levels, joined as a table says)
   if (step.kind === "energy-diagram") return diagramRun(doc, step, w, key);
+  // (two inputs, each a set's entries: Merge, Re-bond, Compare bonding - whyNot has seen each comes in, as each takes)
+  if (PAIRED.includes(step.kind)) {
+    const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
+    const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
+    return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+  }
+  // (a number from its options alone: nothing comes in)
+  if (step.kind === "number") {
+    const n = numberOf(optionsOf(kindInfo(step.kind).options ?? [], step.options));
+    if ("why" in n) return fail(n.why);
+    return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberShown(n), input: key, ...as });
+  }
+  // (a sum on each entry of what comes into Molecules - and the number into Number, where one is wired)
+  if (step.kind === "add") {
+    const into = inputOf(doc, id, "in");
+    if (!into) return fail("Nothing comes into Molecules");
+    const numberSet = wireInto(doc, id, "number")?.from;
+    const number = numberSet ? findSet(doc, numberSet.set)?.number : undefined;
+    if (numberSet && !number) return fail("Number holds no number yet");
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, addedSet(setEntries(into.molecules, into.holds as Holds3D), into.holds as Holds3D, o, number), key, w);
+  }
   if (!input) return fail("Nothing comes into it");
+  // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
+  if (step.kind === "take-frames") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+  }
+  // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
+  //  what comes in is molecules: it takes nothing else)
+  if (step.kind === "measure") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const entries = setEntries(input.molecules, input.holds as Holds3D);
+    if (o.from === "table") return ranAs(doc, id, measuredSet(entries, input.holds as Holds3D, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
+    const typed = measuredSet(entries, input.holds as Holds3D, String(o.measurements ?? ""));
+    const unread = wireInto(doc, id, "atoms") && typed.ok ? { ...typed, said: `${typed.said} \u00b7 the table wired into Atoms not read: atoms typed` } : typed;
+    return ranAs(doc, id, unread, key, w);
+  }
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
@@ -99,6 +140,9 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
  * nothing added does it; what it comes to needs of its options (an Energy
  * diagram's reference: diagramOptions `diagramNeeds`). None, where it can.
  */
+/** Whether what a set holds flows along a wire into a step - a set's kind, a table, a number - and not a chart or pictures, which none takes. */
+const isValueKind = (h: SetHolds): h is ValueKind => (VALUE_KINDS as readonly string[]).includes(h);
+
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
   const failed = wiresInto(doc, step.id).some((wire) => {
@@ -122,6 +166,20 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
+  // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
+  //  and each wired one taking what comes into it; Merge's second of the kind its first is)
+  const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
+  if (missing) return missing;
+  // (a wired one - optional or not - giving what it takes, by what its set gives, run or not yet: a wire that gives nothing it can use
+  //  is never passed as if it were not there, nor as if it gave something)
+  for (const port of ports.slice(1)) {
+    const wire = wireInto(doc, step.id, port.id);
+    if (!wire) continue;
+    const gives = givesOf(doc, wire.from);
+    if (!gives) return `Nothing comes into ${port.name}`;
+    if (!isValueKind(gives) || !takenBy(port.takes, gives)) return `${port.name} takes ${port.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
+    if (step.kind === "merge" && gives !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${port.name} ${SET_NAMES[gives]}: Merge makes one set of two of one kind`;
+  }
   if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
 }
@@ -218,6 +276,17 @@ function rowCompounds(table: Table, entries: readonly SetEntry[]): RowCompound[]
 }
 
 /** `doc` with a chart a step made in its result set: the set it made before - emptied of what it held - or one made to the right of it, as large as a chart is drawn. */
+/** `doc` with a Number step's number in its result set (`holdNumber`), placed as a chart's is: where it was, else beside the step. */
+function placeNumber(doc: WorkspaceDocument, step: WorkflowStep, number: NumberValue): WorkspaceDocument {
+  const exit = exitsOf(step.kind)[0].id;
+  const madeBy = { step: step.id, exit, holds: "number" as const };
+  const was = resultOf(doc, step.id, exit);
+  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, NUMBER_SET.w, NUMBER_SET.h);
+  if (was) return holdNumber(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, number);
+  const id = doc.nextWorkflowId ?? 1;
+  return holdNumber(markMade(addSet(doc, frame, madeBy), id, madeBy), id, number);
+}
+
 function placeChart(doc: WorkspaceDocument, step: WorkflowStep, chart: ChartValue | DiagramValue): WorkspaceDocument {
   const exit = exitsOf(step.kind)[0].id;
   const madeBy = { step: step.id, exit, holds: "chart" as const };
@@ -401,6 +470,9 @@ export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
 export type Worked = SetEntry & {
   path?: number[][];
   pathEnergies?: number[];
+  /** The path's frames after it, where it is a point the path goes on past - the highest a path search refined - and their energies: its entry is then that point, not the path's last. */
+  after?: number[][];
+  afterEnergies?: number[];
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
@@ -423,7 +495,7 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
   // (structures drawn it could not make in 3D - Conformers' - in its aside exit's set as they came: there to be followed, and wired on)
   const asideDrawn = "asideDrawn" in outcome && outcome.asideDrawn?.length ? { drawn: { made: [], rest: outcome.asideDrawn.map(drawnModel) } } : {};
-  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn };
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn, ...(outcome.tables ? { tables: { ...outcome.tables } } : {}) };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -497,9 +569,27 @@ export function placeResults(
   }
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
-  if (aside && results.drawn?.rest.length) return fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
-  if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
-  return doc;
+  if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
+  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set: under the others as they have grown)
+  const tables = Object.entries(results.tables ?? {});
+  for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);
+  return tables.length ? keepExitsUnder(doc, step) : doc;
+}
+
+/**
+ * `doc` with an exit's set holding `table`, a step's (a Reaction's bond
+ * changes): the set that exit made, what it held gone, as large as a table
+ * set is put down - in its place, or made now.
+ */
+function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, table: Table): WorkspaceDocument {
+  const madeBy = { step: step.id, exit, holds: "table" as const };
+  const was = resultOf(doc, step.id, exit);
+  if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h);
+  if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
+  const id = doc.nextWorkflowId ?? 1;
+  return holdTable(markMade(addSet(doc, frame, madeBy), id, madeBy), id, table);
 }
 
 /**
@@ -510,13 +600,15 @@ export function placeResults(
 function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
   let above = resultOf(doc, step.id, exits[0].id);
-  for (const exit of exits.slice(1)) {
+  for (const [k, exit] of exits.slice(1).entries()) {
     const b = resultOf(doc, step.id, exit.id);
     if (!above || !b) break;
     const reach = above.y0 - BETWEEN;
-    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set)
+    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set -
+    //  but the step's sets of exits after it, which go under it in turn)
     const under = b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN;
-    const self = { set: b.id, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
+    const after = new Set(exits.slice(k + 2).flatMap((e) => resultOf(doc, step.id, e.id)?.id ?? []));
+    const self = { set: b.id, sets: after, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
     if (under || !clearOf(doc, b, self)) {
       const to = placeBelow(doc, b.x0, Math.min(b.y1, reach), b.x1 - b.x0, b.y1 - b.y0, self);
       doc = moveSet(doc, b.id, to.x0 - b.x0, to.y1 - b.y1);
@@ -848,25 +940,35 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
   if (outcome.holds !== "conformers") {
     return (outcome.kept as Worked[]).map((e) => {
       const path = e.path?.length ? e.path : undefined;
-      const energies = path ? (e.pathEnergies?.length === path.length && e.energy != null ? [...e.pathEnergies, e.energy] : undefined) : e.energy != null ? [e.energy] : undefined;
+      // (a path that goes on past it - a path search's, its point refined between its ends: frames after it, and it the molecule's entry)
+      const after = path && e.after?.length ? e.after : [];
+      const afterEnergies = after.length && e.afterEnergies?.length === after.length ? e.afterEnergies : after.length ? undefined : [];
+      const energies = path
+        ? e.pathEnergies?.length === path.length && e.energy != null && afterEnergies
+          ? [...e.pathEnergies, e.energy, ...afterEnergies]
+          : undefined
+        : e.energy != null
+          ? [e.energy]
+          : undefined;
+      const tail = after.map(() => ({}));
       return {
         atoms: atomsAt(e, path ? path[0] : e.xyz),
         bonds: e.bonds.map((b) => ({ ...b })),
-        ...(path ? { frames: [...path.slice(1).map((f) => [...f]), [...e.xyz]], path: true as const } : {}),
+        ...(path ? { frames: [...path.slice(1).map((f) => [...f]), [...e.xyz], ...after.map((f) => [...f])], ...(after.length ? { entryFrames: [path.length] } : { path: true as const }) } : {}),
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
         // (its properties, as its last frame's: none for a path's frames before it)
-        ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties] } : {}),
+        ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties, ...tail] } : {}),
         ...keptKnown(e),
         // (how many it stands for, and its mirror image's atoms where one was counted in - of its last geometry; a path's
         //  frames before it, one each, none)
-        ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy] } : {}),
-        ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror]] } : {}),
+        ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
+        ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
-        ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }]),
+        ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
         ...e.keep,
       };
     });

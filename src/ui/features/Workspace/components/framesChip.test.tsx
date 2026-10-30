@@ -79,24 +79,33 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
           { group: "Energies", rows: [{ label: "Total", text: "-1 Eh" }] },
           { group: "How it was made", rows: [{ label: "Method", text: "ETKDG v3 + MMFF94" }], folded: true },
         ]}
+        most="12rem"
       />,
     );
     // (a button of its own, shut; its rows under it laid out but shut - no browser disclosure)
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*How it was made<\/button>/);
     expect(html).toMatch(/grid-template-rows:\s*0fr[^"]*opacity:\s*0/);
     expect(html).not.toContain("<details");
+    // (opened no wider than the room inside the card it is on)
+    expect(html).toMatch(/class="w-max" style="max-width:\s*12rem"/);
     // (a group not folded: its name and rows as they were, no button)
     expect(html.match(/<button/g)).toHaveLength(1);
     expect(html).toContain('<div class="text-[10px] text-gh-gray">Energies</div>');
   });
 
-  it("eases its width and its rows' height in one time and one curve, and measures what its details say whole - never as squeezed by its own width", () => {
+  it("grows and shrinks frame by frame as it opens (theme/opening) - no CSS transition of its width or its rows - and measures what its details say whole", () => {
     const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
     const html = renderToString(<FramesChip count={3} frame={0} energies={[0, 0.001, 0.002]} open={false} onFrame={none} made={made} conformers />);
-    // (the chip's width, its bars' rows, its details' rows and the fold: each 160 ms on Meno's curve, none other)
-    expect(html.match(/transition-duration:160ms;transition-timing-function:var\(--ease-meno\)/g)?.length).toBeGreaterThanOrEqual(5);
+    // (none of its width, its bars' rows, its details' rows or the fold is a CSS transition, which would chase what is still widening)
+    expect(html).not.toMatch(/transition-\[[^\]]*(width|grid-template)/);
+    expect(html).toContain("transition-[opacity,background-color]");
     expect(html).not.toMatch(/duration-200|ease-out/);
     expect(html).toMatch(/class="w-max max-w-\[20rem\] shrink-0/);
+    // (how it was made, held by the chip: no width of its own in its details, its rows drawn whole and cut by the chip until it has grown to them; shut, no height and not seen)
+    expect(html).toMatch(/class="grid grid-cols-\[0px\]" style="grid-template-rows:0fr;opacity:0"/);
+    expect(html).toContain("overflow-x:visible;overflow-y:clip");
+    // (its folded rows opened no wider than its details' own room: 20rem less their sides)
+    expect(html).toContain("max-width:18.75rem");
   });
 
   it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {
@@ -123,6 +132,14 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain('aria-label="Energy of each frame"');
     // (a single geometry read from a file, no conformer set, says none of it)
     expect(one(false)).not.toContain("1<!-- --> / <!-- -->1");
+  });
+
+  it("says a path's frame's energy from the path's start, as its barrier is - never from its lowest, the path's other end", () => {
+    // (a Diels-Alder's path: its start, the point refined 6.75 kcal/mol above it, and cyclohexene 68.03 below it)
+    const kcal = (e: number) => e / 627.509474;
+    const path = [0, kcal(6.75), kcal(-68.03)];
+    expect(renderToString(<FramesChip count={3} frame={1} energies={path} open={false} onFrame={none} fromStart />)).toContain("ΔE 6.75 kcal/mol from its start");
+    expect(renderToString(<FramesChip count={3} frame={1} energies={path} open={false} onFrame={none} />)).toContain("74.8 kcal/mol");
   });
 
   it("writes a conformer's energy and share by what they round to: 10.0 kcal/mol, not 10.00; >99%, not 100%, beside another", () => {

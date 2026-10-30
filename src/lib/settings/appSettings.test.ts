@@ -72,6 +72,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
     // which way the wheel zooms: in, upwards, unless the file says out
     expect(acceptAppSettings({ pointer: { wheelUp: "sideways" } }).pointer).toEqual({ wheelUp: "in" });
+    // how long a long press is: shorter or longer as the file says, else normal (none kept)
+    expect(acceptAppSettings({ pointer: { wheelUp: "in", longPress: "longer" } }).pointer).toEqual({ wheelUp: "in", longPress: "longer" });
+    expect(acceptAppSettings({ pointer: { wheelUp: "in", longPress: 900 } }).pointer).toEqual({ wheelUp: "in" });
     // cores for each, and the cores and memory jobs may use: whole numbers, at least one, within reason
     expect(acceptAppSettings({ calculations: { cores: 2.5, coresAll: 0, memoryAll: -1 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { cores: "8", coresAll: 1025 } }).calculations).toEqual({});
