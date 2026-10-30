@@ -122,6 +122,23 @@ describe("a Filter step", () => {
     expect([ran(other)?.said, out(other)[0].properties?.[0].energy]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not nll < 30 (50))", own(-1)]);
   });
 
+  it("compares a property with another of the same entry (\"its\"): kept where they agree, the rest saying why - one missing either never kept; Meno's own name on either side read as on one", () => {
+    const word = (value: string): Property => ({ value, unit: "none", status: "computed" });
+    const saddles = [
+      water([{ "last end": word("b"), product: word("b") }]),
+      water([{ "last end": word("c"), product: word("b") }], { at: { x: 2, y: 0 } }),
+      water([{ product: word("b") }], { at: { x: -2, y: 0 } }),
+    ];
+    const doc = runStep(filtering(saddles, "last end = its product"), 2, W);
+    expect(ran(doc)).toMatchObject({ ok: true, said: "1 of 3 entries kept \u00b7 rest 2 (1: it has no last end; 1: not last end = its product (c and b))" });
+    expect(out(doc).map((m) => m.properties?.[0]["last end"])).toEqual([word("b")]);
+    // (a name that is Meno's own and an entry's too, on the right as on the left: refused, never read as either)
+    const own = (v: number): Property => ({ value: v, unit: "Eh", by: { plugin: "gen" }, status: "computed" });
+    const shadowed = runStep(filtering([water([{ energy: own(-1), e2: own(-1) }])], "e2 = its energy"), 2, W);
+    expect(ran(shadowed)).toMatchObject({ ok: false, said: '"energy" is Meno\'s own, and 1 entry carries one of its own by that name too: which is meant cannot be told' });
+    expect(filterHow("last end = its product", "all")).toBe("last end = its product");
+  });
+
   it("says how it filters on its card: its conditions as read, all or any", () => {
     const info = kindInfo("filter");
     expect(howOf(info.options!, { conditions: "nll<30;mw <= 500", match: "all" }, info.how)).toBe("nll < 30 and mw \u2264 500");

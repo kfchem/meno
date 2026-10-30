@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { conditionsIn, filter } from "./filter";
+import { conditionsIn, conditionText, filter } from "./filter";
+import type { Property } from "../entry";
 import { entry, quantity } from "./testEntries";
 
 const rel = (kcal: number) => quantity(kcal, "kcal/mol");
@@ -142,5 +143,59 @@ describe("Filter, on what cannot be compared", () => {
     // (all met, nothing more to say)
     const met = filter(two.slice(0, 2), { conditions: [{ property: "nll", compare: "<", value: 20, unit: "none" }], match: "any" });
     expect(met.ok && met.said).toBe("2 of 2 entries kept");
+  });
+});
+
+describe("Filter, a property against another of the same entry", () => {
+  const word = (value: string): Property => ({ value, unit: "none", status: "computed" });
+  // (saddle points, each made for a product, and where its path came down: F28 keeps one whose last end is the product it was made for)
+  const saddles = [
+    entry("s1", { "last end": word("b"), product: word("b") }),
+    entry("s2", { "last end": word("c"), product: word("b") }),
+    entry("s3", { product: word("b") }),
+    entry("s4", { "last end": word("b") }),
+  ];
+
+  it("reads \"its\" and a property as that property of the same entry; a quoted \"its …\" or a bare word stays a text", () => {
+    expect(conditionsIn("last end = its product")).toEqual({ conditions: [{ property: "last end", compare: "=", its: "product" }] });
+    expect(conditionsIn('last end = "its product"')).toEqual({ conditions: [{ property: "last end", compare: "=", value: "its product" }] });
+    expect(conditionsIn("state = finished")).toEqual({ conditions: [{ property: "state", compare: "=", value: "finished" }] });
+    expect(conditionText({ property: "last end", compare: "≠", its: "product" })).toBe("last end ≠ its product");
+  });
+
+  it("keeps the saddle whose last end is the product it was made for - not one that came down elsewhere, nor one with either missing, each saying which", () => {
+    const out = filter(saddles, { conditions: [{ property: "last end", compare: "=", its: "product" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(ids(out.exits.kept)).toEqual(["s1"]);
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["s2", { aside: "not last end = its product (c and b)" }],
+      ["s3", { aside: "it has no last end" }],
+      ["s4", { aside: "it has no product" }],
+    ]);
+    const other = filter(saddles, { conditions: [{ property: "last end", compare: "≠", its: "product" }], match: "all" });
+    expect(other.ok && ids(other.exits.kept)).toEqual(["s2"]);
+  });
+
+  it("compares numbers in the first one's unit, the other converted - equal within a part in 10¹² - and never across dimensions", () => {
+    const es = [
+      entry("eq", { a: quantity(1, "kcal/mol"), b: quantity(4.184, "kJ/mol") }),
+      entry("lt", { a: quantity(1, "kcal/mol"), b: quantity(4.2, "kJ/mol") }),
+      entry("dim", { a: quantity(1, "kcal/mol"), b: quantity(1, "Å") }),
+    ];
+    const at = (compare: "=" | "<") => filter(es, { conditions: [{ property: "a", compare, its: "b" }], match: "all" });
+    const eq = at("=");
+    if (!eq.ok) throw new Error(eq.said);
+    expect(ids(eq.exits.kept)).toEqual(["eq"]);
+    expect(eq.exits.rest.map((e) => e.status)).toEqual([{ aside: "not a = its b (1 kcal/mol and 1.003824 kcal/mol)" }, { aside: "its b is in Å, which does not convert to kcal/mol" }]);
+    const lt = at("<");
+    expect(lt.ok && ids(lt.exits.kept)).toEqual(["lt"]);
+  });
+
+  it("compares a text with a text only, and by = and ≠ alone", () => {
+    const es = [entry("x", { a: word("b"), n: quantity(2, "none") })];
+    const kind = filter(es, { conditions: [{ property: "a", compare: "=", its: "n" }], match: "all" });
+    expect(kind.ok && kind.exits.rest[0].status).toEqual({ aside: "its a and its n are not of one kind" });
+    const order = filter(es, { conditions: [{ property: "a", compare: "<", its: "a" }], match: "all" });
+    expect(order.ok && order.exits.rest[0].status).toEqual({ aside: "a < its a: a text or true/false is compared by = or ≠ alone" });
   });
 });

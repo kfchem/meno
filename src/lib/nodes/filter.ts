@@ -10,6 +10,12 @@
  * has one, meets nothing and says so. Two numbers are equal within a part in
  * 10¹² of the larger, so that a value converted between units (1 kcal/mol
  * as 4.184 kJ/mol) is the value typed.
+ *
+ * A condition may compare a property with another of the same entry
+ * instead of a value typed ("last end = its product"): texts and true or
+ * false exactly, numbers in the first property's unit, the other's
+ * converted within its dimension. An entry without either property does
+ * not meet it, and says which it has not.
  */
 import type { Entry } from "../entry";
 import { isUnit, UNITS, type Unit } from "../units";
@@ -18,8 +24,14 @@ import { entries as count, numberIn, setAside, tally, unitLabel, unreadable, typ
 /** A comparison: less than, at most, more than, at least, equal to, other than. Text and true/false compare by = and ≠ alone. */
 export type Comparison = "<" | "≤" | ">" | "≥" | "=" | "≠";
 
-/** A condition: a property, a comparison, and a value - a number with its unit, a text, or true or false. */
-export type Condition = { property: string; compare: Comparison; value: number | string | boolean; unit?: Unit | "none" };
+/**
+ * A condition: a property, a comparison, and a value - a number with its
+ * unit, a text, or true or false - or another property of the same entry
+ * (`its`) to compare it with.
+ */
+export type Condition =
+  | { property: string; compare: Comparison; value: number | string | boolean; unit?: Unit | "none" }
+  | { property: string; compare: Comparison; its: string };
 
 /**
  * What Filter asks, and whether all or any; and, where given, why an
@@ -56,6 +68,7 @@ function compares(a: number | string | boolean, c: Comparison, b: number | strin
 
 /** A condition written as a chemist reads it: "relative energy ≤ 3 kcal/mol". */
 export function conditionText(c: Condition): string {
+  if ("its" in c) return `${c.property} ${c.compare} its ${c.its}`;
   const unit = typeof c.value === "number" && c.unit && c.unit !== "none" ? ` ${unitLabel(c.unit)}` : "";
   return `${c.property} ${c.compare} ${c.value}${unit}`;
 }
@@ -63,6 +76,7 @@ export function conditionText(c: Condition): string {
 /** Why a condition cannot be asked at all - a text compared as a number - else nothing. */
 function badCondition(c: Condition): string | null {
   if (!c.property) return "A condition names no property";
+  if ("its" in c) return c.its ? null : `${conditionText(c)}: it names no property to compare with`;
   if (typeof c.value !== "number" && c.compare !== "=" && c.compare !== "≠") return `${conditionText(c)}: a text or true/false is compared by = or ≠ alone`;
   if (typeof c.value === "number" && !Number.isFinite(c.value)) return `${conditionText(c)}: the value is no number`;
   return null;
@@ -71,6 +85,7 @@ function badCondition(c: Condition): string | null {
 /** Whether an entry meets a condition; or why it does not - its value compared and found not to (`asked`), or none it could be compared by: not there, not worked out, not finite, of another unit or kind. */
 type Met = true | { why: string; asked: boolean };
 function meets(e: Entry, c: Condition): Met {
+  if ("its" in c) return meetsIts(e, c);
   if (typeof c.value === "number") {
     const v = numberIn(e, c.property, c.unit ?? "none");
     if ("why" in v) return { why: v.why, asked: false };
@@ -82,6 +97,32 @@ function meets(e: Entry, c: Condition): Met {
   if (typeof p!.value !== typeof c.value) return { why: `its ${c.property} is not ${typeof c.value === "string" ? "a text" : "true or false"}`, asked: false };
   // (said with what it is, as a number's is: "not state = finished (not converged)")
   return compares(p!.value as string | boolean, c.compare, c.value) || { why: `not ${conditionText(c)} (${String(p!.value)})`, asked: true };
+}
+
+/**
+ * Whether an entry's property compares as asked with another of its own:
+ * both there and worked out, else why not, naming which it has not; two
+ * numbers in the first one's unit, the other converted within its
+ * dimension; texts and true or false by = and ≠ alone, and only with one
+ * of their own kind.
+ */
+function meetsIts(e: Entry, c: Extract<Condition, { its: string }>): Met {
+  const p = e.properties[c.property];
+  const why = unreadable(p, c.property) ?? unreadable(e.properties[c.its], c.its);
+  if (why) return { why, asked: false };
+  if (typeof p!.value === "number") {
+    const unit = p!.unit;
+    const v = numberIn(e, c.its, unit);
+    if ("why" in v) return { why: v.why, asked: false };
+    const left = numberIn(e, c.property, unit);
+    if ("why" in left) return { why: left.why, asked: false };
+    const said = (x: number) => `${trim(x)}${unit !== "none" ? ` ${unitLabel(unit)}` : ""}`;
+    return compares(left.value, c.compare, v.value) || { why: `not ${conditionText(c)} (${said(left.value)} and ${said(v.value)})`, asked: true };
+  }
+  const q = e.properties[c.its]!;
+  if (typeof q.value !== typeof p!.value) return { why: `its ${c.property} and its ${c.its} are not of one kind`, asked: false };
+  if (c.compare !== "=" && c.compare !== "≠") return { why: `${conditionText(c)}: a text or true/false is compared by = or ≠ alone`, asked: false };
+  return compares(p!.value as string | boolean, c.compare, q.value as string | boolean) || { why: `not ${conditionText(c)} (${String(p!.value)} and ${String(q.value)})`, asked: true };
 }
 
 /** Reasons counted - most first, then in the order first met: "2: it has no nll; 1: ...". */
@@ -177,7 +218,9 @@ function unitTyped(u: string): Unit | undefined {
  * semicolon (one inside double quotes is a text's): a property, a
  * comparison (< ≤ > ≥ = ≠, or <= >= !=), and a value - a number, with its
  * unit where it has one ("energy ≤ -76.4 Eh", "nll < 30"); true or false;
- * else a text, in quotes or not. Why not, of the
+ * "its" and a property, that property of the same entry ("last end = its
+ * product"); else a text, in quotes or not (a text that begins with "its "
+ * in quotes). Why not, of the
  * first that does not read: no comparison, or one Meno does not know (=<),
  * no property, a unit Meno does not know, nothing to compare with, a quote
  * not closed.
@@ -204,6 +247,9 @@ export function conditionsIn(text: string): { conditions: Condition[] } | { why:
       const unit = unitText ? unitTyped(unitText) : "none";
       if (!unit) return { why: `"${line}": ${unitText} is no unit Meno knows` };
       conditions.push({ property, compare, value: Number(number[1].replace("−", "-")), unit });
+    } else if (/^its\s/.test(value)) {
+      const its = value.slice(3).trim();
+      conditions.push({ property, compare, its });
     } else if (value === "true" || value === "false") conditions.push({ property, compare, value: value === "true" });
     else conditions.push({ property, compare, value: /^".*"$/s.test(value) ? value.slice(1, -1) : value });
   }
