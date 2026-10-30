@@ -54,6 +54,22 @@ describe("Merge, as a step", () => {
     expect(ok(runMenoPair("merge", { entries: [cation], holds: "molecules" }, { entries: [water(1)], holds: "molecules" })).kept[0]).toBe(cation);
   });
 
+  it("takes an empty input as nothing to add: the other's entries, its line saying so - both empty, nothing to merge", () => {
+    // (a branch that gave none this time - a step's second exit none went out of - merged with one that gave some)
+    const o = ok(runMenoPair("merge", { entries: [], holds: "conformers" }, { entries: [water(1), water(2)], holds: "conformers" }));
+    expect(o.kept.map((e) => [e.compound, e.number])).toEqual([
+      [0, 1],
+      [0, 2],
+    ]);
+    expect(o.holds).toBe("conformers");
+    expect(o.said).toMatch(/ · nothing came from First$/);
+    expect(ok(runMenoPair("merge", { entries: [water(1)], holds: "molecules" }, { entries: [], holds: "molecules" })).said).toMatch(/ · nothing came from Second$/);
+    expect(runMenoPair("merge", { entries: [], holds: "molecules" }, { entries: [], holds: "molecules" })).toEqual({ ok: false, said: "Nothing came into its first input" });
+    // (the other steps of two inputs still refuse one: each needs both)
+    expect(runMenoPair("rebond", { entries: [], holds: "molecules" }, { entries: [water(1)], holds: "molecules" })).toEqual({ ok: false, said: "Nothing came into its first input" });
+    expect(runMenoPair("compare-bonding", { entries: [water(1)], holds: "molecules" }, { entries: [], holds: "molecules" })).toEqual({ ok: false, said: "Nothing came into its second input" });
+  });
+
   it("keeps one of each value of a property, the rest set aside each naming the one kept", () => {
     const first = [tagged(water(1), "start", "start-1")];
     const second = [tagged(water(1), "start", "start-1"), tagged(ammonia(), "start", "start-2")];

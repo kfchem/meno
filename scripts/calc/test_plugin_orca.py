@@ -224,6 +224,93 @@ Number of SCF / gradient calculations:
 """
 # (and where one image's SCF did not converge, ORCA carrying on with the band)
 SCF_FAILED = "[file orca_leanscf/orca_leanscf.cpp, line 306]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged. There may be a way out but we have to stop here \n"
+def irc_log(capped=()):
+    """ORCA's log of a reaction path, in its form: each side, then the path summary - the point it started from marked."""
+    side = lambda name: f"""
+         *                          {name} IRC                      *
+    0        -1.0950   -1.00   0.01  0.005
+""" + ("""         *  MAXIMUM NUMBER OF ITERATIONS REACHED - STOPPING IRC RUN  *
+""" if name.lower() in capped else """                      ***            THE IRC HAS CONVERGED          ***
+""")
+    return side("FORWARD") + side("BACKWARD") + """
+                       IRC PATH SUMMARY
+Step        E(Eh)      dE(kcal/mol)  max(|G|)   RMS(G)
+   1        -1.170000   -50.20    0.000800  0.000400
+   2        -1.100000    -6.27    0.010000  0.005000
+   3        -1.090000     0.00    0.000016  0.000008 <= TS
+   4        -1.120000   -18.83    0.010000  0.005000
+
+                             ****ORCA TERMINATED NORMALLY****
+"""
+
+
+IRC_FILES = {"input_IRC_Full_trj.xyz": xyz([(0.74, -1.17), (0.90, -1.10), (0.97, -1.09), (1.10, -1.12)])}
+
+
+class ReactionPath(unittest.TestCase):
+    def test_a_job_for_each_point_irc_both_ways_its_steps_where_said(self):
+        options = defaults("reaction-path")
+        job = ask("prepare", step="reaction-path", entries=[H2], options={**options, "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"})["jobs"][0]
+        lines = job["files"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "! NATIVE-XTB2 IRC")
+        self.assertFalse(any(l.startswith("%irc") for l in lines))
+        self.assertEqual(job["reads"], ["input_IRC_Full_trj.xyz"])
+        more = ask("prepare", step="reaction-path", entries=[H2], options={**options, "method": "XTB2", "maxiter": 256})["jobs"][0]
+        self.assertIn("%irc maxiter 256 end", more["files"][0]["text"].splitlines())
+        # (no level of its own unless set: the chemist sets the start's)
+        self.assertEqual((options["method"], options["basis"], options["dispersion"]), ("", "", "none"))
+        with self.assertRaisesRegex(AssertionError, "there is no method"):
+            ask("prepare", step="reaction-path", entries=[H2], options=options)
+
+    def test_reads_the_path_end_to_end_its_start_marked_each_side_said(self):
+        options = {**defaults("reaction-path"), "method": "NATIVE-XTB2", "basis": ""}
+        out = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=irc_log(), ended="done")["outputs"][0]
+        self.assertEqual(out["energies"], [-1.17, -1.10, -1.09, -1.12])
+        self.assertEqual(out["converged"], [False, False, True, False])
+        self.assertEqual(out["method"], "GFN2-xTB")
+        self.assertEqual(out["results"][0]["values"], ["backward, step 2 of 2", "backward, step 1 of 2", "the point it started from", "forward, step 1 of 1"])
+        self.assertNotIn("optimised", out)
+        # (a side stopped at ORCA's cap: the path as far as it came, said - no converged one)
+        capped = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=irc_log(("forward",)), ended="done")["outputs"][0]
+        self.assertEqual(capped["optimised"], False)
+        self.assertIn("The forward side stopped at ORCA's iteration cap", capped["warnings"][0]["text"])
+        # (ORCA said a side stopped, but not where: a side, never read as complete)
+        unsaid = irc_log().replace("THE IRC HAS CONVERGED", "").replace("FORWARD IRC", "").replace("BACKWARD IRC", "") + "MAXIMUM NUMBER OF ITERATIONS REACHED - STOPPING IRC RUN\n"
+        unsaid = unsaid.replace("****ORCA TERMINATED NORMALLY****", "") + "****ORCA TERMINATED NORMALLY****\n"
+        one = ask("collect", step="reaction-path", entries=[H2], options=options, files=IRC_FILES, log=unsaid, ended="done")["outputs"][0]
+        self.assertEqual(one["optimised"], False)
+        self.assertTrue(one["warnings"][0]["text"].startswith("A side stopped at ORCA's iteration cap"))
+        # (a summary that does not list the frames written, or marks no start: not read)
+        bad = ask("collect", step="reaction-path", entries=[H2], options=options, files={"input_IRC_Full_trj.xyz": xyz([(0.74, -1.17)])}, log=irc_log(), ended="done")["outputs"][0]
+        self.assertEqual(bad["kind"], "no-geometry")
+
+
+class SaddlePoint(unittest.TestCase):
+    def test_a_guess_optimised_to_a_saddle_point_its_first_hessian_computed_unless_asked_not_no_sides(self):
+        options = defaults("saddle-point")
+        nh3 = {"name": "nh3", "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0.1}, {"el": "H", "x": 1.01, "y": 0, "z": 0}, {"el": "H", "x": -0.505, "y": 0.8747, "z": 0}, {"el": "H", "x": -0.505, "y": -0.8747, "z": 0}], "bonds": [], "charge": 0, "multiplicity": 1}
+        said = ask("prepare", step="saddle-point", entries=[nh3], options={**options, "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"})
+        lines = said["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(lines[0], "! NATIVE-XTB2 OPTTS")
+        self.assertIn("%geom Calc_Hess true end", lines)
+        # (at ORCA's own xTB its first Hessian is a numerical one: said on the step's line; no wavefunction kept)
+        self.assertEqual(said.get("note"), "its first Hessian computed numerically")
+        self.assertEqual(said["jobs"][0]["reads"], [])
+        # (no level of its own unless set: the chemist sets it)
+        self.assertEqual((options["method"], options["basis"], options["dispersion"]), ("", "", "none"))
+        with self.assertRaisesRegex(AssertionError, "there is no method"):
+            ask("prepare", step="saddle-point", entries=[nh3], options=options)
+        dft = ask("prepare", step="saddle-point", entries=[nh3], options={**options, "method": "B3LYP", "basis": "def2-SVP", "dispersion": "D3BJ", "hessian": "model"})
+        self.assertEqual(dft["jobs"][0]["files"][0]["text"].splitlines()[0], "! B3LYP def2-SVP D3BJ OPTTS")
+        self.assertFalse(any("Calc_Hess" in l for l in dft["jobs"][0]["files"][0]["text"].splitlines()))
+        self.assertNotIn("note", dft)
+        # (sides wired beside it: ORCA's OptTS takes none - refused, never dropped)
+        with self.assertRaisesRegex(AssertionError, "takes no sides"):
+            ask("prepare", step="saddle-point", entries=[{**nh3, "sides": {"reactant": nh3, "product": nh3}}], options=options)
+        with self.assertRaises(AssertionError):
+            ask("prepare", step="saddle-point", entries=[nh3], options={**options, "hessian": "guessed"})
+
+
 H2 = {"name": "h2", "atoms": [{"el": "H", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 0.74, "y": 0, "z": 0}], "bonds": [], "charge": 0, "multiplicity": 1}
 H2_END = {**H2, "atoms": [{"el": "H", "x": 0, "y": 0, "z": 0}, {"el": "H", "x": 1.10, "y": 0, "z": 0}]}
 
@@ -326,11 +413,34 @@ class Collect(unittest.TestCase):
         log = "\n ... \nORCA finished by error termination in SCF\nCalling Command: orca_scf input.gbw b input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=log, ended="failed"), {"why": "ORCA finished by error termination in SCF"})
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log="", ended="stopped"), {"why": "ORCA said nothing"})
+        # (one brought down under way says no error: not its settings' "Startup error" line, but where it got to)
+        down = "   Startup error        DIISStart       ....  0.200000\n ... \n               ***  Starting incremental Fock matrix formation  ***\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=down, ended="failed"), {"why": "ORCA stopped without saying why, after: ***  Starting incremental Fock matrix formation  ***"})
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.strip())
+        # (a line that begins ERROR - ORCA 6.1.1's programs print such, "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY" one - or
+        #  FATAL ERROR is its own words, before any other line that says error)
+        unitary = "   Startup error        DIISStart       ....  0.200000\nERROR IN SCHMIDT-MATRIX IS NOT UNITARY\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=unitary, ended="failed")["why"], "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY")
+        fatal = "   Startup error        DIISStart       ....  0.200000\nFATAL ERROR in the integrals\n  .... aborting the run\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=fatal, ended="failed")["why"], "FATAL ERROR in the integrals")
+
+    def test_an_optimisation_that_stopped_under_way_is_read_for_where_it_got_to(self):
+        cycle = "GEOMETRY OPTIMIZATION CYCLE   3\n ... \nORCA finished by error termination in SCF\n"
+        stopped = ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=cycle, ended="failed")
+        self.assertEqual(stopped, {"why": "ORCA finished by error termination in SCF", "partial": [{"kind": "orca", "log": True, "name": "water.out"}]})
+        # (not before it was under way, nor for a single point)
+        self.assertNotIn("partial", ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="ORCA finished by error termination in SCF\n", ended="failed"))
+        self.assertNotIn("partial", ask("collect", step="energy", entries=[WATER], options={}, files={}, log=cycle, ended="failed"))
 
     def test_a_job_that_exited_0_but_ended_by_error_termination_failed_and_only_one_that_terminated_normally_is_read(self):
         # (as ORCA 6.1.1 ends a parallel run whose MPI is not there: its exit code 0, read as done)
         startup = "%pal nprocs 4 end\nsh: mpirun: command not found\nORCA finished by error termination in Startup\nCalling Command: mpirun -np 4 orca_startup_mpi input.int.tmp input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
-        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=startup, ended="done"), {"why": "ORCA finished by error termination in Startup"})
+        # (said plainly, with what to do: Open MPI is what ORCA runs in parallel with, its manual's 2.5.2.1)
+        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=startup, ended="done"), {"why": worker.NO_MPI_SAID})
+        self.assertTrue(worker.NO_MPI_SAID.startswith("ORCA runs on more than one core only with Open MPI"))
+        # (a start-up error of another kind: in ORCA's words, as before)
+        other = startup.replace("sh: mpirun: command not found\n", "")
+        self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=other, ended="done"), {"why": "ORCA finished by error termination in Startup"})
         # (nor one that never says it ended - cut off, though its runner saw it end)
         self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="FINAL SINGLE POINT ENERGY -76.4\n", ended="done"), {"why": "ORCA's log does not say it ended normally; it last said: FINAL SINGLE POINT ENERGY -76.4"})
         self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="", ended="done"), {"why": "ORCA's log does not say it ended normally"})

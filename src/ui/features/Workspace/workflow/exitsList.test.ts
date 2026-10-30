@@ -35,6 +35,7 @@ describe("a kind's exits, as a list", () => {
       rebond: [first("Re-bonded", "same"), rest("Not re-bonded", "same")],
       "compare-bonding": [first("Same", "same"), rest("Different", "same")],
       "take-frames": [first("Frames", "molecules")],
+      displace: [first("Displaced", "same"), rest("Not displaced", "same")],
       "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       rank: [first("The first {keep}", "same"), rest("The rest", "same")],
       join: [first("Joined", "same"), rest("Not joined", "same")],
@@ -43,6 +44,8 @@ describe("a kind's exits, as a list", () => {
       number: [first("Number", "number")],
       add: [first("{as}", "same"), rest("Not added", "same")],
       "atom-map": [first("Mapped", "same"), rest("Not mapped", "same"), { id: "changes", name: "Bond changes", gives: "table" }],
+      "reaction-path": [first("Reaction paths", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
+      "saddle-point": [first("Optimised structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

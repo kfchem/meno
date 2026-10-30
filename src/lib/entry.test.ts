@@ -125,6 +125,30 @@ describe("a property's value, checked against its entry", () => {
   });
 });
 
+describe("restraints read back from a file", () => {
+  it("reads each row as it was written, and nothing where any row does not read", () => {
+    const value = { restraints: [
+      { kind: "distance", atoms: [0, 1], value: 3.21, strength: 500 },
+      { kind: "dihedral", atoms: [3, 0, 1, 2], value: 180, strength: 50 },
+      { kind: "fixed", atoms: [2] },
+    ] };
+    const p = propertyIn({ value, unit: "none", status: "computed" });
+    expect(p).toEqual({ value, unit: "none", status: "computed" });
+    // (a row of no kind, a distance with no strength, atoms fixed with a value, an atom not a whole number: none read - nothing held in part)
+    for (const bad of [
+      { kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 },
+      { kind: "distance", atoms: [0, 1], value: 2 },
+      { kind: "fixed", atoms: [0], value: 1 },
+      { kind: "fixed", atoms: [0.5] },
+      // (the wrong number of atoms for its kind)
+      { kind: "distance", atoms: [0, 1, 2], value: 2, strength: 1 },
+      { kind: "dihedral", atoms: [0, 1, 2], value: 180, strength: 1 },
+      { kind: "fixed", atoms: [] },
+    ])
+      expect(propertyIn({ value: { restraints: [value.restraints[0], bad] }, unit: "none", status: "computed" })).toBeUndefined();
+  });
+});
+
 describe("a molecule's species, by Meno's one rule", () => {
   const anion = { atoms: [{ el: "O", x: 0, y: 0, z: 0, charge: -1 }, { el: "H", x: 1, y: 0, z: 0 }], bonds: [] };
 
@@ -168,6 +192,13 @@ describe("a property's structure, as a file holds it", () => {
     expect(propertyIn({ ...p, of: 7 })).toBeUndefined();
     const { of: _, ...plain } = p;
     expect(propertyIn(plain)).toEqual(plain);
+  });
+
+  it("reads back the symmetry a free energy was worked out with - its point group, and its symmetry number a whole number of 1 or more", () => {
+    const p = { value: -56.53, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 }, status: "computed" };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    for (const bad of [0, 1.5, "3", -3]) expect(propertyIn({ ...p, by: { ...p.by, symmetryNumber: bad } })).toBeUndefined();
+    expect(propertyIn({ ...p, by: { ...p.by, pointGroup: 3 } })).toBeUndefined();
   });
 
   it("reads back a table of numbers, as a conformer carries its vibrations - and refuses a table of any other shape", () => {

@@ -244,6 +244,7 @@ Property
   by          the step and run that gave it; the plugin and version; the
               program, method and basis, or the model and its version;
               for a thermal quantity, the treatment of its vibrations
+              and the symmetry it took (point group, symmetry number)
   status      computed, failed (why), or not applicable (why)
 ```
 
@@ -262,8 +263,16 @@ reading's own id, the one name every plugin that reads it gives it:
   (`thermo.pressure`, atm) the program said it used - none where it said
   none, never one assumed - and in its solvation; by what worked it out,
   with the treatment of its vibrations as the program said it
-  (`thermo.treatment`). A reading that is not an energy in hartrees is
-  not taken;
+  (`thermo.treatment`), and the symmetry it took as the program printed
+  it: `by.pointGroup` and `by.symmetryNumber`, the rotational symmetry
+  number its rotational entropy counts (`thermo.point-group`,
+  `thermo.symmetry-number`; 2026-10-30). A G is worked out with its own
+  sigma, so its sigma is on it: wherever the value goes - carried by a
+  later step, copied as a part of a sum - its symmetry goes with it, one
+  source. None printed, none said, never one assumed. Being the
+  molecule's, not a way of working out, it never keeps two values apart
+  as program or treatment do: two molecules' differ by right. A reading
+  that is not an energy in hartrees is not taken;
 - `vibrations`, a table of each vibration's frequency (`FREQUENCY`, cm-1,
   an imaginary one negative) in the program's order, from the list whose
   column is a wavenumber; and `modes`, in the same order, where every

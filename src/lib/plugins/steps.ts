@@ -34,6 +34,7 @@ export const STEP_KINDS = [
   "rebond",
   "compare-bonding",
   "take-frames",
+  "displace",
   "path-search",
   "rank",
   "join",
@@ -42,6 +43,8 @@ export const STEP_KINDS = [
   "number",
   "add",
   "atom-map",
+  "reaction-path",
+  "saddle-point",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
@@ -50,7 +53,7 @@ export type StepKind = (typeof STEP_KINDS)[number];
  * (docs/WORKFLOWS-FOUNDATION.md, *Enumerate is Meno's own*): a manifest's
  * step of one is left out, as one of a kind not here is.
  */
-export const MENO_ONLY: readonly StepKind[] = ["enumerate", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "take-frames", "atom-map", "number", "add", "restraints", "torsion-restraints", "join", "rank"];
+export const MENO_ONLY: readonly StepKind[] = ["enumerate", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "take-frames", "displace", "atom-map", "number", "add", "restraints", "torsion-restraints", "join", "rank"];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;

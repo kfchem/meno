@@ -88,7 +88,7 @@ export function bondChangesTable<M extends { map: number; changes: readonly Bond
   const maps = mapped.some((m) => m.map > 0);
   return {
     columns: [
-      { name: MAPPED_ENTRY, kind: "text" },
+      { name: MAPPED_ENTRY, kind: "text", label: "Product" },
       ...(maps ? [{ name: "Map", kind: "number" as const, unit: "none" as const }] : []),
       { name: "Change", kind: "text" },
       { name: "Atom 1", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },

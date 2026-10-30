@@ -20,11 +20,19 @@ import { isUnit, type Unit } from "./units";
  * from it assumes it (`atomsOfRows`); a text's; true or false; or an
  * entry's id.
  */
-export type TableColumn =
+export type TableColumn = (
   | { name: string; kind: "number"; unit: Unit | "none"; by?: By; at?: At; atoms?: typeof ATOMS_FROM_1 }
   | { name: string; kind: "text" }
   | { name: string; kind: "bool" }
-  | { name: string; kind: "entry" };
+  | { name: string; kind: "entry" }
+) & {
+  /**
+   * What its head says, where that is other than its name ("Product" for
+   * "map.entry"): its name stays its key - what rows are matched
+   * on, what a condition names - and is never changed for its look.
+   */
+  label?: string;
+};
 
 /** A cell: as its column's kind is - or none, where it has no value. */
 export type Cell = number | string | boolean | null;
@@ -383,15 +391,18 @@ export function fieldsIn<T extends object>(v: unknown, numbers: readonly string[
 }
 
 /** A column as a file keeps it, read back; none where its name, kind or unit does not read. */
-function columnIn(c: { name?: unknown; kind?: unknown; unit?: unknown; by?: unknown; at?: unknown; atoms?: unknown } | null, lost: Lost): TableColumn | undefined {
+function columnIn(c: { name?: unknown; kind?: unknown; unit?: unknown; by?: unknown; at?: unknown; atoms?: unknown; label?: unknown } | null, lost: Lost): TableColumn | undefined {
   if (!c || !isText(c.name)) return undefined;
+  // (its head's words, where given: a label that does not read is left, the column kept under its name)
+  if (c.label != null && !(isText(c.label) && c.label)) lost("valueField");
+  const label = isText(c.label) && c.label ? { label: c.label } : {};
   if (c.kind === "number") {
     if (!(c.unit === "none" || (isText(c.unit) && isUnit(c.unit)))) return undefined;
     const by = fieldsIn<By>(c.by, [], lost);
     const at = fieldsIn<At>(c.at, ["kelvin", "atm"], lost);
-    return { name: c.name, kind: "number", unit: c.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}), ...(c.atoms === ATOMS_FROM_1 ? { atoms: ATOMS_FROM_1 } : {}) };
+    return { name: c.name, kind: "number", unit: c.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}), ...(c.atoms === ATOMS_FROM_1 ? { atoms: ATOMS_FROM_1 } : {}), ...label };
   }
-  return c.kind === "text" || c.kind === "bool" || c.kind === "entry" ? { name: c.name, kind: c.kind } : undefined;
+  return c.kind === "text" || c.kind === "bool" || c.kind === "entry" ? { name: c.name, kind: c.kind, ...label } : undefined;
 }
 
 /**

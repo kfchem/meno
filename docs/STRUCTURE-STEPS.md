@@ -135,7 +135,10 @@ are numbered on after *First*'s. *Keep* is *All*, or *One of each* value of
 a property: the first met is kept, and each later one is set aside, naming
 the one kept ("the same start as a #1, which was kept"). One with no value
 of it is set aside too, saying so. More than two sets are merged by chaining
-Merges.
+Merges. One input that holds nothing - a branch that gave none this time, a
+step's second exit that none went out of - adds nothing: the other's
+entries come out, and the line says so ("nothing came from
+First"). Both empty, nothing is merged, and the step says so.
 
 ## Re-bond
 
@@ -405,6 +408,40 @@ products, CH3Cl and Br-, as one side: one entry, a bond formed and one
 broken. End to end on the page, its bond changes into *Measure*: the bond
 it forms, C1 to C5, measured on the mapped product as long as it is in the
 product as drawn.
+
+## Displace
+
+Each entry's geometry moved along a vibration (`displacedEntry`,
+`src/lib/steps/vibrations.ts`): case F's way back from a structure that
+has the wrong number of imaginary vibrations - moved along one, then
+optimised again.
+
+- **As a step.** *Along* is *The imaginary vibration* - the one of negative
+  frequency; of several, the most negative, said on the line - or *A
+  vibration by number*, from 1 in the order of its calculation's table.
+  *Amplitude* is in ångströms. Its sign is along the mode as the program
+  wrote it, negative against it: a mode's direction is the program's
+  choice, not the chemistry's, so to go both ways from a saddle point,
+  take two Displace steps, one of each sign. It has no default (0, which
+  moves nothing, until one is given): no value is right for every system,
+  and none is given without a stated basis.
+- **How far.** The atom the vibration moves most moves exactly the
+  amplitude, every other atom in proportion. Nothing depends on how the
+  program scaled its modes.
+- **What it carries.** Its properties ride along, each saying the geometry
+  it was worked out at. Its energy and calculation, of the old geometry,
+  are not its own any more.
+- **Nothing in part.** An entry not finished - its calculation failed, or
+  did not converge - goes out of *Not displaced* as not finished: its
+  vibrations are no ground to move it on. So does one with no vibrations,
+  no imaginary one where that is asked, or no vibration of the number
+  asked, with why written on it (`set_aside`). A conformer set's line
+  counts frames.
+
+Checked: the atom moving most moved by the amplitude, the others in
+proportion, either way; the same move however the mode is scaled; O-H-O
+moved along its proton transfer, and along a bend chosen by number; an
+entry with no imaginary vibration, or no vibrations, set aside with why.
 
 ## Numbering
 
