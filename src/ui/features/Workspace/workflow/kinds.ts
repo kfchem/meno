@@ -20,7 +20,7 @@ import { measurementName, measurementsTyped } from "../../../../lib/steps/measur
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
 import { BOND_REACH, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
-import type { RestraintsAsked } from "../../../../lib/steps/restraints";
+import { DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
@@ -48,7 +48,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "ensemble";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -174,6 +174,8 @@ export const KINDS: readonly KindInfo[] = [
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
+  // (each entry minimised in a force field with its restraints held - Restraints', Torsion restraints' - as its plugin holds them: docs/PLUGINS.md)
+  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
   { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
@@ -745,7 +747,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "factor", label: "Kept at \u00d7 the sum of their van der Waals radii (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
       { id: "distances", label: "Pairs kept at their distance, atoms from 1 (3-7, 1-12)", type: "text", default: "" },
       { id: "fixed", label: "Atoms fixed, from 1 (1, 4-6)", type: "text", default: "" },
-      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: "" },
+      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: String(DISTANCE_STRENGTH) },
     ],
     how: (v) => restraintsHow(v),
     needs: (v) => restraintsNeeds(v),
@@ -776,7 +778,7 @@ export const KINDS: readonly KindInfo[] = [
         default: "one",
       },
       { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
-      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: "" },
+      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP) },
     ],
     how: (v) => torsionsHow(v),
     needs: (v) => torsionsNeeds(v),
@@ -942,7 +944,7 @@ export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked } | {
   const fixed = atomsFromOne(String(v.fixed ?? ""));
   if ("why" in fixed) return { why: fixed.why };
   if (!coordination && !typed.atoms.length && !fixed.length) return { why: "Nothing to hold yet" };
-  const strength = aboveZero(String(v.strength ?? ""), "The strength");
+  const strength = aboveZero(String(v.strength ?? DISTANCE_STRENGTH), "The strength");
   if ((coordination || typed.atoms.length) && strength == null) return { why: "Set the strength" };
   if (strength && typeof strength === "object") return { why: strength.why };
   return {
@@ -971,13 +973,14 @@ export function restraintsHow(v: OptionValues): string {
     distances?.length ? `${distances.length} ${distances.length === 1 ? "pair" : "pairs"} at their distance` : "",
     fixed?.length ? `${fixed.length} ${fixed.length === 1 ? "atom" : "atoms"} fixed` : "",
   ].filter(Boolean);
-  return `${said.join("; ")}${strength != null ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
+  // (the strength where it is not the default: what was chosen, said)
+  return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
 }
 
 /** What a Torsion restraints step still needs of its options. */
 export function torsionsNeeds(v: OptionValues): string | undefined {
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
-  const step = aboveZero(String(v.step ?? ""), "The strength added");
+  const step = aboveZero(String(v.step ?? TORSION_STEP), "The strength added");
   if (step == null) return "Set the strength added";
   return typeof step === "object" ? step.why : undefined;
 }
@@ -989,7 +992,7 @@ export function torsionsHow(v: OptionValues): string {
   // (the one reference is the default: left unsaid)
   const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
   // (the + says it adds each time - the option's own label says it whole)
-  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
+  return `held at 180\u00b0, +${String(v.step ?? TORSION_STEP).trim()} kcal/mol/rad\u00b2${matched}`;
 }
 
 /** *Displace*'s options as read: its amplitude (Å, not 0), and the vibration (from 0) where one is chosen by number - or what it still needs. */

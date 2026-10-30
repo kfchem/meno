@@ -11,6 +11,7 @@ describe("a kind's exits, as a list", () => {
       generate: [first("Generated", "structures")],
       conformers: [first("Conformers", "conformers"), failed("molecules")],
       optimise: [first("Optimised", "same"), failed()],
+      minimise: [first("Minimised", "same"), failed()],
       energy: [first("Energies", "same"), failed()],
       frequencies: [first("Frequencies", "same"), failed()],
       nci: [first("Non-covalent interactions", "same"), failed()],

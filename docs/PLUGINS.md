@@ -546,6 +546,47 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     distances from the centre, sorted, is a bound the conformers cannot be
     under, and each way's own atoms laid over alone is another. Only pairs
     and ways under 0.01 Å by both are laid over in full.
+- **Minimise with restraints, and a search that holds them.** The RDKit
+  plugin fills *Minimise with restraints*: each entry minimised in MMFF94
+  (or MMFF94s, or UFF, as the step asks; UFF where MMFF has no
+  parameters; refused, said, where neither has), its restraints held by
+  RDKit's own constraints as the entry record states them:
+  - a distance by RDKit's distance constraint, ½ k d², the record's k as
+    it is (kcal mol⁻¹ Å⁻²);
+  - a dihedral by RDKit's torsion constraint, which is k (the angle off in
+    degrees)², so the record's k times ½ (π/180)² (`TORSION_K`); both go
+    the shorter way round;
+  - atoms fixed as RDKit's fixed points.
+
+  Nothing between the molecule's parts is left out. It takes at most the
+  steps the step gives, 2000 unless set (`STEPS`, the conformer search's
+  own), and an entry that does not converge in them goes out of *Failed*,
+  saying so. Its energy is the force field's own at the places reached,
+  the restraints' not in it. How far it missed what its restraints hold -
+  the largest distance miss, in Å, and the largest torsion miss, in
+  degrees - comes back as results on the molecule (*Restraints*), so a
+  strength set too weak shows rather than passing in silence. Each energy
+  law is tested against energies worked by hand, across ±180° for a
+  dihedral (`scripts/calc/test_plugin_rdkit.py`). Asked to start *where its restraints were
+  first held*, it starts from the entry's `start`, which Meno writes on its
+  result from where the entry stood as it came, the first time (case F's
+  rounds each start from the geometry before the first, WORKFLOWS-FOUNDATION.md
+  F15). Its conformer search holds an entry's restraints too, as each
+  conformer is optimised, where the molecule has no metal (a metal's own
+  holds are not yet combined with them); none fixed, since a search moves
+  every atom. Either refusal is in words, before anything is embedded. Its
+  *Held* row says the largest miss over the conformers it kept. A
+  distance held is embedded at its value too (`held_bounds`): laid where
+  ETKDG lays a molecule's parts, an acid and its base were left apart -
+  pyridine's BH3 17 Å off at any strength - and embedded at it they hold
+  within 0.02 Å at 239 kcal mol⁻¹ Å⁻² and within 0.01 Å at 500, over
+  eight acid–base pairs (`scripts/calc/measure_restraint_strengths.py`
+  measures it again). A coordination bond that a
+  distance restraint holds - case F's acid held at its base at a factor
+  of their van der Waals radii - is held by that restraint alone: the
+  force field has no bond for it, so the acid and the base are each as
+  their own hydrogens make them (H3N→BH3 held at 3.21 Å comes out as NH3
+  and BH3 that far apart). From RDKit plugin 0.1.15.
 - **A coordination bond is RDKit's dative bond, taking no hydrogen.** A
   drawn dative arrow or coordination bond (a MOL block's type 9), or a
   plugin entry's bond marked `coordination`, is read as RDKit's dative
@@ -553,13 +594,33 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   RDKit counts a dative bond in its acceptor's valence, so a plain B drawn
   H3N→BH3 was given two hydrogens, where Meno counts three: the molecule
   in 3D came out H3N→BH2 (RDKit plugin to 0.1.11). Its acceptor, not a
-  metal, is now given the hydrogens Meno counts, the dative bond taking
-  none (`acceptors_as_drawn`). Where RDKit then cannot hold it - a neutral
-  B or Al with its three bonds besides - the structure is refused in
-  words: "RDKit cannot hold the coordination bond from N to B as drawn: B
-  takes no further bond there. Draw the two charged instead, N+ bonded to
-  B-." A metal acceptor keeps its ligands' hydrogens as they are
-  (cisplatin drawn with arrows: six). From RDKit plugin 0.1.12.
+  metal, is given the hydrogens Meno counts, the dative bond taking none
+  (`acceptors_as_drawn`), from 0.1.12. A metal acceptor keeps its ligands'
+  hydrogens as they are (cisplatin drawn with arrows: six).
+- **A group-13 adduct is held in its dipolar form inside RDKit.** RDKit
+  cannot hold a dative bond to a full group-13 acceptor: B, Al, Ga, In or
+  Tl, neutral, with three bonds besides. So such a bond, from a donor that
+  can carry a charge (N, P, As, O, S, Se or a halogen), neutral, is held
+  inside RDKit as a single bond, the donor +1 and the acceptor −1
+  (`dipolar_adducts`). The total charge and the electrons are the same as
+  drawn. Every op reads a drawn adduct so (`read`, `drawing_of_parts`):
+  *Check structures* keeps it as drawn, *Descriptors* works it out, and the
+  analysis of a drawing marks no atom of it as having too many bonds. What
+  the plugin writes of the molecule is of that form, the same molecule
+  written as RDKit holds it: its SMILES and the keys made from it
+  ([NH3+][BH3-] for H3N→BH3), *Stereoisomers*' SMILES, and *Descriptors*'
+  values (its weight the same either way). What it gives back as a
+  structure is as drawn: a conformer's atoms carry the charges drawn
+  (`drawn_charge`), and each drawing *Stereoisomers* makes carries the
+  arrow and the charges drawn (`as_drawn`). The force field's energies are for that form, and *How it was made*
+  says so: "N→B computed as a single bond, N+ and B−" (or, for several,
+  "N→B, O→B computed as single bonds, each donor + and acceptor −").
+  H3N→BH3, Me3N→AlCl3, the BF3 adducts of an ether and a ketone, and
+  Al2Cl6 drawn with its bridges as arrows are each made, with all their
+  atoms. A coordination bond to a main-group acceptor that cannot be held
+  so is refused in words, naming the reason: an acceptor not of group 13,
+  a charged acceptor or donor, a donor that cannot carry the charge, or
+  two such bonds onto one acceptor. From RDKit plugin 0.1.15.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
@@ -1144,7 +1205,9 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   "bonds": [{"a1", "a2", "order", "coordination"?}],
   "charge": 0,
   "multiplicity": 1,
-  "files": [{"kind", "name", "text"}]  (where the step takes some)
+  "files": [{"kind", "name", "text"}], (where the step takes some)
+  "restraints": [{"kind", "atoms", "value"?, "strength"?}], (where it carries some)
+  "start": [x, y, z, ...]            (where a minimisation first held them)
 }
 ```
 
@@ -1173,7 +1236,14 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   distance by E = k d²/2, k in kcal mol⁻¹ Å⁻²; a dihedral by E = k φ²/2,
   φ in radians the shorter way round, k in kcal mol⁻¹ rad⁻²; atoms fixed
   where they are - converting k into its program's units and saying here,
-  under its name, how; or it refuses them in words. None does yet.
+  under its name, how; or it refuses them in words. An entry gives its
+  restraints as `restraints`, and `start`, the places a minimisation first
+  held them at, where one has. The RDKit plugin holds them (*Minimise with
+  restraints, and a search that holds them*, below). A step that holds
+  none - an *Optimise*, an *Energy* - is given them all the same and leaves
+  them aside: what its program gives back is unheld. It need not refuse
+  them, as case F optimises, unheld, what it minimised with restraints
+  (WORKFLOWS-FOUNDATION.md, F16).
 - A temperature, a pressure and a solvent a plugin gives with a property
   are those its program says it used; a solvent is named with its model
   as the program names them (`ALPB(water)`), or `none` where the
