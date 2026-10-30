@@ -1798,8 +1798,7 @@ Not put right here:
   ORCA's jobs look for it. Not there, each job runs on one core - no
   `%pal` written, one core asked, so that the queue counts it as one and
   as many run side by side as there are cores - and the step's line says
-  so once: *no MPI found: ORCA runs on one core (cores per job apply to
-  the other programs)*. Never refused, whatever *Cores for each* says: it
+  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
   applies to every program, and those that need no launcher still take
   it. The failure above stays for a launcher found that ORCA's job then
   cannot run.

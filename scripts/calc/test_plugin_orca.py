@@ -104,7 +104,7 @@ class Prepare(unittest.TestCase):
             self.assertNotIn("%pal", job["files"][0]["text"])
             self.assertEqual(job["cores"], 1)
             self.assertEqual(job["memory"], 2000)
-        self.assertEqual(alone["note"], "no MPI found: ORCA runs on one core (cores per job apply to the other programs)")
+        self.assertEqual(alone["note"], "run on one core: no MPI on this computer")
         # (one core given - Settings set so, or a computer of one - nothing to say, nothing changed)
         with missing:
             one = ask("prepare", step="energy", entries=[WATER], options=opts, cores=1)
@@ -113,7 +113,7 @@ class Prepare(unittest.TestCase):
         # (said beside what else the step says: frequencies at ORCA's own xTB, computed numerically)
         with missing:
             numeric = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": ""}, cores=4)
-        self.assertEqual(numeric["note"], "frequencies computed numerically; no MPI found: ORCA runs on one core (cores per job apply to the other programs)")
+        self.assertEqual(numeric["note"], "frequencies computed numerically; run on one core: no MPI on this computer")
         # (a path search too)
         with missing:
             path = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), cores=4)

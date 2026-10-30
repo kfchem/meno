@@ -413,7 +413,7 @@ describe("a step that runs a plugin's program", () => {
     const calculations = useAppSettings.getState().calculations;
     useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
     try {
-      const NO_MPI = "no MPI found: ORCA runs on one core (cores per job apply to the other programs)";
+      const NO_MPI = "run on one core: no MPI on this computer";
       const one = { program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [], cores: 1 };
       worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }], note: NO_MPI }) as never);
       worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);

@@ -431,7 +431,7 @@ def irc_output(entry, files, log, options):
 LAUNCHER = "mpiexec" if sys.platform == "win32" else "mpirun"
 #: Said once on the step's line where it is not there: each job then runs on one core, whatever the cores each job is
 #: given - they apply to the other programs, which need no launcher - never refused, never failed at ORCA's start-up.
-NO_LAUNCHER_SAID = "no MPI found: ORCA runs on one core (cores per job apply to the other programs)"
+NO_LAUNCHER_SAID = "run on one core: no MPI on this computer"
 
 
 #: How a program is looked for on the PATH: the standard library's (its tests give their own).
