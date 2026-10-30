@@ -1,7 +1,7 @@
 /**
  * *Atom map* (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures):
  * what the step makes of an entry once it is mapped onto its reference
- * (lib/chem/reactionMap `mapProducts`) - a product onto the reactants, a
+ * (lib/chem/reactionMap `mapOnto`) - a product onto the reactants, a
  * conformer onto its species - the entry renumbered as the reference is,
  * and the bonds the map forms, breaks or changes, as a table.
  *
