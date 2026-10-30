@@ -258,7 +258,7 @@ class Collect(unittest.TestCase):
         # (the total enthalpy: the total energy and H(T) of the row used)
         self.assertAlmostEqual(thermo["thermo.enthalpy"], -8.640016786693 + 0.0583013, places=6)
         # (and how they were worked out, as its setup said)
-        self.assertEqual(thermo["thermo.treatment"], "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1")
+        self.assertEqual(thermo["thermo.treatment"], "rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹, scaling factor 1")
         # (and the symmetry it took, as its box printed it: its point group, and the rotational symmetry number counted)
         self.assertEqual((thermo["thermo.point-group"], thermo["thermo.symmetry-number"]), ("c2v", 2))
 
@@ -323,7 +323,7 @@ class Collect(unittest.TestCase):
 
     def test_the_treatment_is_the_one_printed_gfn_ff_s_frequencies_scaled(self):
         gfnff = THERMO.replace("scaling factor                  1.0000000", "scaling factor                  1.0300000")
-        self.assertEqual(worker.treatment_of(gfnff), "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1.03")
+        self.assertEqual(worker.treatment_of(gfnff), "rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹, scaling factor 1.03")
         self.assertIsNone(worker.treatment_of(""))
 
     def test_of_several_temperatures_the_one_used(self):

@@ -176,7 +176,7 @@ describe("an Energy diagram step", () => {
       ["TS", "not computed"],
       ["P", "not computed"],
     ]);
-    expect(d.levels.map((l) => frequenciesSaid(l.lowest.imaginary!))).toEqual(["has 1 imaginary frequency, 300.0i cm-1", "frequencies not computed", "frequencies not computed"]);
+    expect(d.levels.map((l) => frequenciesSaid(l.lowest.imaginary!))).toEqual(["has 1 imaginary frequency, 300.0i cm⁻¹", "frequencies not computed", "frequencies not computed"]);
     expect(frequenciesSaid([])).toBe("no imaginary frequency");
     // (and kept in the file)
     expect(diagramIn(JSON.parse(JSON.stringify(d)))!.levels.map((l) => l.lowest.imaginary)).toEqual([[-300], "not computed", "not computed"]);
