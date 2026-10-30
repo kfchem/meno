@@ -175,6 +175,20 @@ export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, co
 }
 
 /**
+ * How Settings' cores are counted, in plain words, where it matters: on a
+ * computer that runs more than one thread on each physical core, as its
+ * threads - and a program running as processes takes one physical core,
+ * that many of them, for each process (lib/jobs `processesOf`; the queue's
+ * `taken`). None where each core runs one thread, or its physical cores
+ * cannot be told.
+ */
+export function coresCountedSaid(c: { cores: number; physical?: number }): string | null {
+  if (!c.physical || c.physical < 1 || c.cores <= c.physical) return null;
+  const per = Math.round(c.cores / c.physical);
+  return `Counted in logical cores: ${c.cores} on this computer's ${c.physical} physical cores, ${per} to each. A program that runs as processes takes ${per} for each process.`;
+}
+
+/**
  * How many processes a job of a program running as processes takes (a
  * manifest's `installed[].parallel`: MPI, ORCA's `%pal`): the cores Settings
  * gives it, one process to each - never more than the computer's physical
