@@ -80,15 +80,20 @@ describe("Take frames", () => {
       expect(k.kept[0].properties).not.toHaveProperty("imaginary");
     }
     // (said: what it keeps, and that a frame kept its own - once)
-    expect(o.said).toBe("1 frame of 1 molecule: the first, keeping its molecule's path, species · 1 frame kept its own species");
-    expect(last.said).toBe("1 frame of 1 molecule: the last, keeping its molecule's path, species");
+    expect(o.said).toBe("1 frame of 1 molecule: the first, keeping its molecule's path and species · 1 frame kept its own species");
+    expect(last.said).toBe("1 frame of 1 molecule: the last, keeping its molecule's path and species");
     // (named, as asked, the free energy is kept as it is)
     expect(ok(takeFrames([irc], "last", 1, ["thermo.free-energy"])).kept[0].properties).toEqual({ "thermo.free-energy": value(-76.38, "Eh") });
     // (none named - as before - nothing of its molecule: the first frame its own alone, the last none)
     expect(ok(takeFrames([irc], "first")).kept[0].properties).toEqual({ species: value("species-1") });
     expect(ok(takeFrames([irc], "last")).kept[0]).not.toHaveProperty("properties");
     // (a name no molecule holds: said)
-    expect(ok(takeFrames([irc], "last", 1, ["path", "pc"])).said).toBe("1 frame of 1 molecule: the last, keeping its molecule's path, pc · no molecule holds pc");
+    expect(ok(takeFrames([irc], "last", 1, ["path", "pc"])).said).toBe("1 frame of 1 molecule: the last, keeping its molecule's path and pc · no molecule holds pc");
+    // (a molecule that does not hold a name another does: said, never passed over - as typed, never made small)
+    const other: Molecule3D = { ...irc, id: 8, title: "irc b", properties: [{}, {}, { species: value("species-3") }, {}, {}] as Record<string, Property>[] };
+    expect(ok(takeFrames([irc, other], "last", 1, ["Path", "path"])).said).toBe("2 frames of 2 molecules: the last, keeping its molecule's Path and path · no molecule holds Path · path not on 1 molecule");
+    // (its entry frame taken, holding its molecule's own: no "kept its own" said)
+    expect(ok(takeFrames([irc], "entry", 1, ["path", "species"])).said).toBe("1 frame of 1 molecule: each one's entry frame, keeping its molecule's path and species");
     // (a molecule of several entry frames - each an entry of its own - has none of its own to keep)
     const several = { ...irc, entryFrames: [2, 4] };
     expect(ok(takeFrames([several], "last", 1, ["path"])).kept[0]).not.toHaveProperty("properties");
@@ -96,8 +101,9 @@ describe("Take frames", () => {
 
   it("names on its card what it keeps from each frame's molecule, one name to a line, each once", () => {
     expect(keptNames(" path \n\nspecies\npath\n")).toEqual(["path", "species"]);
-    expect(kindInfo("take-frames").how!({ which: "last", either: 1, keep: "path\nspecies" })).toBe("The last, keeping its molecule's path, species");
-    expect(kindInfo("take-frames").how!({ which: "last", either: 1, keep: "" })).toBe("The last");
+    expect(kindInfo("take-frames").how!({ which: "last", either: 1, keep: "path\nspecies" })).toBe("the last, keeping its molecule's path and species");
+    expect(kindInfo("take-frames").how!({ which: "last", either: 1, keep: "path\nspecies\npc" })).toBe("the last, keeping its molecule's path, species and pc");
+    expect(kindInfo("take-frames").how!({ which: "last", either: 1, keep: "" })).toBe("the last");
   });
 
   it("refuses the highest where a frame has no energy, naming the molecule - never the highest of those that have one", () => {
@@ -133,7 +139,7 @@ describe("Take frames", () => {
     const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
     const ran = runStep(doc, step, W).steps!.find((s) => s.id === step)!.ran;
     expect([ran?.ok, ran?.said]).toEqual([true, "3 frames of 1 molecule: the highest in energy and 1 frame either side"]);
-    expect(kindInfo("take-frames").how?.({ which: "last" })).toBe("The last");
+    expect(kindInfo("take-frames").how?.({ which: "last" })).toBe("the last");
   });
 
   it("keeps on the page what its card names from each frame's molecule, and nothing else of it", () => {

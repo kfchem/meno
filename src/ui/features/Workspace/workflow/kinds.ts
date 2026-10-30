@@ -361,7 +361,7 @@ export const KINDS: readonly KindInfo[] = [
         default: "highest",
       },
       { id: "either", label: "Either side", type: "number", default: 1, min: 1, step: 1, when: { id: "which", in: ["around"] } },
-      { id: "keep", label: "Keep from its molecule", type: "lines", default: "", rows: 2, note: "A property of the molecule each frame is taken from, by its name, one to a line: none, and a frame holds its own alone" },
+      { id: "keep", label: "Keep from its molecule", type: "lines", default: "", rows: 2, note: "One property to a line, taken from the molecule each frame comes from. Empty: each frame keeps only its own." },
     ],
     how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1), keptNames(String(v.keep ?? ""))),
   },

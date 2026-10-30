@@ -34,24 +34,27 @@ export function keptNames(text: string): string[] {
   return [...new Set(text.split("\n").map((l) => l.trim()).filter(Boolean))];
 }
 
-/** What Take frames takes, in words, as its card and its line say it - and what it keeps from each frame's molecule, where it keeps any. */
+/** Names in words, the last two joined by "and": "path", "path and species", "path, species and pc". */
+const andList = (names: readonly string[]) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? ""));
+
+/** What Take frames takes, in words, as its card and its line say it (after its name, so beginning small) - and what it keeps from each frame's molecule, where it keeps any. */
 export function takeFramesHow(which: Which, either: number, keep: readonly string[] = []): string {
   const how = takenHow(which, either);
-  return keep.length ? `${how}, keeping its molecule's ${keep.join(", ")}` : how;
+  return keep.length ? `${how}, keeping its molecule's ${andList(keep)}` : how;
 }
 
 function takenHow(which: Which, either: number): string {
   switch (which) {
     case "highest":
-      return "The highest in energy";
+      return "the highest in energy";
     case "first":
-      return "The first";
+      return "the first";
     case "last":
-      return "The last";
+      return "the last";
     case "entry":
-      return "Each one's entry frame";
+      return "each one's entry frame";
     case "around":
-      return `The highest in energy and ${plural(either, "frame")} either side`;
+      return `the highest in energy and ${plural(either, "frame")} either side`;
   }
 }
 
@@ -121,6 +124,8 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
   const own = new Map(molecules.map((m) => [m.id, ownOf(m)] as const));
   const theirs = new Map<string, number>();
   const held = new Set<string>();
+  // (each name, the molecules a frame was taken from that do not hold it: said, never passed over)
+  const without = new Map(keep.map((name) => [name, new Set(taken.flatMap((e) => (own.get(e.from as number)?.[name] === undefined ? [e.from] : [])))] as const));
   const kept = keep.length
     ? taken.map((e) => {
         const values = own.get(e.from as number);
@@ -129,7 +134,10 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
         for (const name of keep) {
           if (values[name] === undefined) continue;
           held.add(name);
-          if (e.properties?.[name] !== undefined) theirs.set(name, (theirs.get(name) ?? 0) + 1);
+          // (a frame's own, where it differs from its molecule's: its entry frame holds the molecule's itself)
+          if (e.properties?.[name] !== undefined) {
+            if (e.properties[name].value !== values[name].value) theirs.set(name, (theirs.get(name) ?? 0) + 1);
+          }
           else add[name] = values[name];
         }
         return Object.keys(add).length ? { ...e, properties: { ...add, ...e.properties } } : e;
@@ -139,7 +147,8 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
   const keeping = [
     ...[...theirs].map(([name, n]) => ` · ${plural(n, "frame")} kept ${n === 1 ? "its" : "their"} own ${name}`),
     ...keep.filter((name) => !held.has(name)).map((name) => ` · no molecule holds ${name}`),
+    ...keep.filter((name) => held.has(name) && without.get(name)!.size).map((name) => ` · ${name} not on ${plural(without.get(name)!.size, "molecule")}`),
   ].join("");
-  const said = `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either, keep).toLowerCase()}`;
+  const said = `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either, keep)}`;
   return { ok: true, holds: "molecules", kept, aside: [], said: `${refined ? `${said} (of ${refined === molecules.length ? "each" : plural(refined, "path search")}, its ${REFINED_SAID})` : said}${ties.join("")}${keeping}` };
 }
