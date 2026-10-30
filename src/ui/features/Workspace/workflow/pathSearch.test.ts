@@ -7,6 +7,7 @@ import { runMeno } from "./meno";
 import { pairEntries, PATH_PAIR } from "./pairs";
 import { isFailure, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
+import { framesMolecule } from "./setTable";
 import { refinedFrame, takeFrames } from "./takeFrames";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -217,6 +218,24 @@ describe("a path search's molecule", () => {
     expect(ws!.leftOut).toBeUndefined();
     const [opened] = ws!.drawn.molecules3d!;
     expect(opened.calc?.results?.map((r) => r.id)).toEqual(["path.frame", "vibrations"]);
+  });
+
+  it("puts the point refined's calculation with it alone, of its frames a set's table takes out - never on another frame of its path", () => {
+    const path = molecule([-812.5, 4100.25]);
+    // (a result of the molecule as a whole, as a program reads one: of the point refined, the geometry its calculation is of)
+    const dipole = { id: "dipole", on: "molecule" as const, group: "Dipole", label: "Dipole moment", quantity: "dipole" as const, value: 1.5 };
+    const m: Molecule3D = { ...path, calc: { ...path.calc!, results: [...path.calc!.results!, dipole] } };
+    const out = (frames: number[]) => {
+      const x = { ...framesMolecule(m, frames), id: 3, at: { x: 0, y: 0 } };
+      const [entry] = setEntries([x], "molecules", (y) => [framesOf(y) - 1]);
+      return { ids: x.calc?.results?.map((r) => r.id), said: x.calc?.results?.find((r) => r.id === "path.frame"), imaginary: entry.imaginary ?? null };
+    };
+    // (the point refined alone: its own calculation - its dipole, its imaginary frequency - and its frame's word)
+    expect(out([2])).toEqual({ ids: ["path.frame", "dipole"], said: expect.objectContaining({ values: ["highest point refined"] }), imaginary: [-812.5] });
+    // (its path's last image alone: its own word, and none of the point refined's - not its imaginary frequency)
+    expect(out([3])).toEqual({ ids: ["path.frame"], said: expect.objectContaining({ values: ["NEB image 3 of 3"] }), imaginary: null });
+    // (the two together: the point refined's with it, the last image after it its own frame)
+    expect(out([2, 3]).ids).toEqual(["path.frame", "dipole"]);
   });
 
   it("fails a pair whose path is not at its ends' level, or says none - naming both", () => {
