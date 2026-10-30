@@ -2816,9 +2816,10 @@ doubled quotes); a byte-order mark before it is left out.
   number column's head stands at the right, over its numbers, and its
   numbers are written with one count of decimals, so that their points
   line up ("0.00" over "0.37"): an energy in kcal/mol with two, as a
-  molecule's chip writes it, so the same value reads the same in both;
-  any other with as many as the one shown that needs most. The value
-  kept is as it came.
+  molecule's chip writes one under ten, so the same value reads the same
+  in both there (at ten and above the chip writes one decimal, the column
+  still two, its points kept in line); any other with as many as the one
+  shown that needs most. The value kept is as it came.
 - **A table's set is as tall as the rows it shows** (`tableSetSize`): its
   heads, up to six rows, and the line saying what it is, with nothing
   under it.
