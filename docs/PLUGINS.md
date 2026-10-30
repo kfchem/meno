@@ -1003,8 +1003,8 @@ The same for every plugin and for Meno's own parts:
     vibrational entropy is the QRRHO of S. Grimme and at which reference
     frequency - or `RRHO`, where it says it did not ("Quasi RRHO ...
     False": the harmonic oscillator alone, ORCA's `%freq QuasiRRHO false`,
-    which the ORCA plugin's Frequencies writes where its *Low vibrations*
-    option says *Harmonic (RRHO)*; ORCA's own treatment, unless asked,
+    which the ORCA plugin's Frequencies writes where its *Low-frequency
+    vibrations* option says *Harmonic (RRHO)*; ORCA's own treatment, unless asked,
     2026-10-31). Two values of one treatment are written alike, so that
     they compare. And the symmetry its thermochemistry took, as the
     program printed it - of several prints, the last, as the other

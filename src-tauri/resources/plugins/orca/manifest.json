@@ -87,7 +87,7 @@
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
         {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500},
-        {"id": "vibrations", "label": "Low vibrations", "type": "choice", "choices": [{"value": "quasi-rrho", "label": "Quasi-RRHO, as ORCA treats them (Grimme)"}, {"value": "rrho", "label": "Harmonic (RRHO)"}], "default": "quasi-rrho"},
+        {"id": "vibrations", "label": "Low-frequency vibrations", "type": "choice", "choices": [{"value": "none", "label": "Quasi-RRHO (Grimme)"}, {"value": "rrho", "label": "Harmonic (RRHO)"}], "default": "none"},
         {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     },

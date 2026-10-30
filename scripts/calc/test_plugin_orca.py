@@ -86,7 +86,7 @@ class Prepare(unittest.TestCase):
         # (ORCA's own, its default: nothing written - Grimme's quasi-RRHO, as ORCA 6.1.1 prints "Quasi RRHO ... True")
         own = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"), cores=1)["jobs"][0]["files"][0]["text"]
         self.assertNotIn("%freq", own)
-        self.assertEqual(defaults("frequencies")["vibrations"], "quasi-rrho")
+        self.assertEqual(defaults("frequencies")["vibrations"], "none")
         # (harmonic: the rigid-rotor harmonic oscillator alone, ORCA's %freq QuasiRRHO false - checked against ORCA 6.1.1)
         rrho = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "rrho", "maxcore": 2000}, cores=1)["jobs"][0]["files"][0]["text"].splitlines()
         self.assertEqual(rrho[0], "! B3LYP def2-SVP D3BJ FREQ")

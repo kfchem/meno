@@ -175,10 +175,11 @@ def mass_of(el, atom):
     return f"  M = {mass:.15g}"
 
 
-#: How a frequency job's thermochemistry treats the low vibrations (its *Low vibrations* option): ORCA's own, Grimme's
-#: quasi-RRHO for their entropy (ORCA 6.1.1's default, "Quasi RRHO ... True"), or the harmonic oscillator alone - the
-#: rigid-rotor harmonic-oscillator a program with no low-mode treatment gives - ORCA's %freq QuasiRRHO false.
-LOW_VIBRATIONS = {"quasi-rrho": "", "rrho": "%freq QuasiRRHO false end"}
+#: How a frequency job's thermochemistry treats the low-frequency vibrations (its *Low-frequency vibrations* option):
+#: ORCA's own, nothing asked ("none") - Grimme's quasi-RRHO for their entropy, ORCA 6.1.1's default, "Quasi RRHO ...
+#: True" - or the harmonic oscillator alone, the rigid-rotor harmonic oscillator a program with no low-mode treatment
+#: gives: ORCA's %freq QuasiRRHO false. ("none" is the value a step's line leaves unsaid: its default.)
+LOW_VIBRATIONS = {"none": "", "rrho": "%freq QuasiRRHO false end"}
 
 
 def orca_input(step, entry, options, cores):
@@ -214,7 +215,7 @@ def orca_input(step, entry, options, cores):
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity", 1)
     maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)
-    vibrations = LOW_VIBRATIONS.get(options.get("vibrations", "quasi-rrho")) if step == "frequencies" else ""
+    vibrations = LOW_VIBRATIONS.get(options.get("vibrations", "none")) if step == "frequencies" else ""
     if vibrations is None:
         raise Refused(f"no treatment of low vibrations is called {options.get('vibrations')!r}")
 
