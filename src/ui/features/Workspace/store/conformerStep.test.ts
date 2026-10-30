@@ -192,6 +192,13 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(records[1]).not.toContain("> <nll>\n1\n");
   });
 
+  it("asks for the program's own conformers: never as the page has them", async () => {
+    await searched();
+    expect(asked.length).toBeGreaterThan(0);
+    // (the page's flag - each conformer once, laid over, settled - is sent by the page's 3D structure alone: docs/PLUGINS.md)
+    for (const payload of asked) expect(payload).not.toHaveProperty("onPage");
+  });
+
   it("makes the others where one cannot be made, and says which by its place - never in the library's words", async () => {
     const { step } = await searched();
     expect(asked).toHaveLength(3);

@@ -518,7 +518,10 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   before, the RDKit plugin took shapes within 0.5 Å over their heavy atoms
   as one, and over the molecule's symmetries only where their energies
   agreed, and its raw embeddings, with no energies, atom against atom.
-  (`SAME_CONFORMER`, `Sameness` in its worker.)
+  (`SAME_CONFORMER`, `Sameness` in its worker.) The conformers Meno's own
+  page makes (*3D structure*) are kept once each by it; a workflow's
+  *Conformers* step is given every one RDKit made (below), and its
+  *Duplicates* step keeps one of each by this same measure.
   - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
     the one conformer.** Such a shape leaves every atom of it somewhere
     else, so comparing atom against atom counted it again and again - a
@@ -621,9 +624,19 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   the root of a branch joined to the rest through it, and a pendant ring
   symmetric about its bond - as it is in the lowest conformer, by whole
   branches (handedness first, then the fit in the parent's frame), before it
-  answers. Only conformers RDKit made are touched: not a calculation's,
-  not another program's, not a single structure; no heavy atom moves but
-  as a whole equivalent branch; and no whole-molecule symmetry is searched.
+  answers Meno's own page. Only conformers RDKit made are touched: not a
+  calculation's, not another program's, not a single structure; no heavy
+  atom moves but as a whole equivalent branch; and no whole-molecule
+  symmetry is searched.
+- **A workflow's *Conformers* step is given RDKit's own** (the maintainer,
+  2026-10-30). Each conformer is embedded and optimised as RDKit makes
+  it, lowest energy first, and none is taken for another, laid over
+  another, has its equivalent atoms settled, or is made as an enantiomer's
+  mirror image. Those four are for Meno's own page, which asks for them
+  (`onPage`); the core sends that with *3D structure* alone, and no option
+  of the step's carries it. Where it embedded from random coordinates (an
+  η complex, or a crowded cage that would not embed otherwise), its
+  *Embedded* row says so. From RDKit plugin 0.1.14.
 
 ## Versions
 
