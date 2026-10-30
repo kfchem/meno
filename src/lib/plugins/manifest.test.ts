@@ -280,6 +280,17 @@ describe("a plugin's manifest", () => {
     expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
   });
 
+  it("may say how a program installed separately runs in parallel - as threads, or as processes, each a core - as the backend reads it", () => {
+    const orca = (parallel: unknown) =>
+      acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }], installed: [{ name: "orca", label: "ORCA", files: { macos: "orca" }, parallel }] })?.installed;
+    expect(orca("processes")?.[0].parallel).toBe("processes");
+    expect(orca("threads")?.[0].parallel).toBe("threads");
+    expect(orca(undefined)?.[0]).not.toHaveProperty("parallel");
+    for (const bad of ["mpi", "Processes", true, 4, null, ["processes"]]) expect(orca(bad)).toEqual([]);
+    // (ORCA's, as Meno carries it: as processes - its %pal)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].parallel).toBe("processes");
+  });
+
   it("may fetch a program it runs, Meno's own copy: an archive for one system, where the program is in it - as the backend takes it", () => {
     const copy = {
       file: "blender-5.2.2-windows-x64.zip",

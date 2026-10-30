@@ -327,6 +327,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
 | Reaction | an atom, an arrow, the same atom after it, mapped (drawn) | *Reactants*: one entry, molecules in 3D with every hydrogen (several made one complex first, by *Combine*); *Products*: molecules in 3D with every hydrogen | **molecules in 3D**: each product in the reactants' numbering, atom for atom - by its first map, or by every map - out of *Mapped products*; one that does not map one to one out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Reaction*) |
 | Displace | an atom moved along, where it stood dashed (drawn) | molecules in 3D with vibrations, or a conformer set | **the same kind of set**: each geometry moved along its imaginary vibration - or one by number - the atom moving most by the amplitude (Å) given; one with no such vibration out of *Not displaced*, saying why (STRUCTURE-STEPS.md, *Displace*) |
+| Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -651,6 +652,13 @@ Conformers go through a workflow as any set does (decided):
     window* and *Populations* refuse it, saying why (2026-10-23; from
     2026-10-22 until then, it was no entry). Over each it says how many of its frames are entries: "4
     of 21 frames are entries (converged points)".
+    A point worked out once more is one entry, not two: a Gaussian *opt
+    freq*'s Freq link gives the converged point again, the same geometry to
+    the last digit and the same SCF energy, marked new and done. Where the
+    file says just that - that link's route optimising nothing - the
+    link's point is the entry, the frequencies its own, and the one before
+    it a frame: "1 of 6 frames is an entry (the converged one)"
+    (2026-10-30). Anything else is left as marked.
     (A step's own optimisation was already one entry, its path: *Results*.)
   - **What is not known to be found is no entry either: never every
     geometry for want of a mark** (the review desk, 2026-10-22). Which
@@ -729,6 +737,22 @@ Conformers go through a workflow as any set does (decided):
 No key starts a run (decided: menus, at first). Steps run in the order
 their wires give; steps that do not depend on one another may run at
 once (*Several at once*).
+
+**An empty set** (2026-10-30). A step before it that ran well may give
+nothing this time: a branch that took none, a last round of restraints
+that held none. A step whose input is such a set ends at once, done, and
+says what came in empty - its exits empty, nothing an earlier run put in
+them left there (its molecules, a chart, a table, pictures), that run
+kept among its runs: *Nothing came in*, or, of a
+step of several inputs, which - *Nothing came into Molecules*, *Nothing
+came into First and Second*. No job is started and no plugin asked, and
+every step after it goes on the same way, so a chain of rounds runs to
+its end however many rounds had nothing left to do. A step still fails
+where its empty input is a set no step gave (one drawn by hand), or
+where the step before it failed. A Merge whose other input is not empty
+is not ended so: it takes that one's entries, as a Merge does, and the
+rounds' rests merged with the last round's empty restraints are the
+rests.
 
 ### States
 
@@ -1304,6 +1328,24 @@ Decided while building it, for the maintainer to confirm:
   once** - all of them while one runs at a time; set, never more than the
   computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
   and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
+- **A program that runs as processes is given one to each physical core,
+  each told one thread** (2026-10-30). Its manifest says so
+  (`installed[].parallel`: `"processes"` - ORCA, its `%pal`, run under
+  MPI). Its job takes the cores Settings gives each, as processes - never
+  more than the computer's physical cores - and each process is told one
+  thread (`OMP_NUM_THREADS`, MKL's and OpenBLAS's, all `1`). Before, each
+  of its processes was told all the job's cores as its threads: on a
+  computer of 16 physical cores running two threads on each, 32 processes
+  of 32 threads each. Where the computer runs two threads on each physical
+  core, the queue counts each process as two of its cores, so that two
+  such jobs never share a physical core. Its physical cores are what its
+  system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
+  `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
+  is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
+  gives. Never more than the cores it may use (its threads, as the system
+  lets Meno have them), and its cores where the system cannot say. A
+  program of threads (xTB, Gaussian's `%nprocshared`) is told its cores as
+  before.
 - **Jobs at once counted for jobs asked for after it was changed** (until
   2026-10-22): one already waiting kept the number it was asked with. What
   jobs may use now counts at once, for every job waiting - Settings tells
@@ -1963,7 +2005,9 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   quantum calculations, which keeps OH and NH rotamers apart - at its
   least over the ways the molecule maps onto itself, laid over by turning
   and moving, never by reflecting (`workflow/sameConformer`; the RDKit
-  plugin's conformers use the same). The ways are those of its atoms but
+  plugin's conformers for Meno's own page use the same, while its
+  *Conformers* step gives every one RDKit made and its *Duplicates* step
+  applies it: PLUGINS.md). The ways are those of its atoms but
   the hydrogens hanging on one atom, at most 1,000; those hydrogens are
   matched to the nearest of their kind once the rest are laid over.
   Past 1,000 ways - a centre with seven alike arms has 5,040 - its atoms
@@ -2763,7 +2807,12 @@ doubled quotes); a byte-order mark before it is left out.
   2026-10-30): "Product" over the column named "reaction.product". Its
   name stays its key - what rows are matched on, what a condition names -
   and hovering on the head says both ("Product · reaction.product"). A
-  number column's head stands at the right, over its numbers.
+  number column's head stands at the right, over its numbers, and its
+  numbers are written with one count of decimals, so that their points
+  line up ("0.00" over "0.37"): an energy in kcal/mol with two, as a
+  molecule's chip writes it, so the same value reads the same in both;
+  any other with as many as the one shown that needs most. The value
+  kept is as it came.
 - **A table's set is as tall as the rows it shows** (`tableSetSize`): its
   heads, up to six rows, and the line saying what it is, with nothing
   under it.
@@ -3065,6 +3114,39 @@ term.
 - An entry with its own value under the name already, or missing a part,
   is set aside saying so; a number wired in of another dimension refuses
   the step.
+
+### Ensemble energy (2026-10-30)
+
+*Ensemble energy*, Meno's own, takes a group's members - a compound's
+conformers - together (lib/nodes `ensemble`; WORKFLOWS-FOUNDATION.md,
+case F, step 44, beside Rank's lowest):
+
+  G = G_min - R T ln Σ g exp(-(G - G_min) / R T)
+
+with each member's degeneracy g (1 where it says none; one that says a
+degeneracy that is no count - 0, below 0, not a number - sets its group
+aside, saying so), R = 8.314462618 J/(mol K), and T the temperature its
+members' values state.
+
+- **Its options**: the value it takes (*Of*, a free energy: Frequencies'
+  or one an Add wrote), the name it is written *As* ("G-ens"), and
+  within what - *Each group*, *Each value of a property*, *All
+  together*. Its card says it in a line ("G-ens = ensemble of G in each
+  group").
+- **One entry stands for each group**: its lowest, with the value written
+  on it. The value is of the group, not of that geometry
+  (`Property.ensemble`, how many it is over); its parts are each member's
+  value as it was - an Add's own parts with it. It is worked out by the
+  members' own level - their program, method and basis, which they share
+  - and its treatment says it is an ensemble, of the members' treatment
+  ("ensemble, -R T ln Σ g exp(-G/R T), of quasi-RRHO"). So two ensembles
+  at one level, of any sizes, are ranked and summed together; two at
+  different levels, or an ensemble and one geometry's G, are not. The
+  others go out of *The rest*, each saying whose ensemble it is in.
+- **No temperature is assumed**: members whose values state none, or
+  differ in it, or were worked out differently in any other way, set
+  their group aside whole, saying how. A member that is no result -
+  failed, not converged - is never counted, and says so.
 
 ### Charts (2026-10-22)
 

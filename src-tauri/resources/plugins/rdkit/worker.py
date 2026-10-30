@@ -2090,12 +2090,19 @@ def rmsd_laid(P, Q):
     return float(np.sqrt(max((p ** 2).sum() + (q ** 2).sum() - 2 * s.sum(), 0.0) / len(P)))
 
 
-def conformers_of(iso, how, made):
-    """A stereoisomer's conformers. Of two enantiomers, the one whose SMILES
-    comes first is made, and the other is its mirror image: the same shapes
-    and energies, whichever is asked for and in whichever request. `made`
-    keeps what has been made, by SMILES, for the rest of the request."""
+def conformers_of(iso, how, made, page=False):
+    """A stereoisomer's conformers. On Meno's own page (`page`), of two
+    enantiomers the one whose SMILES comes first is made, and the other is
+    its mirror image: the same shapes and energies, whichever is asked for
+    and in whichever request. A workflow's step makes each as RDKit makes
+    it. `made` keeps what has been made, by SMILES, for the rest of the
+    request."""
     smiles = smiles_of(iso)
+    if not page:
+        if smiles not in made:
+            made[smiles] = conformers(iso, **how)
+        return made[smiles]
+    how = {**how, "page": True}
     mirror = mirror_of(iso)
     twin = smiles_of(mirror) if mirror is not None else smiles
     if twin >= smiles:
@@ -2113,11 +2120,14 @@ def conformers_of(iso, how, made):
     return entry
 
 
-def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=()):
+def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(), page=False):
     """A stereoisomer's conformers, embedded (ETKDG) and optimised (MMFF94,
     MMFF94s or UFF, as asked - UFF where MMFF has no parameters), lowest
-    energy first, the same conformer twice kept once (SAME_CONFORMER), and
-    each laid over the first by its heavy atoms; and how they were made,
+    energy first - every one RDKit made, as it made it; and, for Meno's own
+    page alone (`page`: its 3D structure, never a workflow's step), the
+    same conformer twice kept once (SAME_CONFORMER), each laid over the
+    first by its heavy atoms, and their equivalent branches settled
+    (`settle_equivalents`); and how they were made,
     said as rows to show
     (`how`). How many are tried is `count`, or as many as the molecule needs
     where it gives none (`sought`). A metal's bonds are embedded at their
@@ -2168,6 +2178,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
         ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count, params=params))
     if not ids:
         raise ValueError("no 3D structure could be made of it")
+    # (from random coordinates, where it was: said on its row)
+    randomly = params.useRandomCoords
     asked = field
     metals = typed_for_uff(mol)
     eta_metals = {mol.GetAtomWithIdx(metal).GetSymbol() for metal, _, _ in eta}
@@ -2233,20 +2245,28 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
         m, angle = next((m, angle) for _, m, angle in dropped.values())
         raise ValueError(f"every structure made of it came out with two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} "
                          f"closer than the {angle:g}\u00b0 they were held apart")
-    # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
-    sameness = Sameness(mol)
-    places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
-    marks = {cid: sameness.signature(places[cid]) for cid in left}
-    kept = []
-    for cid in sorted(left, key=lambda c: order[c]) if order else left:
-        if not any(sameness.bound(marks[cid], marks[k]) <= SAME_CONFORMER and sameness.same(places[cid], places[k]) for k in kept):
-            kept.append(cid)
-    # (each laid over the lowest by its heavy atoms, for the overlay)
-    heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
-    for cid in kept[1:]:
-        rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
-    # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
-    settle_equivalents(mol, kept)
+    # (lowest first)
+    ranked = sorted(left, key=lambda c: order[c]) if order else left
+    sameness = None
+    if not page:
+        # (a workflow's step: every conformer as RDKit made it - none taken for another, moved or renumbered. Its
+        #  Duplicates step keeps one of each where a workflow asks for that)
+        kept = ranked
+    else:
+        # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
+        sameness = Sameness(mol)
+        places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
+        marks = {cid: sameness.signature(places[cid]) for cid in left}
+        kept = []
+        for cid in ranked:
+            if not any(sameness.bound(marks[cid], marks[k]) <= SAME_CONFORMER and sameness.same(places[cid], places[k]) for k in kept):
+                kept.append(cid)
+        # (each laid over the lowest by its heavy atoms, for the overlay)
+        heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
+        for cid in kept[1:]:
+            rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
+        # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
+        settle_equivalents(mol, kept)
     # (how far the conformers kept missed what their restraints hold, the largest of each kind over them all)
     misses = [restraints_missed([v for p in mol.GetConformer(cid).GetPositions() for v in p], rows) for cid in kept] if rows else []
     missed = [max((m[k] for m in misses if m[k] is not None), default=None) for k in (0, 1)]
@@ -2269,7 +2289,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
         "method": method,
         # (short rows: the chip says them in a narrow card)
         "how": [
-            {"label": "Embedded", "text": "ETKDG v3"},
+            {"label": "Embedded", "text": "ETKDG v3" + (", from random coordinates" if randomly else "")},
             {"label": "Random seed", "text": f"{seed}"},
             *([{"label": "Optimised", "text": f"{field}, at most {iters} steps"}] if field else [
                 {"label": "Optimised", "text": f"UFF, at most {iters} steps"
@@ -2291,8 +2311,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
                 for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()}))}] if dropped else []),
             {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"
              + (f", {len(left) - len(kept)} the same as one kept" if len(left) > len(kept) else "")},
-            {"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
-             + (", atom against atom: too many ways it maps onto itself to try" if sameness.capped else ", over its symmetries")},
+            *([{"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
+                + (", atom against atom: too many ways it maps onto itself to try" if sameness.capped else ", over its symmetries")}] if sameness else []),
             {"label": "Made by", "text": f"RDKit {rdBase.rdkitVersion}"},
         ],
     }
@@ -2305,7 +2325,11 @@ def op_conformers(m):
     the CIP label of every stereocentre and double bond (`cip`), and of the
     ones that were left open (`chosen`), atom by atom and bond by bond. Those
     `like` gives a configuration (see `kept`) are made so, and count as
-    chosen."""
+    chosen. `onPage`, which Meno's own page sends and a workflow's step
+    never does, has them made for the page: each conformer once, laid over
+    the first, its equivalent branches settled, and an enantiomer the mirror
+    image of its twin (`conformers`, `conformers_of`); else they are RDKit's
+    own."""
     drawn = read(m["molblock"])
     as_ligand_anions(drawn, eta_systems(drawn))
     atoms, bonds = open_stereo(drawn)
@@ -2316,7 +2340,7 @@ def op_conformers(m):
     made, cache = [], {}
     how = options_of(m)
     for iso in isomers:
-        entry = dict(conformers_of(iso, how, cache))
+        entry = dict(conformers_of(iso, how, cache, bool(m.get("onPage"))))
         rdCIPLabeler.AssignCIPLabels(iso)
         entry["cip"] = {
             "atoms": {str(a.GetIdx()): a.GetProp("_CIPCode") for a in iso.GetAtoms() if a.HasProp("_CIPCode")},

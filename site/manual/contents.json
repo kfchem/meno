@@ -1,6 +1,6 @@
 {
   "languages": ["en", "ja"],
-  "pages": ["installing", "drawing", "3d", "pdfs"],
+  "pages": ["installing", "drawing", "3d", "pdfs", "slides"],
   "words": {
     "en": {
       "language": "English",

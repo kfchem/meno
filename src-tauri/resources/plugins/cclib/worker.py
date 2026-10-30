@@ -997,8 +997,11 @@ def converged_of(data, text, frames):
     if path_kind(data, text) == "scan" and frames <= len(data.scanenergies):
         return None
     done = getattr(data, "OPT_DONE", 4)
-    status = [bool(int(s) & done) for s in list(status)]
+    raw = [int(s) for s in list(status)]
+    status = [bool(s & done) for s in raw]
     if len(status) == frames:
+        for i in restated_points(data, text, raw):
+            status[i - 1] = False
         return status
     # (ORCA works the energy out once more at each point it converged on - "FINAL ENERGY EVALUATION AT THE
     # STATIONARY POINT" - a geometry after the one cclib marks, which it does not mark: that one is the converged
@@ -1008,6 +1011,32 @@ def converged_of(data, text, frames):
     out = []
     for ok in status:
         out += [False, True] if ok else [False]
+    return out
+
+
+def restated_points(data, text, raw):
+    """Of a Gaussian compound job's geometries, each a later link's own that is the converged point before it once
+    more - "opt freq": its Freq link's single point, marked new and done (`optstatus` 5) - so that the structure is
+    one entry, that link's, which its results are of. Only where the file says so: the geometry marked done just
+    before it, the same to the last digit and of the same SCF energy, and that link's route (one route a link)
+    optimising nothing, read either way where Gaussian wrapped it. Anything else is left as it is."""
+    new, done = getattr(data, "OPT_NEW", 1), getattr(data, "OPT_DONE", 4)
+    # (a route Gaussian wrapped over several lines - a word cut where the line was full: each line joined as it
+    # was, and with a space between, so that an Opt is found either way)
+    routes = [[" ".join(route.split()), "".join(line[1:] if line.startswith(" ") else line for line in route.rstrip("\n").split("\n"))] for route in GAUSSIAN_ROUTE.findall(text or "")]
+    starts = [i for i, s in enumerate(raw) if s & new]
+    coords = getattr(data, "atomcoords", None) if has(data, "atomcoords") else None
+    energies = getattr(data, "scfenergies", None) if has(data, "scfenergies") else None
+    if not routes or len(routes) != len(starts) or coords is None or energies is None:
+        return []
+    if len(coords) < len(raw) or len(energies) < len(raw):
+        return []
+    out = []
+    for link, i in enumerate(starts):
+        if i < 1 or not (raw[i] & done and raw[i - 1] & done) or any(re.search(r"\bopt\b", r, re.I) for r in routes[link]):
+            continue
+        if list(map(list, coords[i])) == list(map(list, coords[i - 1])) and float(energies[i]) == float(energies[i - 1]):
+            out.append(i)
     return out
 
 
