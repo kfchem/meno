@@ -77,11 +77,10 @@ export function ensembleSet(entries: readonly SetEntry[], holds: Holds3D, v: Val
   const whys = new Map<string, number>();
   for (const e of aside) {
     const w = String(e.properties?.[SET_ASIDE]?.value ?? "");
-    const key = w.startsWith("in the ensemble of ") ? "in an ensemble kept" : w;
+    const key = w.startsWith("in the ensemble of ") ? "counted in its group's ensemble" : w;
     whys.set(key, (whys.get(key) ?? 0) + 1);
   }
-  const first = kept[0]?.properties?.[as];
-  const over = first?.at?.kelvin != null ? ` at ${first.at.kelvin} K` : "";
+  // (what came of it alone: the temperature is each value's own, said on its record, not the step's to say)
   const rest = aside.length ? ` · rest ${aside.length} (${[...whys].map(([w, n]) => `${n}: ${w}`).join("; ")})` : "";
-  return { ok: true, holds, kept, aside, said: `${kept.length} ${kept.length === 1 ? "ensemble" : "ensembles"}${over} of ${entries.length}${rest}` };
+  return { ok: true, holds, kept, aside, said: `${kept.length} ${kept.length === 1 ? "ensemble" : "ensembles"} from ${entries.length} ${entries.length === 1 ? "entry" : "entries"}${rest}` };
 }
