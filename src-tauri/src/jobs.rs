@@ -4456,29 +4456,39 @@ mod tests {
         let _ = fs::remove_dir_all(base);
     }
 
-    #[cfg(unix)]
     #[test]
     fn a_program_running_as_processes_is_told_one_thread_each_and_taken_by_the_queue_as_whole_cores() {
+        // (a program installed separately, running as processes - as ORCA does. On unix it needs another plugin's program
+        //  too, as ORCA needs xtb, given as job_start gives it; the helper plugin's program is a script made runnable,
+        //  which Windows has no way to be, so there it needs none)
+        #[cfg(unix)]
         let (base, data, plugins) = needing(true);
-        // (a program installed separately, running as processes, that needs another plugin's program - as ORCA does)
+        #[cfg(not(unix))]
+        let (base, data, plugins) = {
+            let base = temp();
+            (base.clone(), base.join("data"), base.join("plugins"))
+        };
+        let needs: Vec<String> = if cfg!(unix) { vec!["helper".into()] } else { vec![] };
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let ranked = plugins.join("ranked");
         fs::create_dir_all(&ranked).unwrap();
         let declare = |parallel: &str| {
+            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]) };
             let manifest = serde_json::json!({
                 "id": "ranked",
-                "installed": [{"name": "orca", "files": {system(): "orca"}, "path": ["{folder}"], "parallel": parallel}],
-                "needs": [{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}],
+                "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "parallel": parallel}],
+                "needs": needed,
                 "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
             });
             fs::write(ranked.join("manifest.json"), manifest.to_string()).unwrap();
         };
-        let orca = program_file(&base.join("orca_6"), "orca");
+        let orca = program_file(&base.join("orca_6"), &exe("orca"));
         let written = vec!["input.inp".to_string()];
         // (a job of 16 cores, made as job_start makes it: what Meno gives it, and what it gives for the program it needs)
         let job = |found: &Found| {
-            let (needed, _) = needs_given(&data, &manifest_of(&ranked, "ranked").unwrap(), "ranked", &["helper".into()], &|p| Ok(plugins.join(p))).unwrap();
+            let (needed, _) = needs_given(&data, &manifest_of(&ranked, "ranked").unwrap(), "ranked", &needs, &|p| Ok(plugins.join(p))).unwrap();
             let mut spec = JobSpec { env: given_env(found, 4567, Some(16)), cores: 16, ..spec_for("ranked", "orca", found, &["input.inp"]) };
-            spec.needs = vec!["helper".into()];
+            spec.needs = needs.clone();
             spec.env.extend(needed);
             spec
         };
