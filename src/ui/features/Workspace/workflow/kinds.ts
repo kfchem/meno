@@ -161,8 +161,10 @@ const PAIRS_OWN: readonly Option[] = [
     default: "order",
   },
   { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
-  { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } },
 ];
+
+/** How many pairs *Path search*'s each with each makes at most: its own, as every pair is a path search run (workflow/mostPairs). */
+const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } };
 
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
@@ -190,7 +192,7 @@ export const KINDS: readonly KindInfo[] = [
     ],
     others: [FAILED],
     whole: true,
-    own: PAIRS_OWN,
+    own: [...PAIRS_OWN, MOST_OWN],
   },
   {
     // (a guess optimised to a saddle point by its program - with the reactant and product sides, where both are wired, each paired with

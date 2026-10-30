@@ -671,9 +671,10 @@ function guessesWithSides(d: Flow, step: number, options: OptionValues): { entri
   const property = String(options.property ?? "");
   const as = (second: string, other: string): PairAs => ({ first: "Guesses", second, one: "guess", other, unlike: sideUnlike(other) });
   const [reactants, products] = [reactant, product].map((x) => setEntries(x.molecules, x.holds as "molecules" | "conformers"));
-  const r = matchesOf(taken, reactants, pairing, property, as("Reactant side", "reactant side"), mostOf(options));
+  // (its sides paired each with each as many as they make: At most is Path search's alone)
+  const r = matchesOf(taken, reactants, pairing, property, as("Reactant side", "reactant side"), Infinity);
   if (!("ends" in r)) return r;
-  const p = matchesOf(taken, products, pairing, property, as("Product side", "product side"), mostOf(options));
+  const p = matchesOf(taken, products, pairing, property, as("Product side", "product side"), Infinity);
   if (!("ends" in p)) return p;
   // (each guess with each reactant side and each product side it is paired with - one of each, but each with each)
   const entries: SetEntry[] = [];
