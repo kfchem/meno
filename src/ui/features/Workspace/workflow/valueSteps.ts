@@ -7,7 +7,7 @@
  * out where that was said.
  */
 import type { Entry, Property } from "../../../../lib/entry";
-import { groupOf, numberIn } from "../../../../lib/nodes/base";
+import { entries as count, groupOf, numberIn } from "../../../../lib/nodes/base";
 import { rank, type RankOptions } from "../../../../lib/nodes/rank";
 import { compoundLetter, entryOfSet, entryState, FINISHED, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
@@ -114,8 +114,9 @@ export function rankedSet(entries: readonly SetEntry[], holds: Holds3D, options:
   const ranked = aside.filter((e) => /^ranked \d+ of \d+/.test(String(e.properties?.[SET_ASIDE]?.value ?? ""))).length;
   // (counts alone: a tie is with the last one kept in its group, as each tied one says)
   const notes = [...(ties ? [`${ties} tied`] : []), ...(aside.length > ranked ? [`${aside.length - ranked} not ranked`] : [])];
-  const rest = aside.length ? `, ${aside.length} to the rest${notes.length ? ` (${notes.join(", ")})` : ""}` : "";
+  // (as Filter says it: "2 of 6 entries kept · rest 4 (1 tied, 2 not ranked)")
+  const rest = aside.length ? ` · rest ${aside.length}${notes.length ? ` (${notes.join(", ")})` : ""}` : "";
   // (in each group, where each is its own group - molecules, not a conformer set's compounds - it chose nothing: said, that the chemist ranks them all together)
   const own = options.within === "each group" && read.length > 1 && new Set(read.map(groupOf)).size === read.length ? `: each ${holds === "conformers" ? "compound" : "molecule"} is its own group` : "";
-  return { ok: true, holds, kept: out.exits.kept.map((e) => back(e.id)), aside, said: `${out.exits.kept.length} of ${entries.length} kept${rest}${own}` };
+  return { ok: true, holds, kept: out.exits.kept.map((e) => back(e.id)), aside, said: `${out.exits.kept.length} of ${count(entries.length)} kept${rest}${own}` };
 }

@@ -2809,8 +2809,9 @@ the first in each path (step 48).
   though its value would rank first. An entry with no value, or none of
   the group property, is set aside saying that.
 - **Its line says only what came of it**: how many it kept, and how many
-  went to the rest, with those tied and those not ranked counted ("2 of 6
-  kept, 4 to the rest (1 tied, 2 not ranked)"). What it ranked by its card says,
+  went to the rest, with those tied and those not ranked counted, as
+  *Filter* says its own ("2 of 6 entries kept · rest 4 (1 tied, 2 not
+  ranked)"). What it ranked by its card says,
   above; each value's level, program, solvent and temperature stay on its
   record, as they came; each of the rest says its own place or why.
 - **Its first exit is named by how many it keeps**: *The first* where it
