@@ -2,7 +2,7 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import { mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
+import { COORDINATION_BOND, mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
 import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
@@ -26,8 +26,7 @@ export type WriterModel = { atoms: WriterAtom[]; bonds: WriterBond[] };
 /** How long a MOL file's bonds are, in ångström: the usual 1.5. */
 export const MOL_BOND_LENGTH = 1.5;
 
-/** MOL's bond type for a coordination (dative) bond, and for a hydrogen bond. */
-const COORDINATION_BOND = 9;
+/** MOL's bond type for a hydrogen bond (a coordination bond's is `COORDINATION_BOND`). */
 const HYDROGEN_BOND = 10;
 /** A query bond's type ("CTfile Formats", the bond block). */
 const QUERY_TYPE = { "single-or-double": 5, "single-or-aromatic": 6, "double-or-aromatic": 7, any: 8 } as const;

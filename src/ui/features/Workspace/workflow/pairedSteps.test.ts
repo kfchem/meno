@@ -142,7 +142,11 @@ describe("what the steps of two inputs say on their cards", () => {
       expect(kindInfo(kind).inputs?.map((p) => p.name)).toEqual(inputs);
     expect(kindInfo("merge").needs?.({ keep: "one", property: "" })).toBe("Name the property to keep one of each");
     expect(kindInfo("rebond").how?.({ pairs: "property", property: "id" })).toBe("Paired on id");
-    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", rs: true })).toBe("Against each reference, the match as matches; R or S too");
+    // (what was chosen, defaults unsaid)
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", rs: true })).toBe("R or S");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches" })).toBe("against each reference");
+    expect(kindInfo("compare-bonding").how?.({ reference: "property", property: "product", rs: true, ez: true, atoms: "3" })).toBe("matched on product; R or S and E or Z; passing over atoms 3");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "is", elements: "Pd" })).toBe("the match as is; passing over Pd");
   });
 });
 
@@ -232,6 +236,38 @@ describe("Compare bonding's R or S and E or Z, against known answers", () => {
     expect(differs(compare(ch2cl2(true), ch2cl2(), { rs: true }))).toBe("same");
   });
 
+  it("tells apart two stereoisomers of CHFCl-CHFBr that differ at one centre of two, naming that centre alone", () => {
+    // (C1 at the origin, C2 1.54 Å along x; each carbon's three other neighbours 109.5 degrees from the C-C bond, a third of the way round each)
+    const arm = (k: number, side: number, length: number) => {
+      const t = (2 * Math.PI * k) / 3;
+      return [(-side / 3) * length, 0.9428 * Math.cos(t) * length, 0.9428 * Math.sin(t) * length];
+    };
+    const pair = (swapC2: boolean) => {
+      const [h2, f2] = swapC2 ? [1, 0] : [0, 1];
+      return entry(
+        ["C", "C", "H", "F", "Cl", "H", "F", "Br"],
+        [
+          0, 0, 0, 1.54, 0, 0,
+          ...arm(0, 1, 1.09), ...arm(1, 1, 1.35), ...arm(2, 1, 1.77),
+          ...[h2, f2].flatMap((k, i) => arm(k, -1, [1.09, 1.35][i]).map((v, d) => v + (d === 0 ? 1.54 : 0))),
+          ...arm(2, -1, 1.94).map((v, d) => v + (d === 0 ? 1.54 : 0)),
+        ],
+        [
+          [0, 1, 1],
+          [0, 2, 1],
+          [0, 3, 1],
+          [0, 4, 1],
+          [1, 5, 1],
+          [1, 6, 1],
+          [1, 7, 1],
+        ],
+      );
+    };
+    expect(differs(compare(pair(true), pair(false)))).toBe("same");
+    expect(differs(compare(pair(true), pair(false), { rs: true }))).toBe("different: C2 has the other configuration from the reference's.");
+    expect(differs(compare(pair(true), pair(true), { rs: true }))).toBe("same");
+  });
+
   it("tells cis- from trans-1,2-dichloroethene only where E or Z is asked, either way round", () => {
     // (C1=C2 along x, 1.33 Å; each carbon's Cl at 1.73 Å and H at 1.08 Å, 120 degrees from the double bond - the chlorines on one side, or opposite)
     const dce = (cis: boolean) => {
@@ -252,6 +288,51 @@ describe("Compare bonding's R or S and E or Z, against known answers", () => {
     expect(differs(compare(dce(false), dce(true), { ez: true }))).toBe("different: The double bond C1-C2 is trans at Cl3-Cl4 here and cis in the reference.");
     expect(differs(compare(dce(true), dce(false), { ez: true }))).toBe("different: The double bond C1-C2 is cis at Cl3-Cl4 here and trans in the reference.");
     expect(differs(compare(dce(true), dce(true), { ez: true }))).toBe("same");
+  });
+});
+
+describe("Compare bonding's reach", () => {
+  // (H2O2 as NIST's CCCBDB gives it after Redington, Olson and Cross (1962): O-O 1.475 Å, two of Pyykkö's oxygen radii 1.26 Å)
+  const h2o2 = {
+    compound: 0,
+    number: 1,
+    atoms: [{ el: "O" }, { el: "O" }, { el: "H" }, { el: "H" }],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 1, a2: 3, order: 1 },
+    ],
+    xyz: [0, 0, 0, 1.475, 0, 0, -0.3, 0.92, 0, 1.775, 0, 0.92],
+  } as unknown as SetEntry;
+
+  it("bonds a peroxide's O-O at the default, 1.2 times their radii together, and not at 1.1 - saying so, at which distance", () => {
+    const at = (o: Record<string, number>) => ok(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, o));
+    expect(at({}).kept).toHaveLength(1);
+    // (at 1.1, 1.39 Å: under Meno's floor for small radii, 0.15 Å over them, which decides - and is said)
+    const short = at({ reach: 1.1 });
+    expect(text(short.aside[0], "bonding")).toBe("different: O1-O2 is bonded in the reference, not here: 1.48 Å apart, past 1.41 Å (their covalent radii together and 0.15 Å over, more than 1.1 times them).");
+    // (pulled to 1.70 Å: past 1.2 times their radii together, 1.51 Å, which decides)
+    const far = { ...h2o2, xyz: [0, 0, 0, 1.7, 0, 0, -0.3, 0.92, 0, 2.0, 0, 0.92] } as SetEntry;
+    expect(text(ok(runMenoPair("compare-bonding", { entries: [far], holds: "molecules" }, { entries: [h2o2], holds: "molecules" })).aside[0], "bonding")).toBe(
+      "different: O1-O2 is bonded in the reference, not here: 1.70 Å apart, past 1.51 Å (1.2 times their covalent radii together).",
+    );
+    // (the floor the chemist's too: at none, 1.1 times their radii together decides - 1.39 Å)
+    expect(text(at({ reach: 1.1, floor: 0 }).aside[0], "bonding")).toBe("different: O1-O2 is bonded in the reference, not here: 1.48 Å apart, past 1.39 Å (1.1 times their covalent radii together).");
+    // (the other way round: bonded here, not in the reference - which decided, said too)
+    const unbonded = { ...h2o2, bonds: h2o2.bonds.slice(1) } as SetEntry;
+    expect(text(ok(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [unbonded], holds: "molecules" })).aside[0], "bonding")).toBe(
+      "different: O1-O2 is bonded here, not in the reference: 1.48 Å apart, within 1.51 Å (1.2 times their covalent radii together).",
+    );
+    expect(text(ok(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [unbonded], holds: "molecules" }, { reach: 1.1, floor: 0.3 })).aside[0], "bonding")).toBe(
+      "different: O1-O2 is bonded here, not in the reference: 1.48 Å apart, within 1.56 Å (their covalent radii together and 0.3 Å over, more than 1.1 times them).",
+    );
+    // (out of range: refused by the step itself, whatever sent it)
+    expect(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, { reach: 2.5 })).toEqual({ ok: false, said: "Bonded within must be from 1 to 2 times the sum of the covalent radii" });
+    expect(runMenoPair("compare-bonding", { entries: [h2o2], holds: "molecules" }, { entries: [h2o2], holds: "molecules" }, { floor: -0.1 })).toEqual({ ok: false, said: "At least over the sum must be from 0 to 1 Å" });
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1, floor: 0 })).toBe("bonded within 1.1 \u00d7 covalent radii, at least +0 \u00c5");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", floor: 0.3 })).toBe("bonded within 1.2 \u00d7 covalent radii, at least +0.3 \u00c5");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.1 })).toBe("bonded within 1.1 \u00d7 covalent radii");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", reach: 1.2 })).toBe("against each reference");
   });
 });
 

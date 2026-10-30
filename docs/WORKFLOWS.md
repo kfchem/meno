@@ -294,7 +294,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
-| Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
+| Energy | a bolt | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
@@ -305,6 +305,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from; the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
+| Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
@@ -317,7 +318,10 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Restraints | atoms held to a wall (drawn) | molecules in 3D, or conformer sets | the same, each with its restraints from itself - coordination bonds at a factor of their van der Waals radii together (Alvarez 2013), pairs kept at their distance, atoms fixed - one it cannot have them out of *Failed*, saying why (STRUCTURE-STEPS.md, *Restraints*) |
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
-| Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared (STRUCTURE-STEPS.md, *Compare bonding*) |
+| Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
+| Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
+| Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
+| Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -352,12 +356,21 @@ plugin's xtb (XTB2; PLUGINS.md, `needs`), the one level either way. It
 runs NEB-TS alone (one role to a step, 2026-10-27): the point's frequencies
 are a *Frequencies* step's, wired after it.
 
+- **Its options** (ORCA's plugin; the ORCA 6.1 manual, *Nudged Elastic Band
+  Method*): the method and basis set; *Path*, a band with its highest point
+  refined (NEB-TS), or a band, a finer one about its highest point, that
+  refined (ZOOM-NEB-TS, 4.5.12); *Images between the ends*, ORCA's NImages,
+  8 unless said (4.5.16); and the steps refining its highest point, the
+  `%geom` block's MaxIter (4.5.13), ORCA's own unless said. Each is the
+  chemist's to change on the card.
 - **Pairs.** Each start is paired with an end as the step's *Pairs* says:
   *In order* (the k-th with the k-th; other numbers refused), *Each with
   each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
-  no end to match, a pair of other atoms or another order of them (*Re-bond
-  them first*), or of another charge or spin, goes out of *Failed* with why;
-  only the rest are sent.
+  no end to match, a pair of other atoms or another order of them, or of
+  another charge or spin, goes out of *Failed* with why; only the rest are
+  sent. Ends in one numbering come today from a drawn reaction: its arrow's
+  *Atom map*, then *Export reaction in 3D…*, which writes the products in
+  the reactants' numbering - opened, then optimised.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged
@@ -408,6 +421,11 @@ are a *Frequencies* step's, wired after it.
 - **Take frames** takes a path search's point refined as its *highest*,
   whatever image stands higher, and says so; its ends and the images beside
   them as they are.
+- **What it does not catch.** The numbering is checked atom by atom, by
+  element alone: ends numbered otherwise but with the same elements in the
+  same places (two hydrogens swapped, say) pass, and the path found is
+  then between other atoms than meant. A *Reaction* step that writes the
+  products in the reactants' numbering comes later.
 
 ### Who does a step
 
@@ -1827,6 +1845,19 @@ Foundation PR 5 (WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*):
   answers worked out by hand.
 - **A procedure keeps its steps' exits** as empty frames, the wires
   leading on from them.
+- **A later input may be optional - *where wanted*** (`StepPort.optional`,
+  2026-10-29): the step runs with nothing wired into it - an Energy
+  diagram's *Connects*, Add's *Number*. A kind's first input is always
+  needed; every later one not marked optional is too ("Nothing comes into
+  Second"). Two optional inputs may go together (`together`): both wired,
+  or neither ("Reactant side is wired: wire Product side too, or
+  neither"). An optional input looks as any other: the card's line names
+  what is needed, and never an optional one (`kinds` `laterPortsNeed`).
+  Wired, any input - optional or not - must give what it takes, by what
+  its set gives, run or not yet (flow `givesOf`): one wired from a set
+  that came to hold a table or a chart says so ("Second takes molecules
+  in 3D or conformer sets"), and the step does not run as if it were not
+  wired.
 
 Not read from a workspace saved before this: a wire into a step by its
 number alone, or out of a step, and a result set that does not say which
@@ -2744,6 +2775,143 @@ g/mol", "tpsa < 90 Å²" (or Å2).
 
 Not yet: conditions picked from what comes in rather than typed.
 
+### Rank (2026-10-29)
+
+*Rank*, Meno's own, orders entries by a value they carry and keeps the
+first N (lib/nodes `rank`, WORKFLOWS-FOUNDATION.md, *Meno's own nodes*):
+the conformers within a few kcal/mol taken on, at most so many (case F,
+steps 9, 30 and 34), the lowest of each species and each path (step 32),
+the first in each path (step 48).
+
+- **Its options**: the property it ranks by (*By*, energy unless named),
+  lowest or highest first, how many it keeps (*Keep the first*: 1 unless
+  set, the lowest of each, as case F takes it at steps 32, 44 and 48 - the
+  chemist's to change), and within what: *Each group* - a conformer set's compounds -
+  *Each value of a property*, the property named (*path*, *species*, as a
+  Tag wrote them), or *All together*. Its card says it in a line ("the
+  lowest 64 by energy in each species"), or what it still needs.
+- **What it gives**: those kept, in their ranked order, on its first exit;
+  *The rest* on its second, each as it came, its place written on it
+  (`set_aside`: "ranked 3 of 7 in its group by energy, lowest first; the
+  first 1 kept"). Ties keep the order they came in, and one ranked out
+  with the same value as the last one kept in its group - a degenerate
+  conformer - says so, on it ("tied with a #2, which was kept as it came
+  first") and on the line ("1 tied with one kept"): which is kept is never
+  chosen silently.
+- **Only values that can be ranked together are**: numbers of one
+  dimension, converted to the first one's unit, each worked out the same
+  way - its conditions, program, method, basis and thermal treatment
+  (lib/nodes `workedOutAs`). A group whose values were not is set aside
+  whole, saying how two of them differ, by name ("dg values differ in
+  method: M (a #1) and N (a #2)"); never ranked as one.
+- **An entry that is no result is never ranked**: failed, not converged,
+  its marks unread - set aside saying so ("not ranked: not converged"),
+  though its value would rank first. An entry with no value, or none of
+  the group property, is set aside saying that.
+- **Its line says what it ranked by**: the property, and how it was
+  worked out where its record says - level, program, solvent,
+  temperature ("the lowest 1 by dg (wB97X-D/6-311+G(d,p), Gaussian, in
+  SMD(chloroform), at 298.15 K) in each group") - then how many it kept,
+  and the rest counted by why ("rest 3 (2: below the first 1; 1: it has
+  no path to be ranked within)").
+- It takes molecules in 3D and conformer sets; structures drawn are not
+  ranked yet.
+### Join (2026-10-29)
+
+*Join*, Meno's own, puts values of one set's entries onto another's
+(lib/nodes `join`, WORKFLOWS-FOUNDATION.md, *Meno's own nodes*): the names
+of a reaction path's two ends put back on its saddle point, matched on
+*path* (case F, steps 27 and 50), a docking score back onto its ligand.
+
+- **Two inputs**: *Onto*, whose entries come out with what is put on, and
+  *From*, whose properties are put on. Each of *Onto*'s entries is matched
+  with the one entry of *From* that has the same value of the property
+  named in *Matched on* - an ID a Tag gave, which rides along with every
+  entry made from it (lib/nodes `matchedOn`, as Re-bond and Compare
+  bonding match) - never by an implicit rule.
+- **What is put on** is typed in *Put on*, one to a line or each after a
+  semicolon: a property's name ("species"), or a name and the one it is
+  put on as ("species as first end"). Each keeps its record as it was:
+  its value, its unit, where (its geometry, temperature, solvent) and by
+  what it was worked out. A value worked out at From's geometry stays one
+  of that geometry; nothing put on is read as worked out at Onto's.
+- **Nothing is put on silently.** An entry with no match, or more than
+  one ("2 entries of From have its path, q"), goes out of *Not joined*
+  saying so; so does one whose match is no result - failed, not
+  converged, its marks unread ("its match is not finished: not
+  converged"): its values are not to be trusted - one whose match lacks a
+  property asked for, and one that has its own under the name it would be
+  put on as: nothing of its own is overwritten. From's entries that
+  matched none are counted on the line.
+- **Meno's own names are never put on**: an energy, a state, a thermal
+  correction, vibrations - the names an entry's own record gives its own
+  values, worked out at its own geometry. A value put on under one would
+  read as of the entry's geometry; *Put on* refuses it ("put it on under
+  another name"), whether the entry has one or not.
+- A property whose name holds " as " cannot be put on: *Put on* reads it
+  as a name and the one it goes on as.
+- Its card says it in a line ("species as first end, matched on path"), or what it
+  still needs. It takes molecules in 3D and conformer sets; a table to
+  join from, and joining by identity or by drawn atom (the foundation's
+  other two ways), are not built yet.
+### Add and Number (2026-10-29)
+
+*Add* and *Number*, Meno's own, make the free energy at a higher level
+of theory (lib/nodes `add`, `standardState`; WORKFLOWS-FOUNDATION.md,
+case F, steps 31 and 42): a single point's energy, plus a thermal
+correction to G worked out at another level, plus the standard-state
+term.
+
+- ***Number*** takes nothing and gives a number in a set of its own,
+  with its unit and what worked it out:
+  - *Standard state, 1 atm to 1 mol/L*: the free energy of taking a mole
+    of ideal gas from 1 atm to 1 mol/L at temperature T,
+    R T ln(R T c°/p°), with R = 8.314462618 J/(mol K) (CODATA 2018), p° =
+    101325 Pa and c° = 1 mol/L - 1.894 kcal/mol at 298.15 K. Its record
+    says the formula and constants and the temperature: its source is its
+    formula. *At* is 298.15 K unless set, the temperature thermochemistry
+    is tabulated at, as Populations' is - the chemist's to change.
+  - *Typed*: a value and a unit from Meno's units.
+
+  Its card says what was chosen ("standard state", "standard state at
+  310 K", or the number typed); its line and its set, the number as
+  Meno writes one - an energy in kcal/mol as the chips write it, "1.89
+  kcal/mol". The value keeps all its digits.
+- ***Add*** takes *Molecules* and, where wanted, a *Number* (an optional
+  input: it runs without one). Its options: the values to *Add*, one to a
+  line or each after a semicolon ("energy; thermo.g-correction"), and the
+  name the sum is written *As* ("G-DFT") - never a name Meno gives an
+  entry's own values (an energy, a free energy). Each entry gets the sum,
+  in the first value's unit; the number wired in is summed as it is. Its
+  card says the formula ("G-DFT = energy + thermo.g-correction + number",
+  the number where one is wired in); its line, what it gave ("2 of 2
+  entries given G-DFT").
+- **An entry that is no result is never summed** - failed, not converged,
+  its marks unread: set aside saying so ("not added: not converged"),
+  counted on the line.
+- **Only values of one geometry are summed**: each named value must be of
+  the entry's own geometry (its record's geometry key). One of another
+  geometry, or of none, sets the entry aside, saying which ("its
+  thermo.g-correction was worked out at another geometry than its own").
+  A number wired in has no geometry, and is summed. The parts must agree
+  on temperature and pressure where they say them - the standard-state
+  term's temperature among them - or the entry is set aside, naming both.
+- **The sum keeps each part as it was** (`Property.parts`): the property
+  it was, its value, unit, and where and by what it was worked out. Its
+  own record claims no method or basis: it says where it is (the
+  geometry, the thermal part's temperature and pressure, and the solvent
+  where the parts that say one agree - none where two differ, a single
+  point in one and a correction in the gas phase: each part keeps its
+  own), and in words what it is the sum of - "sum: energy
+  (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction
+  (wB97X-D/6-31G(d), Gaussian, 298.15 K, 1 atm, quasi-RRHO) + standard
+  state (...)" - never one level for the whole. A step that takes a free
+  energy (a barrier, a population) reads its parts to check each against
+  another's.
+- An entry with its own value under the name already, or missing a part,
+  is set aside saying so; a number wired in of another dimension refuses
+  the step.
+
 ### Charts (2026-10-22)
 
 **Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
@@ -2821,7 +2989,7 @@ each entry's number, then its energy).
 
 **Energy diagram** (PR 10, fourth part: `src/lib/energyDiagram.ts`) is
 Meno's own step with two inputs: *Levels*, molecules or conformer sets,
-and *Connects*, a table, where wired. It gives a chart in a set
+and *Connects*, a table, where wanted (an optional input). It gives a chart in a set
 of its own. *Levels* reads what comes in as a table, each molecule as it
 is, so it takes a set that mixes a saddle point's conformer set with
 molecules of one geometry - which a step that works on entries refuses

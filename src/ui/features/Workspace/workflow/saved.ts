@@ -61,7 +61,7 @@ function readSet(v: unknown): WorkflowSet | null {
   if (!b || !isId(b.id) || !isNum(b.x0) || !isNum(b.y0) || !isNum(b.x1) || !isNum(b.y1)) return null;
   const made = b.made as { step?: unknown; exit?: unknown; holds?: unknown } | undefined;
   const madeRead =
-    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures" || made.holds === "chart")
+    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || ["pictures", "chart", "table", "number"].includes(made.holds as string))
       ? { step: made.step, exit: made.exit, ...(made.holds != null ? { holds: made.holds as SetHolds } : {}) }
       : undefined;
   // (one that says it was made by a step, but not by which as it reads: a set like any other - and said)

@@ -163,6 +163,28 @@ describe("a molecule's species, by Meno's one rule", () => {
   });
 });
 
+describe("a sum's parts, as a file holds them", () => {
+  it("reads back each part as it was - its value, unit, where and by what - and refuses a sum whose parts do not all read", () => {
+    const p = {
+      value: -499.977,
+      unit: "Eh",
+      at: { geometry: "g1", kelvin: 298.15, atm: 1, solvent: "SMD(chloroform)" },
+      by: { treatment: "sum: energy (...) + thermo.g-correction (...) + standard state (...)" },
+      status: "computed",
+      parts: [
+        { property: "energy", value: -500.1, unit: "Eh", at: { geometry: "g1", solvent: "SMD(chloroform)" }, by: { program: "Gaussian", method: "wB97X-D", basis: "6-311+G(d,p)" } },
+        { property: "thermo.g-correction", value: 0.12, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" } },
+        { property: "standard state", value: 1.894, unit: "kcal/mol", by: { treatment: "standard state 1 atm to 1 mol/L at 298.15 K" } },
+      ],
+    };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    // (one part that does not read - no name, no number, a unit Meno does not know, a field of the wrong kind - and none of it is read)
+    for (const bad of [{ value: 1, unit: "Eh" }, { property: "x", value: "1", unit: "Eh" }, { property: "x", value: 1, unit: "furlongs" }, { property: "x", value: 1, unit: "Eh", at: { kelvin: 298 } }])
+      expect(propertyIn({ ...p, parts: [...p.parts, bad] })).toBeUndefined();
+    expect(propertyIn({ ...p, parts: [] })).toBeUndefined();
+  });
+});
+
 describe("a property's structure, as a file holds it", () => {
   it("reads back the structure a value was worked out from, and refuses one that is no key", () => {
     const p = { value: 136.24, unit: "g/mol", of: "k1", status: "computed" };
