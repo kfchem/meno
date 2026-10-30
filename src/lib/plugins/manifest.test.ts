@@ -188,7 +188,7 @@ describe("a plugin's manifest", () => {
       ["frequencies", ["xtb"], ["method", "solvent"]],
     ]);
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
-    expect(orca.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies", "path-search"]);
+    expect(orca.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies", "path-search", "reaction-path", "saddle-point"]);
     // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
     const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);

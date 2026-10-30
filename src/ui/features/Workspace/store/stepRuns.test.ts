@@ -169,9 +169,10 @@ import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
 import { canWire, resultOf, stateOf } from "../workflow/flow";
+import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
-import { countOf, setEntries, setMembers } from "../workflow/entries";
+import { countOf, entryOfSet, setEntries, setMembers } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
@@ -573,6 +574,50 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
   });
 
+  it("runs a path search on conformer sets, each conformer an entry - paired in order, a job each, each sent its end - and refuses each with each past its most pairs", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [0, 1].map((k) => ({ entries: [k], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 NEB-TS\n" }], reads: [] })) }) as never);
+    const { doc, st } = editor();
+    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
+    // (two conformer sets of water, each of two conformers optimised at one level: the starts, and their ends beside them)
+    const conformers = (dy: number, k: number, at: { x: number; y: number }) => {
+      const w = doc.getState().molecules3d![0];
+      const xyz = (d: number) => w.atoms.flatMap((a, i) => [a.x, i === 1 ? a.y + d : a.y, a.z]);
+      return { atoms: w.atoms, bonds: w.bonds, frames: Array.from({ length: k - 1 }, (_, j) => xyz(dy + 0.01 * (j + 1))), conformerSet: true as const, calc, at };
+    };
+    doc.edit("sets of conformers", (d) => addMolecule3d(addMolecule3d({ ...d, molecules3d: [] }, conformers(0, 2, { x: 0, y: 0 })), conformers(0.3, 2, { x: 20, y: 0 })));
+    const starts = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const ends = st().addSet({ x0: 17, y0: -3, x1: 23, y1: 3 });
+    const step = st().addStep("path-search", "orca", 40, 0);
+    expect(st().connect({ set: starts }, step, "start")).toBe(true);
+    expect(st().connect({ set: ends }, step, "end")).toBe(true);
+    void st().runStep(step);
+    await settle();
+    await settle();
+    const sent = worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1];
+    expect(sent[0]).toBe("path-search");
+    // (each conformer of the starts paired with the end in its place: two pairs, each with its end)
+    expect((sent[1] as { end?: { atoms: unknown[] } }[]).map((e) => e.end?.atoms.length)).toEqual([3, 3]);
+    expect(asked.started).toHaveLength(2);
+    // (each paired by its place - kept with it, and said on the step's line when it ends: never taken for a match)
+    expect(st().steps.find((x) => x.id === step)!.running?.paired).toBe("paired in order, by place");
+
+    // (each with each of 11 conformers and 10: 110 pairs, past the most - refused before any job, saying how many)
+    const big = editor();
+    big.doc.edit("sets of conformers", (d) => addMolecule3d(addMolecule3d({ ...d, molecules3d: [] }, { ...conformers(0, 11, { x: 0, y: 0 }) }), { ...conformers(0.3, 10, { x: 20, y: 0 }) }));
+    const s2 = big.st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const e2 = big.st().addSet({ x0: 17, y0: -3, x1: 23, y1: 3 });
+    const step2 = big.st().addStep("path-search", "orca", 40, 0);
+    big.st().updateStep(step2, { options: { pairs: "each" } });
+    big.st().connect({ set: s2 }, step2, "start");
+    big.st().connect({ set: e2 }, step2, "end");
+    const before = asked.started.length;
+    await big.st().runStep(step2);
+    expect(big.st().steps.find((x) => x.id === step2)!.ran).toMatchObject({ ok: false, said: `Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most ${MOST_PAIRS} - match them on a property instead, or raise At most` });
+    expect(asked.started).toHaveLength(before);
+  });
+
   it("runs a step of two inputs once each step before it is done, not after the first of them alone", async () => {
     const { st, step: a } = editor();
     // (two optimisations of the one set, each into Merge's inputs: the second's job ends last)
@@ -605,7 +650,8 @@ describe("a step that runs a plugin's program", () => {
     //  again, its hydrogens elsewhere - and a hydrogen molecule, another molecule)
     const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
     doc.edit("ends", (d) => {
-      const water = { ...d.molecules3d![0], calc };
+      // (the start carrying how an earlier pair was made: replaced by this path's, said on the line)
+      const water = { ...d.molecules3d![0], calc, properties: [{ "path.paired": { value: "matched on an earlier tag", unit: "none" as const, status: "computed" as const } }] };
       const withWater = { ...d, molecules3d: [water, ...d.molecules3d!.slice(1)] };
       return addMolecule3d(addMolecule3d(withWater, { ...water, atoms: water.atoms.map((a, i) => (i === 1 ? { ...a, y: 0.9 } : a)), at: { x: 20, y: 0 } }), { atoms: [{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.74, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], calc, at: { x: 24, y: 0 } });
     });
@@ -643,6 +689,103 @@ describe("a step that runs a plugin's program", () => {
     const path = st().molecules3d.find((m) => m.entryFrames?.length)!;
     expect(path.entryFrames).toEqual([2]);
     expect(st().frames3d[path.id]).toBe(2);
+    expect(st().steps.find((x) => x.id === step)!.ran?.said).toMatch(/ · the path\.paired a pair carried replaced$/);
+    expect(path.properties?.[2]?.["path.paired"]?.value).toBe("each with each");
+  });
+
+  it("optimises guesses to saddle points - with their sides where both are wired, each paired as its options say; one side alone runs nothing", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const { doc, st } = editor();
+    // (water to guess from, water again on each side - its hydrogens elsewhere - and a hydrogen molecule among the reactant sides)
+    doc.edit("sides", (d) => {
+      const water = d.molecules3d![0];
+      const moved = (dy: number, x: number) => ({ ...water, atoms: water.atoms.map((a, i) => (i === 1 ? { ...a, y: a.y + dy } : a)), at: { x, y: 0 } });
+      return addMolecule3d(addMolecule3d(addMolecule3d(d, moved(0.2, 20)), { atoms: [{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.74, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], at: { x: 24, y: 0 } }), moved(-0.2, 40));
+    });
+    const guesses = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 6 });
+    const reactants = st().addSet({ x0: 17, y0: -3, x1: 27, y1: 3 });
+    const products = st().addSet({ x0: 37, y0: -3, x1: 43, y1: 3 });
+    const step = st().addStep("saddle-point", "orca", 60, 0);
+    st().connect({ set: guesses }, step, "guesses");
+    // (one side alone: none of it runs, saying why)
+    st().connect({ set: reactants }, step, "reactant");
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Reactant side is wired: wire Product side too, or neither" });
+    // (both, each with each: the guess with each reactant side and the product side - the hydrogen molecule no side of it, out of Failed)
+    st().connect({ set: products }, step, "product");
+    st().updateStep(step, { options: { pairs: "each" } });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPTTS\n" }], reads: [] }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    const sent = worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1];
+    expect(sent[0]).toBe("saddle-point");
+    const given = sent[1] as { atoms: { y: number }[]; sides?: { reactant: { atoms: { y: number }[] }; product: { atoms: { y: number }[] } } }[];
+    expect(given).toHaveLength(1);
+    const water = st().molecules3d[0];
+    expect([given[0].sides?.reactant.atoms[1].y, given[0].sides?.product.atoms[1].y].map((y) => Math.round((y! - water.atoms[1].y) * 10) / 10)).toEqual([0.2, -0.2]);
+    Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, files: {} });
+    await st().lookAtJobs();
+    await ran;
+    const failed = st().steps.find((s) => s.id === step)!.ran;
+    expect(failed?.said).toContain("not the same atoms in one numbering");
+  });
+
+  it("puts an optimisation that stopped under way out of Failed at the geometry it reached, from which a step after it starts afresh - saying so", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const { st } = editor();
+    const water = st().molecules3d[0];
+    const at = water.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const moved = (dy: number) => at.map((v, i) => (i === 4 ? v + dy : v));
+    const step = st().addStep("optimise", "orca", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPT\n" }], reads: [] }] }) as never);
+    // (its SCF failed at its third step: ORCA's words, and its output to read for where it got to)
+    worker.collect.mockImplementationOnce(async () => ({ why: "ORCA finished by error termination in SCF", partial: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    readOutput.mockImplementationOnce(async () => ({
+      output: { schema: 1, program: "ORCA", version: "6.1.1", method: "B3LYP", atoms: ["O", "H", "H"], frames: [moved(0.05), moved(0.1)], energies: [-76.40, -76.41] },
+      readers: ["cclib 1.9rc1"],
+    }));
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "GEOMETRY OPTIMIZATION CYCLE 3" });
+    await st().lookAtJobs();
+    await ran;
+    const failedSet = st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!;
+    const stopped = st().molecules3d.find((m) => m.failed?.some((f) => f))!;
+    // (its way there as frames, from the geometry it came in with to the last it reached; no energy of it a result)
+    expect(stopped.frames?.length).toBe(2);
+    expect([stopped.atoms[1].y - water.atoms[1].y, stopped.energies]).toEqual([0, undefined]);
+    expect(stopped.failed?.[stopped.failed.length - 1]?.why).toBe("ORCA finished by error termination in SCF");
+    const [entry] = setEntries([stopped], "molecules");
+    expect(entry.xyz[4] - at[4]).toBeCloseTo(0.1, 9);
+    expect([entry.energy, entryOfSet(entry, "x").properties.failure?.value]).toEqual([undefined, "ORCA finished by error termination in SCF"]);
+    // (an optimisation after it, from its Failed exit: started from where it stopped, nothing of it a result - and said)
+    const again = st().addStep("optimise", "orca", 40, 10);
+    st().connect({ set: failedSet.id }, again);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPT SlowConv\n" }], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    readOutput.mockImplementationOnce(async () => ({
+      output: { schema: 1, program: "ORCA", version: "6.1.1", method: "B3LYP", atoms: ["O", "H", "H"], frames: [moved(0.1), moved(0.12)], energies: [-76.41, -76.42], optimised: true } as never,
+      readers: ["cclib 1.9rc1"],
+    }));
+    const calls = worker.prepare.mock.calls.length;
+    const ran2 = st().runStep(again);
+    for (let i = 0; i < 20 && worker.prepare.mock.calls.length === calls; i++) await settle();
+    await settle();
+    expect(worker.prepare.mock.calls.length).toBe(calls + 1);
+    expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1][1] as { atoms: { y: number }[] }[])[0].atoms[1].y - water.atoms[1].y).toBeCloseTo(0.1, 6);
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 1000, ended: 31_000, log: "ORCA TERMINATED NORMALLY" });
+    await st().lookAtJobs();
+    await ran2;
+    const said = st().steps.find((s) => s.id === again)!.ran;
+    expect(said).toMatchObject({ ok: true });
+    expect(said?.said).toContain("started from a failed run's geometry");
+    const done = st().molecules3d[st().molecules3d.length - 1];
+    expect([done.energies?.[done.energies.length - 1], done.failed?.some((f) => f) ?? false]).toEqual([-76.42, false]);
   });
 
   it("says it was stopped, and brings nothing in", async () => {

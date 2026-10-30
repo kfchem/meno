@@ -238,6 +238,8 @@ export type MappedProduct = {
   map: number;
   /** The product's atoms and bonds in the reactants' numbering: every atom mapped one to one, hydrogens included. */
   molecule: Molecule;
+  /** For each atom in the reactants' numbering, the product's own atom it is (from 0): the product renumbered, read the other way. */
+  order: number[];
   changes: BondChangeRow[];
 };
 
@@ -310,7 +312,9 @@ export function mapProducts(
         notMapped.push({ product, map: k, reason: "The map leaves atoms of one side unpaired." });
         continue;
       }
-      mapped.push({ product, map: k, molecule: renumbered(result.product, m, reactant.atoms.length), changes: bondChangeRows(result.reactant, result.product, m) });
+      const order: number[] = new Array(m.length);
+      m.forEach((r, j) => (order[r] = j));
+      mapped.push({ product, map: k, molecule: renumbered(result.product, m, reactant.atoms.length), order, changes: bondChangeRows(result.reactant, result.product, m) });
     }
   });
   return { mapped, notMapped };

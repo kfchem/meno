@@ -5,6 +5,7 @@
  * own.
  */
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
+import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -46,7 +47,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -146,6 +147,25 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
+/** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
+const PAIRS_OWN: readonly Option[] = [
+  {
+    id: "pairs",
+    label: "Pairs",
+    type: "choice",
+    choices: [
+      { value: "order", label: "In order" },
+      { value: "each", label: "Each with each" },
+      { value: "property", label: "Matched on" },
+    ],
+    default: "order",
+  },
+  { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+];
+
+/** How many pairs *Path search*'s each with each makes at most: its own, as every pair is a path search run (workflow/mostPairs). */
+const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } };
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
@@ -162,31 +182,40 @@ export const KINDS: readonly KindInfo[] = [
     kind: "path-search",
     name: "Path search",
     icon: "path",
-    takes: ["molecules"],
+    takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "program",
     made: "Refined structures",
     inputs: [
-      { id: "start", name: "Start", takes: ["molecules"] },
-      { id: "end", name: "End", takes: ["molecules"] },
+      { id: "start", name: "Start", takes: ["molecules", "conformers"] },
+      { id: "end", name: "End", takes: ["molecules", "conformers"] },
     ],
     others: [FAILED],
     whole: true,
-    own: [
-      {
-        id: "pairs",
-        label: "Pairs",
-        type: "choice",
-        choices: [
-          { value: "order", label: "In order" },
-          { value: "each", label: "Each with each" },
-          { value: "property", label: "Matched on" },
-        ],
-        default: "order",
-      },
-      { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
-    ],
+    own: [...PAIRS_OWN, MOST_OWN],
   },
+  {
+    // (a guess optimised to a saddle point by its program - with the reactant and product sides, where both are wired, each paired with
+    //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
+    kind: "saddle-point",
+    name: "Optimise to a saddle point",
+    icon: "saddle",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "program",
+    made: "Optimised structures",
+    inputs: [
+      { id: "guesses", name: "Guesses", takes: ["molecules"] },
+      { id: "reactant", name: "Reactant side", takes: ["molecules"], optional: true, together: "product" },
+      { id: "product", name: "Product side", takes: ["molecules"], optional: true, together: "reactant" },
+    ],
+    others: [FAILED],
+    whole: true,
+    own: PAIRS_OWN,
+  },
+  // (from each point given - a saddle point, as its frequencies say - down both ways, as its program follows the reaction path: one molecule
+  //  each, its frames the path from one end to the other, its entry the point it started from; Meno judges none of them - docs/WORKFLOWS.md)
+  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",
@@ -545,9 +574,33 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Measured",
-    options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
-    how: (v) => measureHow(String(v.measurements ?? "")),
+    // (the atoms typed, or each row's of a table wired in where wanted - a Reaction's bond changes - its columns saying how they count them)
+    inputs: [
+      { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
+    ],
+    options: [
+      {
+        id: "from",
+        label: "Atoms",
+        type: "choice",
+        choices: [
+          { value: "typed", label: "Typed" },
+          { value: "table", label: "From the table" },
+        ],
+        default: "typed",
+      },
+      { id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "", when: { id: "from", in: ["typed"] } },
+      { id: "rows", label: "Rows matched on (blank: every row)", type: "text", default: "", when: { id: "from", in: ["table"] } },
+    ],
+    how: (v) =>
+      v.from === "table"
+        ? String(v.rows ?? "").trim()
+          ? `atoms from the table, rows by ${String(v.rows).trim()}`
+          : "atoms from the table"
+        : measureHow(String(v.measurements ?? "")),
     needs: (v) => {
+      if (v.from === "table") return undefined;
       const typed = measurementsTyped(String(v.measurements ?? ""));
       return "why" in typed ? typed.why : undefined;
     },
@@ -772,6 +825,65 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) => addHow(v),
     needs: (v) => addNeeds(v),
   },
+  {
+    // (each product mapped onto the one reactant structure, atom for atom, hydrogens too, and written in its numbering - with the bonds each map forms, breaks or changes, as a table; a product that does not map, aside with why)
+    kind: "reaction",
+    name: "Reaction",
+    icon: "reaction",
+    takes: ["molecules", "conformers"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Mapped products",
+    inputs: [
+      { id: "reactants", name: "Reactants", takes: ["molecules", "conformers"] },
+      { id: "products", name: "Products", takes: ["molecules", "conformers"] },
+    ],
+    others: [
+      { id: "rest", name: "Not mapped", gives: "same", of: "rest" },
+      { id: "changes", name: "Bond changes", gives: "table" },
+    ],
+    options: [
+      {
+        id: "maps",
+        label: "Maps",
+        type: "choice",
+        choices: [
+          { value: "first", label: "First map" },
+          { value: "every", label: "Every map" },
+        ],
+        default: "first",
+      },
+    ],
+    how: (v) => (v.maps === "every" ? "every map of each product" : "each product's first map"),
+  },
+  {
+    // (each geometry moved along a vibration - its imaginary one, or one chosen - by an amplitude, the atom moving most by exactly that; one that cannot be, aside with why)
+    kind: "displace",
+    name: "Displace",
+    icon: "moved",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Displaced",
+    others: [{ id: "rest", name: "Not displaced", gives: "same", of: "rest" }],
+    options: [
+      {
+        id: "vibration",
+        label: "Along",
+        type: "choice",
+        choices: [
+          { value: "imaginary", label: "The imaginary vibration" },
+          { value: "number", label: "A vibration by number" },
+        ],
+        default: "imaginary",
+      },
+      { id: "number", label: "Vibration, from 1", type: "number", default: 1, min: 1, step: 1, when: { id: "vibration", in: ["number"] } },
+      // (0, which moves nothing, until one is given: no amplitude is right for every system, and none is given without a basis)
+      { id: "amplitude", label: "Amplitude (negative: against the mode as written)", type: "number", default: 0, step: 0.05, unit: "\u00c5", unset: 0 },
+    ],
+    how: (v) => displaceHow(v),
+    needs: (v) => displaceNeeds(v),
+  },
 ];
 
 /** A number typed on a card, above 0, or why it is not one; null where nothing is typed. */
@@ -843,6 +955,26 @@ export function torsionsHow(v: OptionValues): string {
   const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
   // (the + says it adds each time - the option's own label says it whole)
   return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
+}
+
+/** *Displace*'s options as read: its amplitude (Å, not 0), and the vibration (from 0) where one is chosen by number - or what it still needs. */
+export function displaceRead(v: OptionValues): { amplitude: number; vibration: "imaginary" | number } | { why: string } {
+  const amplitude = Number(v.amplitude ?? 0);
+  if (!Number.isFinite(amplitude) || amplitude === 0) return { why: "Give the amplitude" };
+  if (v.vibration !== "number") return { amplitude, vibration: "imaginary" };
+  const n = Number(v.number ?? 1);
+  if (!Number.isInteger(n) || n < 1) return { why: `${n} is no vibration's number, from 1` };
+  return { amplitude, vibration: n - 1 };
+}
+const displaceNeeds = (v: OptionValues): string | undefined => {
+  const r = displaceRead(v);
+  return "why" in r ? r.why : undefined;
+};
+/** *Displace*'s card line: its amplitude, and the vibration where it is not the imaginary one. */
+function displaceHow(v: OptionValues): string {
+  const r = displaceRead(v);
+  if ("why" in r) return r.why;
+  return `${r.amplitude} \u00c5${r.vibration === "imaginary" ? "" : ` along vibration ${r.vibration + 1}`}`;
 }
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
