@@ -16,6 +16,7 @@ import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, restrain
 import { positionIds, substituted } from "./substituents";
 import { rankedSet } from "./valueSteps";
 import { joinedSet } from "./joinStep";
+import { ensembleSet } from "./ensembleStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -66,6 +67,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
         within: options.within === "all" ? "all" : options.within === "each value" ? "each value" : "each group",
         groupBy: String(options.groupBy ?? ""),
       });
+    case "ensemble":
+      return ensembleSet(entries, holds, options);
     case "tag":
       return taggedSet(entries, holds, String(options.name ?? ""));
     case "species":

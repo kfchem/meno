@@ -42,6 +42,7 @@ describe("a kind's exits, as a list", () => {
       "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
       number: [first("Number", "number")],
       add: [first("{as}", "same"), rest("Not added", "same")],
+      ensemble: [first("{as}", "same"), rest("The rest", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

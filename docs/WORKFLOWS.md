@@ -322,6 +322,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
+| Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -2911,6 +2912,33 @@ term.
 - An entry with its own value under the name already, or missing a part,
   is set aside saying so; a number wired in of another dimension refuses
   the step.
+
+### Ensemble energy (2026-10-30)
+
+*Ensemble energy*, Meno's own, takes a group's members - a compound's
+conformers - together (lib/nodes `ensemble`; WORKFLOWS-FOUNDATION.md,
+case F, step 44, beside Rank's lowest):
+
+  G = G_min - R T ln Σ g exp(-(G - G_min) / R T)
+
+with each member's degeneracy g (1 where it says none), R = 8.314462618
+J/(mol K), and T the temperature its members' values state.
+
+- **Its options**: the value it takes (*Of*, a free energy: Frequencies'
+  or one an Add wrote), the name it is written *As* ("G-ens"), and
+  within what - *Each group*, *Each value of a property*, *All
+  together*. Its card says it in a line ("G-ens = ensemble of G in each
+  group").
+- **One entry stands for each group**: its lowest, with the value written
+  on it. The value is of the group, not of that geometry
+  (`Property.ensemble`, how many it is over); its parts are each member's
+  value as it was - an Add's own parts with it - so that a step reading
+  it checks each member's level. The others go out of *The rest*, each
+  saying whose ensemble it is in.
+- **No temperature is assumed**: members whose values state none, or
+  differ in it, or were worked out differently in any other way, set
+  their group aside whole, saying how. A member that is no result -
+  failed, not converged - is never counted, and says so.
 
 ### Charts (2026-10-22)
 
