@@ -232,6 +232,10 @@ def needs_xtb(options):
 #: end it is paired with, its highest point refined, and - where asked - that point's frequencies. Its files, as ORCA
 #: 6.1.1 writes them for an input named input.inp: the path as images, the point refined.
 PATH_RUN = "NEB-TS"
+#: The runs a path search offers (its *Path* option): a band, its highest point refined; or a band, a finer one about
+#: its highest point, that refined (the manual's 4.5.12 *ZOOM-NEB* and 4.5.13 *NEB-TS*). Both write the same files and
+#: end in one PATH SUMMARY FOR NEB-TS (ORCA 6.1.1).
+PATH_RUNS = ("NEB-TS", "ZOOM-NEB-TS")
 END = "end.xyz"
 MEP = f"{BASE}_MEP_trj.xyz"
 REFINED = f"{BASE}_NEB-TS_converged.xyz"
@@ -311,15 +315,24 @@ def path_input(entry, options, cores):
     why = path_refusal(method, more)
     if why:
         raise Refused(why)
+    run = options.get("run", PATH_RUN)
+    if run not in PATH_RUNS:
+        raise Refused(f"no path is called {run!r}")
+    # (the images between its ends - the manual's 4.5.16, NImages, 8 unless said - and the steps refining its highest
+    #  point, the %geom block's (4.5.13), ORCA's own where none is said)
+    images = whole(options.get("images", 8), "The images", 1)
+    maxiter = whole(options.get("maxiter", 0), "The steps for refining its highest point", 0)
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity", 1)
     maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)
-    lines = ["! " + " ".join(k for k in [method, basis, PATH_RUN, more] if k)]
+    lines = ["! " + " ".join(k for k in [method, basis, run, more] if k)]
     if cores and whole(cores, "The cores", 1) > 1:
         lines.append(f"%pal nprocs {int(cores)} end")
     if maxcore:
         lines.append(f"%maxcore {maxcore}")
-    lines += ["%neb", f'  neb_end_xyzfile "{END}"', "end", f"* xyz {charge} {multiplicity}", *xyz_block(entry), "*"]
+    if maxiter:
+        lines.append(f"%geom maxiter {maxiter} end")
+    lines += ["%neb", f'  neb_end_xyzfile "{END}"', f"  nimages {images}", "end", f"* xyz {charge} {multiplicity}", *xyz_block(entry), "*"]
     end_lines = xyz_block(end)
     return "\n".join(lines) + "\n", f"{len(end_lines)}\nend\n" + "\n".join(end_lines) + "\n"
 

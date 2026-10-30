@@ -3,6 +3,7 @@ import { kekulized } from "../lib/chem/kekulize";
 import {
   bondChem,
   chemistry,
+  COORDINATION_BOND,
   type AbbreviationStructure,
   type SgroupMark,
   type AtomChem,
@@ -62,8 +63,6 @@ function chemistryOf(a: ParsedAtom): AtomChem {
   return { el: a.alias ? aliasLabel(a.el) : normalizeEl(a.el), ...chemistry(a) };
 }
 
-/** MOL's bond type for a coordination (dative) bond. */
-const COORDINATION_BOND = 9;
 const HYDROGEN_BOND = 10;
 /** The query bond types, 5 to 8. */
 const QUERY_OF: Record<number, EditorBond["query"]> = {

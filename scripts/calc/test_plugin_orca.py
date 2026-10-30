@@ -165,9 +165,11 @@ class Prepare(unittest.TestCase):
             self.assertEqual(step["programs"], ["orca"])
             # (memory 0 leaves it to ORCA: unset, so a step's line never shows a bare 0)
             self.assertEqual(options["maxcore"].get("unset"), 0, step["kinds"])
-            # (a path search's: its method, frequencies, keywords and memory - each read by its input)
+            # (a path search's: its method, its run, its images, the steps refining its highest point, keywords and memory - each read by its input)
             if step["kinds"] == ["path-search"]:
-                self.assertEqual(set(options), {"method", "basis", "keywords", "maxcore"})
+                self.assertEqual(set(options), {"method", "basis", "run", "images", "maxiter", "keywords", "maxcore"})
+                self.assertEqual({c["value"] for c in options["run"]["choices"]}, set(worker.PATH_RUNS))
+                self.assertEqual((options["images"]["default"], options["maxiter"].get("unset")), (8, 0))
                 continue
             self.assertEqual({c["value"] for c in options["solvent"]["choices"]}, worker.SOLVENTS)
             self.assertEqual({c["value"] for c in options["dispersion"]["choices"]}, set(worker.DISPERSIONS))
@@ -236,6 +238,18 @@ class PathSearch(unittest.TestCase):
         # (its method - ORCA's own GFN2-xTB, by default - and NEB-TS alone: no frequencies, a Frequencies step's; the end named for %neb)
         self.assertEqual(lines[0], "! NATIVE-XTB2 NEB-TS")
         self.assertIn('  neb_end_xyzfile "end.xyz"', lines)
+        # (its images, ORCA's 8 unless said; no %geom block where its refining steps are left to ORCA)
+        self.assertIn("  nimages 8", lines)
+        self.assertFalse(any(l.startswith("%geom") for l in lines))
+        # (a finer band about its highest point, more images, more steps refining it - as asked)
+        zoom = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options={**options, "run": "ZOOM-NEB-TS", "images": 6, "maxiter": 999})["jobs"][0]
+        zlines = zoom["files"][0]["text"].splitlines()
+        self.assertEqual(zlines[0], "! NATIVE-XTB2 ZOOM-NEB-TS")
+        self.assertIn("%geom maxiter 999 end", zlines)
+        self.assertIn("  nimages 6", zlines)
+        for bad in ({"run": "NEB-CI"}, {"images": 0}, {"images": 2.5}, {"maxiter": -1}):
+            with self.assertRaises(AssertionError, msg=bad):
+                ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options={**options, **bad})
         end = next(f["text"] for f in job["files"] if f["name"] == "end.xyz").splitlines()
         self.assertEqual(end[0], "2")
         self.assertEqual(end[3].split()[:2], ["H", "1.1000000000"])

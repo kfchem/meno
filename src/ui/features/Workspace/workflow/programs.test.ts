@@ -228,9 +228,9 @@ describe("what a plugin reads back of a job", () => {
     const formed = workedOf("optimise", drawn, { ...out, frames: [[0, 0, 0, 0, 0.76, 0.59, 0, 0.1, 0.9]] }, ["xtb 6.7.1"]);
     expect(!isFailure(formed) && formed.keep?.drawnFrom).toBeFalsy();
     // (its own charge, -1 on the oxygen, the calculation said 0: another species)
-    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: 0 }, ["xtb 6.7.1"]);
+    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], energies: [-5], charge: 0 }, ["xtb 6.7.1"]);
     expect(!isFailure(other) && other.keep?.drawnFrom).toBeFalsy();
-    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: -1 }, ["xtb 6.7.1"]);
+    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], energies: [-5], charge: -1 }, ["xtb 6.7.1"]);
     expect(!isFailure(same) && same.keep).toEqual({ drawnFrom: [11, 12, 13], drawnAs: "drawn" });
     expect(sameCompound(WATER, out.frames[1])).toBe(true);
   });
