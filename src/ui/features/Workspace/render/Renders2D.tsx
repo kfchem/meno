@@ -7,15 +7,18 @@ import PageHtml from "../components/PageHtml";
 import { setViewGoal } from "../components/viewGoal";
 import { pageAt } from "../utils/page";
 import { HTML_DISTANCE, PX } from "../workflow/look";
+import { carryFrame } from "./carry";
 import { frameWords } from "./frameWords";
-import { rendersOf, stopRender, withWords, type Rendering } from "./renders";
+import { moveRender, rendersOf, stopRender, withWords, type Rendering } from "./renders";
 
 /**
  * Renders under way on the page (docs/RENDER.md): each where what it makes
  * will lie, as large - a dashed frame, and in it how far it is, what its
  * job said last and a way to stop it - or, where it failed, why, and a way
  * to put it away. In the page's layer of HTML, so that it zooms with the
- * page as all on it does.
+ * page as all on it does. Dragged, the frame moves, as anything on the page
+ * does, and what the render makes lands where it stands then (the
+ * maintainer, 2026-10-28).
  */
 export default function Renders2D() {
   const store = useEditorStore();
@@ -48,7 +51,13 @@ export default function Renders2D() {
     <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[17, 17]} pointerEvents="none">
       <div style={{ position: "relative", width: 0, height: 0 }}>
         {list.map((r) => (
-          <Placeholder key={r.key} r={r} onStop={() => stopRender(store, r.key)} />
+          <Placeholder
+            key={r.key}
+            r={r}
+            onStop={() => stopRender(store, r.key)}
+            onMove={(x, y) => moveRender(store, r.key, x, y)}
+            perPx={() => 1 / Math.max((camera as THREE.OrthographicCamera).zoom || 1, 1e-6)}
+          />
         ))}
       </div>
     </PageHtml>
@@ -66,7 +75,13 @@ export function said(r: Rendering): string {
   return "Rendering…";
 }
 
-function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
+function Placeholder({ r, onStop, onMove, perPx }: { r: Rendering; onStop: () => void; onMove: (x: number, y: number) => void; perPx: () => number }) {
+  // a drag on it moves it (carry): not one on its button
+  const press = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+    e.stopPropagation();
+    carryFrame(e.currentTarget, e, r.at, perPx(), onMove);
+  };
   const w = r.at.w / PX;
   const h = r.at.h / PX;
   const failed = r.state === "failed";
@@ -98,7 +113,8 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
   return (
     <div
       className={`meno-fade-in absolute flex flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-white/80 text-center transition-colors duration-200 ease-meno ${inside ? "px-8 py-3" : "p-1"} ${failed ? "border-accel-accent" : "border-gh-line"}`}
-      style={{ left: (r.at.x - r.at.w / 2) / PX, top: -(r.at.y + r.at.h / 2) / PX, width: w, height: h }}
+      style={{ left: (r.at.x - r.at.w / 2) / PX, top: -(r.at.y + r.at.h / 2) / PX, width: w, height: h, pointerEvents: "auto", cursor: "grab" }}
+      onPointerDown={press}
     >
       {inside && words}
       {!failed && (

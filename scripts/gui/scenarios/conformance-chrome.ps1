@@ -53,8 +53,10 @@
 # - films "tab-switch.mov", "settings-open.mov", "settings-close.mov",
 #   "column-open.mov", "column-close.mov": no jumps (checked frame by frame
 #   after the run: each change spread over frames, eased).
-# - "last-tab-quits" (logged), right after the first run's shots: the one
-#   tab closed - Meno gone; it is started again for the rest.
+# - "one-tab": Settings' tab closed by its x - the workspace's tab alone.
+# - "last-tab-quits" (logged), right after the first run's shots: Settings'
+#   tab closed, then the one tab left - Meno gone (waited for, up to 10 s);
+#   it is started again for the rest.
 #
 # Coordinates are a Mac's 2560x1720 shot's (read off it on 2026-10-13;
 # Windows wants its own). Phenylethanol from a SMILES in the middle: its C2
@@ -108,11 +110,16 @@ Save-Step "chrome"
 $menus = & /usr/bin/osascript -e 'tell application "System Events" to tell process "Meno" to get {name of every menu bar item of menu bar 1, name of every menu item of every menu of every menu bar item of menu bar 1}' 2>&1
 Write-Host "  menu bar: $menus"
 
-# the one tab closed - nothing drawn on it, nothing to ask - and Meno gone with it; then started again
+# Settings' tab closed (opened above, a tab of its own, which Escape leaves open); then the one tab left - nothing
+# drawn on it, nothing to ask - and Meno gone with it, waited for (it closes its window first, then its process);
+# then started again
+Invoke-MenoClick -X 909 -Y 42
+Start-Sleep -Milliseconds 800
+Save-Step "one-tab"
 Invoke-MenoClick -X 517 -Y 42
-Start-Sleep -Milliseconds 2500
-$left = @(Get-MenoApp)
-Write-Host ("  last-tab-quits: " + $(if ($left.Count) { "NO - Meno still running" } else { "yes - Meno gone" }))
+$closed = Get-Date
+do { Start-Sleep -Milliseconds 200; $left = @(Get-MenoApp) } while ($left.Count -and ((Get-Date) - $closed).TotalSeconds -lt 10)
+Write-Host ("  last-tab-quits: " + $(if ($left.Count) { "NO - Meno still running after 10 s" } else { "yes - Meno gone" }))
 if ($Part -eq "first") { return }
 }
 # (started again: the system may have given the front to another program as Meno went - Meno is brought to it)

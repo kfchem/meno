@@ -20,6 +20,8 @@ import { DURATION, EASE } from "../../theme/motion";
 import CardMenu from "./CardMenu";
 import { styleMenuItems3d } from "./styleMenus";
 import Preview3D from "./Preview3D";
+import { carryEnds } from "./carryEnds";
+import { turnsSample } from "./sampleTurn";
 import { exportStyles } from "./exportStyle";
 import { keptPicture3d, useStylePicture3d } from "./stylePicture3d";
 
@@ -73,6 +75,12 @@ export default function StylePicker3D({
     onChange(next);
   };
   useLayoutEffect(() => flip.play(), [choice, drag, flip]);
+  // (a card carried: the hand's pointer all the way, over the other slot's molecule too - not the turning one)
+  const carrying = drag != null;
+  useEffect(() => {
+    document.documentElement.classList.toggle("meno-carrying", carrying);
+    return () => document.documentElement.classList.remove("meno-carrying");
+  }, [carrying]);
 
   // a press on a card: a drag, once it moves; else a choice of what is set
   useEffect(() => {
@@ -103,13 +111,25 @@ export default function StylePicker3D({
       setDrag(null);
       setOver(null);
     };
+    // (the window left, its pointer's let-go lost, or Escape: a card carried goes back to where it came from, and a
+    // press not yet a drag is let go - opening nothing; the card never left stuck to the pointer, nor its hand)
+    const putBack = () => {
+      const p = pressed.current;
+      pressed.current = null;
+      if (!p || !drag) return;
+      flip.capture({ id: drag.id, box: new DOMRect(drag.x - drag.dx, drag.y - drag.dy, drag.w, drag.h) });
+      setDrag(null);
+      setOver(null);
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
+    const ends = carryEnds(window, () => pressed.current != null, putBack);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      ends();
     };
   });
 
@@ -192,9 +212,10 @@ export default function StylePicker3D({
                   {changed(id) && <span className="text-accel-base" title="Changed">•</span>}
                 </div>
                 {carried?.has(id) && <div className="px-3 text-[11px] leading-snug text-gh-gray">In this workspace</div>}
-                {/* (the molecule live in it: turned by a drag on it, as on the canvas - the card moved by its name; a click on it picks the style, as on its name) */}
-                <div className="h-44" onPointerDown={(e) => e.stopPropagation()}>
-                  <Preview3D style={style} look={role} onTap={() => onEdit(id)} />
+                {/* (the molecule live in it: turned by a drag on its atoms or bonds, as on the canvas; a drag anywhere else moves the card,
+                    a click picks the style - the maintainer, 2026-10-28) */}
+                <div className="h-44" onPointerDown={(e) => turnsSample(e.nativeEvent) && e.stopPropagation()}>
+                  <Preview3D style={style} look={role} onTap={() => onEdit(id)} turnOn="molecule" idle />
                 </div>
               </div>
             </div>

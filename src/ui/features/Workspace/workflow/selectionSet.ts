@@ -14,7 +14,13 @@ import { SET_PAD, SET_TOP, CHIP, CHIP_CHAR, CHIP_SIDES } from "./look";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 /** Whether a molecule in 3D shows a frames chip below it (Molecule3DView): it has frames, or a calculation it was read from. */
-export const hasChip = (m: Pick<Molecule3D, "frames" | "calc"> & Partial<Pick<Molecule3D, "title" | "stack" | "failed">>) => framesOf(m) > 1 || !!m.calc || named3d(m) || !!m.failed?.some(Boolean);
+export const hasChip = (m: Pick<Molecule3D, "frames" | "calc"> & Partial<Pick<Molecule3D, "title" | "stack" | "failed" | "conformerSet">>) => setShown(m) || !!m.calc || named3d(m) || !!m.failed?.some(Boolean);
+/**
+ * Whether a molecule's chip says which of its frames it shows, always - not
+ * only while it is pointed at (Frames3D, not `single`): it has several, or
+ * it is a compound of a conformer set, though one conformer of it was kept.
+ */
+const setShown = (m: Pick<Molecule3D, "frames"> & Partial<Pick<Molecule3D, "conformerSet">>) => framesOf(m) > 1 || !!m.conformerSet;
 /** A molecule in 3D called by a name of its own - a structure read from coordinates in a text - not one of a stack, whose chip says its record's: its chip says it. */
 export const named3d = (m: Partial<Pick<Molecule3D, "title" | "stack">>) => !!m.title && !m.stack;
 
@@ -28,7 +34,7 @@ export const named3d = (m: Partial<Pick<Molecule3D, "title" | "stack">>) => !!m.
 export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>): number {
   const n = framesOf(m);
   // (a single geometry called by its name: its name, and its energy where it has one)
-  if (n < 2) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
+  if (!setShown(m)) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
   const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
   const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
   const shares = sharesOf(m) ? " · 100%" : "";

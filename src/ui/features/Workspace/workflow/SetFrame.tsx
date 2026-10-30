@@ -4,7 +4,7 @@ import type { WorkflowSet } from "../store/types";
 import type { ChartPoint } from "../../../../lib/chart";
 import type { DiagramLevel } from "../../../../lib/energyDiagram";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX } from "./look";
+import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, tableBodyPx } from "./look";
 import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
 import { HAIR, Port } from "./StepCard";
 import SummaryBody from "./SummaryBody";
@@ -154,7 +154,7 @@ export default function SetFrame(p: SetFrameProps) {
               )}
             </div>
           ) : p.set.table ? (
-            <div className="origin-top-left" style={{ width: TABLE_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / TABLE_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / TABLE_PX.h)})` }}>
+            <div className="origin-top-left" style={{ width: TABLE_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / TABLE_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / tableBodyPx(p.set.table.rows.length))})` }}>
               <TableBody table={p.set.table} />
             </div>
           ) : (
@@ -162,7 +162,7 @@ export default function SetFrame(p: SetFrameProps) {
           )}
         </div>
       )}
-      {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} />}
+      {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} of={h} />}
     </div>
   );
 }

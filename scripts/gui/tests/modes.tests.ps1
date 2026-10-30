@@ -30,6 +30,7 @@ Check "the PDF reader of a build elsewhere, its folder with spaces" (Test-MenoWo
 Check "a job's runner on Windows, quoted" (Test-MenoWorkerLine '"C:\Users\someone\AppData\Local\Meno\Meno.exe" --job C:\Users\someone\AppData\Roaming\Meno\jobs\7') $true
 Check "the installer's Office registration" (Test-MenoWorkerLine 'C:\Program Files\Meno\Meno.exe --register-ole') $true
 Check "and its removal" (Test-MenoWorkerLine 'C:\Program Files\Meno\Meno.exe --unregister-ole') $true
+Check "the uninstaller's removal of Meno's listing in Default apps" (Test-MenoWorkerLine '"C:\Users\someone\AppData\Local\Meno\Meno.exe" --unregister-defaults') $true
 Check "but not another program's flag of the same name" (Test-MenoWorkerLine "/usr/bin/python3 worker.py --pdf x") $false
 
 Write-Host "every flag the Rust side starts a mode with is in the list"

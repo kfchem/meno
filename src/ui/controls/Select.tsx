@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DURATION } from "../theme/motion";
 import { listKey, opensList } from "./keys";
-import { placeList, pressedAway } from "./place";
+import { listStyle, placeList, pressedAway, type ListPlace } from "./place";
 
 /** A choice of a Select: its value, and what it is called. */
 export type SelectOption<T extends string = string> = { value: T; label: string };
@@ -29,6 +29,7 @@ export default function Select<T extends string>({
   className,
   disabled = false,
   size = "xs",
+  variant = "field",
 }: {
   /** The choice made - none, where none is yet (`placeholder` shown). */
   value: T | null;
@@ -43,6 +44,8 @@ export default function Select<T extends string>({
   disabled?: boolean;
   /** Its letters: a control's (`xs`), or a form's whose fields are set larger (`sm`), to match those beside it. */
   size?: "xs" | "sm";
+  /** A form's field, framed (`field`); or, in a header among tabs and icon buttons, as quiet as they are - no frame, their height and hover (`quiet`). Its list the same either way. */
+  variant?: "field" | "quiet";
 }) {
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -51,13 +54,15 @@ export default function Select<T extends string>({
   // (kept a moment after it closes, as it fades out)
   const [shown, setShown] = useState(false);
   const [lit, setLit] = useState(0);
-  const [place, setPlace] = useState<{ left: number; top: number; minWidth: number } | null>(null);
+  const [place, setPlace] = useState<ListPlace | null>(null);
   const chosen = options.findIndex((o) => o.value === value);
   const current = chosen >= 0 ? options[chosen] : null;
 
   const openList = () => {
     if (disabled || !options.length) return;
     setLit(Math.max(0, chosen));
+    // (measured afresh as it opens: at its own height, not the room it was held to last - ./place, listStyle)
+    setPlace(null);
     setOpen(true);
     setShown(true);
   };
@@ -73,7 +78,10 @@ export default function Select<T extends string>({
 
   useEffect(() => {
     if (open || !shown) return;
-    const t = window.setTimeout(() => setShown(false), DURATION.quick * 1000);
+    const t = window.setTimeout(() => {
+      setShown(false);
+      setPlace(null);
+    }, DURATION.quick * 1000);
     return () => window.clearTimeout(t);
   }, [open, shown]);
 
@@ -87,9 +95,19 @@ export default function Select<T extends string>({
     list.current?.focus();
   }, [open]);
 
+  // (opened: the chosen row in the middle, those either side of it seen; moved through by the keys, only as far as it must)
+  const centred = useRef(false);
   useEffect(() => {
-    if (!open) return;
-    list.current?.querySelector<HTMLElement>(`[data-row="${lit}"]`)?.scrollIntoView({ block: "nearest" });
+    if (!open) {
+      centred.current = false;
+      return;
+    }
+    const box = list.current;
+    const row = box?.querySelector<HTMLElement>(`[data-row="${lit}"]`);
+    // (the list itself scrolled, nothing round it: a scroll of the page under it would shut it)
+    if (box && row && !centred.current) box.scrollTop = Math.max(0, row.offsetTop - (box.clientHeight - row.offsetHeight) / 2);
+    else row?.scrollIntoView({ block: "nearest" });
+    centred.current = true;
   }, [open, lit]);
 
   useEffect(() => {
@@ -133,10 +151,11 @@ export default function Select<T extends string>({
           }
         }}
         className={clsx(
-          "h-7 inline-flex min-w-0 items-center justify-between gap-1.5 rounded-md border bg-white px-2 text-gh-black outline-none",
+          "h-7 inline-flex min-w-0 items-center justify-between gap-1.5 rounded-md px-2 text-gh-black outline-none",
           size === "sm" ? "text-sm" : "text-xs",
-          "hover:bg-gh-base focus-visible:border-accel-base disabled:opacity-50 disabled:hover:bg-white",
-          open ? "border-accel-base" : "border-gh-line",
+          variant === "quiet"
+            ? clsx("hover:bg-gh-base focus-visible:ring-2 focus-visible:ring-accel-lightbase disabled:opacity-50", open && "bg-gh-base")
+            : clsx("border bg-white hover:bg-gh-base focus-visible:border-accel-base disabled:opacity-50 disabled:hover:bg-white", open ? "border-accel-base" : "border-gh-line"),
           className,
         )}
       >
@@ -153,10 +172,12 @@ export default function Select<T extends string>({
             aria-activedescendant={open ? `${id}-${lit}` : undefined}
             tabIndex={-1}
             className={clsx(
-              "fixed z-[120] max-h-72 overflow-y-auto rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none",
+              "fixed z-[120] overflow-y-auto rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none",
               open ? "meno-fade-in" : "meno-fade-out pointer-events-none",
             )}
-            style={place ?? { left: -9999, top: -9999 }}
+            // (nine rows whole at most, or half the tenth showing there is more, and no taller than the room on the side it
+            // opens: ./place, listStyle)
+            style={listStyle(place)}
             onKeyDown={(e) =>
               listKey(
                 e,

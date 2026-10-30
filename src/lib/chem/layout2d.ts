@@ -127,6 +127,8 @@ export type LayoutOptions = {
   hashSpacingPx: number;
   /** The fewest hashes a short hashed bond or wedge is drawn with, room allowing (`FEWEST_HASHES`, where the style asks); unset, as the spacing gives. */
   fewestHashes?: number;
+  /** A hashed wedge's widest hash stops short of a bare atom at its wide end, by a hash's clear gap; unset, it reaches the atom. */
+  hashedWedgeShort?: boolean;
   /**
    * A bold bond's width, and the length of a hashed bond's hashes. Left
    * unset, two thirds of a wedge's broad end.
@@ -1954,7 +1956,11 @@ export const FEWEST_HASHES = 3;
  * and as many lie between as fit at least the hash spacing apart, spread
  * evenly - but, where the style asks, never fewer than `fewest` where that
  * many fit a line width clear of each other: a short one, to a label, still
- * reads as hashed. Round ends make each hash a line with a cap at either end instead,
+ * reads as hashed. Those it is given so, from a bare narrow atom (`root`),
+ * are set at even steps from it - each gap the same, the first from the
+ * atom as well, the last flush with `end` (the maintainer, 2026-10-28): not
+ * the first a hash spacing out and the rest crowded after it. From a label,
+ * the first is flush with it, as ever, and the rest even after it. Round ends make each hash a line with a cap at either end instead,
  * reaching across the outline as far as the trapezoid does at its middle.
  */
 function buildHashes(
@@ -1968,6 +1974,7 @@ function buildHashes(
   lineWidth: number,
   round: boolean,
   fewest = 1,
+  root = 0,
 ): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
   const out = { lines: [] as LineSeg[], polys: [] as Poly[], ends: [] as Vec2[] };
   if (!(end > 0) || !(lineWidth > 0)) return out;
@@ -1978,15 +1985,23 @@ function buildHashes(
   const first = from + depth / 2;
   const last = end - depth / 2;
   const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
-  const fit = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  // (more than the spacing gives: as many as fit, each a line width deep and a line width clear - from the first on, or,
+  // where the first would stand off the root - a bare atom's spacing - from the root on, never fewer that way)
+  const base = Math.max(0, Math.min(root, from));
+  const offRoot = from > base + 1e-9;
+  const fromFirst = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
+  const fit = offRoot ? Math.max(fromFirst, Math.floor((last - base) / (2 * lineWidth) + 1e-9)) : fromFirst;
   const count = Math.max(spaced, Math.min(fewest, fit));
-  // half the outline's width, a distance `at` from the narrow atom
+  // (set from the root where it stands off it: at a label the first is flush, and the rest even after it)
+  const even = count > spaced && offRoot;
+  // half the outline's width, a distance `at` from the narrow atom: from where the hashes start
+  const o = even ? base : from;
   const halfAt = (at: number) =>
-    Math.max(0, startHalf + (wideHalf - startHalf) * ((at - from) / (end - from)));
+    Math.max(0, startHalf + (wideHalf - startHalf) * ((at - o) / (end - o)));
   const point = (at: number, side: number) =>
     vadd(narrow, vadd(vscale(dir, at), vscale(n, side)));
   for (let k = 0; k < count; k++) {
-    const at = count > 1 ? first + ((last - first) * k) / (count - 1) : last;
+    const at = even ? base + ((last - base) * (k + 1)) / count : count > 1 ? first + ((last - first) * k) / (count - 1) : last;
     if (round) {
       const half = Math.max(0, halfAt(at) - lineWidth / 2);
       const a = point(at, half);
@@ -2171,7 +2186,7 @@ const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
  * R₁); an atom list in brackets (GR-9.1); any other label - an
  * abbreviation, a class such as Ar, a reserved atom type such as A or Q -
  * with its counts subscript, read outward from its bond where that comes in
- * from the right (GR-2.3: TBSO). `anchor` is the run that sits on the atom.
+ * from the right (GR-2.3.3, GR-2.1.6: TBSO). `anchor` is the run that sits on the atom.
  */
 function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: number } | null {
   if (a.el === "R#" || (a.rgroups?.length && !ELEMENT_SYMBOLS.has(a.el))) {
@@ -2889,6 +2904,7 @@ export function buildBondPrimitives(
       pxToWorld(lwPx, zoom),
       round,
       opts.fewestHashes,
+      tStart > 0 ? tStart : 0,
     );
     for (const l of hashes.lines) l.widthPx = lwPx;
     lines.push(...hashes.lines);
@@ -2980,20 +2996,33 @@ export function buildBondPrimitives(
     } else {
       // The hashes start where a label at the narrow atom leaves off, or one
       // hash spacing out from a bare atom, and run to the wide end or the
-      // label there.
+      // label there - or, where the style asks (`hashedWedgeShort`), stop
+      // short of a bare atom there by a hash's own clear gap, the bonds on
+      // from it starting at the atom on their own.
       const spacing = toWorld(opts.hashSpacingPx, zoom, units);
-      const hashes = buildHashes(
-        narrowO,
-        vnorm(vsub(wideO, narrowO)),
-        trimNarrow > 0 ? trimNarrow : firstGap,
-        L0 - trimWide,
-        pxToWorld(lwPx, zoom) / 2,
-        baseHalf,
-        spacing,
-        pxToWorld(lwPx, zoom),
-        (opts.joinStyle ?? "round") === "round",
-        opts.fewestHashes,
-      );
+      const lw = pxToWorld(lwPx, zoom);
+      const hashesTo = (end: number) =>
+        buildHashes(
+          narrowO,
+          vnorm(vsub(wideO, narrowO)),
+          trimNarrow > 0 ? trimNarrow : firstGap,
+          end,
+          lw / 2,
+          baseHalf,
+          spacing,
+          lw,
+          (opts.joinStyle ?? "round") === "round",
+          opts.fewestHashes,
+          trimNarrow > 0 ? trimNarrow : 0,
+        );
+      const reaching = hashesTo(L0 - trimWide);
+      // (never below what the style asks for: where stopping short would leave fewer than its three - or than
+      // reaching the atom gives, if that is fewer - or none at all on the very shortest, the hashes reach the atom)
+      const shortBy = opts.hashedWedgeShort && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
+      const stopped = shortBy > 0 ? hashesTo(L0 - trimWide - shortBy) : reaching;
+      const count = (h: { lines: unknown[]; polys: unknown[] }) => h.lines.length + h.polys.length;
+      const least = Math.max(1, Math.min(count(reaching), opts.fewestHashes ?? 1));
+      const hashes = count(stopped) >= least ? stopped : reaching;
       for (const l of hashes.lines) l.widthPx = lwPx;
       lines.push(...hashes.lines);
       polys.push(...hashes.polys);
@@ -4095,7 +4124,7 @@ const QUERY_LABEL = {
   any: "Any",
 } as const;
 
-/** An annotation's size against an atom label's: set smaller, so it reads as one (IUPAC GR-11). */
+/** An annotation's size against an atom label's: set smaller, so it reads as one (IUPAC GR-11.1). */
 const ANNOTATION_SIZE = 0.8;
 
 /** How a reacting centre that is not drawn with strokes is tagged ("CTfile Formats": 1, a centre; 2, no change). */
@@ -4813,11 +4842,34 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   for (const u of layout.under ?? []) {
     s += `<path d="${toSvgPath(u)}" fill="${xmlAttr(svgColor(u.color))}" stroke="none" />`;
   }
+  // (a line with a round cap at each end - a hash, a dash, a short bond - drawn as one line with round ends rather
+  // than a line and two discs: a disc anti-aliased apart from its line shows as a seam at a small size, a hash as
+  // a little x on a screen at its own pixels - the same shape either way)
+  const capKey = (x: number, y: number) => `${Math.round(x * 1e6)},${Math.round(y * 1e6)}`;
+  const caps = new Map<string, number[]>();
+  (layout.fills || []).forEach((c, i) => {
+    const k = capKey(c.c.x, c.c.y);
+    caps.set(k, [...(caps.get(k) ?? []), i]);
+  });
+  const capAt = (x: number, y: number, r: number, color: string | undefined) =>
+    (caps.get(capKey(x, y)) ?? []).find((i) => Math.abs(layout.fills![i].r - r) < 1e-9 * Math.max(1, r) && layout.fills![i].color === color);
+  const used = new Set<number>();
+  const rounded = new Set<number>();
+  layout.lines.forEach((l, i) => {
+    const r = toCoord(l.widthPx > 0 ? l.widthPx : 1) / 2;
+    const a = capAt(l.x1, l.y1, r, l.color);
+    const z = capAt(l.x2, l.y2, r, l.color);
+    if (a == null || z == null || a === z) return;
+    rounded.add(i);
+    used.add(a);
+    used.add(z);
+  });
   // filled join caps
-  for (const c of layout.fills || []) {
+  (layout.fills || []).forEach((c, i) => {
+    if (used.has(i)) return;
     s += `<circle cx="${c.c.x}" cy="${-c.c
       .y}" r="${c.r}" fill="${xmlAttr(svgColor(c.color, stroke))}" stroke="none" />`;
-  }
+  });
   for (const p of layout.polys) {
     s += `<path d="${toSvgPath(p)}" fill="${xmlAttr(svgColor(p.color, stroke))}" stroke="none" />`;
   }
@@ -4839,12 +4891,12 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
           ` fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`
         : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`;
   }
-  for (const l of layout.lines) {
+  layout.lines.forEach((l, i) => {
     const w = toCoord(l.widthPx > 0 ? l.widthPx : 1);
     s += `<line x1="${l.x1}" y1="${-l.y1}" x2="${l.x2}" y2="${-l.y2}"` +
-      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="butt"` +
+      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="${rounded.has(i) ? "round" : "butt"}"` +
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
-  }
+  });
   for (const t of layout.texts) {
     s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
   }

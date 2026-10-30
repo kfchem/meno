@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { arrowEnds, arrowPoints, reshapedArrow } from "../../../../lib/chem/reactionScheme";
-import { arrowPath, cornerAt, type ArrowCorner } from "../../../../lib/chem/reactionArrow";
+import { arrowPath, cornerAt, squareCorner, type ArrowCorner } from "../../../../lib/chem/reactionArrow";
 import { COLORS } from "../../../theme/colors";
 import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
@@ -16,6 +16,7 @@ import ReactionArrow2D from "./ReactionArrow2D";
 import { useDrawnArrows } from "./drawnArrows";
 import { TAU, follow } from "../../../theme/motion";
 import { useDrawnZoom } from "./drawnLayoutContext";
+import { glidden, poseOf, type Pose } from "../utils/arrowGlide";
 
 /** An end handle's radius on the screen, in pixels, and how far round it a press takes it. */
 const HANDLE_PX = 6;
@@ -42,8 +43,11 @@ const native = (e: unknown): Pointerish => ((e as { nativeEvent?: Pointerish }).
  * direction in steps of 15 degrees, as a bond's, until the pointer pauses,
  * and then freely. It shows a handle at each corner its line turns at, and
  * a smaller one in the middle of each stretch: one dragged moves its
- * corner, or makes one there; a corner let go in line with the corners or
- * ends beside it is taken away, the line straight there again. Each is
+ * corner, or makes one there - a right angle, an L, until the pointer
+ * pauses, and then freely; a corner let go in line with the corners or
+ * ends beside it is taken away, the line straight there again. While an
+ * end or a corner is dragged, the arrow is drawn going over to each place
+ * it snaps to, as a bond moved is, rather than jumping there. Each is
  * drawn as long as the words over it and under it need, if they need more
  * than it was made (drawnArrows), growing and shrinking to that about its
  * middle as they are written.
@@ -77,6 +81,9 @@ export default function Arrows2D() {
   // how long each arrow is drawn, going over to how long it is to be - and
   // the arrow as it was made, when it was last drawn
   const shownLength = useRef(new Map<number, number>());
+  // how each arrow whose end or corner is being dragged is drawn, going over to where it is
+  // put (and on to it once let go): its middle, direction, length and corners
+  const glides = useRef(new Map<number, Pose>());
   const lastMade = useRef(new Map<number, (typeof madeArrows)[number]>());
   const [, setFrame] = useState(0);
   // (a length to go over to: frames, for it to go there)
@@ -92,6 +99,16 @@ export default function Arrows2D() {
         shownLength.current.set(a.id, Math.abs(n - a.length) < 1e-4 * NOMINAL_BOND_LENGTH ? a.length : n);
         moving = true;
       }
+    }
+    for (const a of arrows) {
+      const was = glides.current.get(a.id);
+      if (!was) continue;
+      const next = glidden(was, a, d);
+      if (next) {
+        glides.current.set(a.id, next);
+        moving = true;
+      } else if (reshaping !== a.id) glides.current.delete(a.id);
+      else glides.current.set(a.id, poseOf(a));
     }
     for (const a of arrows) {
       const to = hoveredArrow === a.id || reshaping === a.id ? 1 : 0;
@@ -191,6 +208,7 @@ export default function Arrows2D() {
     let free = false;
     let pause: number | null = null;
     let last = toWorld(ev.clientX, ev.clientY);
+    glides.current.set(id, poseOf(a));
     setReshaping(id);
     store.getState().beginPanHold(ev.pointerId ?? null);
     const apply = () => {
@@ -232,18 +250,32 @@ export default function Arrows2D() {
     const { from, to } = arrowEnds(a);
     let corners: ArrowCorner[] = [...(a.corners ?? [])];
     const gesture = `corner-${performance.now()}`;
-    if (insert) {
-      corners.splice(index, 0, cornerAt(from, to, toWorld(ev.clientX, ev.clientY)));
+    glides.current.set(id, poseOf(a));
+    // (where the corner goes for the pointer at `p`: a right angle between what is either side of it, until a pause lets it go)
+    let free = false;
+    let pause: number | null = null;
+    let last = toWorld(ev.clientX, ev.clientY);
+    const apply = () => {
+      const pts = arrowPath(from, to, corners);
+      const at = free ? last : squareCorner(pts[index], pts[index + 2], last);
+      corners = corners.map((c, i) => (i === index ? cornerAt(from, to, at) : c));
       store.getState().updateArrow(id, { corners }, gesture);
-    }
+    };
+    if (insert) corners.splice(index, 0, cornerAt(from, to, last));
+    apply();
     setReshaping(id);
     store.getState().beginPanHold(ev.pointerId ?? null);
     const onMove = (m: PointerEvent) => {
-      const p = toWorld(m.clientX, m.clientY);
-      corners = corners.map((c, i) => (i === index ? cornerAt(from, to, p) : c));
-      store.getState().updateArrow(id, { corners }, gesture);
+      last = toWorld(m.clientX, m.clientY);
+      apply();
+      if (pause != null) window.clearTimeout(pause);
+      pause = window.setTimeout(() => {
+        free = true;
+        apply();
+      }, FREE_MS);
     };
     const onUp = (u: PointerEvent) => {
+      if (pause != null) window.clearTimeout(pause);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
       store.getState().endPanHold(u.pointerId);
@@ -269,6 +301,7 @@ export default function Arrows2D() {
   const seen = new Set(arrows.map((a) => a.id));
   for (const id of [...shownLength.current.keys()]) if (!seen.has(id)) shownLength.current.delete(id);
   for (const id of [...lastMade.current.keys()]) if (!seen.has(id)) lastMade.current.delete(id);
+  for (const id of [...glides.current.keys()]) if (!seen.has(id)) glides.current.delete(id);
   for (const made of madeArrows) {
     const was = lastMade.current.get(made.id);
     const moved = !was || was.x !== made.x || was.y !== made.y || was.angle !== made.angle || was.length !== made.length;
@@ -280,7 +313,7 @@ export default function Arrows2D() {
     <group>
       {draft && <ReactionArrow2D x1={draft.from.x} y1={draft.from.y} x2={draft.to.x} y2={draft.to.y} z={0.02} />}
       {arrows.map((made) => {
-        const a = { ...made, length: shownLength.current.get(made.id) ?? made.length };
+        const a = { ...made, length: shownLength.current.get(made.id) ?? made.length, ...glides.current.get(made.id) };
         const { from, to } = arrowEnds(a);
         const pts = arrowPoints(a);
         const level = handleLevel.current.get(a.id) ?? 0;

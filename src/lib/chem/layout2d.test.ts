@@ -964,6 +964,8 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("C"), bond, three, ZOOM, deg).polys)).toEqual(plain);
     const short = hashesOf(buildBondPrimitives(pair("O"), bond, three, ZOOM, deg).polys);
     expect(short).toHaveLength(3);
+    // (set at even steps from the narrow atom: the first as far from it as each from the next - the maintainer, 2026-10-28)
+    expect(short[0].at).toBeCloseTo(spacing(short)[0], 9);
     for (const g of spacing(short)) {
       expect(g).toBeCloseTo(spacing(short)[0], 9);
       expect(g).toBeLessThan(o.hashSpacingPx);
@@ -972,6 +974,73 @@ describe("a label must not change how a bond is drawn", () => {
     // (with no room for three so, as many as there is room for)
     const tight = opts({ fewestHashes: FEWEST_HASHES, lineWidthPx: o.hashSpacingPx * 0.9 });
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
+  });
+
+  it("stops a hashed wedge's widest hash short of a bare atom at its wide end, where the style asks", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const o = opts();
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, deg).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    // (reaching the atom, as ever; short of it by a hash's clear gap - the widest hash as wide)
+    expect(far(at)).toBeCloseTo(pair("C")[1].x, 9);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+    const widest = (h: { farWidth: number; far: number }[]) => h.reduce((p, q) => (q.far > p.far ? q : p)).farWidth;
+    expect(widest(short)).toBeCloseTo(widest(at), 9);
+    // (at a label it stops at the label, as ever)
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys));
+  });
+
+  it("never stops short below what the style asks: three where it asks for three (or as many as reaching gives), and never none", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    for (let k = 10; k <= 100; k += 5) {
+      const d = (1.5 * k) / 100;
+      const atoms: Atom[] = [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: d, y: 0, el: "C" },
+      ];
+      for (const fewest of [undefined, FEWEST_HASHES]) {
+        const reach = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: fewest }), ZOOM, deg).polys);
+        const short = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: fewest, hashedWedgeShort: true }), ZOOM, deg).polys);
+        expect(short.length, `${k}% ${fewest ?? ""}`).toBeGreaterThanOrEqual(Math.min(reach.length, fewest ?? 1));
+        expect(short.length, `${k}%`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("draws a short hashed wedge from a label as many hashes as before, flush with it, and from a bare atom never fewer, at any length", () => {
+    // every length from 0.30 to 1.00 of a bond: the hashes at the spacing tell where the first and the last stand
+    const lw = opts().lineWidthPx;
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    // (as many as before: those at the spacing, or, fewer than three, as many as fit a line width clear between the
+    // hashes' outline's two ends - read off the hashes at a spacing of next to nothing, which run end to end)
+    const asBefore = (atoms: Atom[], spaced: { at: number }[]) => {
+      const dense = hashesOf(buildBondPrimitives(atoms, bond, opts({ hashSpacingPx: lw / 100 }), ZOOM, deg).polys);
+      const from = dense[0].near;
+      const end = dense[dense.length - 1].far;
+      const depth = Math.min(lw, end - from);
+      return { count: Math.max(spaced.length, Math.min(FEWEST_HASHES, 1 + Math.floor((end - depth / 2 - (from + depth / 2)) / (2 * lw) + 1e-9))), from };
+    };
+    for (let k = 30; k <= 100; k += 5) {
+      const d = (1.5 * k) / 100;
+      for (const narrow of ["N", "C"]) {
+        const atoms: Atom[] = [
+          { id: 1, x: 0, y: 0, el: narrow },
+          { id: 2, x: d, y: 0, el: "C" },
+        ];
+        const spaced = hashesOf(buildBondPrimitives(atoms, bond, opts(), ZOOM, deg).polys);
+        const three = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: FEWEST_HASHES }), ZOOM, deg).polys);
+        if (narrow === "N") {
+          // (from a label: as many as before, the first flush with it, the rest even after it)
+          const before = asBefore(atoms, spaced);
+          expect(three, `${k}%`).toHaveLength(before.count);
+          if (three.length > 1) expect(three[0].near).toBeCloseTo(before.from, 9);
+          for (const g of spacing(three)) expect(g).toBeCloseTo(spacing(three)[0], 9);
+        } else {
+          expect(three.length, `${k}%`).toBeGreaterThanOrEqual(asBefore(atoms, spaced).count);
+        }
+      }
+    }
   });
 
   it("keeps the wave of a wavy bond the same length", () => {

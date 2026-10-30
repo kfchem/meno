@@ -101,6 +101,14 @@ export type DrawingStyle = {
    * without it is "spaced".
    */
   shortHashes?: "spaced" | "three";
+  /**
+   * A hashed wedge's widest hash: reaching the atom at its wide end ("atom"),
+   * or stopping short of it by a hash's clear gap ("short"), the bonds on
+   * from the atom starting there on their own. "short" in Meno's own style
+   * (the maintainer, 2026-10-29); "atom" in the journals', whose
+   * specifications do not say; unset, "atom".
+   */
+  hashedWedgeEnd?: "atom" | "short";
   /** A dashed bond's dashes, and the least gap between two of them. */
   dashLength: Length;
   dashGap: Length;
@@ -212,6 +220,11 @@ export type DrawingStyle = {
  */
 const RULES = {
   bondColor: "#000000",
+  // (a short hashed bond at the spacing, and a hashed wedge's widest hash
+  // reaching the atom: none of the journals' specifications below says
+  // otherwise; Meno's own style changes both)
+  shortHashes: "spaced",
+  hashedWedgeEnd: "atom",
   labelColor: "#000000",
   doubleSideThreshold: 0.06,
   doubleCrowdingAngle: 45,
@@ -228,7 +241,7 @@ const RULES = {
   chargeCircles: "single",
   chargedCarbonLabel: "hidden",
   // (bare, as IUPAC's recommendations for structure diagrams draw them,
-  // GR-11; the journals below say nothing of them in drawings)
+  // GR-11.1; the journals below say nothing of them in drawings)
   stereoDescriptors: "plain",
   stereoDescriptorGap: 0.15,
   aromaticCircleSize: 0.5,
@@ -372,6 +385,9 @@ export const MENO: DrawingStyle = {
   ends: "round",
   // (a short hashed wedge still three hashes: the maintainer, 2026-10-27)
   shortHashes: "three",
+  // (a hashed wedge's widest hash a hash's gap short of a bare atom, so that
+  // the bonds on from it start there on their own: the maintainer, 2026-10-29)
+  hashedWedgeEnd: "short",
   fontFamily: "IBM Plex Sans",
   stereoDescriptors: "plain",
   stereoDescriptorGap: 0.15,
@@ -526,6 +542,7 @@ export function layoutOptionsFor(
     hashSpacingPx: at(style.hashInterval),
     hashFirstGapPx: at(style.hashStartOffset ?? style.hashInterval),
     ...(style.shortHashes === "three" ? { fewestHashes: FEWEST_HASHES } : {}),
+    ...(style.hashedWedgeEnd === "short" ? { hashedWedgeShort: true } : {}),
     boldWidthPx: at(style.boldThickness),
     dashLengthPx: at(style.dashLength),
     dashGapPx: at(style.dashGap),

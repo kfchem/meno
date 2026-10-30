@@ -105,19 +105,47 @@ describe("a property's value, checked against its entry", () => {
     expect(valueFault({ modes: [Array(9).fill(0.1), Array(6).fill(0.2)] }, water3())).toBe("Mode 2 has 6 numbers for 3 atoms");
   });
 
-  it("holds restraints to the entry's atoms, as many as each kind holds, with a value where the kind has one", () => {
+  it("holds restraints to the entry's atoms, as many as each kind holds, with a value and a strength where the kind has them", () => {
     const ok = { restraints: [
-      { kind: "distance" as const, atoms: [0, 1], value: 0.96, strength: 1 },
-      { kind: "fixed" as const, atoms: [0], strength: 1 },
+      { kind: "distance" as const, atoms: [0, 1], value: 0.96, strength: 1000 },
+      { kind: "dihedral" as const, atoms: [1, 0, 2, 1], value: 180, strength: 50 },
+      { kind: "fixed" as const, atoms: [0] },
     ] };
     expect(valueFault(ok, water3())).toBeNull();
-    const fault = (r: { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength: number }) => valueFault({ restraints: [r] }, water3());
+    const fault = (r: { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength?: number }) => valueFault({ restraints: [r] }, water3());
     expect(fault({ kind: "dihedral", atoms: [0, 1, 2], value: 60, strength: 1 })).toBe("Restraint 1, a dihedral, has 3 atoms");
     // (atoms by their number from 0: water's are 0, 1 and 2)
     expect(fault({ kind: "distance", atoms: [1, 3], value: 1.5, strength: 1 })).toBe("Restraint 1 names an atom the entry does not have");
     expect(fault({ kind: "distance", atoms: [0, 1], strength: 1 })).toBe("Restraint 1, a distance, has no value");
-    expect(fault({ kind: "fixed", atoms: [], strength: 1 })).toBe("Restraint 1, a fixed, has 0 atoms");
+    expect(fault({ kind: "fixed", atoms: [] })).toBe("Restraint 1, a fixed, has 0 atoms");
     expect(fault({ kind: "distance", atoms: [0, 1], value: 0.96, strength: 0 })).toBe("Restraint 1 has a strength of 0");
+    expect(fault({ kind: "dihedral", atoms: [0, 1, 2, 0], value: 180 })).toBe("Restraint 1 has a strength of undefined");
+    // (atoms fixed are fixed: nothing to hold them to, nothing to hold them by)
+    expect(fault({ kind: "fixed", atoms: [0], strength: 1 })).toBe("Restraint 1 fixes atoms, so it has neither value nor strength");
+  });
+});
+
+describe("restraints read back from a file", () => {
+  it("reads each row as it was written, and nothing where any row does not read", () => {
+    const value = { restraints: [
+      { kind: "distance", atoms: [0, 1], value: 3.21, strength: 500 },
+      { kind: "dihedral", atoms: [3, 0, 1, 2], value: 180, strength: 50 },
+      { kind: "fixed", atoms: [2] },
+    ] };
+    const p = propertyIn({ value, unit: "none", status: "computed" });
+    expect(p).toEqual({ value, unit: "none", status: "computed" });
+    // (a row of no kind, a distance with no strength, atoms fixed with a value, an atom not a whole number: none read - nothing held in part)
+    for (const bad of [
+      { kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 },
+      { kind: "distance", atoms: [0, 1], value: 2 },
+      { kind: "fixed", atoms: [0], value: 1 },
+      { kind: "fixed", atoms: [0.5] },
+      // (the wrong number of atoms for its kind)
+      { kind: "distance", atoms: [0, 1, 2], value: 2, strength: 1 },
+      { kind: "dihedral", atoms: [0, 1, 2], value: 180, strength: 1 },
+      { kind: "fixed", atoms: [] },
+    ])
+      expect(propertyIn({ value: { restraints: [value.restraints[0], bad] }, unit: "none", status: "computed" })).toBeUndefined();
   });
 });
 
@@ -135,6 +163,28 @@ describe("a molecule's species, by Meno's one rule", () => {
   });
 });
 
+describe("a sum's parts, as a file holds them", () => {
+  it("reads back each part as it was - its value, unit, where and by what - and refuses a sum whose parts do not all read", () => {
+    const p = {
+      value: -499.977,
+      unit: "Eh",
+      at: { geometry: "g1", kelvin: 298.15, atm: 1, solvent: "SMD(chloroform)" },
+      by: { treatment: "sum: energy (...) + thermo.g-correction (...) + standard state (...)" },
+      status: "computed",
+      parts: [
+        { property: "energy", value: -500.1, unit: "Eh", at: { geometry: "g1", solvent: "SMD(chloroform)" }, by: { program: "Gaussian", method: "wB97X-D", basis: "6-311+G(d,p)" } },
+        { property: "thermo.g-correction", value: 0.12, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" } },
+        { property: "standard state", value: 1.894, unit: "kcal/mol", by: { treatment: "standard state 1 atm to 1 mol/L at 298.15 K" } },
+      ],
+    };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    // (one part that does not read - no name, no number, a unit Meno does not know, a field of the wrong kind - and none of it is read)
+    for (const bad of [{ value: 1, unit: "Eh" }, { property: "x", value: "1", unit: "Eh" }, { property: "x", value: 1, unit: "furlongs" }, { property: "x", value: 1, unit: "Eh", at: { kelvin: 298 } }])
+      expect(propertyIn({ ...p, parts: [...p.parts, bad] })).toBeUndefined();
+    expect(propertyIn({ ...p, parts: [] })).toBeUndefined();
+  });
+});
+
 describe("a property's structure, as a file holds it", () => {
   it("reads back the structure a value was worked out from, and refuses one that is no key", () => {
     const p = { value: 136.24, unit: "g/mol", of: "k1", status: "computed" };
@@ -142,6 +192,13 @@ describe("a property's structure, as a file holds it", () => {
     expect(propertyIn({ ...p, of: 7 })).toBeUndefined();
     const { of: _, ...plain } = p;
     expect(propertyIn(plain)).toEqual(plain);
+  });
+
+  it("reads back the symmetry a free energy was worked out with - its point group, and its symmetry number a whole number of 1 or more", () => {
+    const p = { value: -56.53, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 }, status: "computed" };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    for (const bad of [0, 1.5, "3", -3]) expect(propertyIn({ ...p, by: { ...p.by, symmetryNumber: bad } })).toBeUndefined();
+    expect(propertyIn({ ...p, by: { ...p.by, pointGroup: 3 } })).toBeUndefined();
   });
 
   it("reads back a table of numbers, as a conformer carries its vibrations - and refuses a table of any other shape", () => {

@@ -111,3 +111,14 @@ export function textExportPath(
 ): string {
   return text.path ? firstFreeBeside(text.path, taken) : text.name;
 }
+
+/**
+ * How a step's job stands, as its log's chooser says it: as last looked at
+ * in this session (`seen`) - or, none looked at, as the step's run said it
+ * ended (`ran.states`), so that a workspace reopened says the same.
+ */
+export function jobStateSaid(id: string, seen: Readonly<Record<string, { state: string }>>, ran?: { jobs?: readonly string[]; states?: readonly string[] }): string | undefined {
+  if (seen[id]?.state) return seen[id].state;
+  const k = ran?.jobs?.indexOf(id) ?? -1;
+  return k >= 0 ? ran?.states?.[k] : undefined;
+}

@@ -17,3 +17,22 @@ describe("a running step's jobs, as a file keeps them", () => {
       expect(readWorkflow(running([bad]))!.steps[0].running).toBeUndefined();
   });
 });
+
+describe("how a run's jobs ended, as a file keeps them", () => {
+  const job = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const statesOf = (states: unknown, jobs = [job(1), job(2), job(3)]) =>
+    readWorkflow({ sets: [], wires: [], steps: [{ id: 1, kind: "optimise", by: "xtb", x: 0, y: 0, ran: { at: 1, ok: false, said: "", input: "", jobs, states } }] })!.steps[0].ran!.states;
+
+  it("reads one for each job, each a job's state - and anything else as none", () => {
+    expect(statesOf(["done", "failed", "gone"])).toEqual(["done", "failed", "gone"]);
+    // (one too few, one too many: none - one out of place would say a job's state of another)
+    expect(statesOf(["done", "failed"])).toBeUndefined();
+    expect(statesOf(["done", "failed", "done", "done"])).toBeUndefined();
+    // (a state no job has, or not a word at all: none)
+    expect(statesOf(["done", "exploded", "failed"])).toBeUndefined();
+    expect(statesOf(["done", 3, "failed"])).toBeUndefined();
+    expect(statesOf("done")).toBeUndefined();
+    // (a run of one job keeps none)
+    expect(statesOf(["done"], [job(1)])).toBeUndefined();
+  });
+});

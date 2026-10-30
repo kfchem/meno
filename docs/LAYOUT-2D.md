@@ -238,6 +238,14 @@ they hang from.
   group of its own: huperzine A's three-atom bridge laid round its
   ethylidene carbon left the ethylidene on the bridge; laid across the
   face of the ring, it leaves it room.
+- **A macrocycle bridged across a small ring** - a tetrahydropyran bridged
+  2,5 by a long chain, a paracyclophane: the small ring regular, the
+  macrocycle round it taking the strain (GR-3.3.4). Where its shape, placed
+  as it is, crowds or stretches it, it is laid out again from each of its
+  rings in turn, each eased, and the one that reads best kept, so long as
+  it keeps the macrocycle's double bonds as given. Placed as it was, a
+  2,5-bridged tetrahydropyran's chain lay on the ring's O, its bond over
+  C2-O, and the wedge went onto that hidden bond (2026-10-29).
 - **Cages**: a system whose rings are all bridged, each sharing three atoms
   or more with another (norbornane, camphor, tropane, quinuclidine,
   adamantane), or a polyhedron (cubane), is drawn in perspective, as the
@@ -475,6 +483,12 @@ rings, which lies on the lattice no way round and is set on it only by
 its bonds out (proline's carboxyl level, its ring symmetric about it) -
 the drawing takes the one that reads best (section 4).
 
+A molecule with no ring that can lie square is then turned the little way
+that brings its bonds out nearest the lattice. One drawn as its own mirror
+image is square by that mirror instead: N-bromosuccinimide is set with its
+N-Br upright and its two C=O alike either side. It is never tilted to bring
+one C=O onto the lattice at the other's cost.
+
 ## 4. Reading order
 
 - **The long axis level.** A drawing is wider than it is tall, and its
@@ -634,7 +648,7 @@ A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take
 (`src/lib/layout/names.ts`). Its first unit sits on its atom and the rest
 follows, read outward from its bond: leftward from a bond coming in from
-the right (TBSO, IUPAC GR-2.3), rightward otherwise - and from its bonds
+the right (TBSO, IUPAC GR-2.3.3, GR-2.1.6), rightward otherwise - and from its bonds
 where it has several, as a ring's atom has: leftward where they come in
 from the right all together, none leaving to the left (an NFmoc at a
 ring's lower left reads FmocN, away from the ring); a name of one unit
@@ -716,8 +730,13 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   with three groups at the end of a single bond in no ring (a ring through
   a metal aside) is such an axis's (`readStereo`) - but for an S, Se, Te,
   P, As or Sb, its fourth group a lone pair (a sulfoxide's S, a
-  phosphine's P): that is a stereocentre, which Clean-up leaves as drawn,
-  since the engine lays out none with a lone pair.
+  phosphine's P): that is a stereocentre.
+- A stereocentre whose fourth group is a lone pair - a sulfoxide's or a
+  sulfonium's S, a phosphine's P, an arsine's As - is drawn as one with its
+  H left out: one wedge, the lone pair the fourth, undrawn group, and read
+  back from it so (`readStereo`). A selenoxide's Se, a telluride's Te or a
+  stibine's Sb is not read from its wedge, as no reader reads one, so
+  Clean-up leaves such a drawing as it is (2026-10-29).
 - A cage drawn in perspective shows its stereochemistry by the drawing
   itself, with no wedges; what it shows is read back from the solid the
   cage is drawn from, fitted to where its atoms are and how deep, and the
@@ -893,7 +912,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
    section 2 and choosing among free placements by section 5.
 4. Try the frame's orientations and keep the one that reads best by
    section 4, its free choices tried the other way and its parts
-   untangled (section 5).
+   untangled (section 5). Where finished drawings are chosen between - a
+   macrocycle's shapes, a cage's views, a piece's best few at the end -
+   the one with the fewest faults (an atom on another, bonds crossing, an
+   atom on a bond) always wins, whatever else it costs, and those with as
+   many are chosen between by how they read (GR-4.3; the maintainer,
+   2026-10-29). Only there: inside the search a drawing part made has
+   clashes the passes after it clear, and weighed above everything they
+   steer it off.
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn

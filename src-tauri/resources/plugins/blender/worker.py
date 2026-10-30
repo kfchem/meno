@@ -63,7 +63,7 @@ OUTLINES = {"none", "thin", "outer", "mixed"}
 OUTLINE_COLOURS = {"black", "white", "grey"}
 # a scene's file's name: a plain name in the job's folder
 # the looks render.py (looks.py) makes with materials of its own
-OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "ice", "neon", "slime", "xray", "clay"}
+OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "neon", "slime", "xray", "clay"}
 LOOKS = {"meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"} | OWN_LOOKS
 FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "tarnished"}}
 WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
@@ -72,7 +72,7 @@ PILES = {"long", "short"}
 CLAYS = {"terracotta", "elements"}
 PORCELAINS = {"porcelain", "pearl"}
 # the film motions this plugin makes (the manifest's `motions`), each a script of its own beside the studio they share
-MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter", "change-liquid"}
+MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter"}
 # (its changes of molecules: one molecule becoming the next, piece by piece - each with the part they share beside it)
 CHANGE_SCRIPT = "change.py"
 MODES = {"once", "loop"}

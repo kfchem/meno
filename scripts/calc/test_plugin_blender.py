@@ -80,7 +80,7 @@ class Prepare(unittest.TestCase):
             self.assertTrue(l["label"] and l["description"], l["id"])
             self.assertTrue(l.get("own") or l.get("parts"), l["id"])
         self.assertIn("cartoon", looks)
-        for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "clay", "porcelain", "slime", "ice", "neon", "xray", "fur"):
+        for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "clay", "porcelain", "slime", "neon", "xray", "fur"):
             self.assertIn(own, looks)
             self.assertIn(own, worker.LOOKS)
 
@@ -160,6 +160,23 @@ class Prepare(unittest.TestCase):
             self.assertTrue(said["error"].startswith("Blender: "))
         self.assertFalse(ask("prepare", step="optimise", entries=[SCENE], options={})["ok"])
         self.assertFalse(ask("prepare", step="render", entries=[], options={})["ok"])
+
+
+class Withdrawn(unittest.TestCase):
+    """The liquid change and the ice look, withdrawn for now (docs/RENDER.md, *Decided*): no longer offered, and an ask for
+    either - a step saved with it, say - is refused, saying so."""
+
+    def test_neither_is_offered(self):
+        m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
+        self.assertNotIn("ice", [x["id"] for x in m["roles"][0]["looks"]])
+        self.assertNotIn("change-liquid", [x["id"] for x in m["roles"][0]["motions"]])
+        self.assertFalse((FOLDER / "motion_change_liquid.py").exists())
+
+    def test_an_ask_for_either_is_refused(self):
+        said = ask("prepare", step="render", entries=[{**SCENE, "look": "ice"}], options={})
+        self.assertEqual((said["ok"], said["error"]), (False, "Blender: no look is called 'ice'."))
+        said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 60, "fps": 30, "motion": "change-liquid"}], options={})
+        self.assertEqual((said["ok"], said["error"]), (False, "Blender: no motion is called 'change-liquid'."))
 
 
 class Collect(unittest.TestCase):
@@ -254,8 +271,8 @@ class FilmStrips(unittest.TestCase):
         cls.runs = staticmethod(ns["strip_runs"])
 
     def test_every_film_frame_is_its_own_file_across_folders_of_the_same_names(self):
-        # (a liquid change of three molecules, Once: melt 1 forward, reform 1, melt 2 backward, melt 2 forward from its second,
-        # reform 2, melt 3 backward - three folders holding the very same names, one of them played twice and reversed)
+        # (a film of pieces from three folders holding the very same names, one of them played twice and reversed: piece 1
+        # forward, piece 2, piece 3's backward, its forward from its second, piece 4, piece 5's backward)
         d = lambda name: os.path.join("job", "frames", name)
         f = lambda folder, n: os.path.join(d(folder), f"f_{n:04d}.png")
         frames = ([f("melt-01", n) for n in (1, 2, 3)] + [f("reform-01", n) for n in (1, 2)] + [f("melt-02", n) for n in (3, 2, 1)]
@@ -522,14 +539,11 @@ class MotionsRender(unittest.TestCase):
 
     def test_every_change_of_molecules_on_both_studios_once_and_as_a_loop(self):
         for motion in sorted(m for m in worker.MOTIONS if m.startswith("change-")):
-            liquid = motion == "change-liquid"
-            for background, mode, frames in (("black", "once", 7 if liquid else 4), ("white", "loop", 14 if liquid else 6)):
+            for background, mode, frames in (("black", "once", 4), ("white", "loop", 6)):
                 with self.subTest(motion=motion, background=background, mode=mode):
-                    # (Once: one change, methylamine to methanol; Loop: and back - every frame rendered, in two pieces; the liquid
-                    # renders each molecule's melt once, played forward and backward, and a reform between: 2 melts of 3 frames
-                    # and a reform of 1 Once, 2 of 3 and 2 of 1 as a Loop)
+                    # (Once: one change, methylamine to methanol; Loop: and back - every frame rendered, in two pieces)
                     rendered = self.film(motion, background, mode, frames, molecules=(METHYLAMINE, METHANOL))
-                    self.assertEqual(rendered, {"once": 7, "loop": 8}[mode] if liquid else frames)
+                    self.assertEqual(rendered, frames)
 
     def test_a_film_shorter_than_its_motion_can_be_read_in_is_refused_saying_how_long_it_needs(self):
         # (however it was asked for: three molecules' ring change, Once, in 5 s - each change needs 3 s)

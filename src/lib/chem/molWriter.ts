@@ -2,7 +2,7 @@ import { NOMINAL_BOND_LENGTH } from "./acs";
 import { wedgeNarrowAtom } from "./layout2d";
 import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
-import { mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
+import { COORDINATION_BOND, mostBonds, valenceOrder, type AbbreviationStructure, type AtomChem, type BondChem, type Radical, type SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
 import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
@@ -26,8 +26,7 @@ export type WriterModel = { atoms: WriterAtom[]; bonds: WriterBond[] };
 /** How long a MOL file's bonds are, in ångström: the usual 1.5. */
 export const MOL_BOND_LENGTH = 1.5;
 
-/** MOL's bond type for a coordination (dative) bond, and for a hydrogen bond. */
-const COORDINATION_BOND = 9;
+/** MOL's bond type for a hydrogen bond (a coordination bond's is `COORDINATION_BOND`). */
 const HYDROGEN_BOND = 10;
 /** A query bond's type ("CTfile Formats", the bond block). */
 const QUERY_TYPE = { "single-or-double": 5, "single-or-aromatic": 6, "double-or-aromatic": 7, any: 8 } as const;
@@ -163,13 +162,18 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
     const variable = VARIABLES.has(a.el) && touching.length === 1;
     if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    // (bonded more than once - an NMe in a chain - laid out away from all its bonds, as a drawn substituent is)
+    const toward = touching.flatMap((b) => {
+      const o = byId.get(b.a === a.id ? b.b : b.a);
+      return o ? [{ x: o.x - a.x, y: o.y - a.y }] : [];
+    });
     // (a label on a metal that names a ligand bound so - Cp, allyl, CO - written out as bound: lib/chem/boundLigand)
     const bound = !a.abbrev && touching.length === 1 && first && isMetal(first.el) ? boundLigandStructure(a.el, { x: first.x - a.x, y: first.y - a.y }) : null;
     const structure: AbbreviationStructure | null =
       a.abbrev ??
       bound ??
       (abbreviationOf(a.el)
-        ? placedAbbreviation(a.el, first ? { x: first.x - a.x, y: first.y - a.y } : null, NOMINAL_BOND_LENGTH)
+        ? placedAbbreviation(a.el, toward.length > 1 ? toward : first ? { x: first.x - a.x, y: first.y - a.y } : null, NOMINAL_BOND_LENGTH)
         : null);
     if (!structure || !structure.atoms.length) {
       aliases.set(a.id, a.el);

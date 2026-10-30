@@ -5,7 +5,7 @@
  * as one undo step.
  */
 import { contractGraph, contractionTrials, hiddenIn } from "../../../../lib/chem/contract";
-import { chemistry } from "../../../../lib/chem/molecule";
+import { chemistry, implicitHydrogens } from "../../../../lib/chem/molecule";
 import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { Layout2D } from "../../../../lib/layout/engine";
@@ -16,6 +16,7 @@ import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayout";
 import { layOut } from "./layOut";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
+import { formulaOf } from "../../../../lib/io/coordinates";
 
 /**
  * An atom and every atom bonded to it, however far along - a haptic bond
@@ -179,27 +180,82 @@ export async function cleanUp(
     .map((ids) => partOf(model, ids))
     .filter((part) => part.bonds.length > 0);
   if (!parts.length) return; // nothing to lay out
-  const cleaned = await Promise.all(parts.map((part) => laidOutWithLabels(part, expanded)));
+  // (each on its own: one whose wedges cannot be kept, refused before it is laid out, named with the rest below)
+  const settled = await Promise.allSettled(parts.map((part) => laidOutWithLabels(part, expanded)));
+  const cleaned = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const unlaid = settled.flatMap((r, i) => (r.status === "rejected" ? [{ part: parts[i], why: r.reason instanceof Error ? r.reason.message : String(r.reason) }] : []));
   if (store.getState().model !== held) {
     throw new Error(
       "The structure changed while it was being cleaned up, so nothing was moved.",
     );
   }
-  const labels = cleaned.flatMap((c) => c.labels);
-  const written = labels.length ? writtenAsLabels({ ...emptyWorkspaceDocument(), model }, labels).model : model;
+  const allLabels = cleaned.flatMap((c) => c.labels);
+  const written = allLabels.length ? writtenAsLabels({ ...emptyWorkspaceDocument(), model }, allLabels).model : model;
   // (in the style it is drawn in: a bond to a terminal label drawn long enough for its labels)
   const style = styleOf(store.getState().docStyle);
-  const changes = cleaned.map((c) => relayoutFrom(written, c.part, c.job, c.laid, style));
-  store.getState().relayout(
-    {
-      atoms: changes.flatMap((c) => c.atoms),
-      bonds: changes.flatMap((c) => c.bonds),
-      added: changes.flatMap((c) => c.added ?? []),
-      removed: changes.flatMap((c) => c.removed ?? []),
-      eta: changes.flatMap((c) => c.eta ?? []),
-    },
-    labels,
-  );
+  // each structure laid out on its own: one that cannot be - its stereochemistry not kept, an atom put on
+  // another - left as it is drawn, named, and the rest laid out all the same, as one step
+  const tried = cleaned.map((c) => {
+    try {
+      return { c, change: relayoutFrom(written, c.part, c.job, c.laid, style) };
+    } catch (e) {
+      return { c, why: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  const done = tried.flatMap((t) => (t.change ? [{ ...t, change: t.change }] : []));
+  const refused = tried.filter((t) => !t.change);
+  if (done.length) {
+    const changes = done.map((t) => t.change);
+    store.getState().relayout(
+      {
+        atoms: changes.flatMap((c) => c.atoms),
+        bonds: changes.flatMap((c) => c.bonds),
+        added: changes.flatMap((c) => c.added ?? []),
+        removed: changes.flatMap((c) => c.removed ?? []),
+        eta: changes.flatMap((c) => c.eta ?? []),
+      },
+      done.flatMap((t) => t.c.labels),
+    );
+  }
+  const left = [...unlaid, ...refused.map((t) => ({ part: t.c.part, why: t.why! }))];
+  if (left.length) throw new CleanUpRefused(left.map((l) => ({ formula: partFormula(l.part), why: l.why })), parts.length);
+}
+
+/**
+ * What Clean-up left as drawn, each structure by its formula and why: the
+ * rest of what it was asked about laid out all the same (`of`, how many in
+ * all). Its message says so whole.
+ */
+export class CleanUpRefused extends Error {
+  constructor(
+    readonly refused: readonly { formula: string; why: string }[],
+    readonly of: number,
+  ) {
+    // (of one among others laid out, not "nothing was moved": that one was left as it is)
+    const each = refused.map((r) => `${r.formula}: ${r.why.replace(/, so nothing was moved\.?$/, ", so it was left as it is")}`).join("; ");
+    super(of === 1 ? `Clean-up left ${refused[0].formula} as drawn: ${refused[0].why}.` : `Clean-up left ${refused.length} of ${of} structures as drawn - ${each}.`);
+    this.name = "CleanUpRefused";
+  }
+}
+
+/** A structure's formula as Hill writes one, its H carried counted (implicitHydrogens); a label not an element written as it is. */
+export function partFormula(part: Model): string {
+  const used = new Map<number, number>();
+  for (const b of part.bonds) {
+    used.set(b.a, (used.get(b.a) ?? 0) + b.order);
+    used.set(b.b, (used.get(b.b) ?? 0) + b.order);
+  }
+  const atoms: { el: string }[] = [];
+  for (const a of part.atoms) {
+    if (a.el === "*") continue;
+    atoms.push({ el: a.el });
+    // (a label not an element - an abbreviation - carries none counted here)
+    const h = implicitHydrogens(a.el, used.get(a.id) ?? 0, a.charge ?? 0, a.radical);
+    for (let k = 0; k < h; k++) atoms.push({ el: "H" });
+  }
+  // (and its charge, as a formula writes one: NH4+, SO4 2-)
+  const charge = part.atoms.reduce((t, a) => t + (a.charge ?? 0), 0);
+  return formulaOf(atoms) + (charge ? `${Math.abs(charge) > 1 ? ` ${Math.abs(charge)}` : ""}${charge > 0 ? "+" : "-"}` : "");
 }
 
 /**

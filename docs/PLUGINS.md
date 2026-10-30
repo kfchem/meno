@@ -232,6 +232,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true` on *Generate* where it makes from seeds: the step then takes *Seeds*, structures drawn (*Generate*, below). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?, unpackedBytes?, cite?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped: of itself, from where it stopped (a range asked for, taken as the rest only where the server's reply says it begins there; all of it again where the server sends all of it, another range, or says the part is past its file's end), up to four times, after 2, 5, 15 and 30 seconds - each stop written to Meno's log, with how much came - and only then said to have stopped, with how much came of how much and how often it was taken up, the task failed with that reason in the network's record (`fetch_resuming`, 2026-10-24); what came is kept, and *Add* goes on from there. What came is kept under the file's name and its SHA-256's first twelve digits (`model.pth.<digits>.part`), so that what came of a file an older manifest named is never taken up as the new one's: it is thrown away. Once kept, a file is read through for its SHA-256 again once a launch - and again where its size or the time it was last changed is not what it was then - as the plugin is first used in a launch - set up, started, or its worker given its files - never at launch itself, where Meno asks only whether each is there at its size (2026-10-27; `there`): one there that is not its size, or whose SHA-256 is not the manifest's - changed or damaged since - is said plainly ("model.pth is not the file Meno downloaded: its size or fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since.") and asked about again, even where setting the plugin up was allowed, before it is downloaded anew over it; no, and the plugin does not run, saying the same. One that could not be read through - held by another program, not allowed, a share gone - is neither: said, with why, the plugin not run, and read again the next time; never fetched over. While its files are read through, where that takes more than a moment, Settings' *Plugins* and the workspace say so ("Checking its files…"). An archive Meno unpacked is as the stamp it left says: what it unpacked to is not read through again. Meno keeps the files it downloaded as they were: weights of one's own belong in a plugin of one's own, never put in place of these. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. One may be data compressed with gzip (`unpack: "gz"`, never a program), which Meno unpacks itself into `files/<its name without .gz>/`; it must give `unpackedBytes`, said when asking to set the plugin up, and is never unpacked past it. `cite` is how its makers ask to be cited, said there too. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
+| `needs` | list of `{plugin, program, env}` | Another plugin's program its jobs may need (2026-10-27): that plugin, by its id; its program, by the name that plugin's manifest gives it; and the variable the job is told where it is in. ORCA's: the xTB plugin's `xtb`, in `XTBEXE`, for the xTB methods ORCA runs through the xtb program (`XTB2`, `GFN2-XTB`, `GFN-FF` and the rest; ORCA's own `NATIVE-GFN2-XTB` needs none). A job needs it only where its plugin's worker says so of that job (`prepare`, a job's `needs`: the ids). Meno finds the program as that plugin's own jobs would. Where that plugin is not added, the step says so before any job is made ("The xTB plugin is needed for this: add it in Settings, Plugins"). On macOS and Linux it is linked into the job's work folder under its own name, and the variable names it there (`./xtb`): a path with a space in it, as Meno's data folder has, is never given, as ORCA 6.1.1 takes none. On Windows its path is given, and refused where it has a space; it is never quoted. The link is never listed among the job's files: neither kept as a raw output nor saved in a workspace. Its plugin's version is part of each job's key. Never another plugin's own; never a shell; never a variable that finds or loads programs (`ENV_NEVER`), the network's way out, or the threads Meno sets. All as they must be, or none is taken (`src-tauri/src/jobs.rs` `needs_declared`). |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -463,7 +464,11 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   folded with others under a name (`group`), and a choice may fill in other
   options' values when picked (`sets`: a preset's parts, each still the
   chemist's to change); the rule may name an option of Meno's own form
-  beside the plugin's (Render's shading). Meno draws them and remembers
+  beside the plugin's (Render's shading). A number may name the value that
+  sets nothing, left to the program (`unset`: ORCA's %maxcore at 0). A
+  step's line says only the options that apply - one shown under another,
+  only while it is - and no number at its `unset`, as no choice of none:
+  ORCA's solvent is said only with a solvation. Meno draws them and remembers
   the chemist's last choices. The form, its drawing and the remembering are in place, used
   first by Meno's own writers in Export (`lib/options.ts`, FILE-IO.md).
   A plugin declares a role's options in its manifest, with the role
@@ -538,6 +543,20 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     distances from the centre, sorted, is a bound the conformers cannot be
     under, and each way's own atoms laid over alone is another. Only pairs
     and ways under 0.01 Å by both are laid over in full.
+- **A coordination bond is RDKit's dative bond, taking no hydrogen.** A
+  drawn dative arrow or coordination bond (a MOL block's type 9), or a
+  plugin entry's bond marked `coordination`, is read as RDKit's dative
+  bond, from the atom that lends its pair - never as a covalent single.
+  RDKit counts a dative bond in its acceptor's valence, so a plain B drawn
+  H3N→BH3 was given two hydrogens, where Meno counts three: the molecule
+  in 3D came out H3N→BH2 (RDKit plugin to 0.1.11). Its acceptor, not a
+  metal, is now given the hydrogens Meno counts, the dative bond taking
+  none (`acceptors_as_drawn`). Where RDKit then cannot hold it - a neutral
+  B or Al with its three bonds besides - the structure is refused in
+  words: "RDKit cannot hold the coordination bond from N to B as drawn: B
+  takes no further bond there. Draw the two charged instead, N+ bonded to
+  B-." A metal acceptor keeps its ligands' hydrogens as they are
+  (cisplatin drawn with arrows: six). From RDKit plugin 0.1.12.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
@@ -822,6 +841,14 @@ The same for every plugin and for Meno's own parts:
     step's *Failed* exit with its why. A step whose every entry is
     refused, or whose options cannot be done, is refused as a whole, as
     before (an error);
+  - `collect` may answer that a job as a whole stopped, `{"why": "..."}`,
+    and add what to read of what it wrote, one for each entry, as
+    `read` says it - `"partial": [{"kind": "orca", "log": true, "name":
+    "water.out"}]` - where the run stopped once under way: Meno reads it
+    for the geometry the run reached alone, the entry going out of
+    *Failed* there, its frames from where it came in, no energy of it a
+    result (WORKFLOWS.md, *Runs again*). ORCA's and Gaussian's plugins
+    say so for an optimisation;
   - `collect` may answer, for one entry of a job, why that entry alone
     failed - `{"why": "...", "kind": "no-geometry"}` in its place among
     the outputs - the others taken as they are. A `kind` is one of
@@ -836,6 +863,12 @@ The same for every plugin and for Meno's own parts:
     as the program itself judged them (xtb's "significant" ones,
     Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
     marks the molecule as no minimum;
+  - `prepare` may say, in a line of plain words beside its jobs, what
+    it chose for the chemist in preparing them (`{"jobs": [...],
+    "note": "frequencies computed numerically"}`: ORCA's own xTB, which
+    has no analytic Hessian, asked for its frequencies by NUMFREQ). It is
+    said on the step's line when the step ends, so that nothing is
+    hidden; it changes nothing Meno does;
   - a job `prepare` gives may declare the memory it takes, in MiB
     (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
     times its processes, Gaussian's %Mem - counted against what this
@@ -951,8 +984,21 @@ The same for every plugin and for Meno's own parts:
     the program prints one (xtb prints none, and its documentation states
     none); and how it was worked out, `thermo.treatment`, a text in the
     program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
-    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03).
-    Two values of one treatment are written alike, so that they compare.
+    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
+    ORCA's `quasi-RRHO (Grimme), 100 cm-1`, from where it says its
+    vibrational entropy is the QRRHO of S. Grimme and at which reference
+    frequency. Two values of one treatment are written alike, so that
+    they compare. And the symmetry its thermochemistry took, as the
+    program printed it - of several prints, the last, as the other
+    thermochemistry is read, so that all are of one: its point group,
+    `thermo.point-group` (ORCA's "Point Group: D3h", Gaussian's "Full
+    point group", xtb's box's "symmetry"), and the rotational symmetry
+    number its rotational entropy counts, `thermo.symmetry-number` (ORCA's
+    "Symmetry Number: 6", Gaussian's "Rotational symmetry number", xtb's
+    "rotational number"). Not printed, not read: Meno works none of them
+    out itself (2026-10-30). Meno puts them on each thermochemical
+    property it makes of the readings, in its `by` (WORKFLOWS-FOUNDATION.md,
+    *The entry*).
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**
@@ -961,6 +1007,41 @@ The same for every plugin and for Meno's own parts:
     buffers - decided once the measurements were seen (FILE-IO.md,
     *Response*). Meno's own writers run on the page: an SVG picture of
     molecules in 3D needs the page's WebGL.
+
+### Path search
+
+A plugin filling *Path search* is sent pairs: each entry is the start, as
+any entry is, with its end beside it (`end`, an entry of the same atoms in
+one numbering and of one charge and spin - Meno has checked both). Its
+`prepare` runs a job for each. What it reads back is an output in Meno's
+form, its frames the path in the order the program gives them, the point
+it refined among them, each with its energy; `converged` true for that
+point alone, which becomes the molecule's entry frame. A frames result
+`path.frame` says what each frame is - "highest point refined" for that
+point, words of the plugin's own for the rest (ORCA's: "NEB image 3 of
+10"). `imaginary`, and a `vibrations` list, are that point's, where the
+frequencies were worked out. Meno works out the barriers itself, and calls
+no frame a saddle point.
+
+### Follow the reaction path
+
+A plugin filling *Follow the reaction path* is sent each point as any entry
+is. What it reads back is an output in Meno's form, its frames the path one
+end to the other, each with its energy; `converged` true for the point it
+started from alone, which becomes the molecule's entry frame; a frames
+result `path.frame` saying what each frame is, "the point it started from"
+for that one. Where a side stopped before its end, `optimised` false and a
+warning in the program's words: the molecule goes out of *Failed*, the path
+as far as it came.
+
+### Optimise to a saddle point
+
+A plugin filling *Optimise to a saddle point* is sent each guess as any
+entry is; where the step's sides are wired, with them beside it (`sides`,
+`reactant` and `product`, each an entry of the guess's atoms in one
+numbering, of one charge and spin - Meno has checked both). A plugin whose
+program takes no sides refuses a guess sent with them, saying so. What it
+reads back is an optimisation's output, as *Optimise*'s is.
 
 ### Generate
 
@@ -1046,7 +1127,7 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   "schema": 1,
   "name": "...",                      (where it has one)
   "atoms": [{"el", "x", "y", "z", "charge"?, "radical"?, "isotope"?, "mass"?}],
-  "bonds": [{"a1", "a2", "order"}],
+  "bonds": [{"a1", "a2", "order", "coordination"?}],
   "charge": 0,
   "multiplicity": 1,
   "files": [{"kind", "name", "text"}]  (where the step takes some)
@@ -1061,6 +1142,12 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   fixed*), mapping back any its program reorders.
 - Places are in ångströms. `mass` is the isotope's in daltons, where
   Meno knows it.
+- A coordination bond - a dative arrow or a coordination bond as drawn, a
+  file's bond of type 9 - is `order` 1 with `coordination: true`, `a1` the
+  atom that lends its pair (the entry record's `EntryBond`). A plugin
+  maps it to what its program has (the RDKit plugin: RDKit's dative bond)
+  or refuses the entry in words; it never takes it as a covalent single.
+  A program given only atoms and places has no bonds to map.
 - `charge` and `multiplicity` are by Meno's one rule
   (`src/lib/io/writers.ts`, `speciesOf`): what the calculation the
   molecule was read from said, where it said; else what its atoms say.
@@ -1068,10 +1155,11 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   unit with its units table (`src/lib/units.ts`, CODATA 2018), never a
   plugin's own factor.
 - A plugin that holds a geometry to restraints (`Restraint` in
-  `src/lib/entry.ts`) turns each one's relative strength into its
-  program's force constant, and says here, under its name, the constant a
-  strength of 1 is, with its units - so that a strength means one thing
-  across plugins only as far as is written down. None does yet.
+  `src/lib/entry.ts`) holds each by the energy the record states - a
+  distance by E = k d²/2, k in kcal mol⁻¹ Å⁻²; a dihedral by E = k φ²/2,
+  φ in radians the shorter way round, k in kcal mol⁻¹ rad⁻²; atoms fixed
+  where they are - converting k into its program's units and saying here,
+  under its name, how; or it refuses them in words. None does yet.
 - A temperature, a pressure and a solvent a plugin gives with a property
   are those its program says it used; a solvent is named with its model
   as the program names them (`ALPB(water)`), or `none` where the

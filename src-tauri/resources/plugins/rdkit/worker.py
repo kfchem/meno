@@ -79,15 +79,58 @@ def lay_out_2d(mol):
     rdDepictor.Compute2DCoords(mol, forceRDKit=plain)
 
 
+def acceptors_as_drawn(mol):
+    """A molecule's coordination bonds (RDKit's dative, read from a MOL
+    block's type 9 or a plugin entry's `coordination`) taking no hydrogen
+    from either end, as Meno counts them (src/lib/io/unplaced.ts): RDKit
+    counts a dative bond in its acceptor's valence, and gives a plain B
+    acceptor two hydrogens where it is drawn with three. Each acceptor not a
+    metal, its hydrogens not fixed, is given those it has with its dative
+    bonds set aside - fixed. A metal is given none either way. Changed in
+    place; unsanitised in, unsanitised out."""
+    datives = [b for b in mol.GetBonds() if b.GetBondType() == Chem.BondType.DATIVE]
+    acceptors = {b.GetEndAtomIdx() for b in datives if not is_metal(b.GetEndAtom()) and not b.GetEndAtom().GetNoImplicit()}
+    if not acceptors:
+        return mol
+    aside = Chem.RWMol(mol)
+    for b in datives:
+        aside.GetBondWithIdx(b.GetIdx()).SetBondType(Chem.BondType.ZERO)
+    aside.UpdatePropertyCache(strict=False)
+    for i in acceptors:
+        atom = mol.GetAtomWithIdx(i)
+        atom.SetNumExplicitHs(atom.GetNumExplicitHs() + aside.GetAtomWithIdx(i).GetNumImplicitHs())
+        atom.SetNoImplicit(True)
+    return mol
+
+
+def sanitized(mol):
+    """`mol` sanitised, or why not in words: a coordination bond RDKit cannot
+    hold - its acceptor, not a metal, past what RDKit lets it bond, as a
+    neutral B or Al with three bonds besides - named, with what to draw
+    instead; any other problem as RDKit gives it."""
+    problem = Chem.SanitizeMol(mol, catchErrors=True)
+    if problem == Chem.SanitizeFlags.SANITIZE_NONE:
+        return mol
+    for b in mol.GetBonds():
+        if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()):
+            continue
+        donor, acceptor = b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()
+        raise ValueError(
+            f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {acceptor} takes no further bond there. "
+            f"Draw the two charged instead, {donor}+ bonded to {acceptor}-."
+        )
+    raise ValueError(f"cannot make sense of the structure ({problem})")
+
+
 def read(molblock, sanitize=True):
-    """A molecule from a MOL block, kept as drawn: no hydrogens removed."""
+    """A molecule from a MOL block, kept as drawn: no hydrogens removed, and
+    none taken by a coordination bond (`acceptors_as_drawn`)."""
     mol = Chem.MolFromMolBlock(molblock, sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("This structure could not be read.")
+    acceptors_as_drawn(mol)
     if sanitize:
-        problem = Chem.SanitizeMol(mol, catchErrors=True)
-        if problem != Chem.SanitizeFlags.SANITIZE_NONE:
-            raise ValueError(f"cannot make sense of the structure ({problem})")
+        sanitized(mol)
         Chem.AssignChiralTypesFromBondDirs(mol)
         Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
     return mol
@@ -2261,15 +2304,15 @@ def mol_of(entry):
             atom.SetNoImplicit(True)
         rw.AddAtom(atom)
     for b in entry.get("bonds") or []:
-        rw.AddBond(int(b["a1"]), int(b["a2"]), BOND_TYPES.get(int(b.get("order", 1)), Chem.BondType.SINGLE))
-    mol = rw.GetMol()
+        # (a coordination bond as RDKit's dative, from the atom that lends its pair - never a covalent single)
+        kind = Chem.BondType.DATIVE if b.get("coordination") else BOND_TYPES.get(int(b.get("order", 1)), Chem.BondType.SINGLE)
+        rw.AddBond(int(b["a1"]), int(b["a2"]), kind)
+    mol = acceptors_as_drawn(rw.GetMol())
     conf = Chem.Conformer(len(atoms))
     for i, a in enumerate(atoms):
         conf.SetAtomPosition(i, Point3D(float(a["x"]), float(a["y"]), float(a["z"])))
     mol.AddConformer(conf, assignId=True)
-    problem = Chem.SanitizeMol(mol, catchErrors=True)
-    if problem != Chem.SanitizeFlags.SANITIZE_NONE:
-        raise ValueError(f"cannot make sense of the structure ({problem})")
+    sanitized(mol)
     Chem.AssignStereochemistryFrom3D(mol)
     return mol
 

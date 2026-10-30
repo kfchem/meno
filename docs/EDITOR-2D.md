@@ -341,8 +341,11 @@ larger takes another's width or height, and words made wider another's width.
 Ctrl (⌘) held holds them off; Shift keeps a move across or up and down. An
 atom dragged alone snaps as before, to the drawing's lengths and angles.
 
-**A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
-first press only: the second of a double-click held still waits to be
+**A long press** is a press held still for as long as Settings says
+(*General*, *A long press*: shorter 0.22 s, normal 0.26 s, longer 0.4 s;
+`LONG_PRESSES`, `longPressMs`; 0.32 s until 2026-10-28, when the maintainer
+asked for about a quarter of a second and a choice), on the first press
+only: the second of a double-click held still waits to be
 dragged - on a bond as on an atom or empty space (until 2026-10-13 a
 bond's second press began one: `pressOnBond`). It is counted while the button is held.
 As it is held, the selection's shade spreads out from the atom along the
@@ -400,7 +403,22 @@ brackets ("Na is written in brackets: [Na]"; Co, Cs, Pb too, read as
 an atom and an aromatic one), an H written as an atom ("H is left out of
 a SMILES"), an atom with more bonds than it can take (which, with its
 charge: "its 2nd atom, O-, has 3 bonds"), an aromatic atom in no ring, an
-aromatic ring that cannot alternate. Drawn once however fast Enter is pressed
+aromatic ring that cannot alternate. A molecule the dictionary has - a
+reagent, a formula read by rule, a ligand bound only by pairs it lends:
+DMF, Et3N, PdCl2, THF, typed as written or in small letters (dmf,
+et3n), as a label is given its case on the canvas; a formula in capitals
+(ET3N) is not, its elements' case being what it says - is drawn from the
+dictionary, as the canvas draws its label out, with no plugin asked; its
+name - or, for a formula, its label - and formula are said under the
+field as it is typed (a label that is the formula itself, PdCl2, once). Where the text is that and a SMILES too - NBS,
+BrCN - both are offered there, the SMILES first (the field is for
+SMILES), and Enter draws the one chosen, by a
+click or the up and down arrows; never one of them without the other
+shown. A SMILES alone is drawn as before, nothing said under it. Text is
+read as a structure by one reader wherever it is typed (`chem/resolve`):
+here as a whole molecule, in Enumerate's lists and Substituents' groups
+as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
+an atom by the same label reader, kept a label. Drawn once however fast Enter is pressed
 again, and not at all should Quick Add be closed while it is read -
 Escape, a press elsewhere, another opened (`putDownSmiles`). A double-click on an atom still draws one
 bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
@@ -604,12 +622,21 @@ Both go together, because both touch every layer.
   as circles or as Kekulé structures; colour, bold and italic.
 - **Hashes at a fixed spacing.** A longer hashed bond gets more hashes, not
   wider gaps (PR #33). A short one - a hashed wedge to a label - gets three,
-  closer together but a line width clear, where three fit, in a style that
+  closer together but a line width clear, set at even steps from the narrow
+  atom (or its label) to the wide end, where three fit, in a style that
   asks for it ("Shortest hashed bond: Three hashes at least"): two read as
   a pair of lines (the maintainer, 2026-10-24). Meno's own style asks for
   it; a journal's keeps its spacing exactly, as its specification has it
   (2026-10-27), and a style saved before the setting is drawn at the
   spacing.
+- **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
+  atom at its wide end in Meno's own style, the bonds on from the atom
+  starting there on their own (the maintainer, 2026-10-29). In the journals'
+  styles it reaches the atom: none of their specifications says otherwise.
+  The setting is "Hashed wedge: widest hash" (At the atom, Short of the
+  atom). At a label the hashes stop at the label in every style. A style
+  saved before the setting reaches the atom, as it was drawn then; a
+  picture draws it as the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
   is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
@@ -891,7 +918,9 @@ All hover-based, as above.
   the style's bond length, whatever length it was drawn at, so a structure
   put down too large or too small comes right; one shown magnified stays
   as magnified, at the style's length at its true size. The maintainer,
-  2026-10-27.)
+  2026-10-27. A structure Clean-up cannot lay out - its stereochemistry not
+  kept, an atom put on another - is left as drawn and named by its formula
+  and why, the others laid out all the same, as one undo step.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
@@ -921,7 +950,7 @@ All hover-based, as above.
     a pseudo-asymmetric centre; an axis's a upright and set below, Ra and
     Sa (IUPAC 2013, P-91.2.1.1). Bare in Meno's style, and in RSC's,
     Wiley's and Nature's, as IUPAC's recommendations for structure
-    diagrams draw them (Brecher 2008, GR-11; the journals say nothing of
+    diagrams draw them (Brecher 2008, GR-11.1; the journals say nothing of
     them in drawings, and Wiley's point to those recommendations). In
     parentheses, (R), in ACS 1996's, as ACS writes them in names. A
     setting of the drawing style: *R, S, E and Z*.
@@ -975,11 +1004,14 @@ All hover-based, as above.
     alone might make it another or none. On a molecule in 3D, not yet.
   - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
     and floated round a structure a few pixels across). Their letters keep
-    to 9 px at the least; past that they fade as the view goes out, eased
-    with the zoom, and are gone where 9 px is twice the size they would be
-    (`marksSeenAt`). On a drawing and on a molecule in 3D alike; atom
-    numbers on a molecule in 3D fade below their own least size the same
-    way.
+    to 9 px at the least; past that they go once 9 px would be a third
+    larger than they are (`MARKS_LEAST_PX`) - switched there, not faded with
+    the zoom (the maintainer, 2026-10-28: a fade with the zoom left them half
+    there at a zoom), a little either way so that a zoom stopped at it does
+    not switch them back and forth, and faded over Meno's quick time, 120 ms
+    (`marksReadAt`, utils/zoomSwitch). On a drawing and on a molecule in 3D
+    alike. Atom numbers on a molecule in 3D still fade below their own least
+    size with the zoom, atom by atom, in the 3D view's shaders.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -1162,12 +1194,17 @@ All hover-based, as above.
   - **Corners**, any kind (the maintainer, 2026-10-12: corners anywhere,
     not curves): the arrow under the pointer shows a handle at each corner
     and a smaller one in the middle of each stretch. One dragged moves its
-    corner, or makes one there; a corner let go in line with what is
-    either side of it is taken away; *Straighten* in its menu takes them
+    corner, or makes one there - at a right angle, an L, its corner on the
+    circle whose diameter joins what is either side of it, until the
+    pointer pauses, and then freely (2026-10-28); a corner let go in line
+    with what is either side of it is taken away; *Straighten* in its menu takes them
     all away. A corner is kept as a share along the arrow and a distance
     across it, so that it goes with the arrow as it is moved, drawn out by
     an end or grown by its words. Words put by it go over its longest
-    stretch. Words already by it go with the point of its line they are
+    stretch. While an end or a corner is dragged, the arrow is drawn going
+    over to each place it snaps to - an end's 15-degree steps, a corner's
+    right angle - as a bond moved is, never jumping there
+    (`utils/arrowGlide`). Words already by it go with the point of its line they are
     by, as a corner is made, moved or taken away, or an end is drawn
     out. They keep the same share of the way along the line, and the
     same distance from that point, measured along and across its
@@ -1499,8 +1536,11 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or on an atom whose fourth group is a lone pair (a sulfoxide's
-     S), which the engine has no way to take - rather than lose it. A wedge
+     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
+     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
+     sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
+     read from its wedge and laid out like any other, on one wedge
+     (2026-10-29). A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an
@@ -1535,7 +1575,10 @@ lipids each have their own way of being drawn, which it should know.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
      (*Expand abbreviation*) puts the group in free space: away from all
-     the atom's bonds, out of a ring from a ring's atom, and clear of the
+     the atom's bonds, in the widest opening between them as a drawn
+     substituent is (GR-4.1.2; an NMe in a chain, its methyl 120 degrees
+     from each carbon, as a file is written), out of a ring from a ring's
+     atom, and clear of the
      drawing's atoms, bonds and labels as far as their letters are set -
      turned, or seen in a mirror where it has no stereo of its own, only
      where it is not clear as laid out; nothing else moves

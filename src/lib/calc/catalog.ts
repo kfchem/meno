@@ -11,7 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type RoleDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type RoleDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
@@ -69,6 +69,8 @@ export type PythonPlugin = ReaderBase &
     downloads: readonly DownloadDecl[];
     /** About how much room its environment takes once set up, in bytes, as measured (its manifest's `setUpBytes`). */
     setUpBytes?: number;
+    /** Programs of other plugins its jobs may need, where it declares any (lib/plugins/manifest `NeedDecl`). */
+    needs?: readonly NeedDecl[];
     /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
     profile: `plugin-${string}`;
     lock: string;
@@ -106,6 +108,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     installed: m.installed,
     downloads: m.downloads,
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
+    ...(m.needs ? { needs: m.needs } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
