@@ -101,7 +101,10 @@ What it will not do:
   on these rings mapped (cyclooctatetraene's ring closure to
   bicyclo[4.2.0]octatriene, a dimethylpyrrole methylated at N, furan and
   cyclobutadiene onto themselves), the first map is the same either way;
-  cyclooctatetraene's later maps come in another order.
+  cyclooctatetraene's later maps come in another order. On the corpus of
+  134 runs it was checked on (67 reactions, two embeddings each), handing
+  the mapper aromatic bonds changed no map: it is there to match ACCeL's
+  own flow, for the checks and scores that read bond types.
 
 Mapping runs in a worker when the interface asks for it (*On a drawn
 scheme*). How long it takes, and why like molecules standing apart once

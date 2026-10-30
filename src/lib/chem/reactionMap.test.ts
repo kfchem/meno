@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "./molecule";
 import { dielsAlder, molecule, sn2, trueMap } from "./reactionMap.fixtures";
-import { bondChanges, heavyAtomPairs, mapProducts, mapReaction, withMapNumbers, type ReactionMap } from "./reactionMap";
+import { bondChanges, heavyAtomPairs, mapProducts, mapReaction, toAtoms, withMapNumbers, type ReactionMap } from "./reactionMap";
 
 const DA_REACTANT_NAMES = ["C1", "C2", "C3", "C4", "H2", "H3", "H1a", "H1b", "H4a", "H4b", "C5", "C6", "H5a", "H5b", "H6a", "H6b"];
 
@@ -245,6 +245,17 @@ describe("bond changes across an aromatic ring", () => {
     // (C1=C2, C3=C4 and the rest single: no ring of alternating bonds)
     const diene = ring("12", [2, 1, 2, 1, 1, 1]);
     expect(bondChanges(ring("12"), diene, same).orderChanged.map((c) => [c.a1 + 1, c.a2 + 1, c.before, c.after])).toEqual([[5, 6, 2, 1]]);
+  });
+
+  it("the mapper is given a benzene ring's bonds as aromatic (type 4), and a ring whose bonds do not alternate as drawn", () => {
+    const types = (m: Molecule) => new Map(toAtoms(m).bondsDict().map(([a, b, t]) => [`${Math.min(a, b)}-${Math.max(a, b)}`, t]));
+    // (the ring's bonds C1-C2 to C6-C1, its atoms numbered from 1 as ACCeL numbers them)
+    const ringTypes = (m: Molecule) => [1, 2, 3, 4, 5, 6].map((k) => types(m).get(`${Math.min(k, (k % 6) + 1)}-${Math.max(k, (k % 6) + 1)}`));
+    expect(ringTypes(ring("12"))).toEqual([4, 4, 4, 4, 4, 4]);
+    expect(ringTypes(ring("23"))).toEqual([4, 4, 4, 4, 4, 4]);
+    // (a cyclohexadiene: its two double bonds and four single ones as drawn; the methyl's and the hydrogens' bonds single)
+    expect(ringTypes(ring("12", [2, 1, 2, 1, 1, 1]))).toEqual([2, 1, 2, 1, 1, 1]);
+    expect([...types(ring("12")).entries()].filter(([k]) => !/^[1-6]-[1-6]$/.test(k)).every(([, t]) => t === 1)).toBe(true);
   });
 
   it("the mapper is given the ring's bonds as aromatic, so the map is the same whichever Kekul\u00e9 structure either side is drawn in", () => {

@@ -82,7 +82,7 @@ export type ReactionMapRefusal = { error: "2d" | "no-atoms" | "python-error"; me
  * ACCeL perceives the rings from the geometry; Meno from the bonds
  * (lib/chem/identity `aromaticForm`).
  */
-function toAtoms(m: Molecule): Atoms {
+export function toAtoms(m: Molecule): Atoms {
   const atoms = new Atoms();
   for (const a of m.atoms) atoms.getNewAtom([a.el, a.x, a.y, a.z]);
   atoms.initBonds();
