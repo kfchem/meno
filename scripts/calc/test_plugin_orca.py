@@ -454,7 +454,7 @@ class Collect(unittest.TestCase):
                   "       Please check your results very carefully.\n")
         props = warned + "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\n\nORCA finished by error termination in PROPERTIES\n  .... aborting the run\n"
         normal = warned + "FINAL SINGLE POINT ENERGY -76.4\n                             ****ORCA TERMINATED NORMALLY****\n"
-        said = ('The optimisation did not converge in 50 cycles, the most ORCA takes ("The optimization did not converge but '
+        said = ('The optimisation did not converge in 50 cycles, the most it was allowed ("The optimization did not converge but '
                 'reached the maximum number of optimization cycles"): run it again to go on from the geometry it reached')
         for log, ended in ((props, "done"), (props, "failed"), (normal, "done")):
             # (never read as a result: the geometry it reached read for a run again alone, as one that stopped is)

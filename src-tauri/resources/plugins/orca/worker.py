@@ -627,7 +627,7 @@ def optimisation_not_converged(log):
     """Why an optimisation is not read, where ORCA took the most cycles it allows: plainly, with how many."""
     n = cycles_of(log)
     went = f" in {n} cycles" if n is not None else ""
-    return (f"The optimisation did not converge{went}, the most ORCA takes (\"{MAX_CYCLES_SAID}\"): "
+    return (f"The optimisation did not converge{went}, the most it was allowed (\"{MAX_CYCLES_SAID}\"): "
             "run it again to go on from the geometry it reached")
 
 
