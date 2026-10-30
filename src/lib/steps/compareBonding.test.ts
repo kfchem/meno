@@ -4,7 +4,8 @@ import { mapReaction } from "../chem/reactionMap";
 import { dielsAlder } from "../chem/reactionMap.fixtures";
 import type { Entry } from "../entry";
 import { speciesOf } from "../io/writers";
-import { comparedBonding, matchingReference } from "./compareBonding";
+import { comparedBonding, matchingReference, numberedCentres } from "./compareBonding";
+import numbered from "./testdata/numbered-centres.json";
 
 /** Compare bonding against answers known by construction: bonds a reaction forms, a centre and its mirror image, cis and trans. */
 
@@ -106,5 +107,69 @@ describe("Compare bonding", () => {
     expect(comparedBonding(path, entryOf(product, "ref"))).toEqual({ failed: expect.stringMatching(/Take frames/) });
     const drawn: Entry = { ...entryOf(product, "ref"), geometry: { kind: "none" } };
     expect(comparedBonding(entryOf(product, "p"), drawn, { rs: true })).toEqual({ failed: expect.stringMatching(/cannot be compared/) });
+  });
+});
+
+/**
+ * Every centre by its atoms' numbers, against ConfoTS's own check: each pair
+ * of geometries of one synthetic molecule in one numbering, with the atoms
+ * ACCeL's calc_stereo(with_num_chirality=True) flags on it as ConfoTS's
+ * check_chirality reads its labels - nR and nS, or nE and nZ, at one atom
+ * of the two (testdata/numbered-centres.json, made by RDKit's embedding and
+ * ACCeL's own code).
+ */
+describe("Compare bonding, every centre by its atoms' numbers", () => {
+  type Case = { name: string; atoms: string[]; bonds: [number, number, number][]; reference: number[]; entry: number[]; flagged: number[] };
+  const entry = (c: Case, xyz: number[], id: string): Entry => ({
+    id,
+    from: [],
+    structure: { atoms: c.atoms.map((el) => ({ el })), bonds: c.bonds.map(([a1, a2, order]) => ({ a1, a2, order: order as 1 | 2 | 3 })) },
+    geometry: { kind: "3d", xyz },
+    species: speciesOf({ atoms: [], bonds: [] }),
+    properties: {},
+    status: "done",
+  });
+  // (the atom each difference names: "C2 has its neighbours ...", "At C1, ...")
+  const named = (d: string) => Number((d.match(/^(?:At )?[A-Z][a-z]?(\d+)/) ?? [])[1]) - 1;
+
+  for (const c of numbered as Case[])
+    it(`flags the atoms ConfoTS's check flags: ${c.name}`, () => {
+      const r = comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { numbered: true });
+      if ("failed" in r) throw new Error(r.failed);
+      expect(r.differences.map(named).sort((p, q) => p - q)).toEqual(c.flagged);
+      expect(r.same).toBe(c.flagged.length === 0);
+      // (and none where it is not asked)
+      expect(comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"))).toEqual({ same: true, differences: [] });
+    });
+
+  it("reads a =CH2 turned over, which E or Z cannot see: propene has no E or Z", () => {
+    const c = (numbered as Case[]).find((x) => x.name.startsWith("propene"))!;
+    const r = comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { ez: true, numbered: true });
+    if ("failed" in r) throw new Error(r.failed);
+    // (at each end, its highest-numbered neighbour by a single bond and the other end's, as ConfoTS's check reads them: H5 on C1, H6 on C2)
+    expect(r.differences).toEqual([
+      "At C1, H5 and H6 stand trans across the double bond C1-C2 here and cis in the reference.",
+      "At C2, H6 and H5 stand trans across the double bond C2-C1 here and cis in the reference.",
+    ]);
+    expect(comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { ez: true })).toEqual({ same: true, differences: [] });
+  });
+
+  it("says a centre R or S or E or Z compares once, not again by number", () => {
+    const c = (numbered as Case[]).find((x) => x.name === "(S)-butan-2-ol, mirrored")!;
+    const r = comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { rs: true, numbered: true });
+    if ("failed" in r) throw new Error(r.failed);
+    // (C2 by R or S; its methyls and CH2 by number)
+    expect(r.differences.map(named).sort((p, q) => p - q)).toEqual([0, 1, 3, 4]);
+    expect(r.differences.filter((d) => d.startsWith("C2 "))).toEqual(["C2 has the other configuration from the reference's."]);
+  });
+
+  it("reads no allene end, no imine carbon and no aromatic ring's atom, as ConfoTS's check reads none", () => {
+    const allene = numberedCentres({ atoms: ["C", "C", "C", "H", "H", "H", "H"].map((el) => ({ el })), bonds: [{ a1: 0, a2: 1, order: 2 }, { a1: 1, a2: 2, order: 2 }, { a1: 0, a2: 3, order: 1 }, { a1: 0, a2: 4, order: 1 }, { a1: 2, a2: 5, order: 1 }, { a1: 2, a2: 6, order: 1 }] });
+    expect(allene.doubleEnds).toEqual([]);
+    const imine = numberedCentres({ atoms: ["C", "N", "C", "H", "H"].map((el) => ({ el })), bonds: [{ a1: 0, a2: 1, order: 2 }, { a1: 1, a2: 2, order: 1 }, { a1: 0, a2: 3, order: 1 }, { a1: 0, a2: 4, order: 1 }] });
+    expect(imine.doubleEnds).toEqual([]);
+    const ring = Array.from({ length: 6 }, (_, i) => i);
+    const benzene = numberedCentres({ atoms: [...ring.map(() => ({ el: "C" })), ...ring.map(() => ({ el: "H" }))], bonds: [...ring.map((i) => ({ a1: i, a2: (i + 1) % 6, order: (i % 2 ? 1 : 2) as 1 | 2 })), ...ring.map((i) => ({ a1: i, a2: i + 6, order: 1 as const }))] });
+    expect(benzene).toEqual({ tetrahedral: [], doubleEnds: [] });
   });
 });

@@ -227,6 +227,8 @@ export type CompareStep = {
   from: string;
   rs: boolean;
   ez: boolean;
+  /** Every centre by its atoms' numbers, as ConfoTS's check reads them (lib/steps/compareBonding `numberedCentres`). */
+  numbered: boolean;
   atoms: string;
   elements: string;
   /** How far, times their covalent radii together, two atoms may stand and be bonded - and at least how far over them, in Å. */
@@ -252,7 +254,7 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   if (o.reference === "each" && !o.writes.trim()) return { ok: false, said: "Name the property the match is written as" };
   if (!(o.reach >= 1 && o.reach <= 2)) return { ok: false, said: "Bonded within must be from 1 to 2 times the sum of the covalent radii" };
   if (!(o.floor >= 0 && o.floor <= 1)) return { ok: false, said: "At least over the sum must be from 0 to 1 Å" };
-  const options: CompareOptions = { rs: o.rs, ez: o.ez, passOver: { atoms, elements }, reach: o.reach, floor: o.floor };
+  const options: CompareOptions = { rs: o.rs, ez: o.ez, numbered: o.numbered, passOver: { atoms, elements }, reach: o.reach, floor: o.floor };
   const es = entries.map((e, i) => entryOfSet(e, String(i)));
   const rs = references.map((e, i) => entryOfSet(e, String(i)));
   const kept: SetEntry[] = [];

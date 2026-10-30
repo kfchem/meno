@@ -217,6 +217,30 @@ references, the first it is bonded as (`matchingReference`).
   neighbours (by number) at its two ends stand: the dihedral between them
   under or over 90 degrees. Each end must have one other neighbour, or two
   that are not alike.
+- **Every centre by its atoms' numbers, where asked** (`numberedCentres`):
+  ConfoTS's check of a structure against its reference, which reads each
+  centre by its atoms' numbers rather than by what they are (its
+  `check_chirality`, by ACCeL's `calc_stereo` labels by number). So it also
+  sees what R or S and E or Z cannot: a methylene's two hydrogens, or a
+  =CH2's, the other way round from where the reference's numbering has
+  them. Read on the reference's bonds, at:
+  - **every atom of four neighbours**: whether the volume its three
+    highest-numbered neighbours make about its lowest-numbered is positive;
+  - **every atom of three with one double bond** (not an aromatic ring's)
+    and a single bond, where the atom across the double bond has two single
+    bonds: whether its highest-numbered neighbour by a single bond and that
+    atom's stand across the double bond from each other, their dihedral
+    past 90 degrees.
+
+  As there, not at an end whose partner has one single bond (an imine's
+  carbon), an atom of two, or an allene's ends. A centre R or S, or E or Z,
+  already compares - the same reading by number, at the centres that have
+  an R or S, an E or Z - is not said again. One difference from ConfoTS's:
+  an aromatic ring is one to Meno where its bonds alternate (lib/chem/identity
+  `aromaticForm`), where ACCeL counts 4n + 2 electrons. A pyrrole's ring
+  ends are read here and a cyclooctatetraene's are not, the other way round
+  there; a ring holds each of them in place, so neither can differ between
+  two geometries of one structure.
 - **Passed over:** atoms (from 0, as the entry numbers them), elements and
   bonds the chemist lists, such as a metal's coordination, in both the
   bonds and the configurations.
@@ -235,6 +259,20 @@ Checked:
 - H2O2 (O-O 1.475 Å) is bonded as itself at the reach of 1.2, and at 1.1
   its O-O is read as no bond, the floor saying it decided.
 - cis- and trans-2-butene differ where E or Z is asked.
+- Every centre by its atoms' numbers, against ConfoTS's own check: on 13
+  pairs of geometries of synthetic molecules in one numbering, ACCeL's
+  `calc_stereo` labels, read as `check_chirality` reads them, flag the same
+  atoms as this step (src/lib/steps/testdata/numbered-centres.json). The
+  pairs are butane with a CH2's hydrogens swapped, a methyl turned and
+  another conformer; propene and buta-1,3-diene with a =CH2 turned over
+  (both ends of its double bond flagged), and another conformer of the
+  diene; 2-methylbut-2-ene with a methyl turned; (S)-butan-2-ol mirrored
+  (every atom of four flagged) and another conformer; an allene and an
+  imine with a CH2's hydrogens swapped (none flagged); and toluene, another
+  conformer and mirrored. A conformer embedded anew can flag a methyl: its
+  three hydrogens, numbered as they came, can stand the other way round.
+- CH2Cl2 with its hydrogens swapped is the same where R or S is asked, and
+  differs by its atoms' numbers.
 
 ## Restraints
 
