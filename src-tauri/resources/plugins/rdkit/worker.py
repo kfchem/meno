@@ -1192,6 +1192,8 @@ RADII = {
 
 #: How far a metal's bond may be from its covalent length while embedding (A).
 METAL_BOND_SLACK = 0.05
+#: How far, in turn, where those cannot be made to agree with RDKit's own bounds for the rest of the molecule (A).
+METAL_BOND_SLACKS = (METAL_BOND_SLACK, 0.1, 0.15, 0.2)
 #: The narrowest angle two atoms bonded to one metal, of different ligands, are let make while embedding and
 #: optimising (degrees), so that ligands do not pile up - ETKDG knows no angle at a metal, and without one the
 #: seven fluorides of [ZrF7]3- came out 33 degrees apart - by how many atoms are bonded to the metal (FLOORS):
@@ -1356,11 +1358,22 @@ def eta_length(mol, metal, atom):
     return None if rm is None or ra is None else (rm + ra) / 100.0 + ETA_EXTRA
 
 
-def metal_bounds(mol, eta=()):
+def metal_bounds(mol, eta=(), planar=None, slack=None):
     """ETKDG's bounds for a molecule with metals: each metal's bonds at their
     covalent lengths, and its ligands at least a floor's angle apart as
-    seen from it where one holds (floor_pairs); None where it has no metal
-    bonded, or the bounds cannot be made to agree."""
+    seen from it where one holds (floor_pairs) - or, at a square-planar
+    metal `planar` gives, (metal, trans pairs), each two at the distance
+    their cis or trans angle sets (CIS_AT_METAL, TRANS_AT_METAL); None
+    where it has no metal bonded, or the bounds cannot be made to agree
+    (two ends of one chelate set trans). Each metal bond within `slack` of
+    its length (METAL_BOND_SLACK) - or, where those cannot be made to agree
+    with RDKit's own bounds for the rest, the next of METAL_BOND_SLACKS that
+    can: a palladacycle's Pd-C, 1.95 A by its radii, came under RDKit's own
+    lower bound for its ring (2.01), and with nothing agreeing no metal bond
+    was held at all."""
+    slack = METAL_BOND_SLACK if slack is None else slack
+    import itertools
+
     from rdkit import DistanceGeometry
     metals = [a for a in mol.GetAtoms() if is_metal(a) and a.GetDegree()]
     if not metals:
@@ -1399,7 +1412,7 @@ def metal_bounds(mol, eta=()):
                 continue
             j = bond.GetOtherAtomIdx(i)
             length[j] = d
-            put(i, j, d - METAL_BOND_SLACK, d + METAL_BOND_SLACK)
+            put(i, j, d - slack, d + slack)
         for j, k, angle in floor[i]:
             if j not in length or k not in length:
                 continue
@@ -1407,7 +1420,15 @@ def metal_bounds(mol, eta=()):
             dj, dk = length[j], length[k]
             low = math.sqrt(dj * dj + dk * dk - 2 * dj * dk * cos)
             lo, hi = min(j, k), max(j, k)
-            put(j, k, max(bm[hi][lo], low), max(dj + dk + 2 * METAL_BOND_SLACK, low))
+            put(j, k, max(bm[hi][lo], low), max(dj + dk + 2 * slack, low))
+        if planar and planar[0] == i:
+            # (square planar from the first: four ligands drawn into a plane from a tetrahedron by UFF's held angles
+            # tore a bulky phosphine's bonds - PdCl2(PPh3)2's, Pd(PPh3)4's - and ran its phenyls into one another)
+            for j, k in itertools.combinations(sorted(length), 2):
+                low_a, high_a = TRANS_AT_METAL if (j, k) in planar[1] or (k, j) in planar[1] else CIS_AT_METAL
+                dj, dk = length[j], length[k]
+                at = lambda a: math.sqrt(dj * dj + dk * dk - 2 * dj * dk * math.cos(math.radians(a)))
+                put(j, k, at(low_a) - slack, at(high_a) + slack)
     # an eta system over its metal: each of its atoms at its eta length, its star anywhere (set at its
     # centre after), the atoms on it let come near the metal, and other ligands' donors kept off it
     n = mol.GetNumAtoms()
@@ -1419,7 +1440,7 @@ def metal_bounds(mol, eta=()):
         for c in atoms:
             d = eta_length(mol, metal, c)
             if d is not None:
-                put(metal, c, d - METAL_BOND_SLACK, d + METAL_BOND_SLACK)
+                put(metal, c, d - slack, d + slack)
             for x in mol.GetAtomWithIdx(c).GetNeighbors():
                 k = x.GetIdx()
                 if k not in atoms and k != metal and k != star:
@@ -1435,27 +1456,105 @@ def metal_bounds(mol, eta=()):
         bm[hi][lo] = max(bm[hi][lo], low)
         bm[lo][hi] = max(bm[lo][hi], low)
     if not DistanceGeometry.DoTriangleSmoothing(bm):
-        return None
+        wider = [x for x in METAL_BOND_SLACKS if x > slack]
+        return metal_bounds(mol, eta, planar, wider[0]) if wider else None
     return bm
 
 
+#: That a metal's d electrons lie its four ligands tetrahedral, kept on its atom (`tetrahedral`).
+TETRAHEDRAL = "meno_tetrahedral"
 #: A square-planar metal's angles while UFF optimises (degrees): RDKit types
 #: Pd, Pt, Ni and Au as square planar (Pd4+2) only from SP2D, for which its
 #: angle terms have their one minimum at 90 degrees, and four ligands then
 #: settled near tetrahedral. So two trans and four cis angles are held.
 TRANS_AT_METAL = (172.0, 180.0)
+#: How firmly a square-planar metal's angles are held while UFF optimises (kcal/mol/rad^2), in turn: gently,
+#: then firmly. Held firmly at once, from where the embedding left them, 2 or 3 in 100 of PdCl2(PPh3)2 and
+#: PtCl2(PPh3)2 came out torn; held at 5 or 20 first, none.
+STAGED_HOLD = (20.0, 200.0)
 CIS_AT_METAL = (85.0, 95.0)
+
+
+#: A metal's group, by its atomic number - of the d block, where its d electrons are counted (`d_electrons`).
+def group_of(z):
+    return z - 18 if 21 <= z <= 30 else z - 36 if 39 <= z <= 48 else z - 68 if 72 <= z <= 80 else None
+
+
+def donor_charge(atom, order):
+    """What a donor takes from its metal, as the ionic count has it: 1 where it is anionic (X - a halide, an aryl,
+    a carboxylate's O, an amide's N), 0 where it is neutral (L - a phosphine, an amine, a carbonyl's O), by its
+    valence without its bond to the metal (`order`): one short of a valence its element has at its charge, or one
+    of them. None where its valence says neither. Its drawn hydrogens first - a phosphine on a metal is given an H
+    by RDKit's valence, to make its four bonds five, which no chemist drew - and then all."""
+    table = Chem.GetPeriodicTable()
+    z = atom.GetAtomicNum() - atom.GetFormalCharge()
+    if not 0 < z <= 118:
+        return None
+    allowed = [v for v in table.GetValenceList(z) if v >= 0]
+    for valence in (atom.GetExplicitValence(), atom.GetTotalValence()):
+        other = valence - order
+        if other in allowed:
+            return 0
+        if other + 1 in allowed:
+            return 1
+    return None
+
+
+def d_electrons(mol, metal):
+    """How many d electrons a metal with point donors alone has, by the ionic count: its group, less its oxidation
+    state - its charge and one for each anionic donor (donor_charge). None where a donor says neither, or it has an
+    eta ligand, or it is no d-block metal."""
+    group = group_of(metal.GetAtomicNum())
+    near = sorted(metal.GetNeighbors(), key=lambda x: x.GetIdx())
+    # (an eta ligand - through a star, or atoms bonded to each other - is no point donor)
+    if group is None or any(x.GetAtomicNum() == 0 for x in near) or any(
+        mol.GetBondBetweenAtoms(x.GetIdx(), y.GetIdx()) for i, x in enumerate(near) for y in near[i + 1:]
+    ):
+        return None
+    ox = metal.GetFormalCharge()
+    for x in near:
+        bond = mol.GetBondBetweenAtoms(metal.GetIdx(), x.GetIdx())
+        # (a dative bond is a neutral donor's, whatever its charge says: as read() reads a CO drawn [C-]#[O+] on Ni)
+        c = 0 if bond.GetBondType() == Chem.BondType.DATIVE else donor_charge(x, bond.GetBondTypeAsDouble())
+        if c is None:
+            return None
+        ox += c
+    return group - ox
+
+
+#: The d-electron count at which four ligands lie tetrahedral round a metal UFF types square planar alone - Pd(0),
+#: Pt(0), Ni(0): Pd(PPh3)4 - where at d8 they lie square planar (Pd(II), Pt(II), Ni(II), Au(III)).
+TETRAHEDRAL_D = 10
+
+
+def tetrahedral(mol):
+    """The metals of `mol` - before its hydrogens are put on, as drawn - with four point donors whose count is d10
+    (TETRAHEDRAL_D), their ligands to lie tetrahedral. Only those the count is sure of: an ammine drawn as N, whose
+    hydrogens RDKit fills counting its bond to the metal, or a CO drawn with no charges, reads as anionic, and a
+    metal with one is left as it was, square planar where UFF types it so."""
+    return {a.GetIdx() for a in mol.GetAtoms() if is_metal(a) and a.GetDegree() == 4 and d_electrons(mol, a) == TETRAHEDRAL_D}
+
+
+#: The most bonds two donors of one chelate may be joined by, other than through their metal, and lie only cis -
+#: a ring of six with it, its bite near 90 degrees.
+CHELATE_CIS = 4
+#: The ways four ligands pair off trans to each other round a square-planar metal, by their places among its four.
+PAIRINGS = (((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2)))
 
 
 def planar_angles(mol, cid):
     """The angles to hold at each square-planar metal with four bonds, in one
     conformer: its two trans pairs those of its ligands that are furthest
     apart there as embedded, the rest cis - so that cis and trans isomers
-    both come out of a search, as embedding left them. [(i, metal, j, (low, high))]"""
+    both come out of a search, as embedding left them. None at one whose d
+    electrons lie its four tetrahedral (`tetrahedral`: Pd(0) of Pd(PPh3)4).
+    [(i, metal, j, (low, high))]"""
     pos = mol.GetConformer(cid).GetPositions()
     held = []
     for atom in mol.GetAtoms():
         if not is_metal(atom) or atom.GetDegree() != 4 or atom.GetHybridization() != Chem.HybridizationType.SP2D:
+            continue
+        if atom.HasProp(TETRAHEDRAL):
             continue
         c = atom.GetIdx()
         nb = [n.GetIdx() for n in atom.GetNeighbors()]
@@ -1465,8 +1564,7 @@ def planar_angles(mol, cid):
             cos = float((u * v).sum() / math.sqrt(float((u * u).sum() * (v * v).sum())))
             return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
 
-        pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))]
-        trans = max(pairings, key=lambda pr: sum(angle(nb[a], nb[b]) for a, b in pr))
+        trans = max(PAIRINGS, key=lambda pr: sum(angle(nb[a], nb[b]) for a, b in pr))
         for x in range(4):
             for y in range(x + 1, 4):
                 held.append((nb[x], c, nb[y], TRANS_AT_METAL if (x, y) in trans else CIS_AT_METAL))
@@ -1648,11 +1746,14 @@ def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=
         more = {cid: m for cid, (m, _) in zip(ids, done)}
     else:
         for cid in ids:
-            ff = held_by(cid)
-            for i, c, j, (low, high) in angles[cid]:
-                ff.UFFAddAngleConstraint(i, c, j, False, low, high, 200.0)
-            ff.Initialize()
-            more[cid] = ff.Minimize(maxIts=iters)
+            # (the angles held gently first, then firmly: ligands turned into the plane at once tore a bulky
+            # phosphine's bonds where the embedding had left them far from it)
+            for k in STAGED_HOLD:
+                ff = held_by(cid)
+                for i, c, j, (low, high) in angles[cid]:
+                    ff.UFFAddAngleConstraint(i, c, j, False, low, high, k)
+                ff.Initialize()
+                more[cid] = ff.Minimize(maxIts=iters)
     if ff_mol is not mol:
         for cid in ids:
             conf = mol.GetConformer(cid)
@@ -2006,10 +2107,15 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
     given; where none may, the embedded shapes are kept as they are, with
     no energies, and the rows say why. An eta system is held over its metal (eta_systems), its star set at
     its centre, which `stars` names; it gives no energies."""
-    # (before its hydrogens are put on: how many turning bonds and flipping rings it has are of the molecule)
+    # (before its hydrogens are put on: how many turning bonds and flipping rings it has are of the molecule, and
+    # how its metals' d electrons lie their ligands, by the hydrogens drawn)
     count = count or sought(mol)
     eta = eta_systems(mol)
+    d10 = tetrahedral(mol)
+    d10_els = {mol.GetAtomWithIdx(i).GetSymbol() for i in d10}
     mol = Chem.AddHs(mol)
+    for i in d10:
+        mol.GetAtomWithIdx(i).SetBoolProp(TETRAHEDRAL, True)
     params = rdDistGeom.ETKDGv3()
     params.randomSeed = seed
     # (nothing pruned while embedding: ETKDG's raw coordinates are not yet chairs, and two embeddings that would
@@ -2026,10 +2132,44 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         # random coordinates, which a star at no fixed place needs)
         params.embedFragmentsSeparately = False
         params.useRandomCoords = True
-    ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count, params=params))
+    # (a square-planar metal - one, of four bonds, UFF typing it so and its d electrons not tetrahedral - embedded so
+    # from the first: as many of its conformers with each way its ligands can pair off trans as that way can be
+    # made, its chelates' ends never trans)
+    trial = Chem.Mol(mol)
+    typed_for_uff(trial)
+    square = [] if eta else [a.GetIdx() for a in trial.GetAtoms() if is_metal(a) and a.GetDegree() == 4 and a.GetIdx() not in d10
+                             and a.GetHybridization() == Chem.HybridizationType.SP2D]
+    shares = []
+    if len(square) == 1:
+        m = mol.GetAtomWithIdx(square[0])
+        near = sorted(x.GetIdx() for x in m.GetNeighbors())
+        # (two ends of one chelate - joined, but through the metal, within CHELATE_CIS bonds - are never trans: a
+        # palladacycle's C and N. RDKit's own bounds, loose so far along a ring, do not say so)
+        free = Chem.RWMol(mol)
+        for x in near:
+            free.RemoveBond(square[0], x)
+        hops = Chem.GetDistanceMatrix(free, force=True)
+        for pairing in PAIRINGS:
+            trans = {(near[a], near[b]) for a, b in pairing}
+            if any(hops[i][j] <= CHELATE_CIS for i, j in trans):
+                continue
+            b = metal_bounds(mol, eta, (square[0], trans))
+            if b is not None:
+                shares.append(b)
+    if shares:
+        ids = []
+        params.clearConfs = False
+        for k, b in enumerate(shares):
+            params.SetBoundsMat(b)
+            ids += list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count // len(shares) + (k < count % len(shares)), params=params))
+        params.clearConfs = True
+    else:
+        ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count, params=params))
     if not ids:
         # (a crowded cage embeds from random coordinates where it does not otherwise)
         params.useRandomCoords = True
+        if bounds is not None:
+            params.SetBoundsMat(bounds)
         ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count, params=params))
     if not ids:
         raise ValueError("no 3D structure could be made of it")
@@ -2128,6 +2268,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
             ]),
             *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
+               # (a d10 metal's four tetrahedral, whatever UFF's one type for it is)
+               else "bonds at covalent lengths, its four ligands tetrahedral (d10)" if el in d10_els
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
               for el, d in sorted(set(metals), key=lambda x: (x[0], x[1] or ""))],

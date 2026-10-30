@@ -599,6 +599,54 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   had no reason to: a Zeise-type complex's alkene carbon and cis Cl, and a
   cis dihydride's hydrides, though there the force field's own angles
   stayed above it (77° and 88° here, as now).
+- **Four ligands lie as the metal's d electrons lie them** (RDKit plugin
+  0.1.12). UFF has the one type, square planar, for Pd, Pt, Ni and Au, and
+  four ligands on one were held square planar while UFF optimised - each
+  conformer flattened from where the embedding had left it, near a
+  tetrahedron. A bulky phosphine came apart on the way: of PdCl2(PPh3)2
+  made 200 times, 43 came out with a Pd-Cl or Pd-P bond 0.6 to 2 times its
+  length or a phenyl run into the other phosphine; of Pd(PPh3)4 48 in 177,
+  of PtCl2(PPh3)2 28 in 200, of a Buchwald-type palladacycle with a
+  dicyclohexyl(biaryl)phosphine 33 in 198 (PdCl2(PMe3)2, Pd(PMe3)4,
+  Pd(OAc)2 and cisplatin, none). Now:
+  - **d8, square planar from the first.** A metal UFF types square planar,
+    with four point donors and its d electrons not d10, is embedded square
+    planar - as many of its conformers with each way its four can pair off
+    trans as that way can be made, the two ends of one chelate joined
+    within four bonds (a ring of six with the metal) never trans - and its
+    angles are then held gently (20 kcal/mol/rad^2) before firmly (200):
+    held firmly at once, 2 or 3 in 100 of PdCl2(PPh3)2 and PtCl2(PPh3)2
+    still came out torn. None of the eight complexes measured came out torn
+    in 200, and their bonds are UFF's: PdCl2(PPh3)2's Pd-P 2.42 Å and Pd-Cl
+    2.32 Å, against 2.355 and 2.291 in a trans-PdCl2(PAr3)2's crystal
+    structure (Muller and Meijboom, Acta Cryst. 2010, E66, m1463).
+  - **d10, tetrahedral.** Four round a d10 metal - Pd(0), Pt(0), Ni(0) -
+    lie tetrahedral, and are never held square planar: Pd(PPh3)4. The d
+    electrons are its group less its oxidation state, counted from its
+    charge and its donors, each anionic one (a halide, an aryl, a
+    carboxylate's O) one, each neutral one (a phosphine, an amine, a
+    carbonyl's O) none, by its valence without the metal bond - its drawn
+    hydrogens first, as a phosphine on a metal is given one by RDKit's
+    valence that no chemist drew. Only a d10 count the donors are sure of
+    takes a metal out of square planar: an ammine drawn as N, given a
+    hydrogen short, or a CO drawn with no charges, reads as anionic, and its
+    metal stays as it was. A bond the drawing makes dative - a CO drawn
+    [C-]#[O+], which the worker reads as one - is a neutral donor's,
+    whatever its charge: Ni(CO)4 drawn so is Ni(0), tetrahedral.
+  - **What it does not do.** Square planar is UFF's typing and the d8
+    count's, not the ligands': NiCl2(PPh3)2, Ni(II) d8 but tetrahedral in
+    its crystal structures (weak-field ligands), is embedded square planar
+    as before - the count knows no ligand field. And only a structure with
+    one square-planar metal is embedded so: with two or more (a
+    chloride-bridged dimer, [PdCl2(PR3)]2), its metals are held square
+    planar while UFF optimises alone, as before.
+  - **A metal's bonds held, where its ring would not let them be held so
+    tightly.** Each metal bond is embedded within 0.05 Å of its covalent
+    length - or, where that and RDKit's own bounds for the rest of the
+    molecule cannot be made to agree, within 0.1, 0.15 or 0.2. The
+    palladacycle's Pd-C, 1.95 Å by its radii, came under RDKit's own bound
+    for its ring (2.01), and with nothing agreeing none of its metal's
+    bonds was held at all.
 - **Where a lighter metal stands in, or eta rings are held, that model's
   energies order the conformers.** Where UFF has no type for a metal and a
   lighter one of its group stands in, or a ring bound through its atoms is
