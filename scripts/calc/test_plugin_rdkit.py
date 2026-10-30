@@ -1676,6 +1676,24 @@ class CoordinationBonds(unittest.TestCase):
             self.assertRegex(smiles, r"\[BH3-\]")
             self.assertEqual(Chem.MolToSmiles(self.worker.read(block)), smiles)
 
+    def test_an_adduct_renumbered_since_is_never_written_without_its_arrow(self):
+        # (H3N->BH3 held in its dipolar form, then renumbered - its B and N swapped - so that the index its N keeps of
+        #  its acceptor no longer names one bonded to it: refused in words, and Stereoisomers sets such a one aside)
+        mol = self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
+        renumbered = Chem.RenumberAtoms(mol, [1, 0] + list(range(2, mol.GetNumAtoms())))
+        self.assertEqual(renumbered.GetAtomWithIdx(1).GetIntProp(self.worker.LENDS_TO), 1)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(renumbered)
+        # (and an index past its atoms)
+        renumbered.GetAtomWithIdx(1).SetIntProp(self.worker.LENDS_TO, 99)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(renumbered)
+        from unittest import mock
+        adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
+        with mock.patch.object(self.worker, "as_drawn", side_effect=ValueError("its coordination bond from N could not be written back as drawn")):
+            self.assertEqual(self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0],
+                             {"aside": "its coordination bond from N could not be written back as drawn", "kind": "drawing"})
+
     def test_its_smiles_is_of_the_dipolar_form_the_same_molecule(self):
         adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
         self.assertEqual(self.worker.op_to_smiles({"molblock": adduct})["smiles"], Chem.MolToSmiles(Chem.MolFromSmiles("[NH3+][BH3-]")))
