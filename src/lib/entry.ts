@@ -352,8 +352,8 @@ function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] }
  * and a pressure numbers), and whether it was. None where any of that does
  * not read, or its value is of another kind - a list, a table of other
  * cells, modes - which a molecule on the page does not keep as a property.
- * (Restraints read back from 2026-10-30: a workspace saved before kept them
- * only until it was opened again.)
+ * (A workspace saved before restraints were read back kept them only until
+ * it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
   const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown } | null;
