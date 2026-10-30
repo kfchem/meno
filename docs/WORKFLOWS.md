@@ -650,6 +650,13 @@ Conformers go through a workflow as any set does (decided):
     window* and *Populations* refuse it, saying why (2026-10-23; from
     2026-10-22 until then, it was no entry). Over each it says how many of its frames are entries: "4
     of 21 frames are entries (converged points)".
+    A point worked out once more is one entry, not two: a Gaussian *opt
+    freq*'s Freq link gives the converged point again, the same geometry to
+    the last digit and the same SCF energy, marked new and done. Where the
+    file says just that - that link's route optimising nothing - the
+    link's point is the entry, the frequencies its own, and the one before
+    it a frame: "1 of 6 frames is an entry (the converged one)"
+    (2026-10-30). Anything else is left as marked.
     (A step's own optimisation was already one entry, its path: *Results*.)
   - **What is not known to be found is no entry either: never every
     geometry for want of a mark** (the review desk, 2026-10-22). Which
