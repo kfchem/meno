@@ -22,6 +22,8 @@ function digestOf(id: string): string {
 }
 /** Each program installed separately as it is now (its stamp), by where it is; one not there cannot be told. */
 const stamps: Record<string, string> = {};
+/** The computer's physical cores, as a test has them: as many as its cores, unless it says. */
+const physicalCores = vi.hoisted(() => ({ n: 8 }));
 
 vi.mock("../../../../lib/jobs", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/jobs")>()),
@@ -54,8 +56,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
-  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid)
-  computerResources: async () => ({ cores: 8, memory: 32 * 1024 }),
+  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid - its physical cores as a test has them)
+  computerResources: async () => ({ cores: 8, physical: physicalCores.n, memory: 32 * 1024 }),
 }));
 
 /** The files a job made that Meno reads itself, as the test has them: a render's pictures, by where they are. */
@@ -368,6 +370,37 @@ describe("a step that runs a plugin's program", () => {
       expect(asked.started).toEqual([]);
       expect(st().steps.find((s) => s.id === step)!.ran, kind).toMatchObject({ ok: false });
       expect(st().steps.find((s) => s.id === step)!.running, kind).toBeUndefined();
+    }
+  });
+
+  it("gives a program running as processes one to each physical core, however many cores Settings gives - a program of threads all of them", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    // (a computer running two threads on each of its 4 physical cores, and Settings giving each job all 8)
+    physicalCores.n = 4;
+    const calculations = useAppSettings.getState().calculations;
+    useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
+    try {
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never);
+      const { st } = editor();
+      const orca = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, orca);
+      void st().runStep(orca);
+      await settle();
+      await settle();
+      // (ORCA, whose manifest says it runs as processes: 4 - its %pal written so, and its job counted so)
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(4);
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 4 });
+      // (xtb, of threads: all 8)
+      const xtb = st().addStep("optimise", "xtb", 10, 30);
+      st().connect({ set: st().sets[0].id }, xtb);
+      void st().runStep(xtb);
+      await settle();
+      await settle();
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(8);
+    } finally {
+      physicalCores.n = 8;
+      useAppSettings.setState({ calculations });
     }
   });
 

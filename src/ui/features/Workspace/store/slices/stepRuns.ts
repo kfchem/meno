@@ -9,7 +9,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient, useReaders } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
@@ -986,7 +986,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (every pair refused: nothing to send - why the first was, and how many)
     if (!sendIdx.length) return void fail(id, unpaired.length > 1 ? `${unpaired[0].why}; and ${unpaired.length - 1} more cannot be worked out` : (unpaired[0]?.why ?? "Nothing came in"), at, key);
     taken.set(id, { at, entries, holds: taking?.holds ?? (input.holds as Holds3D) });
-    const { cores } = runningOf(useAppSettings.getState().calculations);
+    // (the cores it takes, as Settings says - a program running as processes, one to each physical core: never two on one)
+    const { cores: settled } = runningOf(useAppSettings.getState().calculations);
+    const asProcesses = installedFor(step.kind, plugin.id).some((d) => d.parallel === "processes");
+    const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null))?.physical ?? settled) : settled;
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {

@@ -1303,6 +1303,24 @@ Decided while building it, for the maintainer to confirm:
   once** - all of them while one runs at a time; set, never more than the
   computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
   and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
+- **A program that runs as processes is given one to each physical core,
+  each told one thread** (2026-10-30). Its manifest says so
+  (`installed[].parallel`: `"processes"` - ORCA, its `%pal`, run under
+  MPI). Its job takes the cores Settings gives each, as processes - never
+  more than the computer's physical cores - and each process is told one
+  thread (`OMP_NUM_THREADS`, MKL's and OpenBLAS's, all `1`). Before, each
+  of its processes was told all the job's cores as its threads: on a
+  computer of 16 physical cores running two threads on each, 32 processes
+  of 32 threads each. Where the computer runs two threads on each physical
+  core, the queue counts each process as two of its cores, so that two
+  such jobs never share a physical core. Its physical cores are what its
+  system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
+  `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
+  is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
+  gives. Never more than the cores it may use (its threads, as the system
+  lets Meno have them), and its cores where the system cannot say. A
+  program of threads (xTB, Gaussian's `%nprocshared`) is told its cores as
+  before.
 - **Jobs at once counted for jobs asked for after it was changed** (until
   2026-10-22): one already waiting kept the number it was asked with. What
   jobs may use now counts at once, for every job waiting - Settings tells
