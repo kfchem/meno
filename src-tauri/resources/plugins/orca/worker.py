@@ -79,6 +79,11 @@ RUNS = {"optimise": "OPT", "energy": "SP", "frequencies": "FREQ", "reaction-path
 #: A saddle point's first Hessian (its *First Hessian* option): computed at the start - the manual's 4.3.2.1, *Hessians
 #: for Transition State Calculations*, "the most straightforward option" - or ORCA's own model one.
 HESSIANS = {"computed": "%geom Calc_Hess true end", "model": ""}
+#: The steps whose stopped run's output is read for the geometry it reached (a run again's start; docs/WORKFLOWS.md,
+#: *Runs again*).
+PARTIAL_STEPS = {"optimise"}
+#: What ORCA prints at each step of an optimisation (ORCA 6.1.1): a run that stopped before it computed nothing to start from.
+OPTIMISING = "GEOMETRY OPTIMIZATION CYCLE"
 # ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
 # one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
 NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
@@ -459,13 +464,16 @@ def output_name(entry):
 
 
 def why_of(log):
-    """Why ORCA stopped, as it says: the line it says it ended by an error on, else the first that says error or aborting, else its last."""
+    """Why ORCA stopped, as it says: the line it says it ended by an error on, else the first that begins "ERROR" or
+    "FATAL ERROR", else the first of its other error words ("Error (ORCA_LEANSCF): ...", "INPUT ERROR", "... aborting
+    the run"); else - where it stopped with no word of an error, as a run brought down does - the last thing it said.
+    Not every line with "error" in it: its SCF settings print one ("Startup error   DIISStart   ....  0.200000")."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
-    for pick in (r"error termination", r"\berror\b|aborting"):
+    for pick in (r"(?i:error termination)", r"^(?:FATAL )?ERROR\b", r"(?i:\berror\s*[(:]|\binput error\b|error return|\baborting\b)"):
         for line in lines:
-            if re.search(pick, line, re.I):
+            if re.search(pick, line):
                 return line
-    return lines[-1] if lines else "ORCA said nothing"
+    return f"ORCA stopped without saying why, after: {lines[-1]}" if lines else "ORCA said nothing"
 
 
 def ended_well(log):
@@ -672,7 +680,10 @@ def op_collect(m):
         raise Refused(f"this plugin does no {step!r}")
     log = m.get("log") or ""
     if m.get("ended") != "done" or not ended_well(log):
-        return {"why": not_ended_why(log, m.get("ended"))}
+        # (an optimisation that stopped: what it wrote read too, where it wrote anything - the geometry it reached, for a
+        #  run again to start from - never as a result)
+        partial = [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []] if step in PARTIAL_STEPS and OPTIMISING in log else []
+        return {"why": not_ended_why(log, m.get("ended")), **({"partial": partial} if partial else {})}
     if step == "reaction-path":
         return {"outputs": [irc_output(e, m.get("files") or {}, log, m.get("options") or {}) for e in m.get("entries") or []]}
     # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)

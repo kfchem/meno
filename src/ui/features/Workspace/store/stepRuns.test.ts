@@ -171,7 +171,7 @@ import { MANIFESTS } from "../../../../lib/plugins/known";
 import { canWire, resultOf, stateOf } from "../workflow/flow";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
-import { countOf, setEntries, setMembers } from "../workflow/entries";
+import { countOf, entryOfSet, setEntries, setMembers } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
@@ -682,6 +682,62 @@ describe("a step that runs a plugin's program", () => {
     await ran;
     const failed = st().steps.find((s) => s.id === step)!.ran;
     expect(failed?.said).toContain("not the same atoms in one numbering");
+  });
+
+  it("puts an optimisation that stopped under way out of Failed at the geometry it reached, from which a step after it starts afresh - saying so", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const { st } = editor();
+    const water = st().molecules3d[0];
+    const at = water.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const moved = (dy: number) => at.map((v, i) => (i === 4 ? v + dy : v));
+    const step = st().addStep("optimise", "orca", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPT\n" }], reads: [] }] }) as never);
+    // (its SCF failed at its third step: ORCA's words, and its output to read for where it got to)
+    worker.collect.mockImplementationOnce(async () => ({ why: "ORCA finished by error termination in SCF", partial: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    readOutput.mockImplementationOnce(async () => ({
+      output: { schema: 1, program: "ORCA", version: "6.1.1", method: "B3LYP", atoms: ["O", "H", "H"], frames: [moved(0.05), moved(0.1)], energies: [-76.40, -76.41] },
+      readers: ["cclib 1.9rc1"],
+    }));
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "GEOMETRY OPTIMIZATION CYCLE 3" });
+    await st().lookAtJobs();
+    await ran;
+    const failedSet = st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!;
+    const stopped = st().molecules3d.find((m) => m.failed?.some((f) => f))!;
+    // (its way there as frames, from the geometry it came in with to the last it reached; no energy of it a result)
+    expect(stopped.frames?.length).toBe(2);
+    expect([stopped.atoms[1].y - water.atoms[1].y, stopped.energies]).toEqual([0, undefined]);
+    expect(stopped.failed?.[stopped.failed.length - 1]?.why).toBe("ORCA finished by error termination in SCF");
+    const [entry] = setEntries([stopped], "molecules");
+    expect(entry.xyz[4] - at[4]).toBeCloseTo(0.1, 9);
+    expect([entry.energy, entryOfSet(entry, "x").properties.failure?.value]).toEqual([undefined, "ORCA finished by error termination in SCF"]);
+    // (an optimisation after it, from its Failed exit: started from where it stopped, nothing of it a result - and said)
+    const again = st().addStep("optimise", "orca", 40, 10);
+    st().connect({ set: failedSet.id }, again);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPT SlowConv\n" }], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    readOutput.mockImplementationOnce(async () => ({
+      output: { schema: 1, program: "ORCA", version: "6.1.1", method: "B3LYP", atoms: ["O", "H", "H"], frames: [moved(0.1), moved(0.12)], energies: [-76.41, -76.42], optimised: true } as never,
+      readers: ["cclib 1.9rc1"],
+    }));
+    const calls = worker.prepare.mock.calls.length;
+    const ran2 = st().runStep(again);
+    for (let i = 0; i < 20 && worker.prepare.mock.calls.length === calls; i++) await settle();
+    await settle();
+    expect(worker.prepare.mock.calls.length).toBe(calls + 1);
+    expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1][1] as { atoms: { y: number }[] }[])[0].atoms[1].y - water.atoms[1].y).toBeCloseTo(0.1, 6);
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 1000, ended: 31_000, log: "ORCA TERMINATED NORMALLY" });
+    await st().lookAtJobs();
+    await ran2;
+    const said = st().steps.find((s) => s.id === again)!.ran;
+    expect(said).toMatchObject({ ok: true });
+    expect(said?.said).toContain("started from a failed run's geometry");
+    const done = st().molecules3d[st().molecules3d.length - 1];
+    expect([done.energies?.[done.energies.length - 1], done.failed?.some((f) => f) ?? false]).toEqual([-76.42, false]);
   });
 
   it("says it was stopped, and brings nothing in", async () => {
