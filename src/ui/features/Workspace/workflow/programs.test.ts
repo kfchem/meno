@@ -130,6 +130,9 @@ describe("what a plugin reads back of a job", () => {
   it("is an output for each entry - or why the job gave none", () => {
     expect(readCollected({ outputs: [out] }, 1)).toEqual([out]);
     expect(readCollected({ why: "  Some atoms are very close  " }, 1)).toEqual({ why: "Some atoms are very close", kind: "program-error" });
+    // (of the kind its plugin says, one of core's - an optimisation that did not converge - else, a kind core has not, failed)
+    expect(readCollected({ why: "The optimisation did not converge in 50 cycles", kind: "not-converged" }, 1)).toEqual({ why: "The optimisation did not converge in 50 cycles", kind: "not-converged" });
+    expect(readCollected({ why: "It stopped", kind: "exploded" }, 1)).toEqual({ why: "It stopped", kind: "failed" });
     expect(readCollected({ outputs: [] }, 1)).toEqual({ why: "It read back nothing for it" });
     // (an output Meno cannot take fails its entry alone, the job's others taken)
     expect(readCollected({ outputs: [{ ...out, schema: 2 }, out] }, 2)).toEqual([{ kind: "failed", why: "It read it back in a form this Meno does not read" }, out]);

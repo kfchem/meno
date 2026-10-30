@@ -294,6 +294,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
+| Minimise with restraints | a well, its floor held (drawn) | molecules in 3D, or conformer sets | each minimised in a force field with its restraints held - Restraints', Torsion restraints' - from where it is, or from where its restraints were first held; one that does not converge out of *Failed* (PLUGINS.md, RDKit) |
 | Energy | a bolt | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
@@ -419,6 +420,14 @@ are a *Frequencies* step's, wired after it.
   puts it (ORCA's PATH SUMMARY order). Each frame has its energy and says
   what it is: "NEB image 3 of 10", or "highest point refined". Its entry
   frame - what a set, and the next step, takes of it - is the point refined.
+- **One frame of it.** The point refined, taken alone, carries the run's
+  calculation, and of what the frames say, its own word alone ("highest
+  point refined"). So a molecule made of it after - by *Duplicates* onwards,
+  or a set's table row put on the page - is one of one frame, its
+  calculation that frame's: a step after that one still has it, and it is
+  saved and opened again with nothing left out. Another frame of the path
+  taken alone (*Take frames*, a table's row) carries its own word and none
+  of the point refined's calculation: no imaginary frequency of its.
 - **Barriers.** On the point refined, Meno works out from the energies
   printed `path.E-barrier` (its energy less the path's start's, its first
   image, of the same run) and `path.E-reverse-barrier` (less its end's, its
@@ -436,6 +445,17 @@ are a *Frequencies* step's, wired after it.
   iterations - never in the words of the error return ORCA ends it by. An
   image whose SCF did not converge while ORCA carried on with the band is
   a warning on the molecule, in ORCA's words; it moves nothing.
+- **Its highest point not refined.** Where the band converged but
+  refining its highest point took the most steps ORCA allows (ORCA: "The
+  optimization did not converge but reached the maximum number of
+  optimization cycles"), nothing of the run is read - no point refined,
+  no entry: that pair goes out of *Failed*, *not converged*, saying how
+  many iterations the band took and how many steps the refining, and to
+  raise *Steps for refining its highest point* or give ends nearer the
+  path (2026-10-30). ORCA goes on to its properties after it, and may stop
+  there by an error whose words say nothing of it ("ERROR (SHARK): Failed
+  to read input file", "error termination in PROPERTIES") - on one core or
+  many - or end normally: either way it is said so, never in those words.
 - **Frequencies, after it.** A *Frequencies* step wired after it works out
   the point refined's: its `imaginary`, `imaginary.first` and
   `imaginary.second` are then the chemist's to select on with *Filter*
@@ -2253,6 +2273,14 @@ them again*; the maintainer's rulings of 2026-10-22):
   2026-10-22 it was passed on as a minimum): its path and the last
   geometry it reached go out of *Failed*, the failure on that geometry,
   so that *Take frames* can take it on.
+  An optimisation - a saddle point's too - that took the most cycles its
+  program allows is so, however its program ended after: ORCA's is read
+  by its words ("The optimization did not converge but reached the
+  maximum number of optimization cycles"), never as a result even where
+  ORCA then ended normally, and said *not converged* with how many cycles
+  (2026-10-30; before, in the words of the error ORCA's properties may
+  then stop by). A plugin's reason for a whole job is of the kind it
+  names, one of core's, else a program's error.
 - **A plugin may refuse one entry alone** as it prepares the others'
   jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
   refused, with why. Kept with the workspace while the others run.

@@ -805,7 +805,17 @@ export const refinedFrame = (m: Pick<Molecule3D, "calc">): number | null => fram
 export const startedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, STARTED_SAID);
 
 /** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, a reaction path's, the point it started from, its path going on past it. */
-const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
+export const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
+
+/**
+ * A molecule's calculation as frame `f` of its `n` carries it alone, where
+ * it is the frame the calculation is of: whole, but what it says of each
+ * frame (a path search's `PATH_FRAME`) that frame's alone - so that a
+ * molecule of that one frame holds it as one of one frame, read back as
+ * such, and its frames still say which it is.
+ */
+const calcOfFrame = (calc: CalcInfo, f: number, n: number): CalcInfo =>
+  n > 1 && calc.results?.some((r) => r.on === "frames") ? { ...calc, results: calc.results.map((r) => (r.on === "frames" ? { ...r, values: [r.values[f] ?? null] } : r)) } : calc;
 
 /** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
@@ -853,7 +863,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
-        ...(m.calc ? { calc: f === calcFrame(m, n) ? m.calc : calcBefore } : {}),
+        ...(m.calc ? { calc: f === calcFrame(m, n) ? calcOfFrame(m.calc, f, n) : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         ...(m.converged?.length === n && m.converged[f] ? { converged: m.converged[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)

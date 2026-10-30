@@ -84,6 +84,15 @@ HESSIANS = {"computed": "%geom Calc_Hess true end", "model": ""}
 PARTIAL_STEPS = {"optimise"}
 #: What ORCA prints at each step of an optimisation (ORCA 6.1.1): a run that stopped before it computed nothing to start from.
 OPTIMISING = "GEOMETRY OPTIMIZATION CYCLE"
+#: What ORCA prints where an optimisation took the most cycles it allows without converging (ORCA 6.1.1, in a box of
+#: warnings, over two lines): "The optimization did not converge but reached the maximum number of optimization cycles."
+#: It goes on all the same - to what it was asked for after, its properties - and may then stop there by an error in
+#: words that say nothing of it ("ERROR (SHARK): Failed to read input file", "error termination in PROPERTIES"), or end
+#: normally. Either way, the geometry it reached is no converged one: nothing of it is read as a result.
+MAX_CYCLES = re.compile(r"did not converge but reached the maximum number of\s+optimization cycles")
+MAX_CYCLES_SAID = "The optimization did not converge but reached the maximum number of optimization cycles"
+#: The optimisations whose cycles ORCA counts so: an optimisation, a saddle point's.
+OPTIMISATIONS = {"optimise", "saddle-point"}
 # ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
 # one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
 NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
@@ -607,6 +616,32 @@ def iterations_said(parts):
     return " \u00b7 ".join(f"{name} {n}" for name, n in parts)
 
 
+def cycles_of(log):
+    """How many cycles an optimisation took, as ORCA numbers them ("GEOMETRY OPTIMIZATION CYCLE   12"): the last; none
+    where it numbers none."""
+    found = re.findall(r"GEOMETRY OPTIMIZATION CYCLE\s+(\d+)", log)
+    return int(found[-1]) if found else None
+
+
+def optimisation_not_converged(log):
+    """Why an optimisation is not read, where ORCA took the most cycles it allows: plainly, with how many."""
+    n = cycles_of(log)
+    went = f" in {n} cycles" if n is not None else ""
+    return (f"The optimisation did not converge{went}, the most it was allowed (\"{MAX_CYCLES_SAID}\"): "
+            "run it again to go on from the geometry it reached")
+
+
+def path_refining_not_converged(log):
+    """Why a path search is not read, where its band converged but refining its highest point took the most steps ORCA
+    allows: plainly, with how far each went, and what to change."""
+    parts = dict(path_iterations(log))
+    neb, ts = parts.get("NEB"), parts.get("TS optimization")
+    band = f"Its band converged in {neb} iterations" if neb is not None else "Its band converged"
+    went = f" in {ts} steps" if ts is not None else ""
+    return (f"{band}, but refining its highest point did not converge{went} (\"{MAX_CYCLES_SAID}\"): "
+            "raise Steps for refining its highest point, or give ends nearer the path")
+
+
 def path_not_converged(log):
     """Why a path search's band is not read, where ORCA says it did not converge: plainly, with how far it went."""
     parts = path_iterations(log)
@@ -671,6 +706,10 @@ def op_collect(m):
         # (a band that did not converge: said plainly - ORCA ends it by an error return, whose words say nothing of it)
         if NEB_NOT_CONVERGED in log:
             return {"why": path_not_converged(log), "kind": "not-converged"}
+        # (its band converged, refining its highest point not, in the steps ORCA allows: said plainly - however ORCA ended
+        #  after, by an error in its properties or normally - and nothing of it read: no point refined, no entry)
+        if MAX_CYCLES.search(log):
+            return {"why": path_refining_not_converged(log), "kind": "not-converged"}
         # (read only where ORCA says it ended well, as every step's job is: its exit code is no word on it)
         if m.get("ended") != "done" or not ended_well(log):
             return {"why": not_ended_why(log, m.get("ended"))}
@@ -679,6 +718,12 @@ def op_collect(m):
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
     log = m.get("log") or ""
+    # (an optimisation - a saddle point's too - that took the most cycles ORCA allows without converging: said plainly,
+    #  however ORCA ended after - never read as a result; the geometry it reached read for a run again to start from, out
+    #  of Failed, as one that stopped is)
+    if step in OPTIMISATIONS and MAX_CYCLES.search(log):
+        partial = [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []]
+        return {"why": optimisation_not_converged(log), "kind": "not-converged", "partial": partial}
     if m.get("ended") != "done" or not ended_well(log):
         # (an optimisation that stopped: what it wrote read too, where it wrote anything - the geometry it reached, for a
         #  run again to start from - never as a result)
