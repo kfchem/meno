@@ -9,8 +9,9 @@ It reads the molecule - its atoms with their places, its bonds - its
 restraints, where they were first held, and the step's options from the
 file named; minimises it in the force field asked with its restraints held,
 as the worker beside it does (`minimised`); and writes the places it
-reached, its energy in hartrees, the force field used and whether it
-converged to minimised.json for the plugin's `collect` to read back. What
+reached, its energy in hartrees, the force field used, whether it
+converged and how far it missed what its restraints hold to minimised.json
+for the plugin's `collect` to read back. What
 it does it says as it goes, into the job's log.
 """
 

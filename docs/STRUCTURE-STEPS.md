@@ -258,7 +258,9 @@ strength. Restraints are a label: they name no geometry, and ride along.
   H2O…BF3, Et2O…BF3, pyridine…BH3, Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten
   conformers each, the RDKit plugin's search), the distance held came
   within 0.18 Å of its value at 10, 0.04 at 100, 0.02 at 239 and 0.01 at
-  500: the default holds within 0.01 Å. Case F's workflow sets 0.9:
+  500: the default holds within 0.01 Å
+  (`scripts/calc/measure_restraint_strengths.py` measures it again).
+  Case F's workflow sets 0.9:
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
   about 1.6 Å).
@@ -319,7 +321,8 @@ minimisation (docs/WORKFLOWS-FOUNDATION.md), its numbers the chemist's.
   (but-2-ene, pent-2-ene, stilbene, methyl crotonate, hexa-2,4-diene E,Z
   to E,E, crotononitrile; the RDKit plugin's minimisation, each round from
   the original start), a step of 10 took up to four rounds and 25 up to
-  two. At 50 each was right in one round and held within 1.5°.
+  two. At 50 each was right in one round and held within 1.5°
+  (`scripts/calc/measure_restraint_strengths.py` measures it again).
 
 Checked: (E)- and (Z)-but-2-ene, with their hydrogens: methyl to methyl and
 H to H are the E isomer's trans torsions, methyl to H the Z's. Flat

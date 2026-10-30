@@ -2021,6 +2021,13 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
     bounds = metal_bounds(mol, eta)
     # (each distance held, embedded at its value: an acid held at its base is a part of its own, placed there, not
     #  wherever ETKDG lays a part - laid apart, a weak hold never brought them together, pyridine's BH3 17 A off)
+    if rows:
+        # (refused before anything is embedded: none fixed - a search moves every atom - and only where it has no
+        #  metal, whose own holds are not yet combined with them)
+        if any(r["kind"] == "fixed" for r in rows):
+            raise ValueError("A conformer search moves every atom, so it holds no atoms fixed: take them out of its restraints, or minimise with them instead")
+        if eta or any(is_metal(a) and a.GetDegree() for a in mol.GetAtoms()):
+            raise ValueError("A conformer search holds restraints only where the molecule has no metal: search without them, then minimise with them")
     held = [r for r in rows if r["kind"] == "distance"]
     if held:
         bounds = held_bounds(mol, held, bounds)
@@ -2045,13 +2052,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
     stood = None
     untyped = sorted({el for el, digit in metals if digit is None})
     if rows:
-        # (its restraints held while each conformer is optimised, as Minimise with restraints holds them: none
-        #  fixed - a search moves every atom - and only where it has no metal, whose own holds are not yet
-        #  combined with them)
-        if any(r["kind"] == "fixed" for r in rows):
-            raise ValueError("A conformer search moves every atom, so it holds no atoms fixed: take them out of its restraints, or minimise with them instead")
-        if metals or eta:
-            raise ValueError("A conformer search holds restraints only where the molecule has no metal: search without them, then minimise with them")
+        # (its restraints held while each conformer is optimised, as Minimise with restraints holds them)
         field, make = restrained_field(mol, rows, field)
         stood_in, results = False, []
         for cid in ids:
@@ -2124,6 +2125,9 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
         rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
     # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
     settle_equivalents(mol, kept)
+    # (how far the conformers kept missed what their restraints hold, the largest of each kind over them all)
+    misses = [restraints_missed([v for p in mol.GetConformer(cid).GetPositions() for v in p], rows) for cid in kept] if rows else []
+    missed = [max((m[k] for m in misses if m[k] is not None), default=None) for k in (0, 1)]
     shown = Chem.Mol(mol)
     Chem.Kekulize(shown, clearAromaticFlags=True)
     return {
@@ -2152,7 +2156,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
                  else "none: UFF has no parameters for " + " or ".join(untyped or ["it"])},
             ]),
             *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
-            *([{"label": "Held", "text": restraints_words(rows)}] if rows else []),
+            *([{"label": "Held", "text": "; ".join(w for w in (restraints_words(rows), missed_words(missed)) if w)}] if rows else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
@@ -2392,7 +2396,8 @@ def minimised(mol, rows, field="MMFF94", iters=STEPS, start=None):
     places the restraints were first held at, where given; else from where
     its atoms are. Nothing between its parts is left out. Its energy is the
     force field's, without the restraints' own. Whether it converged within
-    `iters` steps is said."""
+    `iters` steps is said, and how far it missed what its restraints hold
+    (`restraints_missed`)."""
     conf = mol.GetConformer()
     if start is not None:
         if len(start) != 3 * mol.GetNumAtoms():
@@ -2405,7 +2410,8 @@ def minimised(mol, rows, field="MMFF94", iters=STEPS, start=None):
     places = list(ff.Positions())
     # (its energy the force field's own, at the places reached: the restraints' not counted in)
     energy = make(-1, ()).CalcEnergy(places)
-    return {"frame": [round(v, 5) for v in places], "energy": energy / KCAL_PER_HARTREE, "field": field, "converged": converged, "iters": iters}
+    return {"frame": [round(v, 5) for v in places], "energy": energy / KCAL_PER_HARTREE, "field": field, "converged": converged, "iters": iters,
+            "missed": restraints_missed(places, rows)}
 
 
 def held_bounds(mol, held, bounds=None):
@@ -2431,6 +2437,34 @@ def restraints_words(rows):
     if fixed:
         said.append(f"{fixed} atom{'' if fixed == 1 else 's'} fixed")
     return ", ".join(said) + " held, the energies without them"
+
+
+def dihedral_deg(places, a, b, c, d):
+    """The dihedral of four atoms at `places` (x, y and z by atom in turn), in degrees from -180 to 180."""
+    P = [places[3 * i:3 * i + 3] for i in (a, b, c, d)]
+    sub = lambda u, v: [u[0] - v[0], u[1] - v[1], u[2] - v[2]]
+    cross = lambda u, v: [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+    dot = lambda u, v: u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+    b1, b2, b3 = sub(P[1], P[0]), sub(P[2], P[1]), sub(P[3], P[2])
+    n1, n2 = cross(b1, b2), cross(b2, b3)
+    return math.degrees(math.atan2(math.sqrt(dot(b2, b2)) * dot(b1, n2), dot(n1, n2)))
+
+
+def restraints_missed(places, rows):
+    """How far `places` came from what `rows` hold: the largest miss of a
+    distance, in A, and of a dihedral, in degrees the shorter way round -
+    each None where none of its kind is held. Atoms fixed do not move."""
+    at = lambda i: places[3 * i:3 * i + 3]
+    distances = [abs(math.dist(at(r["atoms"][0]), at(r["atoms"][1])) - r["value"]) for r in rows if r["kind"] == "distance"]
+    torsions = [abs((dihedral_deg(places, *r["atoms"]) - r["value"] + 180.0) % 360.0 - 180.0) for r in rows if r["kind"] == "dihedral"]
+    return [max(distances) if distances else None, max(torsions) if torsions else None]
+
+
+def missed_words(missed):
+    """The largest misses, in a row's words: "missed by at most 0.004 Å and 1.2°"; none where nothing was measured."""
+    said = [f"{missed[0]:.3f} \u00c5" if missed[0] is not None else "", f"{missed[1]:.1f}\u00b0" if missed[1] is not None else ""]
+    said = [w for w in said if w]
+    return "missed by at most " + " and ".join(said) if said else ""
 
 
 def restrained_field(mol, rows, field="MMFF94"):
@@ -2500,6 +2534,15 @@ def op_prepare(m):
     return {"jobs": jobs}
 
 
+def missed_results(missed):
+    """A restrained minimisation's largest misses, as results on its molecule (the general form, docs/PLUGINS.md)."""
+    d, t = missed or [None, None]
+    return [
+        *([{"id": "restraint-distance-missed", "on": "molecule", "group": "Restraints", "label": "Largest distance miss", "value": round(d, 4), "quantity": "length"}] if d is not None else []),
+        *([{"id": "restraint-torsion-missed", "on": "molecule", "group": "Restraints", "label": "Largest torsion miss", "value": round(t, 2), "quantity": "angle"}] if t is not None else []),
+    ]
+
+
 def op_collect(m):
     """What a conformer search's job wrote, as Meno's output form: each
     conformer a geometry, lowest energy first, with its energy. Or a
@@ -2524,7 +2567,8 @@ def op_collect(m):
             "frames": [made["frame"]],
             "energies": [made["energy"]],
             "optimised": bool(made.get("converged")),
-            "results": [],
+            # (how far it missed what its restraints hold: a weak strength set by hand shows here, not silently)
+            "results": missed_results(made.get("missed")),
         } for _ in m.get("entries") or []]}
     text = (m.get("files") or {}).get(CONFORMERS_OUT)
     if not text:

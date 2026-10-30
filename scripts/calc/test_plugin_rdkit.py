@@ -1677,6 +1677,40 @@ class MinimiseWithRestraints(unittest.TestCase):
         n1, n2 = np.cross(b1, b2), np.cross(b2, b3)
         return math.degrees(math.atan2(np.linalg.norm(b2) * np.dot(b1, n2), np.dot(n1, n2)))
 
+    def test_holds_each_restraint_by_the_energy_the_record_states(self):
+        # (known answers, by hand: at a geometry set off from what is held, the force field with the restraint less
+        #  the force field without it is k (d - value)^2 / 2 for a distance, k (phi - value)^2 / 2 for a dihedral, phi
+        #  in radians the shorter way round - across +-180 too - in MMFF94 and in UFF alike)
+        from rdkit.Chem import rdMolTransforms
+        mol = self.butane(-170.0)
+        conf = mol.GetConformer()
+        places = [v for p in conf.GetPositions() for v in p]
+        ends = rdMolTransforms.GetBondLength(conf, 0, 3)
+        for field in ("MMFF94", "UFF"):
+            used, make = self.worker.restrained_field(mol, [], field)
+            self.assertEqual(used, field)
+            free = make(-1, ()).CalcEnergy(places)
+            held = lambda rows: make(-1, rows).CalcEnergy(places) - free
+            self.assertAlmostEqual(held([{"kind": "distance", "atoms": [0, 3], "value": ends + 0.3, "strength": 500.0}]), 500.0 * 0.3**2 / 2, delta=1e-6)
+            self.assertAlmostEqual(held([{"kind": "distance", "atoms": [0, 3], "value": ends - 0.2, "strength": 37.0}]), 37.0 * 0.2**2 / 2, delta=1e-6)
+            # (-170 against 175: 15 degrees the shorter way, across +-180, not 345)
+            for value, off in ((175.0, 15.0), (180.0, 10.0), (-150.0, 20.0)):
+                self.assertAlmostEqual(held([{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": value, "strength": 50.0}]), 50.0 * math.radians(off) ** 2 / 2, delta=1e-6)
+            # (both at once: their energies add)
+            both = [{"kind": "distance", "atoms": [0, 3], "value": ends + 0.3, "strength": 500.0}, {"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 175.0, "strength": 50.0}]
+            self.assertAlmostEqual(held(both), 500.0 * 0.3**2 / 2 + 50.0 * math.radians(15.0) ** 2 / 2, delta=1e-6)
+
+    def test_says_how_far_it_missed_what_its_restraints_hold(self):
+        # (a torsion held weakly misses: the largest miss is given back, measured on what it reached, and as results)
+        made = self.worker.minimised(self.butane(60.0), [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 2.0}])
+        miss = 180 - abs(self.dihedral(made["frame"]))
+        self.assertIsNone(made["missed"][0])
+        self.assertAlmostEqual(made["missed"][1], miss, delta=1e-3)
+        self.assertGreater(miss, 1.0)
+        self.assertEqual(self.worker.missed_results(made["missed"]), [{"id": "restraint-torsion-missed", "on": "molecule", "group": "Restraints", "label": "Largest torsion miss", "value": round(miss, 2), "quantity": "angle"}])
+        self.assertEqual(self.worker.missed_words([0.0123, 1.26]), "missed by at most 0.012 \u00c5 and 1.3\u00b0")
+        self.assertEqual(self.worker.missed_words([None, None]), "")
+
     def test_holds_a_torsion_at_180_where_it_would_stay_gauche(self):
         free = self.worker.minimised(self.butane(60.0), [])
         self.assertLess(abs(self.dihedral(free["frame"])), 90)
@@ -1714,11 +1748,16 @@ class MinimiseWithRestraints(unittest.TestCase):
         rows = [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 100.0}]
         made = self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=10, rows=rows)
         self.assertTrue(all(abs(self.dihedral(f)) > 175 for f in made["frames"]))
-        self.assertIn({"label": "Held", "text": "1 torsion held, the energies without them"}, made["how"])
-        with self.assertRaisesRegex(ValueError, r"^A conformer search moves every atom, so it holds no atoms fixed"):
-            self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=2, rows=[{"kind": "fixed", "atoms": [0]}])
-        with self.assertRaisesRegex(ValueError, r"^A conformer search holds restraints only where the molecule has no metal"):
-            self.worker.conformers(Chem.MolFromSmiles("N[Pt](N)(Cl)Cl"), count=2, rows=rows)
+        # (the row says how far the conformers kept missed it at most: the largest of theirs, measured here)
+        worst = max(180 - abs(self.dihedral(f)) for f in made["frames"])
+        self.assertIn({"label": "Held", "text": f"1 torsion held, the energies without them; missed by at most {worst:.1f}\u00b0"}, made["how"])
+        # (refused before anything is embedded: they turn on the restraints and the molecule alone)
+        from unittest import mock
+        with mock.patch.object(self.worker.rdDistGeom, "EmbedMultipleConfs", side_effect=AssertionError("embedded")):
+            with self.assertRaisesRegex(ValueError, r"^A conformer search moves every atom, so it holds no atoms fixed"):
+                self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=2, rows=[{"kind": "fixed", "atoms": [0]}])
+            with self.assertRaisesRegex(ValueError, r"^A conformer search holds restraints only where the molecule has no metal"):
+                self.worker.conformers(Chem.MolFromSmiles("N[Pt](N)(Cl)Cl"), count=2, rows=rows)
 
     def test_a_search_embeds_a_distance_held_at_its_value(self):
         # (pyridine's N and BH3's B, two parts, held at 0.9 of Alvarez's radii together, 3.21 A: laid where ETKDG
