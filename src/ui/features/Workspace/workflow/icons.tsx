@@ -169,6 +169,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M3.6 10.4 V14.2 H16.4 V10.4" strokeDasharray="1.3 1.6" />
     </>
   ),
+  // (an atom moved along: where it stood, dashed)
+  moved: (
+    <>
+      <circle cx="6" cy="10" r="3.2" strokeDasharray="1.4 1.5" />
+      <circle cx="14" cy="10" r="3.2" fill="currentColor" stroke="none" />
+      <path d="M7.6 10 H9.8 M8.5 8.5 L10 10 L8.5 11.5" strokeWidth={1.5} />
+    </>
+  ),
   // (a chain as drawn, the same as its reference)
   compare: (
     <>

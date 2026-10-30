@@ -25,6 +25,7 @@ import { bondChangesTable, PRODUCT, renumberedEntry } from "../../../../lib/step
 import { mapProducts } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
+import { displacedEntry } from "../../../../lib/steps/vibrations";
 import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -497,4 +498,39 @@ export function reactionSet(reactants: readonly SetEntry[], products: readonly S
   if (done.some((m) => whole[m.product].calc)) line.push("calculations not carried");
   if (replaced) line.push(`the ${PRODUCT} ${replaced === 1 ? "a product" : `${replaced} products`} carried replaced`);
   return { ok: true, holds: "molecules", kept, aside, said: line.join(" \u00b7 "), tables: { changes } };
+}
+
+/**
+ * *Displace* (lib/steps `displacedEntry`): each entry's geometry moved
+ * along its imaginary vibration - the most negative of several, said - or
+ * the one chosen, by the amplitude: the atom moving most by exactly that,
+ * the rest in proportion. What it carried rides along, each value saying
+ * the geometry it was worked out at; its energy and calculation, of that
+ * geometry, are not its own any more. One not finished - its calculation
+ * failed, or did not converge - is set aside as not finished: its
+ * vibrations are no ground to move it on. One with no vibrations to move
+ * along, no imaginary one, or no such vibration, is set aside with why. A
+ * conformer set's are counted as frames.
+ */
+export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { amplitude: number; vibration: "imaginary" | number }): Outcome3D {
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const notes = new Set<string>();
+  entries.forEach((e, i) => {
+    if (entryState(e) !== FINISHED) {
+      aside.push(withSaid(e, SET_ASIDE, `not finished: ${entryState(e)}`));
+      return;
+    }
+    const r = displacedEntry(entryOfSet(e, String(i)), o, String(i));
+    if ("failed" in r) {
+      aside.push(withSaid(e, SET_ASIDE, r.failed));
+      return;
+    }
+    if (r.said) notes.add(r.said);
+    const made = setEntryOfEntry(r.entry, { compound: e.compound, number: e.number }, e);
+    if (made) kept.push(made);
+  });
+  const line = [`${holds === "conformers" ? plural(kept.length, "frame") : plural(kept.length, "entry", "entries")} displaced`];
+  if (aside.length) line.push(`${aside.length} not displaced`);
+  return { ok: true, holds, kept, aside, said: [line.join(" \u00b7 "), ...notes].join(". ") };
 }

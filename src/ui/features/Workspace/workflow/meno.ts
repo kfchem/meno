@@ -12,14 +12,14 @@ import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEne
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
 import { rankedSet } from "./valueSteps";
 import { joinedSet } from "./joinStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
-import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
+import { displaceRead, kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
@@ -77,6 +77,10 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return measuredSet(entries, holds, String(options.measurements ?? ""));
     case "restraints":
       return restrainedSet(entries, holds, options);
+    case "displace": {
+      const r = displaceRead(options);
+      return "why" in r ? { ok: false, said: r.why } : displacedSet(entries, holds, r);
+    }
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }
