@@ -73,14 +73,28 @@ export type Side3D = { molecule: Molecule; drawnFrom: (number | null)[] };
 /**
  * What an arrow keeps of a mapped reaction: each side in 3D as one
  * structure, its atoms' drawn atoms, and the complete maps, best first - a
- * reaction whose atoms do not all map keeps none (`complete` false).
+ * reaction whose atoms do not all map keeps none (`complete` false). Of
+ * maps that pair the heavy atoms alike, only the first is kept: they show
+ * the same numbers, and its hydrogens are those ACCeL ranked first.
  */
 export function keptMap(model: Model, result: ReactionMap, reactants: readonly Side3D[], products: readonly Side3D[]): ArrowAtomMap {
   const drawn = (sides: readonly Side3D[]) => sides.flatMap((s) => s.drawnFrom);
   const reactantFrom = drawn(reactants);
   const productFrom = drawn(products);
   const ids = [...reactantFrom, ...productFrom].filter((id): id is number => id != null);
-  const maps = result.maps.filter((_, i) => result.complete[i]).slice(0, MAPS_KEPT);
+  // (maps that pair the heavy atoms alike - its numbers - differ only in which of an atom's like hydrogens is which:
+  //  of those, the first in ACCeL's order stands, so that "Other map" steps through what the numbers show)
+  const heavy = (m: readonly number[]) => m.flatMap((r, j) => (result.product.atoms[j].el === "H" ? [] : [`${j}:${r}`])).join(",");
+  const seen = new Set<string>();
+  const maps = result.maps
+    .filter((m, i) => {
+      if (!result.complete[i]) return false;
+      const k = heavy(m);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .slice(0, MAPS_KEPT);
   const plain = (m: Molecule): Omit<ArrowAtomMap["reactant"], "drawnFrom"> => ({
     atoms: m.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) })),
     bonds: m.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),

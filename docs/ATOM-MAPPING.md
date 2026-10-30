@@ -275,13 +275,25 @@ maps as ACCeL does.
   umbrella folding over; ACCeL reads it as kept and swaps the two
   hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
   lay over and is left as ACCeL placed it, as is a group a hydrogen comes
-  to or goes from.
+  to or goes from. So is an atom with more neighbours on one side than on
+  the other, hydrogens counted: it goes from one shape to another - a
+  double bond added to, as at a Diels-Alder's =CH2 ends, or a cation's or
+  a carbene's CH2 bonded to - and which of its hydrogens is which follows
+  the faces the reaction meets, which ACCeL's face and syn-or-anti scores
+  weigh. Laid over its
+  frame, it was turned against them: a Diels-Alder's two outside
+  hydrogens (trans to the diene's inner carbons) came out on opposite
+  faces of the new ring. An SN2 centre keeps its number of neighbours,
+  and is laid over its frame as before. Checked on a
+  corpus of 134 runs (67 reactions, two embeddings each): 18 first maps
+  changed when this was put right, in their hydrogens only, their bond
+  changes the same; 16 of them are now ACCeL's own first map.
 
   With either of these two, maps the search built apart can become the
   same once their hydrogens are placed; each is then kept once, the first
-  in ACCeL's order, so there can be fewer maps than the search built (for
-  the Diels-Alder in the tests, 4 rather than 64, which differed only in
-  the ring CH2s' hydrogens).
+  in ACCeL's order, so there can be fewer maps than the search built. (The
+  Diels-Alder in the tests keeps its 64, which differ only in the ring
+  CH2s' hydrogens: all four of its CH2s change order.)
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
   `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
@@ -423,9 +435,11 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   *Stop* ends it. ACCeL's search is used as it is, solvent and all - no
   pieces are picked out by hand, and nothing is set to make it faster.
 - **Kept on the arrow** (`ArrowAtomMap`): both sides in 3D as mapped, which
-  drawn atom each 3D atom is, every complete map best first (up to 100),
-  the one in use - the best, unless *Other map* stepped on - and whether it
-  is shown. What it shows is put on the drawing in the same undo step:
+  drawn atom each 3D atom is, and the complete maps best first (up to
+  100). Of maps that pair the heavy atoms alike, and so show the same
+  numbers, only the first is kept, its hydrogens as ACCeL ranked them.
+  Also kept: the map in use (the best, unless *Other map* stepped on), and
+  whether it is shown. What it shows is put on the drawing in the same undo step:
   - each heavy atom's map number, the reactants' numbered one after
     another, a product atom given its reactant atom's;
   - each bond the map makes or breaks marked as a reacting centre (CTfile
@@ -433,10 +447,12 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   Hydrogens are in the map, not numbered on the drawing.
 - **Show / Hide atom map** puts the numbers and centres on the drawing or
   takes them off; the map is kept either way.
-- **Other map** takes the next of the complete maps, round again after the
+- **Other map** takes the next of the maps kept, round again after the
   last; the best stays first. The menu stays open on it and says which of
-  how many is in use ("2 of 32"): most maps differ only in where the
-  hydrogens go, which the drawing does not show.
+  how many is in use ("2 of 4"). Each pairs the heavy atoms its own way,
+  so each shows other numbers; maps that differ only in where the
+  hydrogens go, which the drawing does not show, are not stepped through.
+  `mapReaction` gives all of them, as ACCeL does.
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
   reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
