@@ -586,7 +586,7 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   of their van der Waals radii - is held by that restraint alone: the
   force field has no bond for it, so the acid and the base are each as
   their own hydrogens make them (H3N→BH3 held at 3.21 Å comes out as NH3
-  and BH3 that far apart). From RDKit plugin 0.1.13.
+  and BH3 that far apart). From RDKit plugin 0.1.15.
 - **A coordination bond is RDKit's dative bond, taking no hydrogen.** A
   drawn dative arrow or coordination bond (a MOL block's type 9), or a
   plugin entry's bond marked `coordination`, is read as RDKit's dative
@@ -620,7 +620,7 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   atoms. A coordination bond to a main-group acceptor that cannot be held
   so is refused in words, naming the reason: an acceptor not of group 13,
   a charged acceptor or donor, a donor that cannot carry the charge, or
-  two such bonds onto one acceptor. From RDKit plugin 0.1.13.
+  two such bonds onto one acceptor. From RDKit plugin 0.1.15.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
