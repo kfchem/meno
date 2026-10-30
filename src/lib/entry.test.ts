@@ -194,6 +194,13 @@ describe("a property's structure, as a file holds it", () => {
     expect(propertyIn(plain)).toEqual(plain);
   });
 
+  it("reads back the symmetry a free energy was worked out with - its point group, and its symmetry number a whole number of 1 or more", () => {
+    const p = { value: -56.53, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 }, status: "computed" };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    for (const bad of [0, 1.5, "3", -3]) expect(propertyIn({ ...p, by: { ...p.by, symmetryNumber: bad } })).toBeUndefined();
+    expect(propertyIn({ ...p, by: { ...p.by, pointGroup: 3 } })).toBeUndefined();
+  });
+
   it("reads back a table of numbers, as a conformer carries its vibrations - and refuses a table of any other shape", () => {
     const p = { value: { table: { columns: [FREQUENCY], rows: [[-12.5], [1595], [3657]] } }, unit: "none", at: { geometry: "g1", kelvin: 298.15 }, status: "computed" };
     expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);

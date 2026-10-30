@@ -879,9 +879,10 @@ export const THERMO_PROPERTIES = ["thermo.free-energy", "thermo.enthalpy", "ther
 /**
  * What an entry's calculation was, for its properties (lib/entry `By`): the
  * plugin that read it, the program, method and basis - and, for a thermal
- * quantity, the treatment of its vibrations as the program said it.
+ * quantity, the treatment of its vibrations and the symmetry it took (its
+ * point group, its rotational symmetry number), as the program said them.
  */
-function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
+function byOf(calc: SetEntry["calc"], thermal?: Pick<By, "treatment" | "pointGroup" | "symmetryNumber">): By | undefined {
   if (!calc) return undefined;
   const plugin = calc.readers[0]?.split(" ")[0];
   const by: By = {
@@ -889,7 +890,9 @@ function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
     ...(calc.program ? { program: calc.program } : {}),
     ...(calc.method ? { method: calc.method } : {}),
     ...(calc.basis ? { basis: calc.basis } : {}),
-    ...(treatment ? { treatment } : {}),
+    ...(thermal?.treatment ? { treatment: thermal.treatment } : {}),
+    ...(thermal?.pointGroup ? { pointGroup: thermal.pointGroup } : {}),
+    ...(thermal?.symmetryNumber != null ? { symmetryNumber: thermal.symmetryNumber } : {}),
   };
   return Object.keys(by).length ? by : undefined;
 }
@@ -913,13 +916,20 @@ function thermoOf(e: SetEntry, geometry: string): Partial<Record<(typeof THERMO_
   const kelvin = readingOf(calc, "thermo.temperature");
   const atm = readingOf(calc, "thermo.pressure");
   const treatment = readingOf(calc, "thermo.treatment");
+  const pointGroup = readingOf(calc, "thermo.point-group");
+  const sigma = readingOf(calc, "thermo.symmetry-number");
   const at: At = {
     geometry,
     ...(typeof kelvin === "number" ? { kelvin } : {}),
     ...(typeof atm === "number" ? { atm } : {}),
     ...(calc.solvation ? { solvent: calc.solvation } : {}),
   };
-  const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
+  // (each carries the symmetry it was worked out with, as the program printed it: a G with its own sigma, wherever it goes)
+  const by = byOf(calc, {
+    ...(typeof treatment === "string" ? { treatment } : {}),
+    ...(typeof pointGroup === "string" ? { pointGroup } : {}),
+    ...(typeof sigma === "number" && Number.isInteger(sigma) && sigma >= 1 ? { symmetryNumber: sigma } : {}),
+  });
   const out: Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> = {};
   for (const id of THERMO_PROPERTIES) {
     const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
