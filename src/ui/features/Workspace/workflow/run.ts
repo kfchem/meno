@@ -25,7 +25,7 @@ import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./l
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
 export { frameAt, placeFor } from "./place";
-import { takeFrames, type Which } from "./takeFrames";
+import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
 import { measuredSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
@@ -101,7 +101,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
   if (step.kind === "take-frames") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
-    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either), keptNames(String(o.keep ?? ""))), key, w);
   }
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)

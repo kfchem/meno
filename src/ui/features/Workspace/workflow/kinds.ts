@@ -10,7 +10,7 @@ import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
-import { takeFramesHow, type Which } from "./takeFrames";
+import { keptNames, takeFramesHow, type Which } from "./takeFrames";
 import { joinHow, joinNeeds } from "./joinStep";
 import { addHow, addNeeds, numberHow, numberNeeds } from "./addStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
@@ -361,8 +361,9 @@ export const KINDS: readonly KindInfo[] = [
         default: "highest",
       },
       { id: "either", label: "Either side", type: "number", default: 1, min: 1, step: 1, when: { id: "which", in: ["around"] } },
+      { id: "keep", label: "Keep from its molecule", type: "lines", default: "", rows: 2, note: "A property of the molecule each frame is taken from, by its name, one to a line: none, and a frame holds its own alone" },
     ],
-    how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1)),
+    how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1), keptNames(String(v.keep ?? ""))),
   },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
