@@ -4,7 +4,7 @@ import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from ".
 import type { Molecule3D } from "../store/types";
 import { setMolecules } from "./entries";
 import { resultOf } from "./flow";
-import { howOf, kindInfo, needsOf } from "./kinds";
+import { howOf, kindInfo, madeName, needsOf } from "./kinds";
 import { addSet, addStep, connect } from "./model";
 import { runStep, type RunWith } from "./run";
 import { SET_ASIDE } from "./structureSteps";
@@ -50,7 +50,7 @@ describe("a Rank step", () => {
   it("keeps the lowest by energy in each group, by default the first one - the rest each saying its place", () => {
     // (two conformer sets: a's three, b's two)
     const doc = runStep(ranking([water([-76.40, -76.42, -76.41]), water([-76.30, -76.31], { at: { x: 2, y: 0 } })], {}), 2, W);
-    expect(ran(doc)).toMatchObject({ ok: true, said: "the lowest 1 by energy in each group: 2 of 5 kept · rest 3 (3: below the first 1)" });
+    expect(ran(doc)).toMatchObject({ ok: true, said: "2 of 5 entries kept · rest 3" });
     expect(out(doc).map((m) => [m.numbers, m.energies])).toEqual([
       [[2], [-76.42]],
       [[2], [-76.31]],
@@ -66,15 +66,31 @@ describe("a Rank step", () => {
 
   it("keeps the first N of all together, highest first where asked", () => {
     const doc = runStep(ranking([water([-76.40, -76.42, -76.41]), water([-76.30, -76.31], { at: { x: 2, y: 0 } })], { keep: 2, within: "all", order: "highest first" }), 2, W);
-    expect(ran(doc)?.said).toBe("the highest 2 by energy of all: 2 of 5 kept · rest 3 (3: below the first 2)");
+    expect(ran(doc)?.said).toBe("2 of 5 entries kept · rest 3");
     // (both b's: one molecule of its two, in their ranked order)
     expect(out(doc).map((m) => m.energies)).toEqual([[-76.3, -76.31]]);
+  });
+
+  it("takes a number property's values as one group where they are one value - not split by the last bits of a sum", () => {
+    const x = (value: number): Property => ({ value, unit: "none", status: "computed" });
+    const doc = runStep(ranking([water([-1.0, -1.2, -1.1, -1.3], {}, [{ x: x(0.3) }, { x: x(0.1 + 0.2) }, { x: x(0.5) }, { x: x(0.5) }])], { within: "each value", groupBy: "x" }), 2, W);
+    expect(ran(doc)?.said).toBe("2 of 4 entries kept · rest 2");
+    expect(out(doc)[0].numbers).toEqual([2, 4]);
+    // (values 1e-5 apart are two values, not one: none merged by the figures a chip shows)
+    const apart = runStep(ranking([water([-1.0, -1.2, -1.1], {}, [{ x: x(1.00001) }, { x: x(1.00002) }, { x: x(1.00003) }])], { within: "each value", groupBy: "x" }), 2, W);
+    expect(apart.steps!.find((s) => s.id === 2)!.ran?.said).toBe("3 of 3 entries kept");
+  });
+
+  it("says where each is its own group - molecules, not a conformer set's compounds - so that ranking in each chose nothing", () => {
+    const doc = runStep(ranking([water([-1.0]), { ...water([-1.2]), at: { x: 2, y: 0 } }], {}), 2, W);
+    expect(ran(doc)?.said).toBe("2 of 2 entries kept: each molecule is its own group");
+    expect(runStep(ranking([water([-1.0]), { ...water([-1.2]), at: { x: 2, y: 0 } }], { within: "all" }), 2, W).steps!.find((s) => s.id === 2)!.ran?.said).toBe("1 of 2 entries kept · rest 1");
   });
 
   it("ranks in each value of a property - each path's first - an entry without it set aside saying so", () => {
     const paths = [text("a→b"), text("a→c"), text("a→b"), text("a→c")];
     const doc = runStep(ranking([water([-1.0, -1.2, -1.1, -1.3, -1.4], {}, [...paths.map((path) => ({ path })), {}])], { within: "each value", groupBy: "path" }), 2, W);
-    expect(ran(doc)?.said).toBe("the lowest 1 by energy in each path: 2 of 5 kept · rest 3 (2: below the first 1; 1: it has no path to be ranked within)");
+    expect(ran(doc)?.said).toBe("2 of 5 entries kept · rest 3 (1 not ranked)");
     expect(out(doc)[0].numbers).toEqual([3, 4]);
     expect(out(doc, "rest")[0].properties?.map((p) => p[SET_ASIDE]?.value)).toContain("it has no path to be ranked within");
   });
@@ -83,16 +99,18 @@ describe("a Rank step", () => {
     // (#2 the lowest, but not converged: #3 the lowest of those finished)
     const set = water([-76.40, -76.50, -76.41], { failed: [null, { kind: "not-converged", why: "stopped at 200 cycles" }, null] });
     const doc = runStep(ranking([set], {}), 2, W);
-    expect(ran(doc)?.said).toBe("the lowest 1 by energy in each group: 1 of 3 kept · rest 2 (1: below the first 1; 1: not ranked: not converged)");
+    expect(ran(doc)?.said).toBe("1 of 3 entries kept · rest 2 (1 not ranked)");
     expect(out(doc)[0].numbers).toEqual([3]);
     expect(out(doc, "rest")[0].properties?.map((p) => p[SET_ASIDE]?.value)).toContain("not ranked: not converged");
   });
 
-  it("says what it ranked by: the value's level, solvent and temperature, as its record says them", () => {
+  // (what it ranked by is its card's to say; its line says only what came of it - each value's level, solvent and temperature stay on its record)
+  it("says only what came of it, each value kept as its record says it was worked out", () => {
     const g = (value: number): Property => ({ value, unit: "kcal/mol", at: { geometry: "g", kelvin: 298.15, solvent: "SMD(chloroform)" }, by: { program: "Gaussian", method: "wB97X-D", basis: "6-311+G(d,p)" }, status: "computed" });
     const doc = runStep(ranking([water([-1, -1, -1], {}, [{ dg: g(2) }, { dg: g(0.5) }, { dg: g(1) }])], { property: "dg" }), 2, W);
-    expect(ran(doc)?.said).toBe("the lowest 1 by dg (wB97X-D/6-311+G(d,p), Gaussian, in SMD(chloroform), at 298.15 K) in each group: 1 of 3 kept · rest 2 (2: below the first 1)");
+    expect(ran(doc)?.said).toBe("1 of 3 entries kept · rest 2");
     expect(out(doc)[0].numbers).toEqual([2]);
+    expect(out(doc)[0].properties?.[0].dg).toEqual(g(0.5));
   });
 
   it("sets aside a group whose values were worked out differently, naming the entries, never ranking them as one", () => {
@@ -108,6 +126,9 @@ describe("a Rank step", () => {
     expect(needsOf({ kind: "rank", options: { property: " " } })).toBe("Name the property to rank by");
     expect(needsOf({ kind: "rank", options: { within: "each value" } })).toBe("Name the property whose values are the groups");
     expect([info.name, info.made, info.others?.map((o) => o.name)]).toEqual(["Rank", "The first {keep}", ["The rest"]]);
+    // (its kept set: "The first", one kept - never "The first 1" - and "The first 3")
+    expect(madeName("rank", info.options!, {})).toBe("The first");
+    expect(madeName("rank", info.options!, { keep: 3 })).toBe("The first 3");
   });
 });
 
@@ -115,7 +136,7 @@ describe("a Rank step, its ties and its names", () => {
   it("says where one ranked out has the same value as the last one kept - a degenerate conformer - on the line and on it", () => {
     // (#2 and #3 the same energy: #2 kept, as it came first)
     const doc = runStep(ranking([water([-76.40, -76.42, -76.42])], {}), 2, W);
-    expect(ran(doc)?.said).toBe("the lowest 1 by energy in each group: 1 of 3 kept · rest 2 (2: below the first 1) · 1 tied with one kept");
+    expect(ran(doc)?.said).toBe("1 of 3 entries kept · rest 2 (1 tied)");
     expect(out(doc)[0].numbers).toEqual([2]);
     expect(out(doc, "rest")[0].properties?.map((p) => p[SET_ASIDE]?.value)).toEqual([
       "ranked 3 of 3 in its group by energy, lowest first; the first 1 kept",

@@ -9,7 +9,7 @@ import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
-import { conditionsIn, filter } from "../../../../lib/nodes/filter";
+import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
 import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
@@ -115,6 +115,7 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         from: String(o.from ?? ""),
         rs: o.rs === true,
         ez: o.ez === true,
+        numbered: o.numbered === true,
         atoms: String(o.atoms ?? ""),
         elements: String(o.elements ?? ""),
         reach: Number(o.reach),
@@ -316,6 +317,9 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   return [...out.values()];
 }
 
+/** The properties a Filter's condition reads: its own, and the one it is compared with where it is another of the entry's. */
+const namesOf = (c: Condition): string[] => ("its" in c ? [c.property, c.its] : [c.property]);
+
 /**
  * Entries kept by conditions on their properties (lib/nodes `filter`), read
  * as each is an entry (`entryOfSet`): those that meet them, the rest set
@@ -328,13 +332,13 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
   const read = conditionsIn(text);
   if ("why" in read) return { ok: false, said: read.why };
   // (a condition on a name that is Meno's and an entry's own too - "energy" given by a plugin as well: which is meant cannot be told, so it is not guessed)
-  for (const c of read.conditions) {
-    const both = entries.filter((e) => shadowedIn(e).includes(c.property)).length;
-    if (both) return { ok: false, said: `"${c.property}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
+  for (const name of read.conditions.flatMap(namesOf)) {
+    const both = entries.filter((e) => shadowedIn(e).includes(name)).length;
+    if (both) return { ok: false, said: `"${name}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
   }
   // (a value of one that is no result - failed, not converged, its marks unread - is not to be trusted: on a condition on any
   //  value but its state, never kept, but set aside named, its state said; on its state alone it is judged by that)
-  const onValues = read.conditions.some((c) => c.property !== "state");
+  const onValues = read.conditions.some((c) => namesOf(c).some((n) => n !== "state"));
   const notResult = (x: { id: string }) => {
     const e = entries[Number(x.id)];
     const state = entryState(e);
@@ -364,13 +368,13 @@ function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all
   const read = conditionsIn(text);
   if ("why" in read) return { ok: false, said: read.why };
   // (its state is Meno's on a structure drawn too: one its record carries of its own by that name cannot be told from it)
-  if (read.conditions.some((c) => c.property === "state")) {
+  if (read.conditions.some((c) => namesOf(c).includes("state"))) {
     const both = entries.filter((e) => e.record?.properties && "state" in e.record.properties).length;
     if (both) return { ok: false, said: `"state" is Meno's own, and ${both === 1 ? "1 structure carries one" : `${both} structures carry one`} of its own by that name too: which is meant cannot be told` };
   }
   // (edited since its properties were given: none to read. And one that failed is no result: on a condition on any value but
   //  its state never kept, but set aside named, its why said; on its state alone it is judged by that)
-  const onValues = read.conditions.some((c) => c.property !== "state");
+  const onValues = read.conditions.some((c) => namesOf(c).some((n) => n !== "state"));
   const unread = (x: { id: string }) => {
     const e = entries[Number(x.id)];
     if (e.record?.stale) return e.record.stale;

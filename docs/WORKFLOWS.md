@@ -306,7 +306,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from; the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
-| Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
+| Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit, or another of its properties ("its product"); all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
@@ -2837,6 +2837,17 @@ it.
   does not read - a unit Meno does not know, no comparison, one read whole
   that is none (=<, ≥≥), a quote not closed - and it does not run until
   they do.
+- **A property against another of the same entry** (2026-10-30): "its"
+  and a property's name, in place of a value, is that entry's own ("last
+  end = its product": a saddle point kept where its path came down at the
+  product it was made for). Texts and true or false compare exactly, by =
+  and ≠ alone, and only with one of their own kind. Numbers compare in the
+  first property's unit, the other converted within its dimension, equal
+  within a part in 10¹² of the larger, as a value typed is. An entry
+  without either property does not meet it, and says which it has not
+  ("it has no product"); one of them failed or not worked out likewise.
+  A text that begins with "its " is written in double quotes; a bare word
+  is a text, as before.
 - **A number is compared in the condition's unit**, converted within its
   dimension only: 0.5 eV against 40 kcal/mol is 11.530274 kcal/mol. A
   property of another dimension, or of none where the condition has one,
@@ -2929,7 +2940,7 @@ the first in each path (step 48).
   first 1 kept"). Ties keep the order they came in, and one ranked out
   with the same value as the last one kept in its group - a degenerate
   conformer - says so, on it ("tied with a #2, which was kept as it came
-  first") and on the line ("1 tied with one kept"): which is kept is never
+  first") and on the line ("1 tied"): which is kept is never
   chosen silently.
 - **Only values that can be ranked together are**: numbers of one
   dimension, converted to the first one's unit, each worked out the same
@@ -2941,12 +2952,22 @@ the first in each path (step 48).
   its marks unread - set aside saying so ("not ranked: not converged"),
   though its value would rank first. An entry with no value, or none of
   the group property, is set aside saying that.
-- **Its line says what it ranked by**: the property, and how it was
-  worked out where its record says - level, program, solvent,
-  temperature ("the lowest 1 by dg (wB97X-D/6-311+G(d,p), Gaussian, in
-  SMD(chloroform), at 298.15 K) in each group") - then how many it kept,
-  and the rest counted by why ("rest 3 (2: below the first 1; 1: it has
-  no path to be ranked within)").
+- **Its line says only what came of it**: how many it kept, and how many
+  went to the rest, with those tied and those not ranked counted, as
+  *Filter* says its own ("2 of 6 entries kept · rest 4 (1 tied, 2 not
+  ranked)"). What it ranked by its card says,
+  above; each value's level, program, solvent and temperature stay on its
+  record, as they came; each of the rest says its own place or why.
+- **Its first exit is named by how many it keeps**: *The first* where it
+  keeps one of each, *The first 3* where three.
+- **In each group, where each is its own group** - molecules, not
+  a conformer set's compounds - it chooses nothing, and its line says so
+  ("2 of 2 kept: each molecule is its own group"): *All together*
+  ranks them against one another.
+- **A number property's values are one group where they are one value**:
+  each in the first one's unit, to 12 significant figures - 0.3 and 0.1 +
+  0.2 one group, and one in kcal/mol and another in hartrees one group
+  where they are the same energy; 1.00001 and 1.00002 two.
 - It takes molecules in 3D and conformer sets; structures drawn are not
   ranked yet.
 ### Join (2026-10-29)

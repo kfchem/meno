@@ -48,6 +48,19 @@ bonds with their CTfile types) and gives:
   `get_mapped` gives nothing then.
 - `changes` - the first map's bonds made, broken and changed in order,
   in the reactants' numbering, with their CTfile types before and after.
+  A bond of an aromatic ring on both sides (identity's `aromaticForm`) has
+  not changed in order, whichever Kekulé structure each side is drawn in:
+  a map that turns a symmetric ring over pairs one side's single bonds
+  with the other's double bonds, and the ring is the same. The same holds
+  for every map's bond changes (`bondChanges`): the drawn arrow's reacting
+  centres and the *Reaction* step's *Bond changes* among them. A bond given
+  as aromatic (type 4) on one side and in a Kekulé structure on the other
+  has not changed either. The rule is identity's: a ring is aromatic where
+  its bonds alternate around it, so a bond-shift isomerisation -
+  cyclooctatetraene's ring bonds shifting, cyclobutadiene's automerisation
+  - reads as no bond change, as bond-shift isomers are one structure to
+  identity (docs/WORKFLOWS-FOUNDATION.md, *Duplicates, and what judges
+  them*).
 
 `withMapNumbers` gives the structures as they came in, each atom's
 atom-atom mapping number (`map`, which Meno already reads and writes in
@@ -68,8 +81,30 @@ What it will not do:
 - **Guess bonds.** The bonds come with the structures. ACCeL reads a
   molfile's bond types 1 to 4 as single, double, triple and aromatic, and
   any other type as a bond of no stated order; Meno hands them over the
-  same way. Aromatic bonds count apart from single and double ones, as in
-  ACCeL, so a Kekulé structure and an aromatic one can map differently.
+  same way, with one thing more that ACCeL's own flow does: an aromatic
+  ring's bonds are handed over as aromatic, whichever Kekulé structure the
+  ring was drawn in. ACCeL perceives its rings before it maps
+  (`Box.calc_bonds` calls `Modeler.aromatize`), from the geometry; Meno
+  perceives them from the bonds (identity's `aromaticForm`), as its
+  identity and symmetry do. The map is built over the bonds whatever their
+  type, and the types are read only in a few of the checks and scores
+  (`_correct_maps`, the pericyclic and face terms of `_order_maps`), so a
+  ring drawn in either Kekulé structure maps the same. The two readings
+  differ in both directions. ACCeL takes a ring of bonds between single
+  and double length with 4n + 2 electrons, so pyrrole, furan and thiophene
+  are aromatic to it and cyclooctatetraene and cyclobutadiene are not.
+  Meno takes a ring whose bonds alternate, so for these four it is the
+  other way round. A charged
+  ring drawn with its charge on one atom (tropylium as three C=C and a C+,
+  the cyclopentadienide anion as two C=C and a C-) has no ring of
+  alternating bonds, and is handed over as drawn. On the corpus below and
+  on these rings mapped (cyclooctatetraene's ring closure to
+  bicyclo[4.2.0]octatriene, a dimethylpyrrole methylated at N, furan and
+  cyclobutadiene onto themselves), the first map is the same either way;
+  cyclooctatetraene's later maps come in another order. On the corpus of
+  134 runs it was checked on (67 reactions, two embeddings each), handing
+  the mapper aromatic bonds changed no map: it is there to match ACCeL's
+  own flow, for the checks and scores that read bond types.
 
 Mapping runs in a worker when the interface asks for it (*On a drawn
 scheme*). How long it takes, and why like molecules standing apart once
@@ -240,13 +275,25 @@ maps as ACCeL does.
   umbrella folding over; ACCeL reads it as kept and swaps the two
   hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
   lay over and is left as ACCeL placed it, as is a group a hydrogen comes
-  to or goes from.
+  to or goes from. So is an atom with more neighbours on one side than on
+  the other, hydrogens counted: it goes from one shape to another - a
+  double bond added to, as at a Diels-Alder's =CH2 ends, or a cation's or
+  a carbene's CH2 bonded to - and which of its hydrogens is which follows
+  the faces the reaction meets, which ACCeL's face and syn-or-anti scores
+  weigh. Laid over its
+  frame, it was turned against them: a Diels-Alder's two outside
+  hydrogens (trans to the diene's inner carbons) came out on opposite
+  faces of the new ring. An SN2 centre keeps its number of neighbours,
+  and is laid over its frame as before. Checked on a
+  corpus of 134 runs (67 reactions, two embeddings each): 18 first maps
+  changed when this was put right, in their hydrogens only, their bond
+  changes the same; 16 of them are now ACCeL's own first map.
 
   With either of these two, maps the search built apart can become the
   same once their hydrogens are placed; each is then kept once, the first
-  in ACCeL's order, so there can be fewer maps than the search built (for
-  the Diels-Alder in the tests, 4 rather than 64, which differed only in
-  the ring CH2s' hydrogens).
+  in ACCeL's order, so there can be fewer maps than the search built. (The
+  Diels-Alder in the tests keeps its 64, which differ only in the ring
+  CH2s' hydrogens: all four of its CH2s change order.)
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
   `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
@@ -388,9 +435,11 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   *Stop* ends it. ACCeL's search is used as it is, solvent and all - no
   pieces are picked out by hand, and nothing is set to make it faster.
 - **Kept on the arrow** (`ArrowAtomMap`): both sides in 3D as mapped, which
-  drawn atom each 3D atom is, every complete map best first (up to 100),
-  the one in use - the best, unless *Other map* stepped on - and whether it
-  is shown. What it shows is put on the drawing in the same undo step:
+  drawn atom each 3D atom is, and the complete maps best first (up to
+  100). Of maps that pair the heavy atoms alike, and so show the same
+  numbers, only the first is kept, its hydrogens as ACCeL ranked them.
+  Also kept: the map in use (the best, unless *Other map* stepped on), and
+  whether it is shown. What it shows is put on the drawing in the same undo step:
   - each heavy atom's map number, the reactants' numbered one after
     another, a product atom given its reactant atom's;
   - each bond the map makes or breaks marked as a reacting centre (CTfile
@@ -398,10 +447,12 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   Hydrogens are in the map, not numbered on the drawing.
 - **Show / Hide atom map** puts the numbers and centres on the drawing or
   takes them off; the map is kept either way.
-- **Other map** takes the next of the complete maps, round again after the
+- **Other map** takes the next of the maps kept, round again after the
   last; the best stays first. The menu stays open on it and says which of
-  how many is in use ("2 of 32"): most maps differ only in where the
-  hydrogens go, which the drawing does not show.
+  how many is in use ("2 of 4"). Each pairs the heavy atoms its own way,
+  so each shows other numbers; maps that differ only in where the
+  hydrogens go, which the drawing does not show, are not stepped through.
+  `mapReaction` gives all of them, as ACCeL does.
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
   reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
@@ -435,7 +486,8 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   entry's bonds number them; from 1 in the step's table on the page, as a
   card numbers them - and its bond type before and after (0 where there is none; 4,
   aromatic). The types are the structures'
-  own; nothing is perceived from the geometry here.
+  own; nothing is perceived from the geometry here. A bond of an aromatic
+  ring on both sides is no order change (`changes` above).
 - **Nothing in part.** A product whose atoms cannot all be paired one to
   one - a different number of atoms, a flat drawing, a map that leaves an
   atom out - is not passed on, and the reason is said for it.
