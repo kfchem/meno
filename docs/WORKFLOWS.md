@@ -2700,6 +2700,14 @@ doubled quotes); a byte-order mark before it is left out.
 - A number is digits with a point, a sign (the minus sign too) and an
   exponent - nothing else: no thousands' separators, since a comma means
   one thing in one place and another elsewhere.
+- **A column's head is its label, where it has one** (`TableColumn.label`,
+  2026-10-30): "Product" over the column named "reaction.product". Its
+  name stays its key - what rows are matched on, what a condition names -
+  and hovering on the head says both ("Product · reaction.product"). A
+  number column's head stands at the right, over its numbers.
+- **A table's set is as tall as the rows it shows** (`tableSetSize`): its
+  heads, up to six rows, and the line saying what it is, with nothing
+  under it.
 - **What does not read is counted and said**: a cell of a number column
   that is no number, where it is and what it said; a row with more or
   fewer cells than the columns. An empty cell is no value, as written.

@@ -110,6 +110,24 @@ export const SET_PAD = NOMINAL_BOND_LENGTH / 2;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
+/** How many of a table's rows its frame shows (ValueBody `TableBody`; model `tableSetSize`). */
+export const TABLE_SHOWN_ROWS = 6;
+/**
+ * A table's body (ValueBody `TableBody`), in its own pixels, each height set
+ * on it as it is drawn - never left to its text: its heads' line, the gap
+ * under it, each row's line, and the line saying what it is - as tall as
+ * its text, so that the set's frame stands as far below its last letters as
+ * beside its first (`SET_PAD`); and the room
+ * before each column after the first, so that a number column's last digit
+ * and the next column's first letter do not run together.
+ */
+export const TABLE_HEAD_PX = 19;
+export const TABLE_GAP_PX = 6;
+export const TABLE_ROW_PX = 16;
+export const TABLE_FOOT_PX = 12;
+export const TABLE_COLUMN_GAP_PX = 16;
+/** How tall a table's body draws, showing up to `TABLE_SHOWN_ROWS` of `rows`: a table's set is made as tall (model `tableSetSize`), and its frame scales it to that (SetFrame). */
+export const tableBodyPx = (rows: number) => TABLE_HEAD_PX + TABLE_GAP_PX + TABLE_ROW_PX * Math.min(rows, TABLE_SHOWN_ROWS) + TABLE_FOOT_PX;
 /** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
 export const CHART_PX = { w: 360, h: 260 };
 /** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
