@@ -89,9 +89,10 @@ describe("Ensemble energy", () => {
     expect(aside(ranked.exits.rest)[0][1]).toContain("differ in method: wB97X-D (a1) and B3LYP (b1)");
   });
 
-  it("refuses a degeneracy that is no count - 0, below 0, not a number - setting its group aside, never reading it as 1", () => {
-    for (const d of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      const out = ensemble([entry("x", { g: g(0) }), entry("y", { g: g(0.5), degeneracy: degeneracy(d) })], { property: "g", within: "all", as: "G" });
+  it("refuses a degeneracy that is no count - 0, below 0, not a number, not worked out - setting its group aside, never reading it as 1", () => {
+    const failed: Property = { value: 2, unit: "none", status: { failed: "not counted" } };
+    for (const d of [degeneracy(0), degeneracy(-1), degeneracy(Number.NaN), degeneracy(Number.POSITIVE_INFINITY), failed]) {
+      const out = ensemble([entry("x", { g: g(0) }), entry("y", { g: g(0.5), degeneracy: d })], { property: "g", within: "all", as: "G" });
       if (!out.ok) throw new Error(out.said);
       expect(out.exits.done).toEqual([]);
       expect(aside(out.exits.rest)).toEqual([
