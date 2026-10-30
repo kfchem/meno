@@ -93,7 +93,8 @@ What it will not do:
   differ in both directions. ACCeL takes a ring of bonds between single
   and double length with 4n + 2 electrons, so pyrrole, furan and thiophene
   are aromatic to it and cyclooctatetraene and cyclobutadiene are not.
-  Meno takes a ring whose bonds alternate, the other way round. A charged
+  Meno takes a ring whose bonds alternate, so for these four it is the
+  other way round. A charged
   ring drawn with its charge on one atom (tropylium as three C=C and a C+,
   the cyclopentadienide anion as two C=C and a C-) has no ring of
   alternating bonds, and is handed over as drawn. On the corpus below and
