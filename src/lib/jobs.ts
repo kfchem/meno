@@ -184,8 +184,10 @@ export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, co
  */
 export function coresCountedSaid(c: { cores: number; physical?: number }): string | null {
   if (!c.physical || c.physical < 1 || c.cores <= c.physical) return null;
-  const per = Math.round(c.cores / c.physical);
-  return `Cores here are logical: this computer has ${c.physical} physical cores with ${per} threads each, ${c.cores} in all. A program that runs as separate processes uses ${per} of them for each process.`;
+  // (what a process takes, as the queue counts it - jobs.rs `taken`: rounded up - and its threads said as even only where they are)
+  const per = Math.ceil(c.cores / c.physical);
+  const has = c.cores === per * c.physical ? `${c.physical} physical cores with ${per} threads each, ${c.cores} in all` : `${c.physical} physical cores and ${c.cores} threads`;
+  return `Cores here are logical: this computer has ${has}. A program that runs as separate processes uses ${per} of them for each process.`;
 }
 
 /**

@@ -47,6 +47,9 @@ describe("jobs", () => {
 
   it("says how cores are counted where each physical core runs more than one thread - and nothing where each runs one", () => {
     expect(coresCountedSaid({ cores: 32, physical: 16 })).toBe("Cores here are logical: this computer has 16 physical cores with 2 threads each, 32 in all. A program that runs as separate processes uses 2 of them for each process.");
+    // (as the queue counts a process - rounded up - where the threads are not even: some cores of one, some of two)
+    expect(coresCountedSaid({ cores: 32, physical: 24 })).toBe("Cores here are logical: this computer has 24 physical cores and 32 threads. A program that runs as separate processes uses 2 of them for each process.");
+    expect(coresCountedSaid({ cores: 20, physical: 14 })).toBe("Cores here are logical: this computer has 14 physical cores and 20 threads. A program that runs as separate processes uses 2 of them for each process.");
     expect(coresCountedSaid({ cores: 10, physical: 10 })).toBeNull();
     // (its physical cores not told: nothing said)
     expect(coresCountedSaid({ cores: 8 })).toBeNull();
