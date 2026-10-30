@@ -4,7 +4,7 @@ import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
 import { entryOfSet, setEntries, type SetEntry } from "./entries";
 import { runMeno } from "./meno";
-import { pairEntries } from "./pairs";
+import { pairEntries, PATH_PAIR } from "./pairs";
 import { isFailure, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
 import { refinedFrame, takeFrames } from "./takeFrames";
@@ -24,6 +24,23 @@ describe("a path search's pairs", () => {
       [1, 1, 3],
     ]);
     expect(pairEntries([h2(1)], [h2(2), h2(3)], "order")).toEqual({ why: "Start holds 1 and End 2: in order, each start is paired with the end in its place" });
+  });
+
+  it("keeps how each was paired with it - in order by place alone, never a match of which is which - and writes it on its path", () => {
+    const order = pairEntries([h2(1), h2(2)], [h2(3, 1.1), h2(4, 1.2)], "order");
+    expect("entries" in order && order.entries.map((e) => e.paired)).toEqual(["in order, by place: start a #1 with end c #1", "in order, by place: start b #1 with end d #1"]);
+    const each = pairEntries([h2(1)], [h2(3, 1.1)], "each");
+    expect("entries" in each && each.entries[0].paired).toBe("each with each");
+    const tagged = (e: SetEntry) => ({ ...e, properties: { pc: { value: "pc-1", unit: "none" as const, status: "computed" as const } } });
+    const on = pairEntries([tagged(h2(1))], [tagged(h2(3, 1.1))], "property", "pc");
+    expect("entries" in on && on.entries[0].paired).toBe("matched on pc");
+  });
+
+  it("pairs each with each at most as many as At most says - 10 unless raised", () => {
+    const many = (n: number) => Array.from({ length: n }, (_, k) => h2(k + 1));
+    expect(pairEntries(many(11), many(10), "each")).toEqual({ why: "Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most 10 - match them on a property instead, or raise At most" });
+    const raised = pairEntries(many(11), many(10), "each", "", PATH_PAIR, 110);
+    expect("entries" in raised && raised.entries.length).toBe(110);
   });
 
   it("pairs each with each, or on a property - one with no end to pair with kept, refused with why", () => {
@@ -122,6 +139,14 @@ describe("a path search's molecule", () => {
     expect(p["path.E-reverse-barrier"].value).toBeCloseTo((-1.09 + 1.12) * KCAL, 9);
     expect(p["path.E-barrier"]).toMatchObject({ unit: "kcal/mol", by: { program: "ORCA", treatment: "electronic, at GFN2-xTB: the energy of the highest point refined, less that of the path's start (its first image)" } });
     expect(p["path.E-reverse-barrier"].by?.treatment).toBe("electronic, at GFN2-xTB: the energy of the highest point refined, less that of the path's end (its last image)");
+    // (how its start and end were paired, written on it where the pair said; none where it did not)
+    expect(p).not.toHaveProperty("path.paired");
+    const w = workedOf("path-search", { ...h2(1), end: h2(2, 1.1), paired: "in order, by place: start a #1 with end b #1" }, out(), ["orca"]);
+    expect(!isFailure(w) && (w as Worked).properties?.["path.paired"]).toEqual({ value: "in order, by place: start a #1 with end b #1", unit: "none", status: "computed" });
+    // (and kept with the molecule it makes, as its entry's)
+    const [m] = resultsOf({ ok: true, holds: "molecules", kept: [w as Worked], aside: [], said: "" }, "path-search").molecules;
+    const [again] = setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "molecules");
+    expect(entryOfSet(again, "x").properties["path.paired"]?.value).toBe("in order, by place: start a #1 with end b #1");
   });
 
   it("says how many imaginary frequencies its point refined has, where they were worked out - for the chemist's Filter, Meno judging none", () => {

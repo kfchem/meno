@@ -2,7 +2,7 @@
  * Meno's steps on structures, as a workflow's steps run them
  * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine*, *Measure* and
  * *Restraints*, and those of two inputs, *Merge*, *Re-bond*, *Compare
- * bonding* and *Torsion restraints* - each
+ * bonding*, *Torsion restraints* and *Reaction* - each
  * a set's entries read as Meno's entry record (`entryOfSet`), the step's own
  * function done on them (lib/nodes, lib/steps), and each entry given back as
  * a step's entry (`setEntryOfEntry`) - all it held kept where it is that
@@ -21,7 +21,12 @@ import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/s
 import { restraintsOf, torsionsRestrained } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { restraintsTyped, torsionsNeeds } from "./kinds";
-import { CALC_CARRIED, compoundLetter, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
+import { bondChangesTable, PRODUCT, renumberedEntry } from "../../../../lib/steps/reaction";
+import { mapProducts } from "../../../../lib/chem/reactionMap";
+import type { Molecule } from "../../../../lib/chem/molecule";
+import { atomsOfRows, type Table } from "../../../../lib/table";
+import { displacedEntry } from "../../../../lib/steps/vibrations";
+import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -121,19 +126,39 @@ export function combinedSet(entries: readonly SetEntry[]): Outcome3D {
 }
 
 /** *Measure* (lib/steps `measured`): each entry with its measurements as properties; one that does not apply to it says why on itself. */
-export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: string): Outcome3D {
-  const typed = measurementsTyped(text);
-  if ("why" in typed) return { ok: false, said: typed.why };
-  const made = entries.map((e, i) => measured(entryOfSet(e, String(i)), typed.atoms));
+export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: string, fromTable?: { table: Table | null; rows: string }): Outcome3D {
+  // (the atoms of each entry: typed, the same for all; or each row's of the table - every row on every entry, or those whose
+  //  value in the column named is the entry's value of the property of that name - read as the table's columns say they count them)
+  let each: (e: SetEntry) => number[][];
+  if (fromTable) {
+    if (!fromTable.table) return { ok: false, said: "Nothing comes into Atoms" };
+    const read = atomsOfRows(fromTable.table);
+    if ("why" in read) return { ok: false, said: read.why };
+    const name = fromTable.rows.trim();
+    const column = name ? fromTable.table.columns.findIndex((c) => c.name === name) : -1;
+    if (name && column < 0) return { ok: false, said: `The table has no column ${name}` };
+    const cells = fromTable.table.rows.map((r) => (column >= 0 ? r[column] : null));
+    each = (e) => {
+      const value = e.properties?.[name]?.value;
+      return read.rows.filter((_, k) => !name || (value != null && String(cells[k]) === String(value)));
+    };
+  } else {
+    const typed = measurementsTyped(text);
+    if ("why" in typed) return { ok: false, said: typed.why };
+    each = () => typed.atoms;
+  }
+  const atoms = entries.map(each);
+  const made = entries.map((e, i) => measured(entryOfSet(e, String(i)), atoms[i]));
   // (each measurement this step made that does not apply, or failed: said on the entry, counted here)
-  const names = typed.atoms.map(measurementName);
-  const notDone = made.reduce((n, e) => n + names.filter((k) => e.properties[k] && e.properties[k].status !== "computed").length, 0);
+  const asked = atoms.reduce((n, a) => n + a.length, 0);
+  const notDone = made.reduce((n, e, i) => n + atoms[i].map(measurementName).filter((k) => e.properties[k] && e.properties[k].status !== "computed").length, 0);
+  const none = atoms.filter((a) => !a.length).length;
   return {
     ok: true,
     holds,
     kept: backEach(entries, made),
     aside: [],
-    said: `${plural(typed.atoms.length, "measurement")} on ${plural(entries.length, "entry", "entries")}${notDone ? `, ${notDone} not measured` : ""}`,
+    said: `${plural(asked, "measurement")} on ${plural(entries.length, "entry", "entries")}${notDone ? `, ${notDone} not measured` : ""}${none ? `, ${none} with no row of the table` : ""}`,
   };
 }
 
@@ -378,4 +403,134 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
   if (added) said.push(`${plural(added, "torsion")} newly held`);
   if (raised) said.push(`${plural(raised, "torsion")} held stronger`);
   return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
+}
+
+/** A step's entry as the atom mapper reads a structure: its atoms where its places are, its bonds. */
+export const moleculeOfEntry = (e: SetEntry): Molecule => ({
+  atoms: e.atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })),
+  bonds: e.bonds.map((b) => ({ ...b })),
+});
+
+/** What the atom mapper made of a Reaction's products (lib/chem/reactionMap `mapProducts`), worked out here or in a worker. */
+export type ProductsMapped = ReturnType<typeof mapProducts>;
+
+/** Whether a Reaction maps a product: finished, its hydrogens there - one not finished never comes out as one that is. */
+export const mappable = (p: SetEntry): boolean => !p.skeleton && entryState(p) === FINISHED;
+
+/**
+ * Why a Reaction cannot map what came in at all - not one reactant entry,
+ * or one without its hydrogens - or none where it can. Its products are
+ * looked at one by one (`reactionSet`).
+ */
+export function reactionRefused(reactants: readonly SetEntry[]): string | null {
+  if (reactants.length !== 1) return `Reactants takes one entry, the reactants as one structure (make a complex of several with Combine): ${reactants.length} came in`;
+  if (reactants[0].skeleton) return "The reactants have no hydrogens: every atom must map, hydrogens included";
+  return null;
+}
+
+/**
+ * *Reaction* (lib/chem/reactionMap `mapProducts`, lib/steps/reaction): each
+ * product mapped onto the one reactant entry, atom for atom and hydrogens
+ * too, and written in its numbering - by its first map, or by every map -
+ * each its own compound, numbered by its map; the bonds each map forms,
+ * breaks or changes in the exit *Bond changes*, a table. A product not
+ * finished (failed, or its marks not read), with no hydrogens, or that does
+ * not map one to one, is set aside with why - never passed on as finished.
+ * A product mapped keeps its energy and its imaginary frequencies, of its
+ * geometry however it is numbered; its calculation is not carried, and the
+ * line says so.
+ * `mapped`, where the mapping was worked out already (in a worker): of
+ * `products` with no hydrogens left out, in order.
+ */
+export function reactionSet(reactants: readonly SetEntry[], products: readonly SetEntry[], maps: "first" | "every", mapped?: ProductsMapped): Outcome3D {
+  const refused = reactionRefused(reactants);
+  if (refused) return { ok: false, said: refused };
+  const reactant = reactants[0];
+  const whole = products.filter(mappable);
+  // (a mapped product as its rows and it name it: the product's name or place - and its map, where every map is given)
+  // (one to each: two products of one name told apart by their places)
+  const base = whole.map((p) => p.name ?? named(p));
+  const productKey = (m: { product: number; map: number }) => {
+    const p = whole[m.product];
+    const name = base.filter((b) => b === base[m.product]).length > 1 ? `${base[m.product]} (${named(p)})` : base[m.product];
+    return `${name}${maps === "every" ? `, map ${m.map + 1}` : ""}`;
+  };
+  const out = mapped ?? mapProducts(moleculeOfEntry(reactant), whole.map(moleculeOfEntry), { every: maps === "every" });
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = products.flatMap((p) =>
+    entryState(p) !== FINISHED
+      ? [withSaid(p, SET_ASIDE, `not finished: ${entryState(p)}`)]
+      : p.skeleton
+        ? [withSaid(p, SET_ASIDE, "it has no hydrogens: every atom must map, hydrogens included")]
+        : [],
+  );
+  const counts = new Map<number, number>();
+  let replaced = 0;
+  const notMapped = [...out.notMapped];
+  const done: typeof out.mapped = [];
+  for (const m of out.mapped) {
+    const p = whole[m.product];
+    const r = renumberedEntry(entryOfSet(p, String(m.product)), m.order, `${m.product}:${m.map}`);
+    if ("failed" in r) {
+      notMapped.push({ product: m.product, map: m.map, reason: r.failed });
+      continue;
+    }
+    const e = setEntryOfEntry(r, { compound: m.product, number: (counts.get(m.product) ?? 0) + 1 });
+    if (!e) continue;
+    done.push(m);
+    counts.set(m.product, (counts.get(m.product) ?? 0) + 1);
+    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry and vibrations as
+    //  its own properties, renumbered with it; its calculation not - and which mapped product it is, as its bond changes' rows name it)
+    const carried = Object.fromEntries(CALC_CARRIED.flatMap((k) => (r.properties[k] ? [[k, r.properties[k]]] : [])));
+    const held = { ...e, properties: { ...e.properties, ...carried }, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) };
+    if (p.properties?.[PRODUCT]) replaced++;
+    kept.push(withSaid(held, PRODUCT, productKey(m)));
+  }
+  // (a product of which no map went through, aside with why - each map's that did not, said on it)
+  const why = new Map<number, string[]>();
+  for (const n of notMapped) why.set(n.product, [...(why.get(n.product) ?? []), n.map != null ? `map ${n.map + 1}: ${n.reason}` : n.reason]);
+  whole.forEach((p, k) => {
+    if (!counts.has(k) && why.has(k)) aside.push(withSaid(p, SET_ASIDE, why.get(k)!.join(" ")));
+  });
+  const changes = bondChangesTable(done, productKey);
+  const line = [`${plural(counts.size, "product")} in the reactants' numbering${maps === "every" ? `, ${plural(kept.length, "map")}` : ""}`, `${plural(changes.rows.length, "bond change")}`];
+  if (aside.length) line.push(`${aside.length} not mapped`);
+  if (done.some((m) => whole[m.product].calc)) line.push("calculations not carried");
+  if (replaced) line.push(`the ${PRODUCT} ${replaced === 1 ? "a product" : `${replaced} products`} carried replaced`);
+  return { ok: true, holds: "molecules", kept, aside, said: line.join(" \u00b7 "), tables: { changes } };
+}
+
+/**
+ * *Displace* (lib/steps `displacedEntry`): each entry's geometry moved
+ * along its imaginary vibration - the most negative of several, said - or
+ * the one chosen, by the amplitude: the atom moving most by exactly that,
+ * the rest in proportion. What it carried rides along, each value saying
+ * the geometry it was worked out at; its energy and calculation, of that
+ * geometry, are not its own any more. One not finished - its calculation
+ * failed, or did not converge - is set aside as not finished: its
+ * vibrations are no ground to move it on. One with no vibrations to move
+ * along, no imaginary one, or no such vibration, is set aside with why. A
+ * conformer set's are counted as frames.
+ */
+export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { amplitude: number; vibration: "imaginary" | number }): Outcome3D {
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const notes = new Set<string>();
+  entries.forEach((e, i) => {
+    if (entryState(e) !== FINISHED) {
+      aside.push(withSaid(e, SET_ASIDE, `not finished: ${entryState(e)}`));
+      return;
+    }
+    const r = displacedEntry(entryOfSet(e, String(i)), o, String(i));
+    if ("failed" in r) {
+      aside.push(withSaid(e, SET_ASIDE, r.failed));
+      return;
+    }
+    if (r.said) notes.add(r.said);
+    const made = setEntryOfEntry(r.entry, { compound: e.compound, number: e.number }, e);
+    if (made) kept.push(made);
+  });
+  const line = [`${holds === "conformers" ? plural(kept.length, "frame") : plural(kept.length, "entry", "entries")} displaced`];
+  if (aside.length) line.push(`${aside.length} not displaced`);
+  return { ok: true, holds, kept, aside, said: [line.join(" \u00b7 "), ...notes].join(". ") };
 }

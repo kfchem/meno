@@ -624,6 +624,10 @@ export type SetEntry = {
   keep?: Kept;
   /** The end it is paired with, where it is the start of a pair a step of two inputs works out (workflow/pairs: Path search's). */
   end?: SetEntry;
+  /** Its sides, where it is a guess an *Optimise to a saddle point* step pairs with a reactant side and a product side (workflow/pairs `sideUnlike`). */
+  sides?: { reactant: SetEntry; product: SetEntry };
+  /** How it was paired with its end, in words (workflow/pairs): "in order, by place: start a #2 with end b #2", "each with each", "matched on pc". */
+  paired?: string;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -780,16 +784,25 @@ export const MARKS_UNREAD = "its frames' marks could not be read, so whether it 
 export const PATH_FRAME = "path.frame";
 export const REFINED_SAID = "highest point refined";
 
-/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
-export function refinedFrame(m: Pick<Molecule3D, "calc">): number | null {
+/** What a reaction path's program writes on the frame it started from (ORCA's worker: `IRC_STARTED_SAID`). */
+export const STARTED_SAID = "the point it started from";
+
+/** The one frame of a molecule its frames say is `what`; none where none is, or more than one. */
+function frameSaid(m: Pick<Molecule3D, "calc">, what: string): number | null {
   const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
   if (!said || said.on !== "frames") return null;
-  const k = said.values.indexOf(REFINED_SAID);
-  return k >= 0 && said.values.lastIndexOf(REFINED_SAID) === k ? k : null;
+  const k = said.values.indexOf(what);
+  return k >= 0 && said.values.lastIndexOf(what) === k ? k : null;
 }
 
-/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, its path going on past it. */
-const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? n - 1;
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export const refinedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, REFINED_SAID);
+
+/** Of a reaction path's molecule, the frame it started from, as its frames say; none for any other molecule. */
+export const startedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, STARTED_SAID);
+
+/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, a reaction path's, the point it started from, its path going on past it. */
+const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
 
 /** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
@@ -868,9 +881,10 @@ export const THERMO_PROPERTIES = ["thermo.free-energy", "thermo.enthalpy", "ther
 /**
  * What an entry's calculation was, for its properties (lib/entry `By`): the
  * plugin that read it, the program, method and basis - and, for a thermal
- * quantity, the treatment of its vibrations as the program said it.
+ * quantity, the treatment of its vibrations and the symmetry it took (its
+ * point group, its rotational symmetry number), as the program said them.
  */
-function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
+function byOf(calc: SetEntry["calc"], thermal?: Pick<By, "treatment" | "pointGroup" | "symmetryNumber">): By | undefined {
   if (!calc) return undefined;
   const plugin = calc.readers[0]?.split(" ")[0];
   const by: By = {
@@ -878,7 +892,9 @@ function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
     ...(calc.program ? { program: calc.program } : {}),
     ...(calc.method ? { method: calc.method } : {}),
     ...(calc.basis ? { basis: calc.basis } : {}),
-    ...(treatment ? { treatment } : {}),
+    ...(thermal?.treatment ? { treatment: thermal.treatment } : {}),
+    ...(thermal?.pointGroup ? { pointGroup: thermal.pointGroup } : {}),
+    ...(thermal?.symmetryNumber != null ? { symmetryNumber: thermal.symmetryNumber } : {}),
   };
   return Object.keys(by).length ? by : undefined;
 }
@@ -902,13 +918,20 @@ function thermoOf(e: SetEntry, geometry: string): Partial<Record<(typeof THERMO_
   const kelvin = readingOf(calc, "thermo.temperature");
   const atm = readingOf(calc, "thermo.pressure");
   const treatment = readingOf(calc, "thermo.treatment");
+  const pointGroup = readingOf(calc, "thermo.point-group");
+  const sigma = readingOf(calc, "thermo.symmetry-number");
   const at: At = {
     geometry,
     ...(typeof kelvin === "number" ? { kelvin } : {}),
     ...(typeof atm === "number" ? { atm } : {}),
     ...(calc.solvation ? { solvent: calc.solvation } : {}),
   };
-  const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
+  // (each carries the symmetry it was worked out with, as the program printed it: a G with its own sigma, wherever it goes)
+  const by = byOf(calc, {
+    ...(typeof treatment === "string" ? { treatment } : {}),
+    ...(typeof pointGroup === "string" ? { pointGroup } : {}),
+    ...(typeof sigma === "number" && Number.isInteger(sigma) && sigma >= 1 ? { symmetryNumber: sigma } : {}),
+  });
   const out: Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> = {};
   for (const id of THERMO_PROPERTIES) {
     const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
@@ -1007,10 +1030,10 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
-const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state"] as const;
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state", "failure"] as const;
 export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
 
-/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has and the two largest, its name, its state. */
+/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has and the two largest, its name, its state, and why it failed, where it did. */
 function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
@@ -1029,6 +1052,8 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
     // (whether it is a result to stand on: finished - converged, not failed, its marks read - or why not, in a step's line's words)
     state: { value: entryState(e), unit: "none", status: "computed" },
+    // (why it failed, where it did, in its program's own words: for a Filter to send each kind of failure its own way - Runs again)
+    ...(e.failed ? { failure: { value: e.failed.why, unit: "none" as const, status: "computed" as const } } : {}),
   };
 }
 

@@ -182,6 +182,43 @@ def molecule_wide(data):
     return out
 
 
+#: How a program says the symmetry its thermochemistry took, and how it treated its low vibrations - ORCA 6.1.1:
+#: "Point Group:  Cs, Symmetry Number:   1", "Vibrational entropy computed according to the QRRHO of S. Grimme ... using
+#: a reference frequency of 100.0 cm-1"; Gaussian 16: "Full point group  C1  NOp 1", "Rotational symmetry number  1."
+ORCA_SYMMETRY = re.compile(r"Point Group:\s+(\S+),\s+Symmetry Number:\s+(\d+)")
+ORCA_QRRHO = re.compile(r"QRRHO of S\. Grimme.*?reference frequency of\s+([0-9.]+)\s*cm-1", re.S)
+GAUSSIAN_GROUP = re.compile(r"Full point group\s+(\S+)")
+GAUSSIAN_NUMBER = re.compile(r"Rotational symmetry number\s+(\d+)\.")
+
+
+def thermo_said(text, program):
+    """The symmetry a frequency job's thermochemistry took, as its program printed it - its point group and the
+    rotational symmetry number its rotational entropy counts - and how it treated the low vibrations, where it says;
+    the last it printed, a job's of several. Meno works out none of them itself: not printed, not read."""
+    out = []
+
+    def add(id_, label, value, **measure):
+        out.append({"id": id_, "on": "molecule", "group": "Thermochemistry", "label": label, "value": value, **measure})
+
+    text = text or ""
+    if program == "orca":
+        found = list(ORCA_SYMMETRY.finditer(text))
+        if found:
+            add("thermo.point-group", "Point group", found[-1].group(1))
+            add("thermo.symmetry-number", "Symmetry number", int(found[-1].group(2)), unit="none", digits=0)
+            q = list(ORCA_QRRHO.finditer(text))
+            if q:
+                add("thermo.treatment", "Treatment", f"quasi-RRHO (Grimme), {float(q[-1].group(1)):g} cm-1")
+    elif program == "gaussian":
+        number = list(GAUSSIAN_NUMBER.finditer(text))
+        if number:
+            groups = list(GAUSSIAN_GROUP.finditer(text[: number[-1].start()]))
+            if groups:
+                add("thermo.point-group", "Point group", groups[-1].group(1))
+            add("thermo.symmetry-number", "Symmetry number", int(number[-1].group(1)), unit="none", digits=0)
+    return out
+
+
 def centre_of_mass(data, xyz):
     """Where the molecule's centre of mass is, in angstroms: from the masses
     the output gives its atoms, or else the standard atomic weights; none
@@ -907,6 +944,7 @@ def op_read(m):
         + energies_said(program, energies, unread)
         + xtb_said(text if program == "orca" else "")
         + molecule_wide(data)
+        + thermo_said(text, program)
         + of_state(dipole(data, text, program, frames[-1] if frames else None, printed), states[0])
         + per_frame(data, len(frames))
         + of_state(per_atom(data, len(atoms)), states[1])
