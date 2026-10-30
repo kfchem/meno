@@ -1699,7 +1699,12 @@ Not put right here:
 - **ORCA in parallel** still needs OpenMPI (step 6, *Not yet*): with the
   cores left unset, all of a computer's go to a job, so ORCA is given
   `%pal`, and without OpenMPI it cannot run. Settings, *Calculations*,
-  *Cores for each* set to 1 runs it.
+  *Cores for each* set to 1 runs it. Where it cannot, the step's failure
+  says so plainly, with what to do (2026-10-30): *ORCA runs on more than
+  one core only with Open MPI, whose mpirun this computer does not have
+  (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
+  install Open MPI* - ORCA's own words being only that it ended by an error at its
+  start-up. Meno never runs it on fewer cores than asked without a word.
 - **A conformer set worked out by Gaussian** keeps each conformer in its
   standard orientation: the turn is one for the molecule, not each frame.
 
