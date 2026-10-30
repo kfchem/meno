@@ -258,6 +258,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M4.4 13.6 L2 16 L4.4 18.4 M15.6 13.6 L18 16 L15.6 18.4 M2.4 16 H4.4 M15.6 16 H17.6" />
     </>
   ),
+  // (Optimise's well turned over: a ball at the top of a barrier, an arrow up into it)
+  saddle: (
+    <>
+      <path d="M2.5 17 C5 5, 15 5, 17.5 17" />
+      <circle cx="10" cy="6.9" r="1.9" fill="currentColor" />
+      <path d="M10 17.2 V10.6 M7.6 12.6 L10 10.2 L12.4 12.6" strokeWidth={2} />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */

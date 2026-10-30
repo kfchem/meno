@@ -1010,6 +1010,15 @@ for that one. Where a side stopped before its end, `optimised` false and a
 warning in the program's words: the molecule goes out of *Failed*, the path
 as far as it came.
 
+### Optimise to a saddle point
+
+A plugin filling *Optimise to a saddle point* is sent each guess as any
+entry is; where the step's sides are wired, with them beside it (`sides`,
+`reactant` and `product`, each an entry of the guess's atoms in one
+numbering, of one charge and spin - Meno has checked both). A plugin whose
+program takes no sides refuses a guess sent with them, saying so. What it
+reads back is an optimisation's output, as *Optimise*'s is.
+
 ### Generate
 
 *Generate* makes new structures from nothing that comes in, so it has no

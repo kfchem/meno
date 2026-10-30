@@ -298,6 +298,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below); one whose side stopped before its end, or whose job failed, out of its second exit, *Failed*, saying why |
+| Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
@@ -457,6 +458,35 @@ after it. Meno calls none of it a saddle point or a minimum.
   the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
   own unless said (the manual's 4.4.2 states none; ORCA 6.1.1 prints 20).
   The first Hessian is ORCA's: computed where none comes with the point.
+
+### Optimise to a saddle point
+
+*Optimise to a saddle point* (2026-10-29) optimises each guess towards a
+saddle point with its program, and does nothing else (one role to a step):
+its frequencies are a *Frequencies* step's, wired after it, and the
+chemist's *Filter* on `imaginary` decides what is one. Meno calls none of
+them a saddle point.
+
+- **Guesses**, and **sides**, both or neither. Where *Reactant side* and
+  *Product side* are wired, each guess is paired with one of each as the
+  step's *Pairs* says - in order, each with each, or matched on a property
+  (a *Tag*'s *path*, say) - for a program that takes them (a search from
+  three structures). A side must be the guess's atoms in one numbering, of
+  one charge and spin, or that guess goes out of *Failed* saying why; a
+  side need be no optimisation, at no level. One side wired without the
+  other runs nothing, saying so.
+- **What it gives.** Each guess optimised, its way there as frames, its last
+  geometry its entry. One that did not converge goes out of *Failed* at the
+  last geometry it reached, for a run again to start from.
+- **What it gives** is never passed on as converged where its reader could
+  not say whether it converged: that guess goes out of *Failed*, saying so.
+- **ORCA's plugin** runs OptTS (the ORCA 6.1 manual, *Transition State
+  Searches*), at the method and basis set given: the step has no level of
+  its own unless set. Its *First Hessian* is computed
+  at the start (`Calc_Hess`), "the most straightforward option" (4.3.2.1),
+  or ORCA's model one. At ORCA's own xTB, which has no analytic Hessian,
+  ORCA computes it numerically, and the step's line says so. ORCA's OptTS
+  takes no sides: wired, the step is refused.
 
 ### Who does a step
 

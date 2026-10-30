@@ -44,6 +44,7 @@ export const STEP_KINDS = [
   "add",
   "reaction",
   "reaction-path",
+  "saddle-point",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 

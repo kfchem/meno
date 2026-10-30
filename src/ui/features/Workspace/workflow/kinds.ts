@@ -46,7 +46,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -146,6 +146,22 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
+/** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
+const PAIRS_OWN: readonly Option[] = [
+  {
+    id: "pairs",
+    label: "Pairs",
+    type: "choice",
+    choices: [
+      { value: "order", label: "In order" },
+      { value: "each", label: "Each with each" },
+      { value: "property", label: "Matched on" },
+    ],
+    default: "order",
+  },
+  { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+];
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
@@ -172,20 +188,26 @@ export const KINDS: readonly KindInfo[] = [
     ],
     others: [FAILED],
     whole: true,
-    own: [
-      {
-        id: "pairs",
-        label: "Pairs",
-        type: "choice",
-        choices: [
-          { value: "order", label: "In order" },
-          { value: "each", label: "Each with each" },
-          { value: "property", label: "Matched on" },
-        ],
-        default: "order",
-      },
-      { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+    own: PAIRS_OWN,
+  },
+  {
+    // (a guess optimised to a saddle point by its program - with the reactant and product sides, where both are wired, each paired with
+    //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
+    kind: "saddle-point",
+    name: "Optimise to a saddle point",
+    icon: "saddle",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "program",
+    made: "Optimised structures",
+    inputs: [
+      { id: "guesses", name: "Guesses", takes: ["molecules"] },
+      { id: "reactant", name: "Reactant side", takes: ["molecules"], optional: true, together: "product" },
+      { id: "product", name: "Product side", takes: ["molecules"], optional: true, together: "reactant" },
     ],
+    others: [FAILED],
+    whole: true,
+    own: PAIRS_OWN,
   },
   // (from each point given - a saddle point, as its frequencies say - down both ways, as its program follows the reaction path: one molecule
   //  each, its frames the path from one end to the other, its entry the point it started from; Meno judges none of them - docs/WORKFLOWS.md)

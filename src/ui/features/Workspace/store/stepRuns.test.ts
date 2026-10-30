@@ -645,6 +645,45 @@ describe("a step that runs a plugin's program", () => {
     expect(st().frames3d[path.id]).toBe(2);
   });
 
+  it("optimises guesses to saddle points - with their sides where both are wired, each paired as its options say; one side alone runs nothing", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const { doc, st } = editor();
+    // (water to guess from, water again on each side - its hydrogens elsewhere - and a hydrogen molecule among the reactant sides)
+    doc.edit("sides", (d) => {
+      const water = d.molecules3d![0];
+      const moved = (dy: number, x: number) => ({ ...water, atoms: water.atoms.map((a, i) => (i === 1 ? { ...a, y: a.y + dy } : a)), at: { x, y: 0 } });
+      return addMolecule3d(addMolecule3d(addMolecule3d(d, moved(0.2, 20)), { atoms: [{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.74, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], at: { x: 24, y: 0 } }), moved(-0.2, 40));
+    });
+    const guesses = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 6 });
+    const reactants = st().addSet({ x0: 17, y0: -3, x1: 27, y1: 3 });
+    const products = st().addSet({ x0: 37, y0: -3, x1: 43, y1: 3 });
+    const step = st().addStep("saddle-point", "orca", 60, 0);
+    st().connect({ set: guesses }, step, "guesses");
+    // (one side alone: none of it runs, saying why)
+    st().connect({ set: reactants }, step, "reactant");
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Reactant side is wired: wire Product side too, or neither" });
+    // (both, each with each: the guess with each reactant side and the product side - the hydrogen molecule no side of it, out of Failed)
+    st().connect({ set: products }, step, "product");
+    st().updateStep(step, { options: { pairs: "each" } });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPTTS\n" }], reads: [] }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    const sent = worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1];
+    expect(sent[0]).toBe("saddle-point");
+    const given = sent[1] as { atoms: { y: number }[]; sides?: { reactant: { atoms: { y: number }[] }; product: { atoms: { y: number }[] } } }[];
+    expect(given).toHaveLength(1);
+    const water = st().molecules3d[0];
+    expect([given[0].sides?.reactant.atoms[1].y, given[0].sides?.product.atoms[1].y].map((y) => Math.round((y! - water.atoms[1].y) * 10) / 10)).toEqual([0.2, -0.2]);
+    Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, files: {} });
+    await st().lookAtJobs();
+    await ran;
+    const failed = st().steps.find((s) => s.id === step)!.ran;
+    expect(failed?.said).toContain("not the same atoms in one numbering");
+  });
+
   it("says it was stopped, and brings nothing in", async () => {
     const { st, step } = editor();
     const ran = st().runStep(step);

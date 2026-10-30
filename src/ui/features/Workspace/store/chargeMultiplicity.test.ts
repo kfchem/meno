@@ -309,6 +309,8 @@ function readPrinted(_name: string, text: string) {
       atoms: atoms.map((a) => a[0]),
       frames: [atoms.flatMap((a) => a.slice(1).map(Number))],
       energies: [Number(lines[lines.length - 1].split(" ")[1])],
+      // (a stand-in's run ended where it should: an optimisation's said converged, as a reader of one finished says)
+      optimised: true,
       ...(saying ? { charge, multiplicity } : {}),
     },
     readers: ["stand-in 1"],
@@ -368,6 +370,7 @@ function worker(plugin: string) {
           atoms: e.atoms.map((a) => a.el),
           frames: made[i].frames,
           energies: made[i].energies,
+          optimised: true,
           ...(saying && plugin !== "rdkit" ? { charge: e.charge, multiplicity: e.multiplicity } : {}),
         })),
       };

@@ -18,7 +18,7 @@ import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutpu
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { inputOf, type Flow } from "./flow";
-import { levelKey, levelSaid, pairEntries } from "./pairs";
+import { levelKey, levelSaid, matchesOf, pairEntries, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
@@ -84,7 +84,16 @@ export function pluginEntry(e: SetEntry): PluginEntry {
   if (!species) throw new Error(skeletonWhy());
   const { charge, multiplicity } = species;
   // (the end it is paired with, where it is a pair's start: given as it is, beside it - Path search's)
-  return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity, ...(e.end ? { end: pluginEntry(e.end) } : {}) };
+  return {
+    schema: ENTRY_SCHEMA,
+    ...molecule,
+    atoms,
+    charge,
+    multiplicity,
+    ...(e.end ? { end: pluginEntry(e.end) } : {}),
+    // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
+    ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
+  };
 }
 
 /**
@@ -327,7 +336,7 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
  * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, sides: _sides, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
 /** An entry worked out anew by a calculation whose energy is its own - an optimisation's, frequencies', a conformer search's: without the energy it came with, which is another calculation's, where the new one read none. */
 const anewWithoutEnergy = (entry: SetEntry): SetEntry => {
@@ -389,7 +398,9 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   if (!frames.length) return { kind: "no-geometry", why: "It read back no geometry" };
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
   const last = frames[frames.length - 1];
-  const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
+  // (an optimisation's way there - to a minimum, or to a saddle point - its frames before its last)
+  const optimising = kind === "optimise" || kind === "saddle-point";
+  const path = optimising && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
@@ -402,7 +413,9 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
-    ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+    ...(out.optimised === false && (optimising || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+    // (a saddle point's optimisation whose reader could not say whether it converged: never passed on as converged)
+    ...(kind === "saddle-point" && out.optimised == null ? { failed: { kind: "failed" as const, why: "Whether the optimisation converged could not be read" } } : {}),
   };
 }
 
@@ -583,6 +596,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
  */
 export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
   const ports = inputsOf(kind);
+  if (kind === "saddle-point") return guessesWithSides(d, step, options);
   if (kindInfo(kind).runs === "program" && ports.length === 2) {
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
     if (!start || start.holds === "structures") return null;
@@ -593,6 +607,49 @@ export function programEntries(d: Flow, step: number, kind: StepKind, options: O
   const input = inputOf(d, step);
   if (!input || input.holds === "structures") return null;
   return { entries: jobEntries(kind, setEntries(input.molecules, input.holds), input.holds), holds: input.holds, refused: [] };
+}
+
+/**
+ * The guesses an *Optimise to a saddle point* step takes: each that came
+ * in - or, where its sides are wired, both of them, each guess paired with
+ * a reactant side and a product side as its *Pairs* option says (pairs
+ * `pairEntries`), one guess for each such three; a guess paired with none,
+ * or with a side of other atoms, another numbering, charge or spin, kept
+ * and refused with why. One side wired without the other: none of it runs.
+ */
+function guessesWithSides(d: Flow, step: number, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
+  const [guesses, reactant, product] = ["guesses", "reactant", "product"].map((port) => inputOf(d, step, port));
+  if (!guesses || guesses.holds === "structures") return null;
+  const taken = setEntries(guesses.molecules, guesses.holds);
+  if (!reactant && !product) return { entries: taken, holds: "molecules", refused: [] };
+  if (!reactant || !product) return { why: `${reactant ? "Reactant side" : "Product side"} is wired: wire ${reactant ? "Product side" : "Reactant side"} too, or neither` };
+  if (reactant.holds === "structures" || product.holds === "structures") return { why: "Its sides must be molecules in 3D" };
+  const pairing = options.pairs === "each" || options.pairs === "property" ? options.pairs : "order";
+  const property = String(options.property ?? "");
+  const as = (second: string, other: string): PairAs => ({ first: "Guesses", second, one: "guess", other, unlike: sideUnlike(other) });
+  const [reactants, products] = [reactant, product].map((x) => setEntries(x.molecules, x.holds as "molecules" | "conformers"));
+  const r = matchesOf(taken, reactants, pairing, property, as("Reactant side", "reactant side"));
+  if (!("ends" in r)) return r;
+  const p = matchesOf(taken, products, pairing, property, as("Product side", "product side"));
+  if (!("ends" in p)) return p;
+  // (each guess with each reactant side and each product side it is paired with - one of each, but each with each)
+  const entries: SetEntry[] = [];
+  const refused: { entry: number; why: string }[] = [];
+  taken.forEach((guess, k) => {
+    const none = r.why[k] ?? p.why[k] ?? (!r.ends[k].length ? "it is paired with no reactant side" : !p.ends[k].length ? "it is paired with no product side" : undefined);
+    if (none) {
+      refused.push({ entry: entries.length, why: none });
+      entries.push({ ...guess });
+      return;
+    }
+    for (const i of r.ends[k])
+      for (const j of p.ends[k]) {
+        const why = sideUnlike("reactant side")(guess, reactants[i]) ?? sideUnlike("product side")(guess, products[j]);
+        if (why) refused.push({ entry: entries.length, why });
+        entries.push({ ...guess, sides: { reactant: reactants[i], product: products[j] } });
+      }
+  });
+  return { entries, holds: "molecules", refused };
 }
 
 /** The entries a step's jobs are prepared for: each that came in - but a conformer search on a conformer set searches each compound once, from its first conformer. */
