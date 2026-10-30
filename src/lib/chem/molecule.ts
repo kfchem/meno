@@ -207,9 +207,15 @@ export type ParsedAtom = AtomChem & { x: number; y: number; z: number; alias?: t
 /**
  * A bond as a file gives it, between atoms by index: its CTfile bond type
  * (1 to 10) as `order`, and its stereo as V2000 codes - a single bond's 1
- * up, 4 either, 6 down; a double bond's 3, cis or trans not known.
+ * up, 4 either, 6 down; a double bond's 3, cis or trans not known. A
+ * coordination bond is type 9 (`COORDINATION_BOND`), `a1` the atom that
+ * lends its pair - as a molecule in 3D holds one made from a drawing's
+ * dative arrow or coordination bond, too: one way for both.
  */
 export type ParsedBond = { a1: number; a2: number; order: number; stereoCode?: number };
+
+/** The CTfile's bond type for a coordination (dative) bond ("CTfile Formats", the bond block). */
+export const COORDINATION_BOND = 9;
 /**
  * A molecule as a file gives it. A CTfile's carries all the file said
  * besides (lib/chem/ctfile), its atoms and bonds in the same order.

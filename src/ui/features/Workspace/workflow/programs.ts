@@ -12,10 +12,11 @@ import { ENTRY_SCHEMA, geometryKey, type By, type Property } from "../../../../l
 import { factor } from "../../../../lib/units";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
-import { setEntries, withoutCarried, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, pairEntries } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
@@ -69,7 +70,8 @@ export function pluginEntry(e: SetEntry): PluginEntry {
       ...(a.radical ? { radical: a.radical } : {}),
       ...(a.isotope ? { isotope: a.isotope } : {}),
     })),
-    bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),
+    // (a coordination bond single and marked, as the entry record holds one: docs/PLUGINS.md, *The entry a plugin is given*)
+    bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order })),
   };
   // (an isotope's mass with it, where NIST gives a measured one: what a program's input takes - ORCA's "M =")
   const atoms = molecule.atoms.map((a) => {
@@ -327,6 +329,12 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  */
 const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
+/** An entry worked out anew by a calculation whose energy is its own - an optimisation's, frequencies', a conformer search's: without the energy it came with, which is another calculation's, where the new one read none. */
+const anewWithoutEnergy = (entry: SetEntry): SetEntry => {
+  const { energy: _energy, ...rest } = anew(entry);
+  return rest;
+};
+
 /** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
 export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
 
@@ -384,8 +392,9 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
+  if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   return {
-    ...anew(entry),
+    ...(kind === "optimise" || kind === "frequencies" ? anewWithoutEnergy(entry) : anew(entry)),
     // (what it came as - its structure drawn - where it still is that compound)
     ...keptAnew(entry, last, calc?.charge),
     xyz: [...last],
@@ -393,6 +402,59 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
     ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+  };
+}
+
+/** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
+const SAME_PLACE = 1e-3;
+
+/**
+ * Whether two geometries of the same atoms are one shape - each distance
+ * between two atoms within `SAME_PLACE` - however turned or moved as a
+ * whole; and of one hand, not each other's mirror image (whose distances
+ * are the same): the two, each about its centre, are turned one onto the
+ * other, not reflected - their cross-covariance's determinant is not
+ * negative. A flat geometry's mirror image is itself turned over.
+ */
+function sameShape(a: readonly number[], b: readonly number[]): boolean {
+  const n = a.length / 3;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const d = (x: readonly number[]) => Math.hypot(x[3 * i] - x[3 * j], x[3 * i + 1] - x[3 * j + 1], x[3 * i + 2] - x[3 * j + 2]);
+      if (Math.abs(d(a) - d(b)) > SAME_PLACE) return false;
+    }
+  const centre = (x: readonly number[]) => [0, 1, 2].map((c) => x.reduce((s, v, k) => (k % 3 === c ? s + v : s), 0) / n);
+  const [ca, cb] = [centre(a), centre(b)];
+  const h = [0, 1, 2].map((r) => [0, 1, 2].map((c) => Array.from({ length: n }, (_, k) => (a[3 * k + r] - ca[r]) * (b[3 * k + c] - cb[c])).reduce((s, v) => s + v, 0)));
+  const det = h[0][0] * (h[1][1] * h[2][2] - h[1][2] * h[2][1]) - h[0][1] * (h[1][0] * h[2][2] - h[1][2] * h[2][0]) + h[0][2] * (h[1][0] * h[2][1] - h[1][1] * h[2][0]);
+  // (how large a determinant the geometry's own spread would give: a flat one's is next to none, of either sign)
+  const spread = Array.from({ length: n }, (_, k) => [0, 1, 2].reduce((s, c) => s + (a[3 * k + c] - ca[c]) ** 2, 0)).reduce((s, v) => s + v, 0);
+  return det >= -1e-6 * spread ** 3;
+}
+
+/**
+ * A single point's entry (an *Energy* step's): its energy at the entry's
+ * own geometry, kept as it came - its key with it - though its program
+ * turned it to its own orientation or printed it rounded; and what the
+ * entry carried of the calculation it came from (entries `CALC_CARRIED`:
+ * a Frequencies step's thermochemistry, its vibrations), of that geometry
+ * still, each with its own level: so an energy at one level and a
+ * correction to G at another stand on one geometry, for *Add* to sum. A
+ * program that moved an atom ran no single point: that entry fails.
+ */
+function singlePointWorked(entry: SetEntry, last: number[], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
+  if (!energies) return { kind: "failed", why: "It read back no energy" };
+  if (!sameShape(entry.xyz, last)) return { kind: "failed", why: "Its atoms moved in what was to be a single point: its energy is of another geometry" };
+  const was = anew(entry);
+  const carried = { ...calcProperties(entry), ...Object.fromEntries(CALC_CARRIED.flatMap((k) => (entry.properties?.[k] ? [[k, entry.properties[k]]] : []))) };
+  const properties = { ...was.properties, ...carried };
+  return {
+    ...was,
+    ...keptAnew(entry, entry.xyz, calc?.charge),
+    xyz: [...entry.xyz],
+    energy: energies[energies.length - 1],
+    calc,
+    ...(Object.keys(properties).length ? { properties } : {}),
   };
 }
 
@@ -465,7 +527,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
   // (a search of its own: all the conformers it found, whole - whatever the entry it began from was a part of)
   const { partOf: _part, ...from } = entry;
   return frames.map((f, k) => ({
-    ...anew(from),
+    ...anewWithoutEnergy(from),
     // (each still linked to the structure drawn the entry was made from, where it is still that compound)
     ...keptAnew(entry, f, calc?.charge),
     number: k + 1,
