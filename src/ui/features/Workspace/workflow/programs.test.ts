@@ -180,6 +180,20 @@ describe("what a plugin reads back of a job", () => {
     expect(workedOf("energy", WATER, { ...out, frames: [[1, 2]] }, ["xtb 6.7.1"])).toEqual({ kind: "no-geometry", why: "It read back no geometry" });
   });
 
+  it("starts a failed run's entry from its geometry alone: no energy, calculation or mark of it carried on, where the program reads none", () => {
+    // (a run that stopped, its entry out of Failed - with an energy on it, as a stale one would be - worked out again by a program that read no energy)
+    const stopped: SetEntry = { ...WATER, energy: -76.1, calc: { readers: [], program: "ORCA", method: "B3LYP" }, failed: { kind: "program-error", why: "ORCA finished by error termination in SCF" } };
+    const unread = { ...out, energies: undefined };
+    const w = workedOf("optimise", stopped, unread, ["xtb 6.7.1"]);
+    if (isFailure(w)) throw new Error(w.why);
+    expect(w.energy).toBeUndefined();
+    expect(w.failed).toBeUndefined();
+    expect(w.calc).toMatchObject({ program: "xtb" });
+    // (and where it reads one, that one alone)
+    const read = workedOf("optimise", stopped, out, ["xtb 6.7.1"]);
+    expect(!isFailure(read) && read.energy).toBe(-5.0705);
+  });
+
   it("gives back none of what the entry came with that is not so of what the program worked out: how it was made, what its energies were from, its stereo labels", () => {
     // (water made by a conformer search, its energy MMFF94's, optimised by xTB: its energy is now xTB's, and says so only)
     const made = { ...WATER, calc: { readers: [], program: "RDKit", method: "MMFF94" }, keep: { made: { how: [], energies: "MMFF94" } } };

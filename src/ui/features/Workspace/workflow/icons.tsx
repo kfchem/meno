@@ -160,6 +160,23 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="16" cy="17" r="2.1" fill="currentColor" stroke="none" />
     </>
   ),
+  // (the same atom before and after: across the reaction arrow, linked)
+  reaction: (
+    <>
+      <circle cx="3.6" cy="7" r="2.3" fill="currentColor" stroke="none" />
+      <circle cx="16.4" cy="7" r="2.3" fill="currentColor" stroke="none" />
+      <path d="M6.8 7 H13.4 M11.4 5.1 L13.4 7 L11.4 8.9" />
+      <path d="M3.6 10.4 V14.2 H16.4 V10.4" strokeDasharray="1.3 1.6" />
+    </>
+  ),
+  // (an atom moved along: where it stood, dashed)
+  moved: (
+    <>
+      <circle cx="6" cy="10" r="3.2" strokeDasharray="1.4 1.5" />
+      <circle cx="14" cy="10" r="3.2" fill="currentColor" stroke="none" />
+      <path d="M7.6 10 H9.8 M8.5 8.5 L10 10 L8.5 11.5" strokeWidth={1.5} />
+    </>
+  ),
   // (a chain as drawn, the same as its reference)
   compare: (
     <>
@@ -231,6 +248,22 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <rect x="2" y="5.5" width="16" height="9" rx="2" />
       <path d="M5.2 8.2 L6.6 7.6 V12.4 M8.9 12.4 V12.3 M11 8.4 C11.6 7.4, 13.8 7.4, 13.6 9 C13.4 10.2, 11.2 10.9, 11 12.4 H13.9" strokeWidth={1.3} />
       <path d="M15.8 7.6 V12.4" strokeWidth={1} />
+    </>
+  ),
+  // (from the top of a barrier, down both ways)
+  descent: (
+    <>
+      <path d="M4.2 16 C7.2 16, 7.4 6, 10 6 C12.6 6, 12.8 16, 15.8 16" />
+      <circle cx="10" cy="6" r="2" fill="currentColor" stroke="none" />
+      <path d="M4.4 13.6 L2 16 L4.4 18.4 M15.6 13.6 L18 16 L15.6 18.4 M2.4 16 H4.4 M15.6 16 H17.6" />
+    </>
+  ),
+  // (Optimise's well turned over: a ball at the top of a barrier, an arrow up into it)
+  saddle: (
+    <>
+      <path d="M2.5 17 C5 5, 15 5, 17.5 17" />
+      <circle cx="10" cy="6.9" r="1.9" fill="currentColor" />
+      <path d="M10 17.2 V10.6 M7.6 12.6 L10 10.2 L12.4 12.6" strokeWidth={2} />
     </>
   ),
   // (levels made one, lower than any: an ensemble's energy)

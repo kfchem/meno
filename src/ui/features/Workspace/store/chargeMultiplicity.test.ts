@@ -309,6 +309,8 @@ function readPrinted(_name: string, text: string) {
       atoms: atoms.map((a) => a[0]),
       frames: [atoms.flatMap((a) => a.slice(1).map(Number))],
       energies: [Number(lines[lines.length - 1].split(" ")[1])],
+      // (a stand-in's run ended where it should: an optimisation's said converged, as a reader of one finished says)
+      optimised: true,
       ...(saying ? { charge, multiplicity } : {}),
     },
     readers: ["stand-in 1"],
@@ -368,6 +370,7 @@ function worker(plugin: string) {
           atoms: e.atoms.map((a) => a.el),
           frames: made[i].frames,
           energies: made[i].energies,
+          optimised: true,
           ...(saying && plugin !== "rdkit" ? { charge: e.charge, multiplicity: e.multiplicity } : {}),
         })),
       };
@@ -426,12 +429,13 @@ const chem = {
  * Compare bonding and Torsion restraints take two inputs, which this wires one of: each against its own
  * (workflow/pairedSteps.test) - Merge, Compare bonding and Torsion restraints give back the entries that came in, Re-bond its
  * bonding entry's charge and multiplicity. Path search takes two too, each pair of one charge and spin or refused
- * (workflow/pathSearch.test).
+ * (workflow/pathSearch.test). Follow the reaction path reads back a path, never one geometry: its
+ * entry keeps the charge and multiplicity that came in (workflow/reactionPath.test).
  */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "add" && kind !== "ensemble");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -517,9 +521,10 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join - by their own tests; Number, given nothing; Add, which needs values of one geometry named, by its own tests, and changes no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
     // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join - by their own tests; Number, given nothing; Add and Ensemble energy, which need values named, by their own tests, and change no atom)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding", "join", "torsion-restraints", "number", "add", "ensemble"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding", "join", "torsion-restraints", "number", "add", "reaction", "displace", "ensemble"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

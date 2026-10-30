@@ -11,7 +11,7 @@ import type { DrawnModel, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowSte
 import type { OptionValues } from "../../../../lib/options";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMembers, structureMember, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
-import { CHART_PX, PX, SET_PAD, SET_TOP, TABLE_PX } from "./look";
+import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
 import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
@@ -36,11 +36,16 @@ export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet[
  * put down with its middle at `at`, as large as its first rows take, named
  * `name`: a chemist's set, holding nothing else.
  */
-/** How large a set holding a table is put down, on the page: its first rows, and what it is. */
+/** How large a set holding a table is put down, on the page, at the most: its first rows, and what it is. */
 export const TABLE_SET = { w: TABLE_PX.w * PX + 2 * SET_PAD, h: SET_TOP + TABLE_PX.h * PX + SET_PAD };
 
+/** How large a set holding `table` is made: as wide as a table's set, and as tall as its body draws (look `tableBodyPx`) under its name - no taller, nothing under its last line. */
+export function tableSetSize(table: Pick<Table, "rows">): { w: number; h: number } {
+  return { w: TABLE_SET.w, h: 2 * NAME_DOWN + tableBodyPx(table.rows.length) * PX + SET_PAD };
+}
+
 export function addTableSet(doc: WorkspaceDocument, at: { x: number; y: number }, table: Table, name?: string): WorkspaceDocument {
-  const { w, h } = TABLE_SET;
+  const { w, h } = tableSetSize(table);
   const id = idOf(doc);
   const set: WorkflowSet = { id, x0: at.x - w / 2, x1: at.x + w / 2, y0: at.y - h / 2, y1: at.y + h / 2, ...(name ? { name } : {}), members: [], table };
   return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
@@ -89,6 +94,11 @@ export function holdNumber(doc: WorkspaceDocument, id: number, number: NumberVal
 /** A step's result set holding a chart it made (`WorkflowSet.chart`): nothing on the page among its members, and no molecules of its own. */
 export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue | DiagramValue): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));
+}
+
+/** A step's result set holding a table it made (`WorkflowSet.table`; a Reaction's bond changes): nothing on the page among its members, and no molecules of its own. */
+export function holdTable(doc: WorkspaceDocument, id: number, table: Table): WorkspaceDocument {
+  return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], table }));
 }
 
 /** A result set of structures drawn with the atoms its step put on the page (`WorkflowSet.put`) - none, where it put none. */

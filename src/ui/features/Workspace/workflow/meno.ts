@@ -12,14 +12,15 @@ import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEne
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
 import { rankedSet } from "./valueSteps";
 import { joinedSet } from "./joinStep";
 import { ensembleSet } from "./ensembleStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
-import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
+import { displaceRead, kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
@@ -35,7 +36,7 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 export type Outcome = Outcome3D | DrawnOutcome;
 /** What a step did on molecules in 3D (`Outcome`). */
 export type Outcome3D =
-  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[] }
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[]; tables?: Readonly<Record<string, Table>> }
   | { ok: false; said: string };
 /** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
 export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string; core?: SeriesCore } | { ok: false; said: string };
@@ -79,19 +80,28 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return measuredSet(entries, holds, String(options.measurements ?? ""));
     case "restraints":
       return restrainedSet(entries, holds, options);
+    case "displace": {
+      const r = displaceRead(options);
+      return "why" in r ? { ok: false, said: r.why } : displacedSet(entries, holds, r);
+    }
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints* and *Join*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join"];
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints*, *Join* and *Reaction*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join", "reaction"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
+  const o = optionsOf(kindInfo(kind).options ?? [], own);
+  // (Merge of two sets, one of them empty: nothing of it to add - the other's entries, its line saying so; both empty, nothing to merge)
+  if (kind === "merge" && !a.entries.length !== !b.entries.length) {
+    const out = mergedSet(a.entries, b.entries, a.entries.length ? a.holds : b.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
+    return out.ok ? { ...out, said: `${out.said} · nothing came from ${a.entries.length ? "Second" : "First"}` } : out;
+  }
   if (!a.entries.length) return { ok: false, said: "Nothing came into its first input" };
   if (!b.entries.length) return { ok: false, said: "Nothing came into its second input" };
-  const o = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
     case "merge":
       return mergedSet(a.entries, b.entries, a.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
@@ -114,6 +124,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
       return joinedSet(a.entries, b.entries, a.holds, String(o.on ?? ""), String(o.carry ?? ""));
     case "torsion-restraints":
       return torsionsSet(a.entries, b.entries, a.holds, o);
+    case "reaction":
+      return reactionSet(a.entries, b.entries, o.maps === "every" ? "every" : "first");
     default:
       return { ok: false, said: "Meno does not do this itself on two inputs" };
   }

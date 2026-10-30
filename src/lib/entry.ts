@@ -105,7 +105,11 @@ export type At = { geometry: string; kelvin?: number; atm?: number; solvent?: st
  * What worked a property out: the step and its run; the plugin and its
  * version; the program, method and basis, or the model and its version;
  * and, for a thermal quantity (a free energy, an enthalpy), the treatment
- * of its vibrations, as the program says it (none said: not known).
+ * of its vibrations, as the program says it (none said: not known), and
+ * the symmetry it took - the point group and the rotational symmetry
+ * number its rotational entropy counts, as the program printed them (none
+ * printed: not known). They are the molecule's, not a way of working out:
+ * two molecules' differ by right, so they never keep two values apart.
  */
 export type By = {
   step?: string;
@@ -117,6 +121,8 @@ export type By = {
   basis?: string;
   model?: string;
   treatment?: string;
+  pointGroup?: string;
+  symmetryNumber?: number;
 };
 
 /** Whether a property was worked out: computed, failed (why), or not applicable (why). */
@@ -294,7 +300,7 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
 }
 
 
-const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment"] as const;
+const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment", "pointGroup"] as const;
 
 /**
  * A table of numbers as a file gives one, read back: its columns, each a
@@ -318,18 +324,53 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
 }
 
 /**
+ * Restraints as a file gives them, read back (`Restraint`): each row a
+ * distance, a dihedral or atoms fixed, as many atoms as its kind holds,
+ * each a whole number from 0, a
+ * finite value and a strength above 0 where its kind has them, none where
+ * it has not. None where any row does not read - nothing held in part.
+ * Whether its atoms are the entry's is `valueFault`'s, as for any value.
+ */
+function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
+  const rows = (v as { restraints?: unknown } | null)?.restraints;
+  if (!Array.isArray(rows)) return undefined;
+  const out: Restraint[] = [];
+  for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
+    if (!r || typeof r !== "object" || (r.kind !== "distance" && r.kind !== "dihedral" && r.kind !== "fixed")) return undefined;
+    if (!Array.isArray(r.atoms) || !r.atoms.length || !r.atoms.every((a) => Number.isInteger(a) && (a as number) >= 0)) return undefined;
+    // (as many atoms as its kind holds: a distance two, a dihedral four, atoms fixed one or more)
+    if (r.kind !== "fixed" && r.atoms.length !== RESTRAINT_ATOMS[r.kind]) return undefined;
+    if (r.kind === "fixed") {
+      if (r.value != null || r.strength != null) return undefined;
+      out.push({ kind: "fixed", atoms: [...(r.atoms as number[])] });
+      continue;
+    }
+    if (typeof r.value !== "number" || !Number.isFinite(r.value) || typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
+    out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, strength: r.strength });
+  }
+  return { restraints: out };
+}
+
+/**
  * A property as a file or a plugin gives it, read back: its value - a
- * number, a text, true or false, or a table of numbers (`numberTableIn`) -
+ * number, a text, true or false, a table of numbers (`numberTableIn`), or
+ * restraints (`restraintsIn`) -
  * its unit, what worked it out and where (each field a text, a temperature
  * and a pressure numbers), and whether it was. None where any of that does
  * not read, or its value is of another kind - a list, a table of other
  * cells, modes - which a molecule on the page does not keep as a property.
+ * (Restraints read back from 2026-10-30: a workspace saved before kept them
+ * only until it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
   const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown; ensemble?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value: PropertyValue | undefined =
-    (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean" ? p.value : numberTableIn(p.value);
+    (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean"
+      ? p.value
+      : typeof p.value === "object" && p.value !== null && "restraints" in p.value
+        ? restraintsIn(p.value)
+        : numberTableIn(p.value);
   if (value === undefined) return undefined;
   if (!(p.unit === "none" || (typeof p.unit === "string" && isUnit(p.unit)))) return undefined;
   const st = p.status as { failed?: unknown; notApplicable?: unknown } | string | null | undefined;
@@ -375,7 +416,10 @@ function byIn(v: unknown): By | undefined | null {
   if (v == null) return undefined;
   const b = v as Record<string, unknown>;
   if (typeof b !== "object" || BY_FIELDS.some((f) => b[f] != null && typeof b[f] !== "string")) return null;
-  return Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : [])));
+  // (a symmetry number: a whole number, 1 or more)
+  const sigma = b.symmetryNumber;
+  if (sigma != null && !(typeof sigma === "number" && Number.isInteger(sigma) && sigma >= 1)) return null;
+  return { ...Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : []))), ...(sigma != null ? { symmetryNumber: sigma as number } : {}) };
 }
 
 /** Where a value was worked out, as a file gives it, read back: its geometry's key, a temperature and pressure, a solvent; none where none is given; null where it does not read. */
