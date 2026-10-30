@@ -49,7 +49,7 @@ export default function UpdateSettings() {
           <div className="text-sm text-gh-black">Keep Meno up to date</div>
           <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
             Meno {u.current}. A newer version is looked for on GitHub and downloaded in the
-            background, and goes in when you quit Meno. Each look is kept in the record below, and nothing
+            background, and goes in when you quit Meno. Each check is kept in the record below, and nothing
             goes out while Meno works offline.
           </p>
         </div>
