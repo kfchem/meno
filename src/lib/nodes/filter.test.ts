@@ -186,7 +186,7 @@ describe("Filter, a property against another of the same entry", () => {
     const eq = at("=");
     if (!eq.ok) throw new Error(eq.said);
     expect(ids(eq.exits.kept)).toEqual(["eq"]);
-    expect(eq.exits.rest.map((e) => e.status)).toEqual([{ aside: "not a = its b (1 kcal/mol and 1.003824 kcal/mol)" }, { aside: "its b is in Å, which does not convert to kcal/mol" }]);
+    expect(eq.exits.rest.map((e) => e.status)).toEqual([{ aside: "not a = its b (1 kcal/mol and 4.2 kJ/mol)" }, { aside: "its b is in Å, which does not convert to kcal/mol" }]);
     const lt = at("<");
     expect(lt.ok && ids(lt.exits.kept)).toEqual(["lt"]);
   });
@@ -194,7 +194,7 @@ describe("Filter, a property against another of the same entry", () => {
   it("compares a text with a text only, and by = and ≠ alone", () => {
     const es = [entry("x", { a: word("b"), n: quantity(2, "none") })];
     const kind = filter(es, { conditions: [{ property: "a", compare: "=", its: "n" }], match: "all" });
-    expect(kind.ok && kind.exits.rest[0].status).toEqual({ aside: "its a and its n are not of one kind" });
+    expect(kind.ok && kind.exits.rest[0].status).toEqual({ aside: "its a is a text and its n a number" });
     const order = filter(es, { conditions: [{ property: "a", compare: "<", its: "a" }], match: "all" });
     expect(order.ok && order.exits.rest[0].status).toEqual({ aside: "a < its a: a text or true/false is compared by = or ≠ alone" });
   });

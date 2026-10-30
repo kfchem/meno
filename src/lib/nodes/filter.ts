@@ -17,7 +17,7 @@
  * converted within its dimension. An entry without either property does
  * not meet it, and says which it has not.
  */
-import type { Entry } from "../entry";
+import type { Entry, Property } from "../entry";
 import { isUnit, UNITS, type Unit } from "../units";
 import { entries as count, numberIn, setAside, tally, unitLabel, unreadable, type NodeOutcome } from "./base";
 
@@ -99,6 +99,9 @@ function meets(e: Entry, c: Condition): Met {
   return compares(p!.value as string | boolean, c.compare, c.value) || { why: `not ${conditionText(c)} (${String(p!.value)})`, asked: true };
 }
 
+/** What kind a property's value is, in words: "a number", "a text", "true or false" - or what else it holds. */
+const kindOf = (v: Property["value"]): string => (typeof v === "number" ? "a number" : typeof v === "string" ? "a text" : typeof v === "boolean" ? "true or false" : "neither a number nor a text");
+
 /**
  * Whether an entry's property compares as asked with another of its own:
  * both there and worked out, else why not, naming which it has not; two
@@ -116,11 +119,12 @@ function meetsIts(e: Entry, c: Extract<Condition, { its: string }>): Met {
     if ("why" in v) return { why: v.why, asked: false };
     const left = numberIn(e, c.property, unit);
     if ("why" in left) return { why: left.why, asked: false };
-    const said = (x: number) => `${trim(x)}${unit !== "none" ? ` ${unitLabel(unit)}` : ""}`;
-    return compares(left.value, c.compare, v.value) || { why: `not ${conditionText(c)} (${said(left.value)} and ${said(v.value)})`, asked: true };
+    // (each said as the entry holds it, in its own unit - never a number converted that the chemist never had)
+    const held = (q: Property) => `${trim(q.value as number)}${q.unit !== "none" ? ` ${unitLabel(q.unit)}` : ""}`;
+    return compares(left.value, c.compare, v.value) || { why: `not ${conditionText(c)} (${held(p!)} and ${held(e.properties[c.its]!)})`, asked: true };
   }
   const q = e.properties[c.its]!;
-  if (typeof q.value !== typeof p!.value) return { why: `its ${c.property} and its ${c.its} are not of one kind`, asked: false };
+  if (typeof q.value !== typeof p!.value) return { why: `its ${c.property} is ${kindOf(p!.value)} and its ${c.its} ${kindOf(q.value)}`, asked: false };
   if (c.compare !== "=" && c.compare !== "≠") return { why: `${conditionText(c)}: a text or true/false is compared by = or ≠ alone`, asked: false };
   return compares(p!.value as string | boolean, c.compare, q.value as string | boolean) || { why: `not ${conditionText(c)} (${String(p!.value)} and ${String(q.value)})`, asked: true };
 }
