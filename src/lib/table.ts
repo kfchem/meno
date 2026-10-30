@@ -350,7 +350,7 @@ export const WHAT_COLUMN = "what";
 // ---- kept in a file ----
 
 /** A number, as a value: with its unit (or none), and what worked it out and where, where known. */
-export type NumberValue = { value: number; unit: Unit | "none"; by?: By; at?: At };
+export type NumberValue = { value: number; unit: Unit | "none"; by?: By; at?: At; /** The temperature it is of, where it is of one and of no geometry: a standard-state term's. */ kelvin?: number };
 
 const isText = (v: unknown): v is string => typeof v === "string";
 
@@ -445,7 +445,9 @@ export function numberIn(v: unknown, lost: Lost = NO_COUNT): NumberValue | undef
   }
   const by = fieldsIn<By>(n.by, [], lost);
   const at = fieldsIn<At>(n.at, ["kelvin", "atm"], lost);
-  return { value: n.value, unit: n.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) };
+  const kelvin = (v as { kelvin?: unknown }).kelvin;
+  if (kelvin != null && !(typeof kelvin === "number" && Number.isFinite(kelvin) && kelvin > 0)) lost("valueField");
+  return { value: n.value, unit: n.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}), ...(typeof kelvin === "number" && Number.isFinite(kelvin) && kelvin > 0 ? { kelvin } : {}) };
 }
 
 /**

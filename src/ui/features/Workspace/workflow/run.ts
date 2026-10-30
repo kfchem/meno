@@ -12,13 +12,14 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
-import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
+import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
@@ -26,11 +27,12 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
-import type { Table } from "../../../../lib/table";
+import type { NumberValue, Table } from "../../../../lib/table";
+import { addedSet, numberOf } from "./addStep";
 
 /**
  * What a run needs of the canvas: how far a molecule in 3D reaches on the
@@ -78,6 +80,22 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
     return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
   }
+  // (a number from its options alone: nothing comes in)
+  if (step.kind === "number") {
+    const n = numberOf(optionsOf(kindInfo(step.kind).options ?? [], step.options));
+    if ("why" in n) return fail(n.why);
+    return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberShown(n), input: key, ...as });
+  }
+  // (a sum on each entry of what comes into Molecules - and the number into Number, where one is wired)
+  if (step.kind === "add") {
+    const into = inputOf(doc, id, "in");
+    if (!into) return fail("Nothing comes into Molecules");
+    const numberSet = wireInto(doc, id, "number")?.from;
+    const number = numberSet ? findSet(doc, numberSet.set)?.number : undefined;
+    if (numberSet && !number) return fail("Number holds no number yet");
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, addedSet(setEntries(into.molecules, into.holds as Holds3D), into.holds as Holds3D, o, number), key, w);
+  }
   if (!input) return fail("Nothing comes into it");
   // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
   if (step.kind === "take-frames") {
@@ -111,6 +129,9 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
  * nothing added does it; what it comes to needs of its options (an Energy
  * diagram's reference: diagramOptions `diagramNeeds`). None, where it can.
  */
+/** Whether what a set holds flows along a wire into a step - a set's kind, a table, a number - and not a chart or pictures, which none takes. */
+const isValueKind = (h: SetHolds): h is ValueKind => (VALUE_KINDS as readonly string[]).includes(h);
+
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
   const failed = wiresInto(doc, step.id).some((wire) => {
@@ -134,16 +155,21 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
-  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
-  // (two inputs it cannot run without - Meno's of two, and a program's that works on pairs (Path search): its second wired too, as
-  //  it takes - and Merge's, of the kind its first is)
-  if (PAIRED.includes(step.kind) || (kindInfo(step.kind).runs === "program" && ports.length === 2)) {
-    const second = ports[1];
-    const into = inputOf(doc, step.id, second.id);
-    if (!into) return `Nothing comes into ${second.name}`;
-    if (!takenBy(second.takes, into.holds)) return `${second.name} takes ${second.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
-    if (step.kind === "merge" && into.holds !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${second.name} ${SET_NAMES[into.holds]}: Merge makes one set of two of one kind`;
+  // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
+  //  and each wired one taking what comes into it; Merge's second of the kind its first is)
+  const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
+  if (missing) return missing;
+  // (a wired one - optional or not - giving what it takes, by what its set gives, run or not yet: a wire that gives nothing it can use
+  //  is never passed as if it were not there, nor as if it gave something)
+  for (const port of ports.slice(1)) {
+    const wire = wireInto(doc, step.id, port.id);
+    if (!wire) continue;
+    const gives = givesOf(doc, wire.from);
+    if (!gives) return `Nothing comes into ${port.name}`;
+    if (!isValueKind(gives) || !takenBy(port.takes, gives)) return `${port.name} takes ${port.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
+    if (step.kind === "merge" && gives !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${port.name} ${SET_NAMES[gives]}: Merge makes one set of two of one kind`;
   }
+  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
 }
 
@@ -239,6 +265,17 @@ function rowCompounds(table: Table, entries: readonly SetEntry[]): RowCompound[]
 }
 
 /** `doc` with a chart a step made in its result set: the set it made before - emptied of what it held - or one made to the right of it, as large as a chart is drawn. */
+/** `doc` with a Number step's number in its result set (`holdNumber`), placed as a chart's is: where it was, else beside the step. */
+function placeNumber(doc: WorkspaceDocument, step: WorkflowStep, number: NumberValue): WorkspaceDocument {
+  const exit = exitsOf(step.kind)[0].id;
+  const madeBy = { step: step.id, exit, holds: "number" as const };
+  const was = resultOf(doc, step.id, exit);
+  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, NUMBER_SET.w, NUMBER_SET.h);
+  if (was) return holdNumber(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, number);
+  const id = doc.nextWorkflowId ?? 1;
+  return holdNumber(markMade(addSet(doc, frame, madeBy), id, madeBy), id, number);
+}
+
 function placeChart(doc: WorkspaceDocument, step: WorkflowStep, chart: ChartValue | DiagramValue): WorkspaceDocument {
   const exit = exitsOf(step.kind)[0].id;
   const madeBy = { step: step.id, exit, holds: "chart" as const };

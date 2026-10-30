@@ -51,7 +51,7 @@ describe("a path search's pairs", () => {
 
   it("refuses a pair of other atoms, or of another charge or spin: no path joins them", () => {
     const other = pairEntries([h2(1)], [hf()], "order");
-    expect("refused" in other && other.refused[0].why).toBe("a #1 and its end i #1 are not the same atoms in one numbering: Re-bond them first");
+    expect("refused" in other && other.refused[0].why).toBe("a #1 and its end i #1 are not the same atoms in one numbering: put the end in the start's numbering first (a reaction arrow's Atom map, then Export reaction in 3D…)");
     const ion = pairEntries([h2(1)], [h2(2, 0.74, { charge: 1, multiplicity: 2 })], "order");
     expect("refused" in ion && ion.refused[0].why).toBe("a #1 and its end b #1 are not of one charge and spin");
   });
