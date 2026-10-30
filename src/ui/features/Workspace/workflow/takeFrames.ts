@@ -120,7 +120,7 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
   };
   const taken = setEntries(molecules, "molecules", chosen);
   // (what each frame keeps from its molecule, where asked: as its molecule holds it - a frame's own kept where it holds the same
-  //  name, counted; a name no molecule holds, said; nothing else of its molecule, whatever its molecule holds)
+  //  name, counted; a name a molecule does not hold, said; nothing else of its molecule, whatever its molecule holds)
   const own = new Map(molecules.map((m) => [m.id, ownOf(m)] as const));
   const theirs = new Map<string, number>();
   const held = new Set<string>();
@@ -146,7 +146,7 @@ export function takeFrames(molecules: readonly Molecule3D[], which: Which, eithe
   const refined = byEnergy ? molecules.filter((m) => refinedFrame(m) != null).length : 0;
   const keeping = [
     ...[...theirs].map(([name, n]) => ` · ${plural(n, "frame")} kept ${n === 1 ? "its" : "their"} own ${name}`),
-    ...keep.filter((name) => !held.has(name)).map((name) => ` · no molecule holds ${name}`),
+    ...keep.filter((name) => !held.has(name)).map((name) => ` · ${name} not on any molecule`),
     ...keep.filter((name) => held.has(name) && without.get(name)!.size).map((name) => ` · ${name} not on ${plural(without.get(name)!.size, "molecule")}`),
   ].join("");
   const said = `${plural(kept.length, "frame")} of ${plural(molecules.length, "molecule")}: ${takeFramesHow(which, either, keep)}`;

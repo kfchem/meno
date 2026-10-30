@@ -87,11 +87,11 @@ describe("Take frames", () => {
     // (none named - as before - nothing of its molecule: the first frame its own alone, the last none)
     expect(ok(takeFrames([irc], "first")).kept[0].properties).toEqual({ species: value("species-1") });
     expect(ok(takeFrames([irc], "last")).kept[0]).not.toHaveProperty("properties");
-    // (a name no molecule holds: said)
-    expect(ok(takeFrames([irc], "last", 1, ["path", "pc"])).said).toBe("1 frame of 1 molecule: the last, keeping its molecule's path and pc · no molecule holds pc");
+    // (a name no molecule holds: said, as one some do not are)
+    expect(ok(takeFrames([irc], "last", 1, ["path", "pc"])).said).toBe("1 frame of 1 molecule: the last, keeping its molecule's path and pc · pc not on any molecule");
     // (a molecule that does not hold a name another does: said, never passed over - as typed, never made small)
     const other: Molecule3D = { ...irc, id: 8, title: "irc b", properties: [{}, {}, { species: value("species-3") }, {}, {}] as Record<string, Property>[] };
-    expect(ok(takeFrames([irc, other], "last", 1, ["Path", "path"])).said).toBe("2 frames of 2 molecules: the last, keeping its molecule's Path and path · no molecule holds Path · path not on 1 molecule");
+    expect(ok(takeFrames([irc, other], "last", 1, ["Path", "path"])).said).toBe("2 frames of 2 molecules: the last, keeping its molecule's Path and path · Path not on any molecule · path not on 1 molecule");
     // (its entry frame taken, holding its molecule's own: no "kept its own" said)
     expect(ok(takeFrames([irc], "entry", 1, ["path", "species"])).said).toBe("1 frame of 1 molecule: each one's entry frame, keeping its molecule's path and species");
     // (a molecule of several entry frames - each an entry of its own - has none of its own to keep)
