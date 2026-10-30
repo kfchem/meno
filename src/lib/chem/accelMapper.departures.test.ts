@@ -3,6 +3,7 @@ import { ACCEL_EXACT, Atom, Atoms, BondType, MENO_DEPARTURES, _det_ez, acosOf, g
 import type { Molecule } from "./molecule";
 import { mapReaction } from "./reactionMap";
 import adduct from "./testdata/diels-alder-acrolein.json";
+import shapeChange from "./testdata/shape-change.json";
 import {
   ETHANE_BONDS,
   acetoneEnol,
@@ -240,7 +241,7 @@ describe("localLeastTurn", () => {
   });
 
   // (buta-1,3-diene and acrolein, and their adduct, each made in 3D on its own: each =CH2 end of the diene becomes a ring CH2)
-  const side = (m: { atoms: { el: string; x: number; y: number; z: number }[]; bonds: number[][] }): Molecule => ({ atoms: m.atoms, bonds: m.bonds.map(([a1, a2, order]) => ({ a1, a2, order })) }) as Molecule;
+  const side = (m: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: number[][] }): Molecule => ({ atoms: m.atoms, bonds: m.bonds.map(([a1, a2, order]) => ({ a1, a2, order })) }) as Molecule;
   const da = { reactants: adduct.reactants.map(side), products: [side(adduct.product)] };
   /** Whether, mapped, the diene's two outside hydrogens (trans to its inner carbons) stand on one face of the new ring: suprafacial. */
   const suprafacial = (accelExact: boolean) => {
@@ -261,6 +262,17 @@ describe("localLeastTurn", () => {
     const face = (h: number, c: number) => Math.sign(dot(sub(at(p, h), at(p, c)), normal));
     return face(outside(c1, c2, c3), c1) === face(outside(c4, c3, c2), c4);
   };
+
+  it("leaves an atom with another number of neighbours to ACCeL's own scores: a CH2 cation or a carbene bonded to, its hydrogens where ACCeL ranked them", () => {
+    // (benzyl cation and chloride to benzyl chloride; methylene and (Z)-but-2-ene to cis-1,2-dimethylcyclopropane - each made in 3D on its own)
+    for (const k of ["benzylCation", "carbene"] as const) {
+      const r = { reactants: shapeChange[k].reactants.map(side), products: shapeChange[k].products.map(side) };
+      const meno = mapReaction(r);
+      const accel = mapReaction({ ...r, accelExact: true });
+      if ("error" in meno || "error" in accel) throw new Error(k);
+      expect(meno.maps[0], k).toEqual(accel.maps[0]);
+    }
+  });
 
   it("leaves an atom whose kept bond changes order to ACCeL's own scores: a Diels-Alder's =CH2 ends stay suprafacial", () => {
     expect(adduct.reactants[0].atoms.slice(0, 4).map((a) => a.el)).toEqual(["C", "C", "C", "C"]);

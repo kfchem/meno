@@ -240,16 +240,19 @@ maps as ACCeL does.
   umbrella folding over; ACCeL reads it as kept and swaps the two
   hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
   lay over and is left as ACCeL placed it, as is a group a hydrogen comes
-  to or goes from. So is an atom whose bond to a neighbour it keeps
-  changes order - a double bond added to, as at a Diels-Alder's =CH2 ends,
-  or one made: it goes from one shape to another, and which of its
-  hydrogens is which follows the faces the reaction meets, which ACCeL's
-  face and syn-or-anti scores weigh. Laid over its frame, it was turned
-  against them: a Diels-Alder's two outside hydrogens (trans to the
-  diene's inner carbons) came out on opposite faces of the new ring.
-  Checked on a corpus of 134 runs (67 reactions, two embeddings each): 16
-  first maps changed when this was put right, in their hydrogens only,
-  their bond changes the same; 15 of them are now ACCeL's own first map.
+  to or goes from. So is an atom that goes from one shape to another: one
+  with more neighbours on one side than on the other (a cation's or a
+  carbene's CH2 bonded to), or whose bond to a neighbour it keeps changes
+  order (a double bond added to, as at a Diels-Alder's =CH2 ends, or one
+  made). Which of its hydrogens is which follows the faces the reaction
+  meets, which ACCeL's face and syn-or-anti scores weigh. Laid over its
+  frame, it was turned against them: a Diels-Alder's two outside
+  hydrogens (trans to the diene's inner carbons) came out on opposite
+  faces of the new ring. An SN2 centre keeps its number of neighbours and
+  its bonds' orders, and is laid over its frame as before. Checked on a
+  corpus of 134 runs (67 reactions, two embeddings each): 18 first maps
+  changed when this was put right, in their hydrogens only, their bond
+  changes the same; 16 of them are now ACCeL's own first map.
 
   With either of these two, maps the search built apart can become the
   same once their hydrogens are placed; each is then kept once, the first
