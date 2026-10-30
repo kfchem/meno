@@ -187,6 +187,9 @@ def molecule_wide(data):
 #: a reference frequency of 100.0 cm-1"; Gaussian 16: "Full point group  C1  NOp 1", "Rotational symmetry number  1."
 ORCA_SYMMETRY = re.compile(r"Point Group:\s+(\S+),\s+Symmetry Number:\s+(\d+)")
 ORCA_QRRHO = re.compile(r"QRRHO of S\. Grimme.*?reference frequency of\s+([0-9.]+)\s*cm-1", re.S)
+#: ORCA 6.1.1's line saying whether it treated the low vibrations so ("Quasi RRHO          ...     True"): where it says
+#: False - %freq QuasiRRHO false - its entropy is the harmonic oscillator's alone, rigid rotor, harmonic oscillator.
+ORCA_QRRHO_SAID = re.compile(r"Quasi RRHO\s+\.\.\.\s+(True|False)")
 GAUSSIAN_GROUP = re.compile(r"Full point group\s+(\S+)")
 GAUSSIAN_NUMBER = re.compile(r"Rotational symmetry number\s+(\d+)\.")
 
@@ -207,8 +210,11 @@ def thermo_said(text, program):
             add("thermo.point-group", "Point group", found[-1].group(1))
             add("thermo.symmetry-number", "Symmetry number", int(found[-1].group(2)), unit="none", digits=0)
             q = list(ORCA_QRRHO.finditer(text))
-            if q:
-                add("thermo.treatment", "Treatment", f"quasi-RRHO (Grimme), {float(q[-1].group(1)):g} cm-1")
+            said = list(ORCA_QRRHO_SAID.finditer(text))
+            if said and said[-1].group(1) == "False":
+                add("thermo.treatment", "Treatment", "RRHO")
+            elif q:
+                add("thermo.treatment", "Treatment", f"quasi-RRHO (Grimme), {float(q[-1].group(1)):g} cm⁻¹")
     elif program == "gaussian":
         number = list(GAUSSIAN_NUMBER.finditer(text))
         if number:

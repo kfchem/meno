@@ -29,7 +29,7 @@ function ammonia(): Molecule3D {
     conformerSet: true,
   };
 }
-const SAID = "a #2 has 1 imaginary frequency, 1020.4i cm-1: it is no minimum - take it out first";
+const SAID = "a #2 has 1 imaginary frequency, 1020.4i cm⁻¹: it is no minimum - take it out first";
 
 describe("a saddle point among conformers", () => {
   it("is refused by Energy window on electronic energies, whether the window would keep it or set it aside: it is no conformer to keep or set aside", () => {
