@@ -506,5 +506,6 @@ docs/STRUCTURE-STEPS.md, *Atom map*), and what the page calls for the same:
   each in the other's place comes back to propene's places, atom for atom,
   by the full map and by `numberedLike`; so do 2-chloropropane's two
   methyls swapped whole. Outside the repository, on RDKit's conformers of
-  three compounds of 31 to 99 atoms, every conformer came out with each
-  equivalent atom where its reference has it, by both.
+  two compounds of 60 and 99 atoms with several tert-butyl groups, every
+  conformer came out with each equivalent atom where its reference has
+  it, by both.
