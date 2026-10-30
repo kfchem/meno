@@ -648,7 +648,7 @@ of highest weight stands for it, carrying the results.
 | **Species** | molecules | the same, charge and multiplicity set |
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
 | **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
-| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
+| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
 | **Atom map** | *molecules* and a *reference* (3D, every hydrogen present), each input's entries each a side of its own or one side together; matched on a property, or one reference for all; whether bonds may change (a reaction) or stay the same (conformers of the reference) | *mapped*: each side a complete 3D structure in the reference's numbering, every atom mapped one to one, hydrogens included (the first map, or every map) - a reaction's products in its reactants' numbering, or a species' conformers with their equivalent atoms (a methylene's hydrogens) where the species has them; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
 | **Restraints** | molecules | the same, each with its restraints from itself: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
@@ -1281,8 +1281,8 @@ side together, on the *Atom map* card); set **P** holds the products drawn.
     [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
-17. **Compare bonding** (Meno) against P′, on *product*, with R or S and E or Z:
-    *same* [`check_chirality`].
+17. **Compare bonding** (Meno) against P′, on *product*, with R or S, E or Z
+    and every centre by its atoms' numbers: *same* [`check_chirality`].
 
 **F4. Paths and saddle points at the semiempirical level**
 18. **Path search** (ORCA plugin: NEB with GFN2-xTB, 8 images). *start* is RC
@@ -1297,7 +1297,8 @@ side together, on the *Atom map* card); set **P** holds the products drawn.
 24. **Follow the reaction path** (ORCA plugin, IRC with xTB) [125_F, 125_B].
 25. **Take frames** twice (Meno): the first, and the last.
 26. **Compare bonding** twice (Meno): each end against S, naming the
-    species it matches (*a*, *b*, *c* or none) [128].
+    species it matches (*a*, *b*, *c* or none), with every centre by its
+    atoms' numbers [128; `check_irc_chirality`].
 27. **Join** (Meno) on *path*: both names put back on the saddle points as
     *first end* and *last end*.
 28. **Filter** (Meno): one end is *a* and the other the product the saddle

@@ -698,6 +698,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "from", label: "Its value of (blank: its number)", type: "text", default: "", when: { id: "reference", in: ["each"] } },
       { id: "rs", label: "R or S too", type: "switch", default: false },
       { id: "ez", label: "E or Z too", type: "switch", default: false },
+      { id: "numbered", label: "Every centre by number too", type: "switch", default: false },
       { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
       { id: "elements", label: "Pass over elements", type: "text", default: "" },
       { id: "reach", label: "Bonded within \u00d7 the sum of their covalent radii (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },
@@ -1231,8 +1232,8 @@ export function compareNeeds(v: OptionValues): string | undefined {
 /**
  * *Compare bonding*'s line: what was chosen, defaults unsaid - matched on a
  * property, the match written under another name, a reach not the default,
- * R or S and E or Z, what is passed over; "against each reference" where
- * all is as it comes.
+ * R or S, E or Z and every centre by number, what is passed over; "against
+ * each reference" where all is as it comes.
  */
 export function compareHow(v: OptionValues): string {
   const needs = compareNeeds(v);
@@ -1245,7 +1246,7 @@ export function compareHow(v: OptionValues): string {
   const said = [
     v.reference === "property" ? `matched on ${String(v.property).trim()}` : writes !== "matches" ? `the match as ${writes}` : "",
     reach !== BOND_REACH || floor !== REACH_FLOOR ? `bonded within ${reach} \u00d7 covalent radii${floor !== REACH_FLOOR ? `, at least +${floor} \u00c5` : ""}` : "",
-    [v.rs ? "R or S" : "", v.ez ? "E or Z" : ""].filter(Boolean).join(" and "),
+    [v.rs ? "R or S" : "", v.ez ? "E or Z" : "", v.numbered ? "every centre by number" : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1"),
     atoms ? `passing over atoms ${atoms}` : "",
     elements ? `passing over ${elements}` : "",
   ].filter(Boolean);
