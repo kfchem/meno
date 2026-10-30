@@ -37,6 +37,8 @@ import {
   type MapperTrace,
 } from "./accelMapper";
 import { implicitHydrogens, type Molecule, type ParsedAtom, type ParsedBond } from "./molecule";
+import { aromaticForm } from "./identity";
+import { AROMATIC_BOND } from "./kekulize";
 
 export type ReactionMapInput = {
   reactants: readonly Molecule[];
@@ -72,13 +74,21 @@ export type ReactionMap = {
 
 export type ReactionMapRefusal = { error: "2d" | "no-atoms" | "python-error"; message: string };
 
-/** A structure as ACCeL's read_mol reads a molfile: bond types 1 to 4 as they are, any other undefined. */
+/**
+ * A structure as ACCeL's mapper reads one: bond types 1 to 4 as they are,
+ * any other undefined - and the bonds of an aromatic ring aromatic (4), as
+ * ACCeL's own flow has them before it maps (Box.calc_bonds calls
+ * Modeler.aromatize), whichever Kekulé structure the ring was drawn in.
+ * ACCeL perceives the rings from the geometry; Meno from the bonds
+ * (lib/chem/identity `aromaticForm`).
+ */
 function toAtoms(m: Molecule): Atoms {
   const atoms = new Atoms();
   for (const a of m.atoms) atoms.getNewAtom([a.el, a.x, a.y, a.z]);
   atoms.initBonds();
+  const ring = aromaticBonds(m);
   for (const b of m.bonds) {
-    const t = b.order >= 1 && b.order <= 4 ? b.order : BondType.undefined;
+    const t = ring.has(b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`) ? BondType.aromatic : b.order >= 1 && b.order <= 4 ? b.order : BondType.undefined;
     atoms.addBond(b.a1 + 1, b.a2 + 1, t);
   }
   return atoms;
@@ -143,17 +153,36 @@ function bondTypes(m: Molecule, renumber: (i: number) => number = (i) => i): Map
   return out;
 }
 
-/** How the bonds differ between the reactant and the product read through `map` (product atom -> reactant atom). */
+/** The bonds of a structure that are of an aromatic ring (lib/chem/identity `aromaticForm`), by atom pair (smaller index first). */
+function aromaticBonds(m: Molecule, renumber: (i: number) => number = (i) => i): Set<string> {
+  const form = aromaticForm({ atoms: m.atoms.map((a) => ({ el: a.el })), bonds: m.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+  const out = new Set<string>();
+  for (const b of form.bonds) {
+    const [p, q] = [renumber(b.a), renumber(b.b)];
+    if (b.order === AROMATIC_BOND && p >= 0 && q >= 0) out.add(p < q ? `${p},${q}` : `${q},${p}`);
+  }
+  return out;
+}
+
+/**
+ * How the bonds differ between the reactant and the product read through
+ * `map` (product atom -> reactant atom). A bond of an aromatic ring on both
+ * sides has not changed, whichever Kekulé structure each side is drawn
+ * in: a map that turns a symmetric ring over pairs its single bonds with
+ * the other side's double bonds, and the ring is the same.
+ */
 export function bondChanges(reactant: Molecule, product: Molecule, map: readonly number[]): ReactionMap["changes"] {
   const before = bondTypes(reactant);
   const after = bondTypes(product, (i) => map[i] ?? -1);
+  const ringBefore = aromaticBonds(reactant);
+  const ringAfter = aromaticBonds(product, (i) => map[i] ?? -1);
   const formed: BondChange[] = [];
   const broken: BondChange[] = [];
   const orderChanged: BondChange[] = [];
   for (const [k, b] of before) {
     const a = after.get(k);
     if (!a) broken.push({ a1: b.a1, a2: b.a2, before: b.type, after: 0 });
-    else if (a.type !== b.type) orderChanged.push({ a1: b.a1, a2: b.a2, before: b.type, after: a.type });
+    else if (a.type !== b.type && !(ringBefore.has(k) && ringAfter.has(k))) orderChanged.push({ a1: b.a1, a2: b.a2, before: b.type, after: a.type });
   }
   for (const [k, a] of after) if (!before.has(k)) formed.push({ a1: a.a1, a2: a.a2, before: 0, after: a.type });
   const byAtoms = (p: BondChange, q: BondChange) => p.a1 - q.a1 || p.a2 - q.a2;
@@ -262,35 +291,41 @@ export function bondChangeRows(reactant: Molecule, product: Molecule, map: reado
 }
 
 /**
- * What the *Reaction* step does (docs/WORKFLOWS-FOUNDATION.md, *Atom
- * mapping, and what Meno does itself*): each product mapped onto the one
- * reactant structure (a complex where there are several, made beforehand),
- * in 3D with every hydrogen, and written in the reactants' numbering - by its
- * first map, or by `every` map - with the bonds that map forms, breaks or
- * changes. A product that cannot be mapped one to one, atom for atom, is
- * said with the reason, never passed on in part.
+ * What *Atom map* does, in a workflow and on the page
+ * (docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does
+ * itself*): each entry mapped onto the reference, in 3D with every
+ * hydrogen, and written in its numbering - by its first map, or by `every`
+ * map - with the bonds that map forms, breaks or changes. The reference and
+ * each entry are a side of one or more structures, set side by side as one
+ * as `mapReaction` sets them: a reaction's reactants and one of its
+ * products (or all of them), or a compound and one of its conformers. With
+ * `bonds` "same", the entry is to be the reference's own structure, and a
+ * map that forms, breaks or changes any bond is said, never passed on. An
+ * entry that cannot be mapped one to one, atom for atom, is said with the
+ * reason, never passed on in part.
  */
-export function mapProducts(
-  reactant: Molecule,
-  products: readonly Molecule[],
-  o: { every?: boolean; accelExact?: boolean } = {},
+export function mapOnto(
+  reference: readonly Molecule[],
+  entries: readonly (readonly Molecule[])[],
+  o: { bonds: "change" | "same"; every?: boolean; accelExact?: boolean },
 ): { mapped: MappedProduct[]; notMapped: ProductNotMapped[] } {
   const mapped: MappedProduct[] = [];
   const notMapped: ProductNotMapped[] = [];
-  products.forEach((p, product) => {
-    if (p.atoms.length !== reactant.atoms.length) {
-      notMapped.push({
-        product,
-        reason: `The product has ${p.atoms.length} atoms and the reactants ${reactant.atoms.length}: every atom must map one to one, hydrogens included.`,
-      });
+  const atomsOf = (side: readonly Molecule[]) => side.reduce((n, m) => n + m.atoms.length, 0);
+  const n = atomsOf(reference);
+  // (a side's atoms as one, for counting its elements)
+  const all = (side: readonly Molecule[]): Molecule => ({ atoms: side.flatMap((m) => m.atoms), bonds: [] });
+  entries.forEach((p, product) => {
+    if (atomsOf(p) !== n) {
+      notMapped.push({ product, reason: `It has ${atomsOf(p)} atoms and the reference ${n}: every atom must map one to one, hydrogens included.` });
       return;
     }
-    const unlike = elementsDiffer(reactant, p);
+    const unlike = elementsDiffer(all(reference), all(p));
     if (unlike) {
       notMapped.push({ product, reason: unlike });
       return;
     }
-    const result = mapReaction({ reactants: [reactant], products: [p], accelExact: o.accelExact });
+    const result = mapReaction({ reactants: [...reference], products: [...p], accelExact: o.accelExact });
     if ("error" in result) {
       notMapped.push({ product, reason: result.message });
       return;
@@ -305,16 +340,23 @@ export function mapProducts(
       const j = m.findIndex((i, j) => i >= 0 && result.reactant.atoms[i].el !== result.product.atoms[j].el);
       if (j >= 0) {
         const [a, b] = [result.product.atoms[j].el, result.reactant.atoms[m[j]].el];
-        notMapped.push({ product, map: k, reason: `The map pairs the product's atom ${j + 1} (${a}) with the reactants' atom ${m[j] + 1} (${b}): an atom maps only to one of its own element.` });
+        notMapped.push({ product, map: k, reason: `The map pairs its atom ${j + 1} (${a}) with the reference's atom ${m[j] + 1} (${b}): an atom maps only to one of its own element.` });
         continue;
       }
       if (!result.complete[k]) {
         notMapped.push({ product, map: k, reason: "The map leaves atoms of one side unpaired." });
         continue;
       }
+      const changes = bondChangeRows(result.reactant, result.product, m);
+      if (o.bonds === "same" && changes.length) {
+        const words = { formed: "formed", broken: "broken", order: "of another order" } as const;
+        const said = changes.map((c) => `${c.a1 + 1}-${c.a2 + 1} ${words[c.change]}`).join(", ");
+        notMapped.push({ product, map: k, reason: `The map has bonds ${said}, and its bonds are to stay the same.` });
+        continue;
+      }
       const order: number[] = new Array(m.length);
       m.forEach((r, j) => (order[r] = j));
-      mapped.push({ product, map: k, molecule: renumbered(result.product, m, reactant.atoms.length), order, changes: bondChangeRows(result.reactant, result.product, m) });
+      mapped.push({ product, map: k, molecule: renumbered(result.product, m, n), order, changes });
     }
   });
   return { mapped, notMapped };
@@ -333,7 +375,7 @@ function elementsDiffer(reactant: Molecule, product: Molecule): string | null {
   const fewer = els.filter((e) => (p.get(e) ?? 0) < (r.get(e) ?? 0)).map((e) => `${(r.get(e) ?? 0) - (p.get(e) ?? 0)} ${e}`);
   if (!more.length && !fewer.length) return null;
   const said = [more.length ? `${more.join(", ")} more` : "", fewer.length ? `${fewer.join(", ")} fewer` : ""].filter(Boolean).join(" and ");
-  return `The product has ${said} than the reactants: every atom must map to one of its own element.`;
+  return `It has ${said} than the reference: every atom must map to one of its own element.`;
 }
 
 /** A full map's pairs between heavy atoms only - for showing on a drawing: (reactant atom, product atom). */
