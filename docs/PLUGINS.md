@@ -617,7 +617,7 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   atoms. A coordination bond to a main-group acceptor that cannot be held
   so is refused in words, naming the reason: an acceptor not of group 13,
   a charged acceptor or donor, a donor that cannot carry the charge, or
-  two such bonds onto one acceptor. From RDKit plugin 0.1.14.
+  two such bonds onto one acceptor. From RDKit plugin 0.1.13.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
