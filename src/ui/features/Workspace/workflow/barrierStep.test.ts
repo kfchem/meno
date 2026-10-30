@@ -153,6 +153,18 @@ describe("a Barrier step", () => {
     expect(why(run([ts], [noSigma], { free: "G" }))).toBe(
       "a #1: the rotational symmetry number thermo.g-correction in G was worked out with was not read of its start a #1: its rotational entropy cannot be told",
     );
+    // (a G summed of parts none of which is thermochemistry - an energy and a standard state - has no sigma to read: refused, as
+    //  read and left out alike, never a barrier of no number)
+    const noThermal = (e: SetEntry) => {
+      const g = e.properties!.G;
+      const parts = g.parts!.filter((p) => p.property !== "thermo.g-correction");
+      return { ...e, properties: { G: { ...g, parts } } };
+    };
+    for (const symmetry of ["as-read", "left-out"] as const) {
+      const o = run([noThermal(ts)], [noThermal(start)], { free: "G", symmetry });
+      expect(why(o)).toBe("a #1: G is energy + standard state, none of them a calculation's thermochemistry: the rotational symmetry number it was worked out with cannot be read, nor its rotational entropy told");
+      expect(JSON.stringify(o)).not.toContain("NaN");
+    }
   });
 
   it("pairs as Path search does: in order, each with each, or matched on a property - one with no start out of Failed", () => {

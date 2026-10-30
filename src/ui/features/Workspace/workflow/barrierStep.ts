@@ -104,6 +104,10 @@ function unlikeValues(s: Property, t: Property, name: string, start: string, g: 
       if (g && thermal(sp[i].property) && (sp[i].by?.symmetryNumber == null || tp[i].by?.symmetryNumber == null))
         return `the rotational symmetry number ${sp[i].property} in ${name} was worked out with was not read of ${sp[i].by?.symmetryNumber == null ? "the saddle point" : `its start ${start}`}: its rotational entropy cannot be told`;
     }
+    // (a G summed of parts none of which is a calculation's thermochemistry: worked out with no rotational symmetry number to read -
+    //  as read or left out, its rotational entropy cannot be told)
+    if (g && !sp.some((q) => thermal(q.property)))
+      return `${name} is ${said(s)}, none of them a calculation's thermochemistry: the rotational symmetry number it was worked out with cannot be read, nor its rotational entropy told`;
     return null;
   }
   const d = differ(s, t);
@@ -167,6 +171,8 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
   const leftOut = g && o.symmetry === "left-out";
   const [ss, ts] = [sigmaOf(sv), sigmaOf(tv)];
   if (leftOut && (ss.kelvin == null || ts.kelvin == null)) return `${s}: the temperature ${name} was worked out at is not said, so its rotational symmetry cannot be left out`;
+  // (and, left out, a sigma read on both sides - never a barrier of a sigma not there: no number at all)
+  if (leftOut && (ss.sigma == null || ts.sigma == null)) return `${s}: the rotational symmetry number ${name} was worked out with was not read of ${ss.sigma == null ? "the saddle point" : `its start ${t}`}, so it cannot be left out`;
   const lessSigma = leftOut ? rtLnSigma(ss.sigma!, ss.kelvin!) - rtLnSigma(ts.sigma!, ts.kelvin!) : 0;
   const what = g ? `free energy G (${name}${sv.by?.treatment && !sv.parts ? `; ${sv.by.treatment}` : ""})` : "electronic energy E";
   const symmetry = g

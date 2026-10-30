@@ -556,7 +556,8 @@ on it.
   place of `thermo.free-energy`. The two sides must be sums of the same
   parts, in order, each worked out alike, and each thermal part with its
   sigma read: a standard state on one side alone is refused, never
-  mixed.
+  mixed. A sum none of whose parts is a calculation's thermochemistry has
+  no sigma to read, and is refused for G - as read or left out.
 - **What it gives**: `barrier`, in kcal/mol, the saddle point's value less
   its start's, the hartree at CODATA 2018's value (627.5094740631 kcal/mol,
   lib/units), at the saddle point's geometry, temperature and pressure;
