@@ -246,19 +246,19 @@ describe("Atom map, as a step: sides of several structures", () => {
     expect(o.said).toBe("1 of 1 mapped");
   });
 
-  it("asks how each input's entries are taken and whether bonds may change - none has a default - and says what was chosen", () => {
+  it("asks how each input's entries are taken and whether bonds may change - none has a default - and says what was chosen: an input taken as one side, and the bonds", () => {
     const k = kindInfo("atom-map");
     expect(k.inputs?.map((p) => p.name)).toEqual(["Molecules", "Reference"]);
     expect([k.made, ...(k.others ?? []).map((x) => x.name)]).toEqual(["Mapped", "Not mapped", "Bond changes"]);
-    expect(k.needs?.({})).toBe("Choose whether the molecules are each their own or one side");
-    expect(k.needs?.({ moleculesAre: "each" })).toBe("Choose whether the reference is each its own or one side");
+    expect(k.needs?.({})).toBe("Choose how the molecules are taken");
+    expect(k.needs?.({ moleculesAre: "each" })).toBe("Choose how the reference is taken");
     expect(k.needs?.({ moleculesAre: "each", referenceIs: "each" })).toBe("Choose whether bonds may change");
     expect(k.needs?.({ moleculesAre: "together", referenceIs: "each", bonds: "change", reference: "property", property: "species" })).toBe(
       "Matched on a property takes each entry on its own: set both inputs to each its own",
     );
-    expect(k.how?.({ moleculesAre: "each", referenceIs: "together", bonds: "change", maps: "first", reference: "one" })).toBe("molecules each their own, reference as one side, bonds may change");
+    expect(k.how?.({ moleculesAre: "each", referenceIs: "together", bonds: "change", maps: "first", reference: "one" })).toBe("reference as one side, bonds may change");
     expect(k.how?.({ moleculesAre: "each", referenceIs: "each", bonds: "same", maps: "every", reference: "property", property: "species" })).toBe(
-      "molecules each their own, reference each its own, bonds stay the same, every map, matched on species",
+      "bonds stay the same, every map, matched on species",
     );
   });
 });

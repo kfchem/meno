@@ -947,22 +947,22 @@ export function torsionsHow(v: OptionValues): string {
 /** What an Atom map step still needs of its options. */
 export function atomMapNeeds(v: OptionValues): string | undefined {
   const side = (x: unknown) => x === "each" || x === "together";
-  if (!side(v.moleculesAre)) return "Choose whether the molecules are each their own or one side";
-  if (!side(v.referenceIs)) return "Choose whether the reference is each its own or one side";
+  if (!side(v.moleculesAre)) return "Choose how the molecules are taken";
+  if (!side(v.referenceIs)) return "Choose how the reference is taken";
   if (v.reference === "property" && (v.moleculesAre === "together" || v.referenceIs === "together")) return "Matched on a property takes each entry on its own: set both inputs to each its own";
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
   if (v.bonds !== "change" && v.bonds !== "same") return "Choose whether bonds may change";
   return undefined;
 }
 
-/** An Atom map step's line: what was chosen - how each input's entries are taken, whether bonds may change, every map, the property matched on - its defaults unsaid. */
+/** An Atom map step's line: what was chosen - an input taken as one side, whether bonds may change, every map, the property matched on - an input taken each its own, and the defaults, unsaid. */
 export function atomMapHow(v: OptionValues): string {
   const needs = atomMapNeeds(v);
   if (needs) return needs;
-  const side = (x: unknown, each: string, together: string) => (x === "together" ? together : each);
+  // (an input taken each its own, the plain reading, unsaid - one taken as one side said; whether bonds may change, always)
   return [
-    side(v.moleculesAre, "molecules each their own", "molecules as one side"),
-    side(v.referenceIs, "reference each its own", "reference as one side"),
+    ...(v.moleculesAre === "together" ? ["molecules as one side"] : []),
+    ...(v.referenceIs === "together" ? ["reference as one side"] : []),
     v.bonds === "same" ? "bonds stay the same" : "bonds may change",
     ...(v.maps === "every" ? ["every map"] : []),
     ...(v.reference === "property" ? [`matched on ${String(v.property).trim()}`] : []),
