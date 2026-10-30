@@ -2820,9 +2820,9 @@ the first in each path (step 48).
   ("2 of 2 kept: each molecule is its own group"): *All together*
   ranks them against one another.
 - **A number property's values are one group where they are one value**:
-  each in the first one's unit, as Meno writes numbers - 0.3 and 0.1 +
+  each in the first one's unit, to 12 significant figures - 0.3 and 0.1 +
   0.2 one group, and one in kcal/mol and another in hartrees one group
-  where they are the same energy.
+  where they are the same energy; 1.00001 and 1.00002 two.
 - It takes molecules in 3D and conformer sets; structures drawn are not
   ranked yet.
 ### Join (2026-10-29)

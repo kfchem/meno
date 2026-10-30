@@ -7,7 +7,6 @@
  * out where that was said.
  */
 import type { Entry, Property } from "../../../../lib/entry";
-import { numberText } from "../../../../lib/calc/results";
 import { groupOf, numberIn } from "../../../../lib/nodes/base";
 import { rank, type RankOptions } from "../../../../lib/nodes/rank";
 import { compoundLetter, entryOfSet, entryState, FINISHED, type SetEntry } from "./entries";
@@ -38,17 +37,21 @@ export type GroupedBy = { within: "each group" | "each value" | "all"; groupBy: 
 
 /**
  * Entries regrouped by a property's value (*In each value of*): each
- * entry's `group` its value, as text - a number as Meno writes it, in the
- * first one's unit, so that 0.3 and 0.1 + 0.2 are one group, and the last
- * bits a sum or a conversion leaves split none; one without it left
- * ungrouped, which a step then sets aside saying so.
+ * entry's `group` its value, as text - a number to 12 significant
+ * figures, in the first one's unit, so that 0.3 and 0.1 + 0.2 are one
+ * group, and the last bits a sum or a conversion leaves split none, while
+ * values that differ in any figure Meno could show stay apart; one without
+ * it left ungrouped, which a step then sets aside saying so.
  */
+/** A number as a group's key: to 12 significant figures (`same`'s tolerance), its unit after it where it has one. */
+const keyed = (v: number, unit: string) => `${Number(v.toPrecision(12))}${unit === "none" ? "" : ` ${unit}`}`;
+
 function regrouped(es: readonly Entry[], name: string): Entry[] {
   const first = es.map((e) => e.properties[name]).find((p) => typeof p?.value === "number");
   const keyOf = (e: Entry, p: Property): string => {
     if (typeof p.value !== "number" || !first) return String(p.value);
     const n = numberIn(e, name, first.unit);
-    return "value" in n ? `${numberText(n.value)} ${first.unit}` : `${numberText(p.value)} ${p.unit}`;
+    return "value" in n ? keyed(n.value, first.unit) : keyed(p.value, p.unit);
   };
   return es.map((e) => {
     const p = e.properties[name];

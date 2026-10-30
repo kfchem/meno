@@ -76,6 +76,9 @@ describe("a Rank step", () => {
     const doc = runStep(ranking([water([-1.0, -1.2, -1.1, -1.3], {}, [{ x: x(0.3) }, { x: x(0.1 + 0.2) }, { x: x(0.5) }, { x: x(0.5) }])], { within: "each value", groupBy: "x" }), 2, W);
     expect(ran(doc)?.said).toBe("2 of 4 kept, 2 to the rest");
     expect(out(doc)[0].numbers).toEqual([2, 4]);
+    // (values 1e-5 apart are two values, not one: none merged by the figures a chip shows)
+    const apart = runStep(ranking([water([-1.0, -1.2, -1.1], {}, [{ x: x(1.00001) }, { x: x(1.00002) }, { x: x(1.00003) }])], { within: "each value", groupBy: "x" }), 2, W);
+    expect(apart.steps!.find((s) => s.id === 2)!.ran?.said).toBe("3 of 3 kept");
   });
 
   it("says where each is its own group - molecules, not a conformer set's compounds - so that ranking in each chose nothing", () => {
