@@ -195,8 +195,16 @@ references, the first it is bonded as (`matchingReference`).
 
 - **Bonds read from the geometry** as Meno reads any geometry given no bonds
   (`bondedPairs`): two atoms closer than their single-bond covalent radii
-  (Pyykkö's) together and a fifth over. Which atoms are bonded is compared,
-  not bond orders.
+  (Pyykkö's) together, times the reach. The reach is on the card
+  (*Bonded within*): 1.2 unless set, the maintainer's of 2026-10-22,
+  measured over 1,437 molecules laid out by ETKDG and MMFF (1.1 missed 12
+  bonds, 9 of them peroxides' O-O; 1.2 missed 1 and made none extra:
+  `BOND_REACH`, `src/utils/structureParsers.ts`). It is at least a floor
+  over their radii together, on the card too (*At least the sum plus, Å*): 0.15 Å unless set, the maintainer's of 2026-10-13, for H2's
+  0.741 Å bond (`REACH_FLOOR`), as for every geometry Meno reads. Each
+  difference says whether the reach or the floor decided. The reach is
+  taken from 1 to 2, the floor from 0 to 1 Å; outside them the step
+  refuses. Which atoms are bonded is compared, not bond orders.
 - **R or S, where asked.** Because the two share one numbering, a centre has
   the reference's configuration where its neighbours stand round it the same
   way: the sign of the volume its first three neighbours (by number) make
@@ -222,6 +230,10 @@ Checked:
   bonds formed. The product's geometry is bonded as the product.
 - CHFClBr and its mirror image differ where R or S is asked; CH2FCl with
   its hydrogens swapped does not.
+- Two stereoisomers of CHFCl-CHFBr that differ at C2 alone differ at C2,
+  and C1 is not named.
+- H2O2 (O-O 1.475 Å) is bonded as itself at the reach of 1.2, and at 1.1
+  its O-O is read as no bond, the floor saying it decided.
 - cis- and trans-2-butene differ where E or Z is asked.
 
 ## Restraints

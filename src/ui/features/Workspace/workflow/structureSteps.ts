@@ -140,7 +140,7 @@ export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: 
 /** A property written on an entry by a step: a text, of no unit - why it was set aside, how it is bonded, what it matches. */
 const said = (value: string) => ({ value, unit: "none" as const, status: "computed" as const });
 /** An entry with a text property of a step's written on it. */
-const withSaid = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: said(value) } });
+export const withSaid = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: said(value) } });
 /** An entry as a step's line names it: its compound's letter and its number, "b #2". */
 const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
 /** Why an entry was set aside, as the steps of two inputs write it on it (`set_aside`): to read in its set's table, and to filter on. */
@@ -229,6 +229,9 @@ export type CompareStep = {
   ez: boolean;
   atoms: string;
   elements: string;
+  /** How far, times their covalent radii together, two atoms may stand and be bonded - and at least how far over them, in Å. */
+  reach: number;
+  floor: number;
 };
 
 /**
@@ -247,7 +250,9 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   const elements = o.elements.split(/[\s,]+/).filter(Boolean);
   if (o.reference === "property" && !o.property.trim()) return { ok: false, said: "Name the property to pair them on" };
   if (o.reference === "each" && !o.writes.trim()) return { ok: false, said: "Name the property the match is written as" };
-  const options: CompareOptions = { rs: o.rs, ez: o.ez, passOver: { atoms, elements } };
+  if (!(o.reach >= 1 && o.reach <= 2)) return { ok: false, said: "Bonded within must be from 1 to 2 times the sum of the covalent radii" };
+  if (!(o.floor >= 0 && o.floor <= 1)) return { ok: false, said: "At least over the sum must be from 0 to 1 Å" };
+  const options: CompareOptions = { rs: o.rs, ez: o.ez, passOver: { atoms, elements }, reach: o.reach, floor: o.floor };
   const es = entries.map((e, i) => entryOfSet(e, String(i)));
   const rs = references.map((e, i) => entryOfSet(e, String(i)));
   const kept: SetEntry[] = [];
