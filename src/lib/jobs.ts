@@ -185,7 +185,7 @@ export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, co
 export function coresCountedSaid(c: { cores: number; physical?: number }): string | null {
   if (!c.physical || c.physical < 1 || c.cores <= c.physical) return null;
   const per = Math.round(c.cores / c.physical);
-  return `Counted in logical cores: ${c.cores} on this computer's ${c.physical} physical cores, ${per} to each. A program that runs as processes takes ${per} for each process.`;
+  return `Cores here are logical: this computer has ${c.physical} physical cores with ${per} threads each, ${c.cores} in all. A program that runs as separate processes uses ${per} of them for each process.`;
 }
 
 /**
