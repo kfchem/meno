@@ -407,6 +407,34 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
+  it("runs a job on the fewer cores its plugin says it takes - ORCA with no MPI, one - and says why once, on the step's line", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const calculations = useAppSettings.getState().calculations;
+    useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
+    try {
+      const NO_MPI = "no MPI found: ORCA runs on one core (cores per job apply to the other programs)";
+      const one = { program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [], cores: 1 };
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }], note: NO_MPI }) as never);
+      worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+      const { st } = editor();
+      const step = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, step);
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      // (Settings give each job 8: this one is asked for, and counted by the queue, at 1)
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 1 });
+      Object.assign(jobs.get(idOf(asked.started.length))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output" });
+      await st().lookAtJobs();
+      await ran;
+      const said = st().steps.find((s) => s.id === step)!.ran!.said!;
+      expect(said.split(NO_MPI).length - 1).toBe(1);
+    } finally {
+      useAppSettings.setState({ calculations });
+    }
+  });
+
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";

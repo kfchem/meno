@@ -62,6 +62,7 @@ It keeps nothing between requests, and reaches no network.
 import json
 import math
 import re
+import shutil
 import sys
 
 VERSION = "0.2.0"
@@ -425,9 +426,32 @@ def irc_output(entry, files, log, options):
     }
 
 
+#: The program ORCA starts its processes with, where it runs more than one (the ORCA 6.1 manual, 2.5.2.1): Open MPI's
+#: mpirun on macOS and Linux, Microsoft MPI's mpiexec on Windows - looked for where ORCA's jobs look for it, on the PATH.
+LAUNCHER = "mpiexec" if sys.platform == "win32" else "mpirun"
+#: Said once on the step's line where it is not there: each job then runs on one core, whatever the cores each job is
+#: given - they apply to the other programs, which need no launcher - never refused, never failed at ORCA's start-up.
+NO_LAUNCHER_SAID = "no MPI found: ORCA runs on one core (cores per job apply to the other programs)"
+
+
+#: How a program is looked for on the PATH: the standard library's (its tests give their own).
+which = shutil.which
+
+
+def launcher_found(look=None):
+    """Whether the program ORCA starts its processes with is there (`LAUNCHER`)."""
+    return (look or which)(LAUNCHER) is not None
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
+    # (more than one core, and no MPI to run ORCA's processes with: one core each job, said - never a job ORCA ends at its
+    #  start-up, as every one would, "mpirun: command not found")
+    given = whole(m.get("cores"), "The cores", 1) if m.get("cores") else 1
+    alone = given > 1 and not launcher_found()
+    if alone:
+        m = {**m, "cores": 1}
     # (a reaction path's step offers no wavefunction kept: none written)
     # (a saddle point's step offers no wavefunction kept: none written)
     keep = keeps_wavefunction(options) and step != "reaction-path" and step != "saddle-point"
@@ -447,7 +471,7 @@ def op_prepare(m):
             })
         if not jobs:
             raise Refused("nothing came in")
-        return {"jobs": jobs}
+        return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": NO_LAUNCHER_SAID} if alone else {})}
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
             "entries": [i],
@@ -462,8 +486,9 @@ def op_prepare(m):
         })
     if not jobs:
         raise Refused("nothing came in")
-    note = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
-    return {"jobs": jobs, **({"note": note} if note else {})}
+    said = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
+    note = "; ".join(n for n in (said, NO_LAUNCHER_SAID if alone else None) if n)
+    return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": note} if note else {})}
 
 
 def output_name(entry):

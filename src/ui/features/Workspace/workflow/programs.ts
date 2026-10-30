@@ -116,6 +116,8 @@ export type Prepared = {
   memory?: number;
   /** The other plugins whose programs it needs, by id - each one its plugin's manifest declares (`needs`): ORCA's xTB methods, the xTB plugin's xtb. */
   needs?: string[];
+  /** The cores it takes, where its plugin says fewer than it was given (ORCA with no MPI to run its processes with: one): never more. */
+  cores?: number;
 };
 
 /** The most memory a job may say it takes, in MiB: 64 TiB. */
@@ -217,6 +219,8 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
       reads: [...reads],
       // (a whole number of MiB, within reason; any other, none said)
       ...(Number.isInteger(r?.memory) && (r!.memory as number) > 0 && (r!.memory as number) <= MEMORY_MOST ? { memory: r!.memory as number } : {}),
+      // (fewer cores than it was given, where its plugin says so: a whole number, at least one - never more, the step sees to that)
+      ...(Number.isInteger(r?.cores) && (r!.cores as number) >= 1 ? { cores: r!.cores as number } : {}),
       ...(needs.length ? { needs: [...needs] } : {}),
     });
   }
