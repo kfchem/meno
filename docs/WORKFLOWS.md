@@ -729,6 +729,22 @@ No key starts a run (decided: menus, at first). Steps run in the order
 their wires give; steps that do not depend on one another may run at
 once (*Several at once*).
 
+**An empty set** (2026-10-30). A step before it that ran well may give
+nothing this time: a branch that took none, a last round of restraints
+that held none. A step whose input is such a set ends at once, done, and
+says what came in empty - its exits empty, nothing an earlier run put in
+them left there (its molecules, a chart, a table, pictures), that run
+kept among its runs: *Nothing came in*, or, of a
+step of several inputs, which - *Nothing came into Molecules*, *Nothing
+came into First and Second*. No job is started and no plugin asked, and
+every step after it goes on the same way, so a chain of rounds runs to
+its end however many rounds had nothing left to do. A step still fails
+where its empty input is a set no step gave (one drawn by hand), or
+where the step before it failed. A Merge whose other input is not empty
+is not ended so: it takes that one's entries, as a Merge does, and the
+rounds' rests merged with the last round's empty restraints are the
+rests.
+
 ### States
 
 ![A step's states](workflows/5-states.svg)

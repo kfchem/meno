@@ -35,7 +35,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { emptyIn, energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { mappable, moleculeOfEntry, reactionRefused, reactionSet } from "../../workflow/structureSteps";
 import { mapProductsOff } from "../../chem/mapProducts";
@@ -189,6 +189,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const key = inputKey(d, step, by);
     const why = whyNot(d, step, by);
     if (why) return void fail(id, why, at, key);
+    // (a branch that gave nothing this time: ended at once, its exits empty - no job, no worker asked)
+    const none = emptyIn(d, step, by);
+    if (none) return void doc.edit("run", (x) => ranEmpty(x, id, none, key, { ...w, byOf, now: at }));
     // (which stereoisomer each entry is, where the kind needs it known: asked first, every entry its own)
     const kind = kindInfo(step.kind);
     if (by === "meno" && kind.perceives === "configurations" && (kind.perceivesWith?.(optionsOf(kind.options ?? [], step.options)) ?? true)) {
