@@ -561,7 +561,8 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   (`dipolar_adducts`). The total charge and the electrons are the same as
   drawn, and the charges reported back are the drawn ones (`drawn_charge`).
   The force field's energies are for that form, and *How it was made*
-  says so: "N→B as N+–B− in the force field; the charges as drawn".
+  says so: "N→B computed as a single bond, N+ and B−" (or, for several,
+  "N→B, O→B computed as single bonds, each donor + and acceptor −").
   H3N→BH3, Me3N→AlCl3, the BF3 adducts of an ether and a ketone, and
   Al2Cl6 drawn with its bridges as arrows are each made, with all their
   atoms. A coordination bond to a main-group acceptor that cannot be held

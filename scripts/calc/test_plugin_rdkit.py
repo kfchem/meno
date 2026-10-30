@@ -1621,7 +1621,7 @@ class CoordinationBonds(unittest.TestCase):
         iso = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
         self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), "BHHHHHHN")
         self.assertEqual([a["charge"] for a in iso["atoms"]], [0] * 8)
-        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B as N+\u2013B\u2212 in the force field; the charges as drawn"}, iso["how"])
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B computed as a single bond, N+ and B\u2212"}, iso["how"])
         n, b = iso["frames"][0][0:3], iso["frames"][0][3:6]
         self.assertTrue(1.5 < math.dist(n, b) < 1.8, math.dist(n, b))
         # (an alane, an ether's and a ketone's BF3, and Al2Cl6 drawn with its two bridges as arrows: each made, all its atoms)
@@ -1638,6 +1638,11 @@ class CoordinationBonds(unittest.TestCase):
             iso = self.made(self.block(atoms, bonds))
             self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), formula, name)
             self.assertTrue(all(a["charge"] == 0 for a in iso["atoms"]), name)
+        # (two pairs, said together: Al2Cl6's two Cl->Al bridges are one pair of elements, so one; an ammine and an ether onto two B, two)
+        self.assertIn({"label": "Coordination bonds", "text": "Cl\u2192Al computed as a single bond, Cl+ and Al\u2212"}, iso["how"])
+        two = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0), ("O", 6, 0, 0), ("B", 7.6, 0, 0), ("C", -1, 1, 0), ("C", 5, 1, 0), ("C", 5, -1, 0)],
+                                   [(9, 1, 2), (9, 3, 4), (1, 1, 5), (1, 3, 6), (1, 3, 7)]))
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B, O\u2192B computed as single bonds, each donor + and acceptor \u2212"}, two["how"])
 
     def test_a_main_group_adduct_it_cannot_hold_is_refused_in_words_never_a_hydrogen_short(self):
         for atoms, bonds, why in [

@@ -167,12 +167,16 @@ def drawn_charge(atom):
 
 def dipolar_words(mol):
     """The coordination bonds held in their dipolar form, as a row of *How it
-    was made* says them; None where there are none."""
-    pairs = [(a.GetSymbol(), mol.GetAtomWithIdx(a.GetIntProp(LENDS_TO)).GetSymbol()) for a in mol.GetAtoms() if a.HasProp(LENDS_TO)]
+    was made* says what was computed - only what differs from the drawing,
+    whose charges the structure shows: "N\u2192B computed as a single bond,
+    N+ and B\u2212". None where there are none."""
+    pairs = sorted({(a.GetSymbol(), mol.GetAtomWithIdx(a.GetIntProp(LENDS_TO)).GetSymbol()) for a in mol.GetAtoms() if a.HasProp(LENDS_TO)})
     if not pairs:
         return None
-    said = sorted({f"{d}\u2192{x} as {d}+\u2013{x}\u2212" for d, x in pairs})
-    return ", ".join(said) + " in the force field; the charges as drawn"
+    if len(pairs) == 1:
+        d, x = pairs[0]
+        return f"{d}\u2192{x} computed as a single bond, {d}+ and {x}\u2212"
+    return ", ".join(f"{d}\u2192{x}" for d, x in pairs) + " computed as single bonds, each donor + and acceptor \u2212"
 
 
 def sanitized(mol):
