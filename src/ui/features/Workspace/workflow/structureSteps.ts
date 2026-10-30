@@ -373,8 +373,12 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
     kept.push(withRestraints(e, r.property));
   });
   if (problems.length) return { ok: false, said: `${plural(problems.length, "entry", "entries")} could not be set against a reference: ${problems.join("; ")}` };
-  const said = [`${kept.length} restrained`, `${aside.length - noTrans} trans already`];
+  // (a count of none left unsaid: the set it would name shows it empty)
+  const said: string[] = [];
+  if (kept.length) said.push(`${kept.length} restrained`);
+  if (aside.length - noTrans) said.push(`${aside.length - noTrans} trans already`);
   if (noTrans) said.push(`${noTrans} with no trans torsion in ${noTrans === 1 ? "its" : "their"} reference`);
+  if (!said.length) said.push("0 restrained");
   if (added) said.push(`${plural(added, "torsion")} newly held`);
   if (raised) said.push(`${plural(raised, "torsion")} held stronger`);
   return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };

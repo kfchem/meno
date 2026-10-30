@@ -92,7 +92,7 @@ describe("Torsion restraints, as a step", () => {
     const second = runMenoPair("torsion-restraints", { entries: first.kept, holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, { step: "50" });
     if (!second.ok) throw new Error(second.said);
     expect(held(second.kept[0]).map((r) => r.strength)).toEqual([100, 100]);
-    expect(second.said).toBe("1 restrained · 0 trans already · 2 torsions held stronger");
+    expect(second.said).toBe("1 restrained · 2 torsions held stronger");
   });
 
   it("matches each entry with its reference on a property, and does nothing where one has none, saying which", () => {
@@ -116,7 +116,7 @@ describe("Torsion restraints, as a step", () => {
     const both = [tagged(dce(false), "product", "p-0"), tagged(ref, "product", "p-1")];
     const o = runMenoPair("torsion-restraints", { entries: both, holds: "molecules" }, { entries: both, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
     if (!o.ok) throw new Error(o.said);
-    expect(o.said).toBe("0 restrained · 1 trans already · 1 with no trans torsion in its reference");
+    expect(o.said).toBe("1 trans already · 1 with no trans torsion in its reference");
   });
 
   it("names every entry it could not set against a reference", () => {
