@@ -302,7 +302,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
-| Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
+| Energy window | a funnel | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from - and, of what its molecule holds (on its entry frame), only what *Keep from its molecule* names, one name to a line, as it is: none, unless named, so that a value worked out for the molecule never reaches its frames unasked; a frame that holds one of them itself, of another value, keeps its own, the line saying so once; a name a molecule does not hold, said, with how many ("path not on 2 molecules", "pc not on any molecule") (2026-10-30); the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
@@ -917,6 +917,31 @@ beside its edge - being drawn over all of it.
   method - is said so: "on free energies (G), conditions not stated". On free
   energies a window refuses a saddle point, as Populations does: its G is
   no minimum's;
+- **Energy window, from the lowest in each value of a property**
+  (2026-10-31, for a cap on each product's transition states): *From the
+  lowest in: Each value of a property*, and *The property* named -
+  "product", "path". Each entry is kept where its energy is within the
+  window of the lowest of those with its value; molecules as well as
+  conformer sets. Its card says the window and what it is of ("within 10
+  kcal/mol of each product's lowest"); its line which energy, chosen as
+  above, each group's alike: "3 of 5 entries kept, on electronic
+  energies · rest 2", the reasons counted only where any is more than
+  being outside it. One without the property, or without an energy, goes
+  out of *Outside it* saying so ("it has no product", "it has no
+  energy") - never into a group, never left out unsaid; one outside the
+  window says how far ("12.00 kcal/mol above the lowest of its
+  product"). A saddle point is not refused here - which entries should
+  be transition states is the chemist's to say - but a window means
+  something only within one kind: a group of minima and saddle points
+  together is set aside whole, saying so ("its product b holds minima
+  and saddle points together"), as is one where an entry's kind is not
+  known (no frequencies) beside those whose is; a group none of whose
+  kind is known is windowed, its line saying "whether minima or saddle
+  points not known". An entry that is no result (failed, not converged)
+  is refused, named, as over compounds. Molecules have no compounds: over
+  compounds each is its own group, as *Rank* takes them, so all are kept
+  and the line says so ("2 of 2 entries kept: each molecule is its own
+  group");
 - **A conformer set keeps each conformer's thermochemistry**
   (2026-10-24): *Frequencies* on a conformer set runs a job for each, and
   each conformer keeps what its own job read - its free energy, enthalpy,
