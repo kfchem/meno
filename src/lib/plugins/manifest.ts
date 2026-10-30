@@ -189,7 +189,9 @@ export type System = (typeof SYSTEMS)[number];
  * alone, it prints a line beginning `after`, then the version) - the newest
  * copy new enough then taken; and the programs installed with it, in its
  * folder, that a job may run after it (`beside`: each by its name, and its
- * file on each system - ORCA's orca_2mkl). Meno's backend reads and checks
+ * file on each system - ORCA's orca_2mkl); and how it runs in parallel
+ * (`parallel`: "threads", unsaid, or "processes" - MPI, ORCA's `%pal` - each
+ * process a physical core, told one thread). Meno's backend reads and checks
  * the same (src-tauri/src/jobs.rs `installed_named`, `installed_choice`).
  */
 export type InstalledDecl = {
@@ -201,6 +203,7 @@ export type InstalledDecl = {
   places: Partial<Record<System, string[]>>;
   version?: VersionRule;
   beside?: Record<string, Partial<Record<System, string>>>;
+  parallel?: "threads" | "processes";
 };
 
 /**
@@ -636,9 +639,10 @@ function installedOf(v: unknown): InstalledDecl | null {
   }
   const version = d?.version === undefined ? undefined : versionRuleOf(d.version);
   const beside = d?.beside === undefined ? undefined : besideOf(d.beside);
-  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one, a version it cannot be asked for, a program beside it that is not one - is none)
-  return name && label && Object.keys(files).length && path && envOk && placesOk && version !== null && beside !== null
-    ? { name, label, files, path, env, places, ...(version ? { version } : {}), ...(beside ? { beside } : {}) }
+  const parallel = d?.parallel === undefined ? undefined : d.parallel === "threads" || d.parallel === "processes" ? d.parallel : null;
+  // (one it cannot be run as it says - a place outside its installation, a variable it may not set, a usual place that is not one, a version it cannot be asked for, a program beside it that is not one, a way of running in parallel Meno does not know - is none)
+  return name && label && Object.keys(files).length && path && envOk && placesOk && version !== null && beside !== null && parallel !== null
+    ? { name, label, files, path, env, places, ...(version ? { version } : {}), ...(beside ? { beside } : {}), ...(parallel ? { parallel } : {}) }
     : null;
 }
 

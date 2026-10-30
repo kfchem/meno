@@ -46,6 +46,7 @@ describe("a kind's exits, as a list", () => {
       reaction: [first("Mapped products", "molecules"), rest("Not mapped", "same"), { id: "changes", name: "Bond changes", gives: "table" }],
       "reaction-path": [first("Reaction paths", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       "saddle-point": [first("Optimised structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
+      ensemble: [first("{as}", "same"), rest("The rest", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

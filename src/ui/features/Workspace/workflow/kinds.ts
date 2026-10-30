@@ -10,9 +10,10 @@ import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
-import { takeFramesHow, type Which } from "./takeFrames";
+import { keptNames, takeFramesHow, type Which } from "./takeFrames";
 import { joinHow, joinNeeds } from "./joinStep";
 import { addHow, addNeeds, numberHow, numberNeeds } from "./addStep";
+import { ensembleHow, ensembleNeeds } from "./ensembleStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
 import { tagNeeds } from "../../../../lib/nodes/tag";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
@@ -46,8 +47,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "ensemble";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -361,8 +362,9 @@ export const KINDS: readonly KindInfo[] = [
         default: "highest",
       },
       { id: "either", label: "Either side", type: "number", default: 1, min: 1, step: 1, when: { id: "which", in: ["around"] } },
+      { id: "keep", label: "Keep from its molecule", type: "lines", default: "", rows: 2, note: "One property to a line, taken from the molecule each frame comes from. Empty: each frame keeps only its own." },
     ],
-    how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1)),
+    how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1), keptNames(String(v.keep ?? ""))),
   },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
@@ -887,6 +889,35 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => displaceHow(v),
     needs: (v) => displaceNeeds(v),
+  },
+  {
+    // (each group's free energy over its members - its conformers - on the entry that stands for it, its lowest: lib/nodes/ensemble)
+    kind: "ensemble",
+    name: "Ensemble energy",
+    icon: "ensemble",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "{as}",
+    others: [{ id: "rest", name: "The rest", gives: "same", of: "rest" }],
+    options: [
+      { id: "property", label: "Of", type: "text", default: "" },
+      { id: "as", label: "As", type: "text", default: "" },
+      {
+        id: "within",
+        label: "Within",
+        type: "choice",
+        choices: [
+          { value: "each group", label: "Each group" },
+          { value: "each value", label: "Each value of a property" },
+          { value: "all", label: "All together" },
+        ],
+        default: "each group",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
+    ],
+    how: (v) => ensembleHow(v),
+    needs: (v) => ensembleNeeds(v),
   },
 ];
 

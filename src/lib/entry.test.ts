@@ -185,6 +185,18 @@ describe("a sum's parts, as a file holds them", () => {
   });
 });
 
+describe("an ensemble's value, as a file holds it", () => {
+  it("reads back how many it is over, and its members' values with their own parts one level down - no deeper", () => {
+    const sum = { property: "G", value: -1.2, unit: "Eh", at: { geometry: "g1", kelvin: 298.15 }, parts: [{ property: "energy", value: -1.3, unit: "Eh" }, { property: "thermo.g-correction", value: 0.1, unit: "Eh" }] };
+    const p = { value: -1.21, unit: "Eh", at: { geometry: "g1", kelvin: 298.15 }, by: { treatment: "ensemble over 2" }, status: "computed", parts: [sum, { ...sum, value: -1.19 }], ensemble: { of: 2 } };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    expect(propertyIn({ ...p, ensemble: { of: 0 } })).toBeUndefined();
+    expect(propertyIn({ ...p, ensemble: { of: 1.5 } })).toBeUndefined();
+    // (two levels down: not read)
+    expect(propertyIn({ ...p, parts: [{ ...sum, parts: [{ ...sum.parts[0], parts: [sum.parts[1]] }] }] })).toBeUndefined();
+  });
+});
+
 describe("a property's structure, as a file holds it", () => {
   it("reads back the structure a value was worked out from, and refuses one that is no key", () => {
     const p = { value: 136.24, unit: "g/mol", of: "k1", status: "computed" };

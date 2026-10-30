@@ -340,9 +340,12 @@ export function numberText(v: number, digits?: number): string {
   return t.replace(/^-/, MINUS);
 }
 
+/** How many decimals an energy in kcal/mol under ten is written with (`aboveText`; a table's column of them, workflow ValueBody). */
+export const ABOVE_DECIMALS = 2;
+
 /** An energy above the lowest, in kilocalories per mole, as it is written: "1.23 kcal/mol", "12.3 kcal/mol" - its decimals chosen once it is rounded (9.996 is "10.0", not "10.00"). */
 export function aboveText(kcal: number): string {
-  return `${Math.round(kcal * 100) / 100 < 10 ? numberText(kcal, 2) : numberText(kcal, 1)} kcal/mol`;
+  return `${Math.round(kcal * 100) / 100 < 10 ? numberText(kcal, ABOVE_DECIMALS) : numberText(kcal, ABOVE_DECIMALS - 1)} kcal/mol`;
 }
 
 /**

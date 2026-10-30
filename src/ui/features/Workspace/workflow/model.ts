@@ -91,6 +91,11 @@ export function holdNumber(doc: WorkspaceDocument, id: number, number: NumberVal
   return withSet(doc, id, ({ collection: _c, unread: _u, chart: _h, table: _t, ...b }) => ({ ...b, members: [], number }));
 }
 
+/** A step's result set holding nothing: no members, and no chart, table, number or molecules held in it - as a step that had nothing to work on leaves it (run `ranEmpty`). */
+export function holdNothing(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+  return withSet(doc, id, ({ collection: _c, drawnCollection: _d, unread: _u, chart: _h, table: _t, number: _n, ...b }) => ({ ...b, members: [] }));
+}
+
 /** A step's result set holding a chart it made (`WorkflowSet.chart`): nothing on the page among its members, and no molecules of its own. */
 export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue | DiagramValue): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));

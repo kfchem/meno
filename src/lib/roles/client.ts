@@ -40,8 +40,13 @@ export type ChemRequests = {
    * other's mirror image.
    */
   conformers: {
-    /** `options`: those the plugin declares for the role (its manifest's roleOptions), as chosen in Settings. */
-    args: { molblock: string; isomers?: "one" | "all"; count?: number; like?: Like; options?: OptionValues };
+    /**
+     * `options`: those the plugin declares for the role (its manifest's
+     * roleOptions), as chosen in Settings. `onPage`: made for Meno's own page
+     * (each conformer once, laid over the first, alike atoms in like places -
+     * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
+     */
+    args: { molblock: string; isomers?: "one" | "all"; count?: number; like?: Like; options?: OptionValues; onPage?: true };
     result: { isomers: Conformers[] };
   };
   /**
