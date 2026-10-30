@@ -1364,7 +1364,9 @@ Decided while building it, for the maintainer to confirm:
   computer of 16 physical cores running two threads on each, 32 processes
   of 32 threads each. Where the computer runs two threads on each physical
   core, the queue counts each process as two of its cores, so that two
-  such jobs never share a physical core. Its physical cores are what its
+  such jobs never share a physical core. Settings, *Calculations*, says so under its cores,
+  where the computer runs more than one thread on each: they are counted
+  in logical cores, and such a program takes that many for each process. Its physical cores are what its
   system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
   `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
   is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
