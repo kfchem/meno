@@ -740,7 +740,10 @@ came into First and Second*. No job is started and no plugin asked, and
 every step after it goes on the same way, so a chain of rounds runs to
 its end however many rounds had nothing left to do. A step still fails
 where its empty input is a set no step gave (one drawn by hand), or
-where the step before it failed.
+where the step before it failed. A Merge whose other input is not empty
+is not ended so: it takes that one's entries, as a Merge does, and the
+rounds' rests merged with the last round's empty restraints are the
+rests.
 
 ### States
 

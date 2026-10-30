@@ -641,7 +641,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
   });
 
-  it("ends a step a branch gave nothing this time ok, its exits empty, saying which input came empty - through rounds whose last holds none, to a Merge of what they gave", async () => {
+  it("ends a step a branch gave nothing this time ok, its exits empty, saying which input came empty - through rounds whose last holds none, to a Merge of what they gave and one of the rests with them", async () => {
     const { st, step: a } = editor();
     const exit = (id: number, e: string) => st().sets.find((s) => s.made?.step === id && s.made.exit === e)!.id;
     const ran = (id: number) => st().steps.find((s) => s.id === id)!.ran;
@@ -666,6 +666,11 @@ describe("a step that runs a plugin's program", () => {
     const merge = st().addStep("merge", "meno", 130, 0);
     expect(st().connect({ set: exit(r3, "out") }, merge, "first")).toBe(true);
     expect(st().connect({ set: exit(t3, "out") }, merge, "second")).toBe(true);
+    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's restraints, empty:
+    //  Merge's own rule, the rests' entries, never ended at once)
+    const rests = st().addStep("merge", "meno", 130, 20);
+    expect(st().connect({ set: exit(r1, "out") }, rests, "first")).toBe(true);
+    expect(st().connect({ set: exit(t3, "out") }, rests, "second")).toBe(true);
     const all = st().runAll();
     for (let k = 0; k < 4; k++) await settle();
     expect(asked.started).toHaveLength(1);
@@ -682,6 +687,8 @@ describe("a step that runs a plugin's program", () => {
     expect(holds(t3, "out")).toBe(0);
     expect(ran(merge)).toMatchObject({ ok: true, said: "Nothing came into First and Second" });
     expect(holds(merge, "out")).toBe(0);
+    expect(ran(rests)).toMatchObject({ ok: true, said: expect.stringMatching(/ · nothing came from Second$/) });
+    expect(holds(rests, "out")).toBe(1);
   });
 
   it("still fails a step whose empty input no step gave, or whose step before it failed", async () => {
