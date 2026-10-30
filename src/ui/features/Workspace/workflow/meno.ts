@@ -112,6 +112,7 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
         from: String(o.from ?? ""),
         rs: o.rs === true,
         ez: o.ez === true,
+        numbered: o.numbered === true,
         atoms: String(o.atoms ?? ""),
         elements: String(o.elements ?? ""),
         reach: Number(o.reach),
