@@ -12,7 +12,8 @@ import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEne
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, measuredSet, mergedSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import { combinedSet, comparedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
 import { rankedSet } from "./valueSteps";
 import { joinedSet } from "./joinStep";
@@ -34,7 +35,7 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 export type Outcome = Outcome3D | DrawnOutcome;
 /** What a step did on molecules in 3D (`Outcome`). */
 export type Outcome3D =
-  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[] }
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[]; tables?: Readonly<Record<string, Table>> }
   | { ok: false; said: string };
 /** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
 export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string; core?: SeriesCore } | { ok: false; said: string };
@@ -81,8 +82,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints* and *Join*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join"];
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints*, *Join* and *Reaction*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join", "reaction"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
@@ -111,6 +112,8 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
       return joinedSet(a.entries, b.entries, a.holds, String(o.on ?? ""), String(o.carry ?? ""));
     case "torsion-restraints":
       return torsionsSet(a.entries, b.entries, a.holds, o);
+    case "reaction":
+      return reactionSet(a.entries, b.entries, o.maps === "every" ? "every" : "first");
     default:
       return { ok: false, said: "Meno does not do this itself on two inputs" };
   }

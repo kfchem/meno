@@ -160,6 +160,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="16" cy="17" r="2.1" fill="currentColor" stroke="none" />
     </>
   ),
+  // (the same atom before and after: across the reaction arrow, linked)
+  reaction: (
+    <>
+      <circle cx="3.6" cy="7" r="2.3" fill="currentColor" stroke="none" />
+      <circle cx="16.4" cy="7" r="2.3" fill="currentColor" stroke="none" />
+      <path d="M6.8 7 H13.4 M11.4 5.1 L13.4 7 L11.4 8.9" />
+      <path d="M3.6 10.4 V14.2 H16.4 V10.4" strokeDasharray="1.3 1.6" />
+    </>
+  ),
   // (a chain as drawn, the same as its reference)
   compare: (
     <>

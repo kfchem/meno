@@ -37,6 +37,8 @@ import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
+import { mappable, moleculeOfEntry, reactionRefused, reactionSet } from "../../workflow/structureSteps";
+import { mapProductsOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
@@ -194,6 +196,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }
     if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
+    if (by === "meno" && step.kind === "reaction") return menoReaction(id, at);
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
@@ -352,6 +355,57 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
     doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
+  }
+
+  /**
+   * Meno's Reaction, its products mapped in a worker (chem/mapProducts) -
+   * each can take seconds, which the page does not wait on - its card
+   * saying how many are done, and stopped with the step; its results put in
+   * at the end as one edit, as Meno's other steps'.
+   */
+  async function menoReaction(id: number, at: number): Promise<void> {
+    if (get().menoWorking[id]) return;
+    menoStops.delete(id);
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, "meno");
+    const [r, p] = [inputOf(d, id, "reactants")!, inputOf(d, id, "products")!];
+    const reactants = setEntries(r.molecules, r.holds as Holds3D);
+    const products = setEntries(p.molecules, p.holds as Holds3D);
+    const refused = reactionRefused(reactants);
+    if (refused) return void fail(id, refused, at, key);
+    const every = optionsOf(kindInfo("reaction").options ?? [], step.options).maps === "every";
+    const whole = products.filter(mappable);
+    const working = (patch: { done: number } | null) =>
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        if (patch) rest[id] = { since: at, total: whole.length, ...patch };
+        else delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    working({ done: 0 });
+    const job = mapProductsOff(moleculeOfEntry(reactants[0]), whole.map(moleculeOfEntry), every, (done) => working({ done }));
+    menoKills.set(id, job.stop);
+    let mapped;
+    try {
+      mapped = await job.result;
+    } catch (e) {
+      if (!menoStops.has(id)) return void fail(id, `The mapping stopped: ${e instanceof Error ? e.message : String(e)}`, at, key);
+    } finally {
+      working(null);
+      menoKills.delete(id);
+    }
+    const still = stepOf(doc.getState(), id);
+    if (!still) return;
+    const took = Date.now() - at;
+    const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
+    if (!mapped || menoStops.has(id)) {
+      menoStops.delete(id);
+      return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+    }
+    // (no time said: Meno's own steps say none)
+    const outcome = reactionSet(reactants, products, every ? "every" : "first", mapped);
+    doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
   }
 
   /**

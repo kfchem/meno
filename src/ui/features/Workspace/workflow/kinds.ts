@@ -46,7 +46,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -545,9 +545,33 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Measured",
-    options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
-    how: (v) => measureHow(String(v.measurements ?? "")),
+    // (the atoms typed, or each row's of a table wired in where wanted - a Reaction's bond changes - its columns saying how they count them)
+    inputs: [
+      { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
+    ],
+    options: [
+      {
+        id: "from",
+        label: "Atoms",
+        type: "choice",
+        choices: [
+          { value: "typed", label: "Typed" },
+          { value: "table", label: "From the table" },
+        ],
+        default: "typed",
+      },
+      { id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "", when: { id: "from", in: ["typed"] } },
+      { id: "rows", label: "Rows matched on (blank: every row)", type: "text", default: "", when: { id: "from", in: ["table"] } },
+    ],
+    how: (v) =>
+      v.from === "table"
+        ? String(v.rows ?? "").trim()
+          ? `atoms from the table, rows by ${String(v.rows).trim()}`
+          : "atoms from the table"
+        : measureHow(String(v.measurements ?? "")),
     needs: (v) => {
+      if (v.from === "table") return undefined;
       const typed = measurementsTyped(String(v.measurements ?? ""));
       return "why" in typed ? typed.why : undefined;
     },
@@ -771,6 +795,37 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => addHow(v),
     needs: (v) => addNeeds(v),
+  },
+  {
+    // (each product mapped onto the one reactant structure, atom for atom, hydrogens too, and written in its numbering - with the bonds each map forms, breaks or changes, as a table; a product that does not map, aside with why)
+    kind: "reaction",
+    name: "Reaction",
+    icon: "reaction",
+    takes: ["molecules", "conformers"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Mapped products",
+    inputs: [
+      { id: "reactants", name: "Reactants", takes: ["molecules", "conformers"] },
+      { id: "products", name: "Products", takes: ["molecules", "conformers"] },
+    ],
+    others: [
+      { id: "rest", name: "Not mapped", gives: "same", of: "rest" },
+      { id: "changes", name: "Bond changes", gives: "table" },
+    ],
+    options: [
+      {
+        id: "maps",
+        label: "Maps",
+        type: "choice",
+        choices: [
+          { value: "first", label: "First map" },
+          { value: "every", label: "Every map" },
+        ],
+        default: "first",
+      },
+    ],
+    how: (v) => (v.maps === "every" ? "every map of each product" : "each product's first map"),
   },
 ];
 
