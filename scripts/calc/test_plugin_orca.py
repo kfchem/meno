@@ -383,6 +383,18 @@ class PathSearch(unittest.TestCase):
         # (a band that did not converge: said plainly, never in the words of ORCA's error return)
         stopped = ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options={}, files={}, log=NOT_CONVERGED_LOG, ended="failed")
         self.assertEqual(stopped, {"why": 'Its band did not converge in 3 iterations: ORCA stopped before refining a highest point ("NEB not converged")', "kind": "not-converged"})
+        # (its band converged, refining its highest point not, in the steps ORCA allows - ORCA then going on to its
+        #  properties, there ending by an error that says nothing of it, or ending normally: said plainly, nothing read -
+        #  not even the band; no point refined, no entry)
+        refining = PATH_LOG.replace("     TS optimization                   ... 4  44.4%", "     TS optimization                   ... 1001  91.2%")
+        refining = ("       The optimization did not converge but reached the maximum number of\n       optimization cycles.\n" + refining)
+        said = ('Its band converged in 5 iterations, but refining its highest point did not converge in 1001 steps ("The optimization '
+                'did not converge but reached the maximum number of optimization cycles"): raise Steps for refining its highest point, '
+                'or give ends nearer the path')
+        props = refining.replace("****ORCA TERMINATED NORMALLY****", "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\nORCA finished by error termination in PROPERTIES")
+        for log, ended in ((props, "done"), (props, "failed"), (refining, "done")):
+            self.assertEqual(ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options={}, files=PATH_FILES, log=log, ended=ended),
+                             {"why": said, "kind": "not-converged"})
         # (an image's SCF that did not converge, ORCA carrying on: a warning, in its words - the path read all the same)
         warned = ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), files=PATH_FILES, log=SCF_FAILED + PATH_LOG, ended="done")["outputs"][0]
         self.assertEqual(warned["energies"], [-1.17, -1.10, -1.09, -1.12])
@@ -431,6 +443,28 @@ class Collect(unittest.TestCase):
         # (not before it was under way, nor for a single point)
         self.assertNotIn("partial", ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="ORCA finished by error termination in SCF\n", ended="failed"))
         self.assertNotIn("partial", ask("collect", step="energy", entries=[WATER], options={}, files={}, log=cycle, ended="failed"))
+
+    def test_an_optimisation_that_took_the_most_cycles_orca_allows_is_said_not_converged_however_orca_ended_after(self):
+        # (ORCA 6.1.1's words, in their box over two lines - then, going on to its properties, an error that says nothing
+        #  of it, or a normal end)
+        warned = ("GEOMETRY OPTIMIZATION CYCLE  49\n ... \nGEOMETRY OPTIMIZATION CYCLE  50\n ... \n"
+                  "                                  WARNING !!!\n"
+                  "       The optimization did not converge but reached the maximum number of\n"
+                  "       optimization cycles.\n"
+                  "       Please check your results very carefully.\n")
+        props = warned + "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\n\nORCA finished by error termination in PROPERTIES\n  .... aborting the run\n"
+        normal = warned + "FINAL SINGLE POINT ENERGY -76.4\n                             ****ORCA TERMINATED NORMALLY****\n"
+        said = ('The optimisation did not converge in 50 cycles, the most ORCA takes ("The optimization did not converge but '
+                'reached the maximum number of optimization cycles"): run it again to go on from the geometry it reached')
+        for log, ended in ((props, "done"), (props, "failed"), (normal, "done")):
+            # (never read as a result: the geometry it reached read for a run again alone, as one that stopped is)
+            self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=log, ended=ended),
+                             {"why": said, "kind": "not-converged", "partial": [{"kind": "orca", "log": True, "name": "water.out"}]})
+            # (a saddle point's, so too)
+            self.assertEqual(ask("collect", step="saddle-point", entries=[WATER], options={}, files={}, log=log, ended=ended),
+                             {"why": said, "kind": "not-converged", "partial": [{"kind": "orca", "log": True, "name": "water.out"}]})
+        # (a single point or frequencies never optimise: the words are no sign of anything there)
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=props, ended="done"), {"why": "ORCA finished by error termination in PROPERTIES"})
 
     def test_a_job_that_exited_0_but_ended_by_error_termination_failed_and_only_one_that_terminated_normally_is_read(self):
         # (as ORCA 6.1.1 ends a parallel run whose MPI is not there: its exit code 0, read as done)

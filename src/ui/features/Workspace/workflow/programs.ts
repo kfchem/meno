@@ -300,12 +300,14 @@ function readsOf(list: unknown, count: number): { read: ToRead[] } | { why: stri
  * taken as they are.
  */
 export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind; partial?: ToRead[] } {
-  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown; partial?: unknown } | null;
-  // (the job as a whole did not give what it was for: its program's words, as its plugin read them - and, where it says to,
-  //  what the run wrote, read for the geometry it reached alone: one it cannot read leaves the failure as it is)
+  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown; kind?: unknown; partial?: unknown } | null;
+  // (the job as a whole did not give what it was for: its program's words, as its plugin read them - of the kind it says,
+  //  one of core's (an optimisation that did not converge), else a program's error - and, where it says to, what the run
+  //  wrote, read for the geometry it reached alone: one it cannot read leaves the failure as it is)
   if (typeof r?.why === "string") {
     const partial = r.partial === undefined ? null : readsOf(r.partial, count);
-    return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error", ...(partial && !("why" in partial) ? { partial: partial.read } : {}) };
+    const kind = r.kind === undefined ? "program-error" : failureKindOf(r.kind);
+    return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind, ...(partial && !("why" in partial) ? { partial: partial.read } : {}) };
   }
   if (r?.surfaces !== undefined) {
     if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
