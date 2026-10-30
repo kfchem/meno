@@ -376,8 +376,10 @@ describe("a step that runs a plugin's program", () => {
   it("gives a program running as processes one to each physical core, however many cores Settings gives - a program of threads all of them", async () => {
     useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
-    // (a computer running two threads on each of its 4 physical cores, and Settings giving each job all 8)
+    // (a computer running two threads on each of its 4 physical cores - whatever computer the test runs on: the cores
+    //  the webview tells, too - and Settings giving each job all 8)
     physicalCores.n = 4;
+    Object.defineProperty(globalThis.navigator, "hardwareConcurrency", { value: 8, configurable: true });
     const calculations = useAppSettings.getState().calculations;
     useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
     try {
@@ -400,6 +402,7 @@ describe("a step that runs a plugin's program", () => {
       expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(8);
     } finally {
       physicalCores.n = 8;
+      delete (globalThis.navigator as { hardwareConcurrency?: number }).hardwareConcurrency;
       useAppSettings.setState({ calculations });
     }
   });
