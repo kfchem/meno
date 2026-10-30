@@ -1644,6 +1644,42 @@ class CoordinationBonds(unittest.TestCase):
                                    [(9, 1, 2), (9, 3, 4), (1, 1, 5), (1, 3, 6), (1, 3, 7)]))
         self.assertIn({"label": "Coordination bonds", "text": "N\u2192B, O\u2192B computed as single bonds, each donor + and acceptor \u2212"}, two["how"])
 
+    def test_every_op_that_reads_a_drawing_reads_an_adduct_the_same_way(self):
+        # (H3N->BH3 drawn with an arrow: Check structures keeps it as drawn - no atom with more bonds than it can have -
+        #  Descriptors works it out, and the canvas's analysis marks no valence, as Conformers makes it)
+        adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
+        self.assertEqual(self.worker.step_check([{"molblocks": [adduct]}], {}), {"structures": [{"as": "drawn"}]})
+        described = self.worker.step_descriptors([{"molblocks": [adduct]}], {})["structures"][0]
+        self.assertEqual(described["as"], "drawn")
+        # (its weight: B 10.81, N 14.007, six H 1.008 each - the same in either form)
+        self.assertAlmostEqual(described["properties"]["mw"]["value"], 10.81 + 14.007 + 6 * 1.008, delta=0.01)
+        seen = self.worker.op_analyse({"molblock": adduct})
+        self.assertFalse(any("valenceError" in a for a in seen["atoms"]))
+        self.assertEqual([a["hydrogens"] for a in seen["atoms"]], [3, 3])
+        # (one it cannot hold is still set aside by Check structures, as Conformers refuses it)
+        silicon = self.block([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)])
+        self.assertEqual(self.worker.step_check([{"molblocks": [silicon]}], {})["structures"][0]["kind"], "valence")
+
+    def test_stereoisomers_of_an_adduct_are_drawn_with_its_arrow_and_its_charges_as_drawn(self):
+        # (1-fluoroethylamine->BH3, its carbon a stereocentre left open: two stereoisomers, each written back as drawn - the
+        #  N->B arrow, N and B uncharged - and each reading back as the one its SMILES, of the dipolar form, says)
+        adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
+        made = self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0]
+        self.assertEqual(len(made["made"]), 2)
+        self.assertEqual(len(set(made["smiles"])), 2)
+        for block, smiles in zip(made["made"], made["smiles"]):
+            drawn = Chem.MolFromMolBlock(block, sanitize=False, removeHs=False)
+            arrows = [b for b in drawn.GetBonds() if b.GetBondType() == Chem.BondType.DATIVE]
+            self.assertEqual([(b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()) for b in arrows], [("N", "B")])
+            self.assertTrue(all(a.GetFormalCharge() == 0 for a in drawn.GetAtoms()))
+            self.assertRegex(smiles, r"\[NH2\+\]")
+            self.assertRegex(smiles, r"\[BH3-\]")
+            self.assertEqual(Chem.MolToSmiles(self.worker.read(block)), smiles)
+
+    def test_its_smiles_is_of_the_dipolar_form_the_same_molecule(self):
+        adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
+        self.assertEqual(self.worker.op_to_smiles({"molblock": adduct})["smiles"], Chem.MolToSmiles(Chem.MolFromSmiles("[NH3+][BH3-]")))
+
     def test_a_main_group_adduct_it_cannot_hold_is_refused_in_words_never_a_hydrogen_short(self):
         for atoms, bonds, why in [
             # (Si, not of group 13; a charged acceptor; a charged donor; a donor that cannot carry the charge; two arrows onto one B)

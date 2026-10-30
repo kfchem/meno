@@ -559,8 +559,16 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   can carry a charge (N, P, As, O, S, Se or a halogen), neutral, is held
   inside RDKit as a single bond, the donor +1 and the acceptor −1
   (`dipolar_adducts`). The total charge and the electrons are the same as
-  drawn, and the charges reported back are the drawn ones (`drawn_charge`).
-  The force field's energies are for that form, and *How it was made*
+  drawn. Every op reads a drawn adduct so (`read`, `drawing_of_parts`):
+  *Check structures* keeps it as drawn, *Descriptors* works it out, and the
+  analysis of a drawing marks no atom of it as having too many bonds. What
+  the plugin writes of the molecule is of that form, the same molecule
+  written as RDKit holds it: its SMILES and the keys made from it
+  ([NH3+][BH3-] for H3N→BH3), *Stereoisomers*' SMILES, and *Descriptors*'
+  values (its weight the same either way). What it gives back as a
+  structure is as drawn: a conformer's atoms carry the charges drawn
+  (`drawn_charge`), and each drawing *Stereoisomers* makes carries the
+  arrow and the charges drawn (`as_drawn`). The force field's energies are for that form, and *How it was made*
   says so: "N→B computed as a single bond, N+ and B−" (or, for several,
   "N→B, O→B computed as single bonds, each donor + and acceptor −").
   H3N→BH3, Me3N→AlCl3, the BF3 adducts of an ether and a ketone, and

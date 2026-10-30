@@ -179,6 +179,31 @@ def dipolar_words(mol):
     return ", ".join(f"{d}\u2192{x}" for d, x in pairs) + " computed as single bonds, each donor + and acceptor \u2212"
 
 
+def as_drawn(mol):
+    """A copy of `mol` with each coordination bond held in its dipolar form
+    (`dipolar_adducts`) as drawn again: a dative bond from its donor to its
+    acceptor, and each atom's charge as drawn - for a drawing written back,
+    which shows what the chemist drew, not how RDKit holds it."""
+    out = Chem.RWMol(mol)
+    for a in mol.GetAtoms():
+        if a.HasProp(LENDS_TO):
+            bond = out.GetBondBetweenAtoms(a.GetIdx(), a.GetIntProp(LENDS_TO))
+            bond.SetBondType(Chem.BondType.DATIVE)
+            if bond.GetBeginAtomIdx() != a.GetIdx():
+                bond.SetBeginAtomIdx(a.GetIdx())
+                bond.SetEndAtomIdx(a.GetIntProp(LENDS_TO))
+        if a.HasProp(DRAWN_CHARGE):
+            out.GetAtomWithIdx(a.GetIdx()).SetFormalCharge(a.GetIntProp(DRAWN_CHARGE))
+    out = out.GetMol()
+    out.UpdatePropertyCache(strict=False)
+    return out
+
+
+def held_dipolar(mol):
+    """Whether `mol` holds a coordination bond in its dipolar form (`dipolar_adducts`)."""
+    return any(a.HasProp(LENDS_TO) for a in mol.GetAtoms())
+
+
 def sanitized(mol):
     """`mol` sanitised - a coordination bond to a full group-13 acceptor held
     in its dipolar form first (`dipolar_adducts`) - or why not in words: a
@@ -199,11 +224,14 @@ def sanitized(mol):
 
 def read(molblock, sanitize=True):
     """A molecule from a MOL block, kept as drawn: no hydrogens removed, and
-    none taken by a coordination bond (`acceptors_as_drawn`)."""
+    none taken by a coordination bond (`acceptors_as_drawn`); one to a full
+    group-13 acceptor held in its dipolar form (`dipolar_adducts`), whether
+    sanitised or not, so that every op reads an adduct the same way."""
     mol = Chem.MolFromMolBlock(molblock, sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("This structure could not be read.")
     acceptors_as_drawn(mol)
+    dipolar_adducts(mol)
     if sanitize:
         sanitized(mol)
         Chem.AssignChiralTypesFromBondDirs(mol)
@@ -428,19 +456,28 @@ def drawing_block(mol):
     Meno's engine to lay out again), its stereo wedged as the molecule has
     it."""
     lay_out_2d(mol)
-    block = Chem.MolToV3KMolBlock(mol)
+    # (an adduct held in its dipolar form written as drawn: its arrow, and its charges as drawn - `as_drawn`)
+    written = lambda: Chem.MolToV3KMolBlock(as_drawn(mol) if held_dipolar(mol) else mol)
+    block = written()
     # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
     # says (Z): where what is written does not read back as the molecule,
     # RDKit's own depictor lays it out instead (it keeps that one)
     if not reads_as(block, mol):
         rdDepictor.Compute2DCoords(mol, forceRDKit=True)
-        block = Chem.MolToV3KMolBlock(mol)
+        block = written()
     return block
 
 
 def reads_as(molblock, mol):
     """Whether a MOL block reads back as the molecule it was written from,
     stereochemistry and all."""
+    if held_dipolar(mol):
+        # (read as the worker reads a drawing, its adduct held in its dipolar form again: RDKit's own reading refuses it)
+        try:
+            back = read(molblock)
+        except ValueError:
+            return False
+        return Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
     back = Chem.MolFromMolBlock(molblock)
     return back is not None and Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
 
@@ -2521,13 +2558,18 @@ def op_run(m):
 
 def drawing_of_parts(blocks):
     """A structure drawn, its parts read as one molecule - unsanitised, as
-    drawn - or why it cannot be read at all."""
+    drawn, but read as every op of the worker reads a drawing (`read`): a
+    coordination bond takes no hydrogen (`acceptors_as_drawn`), and one to
+    a full group-13 acceptor is held in its dipolar form (`dipolar_adducts`)
+    - or None where it cannot be read at all."""
     mols = [Chem.MolFromMolBlock(b, sanitize=False, removeHs=False) for b in blocks]
     if not mols or any(x is None for x in mols):
         return None
     mol = mols[0]
     for more in mols[1:]:
         mol = Chem.CombineMols(mol, more)
+    acceptors_as_drawn(mol)
+    dipolar_adducts(mol)
     return mol
 
 
