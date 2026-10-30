@@ -63,7 +63,6 @@ import json
 import math
 import os
 import re
-import shutil
 import sys
 import threading
 import time
@@ -526,8 +525,9 @@ def render(scene, s, folder):
 def strip_runs(frames):
     """The frames a film plays, as the sequencer's image strips take them: a strip reads all its files from one folder - its
     first file's - so each run of frames from one folder is a strip of its own, (folder, the files' names, the film frame it
-    starts at). A change's pieces each have their own folder, their files the same names (f_0001.png...), and a melt is
-    played backward as well as forward: never one strip for them all, which would play the first folder's throughout."""
+    starts at). A change's pieces each have their own folder, their files the same names (f_0001.png...), and a cycle's
+    Loop plays its frames forward, then back: never one strip for them all, which would play the first folder's
+    throughout, and the names kept in the order they are played."""
     runs = []
     for k, f in enumerate(frames):
         d, name = os.path.split(f)
@@ -657,10 +657,8 @@ def motion_film(s, meno, folder):
 
 # The changes of molecules this plugin makes (manifest `motions`, "change-<id>"): a film in pieces, one for each molecule that
 # becomes the next, in the order Meno wrote them - Once to the last, Loop back to the first. Each piece is timed in a
-# length of its own; the film's length is shared out among them, and each played faster or slower to fit. The liquid is
-# made in stages: each molecule's melt, then each change between two melts' pools (`liquid_film`).
+# length of its own; the film's length is shared out among them, and each played faster or slower to fit.
 CHANGE_NOMINAL = {"change-ring": 5.0, "change-scan": 5.0, "change-shatter": 5.0}
-LIQUID_MELT, LIQUID_REFORM = 8.0, 1.6
 
 
 def molecules_to_change(s, meno):
@@ -719,8 +717,6 @@ def share(total, parts):
 def change_film(s, meno, folder):
     """A change of molecules: each piece, A becoming B, made after the piece before, the camera running on through them all.
     The frames, in the order the film plays them."""
-    if s["motion"] == "change-liquid":
-        return liquid_film(s, meno, folder)
     mols, pairs, loop = molecules_to_change(s, meno)
     total = s["frames"]
     if total < 2 * len(pairs):
@@ -733,49 +729,6 @@ def change_film(s, meno, folder):
                "piece": k + 1, "pieces": len(pairs)}
         made += change_piece(s, folder, cfg, "motion_change_" + s["motion"][len("change-"):] + ".py", progress, k == 0)
         start += n
-    progress.end()
-    return made
-
-
-def reach(mol):
-    """How far a molecule reaches across the floor from its heavy atoms' middle, in ångströms (Meno's x and z)."""
-    heavy = [a["p"] for a in mol["atoms"] if a["el"] != "H"] or [a["p"] for a in mol["atoms"]]
-    cx, cz = sum(p[0] for p in heavy) / len(heavy), sum(p[2] for p in heavy) / len(heavy)
-    return max(math.hypot(a["p"][0] - cx, a["p"][2] - cz) for a in mol["atoms"])
-
-
-def liquid_film(s, meno, folder):
-    """The liquid change: each molecule's melt rendered once (its pool kept), each change between two pools after; the film
-    plays a molecule's melt forward as it changes away, backward as it is changed into - the first melt from its first
-    frame, each one after from its second, so that no frame is shown twice."""
-    mols, pairs, loop = molecules_to_change(s, meno)
-    changes = len(pairs)
-    # (each change: A's melt, the reform, B's melt backward - in the lengths the liquid takes, 8 s, 1.6 s and 8 s)
-    per = s["frames"] / changes
-    melt = max(2, int(round(per * LIQUID_MELT / (2 * LIQUID_MELT + LIQUID_REFORM))))
-    reform = max(1, int(round(per)) - 2 * melt)
-    progress = Progress(len(mols) * melt + changes * reform)
-    widest = max(reach(m) for m in mols)
-    melts, first = [], True
-    for i, mol in enumerate(mols):
-        out = os.path.join(folder, "frames", f"melt-{i + 1:02d}")
-        cfg = {**piece_settings(s, melt, LIQUID_MELT, out), "molecules": [mol], "stage": "melt", "reach": widest, "bg": "white",
-               "cache": os.path.join(folder, "cache", f"melt-{i + 1:02d}"), "pool": os.path.join(out, "pool.npz"),
-               "piece": i + 1, "pieces": len(mols) + changes}
-        os.makedirs(cfg["cache"], exist_ok=True)
-        melts.append(change_piece(s, folder, cfg, "motion_change_liquid.py", progress, first))
-        first = False
-        shutil.rmtree(cfg["cache"], ignore_errors=True)
-    made = []
-    for k, (i, j) in enumerate(pairs):
-        out = os.path.join(folder, "frames", f"reform-{k + 1:02d}")
-        cfg = {**piece_settings(s, reform, LIQUID_REFORM, out), "molecules": [mols[i]], "stage": "reform", "reach": widest, "bg": "white",
-               "pools": [os.path.join(folder, "frames", f"melt-{i + 1:02d}", "pool.npz"), os.path.join(folder, "frames", f"melt-{j + 1:02d}", "pool.npz")],
-               "piece": len(mols) + k + 1, "pieces": len(mols) + changes}
-        made += melts[i] if k == 0 else melts[i][1:]
-        made += change_piece(s, folder, cfg, "motion_change_liquid.py", progress, False)
-        # (a Loop's last change comes back to the first molecule, whose first frame begins the film again: not shown twice)
-        made += melts[j][:0:-1] if loop and k == changes - 1 else melts[j][::-1]
     progress.end()
     return made
 

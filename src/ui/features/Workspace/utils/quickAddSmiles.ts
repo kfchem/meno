@@ -2,6 +2,7 @@ import type { EditorState, Model } from "../store/types";
 import { centredAt } from "./copyPaste";
 import { styleOf } from "../../../../lib/chem/style";
 import { cycleThings, snapToCycles } from "./cycles";
+import { emptyWorkspaceDocument, expandAbbreviation } from "../document";
 
 /**
  * A SMILES read put down where Quick Add was opened (`asked`, the Quick Add
@@ -22,4 +23,16 @@ export function putDownSmiles(store: { getState(): EditorState }, asked: EditorS
   if (by) placed = centredAt(drawn, { x: asked.at.x + by.x, y: asked.at.y + by.y });
   st.pasteModel(placed);
   return true;
+}
+
+/**
+ * A molecule the dictionary draws whole - typed in Quick Add, and read as
+ * the dictionary's (chem/resolve, a `"label"` reading of a molecule: DMF,
+ * Et3N, PdCl2) - drawn as the canvas draws its label out: one atom so
+ * labelled, drawn out where it is (`expandAbbreviation`), one function for
+ * both. No plugin is asked: the dictionary has its structure.
+ */
+export function namedDrawn(label: string): Model {
+  const doc = { ...emptyWorkspaceDocument(), model: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: label }], bonds: [] }, nextId: 2 };
+  return expandAbbreviation(doc, 1).model;
 }

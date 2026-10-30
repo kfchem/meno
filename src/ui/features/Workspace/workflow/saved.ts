@@ -61,7 +61,7 @@ function readSet(v: unknown): WorkflowSet | null {
   if (!b || !isId(b.id) || !isNum(b.x0) || !isNum(b.y0) || !isNum(b.x1) || !isNum(b.y1)) return null;
   const made = b.made as { step?: unknown; exit?: unknown; holds?: unknown } | undefined;
   const madeRead =
-    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures" || made.holds === "chart")
+    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || ["pictures", "chart", "table", "number"].includes(made.holds as string))
       ? { step: made.step, exit: made.exit, ...(made.holds != null ? { holds: made.holds as SetHolds } : {}) }
       : undefined;
   // (one that says it was made by a step, but not by which as it reads: a set like any other - and said)
@@ -309,6 +309,8 @@ function readRunning(v: unknown): StepRunning | undefined {
   }, "job");
   const kind = (r as { kind?: unknown }).kind;
   const over = (r as { over?: unknown }).over;
+  const note = (r as { note?: unknown }).note;
+  const paired = (r as { paired?: unknown }).paired;
   const adopted = adoptedIn((r as { adopted?: unknown }).adopted);
   // (those its plugin refused as it prepared the others' jobs: kept to be said failed when it ends)
   const refused = readRefused({ refused: (r as { refused?: unknown }).refused }, Number.MAX_SAFE_INTEGER);
@@ -320,6 +322,8 @@ function readRunning(v: unknown): StepRunning | undefined {
         jobs,
         ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}),
         ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}),
+        ...(typeof note === "string" && note ? { note: note.slice(0, 300) } : {}),
+        ...(typeof paired === "string" && paired ? { paired: paired.slice(0, 300) } : {}),
         ...(refused.length ? { refused } : {}),
         ...(adopted ? { adopted } : {}),
       }

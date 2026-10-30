@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import type { EditorState, Model } from "../store/types";
-import { putDownSmiles } from "./quickAddSmiles";
+import { namedDrawn, putDownSmiles } from "./quickAddSmiles";
+import { isElementSymbol } from "../../../../lib/roles/molblock";
 
 function editor() {
   const doc = createWorkspaceDocument();
@@ -60,5 +61,22 @@ describe("a SMILES typed in Quick Add", () => {
     expect(st().model.atoms).toHaveLength(3);
     doc.undo();
     expect(st().model.atoms).toHaveLength(0);
+  });
+});
+
+describe("a molecule the dictionary has, typed in Quick Add", () => {
+  it("is drawn out as the canvas draws its label out: its atoms, each an element, none left a label", () => {
+    for (const [label, atoms, bonds] of [["DMF", 5, 4], ["Et3N", 7, 6], ["THF", 5, 5], ["PdCl2", 3, 2]] as const) {
+      const m = namedDrawn(label);
+      expect([label, m.atoms.length, m.bonds.length]).toEqual([label, atoms, bonds]);
+      expect(m.atoms.every((a) => isElementSymbol(a.el))).toBe(true);
+    }
+  });
+
+  it("is put down where Quick Add was opened, as a SMILES read is", () => {
+    const { store, st } = editor();
+    const asked = opened(st);
+    expect(putDownSmiles(store, asked, namedDrawn("DMF"))).toBe(true);
+    expect(st().model.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "N", "O"]);
   });
 });

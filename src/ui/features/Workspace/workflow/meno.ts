@@ -9,14 +9,17 @@ import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
-import { conditionsIn, filter } from "../../../../lib/nodes/filter";
+import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
 import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, measuredSet, speciesSet, taggedSet } from "./structureSteps";
+import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
+import { rankedSet } from "./valueSteps";
+import { joinedSet } from "./joinStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
-import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
+import { displaceRead, kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
@@ -32,7 +35,7 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 export type Outcome = Outcome3D | DrawnOutcome;
 /** What a step did on molecules in 3D (`Outcome`). */
 export type Outcome3D =
-  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[] }
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[]; tables?: Readonly<Record<string, Table>> }
   | { ok: false; said: string };
 /** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
 export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string; core?: SeriesCore } | { ok: false; said: string };
@@ -56,6 +59,14 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
     case "filter":
       return filtered(entries, holds, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
+    case "rank":
+      return rankedSet(entries, holds, {
+        property: String(options.property ?? ""),
+        order: options.order === "highest first" ? "highest first" : "lowest first",
+        keep: Number(options.keep),
+        within: options.within === "all" ? "all" : options.within === "each value" ? "each value" : "each group",
+        groupBy: String(options.groupBy ?? ""),
+      });
     case "tag":
       return taggedSet(entries, holds, String(options.name ?? ""));
     case "species":
@@ -64,8 +75,56 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return combinedSet(entries);
     case "measure":
       return measuredSet(entries, holds, String(options.measurements ?? ""));
+    case "restraints":
+      return restrainedSet(entries, holds, options);
+    case "displace": {
+      const r = displaceRead(options);
+      return "why" in r ? { ok: false, said: r.why } : displacedSet(entries, holds, r);
+    }
     default:
       return { ok: false, said: "Meno does not do this itself" };
+  }
+}
+
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints*, *Join* and *Reaction*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join", "reaction"];
+
+/** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
+export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
+  const o = optionsOf(kindInfo(kind).options ?? [], own);
+  // (Merge of two sets, one of them empty: nothing of it to add - the other's entries, its line saying so; both empty, nothing to merge)
+  if (kind === "merge" && !a.entries.length !== !b.entries.length) {
+    const out = mergedSet(a.entries, b.entries, a.entries.length ? a.holds : b.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
+    return out.ok ? { ...out, said: `${out.said} · nothing came from ${a.entries.length ? "Second" : "First"}` } : out;
+  }
+  if (!a.entries.length) return { ok: false, said: "Nothing came into its first input" };
+  if (!b.entries.length) return { ok: false, said: "Nothing came into its second input" };
+  switch (kind) {
+    case "merge":
+      return mergedSet(a.entries, b.entries, a.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
+    case "rebond":
+      return rebondedSet(a.entries, b.entries, a.holds, o.pairs === "property" ? "property" : "each", String(o.property ?? ""));
+    case "compare-bonding":
+      return comparedSet(a.entries, b.entries, a.holds, {
+        reference: o.reference === "property" ? "property" : "each",
+        property: String(o.property ?? ""),
+        writes: String(o.writes ?? ""),
+        from: String(o.from ?? ""),
+        rs: o.rs === true,
+        ez: o.ez === true,
+        atoms: String(o.atoms ?? ""),
+        elements: String(o.elements ?? ""),
+        reach: Number(o.reach),
+        floor: Number(o.floor),
+      });
+    case "join":
+      return joinedSet(a.entries, b.entries, a.holds, String(o.on ?? ""), String(o.carry ?? ""));
+    case "torsion-restraints":
+      return torsionsSet(a.entries, b.entries, a.holds, o);
+    case "reaction":
+      return reactionSet(a.entries, b.entries, o.maps === "every" ? "every" : "first");
+    default:
+      return { ok: false, said: "Meno does not do this itself on two inputs" };
   }
 }
 
@@ -254,6 +313,9 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   return [...out.values()];
 }
 
+/** The properties a Filter's condition reads: its own, and the one it is compared with where it is another of the entry's. */
+const namesOf = (c: Condition): string[] => ("its" in c ? [c.property, c.its] : [c.property]);
+
 /**
  * Entries kept by conditions on their properties (lib/nodes `filter`), read
  * as each is an entry (`entryOfSet`): those that meet them, the rest set
@@ -266,13 +328,13 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
   const read = conditionsIn(text);
   if ("why" in read) return { ok: false, said: read.why };
   // (a condition on a name that is Meno's and an entry's own too - "energy" given by a plugin as well: which is meant cannot be told, so it is not guessed)
-  for (const c of read.conditions) {
-    const both = entries.filter((e) => shadowedIn(e).includes(c.property)).length;
-    if (both) return { ok: false, said: `"${c.property}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
+  for (const name of read.conditions.flatMap(namesOf)) {
+    const both = entries.filter((e) => shadowedIn(e).includes(name)).length;
+    if (both) return { ok: false, said: `"${name}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
   }
   // (a value of one that is no result - failed, not converged, its marks unread - is not to be trusted: on a condition on any
   //  value but its state, never kept, but set aside named, its state said; on its state alone it is judged by that)
-  const onValues = read.conditions.some((c) => c.property !== "state");
+  const onValues = read.conditions.some((c) => namesOf(c).some((n) => n !== "state"));
   const notResult = (x: { id: string }) => {
     const e = entries[Number(x.id)];
     const state = entryState(e);
@@ -302,13 +364,13 @@ function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all
   const read = conditionsIn(text);
   if ("why" in read) return { ok: false, said: read.why };
   // (its state is Meno's on a structure drawn too: one its record carries of its own by that name cannot be told from it)
-  if (read.conditions.some((c) => c.property === "state")) {
+  if (read.conditions.some((c) => namesOf(c).includes("state"))) {
     const both = entries.filter((e) => e.record?.properties && "state" in e.record.properties).length;
     if (both) return { ok: false, said: `"state" is Meno's own, and ${both === 1 ? "1 structure carries one" : `${both} structures carry one`} of its own by that name too: which is meant cannot be told` };
   }
   // (edited since its properties were given: none to read. And one that failed is no result: on a condition on any value but
   //  its state never kept, but set aside named, its why said; on its state alone it is judged by that)
-  const onValues = read.conditions.some((c) => c.property !== "state");
+  const onValues = read.conditions.some((c) => namesOf(c).some((n) => n !== "state"));
   const unread = (x: { id: string }) => {
     const e = entries[Number(x.id)];
     if (e.record?.stale) return e.record.stale;
@@ -406,9 +468,10 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
   const basis = basisOf(entries);
   if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
-  // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
-  //  frequencies refuse it too where the window is on free energies - a saddle point's G is no minimum's)
-  const unconverged = notAllMinima(basis.free ? entries : entries.filter((e) => e.failed || e.marksUnread));
+  // (one that did not converge is no minimum: its energy is where its optimisation stopped. One its calculation found
+  //  imaginary frequencies of - a transition state, a saddle point - is none either, on electronic energies as on free
+  //  ones: kept in a window, or set aside from it, as if it were a conformer, it would stand for a population it has not)
+  const unconverged = notAllMinima(entries);
   if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];

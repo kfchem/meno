@@ -31,7 +31,8 @@ export type ChoiceOption = OptionBase & {
   choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
-export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known };
+/** `unset`: the value that sets nothing - what is left to the program ("0 leaves it to ORCA"): not said on a step's line. */
+export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known; unset?: number };
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
@@ -162,6 +163,7 @@ export function acceptOptions(raw: unknown): Option[] {
         ...(num(r.step) !== undefined ? { step: num(r.step) } : {}),
         ...(label(r.unit, 20) ? { unit: label(r.unit, 20)! } : {}),
         ...(from ? { from } : {}),
+        ...(num(r.unset) !== undefined ? { unset: num(r.unset) } : {}),
       };
     } else if (r.type === "text") {
       o = { id, label: name, type: "text", default: typeof r.default === "string" ? r.default.slice(0, 200) : "", ...(from ? { from } : {}) };

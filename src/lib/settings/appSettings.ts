@@ -94,11 +94,16 @@ export const WINDOW_3D_MOST = 1000;
  */
 export type CanvasSettings = { resolution: 2 | "display" | 1 };
 
-/** How the mouse and the trackpad work the canvas: which way a turn of the wheel zooms. */
+/** How the mouse and the trackpad work the canvas: which way a turn of the wheel zooms, and how long a press is held to be a long press. */
 export type PointerSettings = {
   /** A turn of the wheel upwards zooms in (as maps do), or out. */
   wheelUp: "in" | "out";
+  /** How long a press held still takes to be a long press (Workspace/constants `LONG_PRESSES`); unset, normal. */
+  longPress?: LongPress;
 };
+
+/** How long a long press is: shorter, normal or longer (Workspace/constants `LONG_PRESSES`). */
+export type LongPress = "shorter" | "normal" | "longer";
 
 /** How an atom's label is read as it is typed (Workspace/LabelTyping2D; lib/chem/smartLabel). */
 export type LabelSettings = {
@@ -259,8 +264,9 @@ function acceptCanvas(raw: unknown): CanvasSettings {
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */
 function acceptPointer(raw: unknown): PointerSettings {
-  const r = (raw ?? {}) as { wheelUp?: unknown };
-  return { wheelUp: r.wheelUp === "out" ? "out" : "in" };
+  const r = (raw ?? {}) as { wheelUp?: unknown; longPress?: unknown };
+  const longPress = r.longPress === "shorter" || r.longPress === "longer" ? r.longPress : undefined;
+  return { wheelUp: r.wheelUp === "out" ? "out" : "in", ...(longPress ? { longPress } : {}) };
 }
 
 function acceptPictures(raw: unknown): PictureSettings {

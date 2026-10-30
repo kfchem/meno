@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { longPressMs } from "../longPress";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -7,7 +8,7 @@ import { COLORS } from "../../../theme/colors";
 import { sheetMiddle, sheetOfText } from "../utils/textSheets";
 import { pdfBounds, pointOf } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
 import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
@@ -282,7 +283,7 @@ export default function Selection2D() {
         lastEmpty = none;
         // (no box where the view has moved under the press: viewGoal)
         if (!pressMovedUnder(camera)) box(e, sx, sy, kind, false);
-      }, LONG_PRESS_MS);
+      }, longPressMs());
       const onFirstMove = (ev: PointerEvent) => {
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < MOV_PX) return;
         // (a pan is no first click)

@@ -18,15 +18,15 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
   return (
     <label className="block">
       <span className="block text-xs text-gh-gray mb-1">{option.label}</span>
-      {/* (20 px a line, as leading-5, and the box's own padding) */}
-      <span className="flex gap-2 overflow-y-auto" style={{ maxHeight: MOST_ROWS * 20 + 10 }}>
+      {/* (20 px a line, as leading-5, and the box's own padding - and room all round for its focus ring, which the scroll would clip) */}
+      <span className="-m-0.5 flex gap-2 overflow-y-auto p-0.5" style={{ maxHeight: MOST_ROWS * 20 + 10 + 4 }}>
         <textarea
           value={value}
           rows={rows}
           wrap="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
-          className="w-28 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
+          className="w-28 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
         />
         {read.length > 0 && (
           <span aria-label="Read as" className="min-w-0 flex-1 py-1 text-xs leading-5">

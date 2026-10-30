@@ -23,7 +23,8 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { wordsReadAt } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
+import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
@@ -927,7 +928,8 @@ export default function Workflow2D() {
       const diagram = s.kind === "energy-diagram";
       const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
       const own = diagram ? diagramValues(takes, s.options) : s.options;
-      const how = howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
+      // (Add's: its formula, the number wired into its Number with it, where one is)
+      const how = s.kind === "add" ? addHow(optionsOf(takes, own), !!wireInto(flow, s.id, "number")) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
       return (
         // (its top at its place: the card grows downwards as it opens - over the cards below it)

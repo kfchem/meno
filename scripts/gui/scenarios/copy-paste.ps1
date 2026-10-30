@@ -14,7 +14,7 @@
 Start-Meno
 Wait-MenoSettled | Out-Null          # Meno starts on a workspace
 Add-MenoSmiles "CC(C)Cc1ccc(cc1)[C@@H](C)C(=O)O"   # from Quick Add, in the middle
-Invoke-MenoWheel -X 1280 -Y 860 -Notches -3
+Invoke-MenoZoom -X 1280 -Y 860 -Notches -3
 Start-Sleep -Seconds 1
 Wait-MenoSettled | Out-Null
 Save-Step "loaded"
