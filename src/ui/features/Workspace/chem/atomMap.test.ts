@@ -69,8 +69,13 @@ describe("a kept map and what it shows", () => {
     const { reactants, products, result } = sides();
     const kept = keptMap(d.model, result, reactants, products);
     expect(kept.complete).toBe(true);
-    // the maps that differ in more than which of a ring CH2's hydrogens is which (src/lib/chem/reactionMap.test.ts)
+    // of the search's 64 complete maps (src/lib/chem/reactionMap.test.ts), those that pair the heavy atoms differently, each
+    // as ACCeL ranked it first: what "Other map" steps through, each with its own numbers
     expect(kept.maps.length).toBe(4);
+    expect(kept.maps[0]).toEqual(result.maps[0]);
+    const heavyOf = (m: readonly number[]) => m.filter((_, j) => result.product.atoms[j].el !== "H").join(",");
+    expect(new Set(kept.maps.map(heavyOf)).size).toBe(4);
+    expect(new Set(result.maps.filter((_, i) => result.complete[i]).map(heavyOf)).size).toBe(4);
     const { numbers, centres } = mapMarks(kept, d.model);
     for (const k of NAMES) expect(numbers.get(P_ID[k])).toBe(numbers.get(R_ID[k]));
     expect(new Set(NAMES.map((k) => numbers.get(R_ID[k]))).size).toBe(6);

@@ -244,6 +244,7 @@ Property
   by          the step and run that gave it; the plugin and version; the
               program, method and basis, or the model and its version;
               for a thermal quantity, the treatment of its vibrations
+              and the symmetry it took (point group, symmetry number)
   status      computed, failed (why), or not applicable (why)
 ```
 
@@ -262,8 +263,16 @@ reading's own id, the one name every plugin that reads it gives it:
   (`thermo.pressure`, atm) the program said it used - none where it said
   none, never one assumed - and in its solvation; by what worked it out,
   with the treatment of its vibrations as the program said it
-  (`thermo.treatment`). A reading that is not an energy in hartrees is
-  not taken;
+  (`thermo.treatment`), and the symmetry it took as the program printed
+  it: `by.pointGroup` and `by.symmetryNumber`, the rotational symmetry
+  number its rotational entropy counts (`thermo.point-group`,
+  `thermo.symmetry-number`; 2026-10-30). A G is worked out with its own
+  sigma, so its sigma is on it: wherever the value goes - carried by a
+  later step, copied as a part of a sum - its symmetry goes with it, one
+  source. None printed, none said, never one assumed. Being the
+  molecule's, not a way of working out, it never keeps two values apart
+  as program or treatment do: two molecules' differ by right. A reading
+  that is not an energy in hartrees is not taken;
 - `vibrations`, a table of each vibration's frequency (`FREQUENCY`, cm-1,
   an imaginary one negative) in the program's order, from the list whose
   column is a wavenumber; and `modes`, in the same order, where every
@@ -635,7 +644,7 @@ of highest weight stands for it, carrying the results.
 | **Species** | molecules | the same, charge and multiplicity set |
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
 | **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
-| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
+| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
 | **Reaction** | *reactants* (one entry, 3D, every hydrogen present; a complex is made first by *Combine*) and *products* (3D, every hydrogen present) | *mapped products*: each product a complete 3D structure in the reactants' numbering, every atom mapped one to one, hydrogens included (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
@@ -1264,8 +1273,8 @@ one complex by *Combine*); set **P** holds the products drawn.
     [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
-17. **Compare bonding** (Meno) against P′, on *product*, with R or S and E or Z:
-    *same* [`check_chirality`].
+17. **Compare bonding** (Meno) against P′, on *product*, with R or S, E or Z
+    and every centre by its atoms' numbers: *same* [`check_chirality`].
 
 **F4. Paths and saddle points at the semiempirical level**
 18. **Path search** (ORCA plugin: NEB with GFN2-xTB, 8 images). *start* is RC
@@ -1280,7 +1289,8 @@ one complex by *Combine*); set **P** holds the products drawn.
 24. **Follow the reaction path** (ORCA plugin, IRC with xTB) [125_F, 125_B].
 25. **Take frames** twice (Meno): the first, and the last.
 26. **Compare bonding** twice (Meno): each end against S, naming the
-    species it matches (*a*, *b*, *c* or none) [128].
+    species it matches (*a*, *b*, *c* or none), with every centre by its
+    atoms' numbers [128; `check_irc_chirality`].
 27. **Join** (Meno) on *path*: both names put back on the saddle points as
     *first end* and *last end*.
 28. **Filter** (Meno): one end is *a* and the other the product the saddle

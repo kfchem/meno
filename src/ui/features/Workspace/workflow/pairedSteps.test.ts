@@ -54,6 +54,22 @@ describe("Merge, as a step", () => {
     expect(ok(runMenoPair("merge", { entries: [cation], holds: "molecules" }, { entries: [water(1)], holds: "molecules" })).kept[0]).toBe(cation);
   });
 
+  it("takes an empty input as nothing to add: the other's entries, its line saying so - both empty, nothing to merge", () => {
+    // (a branch that gave none this time - a step's second exit none went out of - merged with one that gave some)
+    const o = ok(runMenoPair("merge", { entries: [], holds: "conformers" }, { entries: [water(1), water(2)], holds: "conformers" }));
+    expect(o.kept.map((e) => [e.compound, e.number])).toEqual([
+      [0, 1],
+      [0, 2],
+    ]);
+    expect(o.holds).toBe("conformers");
+    expect(o.said).toMatch(/ · nothing came from First$/);
+    expect(ok(runMenoPair("merge", { entries: [water(1)], holds: "molecules" }, { entries: [], holds: "molecules" })).said).toMatch(/ · nothing came from Second$/);
+    expect(runMenoPair("merge", { entries: [], holds: "molecules" }, { entries: [], holds: "molecules" })).toEqual({ ok: false, said: "Nothing came into its first input" });
+    // (the other steps of two inputs still refuse one: each needs both)
+    expect(runMenoPair("rebond", { entries: [], holds: "molecules" }, { entries: [water(1)], holds: "molecules" })).toEqual({ ok: false, said: "Nothing came into its first input" });
+    expect(runMenoPair("compare-bonding", { entries: [water(1)], holds: "molecules" }, { entries: [], holds: "molecules" })).toEqual({ ok: false, said: "Nothing came into its second input" });
+  });
+
   it("keeps one of each value of a property, the rest set aside each naming the one kept", () => {
     const first = [tagged(water(1), "start", "start-1")];
     const second = [tagged(water(1), "start", "start-1"), tagged(ammonia(), "start", "start-2")];
@@ -147,6 +163,8 @@ describe("what the steps of two inputs say on their cards", () => {
     expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches" })).toBe("against each reference");
     expect(kindInfo("compare-bonding").how?.({ reference: "property", property: "product", rs: true, ez: true, atoms: "3" })).toBe("matched on product; R or S and E or Z; passing over atoms 3");
     expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "is", elements: "Pd" })).toBe("the match as is; passing over Pd");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", numbered: true })).toBe("every centre by number");
+    expect(kindInfo("compare-bonding").how?.({ reference: "each", writes: "matches", rs: true, ez: true, numbered: true })).toBe("R or S, E or Z and every centre by number");
   });
 });
 
@@ -234,6 +252,9 @@ describe("Compare bonding's R or S and E or Z, against known answers", () => {
       return { ...e, xyz };
     };
     expect(differs(compare(ch2cl2(true), ch2cl2(), { rs: true }))).toBe("same");
+    // (by its atoms' numbers, as ConfoTS's check reads every centre of four: the other way round)
+    expect(differs(compare(ch2cl2(true), ch2cl2(), { rs: true, numbered: true }))).toBe("different: C1 has its neighbours, by their numbers, the other way round from the reference's.");
+    expect(differs(compare(ch2cl2(), ch2cl2(), { numbered: true }))).toBe("same");
   });
 
   it("tells apart two stereoisomers of CHFCl-CHFBr that differ at one centre of two, naming that centre alone", () => {

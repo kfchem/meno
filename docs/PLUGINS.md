@@ -855,6 +855,14 @@ The same for every plugin and for Meno's own parts:
     step's *Failed* exit with its why. A step whose every entry is
     refused, or whose options cannot be done, is refused as a whole, as
     before (an error);
+  - `collect` may answer that a job as a whole stopped, `{"why": "..."}`,
+    and add what to read of what it wrote, one for each entry, as
+    `read` says it - `"partial": [{"kind": "orca", "log": true, "name":
+    "water.out"}]` - where the run stopped once under way: Meno reads it
+    for the geometry the run reached alone, the entry going out of
+    *Failed* there, its frames from where it came in, no energy of it a
+    result (WORKFLOWS.md, *Runs again*). ORCA's and Gaussian's plugins
+    say so for an optimisation;
   - `collect` may answer, for one entry of a job, why that entry alone
     failed - `{"why": "...", "kind": "no-geometry"}` in its place among
     the outputs - the others taken as they are. A `kind` is one of
@@ -990,8 +998,21 @@ The same for every plugin and for Meno's own parts:
     the program prints one (xtb prints none, and its documentation states
     none); and how it was worked out, `thermo.treatment`, a text in the
     program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
-    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03).
-    Two values of one treatment are written alike, so that they compare.
+    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
+    ORCA's `quasi-RRHO (Grimme), 100 cm-1`, from where it says its
+    vibrational entropy is the QRRHO of S. Grimme and at which reference
+    frequency. Two values of one treatment are written alike, so that
+    they compare. And the symmetry its thermochemistry took, as the
+    program printed it - of several prints, the last, as the other
+    thermochemistry is read, so that all are of one: its point group,
+    `thermo.point-group` (ORCA's "Point Group: D3h", Gaussian's "Full
+    point group", xtb's box's "symmetry"), and the rotational symmetry
+    number its rotational entropy counts, `thermo.symmetry-number` (ORCA's
+    "Symmetry Number: 6", Gaussian's "Rotational symmetry number", xtb's
+    "rotational number"). Not printed, not read: Meno works none of them
+    out itself (2026-10-30). Meno puts them on each thermochemical
+    property it makes of the readings, in its `by` (WORKFLOWS-FOUNDATION.md,
+    *The entry*).
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**
@@ -1015,6 +1036,26 @@ point, words of the plugin's own for the rest (ORCA's: "NEB image 3 of
 10"). `imaginary`, and a `vibrations` list, are that point's, where the
 frequencies were worked out. Meno works out the barriers itself, and calls
 no frame a saddle point.
+
+### Follow the reaction path
+
+A plugin filling *Follow the reaction path* is sent each point as any entry
+is. What it reads back is an output in Meno's form, its frames the path one
+end to the other, each with its energy; `converged` true for the point it
+started from alone, which becomes the molecule's entry frame; a frames
+result `path.frame` saying what each frame is, "the point it started from"
+for that one. Where a side stopped before its end, `optimised` false and a
+warning in the program's words: the molecule goes out of *Failed*, the path
+as far as it came.
+
+### Optimise to a saddle point
+
+A plugin filling *Optimise to a saddle point* is sent each guess as any
+entry is; where the step's sides are wired, with them beside it (`sides`,
+`reactant` and `product`, each an entry of the guess's atoms in one
+numbering, of one charge and spin - Meno has checked both). A plugin whose
+program takes no sides refuses a guess sent with them, saying so. What it
+reads back is an optimisation's output, as *Optimise*'s is.
 
 ### Generate
 
