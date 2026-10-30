@@ -266,6 +266,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M10 17.2 V10.6 M7.6 12.6 L10 10.2 L12.4 12.6" strokeWidth={2} />
     </>
   ),
+  // (levels made one, lower than any: an ensemble's energy)
+  ensemble: (
+    <>
+      <path d="M2.5 4 H6.5 M2.5 7.5 H6.5 M2.5 11 H6.5 M2.5 14.5 H6.5" />
+      <path d="M6.5 4 L12 16 M6.5 7.5 L12 16 M6.5 11 L12 16 M6.5 14.5 L12 16" strokeWidth={0.9} />
+      <path d="M12 16 H17.5" strokeWidth={2.2} />
+    </>
+  ),
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
