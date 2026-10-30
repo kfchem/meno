@@ -1613,19 +1613,112 @@ class CoordinationBonds(unittest.TestCase):
         iso = self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
         return "".join(sorted(a["el"] for a in iso["atoms"]))
 
-    def test_a_main_group_adduct_drawn_with_an_arrow_is_refused_in_words_never_a_hydrogen_short(self):
-        # (H3N->BH3 as plain atoms: RDKit gave the B two hydrogens - H3N->BH2 - where Meno draws three)
+    def made(self, molblock):
+        return self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
+
+    def test_a_group_13_adduct_drawn_with_an_arrow_is_held_in_its_dipolar_form_its_charges_reported_as_drawn(self):
+        # (H3N->BH3 as plain atoms: before 0.1.12 RDKit gave the B two hydrogens - H3N->BH2 - and 0.1.12 refused it)
+        iso = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
+        self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), "BHHHHHHN")
+        self.assertEqual([a["charge"] for a in iso["atoms"]], [0] * 8)
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B computed as a single bond, N+ and B\u2212"}, iso["how"])
+        n, b = iso["frames"][0][0:3], iso["frames"][0][3:6]
+        self.assertTrue(1.5 < math.dist(n, b) < 1.8, math.dist(n, b))
+        # (an alane, an ether's and a ketone's BF3, and Al2Cl6 drawn with its two bridges as arrows: each made, all its atoms)
+        for name, atoms, bonds, formula in [
+            ("Me3N->AlCl3", [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)], "AlCCCClClClHHHHHHHHHN"),
+            ("Me2O->BF3", [("O", 0, 0, 0), ("B", 1.6, 0, 0), ("F", 2.5, 1, 0), ("F", 2.5, -1, 0), ("F", 1.6, 1.5, 0), ("C", -1, 1, 0), ("C", -1, -1, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7)], "BCCFFFHHHHHHO"),
+            ("Me2C=O->BF3", [("O", 0, 0, 0), ("B", 1.6, 0, 0), ("F", 2.5, 1, 0), ("F", 2.5, -1, 0), ("F", 1.6, 1.5, 0), ("C", -1.2, 0, 0), ("C", -2, 1, 0), ("C", -2, -1, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (2, 1, 6), (1, 6, 7), (1, 6, 8)], "BCCCFFFHHHHHHO"),
+            ("Al2Cl6", [("Al", 0, 0, 0), ("Al", 3, 0, 0), ("Cl", 1.5, 1, 0), ("Cl", 1.5, -1, 0), ("Cl", -1, 1, 0), ("Cl", -1, -1, 0), ("Cl", 4, 1, 0), ("Cl", 4, -1, 0)],
+             [(1, 1, 3), (9, 3, 2), (1, 2, 4), (9, 4, 1), (1, 1, 5), (1, 1, 6), (1, 2, 7), (1, 2, 8)], "AlAlClClClClClCl"),
+        ]:
+            iso = self.made(self.block(atoms, bonds))
+            self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), formula, name)
+            self.assertTrue(all(a["charge"] == 0 for a in iso["atoms"]), name)
+        # (two pairs, said together: Al2Cl6's two Cl->Al bridges are one pair of elements, so one; an ammine and an ether onto two B, two)
+        self.assertIn({"label": "Coordination bonds", "text": "Cl\u2192Al computed as a single bond, Cl+ and Al\u2212"}, iso["how"])
+        two = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0), ("O", 6, 0, 0), ("B", 7.6, 0, 0), ("C", -1, 1, 0), ("C", 5, 1, 0), ("C", 5, -1, 0)],
+                                   [(9, 1, 2), (9, 3, 4), (1, 1, 5), (1, 3, 6), (1, 3, 7)]))
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B, O\u2192B computed as single bonds, each donor + and acceptor \u2212"}, two["how"])
+
+    def test_every_op_that_reads_a_drawing_reads_an_adduct_the_same_way(self):
+        # (H3N->BH3 drawn with an arrow: Check structures keeps it as drawn - no atom with more bonds than it can have -
+        #  Descriptors works it out, and the canvas's analysis marks no valence, as Conformers makes it)
         adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
-        with self.assertRaisesRegex(ValueError, r"^RDKit cannot hold the coordination bond from N to B as drawn: B takes no further bond there\. Draw the two charged instead, N\+ bonded to B-\.$"):
-            self.formula(adduct)
-        alane = self.block(
-            [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
-            [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)],
-        )
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to Al as drawn"):
-            self.formula(alane)
-        # (drawn charged, as the words say: made, its six hydrogens all there)
-        self.assertEqual(self.formula(self.block([("N", 0, 0, 1), ("B", 1.6, 0, -1)], [(1, 1, 2)])), "BHHHHHHN")
+        self.assertEqual(self.worker.step_check([{"molblocks": [adduct]}], {}), {"structures": [{"as": "drawn"}]})
+        described = self.worker.step_descriptors([{"molblocks": [adduct]}], {})["structures"][0]
+        self.assertEqual(described["as"], "drawn")
+        # (its weight: B 10.81, N 14.007, six H 1.008 each - the same in either form)
+        self.assertAlmostEqual(described["properties"]["mw"]["value"], 10.81 + 14.007 + 6 * 1.008, delta=0.01)
+        seen = self.worker.op_analyse({"molblock": adduct})
+        self.assertFalse(any("valenceError" in a for a in seen["atoms"]))
+        self.assertEqual([a["hydrogens"] for a in seen["atoms"]], [3, 3])
+        # (one it cannot hold is still set aside by Check structures, as Conformers refuses it)
+        silicon = self.block([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)])
+        self.assertEqual(self.worker.step_check([{"molblocks": [silicon]}], {})["structures"][0]["kind"], "valence")
+
+    def test_stereoisomers_of_an_adduct_are_drawn_with_its_arrow_and_its_charges_as_drawn(self):
+        # (1-fluoroethylamine->BH3, its carbon a stereocentre left open: two stereoisomers, each written back as drawn - the
+        #  N->B arrow, N and B uncharged - and each reading back as the one its SMILES, of the dipolar form, says)
+        adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
+        made = self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0]
+        self.assertEqual(len(made["made"]), 2)
+        self.assertEqual(len(set(made["smiles"])), 2)
+        for block, smiles in zip(made["made"], made["smiles"]):
+            drawn = Chem.MolFromMolBlock(block, sanitize=False, removeHs=False)
+            arrows = [b for b in drawn.GetBonds() if b.GetBondType() == Chem.BondType.DATIVE]
+            self.assertEqual([(b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()) for b in arrows], [("N", "B")])
+            self.assertTrue(all(a.GetFormalCharge() == 0 for a in drawn.GetAtoms()))
+            self.assertRegex(smiles, r"\[NH2\+\]")
+            self.assertRegex(smiles, r"\[BH3-\]")
+            self.assertEqual(Chem.MolToSmiles(self.worker.read(block)), smiles)
+
+    def test_an_adduct_renumbered_since_is_never_written_without_its_arrow(self):
+        # (H3N->BH3 held in its dipolar form, then renumbered - its B and N swapped - so that the index its N keeps of
+        #  its acceptor no longer names one bonded to it: refused in words, and Stereoisomers sets such a one aside)
+        mol = self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
+        renumbered = Chem.RenumberAtoms(mol, [1, 0] + list(range(2, mol.GetNumAtoms())))
+        self.assertEqual(renumbered.GetAtomWithIdx(1).GetIntProp(self.worker.LENDS_TO), 1)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(renumbered)
+        # (and an index past its atoms)
+        renumbered.GetAtomWithIdx(1).SetIntProp(self.worker.LENDS_TO, 99)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(renumbered)
+        # (and one naming an atom bonded to the donor that is not its acceptor - one of the N's own hydrogens: never that
+        #  N-H written as the arrow)
+        withH = Chem.AddHs(self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])))
+        n = next(x for x in withH.GetAtoms() if x.GetSymbol() == "N")
+        h = next(x.GetIdx() for x in n.GetNeighbors() if x.GetSymbol() == "H")
+        arrows = lambda m: [(x.GetBeginAtom().GetSymbol(), x.GetEndAtom().GetSymbol()) for x in m.GetBonds() if x.GetBondType() == Chem.BondType.DATIVE]
+        self.assertEqual(arrows(self.worker.as_drawn(withH)), [("N", "B")])
+        n.SetIntProp(self.worker.LENDS_TO, h)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(withH)
+        from unittest import mock
+        adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
+        with mock.patch.object(self.worker, "as_drawn", side_effect=ValueError("its coordination bond from N could not be written back as drawn")):
+            self.assertEqual(self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0],
+                             {"aside": "its coordination bond from N could not be written back as drawn", "kind": "drawing"})
+
+    def test_its_smiles_is_of_the_dipolar_form_the_same_molecule(self):
+        adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
+        self.assertEqual(self.worker.op_to_smiles({"molblock": adduct})["smiles"], Chem.MolToSmiles(Chem.MolFromSmiles("[NH3+][BH3-]")))
+
+    def test_a_main_group_adduct_it_cannot_hold_is_refused_in_words_never_a_hydrogen_short(self):
+        for atoms, bonds, why in [
+            # (Si, not of group 13; a charged acceptor; a charged donor; a donor that cannot carry the charge; two arrows onto one B)
+            ([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)], "Si is not one of B, Al, Ga, In and Tl"),
+            ([("N", 0, 0, 0), ("B", 1.6, 0, -1)], [(9, 1, 2)], "B is drawn charged"),
+            ([("N", 0, 0, 1), ("B", 1.6, 0, 0)], [(9, 1, 2)], "N is drawn charged"),
+            ([("C", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)], "C cannot carry the charge"),
+            ([("N", 0, 0, 0), ("B", 1.6, 0, 0), ("N", 3.2, 0, 0)], [(9, 1, 2), (9, 3, 2)], "B takes 2 of them"),
+        ]:
+            with self.assertRaisesRegex(ValueError, "^RDKit cannot hold the coordination bond from [A-Z][a-z]? to [A-Z][a-z]? as drawn: " + why + r"\.$"):
+                self.made(self.block(atoms, bonds))
 
     def test_a_metal_acceptor_keeps_its_ligands_hydrogens(self):
         # (cis-[PtCl2(NH3)2], each ammine's bond to Pt an arrow: six hydrogens, none taken)
@@ -1633,14 +1726,16 @@ class CoordinationBonds(unittest.TestCase):
         self.assertEqual(self.formula(cisplatin), "ClClHHHHHHNNPt")
 
     def test_a_plugin_entrys_coordination_bond_is_dative_never_a_covalent_single(self):
-        # (H3N->BH3 with all its hydrogens, its B-N bond marked: refused; a Pt ammine's N->Pt: dative)
+        # (H3N->BH3 with all its hydrogens, its B-N bond marked: its dipolar form, the charges as drawn kept; a Pt ammine's N->Pt: dative)
         h = lambda x, k: {"el": "H", "x": x, "y": 0.9 * (k - 1), "z": 0.5}
         borane = {
             "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0}, {"el": "B", "x": 1.66, "y": 0, "z": 0}] + [h(-0.4, k) for k in range(3)] + [h(2.1, k) for k in range(3)],
             "bonds": [{"a1": 0, "a2": 1, "order": 1, "coordination": True}] + [{"a1": 0, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 1, "a2": 5 + k, "order": 1} for k in range(3)],
         }
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to B as drawn"):
-            self.worker.mol_of(borane)
+        held = self.worker.mol_of(borane)
+        bond = held.GetBondBetweenAtoms(0, 1)
+        self.assertEqual((bond.GetBondType(), held.GetAtomWithIdx(0).GetFormalCharge(), held.GetAtomWithIdx(1).GetFormalCharge()), (Chem.BondType.SINGLE, 1, -1))
+        self.assertEqual([self.worker.drawn_charge(a) for a in held.GetAtoms()][:2], [0, 0])
         ammine = {
             "atoms": [{"el": "Pt", "x": 0, "y": 0, "z": 0}, {"el": "N", "x": 2.05, "y": 0, "z": 0}] + [h(2.4, k) for k in range(3)] + [{"el": "Cl", "x": -2.3, "y": 0, "z": 0}],
             "bonds": [{"a1": 1, "a2": 0, "order": 1, "coordination": True}] + [{"a1": 1, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 0, "a2": 5, "order": 1}],

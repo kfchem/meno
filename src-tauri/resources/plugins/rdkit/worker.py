@@ -103,11 +103,123 @@ def acceptors_as_drawn(mol):
     return mol
 
 
+#: Acceptors of group 13, neutral with three bonds besides, whose coordination bond RDKit cannot hold as a dative
+#: bond - it counts it in their valence - and so holds as the bond's dipolar form inside it (`dipolar_adducts`).
+DIPOLAR_ACCEPTORS = {"B", "Al", "Ga", "In", "Tl"}
+#: Donors that can carry a +1 charge with one bond more, as that form needs.
+DIPOLAR_DONORS = {"N", "P", "As", "O", "S", "Se", "F", "Cl", "Br", "I"}
+
+
+def adduct_why(mol, b):
+    """Why a coordination bond to a full main-group acceptor cannot be held
+    in its dipolar form, in words; None where it can."""
+    donor, acceptor = b.GetBeginAtom(), b.GetEndAtom()
+    if acceptor.GetSymbol() not in DIPOLAR_ACCEPTORS:
+        return f"{acceptor.GetSymbol()} is not one of B, Al, Ga, In and Tl"
+    if acceptor.GetFormalCharge():
+        return f"{acceptor.GetSymbol()} is drawn charged"
+    if donor.GetFormalCharge():
+        return f"{donor.GetSymbol()} is drawn charged"
+    if donor.GetSymbol() not in DIPOLAR_DONORS:
+        return f"{donor.GetSymbol()} cannot carry the charge"
+    datives = [x for x in acceptor.GetBonds() if x.GetBondType() == Chem.BondType.DATIVE]
+    if len(datives) > 1:
+        return f"{acceptor.GetSymbol()} takes {len(datives)} of them"
+    besides = acceptor.GetNumExplicitHs() + sum(x.GetBondTypeAsDouble() for x in acceptor.GetBonds() if x.GetBondType() != Chem.BondType.DATIVE)
+    if besides != 3:
+        return f"{acceptor.GetSymbol()} has {besides:g} bonds besides, not three"
+    return None
+
+
+def dipolar_adducts(mol):
+    """Each coordination bond to a group-13 acceptor, neutral with three
+    bonds besides, from a donor that can carry a charge, held as its
+    dipolar form: a single bond, the donor +1 and the acceptor -1. Inside
+    RDKit only, which cannot hold it as a dative bond: the charges as drawn
+    are kept on each atom (`DRAWN_CHARGE`) and are what is reported back, and
+    the donor names its acceptor (`LENDS_TO`). The same charge and electrons
+    as drawn. Changed in place; unsanitised in, unsanitised out. Those it
+    held so, as (donor, acceptor)."""
+    held = []
+    for b in list(mol.GetBonds()):
+        if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()) or adduct_why(mol, b):
+            continue
+        donor, acceptor = b.GetBeginAtom(), b.GetEndAtom()
+        for atom in (donor, acceptor):
+            atom.SetIntProp(DRAWN_CHARGE, atom.GetFormalCharge())
+        b.SetBondType(Chem.BondType.SINGLE)
+        donor.SetFormalCharge(donor.GetFormalCharge() + 1)
+        acceptor.SetFormalCharge(acceptor.GetFormalCharge() - 1)
+        donor.SetIntProp(LENDS_TO, acceptor.GetIdx())
+        held.append((donor.GetIdx(), acceptor.GetIdx()))
+    return held
+
+
+#: An atom's charge as drawn, kept where RDKit holds it otherwise (`dipolar_adducts`), and its acceptor's index on a donor.
+DRAWN_CHARGE = "meno_drawn_charge"
+LENDS_TO = "meno_lends_to"
+
+
+def drawn_charge(atom):
+    """An atom's charge as drawn: kept where RDKit holds a dipolar form."""
+    return atom.GetIntProp(DRAWN_CHARGE) if atom.HasProp(DRAWN_CHARGE) else atom.GetFormalCharge()
+
+
+def dipolar_words(mol):
+    """The coordination bonds held in their dipolar form, as a row of *How it
+    was made* says what was computed - only what differs from the drawing,
+    whose charges the structure shows: "N\u2192B computed as a single bond,
+    N+ and B\u2212". None where there are none."""
+    pairs = sorted({(a.GetSymbol(), mol.GetAtomWithIdx(a.GetIntProp(LENDS_TO)).GetSymbol()) for a in mol.GetAtoms() if a.HasProp(LENDS_TO)})
+    if not pairs:
+        return None
+    if len(pairs) == 1:
+        d, x = pairs[0]
+        return f"{d}\u2192{x} computed as a single bond, {d}+ and {x}\u2212"
+    return ", ".join(f"{d}\u2192{x}" for d, x in pairs) + " computed as single bonds, each donor + and acceptor \u2212"
+
+
+def as_drawn(mol):
+    """A copy of `mol` with each coordination bond held in its dipolar form
+    (`dipolar_adducts`) as drawn again: a dative bond from its donor to its
+    acceptor, and each atom's charge as drawn - for a drawing written back,
+    which shows what the chemist drew, not how RDKit holds it. Where the
+    atom a donor names as its acceptor is no longer that acceptor - not
+    bonded to it, or not a group-13 acceptor held so (its charge as drawn
+    kept, its charge here -1): the molecule renumbered since - why, in
+    words: never a drawing written without its arrow, nor with it on
+    another bond."""
+    out = Chem.RWMol(mol)
+    for a in mol.GetAtoms():
+        if a.HasProp(LENDS_TO):
+            to = a.GetIntProp(LENDS_TO)
+            acceptor = mol.GetAtomWithIdx(to) if 0 <= to < mol.GetNumAtoms() else None
+            bond = out.GetBondBetweenAtoms(a.GetIdx(), to) if acceptor is not None else None
+            if (bond is None or not acceptor.HasProp(DRAWN_CHARGE) or acceptor.GetSymbol() not in DIPOLAR_ACCEPTORS
+                    or acceptor.GetFormalCharge() != -1):
+                raise ValueError(f"its coordination bond from {a.GetSymbol()} could not be written back as drawn")
+            bond.SetBondType(Chem.BondType.DATIVE)
+            if bond.GetBeginAtomIdx() != a.GetIdx():
+                bond.SetBeginAtomIdx(a.GetIdx())
+                bond.SetEndAtomIdx(a.GetIntProp(LENDS_TO))
+        if a.HasProp(DRAWN_CHARGE):
+            out.GetAtomWithIdx(a.GetIdx()).SetFormalCharge(a.GetIntProp(DRAWN_CHARGE))
+    out = out.GetMol()
+    out.UpdatePropertyCache(strict=False)
+    return out
+
+
+def held_dipolar(mol):
+    """Whether `mol` holds a coordination bond in its dipolar form (`dipolar_adducts`)."""
+    return any(a.HasProp(LENDS_TO) for a in mol.GetAtoms())
+
+
 def sanitized(mol):
-    """`mol` sanitised, or why not in words: a coordination bond RDKit cannot
-    hold - its acceptor, not a metal, past what RDKit lets it bond, as a
-    neutral B or Al with three bonds besides - named, with what to draw
-    instead; any other problem as RDKit gives it."""
+    """`mol` sanitised - a coordination bond to a full group-13 acceptor held
+    in its dipolar form first (`dipolar_adducts`) - or why not in words: a
+    coordination bond RDKit cannot hold otherwise, named, with why; any other
+    problem as RDKit gives it."""
+    dipolar_adducts(mol)
     problem = Chem.SanitizeMol(mol, catchErrors=True)
     if problem == Chem.SanitizeFlags.SANITIZE_NONE:
         return mol
@@ -115,20 +227,21 @@ def sanitized(mol):
         if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()):
             continue
         donor, acceptor = b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()
-        raise ValueError(
-            f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {acceptor} takes no further bond there. "
-            f"Draw the two charged instead, {donor}+ bonded to {acceptor}-."
-        )
+        why = adduct_why(mol, b) or f"{acceptor} takes no further bond there"
+        raise ValueError(f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {why}.")
     raise ValueError(f"cannot make sense of the structure ({problem})")
 
 
 def read(molblock, sanitize=True):
     """A molecule from a MOL block, kept as drawn: no hydrogens removed, and
-    none taken by a coordination bond (`acceptors_as_drawn`)."""
+    none taken by a coordination bond (`acceptors_as_drawn`); one to a full
+    group-13 acceptor held in its dipolar form (`dipolar_adducts`), whether
+    sanitised or not, so that every op reads an adduct the same way."""
     mol = Chem.MolFromMolBlock(molblock, sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("This structure could not be read.")
     acceptors_as_drawn(mol)
+    dipolar_adducts(mol)
     if sanitize:
         sanitized(mol)
         Chem.AssignChiralTypesFromBondDirs(mol)
@@ -353,19 +466,28 @@ def drawing_block(mol):
     Meno's engine to lay out again), its stereo wedged as the molecule has
     it."""
     lay_out_2d(mol)
-    block = Chem.MolToV3KMolBlock(mol)
+    # (an adduct held in its dipolar form written as drawn: its arrow, and its charges as drawn - `as_drawn`)
+    written = lambda: Chem.MolToV3KMolBlock(as_drawn(mol) if held_dipolar(mol) else mol)
+    block = written()
     # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
     # says (Z): where what is written does not read back as the molecule,
     # RDKit's own depictor lays it out instead (it keeps that one)
     if not reads_as(block, mol):
         rdDepictor.Compute2DCoords(mol, forceRDKit=True)
-        block = Chem.MolToV3KMolBlock(mol)
+        block = written()
     return block
 
 
 def reads_as(molblock, mol):
     """Whether a MOL block reads back as the molecule it was written from,
     stereochemistry and all."""
+    if held_dipolar(mol):
+        # (read as the worker reads a drawing, its adduct held in its dipolar form again: RDKit's own reading refuses it)
+        try:
+            back = read(molblock)
+        except ValueError:
+            return False
+        return Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
     back = Chem.MolFromMolBlock(molblock)
     return back is not None and Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
 
@@ -2131,7 +2253,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
     shown = Chem.Mol(mol)
     Chem.Kekulize(shown, clearAromaticFlags=True)
     return {
-        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge()} for a in mol.GetAtoms()],
+        # (each charge as drawn, where RDKit held a coordination bond in its dipolar form)
+        "atoms": [{"el": a.GetSymbol(), "charge": drawn_charge(a)} for a in mol.GetAtoms()],
         "bonds": [
             {"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": kekule_order(b)}
             for b in shown.GetBonds()
@@ -2157,6 +2280,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
             ]),
             *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
             *([{"label": "Held", "text": "; ".join(w for w in (restraints_words(rows), missed_words(missed)) if w)}] if rows else []),
+            *([{"label": "Coordination bonds", "text": dipolar_words(mol)}] if dipolar_words(mol) else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
@@ -2667,13 +2791,18 @@ def op_run(m):
 
 def drawing_of_parts(blocks):
     """A structure drawn, its parts read as one molecule - unsanitised, as
-    drawn - or why it cannot be read at all."""
+    drawn, but read as every op of the worker reads a drawing (`read`): a
+    coordination bond takes no hydrogen (`acceptors_as_drawn`), and one to
+    a full group-13 acceptor is held in its dipolar form (`dipolar_adducts`)
+    - or None where it cannot be read at all."""
     mols = [Chem.MolFromMolBlock(b, sanitize=False, removeHs=False) for b in blocks]
     if not mols or any(x is None for x in mols):
         return None
     mol = mols[0]
     for more in mols[1:]:
         mol = Chem.CombineMols(mol, more)
+    acceptors_as_drawn(mol)
+    dipolar_adducts(mol)
     return mol
 
 
@@ -2784,7 +2913,12 @@ def stereoisomers_one(blocks, aside):
         return {"aside": f"stereo left open: {len(made)} stereoisomers", "kind": "stereo open"}
     # (in a fixed order: by each one's SMILES - and each one's own SMILES given beside it)
     made.sort(key=Chem.MolToSmiles)
-    return {"made": [drawing_block(Chem.Mol(x)) for x in made], "smiles": [Chem.MolToSmiles(x) for x in made], **note}
+    try:
+        drawings = [drawing_block(Chem.Mol(x)) for x in made]
+    except ValueError as e:
+        # (an adduct's drawing that cannot be written back as drawn: set aside, saying so - `as_drawn`)
+        return {"aside": str(e), "kind": "drawing"}
+    return {"made": drawings, "smiles": [Chem.MolToSmiles(x) for x in made], **note}
 
 
 def step_stereoisomers(entries, options):
