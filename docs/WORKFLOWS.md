@@ -2004,7 +2004,9 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   quantum calculations, which keeps OH and NH rotamers apart - at its
   least over the ways the molecule maps onto itself, laid over by turning
   and moving, never by reflecting (`workflow/sameConformer`; the RDKit
-  plugin's conformers use the same). The ways are those of its atoms but
+  plugin's conformers for Meno's own page use the same, while its
+  *Conformers* step gives every one RDKit made and its *Duplicates* step
+  applies it: PLUGINS.md). The ways are those of its atoms but
   the hydrogens hanging on one atom, at most 1,000; those hydrogens are
   matched to the nearest of their kind once the rest are laid over.
   Past 1,000 ways - a centre with seven alike arms has 5,040 - its atoms
