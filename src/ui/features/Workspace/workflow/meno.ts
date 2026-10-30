@@ -560,7 +560,9 @@ function energyWindowByValue(entries: readonly SetEntry[], holds: Holds3D, kcal:
     const k = /kcal\/mol above/.test(w) ? "outside the window" : w;
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
-  const rest = aside.length ? ` · rest ${aside.length} (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})` : "";
+  // (the reasons counted only where any is more than being outside it - its exit says that much, and each entry its own)
+  const only = counts.size === 1 && counts.has("outside the window");
+  const rest = aside.length ? ` · rest ${aside.length}${only ? "" : ` (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})`}` : "";
   const kinds = unknown ? ` · ${unknown === groups.size ? "whether minima or saddle points not known" : `${unknown} of ${groups.size} ${name}s: whether minima or saddle points not known`} (no frequencies)` : "";
   return { ok: true, holds, kept: keptOut, aside, said: `${keptOut.length} of ${countEntries(entries.length)} kept, on ${basis.words}${rest}${kinds}` };
 }

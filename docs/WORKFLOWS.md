@@ -832,30 +832,31 @@ beside its edge - being drawn over all of it.
   method - is said so: "on free energies (G), conditions not stated". On free
   energies a window refuses a saddle point, as Populations does: its G is
   no minimum's;
-- **Energy window, of the lowest in each value of a property** (2026-10-31,
-  for a cap on each product's transition states): *Of the lowest in: Each
-  value of a property*, and *The property* named - "product", "path". Each
-  entry is kept where its energy is within the window of the lowest of
-  those with its value; molecules as well as conformer sets. Its card
-  says the window and what it is of ("within 10 kcal/mol of the lowest in
-  each product"); its line which energy, chosen as above, each group's
-  alike: "3 of 5 entries kept, on electronic energies · rest 2 (2:
-  outside the window)". One without the property, or without an energy,
-  goes out of *Outside it* saying so ("it has no product", "it has no
+- **Energy window, from the lowest in each value of a property**
+  (2026-10-31, for a cap on each product's transition states): *From the
+  lowest in: Each value of a property*, and *The property* named -
+  "product", "path". Each entry is kept where its energy is within the
+  window of the lowest of those with its value; molecules as well as
+  conformer sets. Its card says the window and what it is of ("within 10
+  kcal/mol of each product's lowest"); its line which energy, chosen as
+  above, each group's alike: "3 of 5 entries kept, on electronic
+  energies · rest 2", the reasons counted only where any is more than
+  being outside it. One without the property, or without an energy, goes
+  out of *Outside it* saying so ("it has no product", "it has no
   energy") - never into a group, never left out unsaid; one outside the
-  window says how far ("12.00 kcal/mol above the lowest of its product").
-  A saddle point is not refused here - which entries should be transition
-  states is the chemist's to say - but a window means something only within
-  one kind: a group of minima and saddle points together is set aside
-  whole, saying so ("its product b holds minima and saddle points
-  together"), as is one where an entry's kind is not known (no
-  frequencies) beside those whose is; a group none of whose kind is known
-  is windowed, its line saying "whether minima or saddle points not
-  known". An entry that is no result
-  (failed, not converged) is, named, as over compounds. Molecules have no
-  compounds: over compounds each is its own group, as *Rank* takes them,
-  so all are kept and the line says so ("2 of 2 entries kept: each
-  molecule is its own group");
+  window says how far ("12.00 kcal/mol above the lowest of its
+  product"). A saddle point is not refused here - which entries should
+  be transition states is the chemist's to say - but a window means
+  something only within one kind: a group of minima and saddle points
+  together is set aside whole, saying so ("its product b holds minima
+  and saddle points together"), as is one where an entry's kind is not
+  known (no frequencies) beside those whose is; a group none of whose
+  kind is known is windowed, its line saying "whether minima or saddle
+  points not known". An entry that is no result (failed, not converged)
+  is refused, named, as over compounds. Molecules have no compounds: over
+  compounds each is its own group, as *Rank* takes them, so all are kept
+  and the line says so ("2 of 2 entries kept: each molecule is its own
+  group");
 - **A conformer set keeps each conformer's thermochemistry**
   (2026-10-24): *Frequencies* on a conformer set runs a job for each, and
   each conformer keeps what its own job read - its free energy, enthalpy,

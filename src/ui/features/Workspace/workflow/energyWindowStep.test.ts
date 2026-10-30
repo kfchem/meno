@@ -58,7 +58,7 @@ describe("Energy window, of the lowest in each value of a property", () => {
     // (product b: 0 and 4 kept, 12 out; product c: its lowest 20 kept, though 20 above b's - each product its own lowest, never the whole set's - and 33 out)
     const ts = [water(0, 0, product("b")), water(4, 2, product("b")), water(12, 4, product("b")), water(20, 6, product("c")), water(33, 8, product("c"))];
     const doc = runStep(windowed(ts, { window: 10, within: "each value", groupBy: "product" }), 2, W);
-    expect(ran(doc)?.said).toBe("3 of 5 entries kept, on electronic energies · rest 2 (2: outside the window) · whether minima or saddle points not known (no frequencies)");
+    expect(ran(doc)?.said).toBe("3 of 5 entries kept, on electronic energies · rest 2 · whether minima or saddle points not known (no frequencies)");
     expect(out(doc).map((m) => Math.round((m.energies![0] + 76) * KCAL))).toEqual([0, 4, 20]);
     expect(asides(doc)).toEqual(["12.00 kcal/mol above the lowest of its product", "13.00 kcal/mol above the lowest of its product"]);
   });
@@ -71,7 +71,7 @@ describe("Energy window, of the lowest in each value of a property", () => {
 
   it("takes transition states as they are - a saddle point is not refused, which ones should be is the chemist's to say - but never an entry that is no result", () => {
     const saddle = (kcal: number, x: number) => water(kcal, x, product("b"), { imaginary: [[-450]] });
-    expect(ran(runStep(windowed([saddle(0, 0), saddle(5, 2)], { window: 3, within: "each value", groupBy: "product" }), 2, W))?.said).toBe("1 of 2 entries kept, on electronic energies · rest 1 (1: outside the window)");
+    expect(ran(runStep(windowed([saddle(0, 0), saddle(5, 2)], { window: 3, within: "each value", groupBy: "product" }), 2, W))?.said).toBe("1 of 2 entries kept, on electronic energies · rest 1");
     const failed = water(0, 2, product("b"), { failed: [{ kind: "not-converged", why: "stopped at 200 cycles" }] });
     expect(ran(runStep(windowed([water(1, 0, product("b")), failed], { window: 3, within: "each value", groupBy: "product" }), 2, W))?.ok).toBe(false);
   });
@@ -95,7 +95,7 @@ describe("Energy window, of the lowest in each value of a property", () => {
   it("says on its card the window and what it is of, and what it still needs", () => {
     const info = kindInfo("energy-window");
     expect(howOf(info.options!, {}, info.how)).toBe("within 3 kcal/mol of each compound's lowest");
-    expect(howOf(info.options!, { window: 10, within: "each value", groupBy: "product" }, info.how)).toBe("within 10 kcal/mol of the lowest in each product");
+    expect(howOf(info.options!, { window: 10, within: "each value", groupBy: "product" }, info.how)).toBe("within 10 kcal/mol of each product's lowest");
     expect(needsOf({ kind: "energy-window", options: { within: "each value" } })).toBe("Name the property whose values are the groups");
     expect(info.takes).toEqual(["conformers", "molecules"]);
   });

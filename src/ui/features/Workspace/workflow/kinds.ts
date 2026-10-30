@@ -234,7 +234,7 @@ export const KINDS: readonly KindInfo[] = [
       // (of each compound's lowest, as it was; or of the lowest of those with one value of a property - a path, a product: never grouped by guess)
       {
         id: "within",
-        label: "Of the lowest in",
+        label: "From the lowest in",
         type: "choice",
         choices: [
           { value: "each compound", label: "Each compound" },
@@ -1090,11 +1090,11 @@ export function energyWindowNeeds(v: Record<string, string | number | boolean>):
   return v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined;
 }
 
-/** How an Energy window does its work, in a line: "within 3 kcal/mol of each compound's lowest", "within 10 kcal/mol of the lowest in each path" - which energy, G or E, its line says once it has run. */
+/** How an Energy window does its work, in a line: "within 3 kcal/mol of each compound's lowest", "within 10 kcal/mol of each path's lowest" - which energy, G or E, its line says once it has run. */
 export function energyWindowHow(v: Record<string, string | number | boolean>): string {
   const needs = energyWindowNeeds(v);
   if (needs) return needs;
-  return `within ${Number(v.window)} kcal/mol of ${v.within === "each value" ? `the lowest in each ${String(v.groupBy).trim()}` : "each compound's lowest"}`;
+  return `within ${Number(v.window)} kcal/mol of each ${v.within === "each value" ? String(v.groupBy).trim() : "compound"}'s lowest`;
 }
 
 /** How a Rank step does its work, in a line: "the lowest 1 by energy in each group" - or what it still needs. */
