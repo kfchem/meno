@@ -574,8 +574,8 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   distance restraint holds - case F's acid held at its base at a factor
   of their van der Waals radii - is held by that restraint alone: the
   force field has no bond for it, so the acid and the base are each as
-  their own hydrogens make them (H3N→BH3 held at 3.21 Å is made, where
-  the same drawing unheld is refused). From RDKit plugin 0.1.13.
+  their own hydrogens make them (H3N→BH3 held at 3.21 Å comes out as NH3
+  and BH3 that far apart). From RDKit plugin 0.1.13.
 - **A coordination bond is RDKit's dative bond, taking no hydrogen.** A
   drawn dative arrow or coordination bond (a MOL block's type 9), or a
   plugin entry's bond marked `coordination`, is read as RDKit's dative

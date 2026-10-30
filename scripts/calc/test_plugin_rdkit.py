@@ -1747,9 +1747,6 @@ class MinimiseWithRestraints(unittest.TestCase):
         self.assertIsNone(mol.GetBondBetweenAtoms(0, 1))
         made = self.worker.minimised(mol, rows)
         self.assertAlmostEqual(math.dist(made["frame"][0:3], made["frame"][3:6]), 3.213, delta=0.05)
-        # (unheld, the same entry is refused as RDKit cannot hold it, as #759 says)
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to B as drawn"):
-            self.worker.mol_of(entry)
 
     def test_prepares_a_job_with_the_entrys_restraints_and_start(self):
         import json as _json
