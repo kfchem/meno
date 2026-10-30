@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "./molecule";
 import { dielsAlder, molecule, sn2, trueMap } from "./reactionMap.fixtures";
-import { heavyAtomPairs, mapProducts, mapReaction, withMapNumbers, type ReactionMap } from "./reactionMap";
+import { bondChanges, heavyAtomPairs, mapProducts, mapReaction, withMapNumbers, type ReactionMap } from "./reactionMap";
 
 const DA_REACTANT_NAMES = ["C1", "C2", "C3", "C4", "H2", "H3", "H1a", "H1b", "H4a", "H4b", "C5", "C6", "H5a", "H5b", "H6a", "H6b"];
 
@@ -209,5 +209,48 @@ describe("mapProducts (the Reaction step)", () => {
       ["formed", "C", "Cl"],
       ["broken", "C", "Br"],
     ]);
+  });
+});
+
+describe("bond changes across an aromatic ring", () => {
+  // (benzene with a methyl on C1: ring C1-C6, C7 the methyl; H on C2-C6 and three on C7 - as one Kekul\u00e9 structure, or the other)
+  const ring = (doubles: "12" | "23", ringOrders?: number[]) => {
+    const atoms: Record<string, [string, [number, number, number]]> = {};
+    for (let k = 0; k < 6; k++) atoms[`C${k + 1}`] = ["C", [1.39 * Math.cos((k * Math.PI) / 3), 1.39 * Math.sin((k * Math.PI) / 3), 0]];
+    atoms.C7 = ["C", [2.9, 0, 0]];
+    for (let k = 1; k < 6; k++) atoms[`H${k + 1}`] = ["H", [2.47 * Math.cos((k * Math.PI) / 3), 2.47 * Math.sin((k * Math.PI) / 3), 0]];
+    atoms.H7a = ["H", [3.3, 1, 0]];
+    atoms.H7b = ["H", [3.3, -0.5, 0.87]];
+    atoms.H7c = ["H", [3.3, -0.5, -0.87]];
+    const orders = ringOrders ?? (doubles === "12" ? [2, 1, 2, 1, 2, 1] : [1, 2, 1, 2, 1, 2]);
+    const bonds: [string, string, number][] = [0, 1, 2, 3, 4, 5].map((k) => [`C${k + 1}`, `C${((k + 1) % 6) + 1}`, orders[k]]);
+    bonds.push(["C1", "C7", 1]);
+    for (let k = 1; k < 6; k++) bonds.push([`C${k + 1}`, `H${k + 1}`, 1]);
+    for (const h of ["H7a", "H7b", "H7c"]) bonds.push(["C7", h, 1]);
+    return molecule(atoms, bonds, undefined, { jitter: false });
+  };
+  const same = ring("12").atoms.map((_, i) => i);
+
+  it("are none where both sides hold the ring, whichever Kekul\u00e9 structure each is drawn in - as when a map turns a symmetric ring over", () => {
+    expect(bondChanges(ring("12"), ring("23"), same)).toEqual({ formed: [], broken: [], orderChanged: [] });
+  });
+
+  it("are still said where the ring is not aromatic on one side: a cyclohexadiene's bonds against the ring's", () => {
+    // (C1=C2, C3=C4 and the rest single: no ring of alternating bonds)
+    const diene = ring("12", [2, 1, 2, 1, 1, 1]);
+    expect(bondChanges(ring("12"), diene, same).orderChanged.map((c) => [c.a1 + 1, c.a2 + 1, c.before, c.after])).toEqual([[5, 6, 2, 1]]);
+  });
+
+  it("the mapper is given the ring's bonds as aromatic, so the map is the same whichever Kekul\u00e9 structure either side is drawn in", () => {
+    const one = mapReaction({ reactants: [ring("12")], products: [ring("12")] });
+    const other = mapReaction({ reactants: [ring("12")], products: [ring("23")] });
+    if ("error" in one || "error" in other) throw new Error("refused");
+    expect(other.maps).toEqual(one.maps);
+  });
+
+  it("a whole map of the ring onto itself turned over has none", () => {
+    const r = mapReaction({ reactants: [ring("12")], products: [ring("23")] });
+    if ("error" in r) throw new Error(r.message);
+    expect(r.changes).toEqual({ formed: [], broken: [], orderChanged: [] });
   });
 });

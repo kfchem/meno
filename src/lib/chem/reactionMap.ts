@@ -37,6 +37,8 @@ import {
   type MapperTrace,
 } from "./accelMapper";
 import { implicitHydrogens, type Molecule, type ParsedAtom, type ParsedBond } from "./molecule";
+import { aromaticForm } from "./identity";
+import { AROMATIC_BOND } from "./kekulize";
 
 export type ReactionMapInput = {
   reactants: readonly Molecule[];
@@ -72,13 +74,21 @@ export type ReactionMap = {
 
 export type ReactionMapRefusal = { error: "2d" | "no-atoms" | "python-error"; message: string };
 
-/** A structure as ACCeL's read_mol reads a molfile: bond types 1 to 4 as they are, any other undefined. */
+/**
+ * A structure as ACCeL's mapper reads one: bond types 1 to 4 as they are,
+ * any other undefined - and the bonds of an aromatic ring aromatic (4), as
+ * ACCeL's own flow has them before it maps (Box.calc_bonds calls
+ * Modeler.aromatize), whichever Kekulé structure the ring was drawn in.
+ * ACCeL perceives the rings from the geometry; Meno from the bonds
+ * (lib/chem/identity `aromaticForm`).
+ */
 function toAtoms(m: Molecule): Atoms {
   const atoms = new Atoms();
   for (const a of m.atoms) atoms.getNewAtom([a.el, a.x, a.y, a.z]);
   atoms.initBonds();
+  const ring = aromaticBonds(m);
   for (const b of m.bonds) {
-    const t = b.order >= 1 && b.order <= 4 ? b.order : BondType.undefined;
+    const t = ring.has(b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`) ? BondType.aromatic : b.order >= 1 && b.order <= 4 ? b.order : BondType.undefined;
     atoms.addBond(b.a1 + 1, b.a2 + 1, t);
   }
   return atoms;
@@ -143,17 +153,36 @@ function bondTypes(m: Molecule, renumber: (i: number) => number = (i) => i): Map
   return out;
 }
 
-/** How the bonds differ between the reactant and the product read through `map` (product atom -> reactant atom). */
+/** The bonds of a structure that are of an aromatic ring (lib/chem/identity `aromaticForm`), by atom pair (smaller index first). */
+function aromaticBonds(m: Molecule, renumber: (i: number) => number = (i) => i): Set<string> {
+  const form = aromaticForm({ atoms: m.atoms.map((a) => ({ el: a.el })), bonds: m.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
+  const out = new Set<string>();
+  for (const b of form.bonds) {
+    const [p, q] = [renumber(b.a), renumber(b.b)];
+    if (b.order === AROMATIC_BOND && p >= 0 && q >= 0) out.add(p < q ? `${p},${q}` : `${q},${p}`);
+  }
+  return out;
+}
+
+/**
+ * How the bonds differ between the reactant and the product read through
+ * `map` (product atom -> reactant atom). A bond of an aromatic ring on both
+ * sides has not changed, whichever Kekulé structure each side is drawn
+ * in: a map that turns a symmetric ring over pairs its single bonds with
+ * the other side's double bonds, and the ring is the same.
+ */
 export function bondChanges(reactant: Molecule, product: Molecule, map: readonly number[]): ReactionMap["changes"] {
   const before = bondTypes(reactant);
   const after = bondTypes(product, (i) => map[i] ?? -1);
+  const ringBefore = aromaticBonds(reactant);
+  const ringAfter = aromaticBonds(product, (i) => map[i] ?? -1);
   const formed: BondChange[] = [];
   const broken: BondChange[] = [];
   const orderChanged: BondChange[] = [];
   for (const [k, b] of before) {
     const a = after.get(k);
     if (!a) broken.push({ a1: b.a1, a2: b.a2, before: b.type, after: 0 });
-    else if (a.type !== b.type) orderChanged.push({ a1: b.a1, a2: b.a2, before: b.type, after: a.type });
+    else if (a.type !== b.type && !(ringBefore.has(k) && ringAfter.has(k))) orderChanged.push({ a1: b.a1, a2: b.a2, before: b.type, after: a.type });
   }
   for (const [k, a] of after) if (!before.has(k)) formed.push({ a1: a.a1, a2: a.a2, before: 0, after: a.type });
   const byAtoms = (p: BondChange, q: BondChange) => p.a1 - q.a1 || p.a2 - q.a2;

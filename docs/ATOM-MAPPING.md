@@ -48,6 +48,12 @@ bonds with their CTfile types) and gives:
   `get_mapped` gives nothing then.
 - `changes` - the first map's bonds made, broken and changed in order,
   in the reactants' numbering, with their CTfile types before and after.
+  A bond of an aromatic ring on both sides (identity's `aromaticForm`) has
+  not changed in order, whichever Kekulé structure each side is drawn in:
+  a map that turns a symmetric ring over pairs one side's single bonds
+  with the other's double bonds, and the ring is the same. The same holds
+  for every map's bond changes (`bondChanges`): the drawn arrow's reacting
+  centres and the *Reaction* step's *Bond changes* among them.
 
 `withMapNumbers` gives the structures as they came in, each atom's
 atom-atom mapping number (`map`, which Meno already reads and writes in
@@ -68,8 +74,15 @@ What it will not do:
 - **Guess bonds.** The bonds come with the structures. ACCeL reads a
   molfile's bond types 1 to 4 as single, double, triple and aromatic, and
   any other type as a bond of no stated order; Meno hands them over the
-  same way. Aromatic bonds count apart from single and double ones, as in
-  ACCeL, so a Kekulé structure and an aromatic one can map differently.
+  same way, with one thing more that ACCeL's own flow does: an aromatic
+  ring's bonds are handed over as aromatic, whichever Kekulé structure the
+  ring was drawn in. ACCeL perceives its rings before it maps
+  (`Box.calc_bonds` calls `Modeler.aromatize`), from the geometry; Meno
+  perceives them from the bonds (identity's `aromaticForm`), as its
+  identity and symmetry do. The map is built over the bonds whatever their
+  type, and the types are read only in a few of the checks and scores
+  (`_correct_maps`, the pericyclic and face terms of `_order_maps`), so a
+  ring drawn in either Kekulé structure maps the same.
 
 Mapping runs in a worker when the interface asks for it (*On a drawn
 scheme*). How long it takes, and why like molecules standing apart once
@@ -434,7 +447,8 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   numbering (from 0, as an entry's bonds number them) with their
   elements, and its bond type before and after (0 where there is none; 4,
   aromatic). The types are the structures'
-  own; nothing is perceived from the geometry here.
+  own; nothing is perceived from the geometry here. A bond of an aromatic
+  ring on both sides is no order change (`changes` above).
 - **Nothing in part.** A product whose atoms cannot all be paired one to
   one - a different number of atoms, a flat drawing, a map that leaves an
   atom out - is not passed on, and the reason is said for it.
