@@ -61,7 +61,7 @@ describe("an entry renumbered as the reactants are", () => {
   });
 
   it("refuses an order that is not each atom once, saying so", () => {
-    expect(renumberedEntry(water(), [0, 0, 2], "r")).toEqual({ failed: "The map does not give each of its 3 atoms one place in the reactants' numbering." });
+    expect(renumberedEntry(water(), [0, 0, 2], "r")).toEqual({ failed: "The map does not give each of its 3 atoms one place in the reference's numbering." });
     expect(renumberedEntry(water(), [0, 1], "r")).toHaveProperty("failed");
   });
 });
@@ -74,7 +74,7 @@ describe("a reaction's bond changes as a table", () => {
 
   it("has a row a bond, its atoms from 1, with what changed and its order before and after", () => {
     const t = bondChangesTable([{ product: 0, map: 0, changes }], () => "b");
-    expect(t.columns.map((c) => c.name)).toEqual(["reaction.product", "Change", "Atom 1", "Atom 2", "Element 1", "Element 2", "Order before", "Order after"]);
+    expect(t.columns.map((c) => c.name)).toEqual(["map.entry", "Change", "Atom 1", "Atom 2", "Element 1", "Element 2", "Order before", "Order after"]);
     expect(t.rows).toEqual([
       ["b", "formed", 1, 5, "C", "C", 0, 1],
       ["b", "order changed", 1, 2, "C", "C", 2, 1],

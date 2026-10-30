@@ -46,7 +46,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -96,7 +96,7 @@ export function laterPortsNeed(ports: readonly StepPort[], isWired: (id: string)
  * marks the exit for what a step set aside or could not do, drawn with its
  * count: nothing is hidden, and it can be wired on. A kind has at most one
  * such exit; its other exits each give something of their own (a
- * Reaction's bond changes, a table).
+ * Atom map's bond changes, a table).
  */
 export type StepExit = { id: string; name: string; gives: ValueKind | "chart" | "same" | "pictures"; of?: "rest" | "failed" };
 
@@ -545,7 +545,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Measured",
-    // (the atoms typed, or each row's of a table wired in where wanted - a Reaction's bond changes - its columns saying how they count them)
+    // (the atoms typed, or each row's of a table wired in where wanted - an Atom map's bond changes - its columns saying how they count them)
     inputs: [
       { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
       { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
@@ -797,23 +797,66 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => addNeeds(v),
   },
   {
-    // (each product mapped onto the one reactant structure, atom for atom, hydrogens too, and written in its numbering - with the bonds each map forms, breaks or changes, as a table; a product that does not map, aside with why)
-    kind: "reaction",
-    name: "Reaction",
-    icon: "reaction",
+    // (each entry mapped onto its reference, atom for atom, hydrogens too, and written in its numbering - a reaction's products onto its reactants, a species' conformers onto it - with the bonds each map forms, breaks or changes, as a table; an entry that does not map, aside with why)
+    kind: "atom-map",
+    name: "Atom map",
+    icon: "mapped",
     takes: ["molecules", "conformers"],
-    gives: "molecules",
+    gives: "same",
     runs: "entries",
-    made: "Mapped products",
+    made: "Mapped",
     inputs: [
-      { id: "reactants", name: "Reactants", takes: ["molecules", "conformers"] },
-      { id: "products", name: "Products", takes: ["molecules", "conformers"] },
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
     ],
     others: [
       { id: "rest", name: "Not mapped", gives: "same", of: "rest" },
       { id: "changes", name: "Bond changes", gives: "table" },
     ],
     options: [
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "one", label: "The one reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "one",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      {
+        // (no default: whether an input's entries are each a side of its own, or one side together, is the chemist's - a reaction's products, or its reactants)
+        id: "moleculesAre",
+        label: "Molecules",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each its own" },
+          { value: "together", label: "One side together" },
+        ],
+        default: "",
+      },
+      {
+        id: "referenceIs",
+        label: "Reference",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each its own" },
+          { value: "together", label: "One side together" },
+        ],
+        default: "",
+      },
+      {
+        // (no default: whether its bonds may change is what the chemist maps for - a reaction, or conformers of one species)
+        id: "bonds",
+        label: "Bonds",
+        type: "choice",
+        choices: [
+          { value: "change", label: "May change (a reaction)" },
+          { value: "same", label: "Stay the same (conformers)" },
+        ],
+        default: "",
+      },
       {
         id: "maps",
         label: "Maps",
@@ -825,7 +868,8 @@ export const KINDS: readonly KindInfo[] = [
         default: "first",
       },
     ],
-    how: (v) => (v.maps === "every" ? "every map of each product" : "each product's first map"),
+    how: (v) => atomMapHow(v),
+    needs: (v) => atomMapNeeds(v),
   },
 ];
 
@@ -898,6 +942,31 @@ export function torsionsHow(v: OptionValues): string {
   const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
   // (the + says it adds each time - the option's own label says it whole)
   return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
+}
+
+/** What an Atom map step still needs of its options. */
+export function atomMapNeeds(v: OptionValues): string | undefined {
+  const side = (x: unknown) => x === "each" || x === "together";
+  if (!side(v.moleculesAre)) return "Choose whether the molecules are each their own or one side";
+  if (!side(v.referenceIs)) return "Choose whether the reference is each its own or one side";
+  if (v.reference === "property" && (v.moleculesAre === "together" || v.referenceIs === "together")) return "Matched on a property takes each entry on its own: set both inputs to each its own";
+  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
+  if (v.bonds !== "change" && v.bonds !== "same") return "Choose whether bonds may change";
+  return undefined;
+}
+
+/** An Atom map step's line: what was chosen - how each input's entries are taken, whether bonds may change, every map, the property matched on - its defaults unsaid. */
+export function atomMapHow(v: OptionValues): string {
+  const needs = atomMapNeeds(v);
+  if (needs) return needs;
+  const side = (x: unknown, each: string, together: string) => (x === "together" ? together : each);
+  return [
+    side(v.moleculesAre, "molecules each their own", "molecules as one side"),
+    side(v.referenceIs, "reference each its own", "reference as one side"),
+    v.bonds === "same" ? "bonds stay the same" : "bonds may change",
+    ...(v.maps === "every" ? ["every map"] : []),
+    ...(v.reference === "property" ? [`matched on ${String(v.property).trim()}`] : []),
+  ].join(", ");
 }
 
 /** What an Enumerate with no lists says: on its card, as how it works and where it would say *Ready*. */
