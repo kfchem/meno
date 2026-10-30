@@ -2921,8 +2921,10 @@ case F, step 44, beside Rank's lowest):
 
   G = G_min - R T ln Σ g exp(-(G - G_min) / R T)
 
-with each member's degeneracy g (1 where it says none), R = 8.314462618
-J/(mol K), and T the temperature its members' values state.
+with each member's degeneracy g (1 where it says none; one that says a
+degeneracy that is no count - 0, below 0, not a number - sets its group
+aside, saying so), R = 8.314462618 J/(mol K), and T the temperature its
+members' values state.
 
 - **Its options**: the value it takes (*Of*, a free energy: Frequencies'
   or one an Add wrote), the name it is written *As* ("G-ens"), and
@@ -2932,9 +2934,13 @@ J/(mol K), and T the temperature its members' values state.
 - **One entry stands for each group**: its lowest, with the value written
   on it. The value is of the group, not of that geometry
   (`Property.ensemble`, how many it is over); its parts are each member's
-  value as it was - an Add's own parts with it - so that a step reading
-  it checks each member's level. The others go out of *The rest*, each
-  saying whose ensemble it is in.
+  value as it was - an Add's own parts with it. It is worked out by the
+  members' own level - their program, method and basis, which they share
+  - and its treatment says it is an ensemble, of the members' treatment
+  ("ensemble, -R T ln Σ g exp(-G/R T), of quasi-RRHO"). So two ensembles
+  at one level, of any sizes, are ranked and summed together; two at
+  different levels, or an ensemble and one geometry's G, are not. The
+  others go out of *The rest*, each saying whose ensemble it is in.
 - **No temperature is assumed**: members whose values state none, or
   differ in it, or were worked out differently in any other way, set
   their group aside whole, saying how. A member that is no result -

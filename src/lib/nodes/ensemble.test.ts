@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Property } from "../entry";
 import { ensemble } from "./ensemble";
+import { rank } from "./rank";
 import { entry, quantity } from "./testEntries";
 
 const by = { program: "Gaussian", method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" };
@@ -30,7 +31,7 @@ describe("Ensemble energy", () => {
     const p = out.exits.done[0].properties.G;
     expect(p.ensemble).toEqual({ of: 2 });
     expect(p.at).toMatchObject({ kelvin: 298.15, atm: 1 });
-    expect(p.by).toEqual({ treatment: "ensemble over 2 at 298.15 K: -R T ln Σ g exp(-g/R T)" });
+    expect(p.by).toEqual({ program: "Gaussian", method: "wB97X-D", basis: "6-31G(d)", treatment: "ensemble, -R T ln Σ g exp(-g/R T), of quasi-RRHO" });
     expect(p.parts).toEqual([
       { property: "g", value: 0, unit: "kcal/mol", at: g(0).at, by },
       { property: "g", value: 0.5, unit: "kcal/mol", at: g(0.5).at, by },
@@ -59,5 +60,44 @@ describe("Ensemble energy", () => {
     const other = quantity(1, "kcal/mol", { ...by, method: "B3LYP" }, { kelvin: 298.15, atm: 1 });
     const out = ensemble([entry("x", { g: g(0) }), entry("y", { g: other })], { property: "g", within: "all", as: "G" });
     expect(out.ok && aside(out.exits.rest)[0][1]).toBe("its group's g values differ in method: wB97X-D (x) and B3LYP (y), and are not taken together");
+  });
+
+  it("carries the members' level, not their count: ensembles of 3 and of 2 at one level are ranked together", () => {
+    const out = ensemble(
+      [entry("a1", { g: g(0) }, "a"), entry("a2", { g: g(0.4) }, "a"), entry("a3", { g: g(0.9) }, "a"), entry("b1", { g: g(0.2) }, "b"), entry("b2", { g: g(0.3) }, "b")],
+      { property: "g", within: "each group", as: "G" },
+    );
+    if (!out.ok) throw new Error(out.said);
+    expect(out.exits.done.map((e) => e.properties.G.ensemble)).toEqual([{ of: 3 }, { of: 2 }]);
+    const ranked = rank(out.exits.done, { property: "G", order: "lowest first", keep: 2, within: "all" });
+    if (!ranked.ok) throw new Error(ranked.said);
+    expect(ranked.exits.kept.map((e) => e.id)).toEqual(["a1", "b1"]);
+    expect(ranked.exits.rest).toEqual([]);
+  });
+
+  it("and ensembles at two levels are not ranked together, saying how they differ", () => {
+    const b3 = (v: number) => quantity(v, "kcal/mol", { ...by, method: "B3LYP" }, { kelvin: 298.15, atm: 1 });
+    const out = ensemble([entry("a1", { g: g(0) }, "a"), entry("a2", { g: g(0.4) }, "a"), entry("b1", { g: b3(0.2) }, "b"), entry("b2", { g: b3(0.3) }, "b")], {
+      property: "g",
+      within: "each group",
+      as: "G",
+    });
+    if (!out.ok) throw new Error(out.said);
+    const ranked = rank(out.exits.done, { property: "G", order: "lowest first", keep: 2, within: "all" });
+    if (!ranked.ok) throw new Error(ranked.said);
+    expect(ranked.exits.kept).toEqual([]);
+    expect(aside(ranked.exits.rest)[0][1]).toContain("differ in method: wB97X-D (a1) and B3LYP (b1)");
+  });
+
+  it("refuses a degeneracy that is no count - 0, below 0, not a number - setting its group aside, never reading it as 1", () => {
+    for (const d of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const out = ensemble([entry("x", { g: g(0) }), entry("y", { g: g(0.5), degeneracy: degeneracy(d) })], { property: "g", within: "all", as: "G" });
+      if (!out.ok) throw new Error(out.said);
+      expect(out.exits.done).toEqual([]);
+      expect(aside(out.exits.rest)).toEqual([
+        ["x", "its group's y has a degeneracy that is not a number above 0"],
+        ["y", "its group's y has a degeneracy that is not a number above 0"],
+      ]);
+    }
   });
 });

@@ -18,7 +18,7 @@ type Values = Record<string, string | number | boolean>;
 /** An entry as a step's line names it: its compound's letter and its number, "b #2". */
 const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
 /** An entry's id as the node is given it: its place after a mark no name carries (U+2063), so that only it is said by name. */
-const MARK = "⁣";
+const MARK = "\u2063";
 const MARKED = new RegExp(`${MARK}(\\d+)`, "g");
 
 /** What an Ensemble energy step still needs of its options: the value to take, a name for it, and - in each value of a property - which. */

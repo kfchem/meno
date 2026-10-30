@@ -5,13 +5,14 @@
  *
  *   G_ens = G_min - R T ln Σ_i g_i exp(-(G_i - G_min) / R T)
  *
- * with g_i each member's degeneracy (1 where it says none), at the one
+ * with g_i each member's degeneracy (1 where it says none; one that is no
+ * count refused), at the one
  * temperature its members' values state - none assumed. One entry stands
  * for each group, its lowest, carrying the value: of the group, not of
  * that one geometry (`Property.ensemble`), each member's value kept as it
  * was (`Property.parts`, an Add's own parts one level down).
  */
-import type { Entry, Property, PropertyPart } from "../entry";
+import type { By, Entry, Property, PropertyPart } from "../entry";
 import { convert, type Unit } from "../units";
 import { entries as count, inGroups, numberIn, setAside, tally, unreadable, workedOutUnlike, type NodeOutcome } from "./base";
 import { R_GAS } from "./standardState";
@@ -24,6 +25,9 @@ export type EnsembleOptions = {
   /** The name the ensemble's value is written under, on the entry that stands for its group. */
   as: string;
 };
+
+/** What of a member's `by` its ensemble's value carries: the level the members share. */
+const LEVEL = ["plugin", "version", "program", "method", "basis", "model"] as const;
 
 /** Joules in a thermochemical kilocalorie. */
 const J_PER_KCAL = 4184;
@@ -90,10 +94,14 @@ function groupEnsemble(g: readonly Entry[], name: string, as: string): { stands:
   if (kelvins.some((k) => k == null)) return `its group's ${name} values do not all say their temperature`;
   const kelvin = kelvins[0]!;
   if (kelvins.some((k) => k !== kelvin)) return `its group's ${name} values are of different temperatures`;
-  const degeneracies = g.map((e) => {
-    const d = e.properties.degeneracy?.value;
-    return typeof d === "number" && Number.isFinite(d) && d > 0 ? d : 1;
-  });
+  // (a degeneracy that is said must be a count: one that is not sets the group aside, never read as 1)
+  const degeneracies: number[] = [];
+  for (const e of g) {
+    const d = e.properties.degeneracy;
+    if (d && (d.status !== "computed" || typeof d.value !== "number" || !Number.isFinite(d.value) || !(d.value > 0)))
+      return `its group's ${e.id} has a degeneracy that is not a number above 0`;
+    degeneracies.push(d ? (d.value as number) : 1);
+  }
   // (in kcal/mol, R T: R = 8.314462618 J/(mol K) over 4184 J/kcal)
   const kcal = values.map((v) => convert(v, unit as Unit, "kcal/mol"));
   const low = Math.min(...kcal);
@@ -107,11 +115,20 @@ function groupEnsemble(g: readonly Entry[], name: string, as: string): { stands:
     return all.every((x) => x === all[0]) && all[0] != null ? { [k]: all[0] } : {};
   };
   const n = g.length;
+  // (the members' own level - program, method, basis, model - which they share, so that two ensembles at one level, of
+  //  any sizes, are compared and summed as values worked out alike, and two at different levels are not; the count is
+  //  the ensemble's own, never part of how it was worked out)
+  const shared: By = {};
+  for (const k of LEVEL) {
+    const all = g.map((e) => e.properties[name].by?.[k]);
+    if (all[0] != null && all.every((x) => x === all[0])) shared[k] = all[0];
+  }
+  const treatment = first.by?.treatment ?? "unknown";
   const property: Property = {
     value,
     unit,
     at: { geometry: first.at!.geometry, kelvin, ...agreed("atm"), ...agreed("solvent") },
-    by: { treatment: `ensemble over ${n} at ${kelvin} K: -R T ln Σ g exp(-${name}/R T)` },
+    by: { ...shared, treatment: `ensemble, -R T ln Σ g exp(-${name}/R T), of ${treatment}` },
     parts: g.map((e) => partOf(name, e.properties[name])),
     ensemble: { of: n },
     status: "computed",
