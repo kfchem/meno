@@ -417,6 +417,14 @@ are a *Frequencies* step's, wired after it.
   puts it (ORCA's PATH SUMMARY order). Each frame has its energy and says
   what it is: "NEB image 3 of 10", or "highest point refined". Its entry
   frame - what a set, and the next step, takes of it - is the point refined.
+- **One frame of it.** The point refined, taken alone, carries the run's
+  calculation, and of what the frames say, its own word alone ("highest
+  point refined"). So a molecule made of it after - by *Duplicates* onwards,
+  or a set's table row put on the page - is one of one frame, its
+  calculation that frame's: a step after that one still has it, and it is
+  saved and opened again with nothing left out. Another frame of the path
+  taken alone (*Take frames*, a table's row) carries its own word and none
+  of the point refined's calculation: no imaginary frequency of its.
 - **Barriers.** On the point refined, Meno works out from the energies
   printed `path.E-barrier` (its energy less the path's start's, its first
   image, of the same run) and `path.E-reverse-barrier` (less its end's, its
