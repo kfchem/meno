@@ -152,10 +152,17 @@ export type Property = {
    * energy, a thermal correction of another level, a standard-state term).
    */
   parts?: PropertyPart[];
+  /**
+   * Where it is a value of a group, not of one geometry - an ensemble's
+   * free energy over its conformers (*Ensemble energy*) - how many members
+   * it is over: its geometry (`at`) is its representative's, and its parts
+   * each member's value.
+   */
+  ensemble?: { of: number };
 };
 
-/** One part of a sum (`Property.parts`): the property it was, as it was. */
-export type PropertyPart = { property: string; value: number; unit: Unit | "none"; at?: At; by?: By };
+/** One part of a sum or an ensemble (`Property.parts`): the property it was, as it was - with its own parts, where it was a sum itself, one level down. */
+export type PropertyPart = { property: string; value: number; unit: Unit | "none"; at?: At; by?: By; parts?: PropertyPart[] };
 
 /**
  * An element of an entry that could be stereogenic: a centre (its atom), a
@@ -356,7 +363,7 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
  * only until it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
-  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown } | null;
+  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown; ensemble?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value: PropertyValue | undefined =
     (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean"
@@ -374,22 +381,34 @@ export function propertyIn(v: unknown): Property | undefined {
   const at = atIn(p.at);
   if (by === null || at === null) return undefined;
   if (p.of != null && typeof p.of !== "string") return undefined;
-  // (a sum's parts: each as it was, or none of them - a sum whose parts do not all read is not read as one without them)
-  let parts: PropertyPart[] | undefined;
-  if (p.parts != null) {
-    if (!Array.isArray(p.parts) || !p.parts.length) return undefined;
-    parts = [];
-    for (const raw of p.parts as unknown[]) {
-      const q = raw as { property?: unknown; value?: unknown; unit?: unknown; at?: unknown; by?: unknown } | null;
-      if (!q || typeof q.property !== "string" || !q.property || typeof q.value !== "number" || !Number.isFinite(q.value)) return undefined;
-      if (!(q.unit === "none" || (typeof q.unit === "string" && isUnit(q.unit)))) return undefined;
-      const qBy = byIn(q.by);
-      const qAt = atIn(q.at);
-      if (qBy === null || qAt === null) return undefined;
-      parts.push({ property: q.property, value: q.value, unit: q.unit as Unit | "none", ...(qAt ? { at: qAt } : {}), ...(qBy ? { by: qBy } : {}) });
-    }
+  // (a sum's parts, or an ensemble's: each as it was, or none of them - one whose parts do not all read is not read without them)
+  const parts = p.parts != null ? partsIn(p.parts, 1) : undefined;
+  if (parts === null) return undefined;
+  let ensemble: { of: number } | undefined;
+  if (p.ensemble != null) {
+    const of = (p.ensemble as { of?: unknown }).of;
+    if (typeof of !== "number" || !Number.isInteger(of) || of < 1) return undefined;
+    ensemble = { of };
   }
-  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status, ...(parts ? { parts } : {}) };
+  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status, ...(parts ? { parts } : {}), ...(ensemble ? { ensemble } : {}) };
+}
+
+/** A sum's or an ensemble's parts as a file gives them, read back: each as it was, with its own parts `deeper` levels down at most; null where any does not read, or there are none. */
+function partsIn(v: unknown, deeper: number): PropertyPart[] | null {
+  if (!Array.isArray(v) || !v.length) return null;
+  const parts: PropertyPart[] = [];
+  for (const raw of v as unknown[]) {
+    const q = raw as { property?: unknown; value?: unknown; unit?: unknown; at?: unknown; by?: unknown; parts?: unknown } | null;
+    if (!q || typeof q.property !== "string" || !q.property || typeof q.value !== "number" || !Number.isFinite(q.value)) return null;
+    if (!(q.unit === "none" || (typeof q.unit === "string" && isUnit(q.unit)))) return null;
+    const qBy = byIn(q.by);
+    const qAt = atIn(q.at);
+    if (qBy === null || qAt === null) return null;
+    const inner = q.parts != null ? (deeper > 0 ? partsIn(q.parts, deeper - 1) : null) : undefined;
+    if (inner === null) return null;
+    parts.push({ property: q.property, value: q.value, unit: q.unit as Unit | "none", ...(qAt ? { at: qAt } : {}), ...(qBy ? { by: qBy } : {}), ...(inner ? { parts: inner } : {}) });
+  }
+  return parts;
 }
 
 /** What worked a value out, as a file gives it, read back: each field a text; none where none is given; null where it does not read. */

@@ -233,6 +233,51 @@ class Converged(unittest.TestCase):
         self.assertIsNone(worker.converged_of(self.data([1, 4, 4]), " #p HF/STO-3G IRC(maxpoints=2)\n -----\n", 3))
 
 
+class RestatedPoint(unittest.TestCase):
+    """A Gaussian "opt freq": its Freq link works the converged point out once more - the same geometry to the last
+    digit, the same SCF energy, marked new and done (`optstatus` 5) - one structure, one entry: that link's, which
+    the frequencies are of. Short lines and numbers after methanol's B3LYP/3-21G output."""
+
+    ROUTES = "\n".join([
+        " ----------------------",
+        " #p B3LYP/3-21G opt freq",
+        " ----------------------",
+        " ------------------------------------------------------------------",
+        " #P Geom=AllCheck Guess=TCheck SCRF=Check GenChk RB3LYP/3-21G Freq",
+        " ------------------------------------------------------------------",
+    ])
+    POINT = [[-0.0469, 0.6629, 0.0], [-0.0469, -0.7631, 0.0], [-1.0807, 0.9925, 0.0]]
+
+    def data(self, status=(1, 0, 0, 0, 4, 5), last=None, energy=-115.073593835):
+        coords = [[[c + 0.01 * k for c in atom] for atom in self.POINT] for k in (4, 3, 2, 1)] + [self.POINT, last or self.POINT]
+        energies = [-115.0701, -115.0723, -115.0731, -115.0735, -115.073593835, energy]
+        return types.SimpleNamespace(optstatus=list(status), OPT_NEW=1, OPT_DONE=4, scanenergies=None, atomcoords=coords, scfenergies=energies)
+
+    def test_the_freq_link_s_point_is_the_one_entry(self):
+        self.assertEqual(worker.converged_of(self.data(), self.ROUTES, 6), [False] * 5 + [True])
+
+    def test_a_route_wrapped_over_lines_read_whole(self):
+        wrapped = self.ROUTES.replace(" #P Geom=AllCheck Guess=TCheck SCRF=Check GenChk RB3LYP/3-21G Freq", " #P Geom=AllCheck Guess=TCheck SCRF=Check GenChk RB3L\n YP/3-21G Freq")
+        self.assertEqual(worker.converged_of(self.data(), wrapped, 6), [False] * 5 + [True])
+
+    def test_anything_else_left_as_it_is(self):
+        # (another geometry, by its last digit; another energy; a later link that optimises)
+        moved = [row[:] for row in self.POINT]
+        moved[0][0] = -0.0468
+        self.assertEqual(worker.converged_of(self.data(last=moved), self.ROUTES, 6), [False] * 4 + [True, True])
+        self.assertEqual(worker.converged_of(self.data(energy=-115.073593836), self.ROUTES, 6), [False] * 4 + [True, True])
+        optimising = self.ROUTES.replace("GenChk RB3LYP/3-21G Freq", "GenChk RB3LYP/3-21G Opt Freq")
+        self.assertEqual(worker.converged_of(self.data(), optimising, 6), [False] * 4 + [True, True])
+        # (a route wrapped over two lines, Opt cut where the first was full: an Opt all the same)
+        cut = self.ROUTES.replace(" #P Geom=AllCheck Guess=TCheck SCRF=Check GenChk RB3LYP/3-21G Freq", " #P Geom=AllCheck Guess=TCheck SCRF=Check GenChk RB3LYP/3-21G O\n pt Freq")
+        self.assertEqual(worker.converged_of(self.data(), cut, 6), [False] * 4 + [True, True])
+        # (routes not one a link: which link a point is of is not known)
+        self.assertEqual(worker.converged_of(self.data(), self.ROUTES.split(" ---------------------------------")[0], 6), [False] * 4 + [True, True])
+        # (an optimisation alone, and one whose later point is no new link's)
+        self.assertEqual(worker.converged_of(self.data(status=(1, 0, 0, 0, 0, 4)), self.ROUTES, 6), [False] * 5 + [True])
+        self.assertEqual(worker.converged_of(self.data(status=(1, 0, 0, 0, 4, 4)), self.ROUTES, 6), [False] * 4 + [True, True])
+
+
 class Unmarked(unittest.TestCase):
     """Why none of a run's geometries is one it found, where cclib marks none of them: never every one taken as found."""
 
