@@ -1,10 +1,10 @@
 /**
  * Meno keeping itself up to date (src-tauri/src/update.rs): it looks on the
- * project's GitHub Releases for a newer Meno as it starts and every few
- * hours, downloads one in the background, and installs it as Meno quits -
- * or at once, when the user restarts into it. On Windows, not while jobs
- * wait or run: installing would stop them (docs/WORKFLOWS.md, *When Meno
- * closes*).
+ * project's GitHub Releases for a newer Meno shortly after it starts and
+ * once a day while it runs, downloads one in the background, and installs it
+ * as Meno quits - or at once, when the user restarts into it. On Windows, not
+ * while jobs wait or run: installing would stop them (docs/WORKFLOWS.md,
+ * *When Meno closes*).
  *
  * It uses the network as everything in Meno does (lib/net/network): under
  * its own purpose, which the user allows once (Meno asks, once, of its own
@@ -52,7 +52,13 @@ export const useUpdate = create<UpdateState | null>(() => null);
 
 /** How soon after Meno starts it first looks, and how often after that. */
 const FIRST_LOOK_MS = 20_000;
-const EVERY_MS = 6 * 60 * 60 * 1000;
+export const EVERY_MS = 24 * 60 * 60 * 1000;
+/**
+ * How often Meno sees whether a day has gone by. The day is told by the wall
+ * clock, not by a timer of EVERY_MS: a web view's timers do not count the
+ * time a Mac sleeps, so a Mac awake 8 hours a day would look every 3 days.
+ */
+const TICK_MS = 10 * 60 * 1000;
 /** How often, with an update ready, Meno looks again at the jobs it waits for. */
 const HELD_EVERY_MS = 10_000;
 
@@ -63,7 +69,7 @@ export const UPDATE_CONSENT: ConsentRequest = {
   purpose: UPDATE_PURPOSE,
   title: "Keep Meno up to date?",
   detail:
-    "Meno looks on GitHub for a newer version as it starts and every few hours while it runs, " +
+    "Meno looks on GitHub for a newer version shortly after it starts and once a day while it runs, " +
     "downloads it in the background (about 20 MB), and installs it when you quit. Every " +
     "connection is shown as it is made, and nothing goes out while Meno works offline. " +
     "You can take this back in Settings, under Network.",
@@ -110,6 +116,54 @@ export function mayLook(): boolean {
   return !net.offline && net.granted.includes(UPDATE_PURPOSE);
 }
 
+/** Where no look is due: none in this Meno, one under way, or an update ready - which a look would only report again. */
+const NOT_DUE: ReadonlySet<UpdatePhase> = new Set(["unavailable", "checking", "downloading", "ready"]);
+
+/**
+ * Whether a look is due at `now` (ms since the epoch): allowed, none under
+ * way, no update ready already, and a day gone by the wall clock since
+ * GitHub was last asked - or never asked yet, a look missed while offline
+ * among them. `checked` is set as GitHub answers, or fails to: a failure
+ * before that - Meno's network not up, the updater not built, the look
+ * refused a start - leaves it as it was, and the next tick tries again,
+ * with nothing sent meanwhile.
+ */
+export function lookDue(u: UpdateState | null, now: number, allowed: boolean): boolean {
+  if (!allowed || !u || NOT_DUE.has(u.phase)) return false;
+  return u.checked == null || now - u.checked >= EVERY_MS;
+}
+
+/**
+ * Looks once a day while Meno runs: every TICK_MS, and as its window comes
+ * back - shown again, or brought to the front, as when a Mac wakes - it looks
+ * if a look is due (lookDue), one at a time. Returns a stop.
+ */
+export function looksDaily(
+  win: EventTarget,
+  doc: EventTarget & { visibilityState: DocumentVisibilityState },
+  look: () => Promise<void>,
+): () => void {
+  let looking = false;
+  const maybe = () => {
+    if (looking || !lookDue(useUpdate.getState(), Date.now(), mayLook())) return;
+    looking = true;
+    void look().finally(() => {
+      looking = false;
+    });
+  };
+  const shown = () => {
+    if (doc.visibilityState === "visible") maybe();
+  };
+  const tick = setInterval(maybe, TICK_MS);
+  win.addEventListener("focus", maybe);
+  doc.addEventListener("visibilitychange", shown);
+  return () => {
+    clearInterval(tick);
+    win.removeEventListener("focus", maybe);
+    doc.removeEventListener("visibilitychange", shown);
+  };
+}
+
 /** Looks for a newer Meno now, and downloads it - if it may. */
 export async function checkForUpdate(): Promise<void> {
   if (!isTauri() || !mayLook()) return;
@@ -148,9 +202,9 @@ export async function restartIntoUpdate(): Promise<void> {
 /**
  * Starts keeping Meno up to date, once the settings are in: asks the once -
  * after the user's first action (lib/firstAction), once it has ended, never
- * before - looks after a little while, then every few hours, and at once
- * whenever it becomes allowed (back online, or just turned on). Returns a
- * stop.
+ * before - looks after a little while, then once a day by the wall clock
+ * (looksDaily), and at once whenever it becomes allowed (back online, or
+ * just turned on). Returns a stop.
  */
 export function startUpdates(): () => void {
   if (!isTauri()) return () => {};
@@ -196,8 +250,12 @@ export function startUpdates(): () => void {
         };
       },
     );
-    const first = setTimeout(() => void checkForUpdate(), FIRST_LOOK_MS);
-    const every = setInterval(() => void checkForUpdate(), EVERY_MS);
+    // (the daily looks from the first on: a window brought to the front as Meno starts does not look before it)
+    let daily = () => {};
+    const first = setTimeout(() => {
+      void checkForUpdate();
+      daily = looksDaily(window, document, checkForUpdate);
+    }, FIRST_LOOK_MS);
     // (an update ready: the jobs it waits for, as they start and end)
     const held = setInterval(() => {
       if (useUpdate.getState()?.phase === "ready") void invoke<UpdateState>("update_state").then((s) => useUpdate.setState(s, true));
@@ -211,7 +269,7 @@ export function startUpdates(): () => void {
       heard();
       ask();
       clearTimeout(first);
-      clearInterval(every);
+      daily();
       clearInterval(held);
       unwatch();
     });
