@@ -240,16 +240,16 @@ maps as ACCeL does.
   umbrella folding over; ACCeL reads it as kept and swaps the two
   hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
   lay over and is left as ACCeL placed it, as is a group a hydrogen comes
-  to or goes from. So is an atom that goes from one shape to another: one
-  with more neighbours on one side than on the other (a cation's or a
-  carbene's CH2 bonded to), or whose bond to a neighbour it keeps changes
-  order (a double bond added to, as at a Diels-Alder's =CH2 ends, or one
-  made). Which of its hydrogens is which follows the faces the reaction
-  meets, which ACCeL's face and syn-or-anti scores weigh. Laid over its
+  to or goes from. So is an atom with more neighbours on one side than on
+  the other, hydrogens counted: it goes from one shape to another - a
+  double bond added to, as at a Diels-Alder's =CH2 ends, or a cation's or
+  a carbene's CH2 bonded to - and which of its hydrogens is which follows
+  the faces the reaction meets, which ACCeL's face and syn-or-anti scores
+  weigh. Laid over its
   frame, it was turned against them: a Diels-Alder's two outside
   hydrogens (trans to the diene's inner carbons) came out on opposite
-  faces of the new ring. An SN2 centre keeps its number of neighbours and
-  its bonds' orders, and is laid over its frame as before. Checked on a
+  faces of the new ring. An SN2 centre keeps its number of neighbours,
+  and is laid over its frame as before. Checked on a
   corpus of 134 runs (67 reactions, two embeddings each): 18 first maps
   changed when this was put right, in their hydrogens only, their bond
   changes the same; 16 of them are now ACCeL's own first map.
@@ -400,10 +400,11 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   *Stop* ends it. ACCeL's search is used as it is, solvent and all - no
   pieces are picked out by hand, and nothing is set to make it faster.
 - **Kept on the arrow** (`ArrowAtomMap`): both sides in 3D as mapped, which
-  drawn atom each 3D atom is, the complete maps best first (up to 100) -
-  of those that pair the heavy atoms alike, and so show the same numbers,
-  only the first, its hydrogens as ACCeL ranked them - the one in use - the best, unless *Other map* stepped on - and whether it
-  is shown. What it shows is put on the drawing in the same undo step:
+  drawn atom each 3D atom is, and the complete maps best first (up to
+  100). Of maps that pair the heavy atoms alike, and so show the same
+  numbers, only the first is kept, its hydrogens as ACCeL ranked them.
+  Also kept: the map in use (the best, unless *Other map* stepped on), and
+  whether it is shown. What it shows is put on the drawing in the same undo step:
   - each heavy atom's map number, the reactants' numbered one after
     another, a product atom given its reactant atom's;
   - each bond the map makes or breaks marked as a reacting centre (CTfile

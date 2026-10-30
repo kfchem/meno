@@ -274,7 +274,7 @@ describe("localLeastTurn", () => {
     }
   });
 
-  it("leaves an atom whose kept bond changes order to ACCeL's own scores: a Diels-Alder's =CH2 ends stay suprafacial", () => {
+  it("leaves a double bond's end added to (more neighbours on one side) to ACCeL's own scores: a Diels-Alder's =CH2 ends stay suprafacial", () => {
     expect(adduct.reactants[0].atoms.slice(0, 4).map((a) => a.el)).toEqual(["C", "C", "C", "C"]);
     expect(suprafacial(true)).toBe(true);
     expect(suprafacial(false)).toBe(true);
