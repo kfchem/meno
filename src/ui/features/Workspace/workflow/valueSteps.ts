@@ -35,6 +35,9 @@ const same = (a: number, b: number) => Math.abs(a - b) <= 1e-12 * Math.max(1, Ma
 /** The option for which property a step's groups are: its entries' compounds, or a property each carries. */
 export type GroupedBy = { within: "each group" | "each value" | "all"; groupBy: string };
 
+/** A number as a group's key: to 12 significant figures (`same`'s tolerance), its unit after it where it has one. */
+const keyed = (v: number, unit: string) => `${Number(v.toPrecision(12))}${unit === "none" ? "" : ` ${unit}`}`;
+
 /**
  * Entries regrouped by a property's value (*In each value of*): each
  * entry's `group` its value, as text - a number to 12 significant
@@ -43,9 +46,6 @@ export type GroupedBy = { within: "each group" | "each value" | "all"; groupBy: 
  * values that differ in any figure Meno could show stay apart; one without
  * it left ungrouped, which a step then sets aside saying so.
  */
-/** A number as a group's key: to 12 significant figures (`same`'s tolerance), its unit after it where it has one. */
-const keyed = (v: number, unit: string) => `${Number(v.toPrecision(12))}${unit === "none" ? "" : ` ${unit}`}`;
-
 function regrouped(es: readonly Entry[], name: string): Entry[] {
   const first = es.map((e) => e.properties[name]).find((p) => typeof p?.value === "number");
   const keyOf = (e: Entry, p: Property): string => {
