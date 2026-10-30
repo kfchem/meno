@@ -18,7 +18,7 @@ import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutpu
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { inputOf, type Flow } from "./flow";
-import { levelKey, levelSaid, pairEntries } from "./pairs";
+import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
@@ -84,7 +84,16 @@ export function pluginEntry(e: SetEntry): PluginEntry {
   if (!species) throw new Error(skeletonWhy());
   const { charge, multiplicity } = species;
   // (the end it is paired with, where it is a pair's start: given as it is, beside it - Path search's)
-  return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity, ...(e.end ? { end: pluginEntry(e.end) } : {}) };
+  return {
+    schema: ENTRY_SCHEMA,
+    ...molecule,
+    atoms,
+    charge,
+    multiplicity,
+    ...(e.end ? { end: pluginEntry(e.end) } : {}),
+    // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
+    ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
+  };
 }
 
 /**
@@ -260,28 +269,11 @@ function surfacesOf(v: unknown): ToSurfaces | null {
   return { name, rows };
 }
 
-/**
- * What a plugin read back of a job: an output for each of its entries, in
- * Meno's own form - or, for each, an output for Meno's readers to read
- * (ORCA's, Gaussian's: a program installed separately), or surfaces in
- * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
- * An output may be why that entry alone failed (`{why, kind}`: its kind
- * one of core's, else `failed` - its words kept), the rest of the job's
- * taken as they are.
- */
-export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind } {
-  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown } | null;
-  // (the job as a whole did not give what it was for: its program's words, as its plugin read them)
-  if (typeof r?.why === "string") return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error" };
-  if (r?.surfaces !== undefined) {
-    if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
-    const surfaces = r.surfaces.map(surfacesOf);
-    return surfaces.every((s): s is ToSurfaces => s != null) ? { surfaces } : { why: "It said to read what Meno cannot" };
-  }
-  if (r?.read !== undefined) {
-    if (!Array.isArray(r.read) || r.read.length !== count) return { why: "It read back nothing for it" };
-    const read: ToRead[] = [];
-    for (const x of r.read as Record<string, unknown>[]) {
+/** What a plugin said to read, one for each entry, each its kind and where (a file, or the job's log); or why that cannot be read. */
+function readsOf(list: unknown, count: number): { read: ToRead[] } | { why: string } {
+  if (!Array.isArray(list) || list.length !== count) return { why: "It read back nothing for it" };
+  const read: ToRead[] = [];
+  for (const x of list as Record<string, unknown>[]) {
       const kind = typeof x?.kind === "string" && KIND_ID.test(x.kind) ? x.kind : null;
       const file = typeof x?.file === "string" && inside(x.file) ? x.file : null;
       const name = typeof x?.name === "string" && inside(x.name) ? x.name : file;
@@ -294,10 +286,35 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
             : null;
       if (!kind || !name || (!file && x?.log !== true) || wavefunction === null) return { why: "It said to read what Meno cannot" };
       read.push({ ...(file ? { kind, name, file } : { kind, name, log: true as const }), ...(wavefunction ? { wavefunction } : {}) });
-    }
-    return { read };
   }
+  return { read };
+}
+
+/**
+ * What a plugin read back of a job: an output for each of its entries, in
+ * Meno's own form - or, for each, an output for Meno's readers to read
+ * (ORCA's, Gaussian's: a program installed separately), or surfaces in
+ * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
+ * An output may be why that entry alone failed (`{why, kind}`: its kind
+ * one of core's, else `failed` - its words kept), the rest of the job's
+ * taken as they are.
+ */
+export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind; partial?: ToRead[] } {
+  const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown; partial?: unknown } | null;
+  // (the job as a whole did not give what it was for: its program's words, as its plugin read them - and, where it says to,
+  //  what the run wrote, read for the geometry it reached alone: one it cannot read leaves the failure as it is)
+  if (typeof r?.why === "string") {
+    const partial = r.partial === undefined ? null : readsOf(r.partial, count);
+    return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error", ...(partial && !("why" in partial) ? { partial: partial.read } : {}) };
+  }
+  if (r?.surfaces !== undefined) {
+    if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
+    const surfaces = r.surfaces.map(surfacesOf);
+    return surfaces.every((s): s is ToSurfaces => s != null) ? { surfaces } : { why: "It said to read what Meno cannot" };
+  }
+  if (r?.read !== undefined) return readsOf(r.read, count);
   if (!Array.isArray(r?.outputs) || r.outputs.length !== count) return { why: "It read back nothing for it" };
+
   const outs: (ReaderOutput | Failure)[] = [];
   for (const o of r.outputs as ReaderOutput[]) {
     // (that entry alone failed, saying why)
@@ -327,13 +344,19 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
  * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, sides: _sides, paired: _paired, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+
+/** The property a path search writes on each path: how its start and end were paired ("in order, by place: start a #2 with end b #2"). */
+export const PAIRED = "path.paired";
 
 /** An entry worked out anew by a calculation whose energy is its own - an optimisation's, frequencies', a conformer search's: without the energy it came with, which is another calculation's, where the new one read none. */
 const anewWithoutEnergy = (entry: SetEntry): SetEntry => {
   const { energy: _energy, ...rest } = anew(entry);
   return rest;
 };
+
+/** A failed run's entry as a step starts from it (docs/WORKFLOWS.md, *Runs again*): its geometry alone - worked out anew, and without the energy it came with, as no result. */
+const startOnly = anewWithoutEnergy;
 
 /** What an entry worked out anew says where its bonds are no longer those it came with: no longer the structure drawn it was made from. */
 export const UNLINKED_WHY = "its bonds or charge changed in the calculation: no longer the structure drawn it was made from";
@@ -389,20 +412,42 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   if (!frames.length) return { kind: "no-geometry", why: "It read back no geometry" };
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
   const last = frames[frames.length - 1];
-  const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
+  // (an optimisation's way there - to a minimum, or to a saddle point - its frames before its last)
+  const optimising = kind === "optimise" || kind === "saddle-point";
+  const path = optimising && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
+  if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
   return {
-    ...(kind === "optimise" || kind === "frequencies" ? anewWithoutEnergy(entry) : anew(entry)),
+    // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
+    ...(entry.failed ? startOnly(entry) : kind === "optimise" || kind === "frequencies" ? anewWithoutEnergy(entry) : anew(entry)),
     // (what it came as - its structure drawn - where it still is that compound)
     ...keptAnew(entry, last, calc?.charge),
     xyz: [...last],
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
-    ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+    ...(out.optimised === false && (optimising || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
+    // (a saddle point's optimisation whose reader could not say whether it converged: never passed on as converged)
+    ...(kind === "saddle-point" && out.optimised == null ? { failed: { kind: "failed" as const, why: "Whether the optimisation converged could not be read" } } : {}),
   };
+}
+
+/**
+ * Where a run that stopped got to (docs/WORKFLOWS.md, *Runs again*): what
+ * it wrote, read, as its entry - its way there as frames, beginning with
+ * the geometry it came in with, so that *Take frames*' first is a start
+ * from the beginning and its last a start from where it stopped - for a
+ * step after it to start from; never a result: no energy of the run's is
+ * on it, its frames' none, since a frame's energy stands as its entry's
+ * where a step takes it. None where what it wrote holds no geometry.
+ */
+export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | null {
+  const w = workedOf(kind, entry, { ...out, energies: undefined }, readers, source);
+  if (isFailure(w)) return null;
+  const { energy: _energy, pathEnergies: _pathEnergies, failed: _failed, ...at } = w as Worked & { pathEnergies?: number[] };
+  return { ...at, path: [[...entry.xyz], ...(w.path ?? [])] };
 }
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
@@ -458,6 +503,40 @@ function singlePointWorked(entry: SetEntry, last: number[], energies: readonly n
   };
 }
 
+/**
+ * A reaction path, as its program followed it from the point given (docs/
+ * WORKFLOWS.md, *Follow the reaction path*): one molecule, its frames the
+ * path from one end to the other in the order its program gave them, each
+ * with its energy, its entry the point it started from (the run's one
+ * converged geometry), between them. A side that stopped before its end -
+ * its program's iteration cap reached - leaves the path as far as it came,
+ * out of *Failed*, its program's words on it: its end no minimum. The path
+ * is one only at the level its start was found at - a saddle point at one
+ * level is no stationary point at another - so the path's own level, as
+ * its output says it, must be its start's: else it fails, naming both.
+ */
+function reactionPathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], energies: readonly number[] | undefined, calc: CalcInfo): Worked | Failure {
+  const k = out.converged?.length === frames.length ? out.converged.indexOf(true) : -1;
+  if (k < 0 || out.converged!.lastIndexOf(true) !== k) return { kind: "no-geometry", why: "It read back no one point the path started from" };
+  if (!energies || frames.length < 3 || k === 0 || k === frames.length - 1) return { kind: "no-geometry", why: "It read back no path with energies, the point it started from between its ends" };
+  if (!calc.method) return { kind: "failed", why: "It did not say the path's level: whether it is its start's cannot be told" };
+  if (levelKey(calc) !== levelKey(entry.calc))
+    return { kind: "failed", why: `The path is at ${levelSaid(calc)}, its start was found at ${levelSaid(entry.calc)}: run it at the start's level` };
+  const stopped = out.optimised === false ? (out.warnings?.map((w) => w.text).join("; ") ?? "") || "A side stopped before its end" : null;
+  return {
+    ...anew(entry),
+    ...keptAnew(entry, frames[k], calc.charge),
+    xyz: [...frames[k]],
+    energy: energies[k],
+    path: frames.slice(0, k),
+    pathEnergies: energies.slice(0, k),
+    after: frames.slice(k + 1),
+    afterEnergies: energies.slice(k + 1),
+    calc,
+    ...(stopped ? { failed: { kind: "not-converged" as const, why: stopped } } : {}),
+  };
+}
+
 /** Kilocalories per mole in a hartree (Meno's units table). */
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 
@@ -500,6 +579,8 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
       ...was.properties,
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),
       "path.E-reverse-barrier": barrier(energies[energies.length - 1], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's end (its last image)`),
+      // (how its start and end were paired: in order is by place, never a match of which is which)
+      ...(entry.paired ? { [PAIRED]: { value: entry.paired, unit: "none" as const, status: "computed" as const } } : {}),
     },
   };
 }
@@ -546,18 +627,73 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
  * as its options say (workflow/pairs), those that cannot be worked out
  * refused, with why; or why nothing can be taken. None where nothing comes in.
  */
-export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
+export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[]; paired?: string } | { why: string } | null {
   const ports = inputsOf(kind);
+  if (kind === "saddle-point") return guessesWithSides(d, step, options);
   if (kindInfo(kind).runs === "program" && ports.length === 2) {
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
     if (!start || start.holds === "structures") return null;
     if (!end || end.holds === "structures") return { why: `Nothing comes into ${ports[1].name}` };
-    const paired = pairEntries(setEntries(start.molecules, start.holds), setEntries(end.molecules, end.holds), options.pairs === "each" || options.pairs === "property" ? options.pairs : "order", String(options.property ?? ""));
-    return "why" in paired ? paired : { ...paired, holds: "molecules" };
+    // (each with each, at most as many pairs as the step says)
+    const paired = pairEntries(
+      setEntries(start.molecules, start.holds),
+      setEntries(end.molecules, end.holds),
+      options.pairs === "each" || options.pairs === "property" ? options.pairs : "order",
+      String(options.property ?? ""),
+      PATH_PAIR,
+      mostOf(options),
+    );
+    // (two conformer sets paired in order: by place alone - said on the step's line, so that it is never taken for a match)
+    const byPlace = (options.pairs ?? "order") === "order" && (start.holds === "conformers" || end.holds === "conformers");
+    return "why" in paired ? paired : { ...paired, holds: "molecules", ...(byPlace ? { paired: "paired in order, by place" } : {}) };
   }
   const input = inputOf(d, step);
   if (!input || input.holds === "structures") return null;
   return { entries: jobEntries(kind, setEntries(input.molecules, input.holds), input.holds), holds: input.holds, refused: [] };
+}
+
+/**
+ * The guesses an *Optimise to a saddle point* step takes: each that came
+ * in - or, where its sides are wired, both of them, each guess paired with
+ * a reactant side and a product side as its *Pairs* option says (pairs
+ * `pairEntries`), one guess for each such three; a guess paired with none,
+ * or with a side of other atoms, another numbering, charge or spin, kept
+ * and refused with why. One side wired without the other: none of it runs.
+ */
+function guessesWithSides(d: Flow, step: number, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
+  const [guesses, reactant, product] = ["guesses", "reactant", "product"].map((port) => inputOf(d, step, port));
+  if (!guesses || guesses.holds === "structures") return null;
+  const taken = setEntries(guesses.molecules, guesses.holds);
+  if (!reactant && !product) return { entries: taken, holds: "molecules", refused: [] };
+  if (!reactant || !product) return { why: `${reactant ? "Reactant side" : "Product side"} is wired: wire ${reactant ? "Product side" : "Reactant side"} too, or neither` };
+  if (reactant.holds === "structures" || product.holds === "structures") return { why: "Its sides must be molecules in 3D" };
+  const pairing = options.pairs === "each" || options.pairs === "property" ? options.pairs : "order";
+  const property = String(options.property ?? "");
+  const as = (second: string, other: string): PairAs => ({ first: "Guesses", second, one: "guess", other, unlike: sideUnlike(other) });
+  const [reactants, products] = [reactant, product].map((x) => setEntries(x.molecules, x.holds as "molecules" | "conformers"));
+  // (its sides paired each with each as many as they make: At most is Path search's alone)
+  const r = matchesOf(taken, reactants, pairing, property, as("Reactant side", "reactant side"), Infinity);
+  if (!("ends" in r)) return r;
+  const p = matchesOf(taken, products, pairing, property, as("Product side", "product side"), Infinity);
+  if (!("ends" in p)) return p;
+  // (each guess with each reactant side and each product side it is paired with - one of each, but each with each)
+  const entries: SetEntry[] = [];
+  const refused: { entry: number; why: string }[] = [];
+  taken.forEach((guess, k) => {
+    const none = r.why[k] ?? p.why[k] ?? (!r.ends[k].length ? "it is paired with no reactant side" : !p.ends[k].length ? "it is paired with no product side" : undefined);
+    if (none) {
+      refused.push({ entry: entries.length, why: none });
+      entries.push({ ...guess });
+      return;
+    }
+    for (const i of r.ends[k])
+      for (const j of p.ends[k]) {
+        const why = sideUnlike("reactant side")(guess, reactants[i]) ?? sideUnlike("product side")(guess, products[j]);
+        if (why) refused.push({ entry: entries.length, why });
+        entries.push({ ...guess, sides: { reactant: reactants[i], product: products[j] } });
+      }
+  });
+  return { entries, holds: "molecules", refused };
 }
 
 /** The entries a step's jobs are prepared for: each that came in - but a conformer search on a conformer set searches each compound once, from its first conformer. */

@@ -27,7 +27,8 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { measuredSet } from "./structureSteps";
+import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
@@ -104,6 +105,16 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "take-frames") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+  }
+  // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
+  //  what comes in is molecules: it takes nothing else)
+  if (step.kind === "measure") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const entries = setEntries(input.molecules, input.holds as Holds3D);
+    if (o.from === "table") return ranAs(doc, id, measuredSet(entries, input.holds as Holds3D, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
+    const typed = measuredSet(entries, input.holds as Holds3D, String(o.measurements ?? ""));
+    const unread = wireInto(doc, id, "atoms") && typed.ok ? { ...typed, said: `${typed.said} \u00b7 the table wired into Atoms not read: atoms typed` } : typed;
+    return ranAs(doc, id, unread, key, w);
   }
   const outcome =
     input.holds === "structures"
@@ -545,7 +556,7 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
   // (structures drawn it could not make in 3D - Conformers' - in its aside exit's set as they came: there to be followed, and wired on)
   const asideDrawn = "asideDrawn" in outcome && outcome.asideDrawn?.length ? { drawn: { made: [], rest: outcome.asideDrawn.map(drawnModel) } } : {};
-  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn };
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn, ...(outcome.tables ? { tables: { ...outcome.tables } } : {}) };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -619,9 +630,27 @@ export function placeResults(
   }
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
-  if (aside && results.drawn?.rest.length) return fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
-  if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
-  return doc;
+  if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
+  else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set: under the others as they have grown)
+  const tables = Object.entries(results.tables ?? {});
+  for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);
+  return tables.length ? keepExitsUnder(doc, step) : doc;
+}
+
+/**
+ * `doc` with an exit's set holding `table`, a step's (a Reaction's bond
+ * changes): the set that exit made, what it held gone, as large as a table
+ * set is put down - in its place, or made now.
+ */
+function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, table: Table): WorkspaceDocument {
+  const madeBy = { step: step.id, exit, holds: "table" as const };
+  const was = resultOf(doc, step.id, exit);
+  if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h);
+  if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
+  const id = doc.nextWorkflowId ?? 1;
+  return holdTable(markMade(addSet(doc, frame, madeBy), id, madeBy), id, table);
 }
 
 /**
@@ -632,13 +661,15 @@ export function placeResults(
 function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
   let above = resultOf(doc, step.id, exits[0].id);
-  for (const exit of exits.slice(1)) {
+  for (const [k, exit] of exits.slice(1).entries()) {
     const b = resultOf(doc, step.id, exit.id);
     if (!above || !b) break;
     const reach = above.y0 - BETWEEN;
-    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set)
+    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set -
+    //  but the step's sets of exits after it, which go under it in turn)
     const under = b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN;
-    const self = { set: b.id, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
+    const after = new Set(exits.slice(k + 2).flatMap((e) => resultOf(doc, step.id, e.id)?.id ?? []));
+    const self = { set: b.id, sets: after, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
     if (under || !clearOf(doc, b, self)) {
       const to = placeBelow(doc, b.x0, Math.min(b.y1, reach), b.x1 - b.x0, b.y1 - b.y0, self);
       doc = moveSet(doc, b.id, to.x0 - b.x0, to.y1 - b.y1);

@@ -7,7 +7,7 @@
  * out where that was said.
  */
 import type { Entry, Property } from "../../../../lib/entry";
-import { groupOf, numberIn, workedOutAs } from "../../../../lib/nodes/base";
+import { entries as count, groupOf, numberIn } from "../../../../lib/nodes/base";
 import { rank, type RankOptions } from "../../../../lib/nodes/rank";
 import { compoundLetter, entryOfSet, entryState, FINISHED, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
@@ -32,43 +32,31 @@ const MARKED = new RegExp(`\\(${MARK}(\\d+)\\)`, "g");
 /** Whether two values are the same: equal, but for the last bits a conversion leaves. */
 const same = (a: number, b: number) => Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(a), Math.abs(b));
 
-/**
- * What a value is, in a few words, as its record says it was worked out:
- * the program, method and basis, the solvent, the temperature - each where
- * it was said, none guessed ("GFN2-xTB, xtb, in ALPB(chloroform), at
- * 298.15 K"). Nothing where none was.
- */
-export function workedOutSaid(p: Property | undefined): string {
-  if (!p) return "";
-  const parts = new Map(workedOutAs(p));
-  const stated = (k: string) => {
-    const v = parts.get(k);
-    return v && v !== "not stated" && v !== "unknown" ? v : "";
-  };
-  const level = [stated("method"), stated("basis")].filter(Boolean).join("/");
-  return [
-    level,
-    stated("program"),
-    stated("solvent") && (stated("solvent").startsWith("none") ? "in the gas phase" : `in ${stated("solvent")}`),
-    stated("temperature") && `at ${stated("temperature")}`,
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
-
 /** The option for which property a step's groups are: its entries' compounds, or a property each carries. */
 export type GroupedBy = { within: "each group" | "each value" | "all"; groupBy: string };
 
+/** A number as a group's key: to 12 significant figures (`same`'s tolerance), its unit after it where it has one. */
+const keyed = (v: number, unit: string) => `${Number(v.toPrecision(12))}${unit === "none" ? "" : ` ${unit}`}`;
+
 /**
  * Entries regrouped by a property's value (*In each value of*): each
- * entry's `group` its value, as text; one without it left ungrouped, which
- * a step then sets aside saying so.
+ * entry's `group` its value, as text - a number to 12 significant
+ * figures, in the first one's unit, so that 0.3 and 0.1 + 0.2 are one
+ * group, and the last bits a sum or a conversion leaves split none, while
+ * values that differ in any figure Meno could show stay apart; one without
+ * it left ungrouped, which a step then sets aside saying so.
  */
 function regrouped(es: readonly Entry[], name: string): Entry[] {
+  const first = es.map((e) => e.properties[name]).find((p) => typeof p?.value === "number");
+  const keyOf = (e: Entry, p: Property): string => {
+    if (typeof p.value !== "number" || !first) return String(p.value);
+    const n = numberIn(e, name, first.unit);
+    return "value" in n ? keyed(n.value, first.unit) : keyed(p.value, p.unit);
+  };
   return es.map((e) => {
     const p = e.properties[name];
     const { group: _, ...rest } = e.properties;
-    return p == null || p.value == null ? { ...e, properties: rest } : { ...e, properties: { ...rest, group: { value: String(p.value), unit: "none", status: "computed" } } };
+    return p == null || p.value == null ? { ...e, properties: rest } : { ...e, properties: { ...rest, group: { value: keyOf(e, p), unit: "none", status: "computed" } } };
   });
 }
 
@@ -122,17 +110,13 @@ export function rankedSet(entries: readonly SetEntry[], holds: Holds3D, options:
     }),
     ...[...unfinished].map(([i, why]) => withSaid(entries[i], SET_ASIDE, why)),
   ];
-  const what = workedOutSaid(out.exits.kept[0]?.properties[property]);
-  const within = options.within === "all" ? "of all" : options.within === "each value" ? `in each ${groupBy}` : "in each group";
-  const head = `the ${options.order === "lowest first" ? "lowest" : "highest"} ${options.keep} by ${property}${what ? ` (${what})` : ""} ${within}`;
-  // (the rest counted by why: those ranked below the first N as one - each its own place, written on it - the others each by their own)
-  const whys = new Map<string, number>();
-  for (const e of aside) {
-    const why = String(e.properties?.[SET_ASIDE]?.value ?? "");
-    const key = /^ranked \d+ of \d+/.test(why) ? `below the first ${options.keep}` : why;
-    whys.set(key, (whys.get(key) ?? 0) + 1);
-  }
-  const rest = aside.length ? ` · rest ${aside.length} (${[...whys].map(([why, n]) => `${n}: ${why}`).join("; ")})` : "";
-  const tied = ties ? ` · ${ties} tied with one kept` : "";
-  return { ok: true, holds, kept: out.exits.kept.map((e) => back(e.id)), aside, said: `${head}: ${out.exits.kept.length} of ${entries.length} kept${rest}${tied}` };
+  // (only what came of it: what it ranked by and how many it keeps the card says above - each of the rest says its own place or why)
+  const ranked = aside.filter((e) => /^ranked \d+ of \d+/.test(String(e.properties?.[SET_ASIDE]?.value ?? ""))).length;
+  // (counts alone: a tie is with the last one kept in its group, as each tied one says)
+  const notes = [...(ties ? [`${ties} tied`] : []), ...(aside.length > ranked ? [`${aside.length - ranked} not ranked`] : [])];
+  // (as Filter says it: "2 of 6 entries kept · rest 4 (1 tied, 2 not ranked)")
+  const rest = aside.length ? ` · rest ${aside.length}${notes.length ? ` (${notes.join(", ")})` : ""}` : "";
+  // (in each group, where each is its own group - molecules, not a conformer set's compounds - it chose nothing: said, that the chemist ranks them all together)
+  const own = options.within === "each group" && read.length > 1 && new Set(read.map(groupOf)).size === read.length ? `: each ${holds === "conformers" ? "compound" : "molecule"} is its own group` : "";
+  return { ok: true, holds, kept: out.exits.kept.map((e) => back(e.id)), aside, said: `${out.exits.kept.length} of ${count(entries.length)} kept${rest}${own}` };
 }

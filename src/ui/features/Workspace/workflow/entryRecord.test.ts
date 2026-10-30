@@ -122,6 +122,34 @@ describe("a calculation's thermochemistry as the entry's properties", () => {
     expect(unsaid["thermo.free-energy"].at).not.toHaveProperty("solvent");
   });
 
+  it("gives each thermochemical property the symmetry it was worked out with, as the program printed it - and none where it printed none", () => {
+    const orca = {
+      readers: ["cclib 1.9rc1"],
+      program: "ORCA",
+      method: "B3LYP",
+      results: [
+        reading("thermo.free-energy", -56.53),
+        reading("thermo.g-correction", 0.0123),
+        reading("thermo.enthalpy", -56.51),
+        reading("thermo.zpve", 0.0345),
+        reading("thermo.treatment", "quasi-RRHO (Grimme), 100 cm-1"),
+        reading("thermo.point-group", "C3v"),
+        reading("thermo.symmetry-number", 3, { unit: "none" }),
+      ],
+    };
+    const p = entryOfSet(water(1, 0, -56.55, { calc: orca }), "x").properties;
+    const by = { plugin: "cclib", program: "ORCA", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 };
+    for (const id of ["thermo.free-energy", "thermo.g-correction", "thermo.enthalpy", "thermo.zpve"]) expect(p[id].by).toEqual(by);
+    // (the electronic energy has none: it counts no rotation)
+    expect(p.energy.by).toEqual({ plugin: "cclib", program: "ORCA", method: "B3LYP" });
+    // (none printed: none said, never one assumed; one that is no whole number of 1 or more, none)
+    const unprinted = entryOfSet(water(1, 0, -56.55, { calc: { ...orca, results: orca.results.slice(0, 5) } }), "x").properties;
+    expect(unprinted["thermo.free-energy"].by).not.toHaveProperty("symmetryNumber");
+    expect(unprinted["thermo.free-energy"].by).not.toHaveProperty("pointGroup");
+    const odd = entryOfSet(water(1, 0, -56.55, { calc: { ...orca, results: [...orca.results.slice(0, 6), reading("thermo.symmetry-number", 0, { unit: "none" })] } }), "x").properties;
+    expect(odd["thermo.free-energy"].by).not.toHaveProperty("symmetryNumber");
+  });
+
   it("takes nothing that is not an energy in hartrees, and nothing where no calculation was", () => {
     const odd = { readers: ["x 1"], results: [reading("thermo.free-energy", "n/a"), reading("thermo.enthalpy", 3, { unit: "kcal/mol" })] };
     const p = entryOfSet(water(1, 0, undefined, { calc: odd }), "x").properties;
