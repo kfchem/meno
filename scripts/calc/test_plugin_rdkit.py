@@ -337,11 +337,12 @@ class EquivalentAtoms(unittest.TestCase):
         self.assertLess(worst, 1e-4)
 
     def test_keeps_every_hydrogens_side_across_twenty_conformers(self):
-        # (butan-2-ol and a methylcyclohexane: each CH2's hydrogens keep the sign of their signed volume of the reference)
+        # (butan-2-ol and a methylcyclohexane: each CH2's hydrogens keep the sign of their signed volume of the reference -
+        #  on Meno's page, which settles them)
         import numpy as np
         for smiles in ["C[C@H](O)CC", "C[C@H]1CCCCC1"]:
             mol = Chem.MolFromSmiles(smiles)
-            entry = self.worker.conformers(mol, count=20)
+            entry = self.worker.conformers(mol, count=20, page=True)
             frames = entry["frames"]
             self.assertGreater(len(frames), 1)
             full = Chem.AddHs(mol)
@@ -364,6 +365,68 @@ class EquivalentAtoms(unittest.TestCase):
         self.assertEqual(text.count("settle_equivalents(mol, kept)"), 1)
         for other in ("cclib", "pyscf", "xtb", "crest", "orca", "gaussian"):
             self.assertNotIn("settle_equivalents", (ROOT / "src-tauri/resources/plugins" / other / "worker.py").read_text(encoding="utf-8"))
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class AWorkflowsSearch(unittest.TestCase):
+    """A workflow's *Conformers* step is given RDKit's own conformers: every one embedded and optimised, as RDKit made
+    it - none taken for another, laid over another, renumbered, or made as another's mirror image. Those are Meno's
+    page's alone, which asks for them (`onPage`), as a workflow's step cannot."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def test_gives_rdkits_own_conformers_frame_for_frame(self):
+        # (the known answer, RDKit's own: ETKDG v3 at the worker's seed, MMFF94 optimisation, lowest first)
+        from rdkit.Chem import rdForceFieldHelpers
+        mol = Chem.MolFromSmiles("C[C@H](O)CC")
+        made = self.worker.conformers(mol, count=12)
+        raw = Chem.AddHs(mol)
+        params = rdDistGeom.ETKDGv3()
+        params.randomSeed = self.worker.SEED
+        params.pruneRmsThresh = -1.0
+        params.numThreads = 0
+        ids = list(rdDistGeom.EmbedMultipleConfs(raw, numConfs=12, params=params))
+        energy = {cid: e for cid, (_, e) in zip(ids, rdForceFieldHelpers.MMFFOptimizeMoleculeConfs(raw, numThreads=0, maxIters=self.worker.STEPS, mmffVariant="MMFF94"))}
+        order = sorted(ids, key=lambda c: energy[c])
+        self.assertEqual(made["frames"], [[round(v, 4) for p in raw.GetConformer(c).GetPositions() for v in p] for c in order])
+        for got, cid in zip(made["energies"], order):
+            self.assertAlmostEqual(got, energy[cid] / self.worker.KCAL_PER_HARTREE, places=9)
+        rows = {r["label"]: r["text"] for r in made["how"]}
+        self.assertEqual(rows["Kept"], "12 of 12 embedded (12 sought)")
+        self.assertNotIn("The same within", rows)
+
+    def test_makes_each_enantiomer_itself_and_only_the_page_its_twins_mirror_image(self):
+        # (of butan-2-ol's two enantiomers, the one whose twin's SMILES comes first: on Meno's page, its twin reflected;
+        #  in a workflow's step, embedded itself)
+        r, s = (self.worker.op_from_smiles({"smiles": x})["molblock"] for x in ("C[C@@H](O)CC", "C[C@H](O)CC"))
+        second = next(b for b in (r, s) if self.worker.smiles_of(self.worker.mirror_of(self.worker.read(b))) < self.worker.smiles_of(self.worker.read(b)))
+        reflected, used = self.worker.reflected, []
+        self.worker.reflected = lambda entry: used.append(1) or reflected(entry)
+        try:
+            self.worker.op_conformers({"molblock": second, "options": {"count": 4}})
+            self.assertEqual(used, [])
+            self.worker.op_conformers({"molblock": second, "options": {"count": 4}, "onPage": True})
+            self.assertEqual(used, [1])
+        finally:
+            self.worker.reflected = reflected
+
+    def test_cannot_be_asked_for_the_pages_through_its_options(self):
+        # (the step's options never carry the page's flag: its card cannot set it)
+        mb = self.worker.op_from_smiles({"smiles": "CC(C)(C)C1CCCCC1"})["molblock"]
+        made = self.worker.op_conformers({"molblock": mb, "options": {"count": 30, "onPage": True, "page": True}})["isomers"][0]
+        self.assertNotIn("The same within", {r["label"] for r in made["how"]})
+        self.assertNotIn("page", self.worker.options_of({"options": {"onPage": True, "page": True}}))
+
+    def test_says_when_it_embedded_from_random_coordinates(self):
+        rows = lambda e: {r["label"]: r["text"] for r in e["how"]}
+        self.assertEqual(rows(self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=4))["Embedded"], "ETKDG v3")
+        # (an eta complex is embedded from random coordinates, its star at no fixed place)
+        fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene(), "options": {"count": 4}})["isomers"][0]
+        self.assertEqual(rows(fe)["Embedded"], "ETKDG v3, from random coordinates")
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
@@ -598,8 +661,9 @@ class SameConformer(unittest.TestCase):
         spec.loader.exec_module(cls.worker)
 
     def made(self, smiles):
+        # (on Meno's page, where the same conformer twice is kept once)
         mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
-        entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        entry = self.worker.op_conformers({"molblock": mb, "onPage": True})["isomers"][0]
         lowest = min(entry["energies"])
         return entry, [(e - lowest) * 627.5094740631 for e in entry["energies"]]
 
@@ -811,9 +875,9 @@ class MetalFloor(unittest.TestCase):
         m.UpdatePropertyCache(strict=False)
         return m
 
-    def made(self, smiles):
+    def made(self, smiles, page=False):
         mb = Chem.MolToMolBlock(self.mol(smiles), kekulize=False)
-        return self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        return self.worker.op_conformers({"molblock": mb, **({"onPage": True} if page else {})})["isomers"][0]
 
     def angles(self, entry, frame, symbol):
         import numpy as np
@@ -840,8 +904,9 @@ class MetalFloor(unittest.TestCase):
     def test_gives_hexachloroosmate_as_its_one_octahedron(self):
         # (the known answer: one conformer, Oh. Fe standing in for Os, one embedding stopped in a well 87.7
         #  kcal/mol above the octahedron, two Cl 62 degrees apart - under the floor, so dropped and counted; the
-        #  other eight are the octahedron again, relabelled)
-        entry = self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl")
+        #  other eight are the octahedron again, relabelled: on Meno's page, one; a workflow's step gives all nine)
+        self.assertEqual(len(self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl")["frames"]), 9)
+        entry = self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl", page=True)
         self.assertEqual(len(entry["frames"]), 1)
         angles, _, _, _ = self.angles(entry, 0, "Os")
         self.assertTrue(all(abs(a - 90) < 1 for a in angles[:12]), angles)
