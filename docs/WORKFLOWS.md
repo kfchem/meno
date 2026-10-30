@@ -296,7 +296,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
-| Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
+| Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below); one whose side stopped before its end, or whose job failed, out of its second exit, *Failed*, saying why |
 | Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
@@ -374,7 +374,26 @@ are a *Frequencies* step's, wired after it.
   another charge or spin, goes out of *Failed* with why; only the rest are
   sent. Ends in one numbering come today from a drawn reaction: its arrow's
   *Atom map*, then *Export reaction in 3D…*, which writes the products in
-  the reactants' numbering - opened, then optimised.
+  the reactants' numbering - opened, then optimised. A conformer set into
+  either is its conformers, each one start or end (2026-10-30): a
+  reactant's conformers, each paired with the product made from it,
+  matched on a *Tag*'s ID. *Each with each* makes at most as many pairs as
+  *At most* says - 10 unless changed, so that one option does not start a
+  job for every pair of two large sets (two of 29 conformers make 841). A
+  Diels-Alder pair's NEB-TS at ORCA's own GFN2-xTB, on one core
+  (2026-10-30), took 8 to 10 min for ends about 3 Å apart, and 29 to 132
+  min (median about 55) for ends 3.5 to 7.8 Å apart, as optimised starts
+  are: so 10 pairs are about a night of one core (1.5 to 22 hours). Past
+  it, nothing is run, and the step says how many it would make; pairs
+  matched on a property are as many as the starts, and not limited. Each
+  path keeps how its start and end were paired (`path.paired`: "in order,
+  by place: start a #2 with end b #2", "each with each", "matched on pc"),
+  and where a conformer set was paired in order the step's line says so
+  ("paired in order, by place"): pairs by place are never a match of which
+  is which. A start that carried a `path.paired` already, an earlier
+  path's, has it replaced by this one's, and the line counts them ("the
+  path.paired a pair carried replaced"), as *Reaction* says of
+  `reaction.product`.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged

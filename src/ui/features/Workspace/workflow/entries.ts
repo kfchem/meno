@@ -626,6 +626,8 @@ export type SetEntry = {
   end?: SetEntry;
   /** Its sides, where it is a guess an *Optimise to a saddle point* step pairs with a reactant side and a product side (workflow/pairs `sideUnlike`). */
   sides?: { reactant: SetEntry; product: SetEntry };
+  /** How it was paired with its end, in words (workflow/pairs): "in order, by place: start a #2 with end b #2", "each with each", "matched on pc". */
+  paired?: string;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;

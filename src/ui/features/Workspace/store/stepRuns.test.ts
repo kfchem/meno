@@ -169,6 +169,7 @@ import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
 import { canWire, resultOf, stateOf } from "../workflow/flow";
+import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
 import { countOf, entryOfSet, setEntries, setMembers } from "../workflow/entries";
@@ -573,6 +574,50 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
   });
 
+  it("runs a path search on conformer sets, each conformer an entry - paired in order, a job each, each sent its end - and refuses each with each past its most pairs", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [0, 1].map((k) => ({ entries: [k], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 NEB-TS\n" }], reads: [] })) }) as never);
+    const { doc, st } = editor();
+    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
+    // (two conformer sets of water, each of two conformers optimised at one level: the starts, and their ends beside them)
+    const conformers = (dy: number, k: number, at: { x: number; y: number }) => {
+      const w = doc.getState().molecules3d![0];
+      const xyz = (d: number) => w.atoms.flatMap((a, i) => [a.x, i === 1 ? a.y + d : a.y, a.z]);
+      return { atoms: w.atoms, bonds: w.bonds, frames: Array.from({ length: k - 1 }, (_, j) => xyz(dy + 0.01 * (j + 1))), conformerSet: true as const, calc, at };
+    };
+    doc.edit("sets of conformers", (d) => addMolecule3d(addMolecule3d({ ...d, molecules3d: [] }, conformers(0, 2, { x: 0, y: 0 })), conformers(0.3, 2, { x: 20, y: 0 })));
+    const starts = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const ends = st().addSet({ x0: 17, y0: -3, x1: 23, y1: 3 });
+    const step = st().addStep("path-search", "orca", 40, 0);
+    expect(st().connect({ set: starts }, step, "start")).toBe(true);
+    expect(st().connect({ set: ends }, step, "end")).toBe(true);
+    void st().runStep(step);
+    await settle();
+    await settle();
+    const sent = worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1];
+    expect(sent[0]).toBe("path-search");
+    // (each conformer of the starts paired with the end in its place: two pairs, each with its end)
+    expect((sent[1] as { end?: { atoms: unknown[] } }[]).map((e) => e.end?.atoms.length)).toEqual([3, 3]);
+    expect(asked.started).toHaveLength(2);
+    // (each paired by its place - kept with it, and said on the step's line when it ends: never taken for a match)
+    expect(st().steps.find((x) => x.id === step)!.running?.paired).toBe("paired in order, by place");
+
+    // (each with each of 11 conformers and 10: 110 pairs, past the most - refused before any job, saying how many)
+    const big = editor();
+    big.doc.edit("sets of conformers", (d) => addMolecule3d(addMolecule3d({ ...d, molecules3d: [] }, { ...conformers(0, 11, { x: 0, y: 0 }) }), { ...conformers(0.3, 10, { x: 20, y: 0 }) }));
+    const s2 = big.st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
+    const e2 = big.st().addSet({ x0: 17, y0: -3, x1: 23, y1: 3 });
+    const step2 = big.st().addStep("path-search", "orca", 40, 0);
+    big.st().updateStep(step2, { options: { pairs: "each" } });
+    big.st().connect({ set: s2 }, step2, "start");
+    big.st().connect({ set: e2 }, step2, "end");
+    const before = asked.started.length;
+    await big.st().runStep(step2);
+    expect(big.st().steps.find((x) => x.id === step2)!.ran).toMatchObject({ ok: false, said: `Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most ${MOST_PAIRS} - match them on a property instead, or raise At most` });
+    expect(asked.started).toHaveLength(before);
+  });
+
   it("runs a step of two inputs once each step before it is done, not after the first of them alone", async () => {
     const { st, step: a } = editor();
     // (two optimisations of the one set, each into Merge's inputs: the second's job ends last)
@@ -605,7 +650,8 @@ describe("a step that runs a plugin's program", () => {
     //  again, its hydrogens elsewhere - and a hydrogen molecule, another molecule)
     const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
     doc.edit("ends", (d) => {
-      const water = { ...d.molecules3d![0], calc };
+      // (the start carrying how an earlier pair was made: replaced by this path's, said on the line)
+      const water = { ...d.molecules3d![0], calc, properties: [{ "path.paired": { value: "matched on an earlier tag", unit: "none" as const, status: "computed" as const } }] };
       const withWater = { ...d, molecules3d: [water, ...d.molecules3d!.slice(1)] };
       return addMolecule3d(addMolecule3d(withWater, { ...water, atoms: water.atoms.map((a, i) => (i === 1 ? { ...a, y: 0.9 } : a)), at: { x: 20, y: 0 } }), { atoms: [{ el: "H", x: 0, y: 0, z: 0 }, { el: "H", x: 0.74, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }], calc, at: { x: 24, y: 0 } });
     });
@@ -643,6 +689,8 @@ describe("a step that runs a plugin's program", () => {
     const path = st().molecules3d.find((m) => m.entryFrames?.length)!;
     expect(path.entryFrames).toEqual([2]);
     expect(st().frames3d[path.id]).toBe(2);
+    expect(st().steps.find((x) => x.id === step)!.ran?.said).toMatch(/ · the path\.paired a pair carried replaced$/);
+    expect(path.properties?.[2]?.["path.paired"]?.value).toBe("each with each");
   });
 
   it("optimises guesses to saddle points - with their sides where both are wired, each paired as its options say; one side alone runs nothing", async () => {

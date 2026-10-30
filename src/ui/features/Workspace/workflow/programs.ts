@@ -18,7 +18,7 @@ import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutpu
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { inputOf, type Flow } from "./flow";
-import { levelKey, levelSaid, matchesOf, pairEntries, sideUnlike, type PairAs } from "./pairs";
+import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
@@ -344,7 +344,10 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
  * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, sides: _sides, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, sides: _sides, paired: _paired, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+
+/** The property a path search writes on each path: how its start and end were paired ("in order, by place: start a #2 with end b #2"). */
+export const PAIRED = "path.paired";
 
 /** An entry worked out anew by a calculation whose energy is its own - an optimisation's, frequencies', a conformer search's: without the energy it came with, which is another calculation's, where the new one read none. */
 const anewWithoutEnergy = (entry: SetEntry): SetEntry => {
@@ -576,6 +579,8 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
       ...was.properties,
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),
       "path.E-reverse-barrier": barrier(energies[energies.length - 1], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's end (its last image)`),
+      // (how its start and end were paired: in order is by place, never a match of which is which)
+      ...(entry.paired ? { [PAIRED]: { value: entry.paired, unit: "none" as const, status: "computed" as const } } : {}),
     },
   };
 }
@@ -622,15 +627,25 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
  * as its options say (workflow/pairs), those that cannot be worked out
  * refused, with why; or why nothing can be taken. None where nothing comes in.
  */
-export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[] } | { why: string } | null {
+export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[]; paired?: string } | { why: string } | null {
   const ports = inputsOf(kind);
   if (kind === "saddle-point") return guessesWithSides(d, step, options);
   if (kindInfo(kind).runs === "program" && ports.length === 2) {
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
     if (!start || start.holds === "structures") return null;
     if (!end || end.holds === "structures") return { why: `Nothing comes into ${ports[1].name}` };
-    const paired = pairEntries(setEntries(start.molecules, start.holds), setEntries(end.molecules, end.holds), options.pairs === "each" || options.pairs === "property" ? options.pairs : "order", String(options.property ?? ""));
-    return "why" in paired ? paired : { ...paired, holds: "molecules" };
+    // (each with each, at most as many pairs as the step says)
+    const paired = pairEntries(
+      setEntries(start.molecules, start.holds),
+      setEntries(end.molecules, end.holds),
+      options.pairs === "each" || options.pairs === "property" ? options.pairs : "order",
+      String(options.property ?? ""),
+      PATH_PAIR,
+      mostOf(options),
+    );
+    // (two conformer sets paired in order: by place alone - said on the step's line, so that it is never taken for a match)
+    const byPlace = (options.pairs ?? "order") === "order" && (start.holds === "conformers" || end.holds === "conformers");
+    return "why" in paired ? paired : { ...paired, holds: "molecules", ...(byPlace ? { paired: "paired in order, by place" } : {}) };
   }
   const input = inputOf(d, step);
   if (!input || input.holds === "structures") return null;
@@ -656,9 +671,9 @@ function guessesWithSides(d: Flow, step: number, options: OptionValues): { entri
   const property = String(options.property ?? "");
   const as = (second: string, other: string): PairAs => ({ first: "Guesses", second, one: "guess", other, unlike: sideUnlike(other) });
   const [reactants, products] = [reactant, product].map((x) => setEntries(x.molecules, x.holds as "molecules" | "conformers"));
-  const r = matchesOf(taken, reactants, pairing, property, as("Reactant side", "reactant side"));
+  const r = matchesOf(taken, reactants, pairing, property, as("Reactant side", "reactant side"), mostOf(options));
   if (!("ends" in r)) return r;
-  const p = matchesOf(taken, products, pairing, property, as("Product side", "product side"));
+  const p = matchesOf(taken, products, pairing, property, as("Product side", "product side"), mostOf(options));
   if (!("ends" in p)) return p;
   // (each guess with each reactant side and each product side it is paired with - one of each, but each with each)
   const entries: SetEntry[] = [];

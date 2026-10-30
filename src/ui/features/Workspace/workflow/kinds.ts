@@ -5,6 +5,7 @@
  * own.
  */
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
+import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -160,6 +161,7 @@ const PAIRS_OWN: readonly Option[] = [
     default: "order",
   },
   { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
+  { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } },
 ];
 
 export const KINDS: readonly KindInfo[] = [
@@ -178,13 +180,13 @@ export const KINDS: readonly KindInfo[] = [
     kind: "path-search",
     name: "Path search",
     icon: "path",
-    takes: ["molecules"],
+    takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "program",
     made: "Refined structures",
     inputs: [
-      { id: "start", name: "Start", takes: ["molecules"] },
-      { id: "end", name: "End", takes: ["molecules"] },
+      { id: "start", name: "Start", takes: ["molecules", "conformers"] },
+      { id: "end", name: "End", takes: ["molecules", "conformers"] },
     ],
     others: [FAILED],
     whole: true,

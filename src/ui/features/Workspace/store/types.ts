@@ -909,6 +909,8 @@ export type StepRunning = {
   over?: string;
   /** What its plugin says of how it prepared its jobs, in plain words (programs `readNote`): said on its line when it ends. */
   note?: string;
+  /** How a step of two inputs paired them, where it is said on its line: "paired in order, by place", two conformer sets paired by their places (programs `programEntries`). */
+  paired?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
 };
