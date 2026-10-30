@@ -69,6 +69,9 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const fail = (said: string) => setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said, input: key, ...as });
   const why = whyNot(doc, step, by);
   if (why) return fail(why);
+  // (a branch that gave nothing this time: ended at once, its exits empty, saying what came in empty)
+  const none = emptyIn(doc, step, by);
+  if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
   // (a chart: a table's columns, one against the other)
   if (step.kind === "chart") return chartRun(doc, step, w, key);
@@ -121,6 +124,56 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
   return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: outcome.said, input: key, ...as });
+}
+
+/** Names in words: "Molecules", "Molecules and Reference", "First, Second and Third". */
+const namesSaid = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
+/**
+ * Where a step ends at once, nothing done, its exits empty (docs/WORKFLOWS.md,
+ * *An empty set*): an input that holds entries is wired with a set a step
+ * before it gave empty this time, having run ok - a branch that gave
+ * nothing, such as a last round of restraints that held none. What it says:
+ * "Nothing came in"; of a step of several inputs, into which: "Nothing came
+ * into Reference". None - the step runs, or fails, as ever - where no input
+ * is so; where an empty one is a set no step gave, or one whose step has
+ * not run ok; and for Merge with the other input not empty, which takes
+ * that one's entries (`runMenoPair`).
+ */
+export function emptyIn(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
+  const ports = inputsFor(step.kind, by);
+  if (!ports.length) return null;
+  const empty: string[] = [];
+  let full = 0;
+  for (const port of ports) {
+    const at = ports.length > 1 ? port.id : undefined;
+    const wire = wireInto(doc, step.id, at);
+    const input = wire ? inputOf(doc, step.id, at) : null;
+    // (not wired, or a table or a number: no entries of its own to give)
+    if (!wire || !input) continue;
+    if (input.molecules.length || input.structures.length || input.held?.length) {
+      full++;
+      continue;
+    }
+    const made = findSet(doc, wire.from.set)?.made;
+    if (!made || stepOf(doc, made.step)?.ran?.ok !== true) return null;
+    empty.push(port.name);
+  }
+  if (!empty.length || (step.kind === "merge" && full)) return null;
+  return ports.length > 1 ? `Nothing came into ${namesSaid(empty)}` : "Nothing came in";
+}
+
+/** `doc` with step `id` ended at once on an empty input (`emptyIn`), saying `said`: ok, its exits emptied of what an earlier run put in them. */
+export function ranEmpty(doc: WorkspaceDocument, id: number, said: string, key: string, w: RunWith): WorkspaceDocument {
+  const step = stepOf(doc, id);
+  if (!step) return doc;
+  const ports = inputsOf(step.kind);
+  const came = inputOf(doc, id, ports.length > 1 ? ports[0].id : undefined)?.holds ?? "molecules";
+  const gives = kindInfo(step.kind).gives;
+  const holds = isSetKind(gives) ? gives : came;
+  // (the one empty outcome, of structures drawn or of molecules in 3D, as its type has each)
+  const outcome: Outcome = holds === "structures" ? { ok: true, holds, kept: [], aside: [], said } : { ok: true, holds, kept: [], aside: [], said };
+  return ranAs(doc, id, outcome, key, w);
 }
 
 /**
