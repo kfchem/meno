@@ -2796,7 +2796,7 @@ the first in each path (step 48).
   first 1 kept"). Ties keep the order they came in, and one ranked out
   with the same value as the last one kept in its group - a degenerate
   conformer - says so, on it ("tied with a #2, which was kept as it came
-  first") and on the line ("1 tied with one kept"): which is kept is never
+  first") and on the line ("1 tied"): which is kept is never
   chosen silently.
 - **Only values that can be ranked together are**: numbers of one
   dimension, converted to the first one's unit, each worked out the same
@@ -2808,12 +2808,21 @@ the first in each path (step 48).
   its marks unread - set aside saying so ("not ranked: not converged"),
   though its value would rank first. An entry with no value, or none of
   the group property, is set aside saying that.
-- **Its line says what it ranked by**: the property, and how it was
-  worked out where its record says - level, program, solvent,
-  temperature ("the lowest 1 by dg (wB97X-D/6-311+G(d,p), Gaussian, in
-  SMD(chloroform), at 298.15 K) in each group") - then how many it kept,
-  and the rest counted by why ("rest 3 (2: below the first 1; 1: it has
-  no path to be ranked within)").
+- **Its line says only what came of it**: how many it kept, and how many
+  went to the rest, with those tied and those not ranked counted ("2 of 6
+  kept, 4 to the rest (1 tied, 2 not ranked)"). What it ranked by its card says,
+  above; each value's level, program, solvent and temperature stay on its
+  record, as they came; each of the rest says its own place or why.
+- **Its first exit is named by how many it keeps**: *The first* where it
+  keeps one of each, *The first 3* where three.
+- **In each group, where each is its own group** - molecules, not
+  a conformer set's compounds - it chooses nothing, and its line says so
+  ("2 of 2 kept: each molecule is its own group"): *All together*
+  ranks them against one another.
+- **A number property's values are one group where they are one value**:
+  each in the first one's unit, as Meno writes numbers - 0.3 and 0.1 +
+  0.2 one group, and one in kcal/mol and another in hartrees one group
+  where they are the same energy.
 - It takes molecules in 3D and conformer sets; structures drawn are not
   ranked yet.
 ### Join (2026-10-29)
