@@ -303,7 +303,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
+| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound - or of its value of a property, across compounds - kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from - and, of what its molecule holds (on its entry frame), only what *Keep from its molecule* names, one name to a line, as it is: none, unless named, so that a value worked out for the molecule never reaches its frames unasked; a frame that holds one of them itself, of another value, keeps its own, the line saying so once; a name a molecule does not hold, said, with how many ("path not on 2 molecules", "pc not on any molecule") (2026-10-30); the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
@@ -1317,6 +1317,24 @@ Decided while building it, for the maintainer to confirm:
   structure. In a conformer set, within each compound, lowest energy
   first. Alike is the one definition of the same conformer (*The same
   conformer*, below).
+- **Duplicates within each value of a property** (2026-10-31, the same
+  transition state found by two paths): *Compared within: Each value of
+  a property*, and *The property* named - "product", "path". Entries of
+  one value, of the same atoms bonded alike in the same order and the
+  same charge and spin, are compared across compounds - each saddle
+  point a path search gives is its own compound - with the same one
+  definition of alike, no threshold of its own; the lower kept, each
+  other one out of *Alike* naming it ("the same as b #1, which was
+  kept"). Its card: "Kept apart · compared within each product"; its
+  line "3 of 4 entries kept · rest 1", the reasons counted only where
+  any is more than being alike. One without the property goes out saying
+  so ("it has no product"), never compared. As *Energy window* in each
+  value: saddle points are compared with saddle points, but minima and
+  saddle points of one value are set aside together, saying so, as is
+  one whose kind is not known (no frequencies) beside those whose is; a
+  value none of whose kind is known is compared, its line saying
+  "whether minima or saddle points not known". An entry that is no
+  result is refused, named.
 - **Deleting a step keeps the set it made**, with what it holds - a set
   like any the chemist made, so a compound set. A large set it made keeps
   the molecules it holds itself (2026-10-22): they are on no page, and

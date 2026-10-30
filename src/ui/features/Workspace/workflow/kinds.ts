@@ -274,7 +274,21 @@ export const KINDS: readonly KindInfo[] = [
         ],
         default: "apart",
       },
+      // (each compound's conformers, or a compound set's same structures, as it was; or those with one value of a property - a product, a path - across compounds: never grouped by guess)
+      {
+        id: "within",
+        label: "Compared within",
+        type: "choice",
+        choices: [
+          { value: "each compound", label: "Each compound" },
+          { value: "each value", label: "Each value of a property" },
+        ],
+        default: "each compound",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
     ],
+    how: (v) => duplicatesHow(v),
+    needs: (v) => (v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined),
     perceives: "configurations",
     perceivesWith: (v) => v.mirrors === "counted",
   },
@@ -1086,6 +1100,14 @@ export function rankNeeds(v: Record<string, string | number | boolean>): string 
   if (!String(v.property ?? "").trim()) return "Name the property to rank by";
   if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
   return undefined;
+}
+
+/** How a Duplicates step does its work, in a line: its mirror images as before ("Kept apart") - and, compared in each value of a property, which ("Kept apart · compared within each product"). */
+export function duplicatesHow(v: Record<string, string | number | boolean>): string {
+  const mirrors = v.mirrors === "counted" ? "Counted in (degeneracy 2)" : "Kept apart";
+  if (v.within !== "each value") return mirrors;
+  const by = String(v.groupBy ?? "").trim();
+  return by ? `${mirrors} · compared within each ${by}` : "Name the property whose values are the groups";
 }
 
 /** What an Energy window still needs before it can run: the property, where its groups are a property's values. */
