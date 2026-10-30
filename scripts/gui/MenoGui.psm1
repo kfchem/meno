@@ -189,8 +189,28 @@ function Get-MenoProfile {
 }
 
 function Start-MenoProcess {
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [string] $HomeFolder)
+    if ($HomeFolder) { throw "a profile of its own (-HomeFolder) is for a Mac, where Meno's folders follow HOME" }
     Start-Process -FilePath $Path | Out-Null
+}
+
+function Find-MenoPart {
+    # Parts found by what Accessibility calls them: the tutorials are
+    # recorded on a Mac (MenoGui.macOS.psm1), and this has no UI Automation.
+    param([string] $Role, [string] $Name, [string] $Within, [string] $Row, [switch] $Reveal, [double] $TimeoutSec)
+    throw "Find-MenoPart is on a Mac only"
+}
+
+function Get-MenoPartsLike {
+    # (as Find-MenoPart)
+    param([string] $Role, [string] $Like)
+    throw "Get-MenoPartsLike is on a Mac only"
+}
+
+function Get-MenoVersion {
+    # The version of a build, as its executable says it.
+    param([Parameter(Mandatory)] [string] $Path)
+    return (Get-Item $Path).VersionInfo.ProductVersion
 }
 
 function Close-MenoProcess {
@@ -597,5 +617,5 @@ function Wait-MenoSettled {
 
 Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
-    ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
+    ConvertTo-Screen, Find-MenoPart, Get-MenoPartsLike, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled

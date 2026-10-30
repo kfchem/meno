@@ -269,6 +269,85 @@ public static class MacGui {
     } finally { CFRelease(sys); }
   }
 
+  public class Part {
+    public string Role; public string Name; public string Within;
+    public double X, Y, Width, Height;
+  }
+
+  [DllImport(CF)] static extern ulong CFGetTypeID(IntPtr o);
+  [DllImport(CF)] static extern ulong CFStringGetTypeID();
+
+  static string AxText(IntPtr e, string attr) {
+    IntPtr v;
+    if (AXUIElementCopyAttributeValue(e, Str(attr), out v) != 0 || v == IntPtr.Zero) return null;
+    try {
+      if (CFGetTypeID(v) != CFStringGetTypeID()) return null;
+      byte[] buf = new byte[2048];
+      if (!CFStringGetCString(v, buf, buf.Length, Utf8)) return null;
+      string s = System.Text.Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0)).Trim();
+      return s.Length == 0 ? null : s;
+    } finally { CFRelease(v); }
+  }
+
+  // The parts of an app's windows that Accessibility names, as a reader of
+  // the window sees them: each one's role (AXButton), its name (its title, or
+  // its description, or a text's words), the names of the parts it sits in,
+  // innermost first, and where it is, in global points. A web view builds
+  // this for its page the first time it is asked, so the first answer may
+  // be the window alone: ask again.
+  public static List<Part> Parts(int pid) {
+    var parts = new List<Part>();
+    IntPtr app = AXUIElementCreateApplication(pid);
+    try {
+      IntPtr wins;
+      if (AXUIElementCopyAttributeValue(app, Str("AXWindows"), out wins) != 0 || wins == IntPtr.Zero) return parts;
+      try {
+        long n = CFArrayGetCount(wins);
+        for (long i = 0; i < n; i++) Walk(CFArrayGetValueAtIndex(wins, i), new List<string>(), parts, 0);
+      } finally { CFRelease(wins); }
+    } finally { CFRelease(app); }
+    return parts;
+  }
+
+  // A control named by nothing but the words inside it - a menu's item, a
+  // button of words - is named by those words, as a reader reads it.
+  static readonly HashSet<string> Controls = new HashSet<string> { "AXButton", "AXMenuItem", "AXRadioButton", "AXCheckBox", "AXLink", "AXPopUpButton", "AXMenuButton", "AXTab" };
+
+  static string Words(IntPtr e, int depth) {
+    if (depth > 3) return "";
+    if ((AxText(e, "AXRole") ?? "") == "AXStaticText") return AxText(e, "AXValue") ?? "";
+    IntPtr kids;
+    if (AXUIElementCopyAttributeValue(e, Str("AXChildren"), out kids) != 0 || kids == IntPtr.Zero) return "";
+    try {
+      var words = new List<string>();
+      long n = CFArrayGetCount(kids);
+      for (long i = 0; i < n; i++) { string w = Words(CFArrayGetValueAtIndex(kids, i), depth + 1); if (w.Length > 0) words.Add(w); }
+      return string.Join(" ", words);
+    } finally { CFRelease(kids); }
+  }
+
+  static void Walk(IntPtr e, List<string> within, List<Part> parts, int depth) {
+    string role = AxText(e, "AXRole") ?? "";
+    string name = AxText(e, "AXTitle") ?? AxText(e, "AXDescription") ?? (role == "AXStaticText" ? AxText(e, "AXValue") : null);
+    if (name == null && Controls.Contains(role)) { string w = Words(e, 0).Trim(); if (w.Length > 0) name = w; }
+    if (name != null) {
+      CGPoint p; CGSize s;
+      if (ReadPoint(e, out p) && ReadSize(e, out s) && s.Width > 0 && s.Height > 0) {
+        var inner = new List<string>(within); inner.Reverse();
+        parts.Add(new Part { Role = role, Name = name, Within = string.Join("\n", inner), X = p.X, Y = p.Y, Width = s.Width, Height = s.Height });
+      }
+    }
+    if (depth > 80) return;
+    IntPtr kids;
+    if (AXUIElementCopyAttributeValue(e, Str("AXChildren"), out kids) != 0 || kids == IntPtr.Zero) return;
+    try {
+      if (name != null) within.Add(name);
+      long n = CFArrayGetCount(kids);
+      for (long i = 0; i < n; i++) Walk(CFArrayGetValueAtIndex(kids, i), within, parts, depth + 1);
+      if (name != null) within.RemoveAt(within.Count - 1);
+    } finally { CFRelease(kids); }
+  }
+
   // The process a process answers to - a web view's content process, the
   // app it draws for.
   public static int ResponsiblePid(int pid) {
@@ -444,10 +523,14 @@ function Start-MenoProcess {
       Start a build: an app bundle through Launch Services, the way it is
       started from the Finder, or a bare executable as it is.
     #>
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [string] $HomeFolder)
+    # (-HomeFolder: started as if that were the user's home - its settings, plugins and all in a profile of its own there)
+    $envArgs = if ($HomeFolder) { @("--env", "HOME=$HomeFolder") } else { @() }
     if ((Test-Path -PathType Container $Path) -and $Path.TrimEnd("/").EndsWith(".app")) {
-        & /usr/bin/open -n $Path
+        & /usr/bin/open -n @envArgs $Path
         if ($LASTEXITCODE -ne 0) { throw "open could not start '$Path'" }
+    } elseif ($HomeFolder) {
+        Start-Process -FilePath /usr/bin/env -ArgumentList "HOME=$HomeFolder", $Path | Out-Null
     } else {
         Start-Process -FilePath $Path | Out-Null
     }
@@ -714,6 +797,139 @@ function ConvertTo-Screen {
         throw "($X, $Y) is outside the window, which is $([int]($w.Width * $k))x$([int]($w.Height * $k)) in shot pixels"
     }
     return @{ X = $w.X + $X / $k; Y = $w.Y + $Y / $k }
+}
+
+function Find-MenoPart {
+    <#
+      .SYNOPSIS
+      A part of Meno's window found by what Accessibility calls it - its
+      role and its name, as a reader of the window sees them - not by where
+      it was last time.
+
+      .DESCRIPTION
+      Two of the same name are told apart by -Within, naming a part it sits
+      in, or by -Row, naming words in the row it is in: the one nearest them,
+      up or down (an Add, in the row of the plugin "Blender"); either, with
+      the part, comes back as Near, what tells where it is. -Reveal
+      scrolls the window towards it, with the wheel at the window's middle,
+      while it is out of view. It comes back with its Role and Name, in
+      pixels of the window's shot, like every coordinate here: X, Y, Width,
+      Height, and its middle, CX and CY. It is waited for, up to -TimeoutSec: the web view builds what
+      Accessibility sees of its page only once asked, and a part may be on
+      its way in. Not there, or not the only one, the run stops, saying what
+      is there.
+    #>
+    param(
+        [Parameter(Mandatory)] [string] $Role,
+        [Parameter(Mandatory)] [string] $Name,
+        [string] $Within,
+        [string] $Row,
+        [switch] $Reveal,
+        [double] $TimeoutSec = 5
+    )
+    $axRole = if ($Role.StartsWith("AX")) { $Role } else { "AX$Role" }
+    $what = "$Role '$Name'$(if ($Within) { " in '$Within'" })$(if ($Row) { " in the row of '$Row'" })"
+    $isIt = { param($p) $p.Role -eq $axRole -and $p.Name -eq $Name -and (-not $Within -or ($p.Within -split "`n") -contains $Within) }
+    $isRow = { param($p) $p.Role -eq "AXStaticText" -and ($p.Name -eq $Row -or $p.Name.StartsWith("$Row ")) }
+    $until = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
+    $scrolls = 0
+    do {
+        $w = Get-WindowInfo
+        $all = @([MacGui]::Parts($script:MenoPid))
+        # (parts of the window alone, and in view: one scrolled out of it cannot be clicked)
+        $shown = { param($p) $p.X -ge $w.X - 0.5 -and $p.Y -ge $w.Y - 0.5 -and $p.X + $p.Width -le $w.X + $w.Width + 0.5 -and $p.Y + $p.Height -le $w.Y + $w.Height + 0.5 }
+        $inView = @($all | Where-Object { & $shown $_ })
+        $found = @($inView | Where-Object { & $isIt $_ })
+        # (a control named by its words takes its key with them - "Open… ⌘O": the words alone, where nothing is named exactly so)
+        if (-not $found.Count) {
+            $found = @($inView | Where-Object { $_.Role -eq $axRole -and $_.Name.StartsWith("$Name ") -and (-not $Within -or ($_.Within -split "`n") -contains $Within) })
+        }
+        $label = $null
+        if ($Row) {
+            $label = $all | Where-Object { & $isRow $_ } | Select-Object -First 1
+            $found = @(if ($label -and (& $shown $label)) {
+                $mid = $label.Y + $label.Height / 2
+                $found | Sort-Object { [math]::Abs($_.Y + $_.Height / 2 - $mid) } | Select-Object -First 1
+            })
+        }
+        if ($found.Count -gt 1) { throw "$($found.Count) parts are $what in Meno's window: tell them apart with -Within or -Row" }
+        if ($found.Count -eq 1) {
+            $k = Get-ShotScale
+            $p = $found[0]
+            $x = ($p.X - $w.X) * $k; $y = ($p.Y - $w.Y) * $k
+            # (what tells where it is: the part it was found within, or its row's words, with it - for a picture of round about it)
+            $by = if ($Within) {
+                $inView | Where-Object { $_.Name -eq $Within -and $_.X -le $p.X -and $_.Y -le $p.Y -and $_.X + $_.Width -ge $p.X + $p.Width -and $_.Y + $_.Height -ge $p.Y + $p.Height } |
+                    Sort-Object { $_.Width * $_.Height } | Select-Object -First 1
+            } elseif ($Row) { $label } else { $null }
+            $near = $null
+            if ($by) {
+                $nx = [math]::Min($p.X, $by.X); $ny = [math]::Min($p.Y, $by.Y)
+                $near = [pscustomobject]@{
+                    X = [int][math]::Round(($nx - $w.X) * $k); Y = [int][math]::Round(($ny - $w.Y) * $k)
+                    Width = [int][math]::Round(([math]::Max($p.X + $p.Width, $by.X + $by.Width) - $nx) * $k)
+                    Height = [int][math]::Round(([math]::Max($p.Y + $p.Height, $by.Y + $by.Height) - $ny) * $k)
+                }
+            }
+            return [pscustomobject]@{
+                Role = $p.Role; Name = $p.Name
+                X = [int][math]::Round($x); Y = [int][math]::Round($y)
+                Width = [int][math]::Round($p.Width * $k); Height = [int][math]::Round($p.Height * $k)
+                CX = [int][math]::Round($x + $p.Width * $k / 2); CY = [int][math]::Round($y + $p.Height * $k / 2)
+                Near = $near
+            }
+        }
+        # out of view: towards it, a few notches at a time (a page scrolls down for a turn towards you)
+        $away = if ($Row) { $label } else { $all | Where-Object { & $isIt $_ } | Select-Object -First 1 }
+        if ($Reveal -and $away -and $scrolls -lt 40) {
+            $size = Get-ClientSize
+            $notches = if ($away.Y -gt $w.Y + $w.Height / 2) { -3 } else { 3 }
+            Invoke-MenoWheel -X ([int]($size.Width / 2)) -Y ([int]($size.Height / 2)) -Notches $notches
+            $scrolls++
+            $until = $until.AddMilliseconds(400)
+            Start-Sleep -Milliseconds 400
+            continue
+        }
+        Start-Sleep -Milliseconds 300
+    } while ([DateTime]::UtcNow -lt $until)
+    $there = ($inView | Where-Object { $_.Role -ne "AXStaticText" } | Select-Object -First 40 | ForEach-Object { "$($_.Role.Substring(2)) '$($_.Name)'" }) -join ", "
+    throw "no $what in Meno's window. There is: $there"
+}
+
+function Get-MenoPartsLike {
+    <#
+      .SYNOPSIS
+      The parts of Meno's window, now, of -Role whose names are like -Like (a
+      wildcard: "Allow*"), with their names, in pixels of the window's shot -
+      none waited for, but the page's tree, which the web view builds only
+      once asked.
+    #>
+    param([Parameter(Mandatory)] [string] $Role, [Parameter(Mandatory)] [string] $Like)
+    $axRole = if ($Role.StartsWith("AX")) { $Role } else { "AX$Role" }
+    $until = [DateTime]::UtcNow.AddSeconds(4)
+    do {
+        $all = @([MacGui]::Parts($script:MenoPid))
+        if ($all.Count) { break }
+        Start-Sleep -Milliseconds 300
+    } while ([DateTime]::UtcNow -lt $until)
+    $w = Get-WindowInfo
+    $k = Get-ShotScale
+    # (an array however many, none included: never unrolled into nothing)
+    return , @($all | Where-Object { $_.Role -eq $axRole -and $_.Name -like $Like } | ForEach-Object {
+        [pscustomobject]@{
+            Name = $_.Name
+            X = [int][math]::Round(($_.X - $w.X) * $k); Y = [int][math]::Round(($_.Y - $w.Y) * $k)
+            Width = [int][math]::Round($_.Width * $k); Height = [int][math]::Round($_.Height * $k)
+        }
+    })
+}
+
+function Get-MenoVersion {
+    # The version of a build: an app bundle's, as its Info.plist says it.
+    param([Parameter(Mandatory)] [string] $Path)
+    $plist = Join-Path $Path "Contents/Info.plist"
+    if (-not (Test-Path $plist)) { return "" }
+    return (& /usr/bin/plutil -extract CFBundleShortVersionString raw -o - $plist).Trim()
 }
 
 function Save-WindowShot {
@@ -1147,7 +1363,7 @@ function Wait-MenoSettled {
 
 Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
-    ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
+    ConvertTo-Screen, Find-MenoPart, Get-MenoPartsLike, Get-MenoVersion, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
     Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
     # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
     Find-SystemWindow, Find-WindowAt
