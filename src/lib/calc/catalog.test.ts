@@ -93,7 +93,7 @@ describe("the readers Meno knows of", () => {
       },
     ]);
     expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" }, path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] }, places: {} }]);
-    expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
+    expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies", "saddle-point"]);
     // (and those that fill kinds of step: xTB, made by pixi - and RDKit, a 3D structure besides its roles)
     const xtb = PLUGINS.find((p) => p.id === "xtb")!;
     expect(xtb).toMatchObject({ reads: [], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
