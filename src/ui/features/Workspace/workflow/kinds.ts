@@ -226,12 +226,28 @@ export const KINDS: readonly KindInfo[] = [
     kind: "energy-window",
     name: "Energy window",
     icon: "band",
-    takes: ["conformers"],
-    gives: "conformers",
+    takes: ["conformers", "molecules"],
+    gives: "same",
     runs: "entries",
     made: "Within {window} kcal/mol",
     others: [{ id: "rest", name: "Outside it", gives: "same", of: "rest" }],
-    options: [{ id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" }],
+    options: [
+      { id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" },
+      // (of each compound's lowest, as it was; or of the lowest of those with one value of a property - a path, a product: never grouped by guess)
+      {
+        id: "within",
+        label: "From the lowest in",
+        type: "choice",
+        choices: [
+          { value: "each compound", label: "Each compound" },
+          { value: "each value", label: "Each value of a property" },
+        ],
+        default: "each compound",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
+    ],
+    how: (v) => energyWindowHow(v),
+    needs: (v) => energyWindowNeeds(v),
   },
   {
     kind: "duplicates",
@@ -1070,6 +1086,18 @@ export function rankNeeds(v: Record<string, string | number | boolean>): string 
   if (!String(v.property ?? "").trim()) return "Name the property to rank by";
   if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
   return undefined;
+}
+
+/** What an Energy window still needs before it can run: the property, where its groups are a property's values. */
+export function energyWindowNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  return v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined;
+}
+
+/** How an Energy window does its work, in a line: "within 3 kcal/mol of each compound's lowest", "within 10 kcal/mol of each path's lowest" - which energy, G or E, its line says once it has run. */
+export function energyWindowHow(v: Record<string, string | number | boolean>): string {
+  const needs = energyWindowNeeds(v);
+  if (needs) return needs;
+  return `within ${Number(v.window)} kcal/mol of each ${v.within === "each value" ? String(v.groupBy).trim() : "compound"}'s lowest`;
 }
 
 /** How a Rank step does its work, in a line: "the lowest 1 by energy in each group" - or what it still needs. */
