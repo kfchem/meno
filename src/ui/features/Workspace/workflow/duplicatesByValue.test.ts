@@ -82,8 +82,10 @@ describe("Duplicates, within each value of a property", () => {
 
   it("says on its card what it compares within, and what it still needs", () => {
     const info = kindInfo("duplicates");
-    expect(howOf(info.options!, {}, info.how)).toBe("Kept apart");
-    expect(howOf(info.options!, BY, info.how)).toBe("Kept apart · compared within each product");
+    // (only what is not its default: at all its defaults, nothing - the card says "Duplicates")
+    expect(howOf(info.options!, {}, info.how)).toBe("");
+    expect(howOf(info.options!, BY, info.how)).toBe("compared within each product");
+    expect(howOf(info.options!, { ...BY, mirrors: "counted" }, info.how)).toBe("mirror images counted as one · compared within each product");
     expect(needsOf({ kind: "duplicates", options: { within: "each value" } })).toBe("Name the property whose values are the groups");
   });
 });

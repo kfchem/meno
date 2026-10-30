@@ -1325,16 +1325,16 @@ Decided while building it, for the maintainer to confirm:
   point a path search gives is its own compound - with the same one
   definition of alike, no threshold of its own; the lower kept, each
   other one out of *Alike* naming it ("the same as b #1, which was
-  kept"). Its card: "Kept apart · compared within each product"; its
-  line "3 of 4 entries kept · rest 1", the reasons counted only where
-  any is more than being alike. One without the property goes out saying
-  so ("it has no product"), never compared. As *Energy window* in each
-  value: saddle points are compared with saddle points, but minima and
-  saddle points of one value are set aside together, saying so, as is
-  one whose kind is not known (no frequencies) beside those whose is; a
-  value none of whose kind is known is compared, its line saying
-  "whether minima or saddle points not known". An entry that is no
-  result is refused, named.
+  kept"). Its card: "compared within each product" - only what is not
+  its default; its line "3 of 4 entries kept · rest 1", the reasons
+  counted only where any is more than being alike. One without the
+  property goes out saying so ("it has no product"), never compared. As
+  *Energy window* in each value: saddle points are compared with saddle
+  points, but minima and saddle points of one value are set aside
+  together, saying so, as is one whose kind is not known (no
+  frequencies) beside those whose is; a value none of whose kind is
+  known is compared, its line saying "whether minima or saddle points
+  not known". An entry that is no result is refused, named.
 - **Deleting a step keeps the set it made**, with what it holds - a set
   like any the chemist made, so a compound set. A large set it made keeps
   the molecules it holds itself (2026-10-22): they are on no page, and

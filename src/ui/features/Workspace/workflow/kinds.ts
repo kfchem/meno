@@ -1102,12 +1102,11 @@ export function rankNeeds(v: Record<string, string | number | boolean>): string 
   return undefined;
 }
 
-/** How a Duplicates step does its work, in a line: its mirror images as before ("Kept apart") - and, compared in each value of a property, which ("Kept apart · compared within each product"). */
+/** How a Duplicates step does its work, in a line: only what is not its default - "compared within each product", "mirror images counted as one" - and nothing at all where all is (the card says "Duplicates"). */
 export function duplicatesHow(v: Record<string, string | number | boolean>): string {
-  const mirrors = v.mirrors === "counted" ? "Counted in (degeneracy 2)" : "Kept apart";
-  if (v.within !== "each value") return mirrors;
   const by = String(v.groupBy ?? "").trim();
-  return by ? `${mirrors} · compared within each ${by}` : "Name the property whose values are the groups";
+  if (v.within === "each value" && !by) return "Name the property whose values are the groups";
+  return [...(v.mirrors === "counted" ? ["mirror images counted as one"] : []), ...(v.within === "each value" ? [`compared within each ${by}`] : [])].join(" · ");
 }
 
 /** What an Energy window still needs before it can run: the property, where its groups are a property's values. */
