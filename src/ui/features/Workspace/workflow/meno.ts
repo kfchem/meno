@@ -91,9 +91,14 @@ export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding"
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
+  const o = optionsOf(kindInfo(kind).options ?? [], own);
+  // (Merge of two sets, one of them empty: nothing of it to add - the other's entries, its line saying so; both empty, nothing to merge)
+  if (kind === "merge" && !a.entries.length !== !b.entries.length) {
+    const out = mergedSet(a.entries, b.entries, a.entries.length ? a.holds : b.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
+    return out.ok ? { ...out, said: `${out.said} · nothing came from ${a.entries.length ? "Second" : "First"}` } : out;
+  }
   if (!a.entries.length) return { ok: false, said: "Nothing came into its first input" };
   if (!b.entries.length) return { ok: false, said: "Nothing came into its second input" };
-  const o = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
     case "merge":
       return mergedSet(a.entries, b.entries, a.holds, o.keep === "one" ? "one" : "all", String(o.property ?? ""));
