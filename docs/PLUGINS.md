@@ -997,11 +997,15 @@ The same for every plugin and for Meno's own parts:
     the program used; the pressure, `thermo.pressure` (atm), only where
     the program prints one (xtb prints none, and its documentation states
     none); and how it was worked out, `thermo.treatment`, a text in the
-    program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
+    program's words, its units as Meno writes them (cm⁻¹, 2026-10-31): xtb's `rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹,
     scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
-    ORCA's `quasi-RRHO (Grimme), 100 cm-1`, from where it says its
+    ORCA's `quasi-RRHO (Grimme), 100 cm⁻¹`, from where it says its
     vibrational entropy is the QRRHO of S. Grimme and at which reference
-    frequency. Two values of one treatment are written alike, so that
+    frequency - or `RRHO`, where it says it did not ("Quasi RRHO ...
+    False": the harmonic oscillator alone, ORCA's `%freq QuasiRRHO false`,
+    which the ORCA plugin's Frequencies writes where its *Low vibrations*
+    option says *Harmonic (RRHO)*; ORCA's own treatment, unless asked,
+    2026-10-31). Two values of one treatment are written alike, so that
     they compare. And the symmetry its thermochemistry took, as the
     program printed it - of several prints, the last, as the other
     thermochemistry is read, so that all are of one: its point group,
