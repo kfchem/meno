@@ -8,14 +8,14 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
-import { workedOutAs } from "../../../../lib/nodes/base";
+import { entries as countEntries, workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, torsionsSet, withSaid } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
-import { rankedSet } from "./valueSteps";
+import { rankedSet, valueKeysOf } from "./valueSteps";
 import { joinedSet } from "./joinStep";
 import { ensembleSet } from "./ensembleStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -27,6 +27,7 @@ import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
 import { imaginaryWords } from "../../../../lib/calc/output";
+import { numberText } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "./failures";
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
@@ -51,7 +52,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
     case "as-conformers":
       return asConformers(entries);
     case "energy-window":
-      return energyWindow(entries, Number(options.window));
+      return options.within === "each value" ? energyWindowByValue(entries, holds, Number(options.window), String(options.groupBy ?? "")) : energyWindow(entries, Number(options.window), holds);
     case "duplicates":
       return drain(duplicates(entries, holds, mirrorsOf(options), never));
     case "populations":
@@ -425,7 +426,7 @@ const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(
  * either way: which it was.
  */
 type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
-function basisOf(entries: readonly SetEntry[], kelvin?: number): Basis {
+function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly { said: string; entries: readonly SetEntry[] }[] = byCompound(entries).map((c) => ({ said: `compound ${compoundLetter(c[0].compound)}'s`, entries: c }))): Basis {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
   const electronic = (why?: string): Basis => ({
     energy: (e) => (hasEnergy(e) ? e.energy : undefined),
@@ -436,12 +437,12 @@ function basisOf(entries: readonly SetEntry[], kelvin?: number): Basis {
   if (![...g.values()].some(Boolean)) return electronic();
   const without = entries.find((e) => !g.get(e));
   if (without) return electronic(`${name(without)} has none`);
-  for (const c of byCompound(entries)) {
+  for (const { said, entries: c } of groups) {
     const first = workedOutAs(g.get(c[0])!);
     for (const e of c.slice(1)) {
       const these = workedOutAs(g.get(e)!);
       const k = these.findIndex(([, v], i) => v !== first[i][1]);
-      if (k >= 0) return electronic(`compound ${compoundLetter(c[0].compound)}'s differ in ${first[k][0]}: ${first[k][1]} (${name(c[0])}) and ${these[k][1]} (${name(e)})`);
+      if (k >= 0) return electronic(`${said} differ in ${first[k][0]}: ${first[k][1]} (${name(c[0])}) and ${these[k][1]} (${name(e)})`);
     }
   }
   if (kelvin != null) {
@@ -467,9 +468,11 @@ const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? 
  * aside. A compound split between the two, a part of it in each
  * (`partOf`); one all within, whole as it came.
  */
-function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
+function energyWindow(entries: readonly SetEntry[], kcal: number, holds: Holds3D): Outcome3D {
   // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
-  if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  // (molecules are no compound's conformers: each its own group, as Rank takes them, so none is outside its window - said, that the chemist names a property to take them together)
+  if (holds !== "conformers") return { ok: true, holds, kept: [...entries], aside: [], said: `${entries.length} of ${countEntries(entries.length)} kept: each molecule is its own group` };
   const basis = basisOf(entries);
   if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
   // (one that did not converge is no minimum: its energy is where its optimisation stopped. One its calculation found
@@ -487,6 +490,79 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
     aside.push(...asPart(out));
   }
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept, on ${basis.words}${onesSaid(entries)}` };
+}
+
+const NO_WINDOW: Outcome3D = { ok: false, said: "The window must be 0 kcal/mol or more" };
+
+/** What an entry is, as its frequencies say: a saddle point where it has an imaginary one, a minimum where they were worked out with none, else not known (entries `imaginaryOf`). */
+const kindOf = (e: SetEntry): "minimum" | "saddle point" | "not known" => {
+  const im = imaginaryOf(e);
+  return im === "not computed" ? "not known" : im.length ? "saddle point" : "minimum";
+};
+/** An entry as a step's line names it: its compound's letter and its number ("b #2"). */
+const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+
+/**
+ * Entries within `kcal` of the lowest of those with the same value of
+ * `name` (*Within: Each value of a property* - a path, a product): each
+ * group's lowest and those near it kept, the rest set aside, each saying
+ * how far above it. One without that property, or without an energy, is
+ * set aside saying so - never taken into a group, nor left out unsaid.
+ * Entries that are no result are refused, named, as the window over
+ * compounds refuses them; a saddle point is not - which entries should be
+ * transition states is the chemist's to say (a window over each product's
+ * transition states, say). The energy is chosen as over compounds
+ * (`basisOf`), each group's values alike.
+ */
+function energyWindowByValue(entries: readonly SetEntry[], holds: Holds3D, kcal: number, groupBy: string): Outcome3D {
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  const name = groupBy.trim();
+  if (!name) return { ok: false, said: "Name the property whose values are the groups" };
+  const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
+  if (failed) return { ok: false, said: failed };
+  const keys = valueKeysOf(entries.map((e, i) => entryOfSet(e, String(i))), name);
+  const why = new Map<SetEntry, string>();
+  entries.forEach((e, i) => keys[i] == null && why.set(e, `it has no ${name}`));
+  const valued = entries.filter((_, i) => keys[i] != null);
+  const groups = new Map<string, SetEntry[]>();
+  valued.forEach((e) => pushTo(groups, keys[entries.indexOf(e)]!, e));
+  const basis = basisOf(valued, undefined, [...groups.entries()].map(([key, g]) => ({ said: `the ${name} ${key}'s`, entries: g })));
+  const kept: SetEntry[] = [];
+  // (a window means something within one kind: minima, or saddle points - one of each in a group is refused for that group, and one whose kind is not known beside one whose is; a group none of whose is known is windowed, and the line says so)
+  let unknown = 0;
+  for (const [key, g] of groups) {
+    const kinds = g.map((e) => kindOf(e));
+    const unlike = kinds.includes("minimum") && kinds.includes("saddle point") ? `its ${name} ${key} holds minima and saddle points together: not windowed against each other` : null;
+    const open = kinds.includes("not known") && kinds.some((k) => k !== "not known") ? `in its ${name} ${key}, whether ${named(g[kinds.indexOf("not known")])} is a minimum or a saddle point is not known (no frequencies)` : null;
+    if (unlike ?? open) {
+      for (const e of g) why.set(e, (unlike ?? open)!);
+      continue;
+    }
+    if (kinds.every((k) => k === "not known")) unknown++;
+    const has = g.filter((e) => basis.energy(e) != null);
+    for (const e of g) if (basis.energy(e) == null) why.set(e, "it has no energy");
+    if (!has.length) continue;
+    const lowest = least(has.map((e) => basis.energy(e)!));
+    for (const e of has) {
+      const above = (basis.energy(e)! - lowest) * KCAL_PER_HARTREE;
+      if (above <= kcal + 1e-9) kept.push(e);
+      else why.set(e, `${numberText(above, 2)} kcal/mol above the lowest of its ${name}`);
+    }
+  }
+  // (a compound's conformers split between the two exits: a part of it in each, as over compounds)
+  const outOf = new Set(entries.filter((e) => why.has(e)).map((e) => e.compound));
+  const inOf = new Set(kept.map((e) => e.compound));
+  const part = (e: SetEntry): SetEntry => (holds === "conformers" && outOf.has(e.compound) && inOf.has(e.compound) ? { ...e, partOf: true as const } : e);
+  const keptOut = entries.filter((e) => !why.has(e)).map(part);
+  const aside = entries.filter((e) => why.has(e)).map((e) => withSaid(part(e), SET_ASIDE, why.get(e)!));
+  const counts = new Map<string, number>();
+  for (const w of why.values()) {
+    const k = /kcal\/mol above/.test(w) ? "outside the window" : w;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const rest = aside.length ? ` · rest ${aside.length} (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})` : "";
+  const kinds = unknown ? ` · ${unknown === groups.size ? "whether minima or saddle points not known" : `${unknown} of ${groups.size} ${name}s: whether minima or saddle points not known`} (no frequencies)` : "";
+  return { ok: true, holds, kept: keptOut, aside, said: `${keptOut.length} of ${countEntries(entries.length)} kept, on ${basis.words}${rest}${kinds}` };
 }
 
 /** How Duplicates takes a conformer's mirror image, in an achiral molecule: kept apart (the default), or counted in its twin. */

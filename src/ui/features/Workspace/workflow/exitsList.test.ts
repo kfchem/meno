@@ -15,7 +15,7 @@ describe("a kind's exits, as a list", () => {
       frequencies: [first("Frequencies", "same"), failed()],
       nci: [first("Non-covalent interactions", "same"), failed()],
       render: [first("Rendered", "pictures")],
-      "energy-window": [first("Within {window} kcal/mol", "conformers"), rest("Outside it", "same")],
+      "energy-window": [first("Within {window} kcal/mol", "same"), rest("Outside it", "same")],
       duplicates: [first("Unlike", "same"), rest("Alike", "same")],
       populations: [first("Populations at {temperature} K", "conformers")],
       filter: [first("Filtered", "same"), rest("The rest", "same")],
