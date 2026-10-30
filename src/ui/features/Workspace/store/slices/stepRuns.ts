@@ -1016,7 +1016,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       const client = await pluginClient(plugin);
       const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
-      const raw = await client.prepare(step.kind, sent, options, cores);
+      const raw = await client.prepare(step.kind, sent, options, cores, Object.fromEntries(paths));
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
       note = readNote(raw);

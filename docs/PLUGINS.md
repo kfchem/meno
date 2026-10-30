@@ -887,6 +887,9 @@ The same for every plugin and for Meno's own parts:
     (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
     times its processes, Gaussian's %Mem - counted against what this
     computer's jobs may use; none declared, it is counted by its cores;
+  - `prepare` is told where each program installed separately was
+    found (`programs`, by its name: `{"orca": "/Applications/orca/orca"}`),
+    the folder its jobs' PATH begins with (2026-10-31);
   - a job `prepare` gives may take fewer cores than it was given
     (`"cores": 1`): ORCA's, with no MPI to run its processes with. Meno
     asks for it at that many, never more than Settings gives, and the

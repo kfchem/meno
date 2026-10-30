@@ -1794,8 +1794,10 @@ Not put right here:
   start-up. Meno never runs it on fewer cores than asked without a word.
   Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
   processes with before any job is made - Open MPI's `mpirun` on macOS
-  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH, where
-  ORCA's jobs look for it. Not there, each job runs on one core - no
+  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
+  jobs are given: ORCA's own folder, where it was found, before the PATH
+  Meno was started with - never the plugin's own environment's folders,
+  which no job is given. Not there, each job runs on one core - no
   `%pal` written, one core asked, so that the queue counts it as one and
   as many run side by side as there are cores - and the step's line says
   so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it

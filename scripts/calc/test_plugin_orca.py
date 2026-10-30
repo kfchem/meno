@@ -24,7 +24,7 @@ spec = importlib.util.spec_from_file_location("plugin_orca", WORKER)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 # (MPI's launcher taken to be there, whatever this computer has: each test that says otherwise says so)
-worker.which = lambda name: f"/usr/local/bin/{name}"
+worker.which = lambda name, path=None: f"/usr/local/bin/{name}"
 
 WATER = {
     "name": "water",
@@ -87,8 +87,8 @@ class Prepare(unittest.TestCase):
 
     def test_with_no_mpi_to_run_its_processes_each_job_runs_on_one_core_said_once_never_failed_at_its_start(self):
         from unittest import mock
-        found = mock.patch.object(worker, "which", lambda name: f"/usr/local/bin/{name}")
-        missing = mock.patch.object(worker, "which", lambda name: None)
+        found = mock.patch.object(worker, "which", lambda name, path=None: f"/usr/local/bin/{name}")
+        missing = mock.patch.object(worker, "which", lambda name, path=None: None)
         opts = {**defaults("energy"), "maxcore": 2000}
         # (MPI there: its processes, as before - no fewer cores asked, nothing said)
         with found:
@@ -120,6 +120,41 @@ class Prepare(unittest.TestCase):
         self.assertNotIn("%pal", path["jobs"][0]["files"][0]["text"])
         self.assertEqual(path["jobs"][0]["cores"], 1)
 
+    @unittest.skipIf(sys.platform == "win32", "a launcher made runnable as macOS and Linux run one")
+    def test_the_launcher_looked_for_on_the_path_its_jobs_are_given_not_this_workers(self):
+        import os
+        import shutil
+        import stat
+        import tempfile
+        from unittest import mock
+        base = tempfile.mkdtemp()
+        try:
+            def program(folder, name):
+                os.makedirs(folder, exist_ok=True)
+                path = os.path.join(folder, name)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n")
+                os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                return path
+            orca = program(os.path.join(base, "orca_6"), "orca")
+            own = os.path.join(base, "env")
+            program(os.path.join(own, "bin"), worker.LAUNCHER)
+            plain = os.path.join(base, "usr", "bin")
+            os.makedirs(plain)
+            with mock.patch.object(worker, "which", shutil.which), mock.patch.object(worker.sys, "prefix", own), \
+                    mock.patch.dict(os.environ, {"PATH": os.pathsep.join([os.path.join(own, "bin"), plain])}):
+                # (in this worker's own environment alone: no job is given it - not found)
+                self.assertFalse(worker.launcher_found(programs={"orca": orca}))
+                # (beside ORCA, where it was found: its jobs' PATH begins there - found)
+                program(os.path.join(base, "orca_6"), worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs={"orca": orca}))
+                # (on the PATH Meno was started with: found, ORCA's folder given or not)
+                os.remove(os.path.join(base, "orca_6", worker.LAUNCHER))
+                program(plain, worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs=None))
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
     def test_the_mpi_launcher_looked_for_is_each_systems(self):
         import importlib.util
         from unittest import mock
@@ -130,7 +165,7 @@ class Prepare(unittest.TestCase):
                 spec.loader.exec_module(fresh)
             self.assertEqual(fresh.LAUNCHER, name)
             asked = []
-            self.assertFalse(fresh.launcher_found(lambda n: asked.append(n)))
+            self.assertFalse(fresh.launcher_found(lambda n, path=None: asked.append(n)))
             self.assertEqual(asked, [name])
 
     def test_frequencies_at_orcas_own_xtb_are_asked_for_numerically_and_said_to_be(self):

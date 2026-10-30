@@ -61,6 +61,7 @@ It keeps nothing between requests, and reaches no network.
 
 import json
 import math
+import os
 import re
 import shutil
 import sys
@@ -434,13 +435,22 @@ LAUNCHER = "mpiexec" if sys.platform == "win32" else "mpirun"
 NO_LAUNCHER_SAID = "run on one core: no MPI on this computer"
 
 
-#: How a program is looked for on the PATH: the standard library's (its tests give their own).
+#: How a program is looked for on a PATH: the standard library's (its tests give their own).
 which = shutil.which
 
 
-def launcher_found(look=None):
-    """Whether the program ORCA starts its processes with is there (`LAUNCHER`)."""
-    return (look or which)(LAUNCHER) is not None
+def job_path(programs):
+    """The PATH ORCA's job is given (jobs.rs `installed_env`): ORCA's own folder, where it was found, before the PATH Meno
+    was started with - this worker's, less its own environment's folders, which no job is given."""
+    own = os.path.realpath(sys.prefix)
+    rest = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p and not os.path.realpath(p).startswith(own + os.sep)]
+    found = (programs or {}).get(PROGRAM)
+    return os.pathsep.join(([os.path.dirname(found)] if isinstance(found, str) and found else []) + rest)
+
+
+def launcher_found(look=None, programs=None):
+    """Whether the program ORCA starts its processes with is there (`LAUNCHER`), on the PATH its jobs are given."""
+    return (look or which)(LAUNCHER, path=job_path(programs)) is not None
 
 
 def op_prepare(m):
@@ -449,7 +459,7 @@ def op_prepare(m):
     # (more than one core, and no MPI to run ORCA's processes with: one core each job, said - never a job ORCA ends at its
     #  start-up, as every one would, "mpirun: command not found")
     given = whole(m.get("cores"), "The cores", 1) if m.get("cores") else 1
-    alone = given > 1 and not launcher_found()
+    alone = given > 1 and not launcher_found(programs=m.get("programs"))
     if alone:
         m = {**m, "cores": 1}
     # (a reaction path's step offers no wavefunction kept: none written)
