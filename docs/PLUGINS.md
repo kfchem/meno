@@ -562,21 +562,28 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   of different ligands, are held at least a floor's angle apart, so that
   its ligands do not pile up: ETKDG knows no angle at a metal, and without
   one the seven fluorides of [ZrF7]3- came out 33 degrees apart, the
-  halides of OsCl4Br4 25. The floor goes by how many atoms are bonded to
-  the metal, and its source is geometry - each sits below the narrowest
-  angle between neighbours of the ideal polyhedra it is for:
+  halides of OsCl4Br4 25. The floor goes by how many places round the
+  metal its ligands take - each atom bonded to it, an eta ligand one - and
+  its source is geometry - each sits below the narrowest angle between
+  neighbours of the ideal polyhedra it is for:
 
-  | Atoms bonded | Floor | Narrowest ideal polyhedra |
+  | Places | Floor | Narrowest ideal polyhedra |
   |---|---|---|
   | 2 to 6 | 75° (`NARROWEST_AT_METAL`) | trigonal prism with equal edges, 2 asin(√(3/7)) = 81.8°; octahedron, square plane, trigonal bipyramid, square pyramid, 90° |
   | 7 to 12 | 60° (`NARROWEST_CROWDED`) | pentagonal bipyramid, 72° (360°/5); icosahedron, 63.4° (arctan 2). No common polyhedron of 10 or 11 points was worked out: there the margin rests on the icosahedron alone, 3.4° |
   | more | none | |
 
-  Only between point donors:
-  - none at a metal with a ligand bound through atoms side by side (eta),
+  Only between point donors - atoms bonded to the metal alone of their
+  ligands:
+  - never to an atom of a ligand bound through atoms side by side (eta),
     whose atoms spread round where it sits: Cp2TiCl2's Cp carbon and Cl
     come near 76 degrees, a Zeise-type alkene's carbon and its cis Cl near
-    71. Its own holds keep the other ligands off it (*η*, WORKSPACE.md);
+    71. Its own holds keep the other ligands off it (*η*, WORKSPACE.md).
+    The point donors beside it are held apart as at any metal, though
+    (RDKit plugin 0.1.12): Cp2ZrCl2's two Cl, near 97 degrees apart in
+    crystal structures and 109.5 as the titanium standing in makes them,
+    once came out 1.96 Å from each other, the metal's bond to one 1.83 Å,
+    where nothing held them; a piano stool's OC-M-CO is near 90;
   - never between two atoms of one ligand, whose own bonds set its bite
     (en on a lanthanide bites about 65 degrees);
   - nor for a hydride, which may sit closer to another (cis H-M-H).
@@ -585,10 +592,38 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   why. A conformer that comes out with two ligands closer than its floor
   by more than five degrees is dropped - the holds give up to two, measured
   on complexes pressed against the 60° floor - and
-  the chip counts it, naming the metal and the floor: it sat in a well of
+  the chip counts it, naming the metal and the narrowest angle (*two
+  ligands at Os too near one another*): it sat in a well of
   the force field the hold could not pull it out of. [OsCl6]2-, with Fe
   standing in, gave one 87.7 kcal/mol above the octahedron with two Cl 62
   degrees apart.
+- **No conformer with two atoms run into one another** (RDKit plugin
+  0.1.12). A conformer is dropped, and counted on the chip with the pair
+  that was nearest or furthest, where:
+  - two heavy atoms come nearer than 0.65 of their van der Waals contact,
+    the sum of their radii (Alvarez's, the app's: `lib/chem/elements`) - two
+    atoms of one part of it (a fragment, an eta ring one with its metal: a
+    salt's ions are placed by nothing but the embedding), not bonded to
+    each other nor both to one same atom, whose bonds and angles, or a
+    metal's floor, set how near they are (a bicyclo[1.1.1]pentane's
+    bridgeheads, 1.87 Å apart, are not such a pair), and not a metal and an
+    atom of an eta ring on it. The chip says *two atoms run into one
+    another*, with the nearest pair and how far apart. Measured over
+    seventeen molecules made up to 500 times each - strained, crowded,
+    hydrogen-bonded, metal complexes - none of a sound shape came under
+    0.69: the nearest were a ruthenium benzylidene's Ru and an ortho carbon
+    (0.73), a bicyclo[2.2.2]octane's bridgeheads (0.735) and cubane's
+    opposite corners (0.75). Those under it were all broken: Cp2ZrCl2 with
+    a Cl 1.16 Å from a ring carbon (0.32), PdCl2(PPh3)2 with a P 1.99 Å
+    from the other phosphine's phenyl (0.54). Hydrogens are not counted: a
+    hydrogen bond brings its hydrogen nearer its acceptor than that;
+  - a metal's bond to a point donor comes out more than 15% from the
+    covalent length it is embedded at and held to: the hold lost it (the
+    chip says *a bond to a metal far from its length*, with the furthest). Of
+    Pd(PPh3)4 made 300 times, 47 came out with one 0.62 to 2.07 of its
+    length - a phosphine pulled off, or into the metal; every conformer of
+    the Ru, Os, Co, Zr and Pd complexes otherwise kept theirs within 0.92
+    to 1.07.
 
   Before (RDKit plugin 0.1.4 to 0.1.7, from 2026-10-17), one floor of 75°
   held at every metal, between every two of its atoms not joined within
