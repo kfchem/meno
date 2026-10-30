@@ -5,7 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
-import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
+import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, removePictures, withoutAtoms, type WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Member, Model, Molecule3D, SeriesCore, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
 import { partOf } from "../chem/cleanUp";
@@ -27,7 +27,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
@@ -163,17 +163,25 @@ export function emptyIn(doc: WorkspaceDocument, step: WorkflowStep, by: string):
   return ports.length > 1 ? `Nothing came into ${namesSaid(empty)}` : "Nothing came in";
 }
 
-/** `doc` with step `id` ended at once on an empty input (`emptyIn`), saying `said`: ok, its exits emptied of what an earlier run put in them. */
+/**
+ * `doc` with step `id` ended at once on an empty input (`emptyIn`), saying
+ * `said`: done, what it last did kept among its runs, and every one of its
+ * exits' sets emptied of what an earlier run put in it - its molecules in
+ * 3D, the atoms it put on the page, its pictures, and a chart, table,
+ * number or molecules held in it - so that none stands under a step that
+ * says nothing came in.
+ */
 export function ranEmpty(doc: WorkspaceDocument, id: number, said: string, key: string, w: RunWith): WorkspaceDocument {
   const step = stepOf(doc, id);
   if (!step) return doc;
-  const ports = inputsOf(step.kind);
-  const came = inputOf(doc, id, ports.length > 1 ? ports[0].id : undefined)?.holds ?? "molecules";
-  const gives = kindInfo(step.kind).gives;
-  const holds = isSetKind(gives) ? gives : came;
-  // (the one empty outcome, of structures drawn or of molecules in 3D, as its type has each)
-  const outcome: Outcome = holds === "structures" ? { ok: true, holds, kept: [], aside: [], said } : { ok: true, holds, kept: [], aside: [], said };
-  return ranAs(doc, id, outcome, key, w);
+  doc = keepRun(doc, step);
+  for (const exit of exitsOf(step.kind)) {
+    const set = resultOf(doc, id, exit.id);
+    if (!set) continue;
+    doc = removePictures(emptied(doc, set), setMembers(doc, set).pictures);
+    doc = holdNothing(doc, set.id);
+  }
+  return setRan(doc, id, { at: w.now, ok: true, said, input: key, kind: step.kind, ...(step.options ? { options: step.options } : {}) });
 }
 
 /**
