@@ -10,6 +10,7 @@ import { BETWEEN, CHIP, CHIP_CHAR, SET_PAD, SET_TOP } from "./look";
 import { addSet, addStep } from "./model";
 import { resultOf } from "./flow";
 import { chipWide, fitResultSets, placeResults, type RunWith } from "./run";
+import { PATH_FRAME, REFINED_SAID } from "./entries";
 import { style3dIn } from "../../../../lib/chem/workspaceStyle3d";
 
 /** A bent triatomic about the origin: water, or one of its kind. */
@@ -260,5 +261,16 @@ describe("a result set of molecules narrower than their frames chips", () => {
     for (let i = 1; i < chips.length; i++) if (chips[i].y === chips[i - 1].y) expect(chips[i].x0).toBeGreaterThanOrEqual(chips[i - 1].x1);
     for (const c of chips) expect(c.x0).toBeGreaterThanOrEqual(set.x0);
     for (const c of chips) expect(c.x1).toBeLessThanOrEqual(set.x1);
+  });
+
+  // (a path search's molecule, its highest point refined, says each frame's energy from its start - "3 / 3 · ΔE 12.3 kcal/mol from
+  //  its start" - not the bare height a plain set's chip says)
+  it("gives a path search's chip room for its energy from the path's start", () => {
+    const xyz = bent().atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const plain = { ...bent(), frames: [xyz, xyz], energies: [-1, -0.99, -0.995] };
+    const calc = { program: "test", results: [{ id: PATH_FRAME, group: "Path", label: "Frame", on: "frames" as const, values: ["", REFINED_SAID, ""] }] };
+    const path = { ...plain, calc } as unknown as typeof plain;
+    expect(chipWide(path)).toBeGreaterThanOrEqual("3 / 3 · ΔE 12.3 kcal/mol from its start".length * CHIP_CHAR);
+    expect(chipWide(path)).toBeGreaterThan(chipWide(plain));
   });
 });

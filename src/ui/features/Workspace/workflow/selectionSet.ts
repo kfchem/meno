@@ -9,7 +9,7 @@ import type { Style3D } from "../../../../lib/chem/style3d";
 import { labelBox, labelSetOf, pxToWorld, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
 import type { Model, Molecule3D, Turn3D } from "../store/types";
 import { chipMarks, lookOf, poseOf, seenBounds, sharesOf, solidOf } from "../utils/molecule3d";
-import { framesOf, inside, placesOf, structuresOf, type Frame, type Page } from "./entries";
+import { framesOf, inside, placesOf, refinedFrame, structuresOf, type Frame, type Page } from "./entries";
 import { SET_PAD, SET_TOP, CHIP, CHIP_CHAR, CHIP_SIDES } from "./look";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { aboveSaid, barsAbove } from "../utils/barsAbove";
@@ -41,9 +41,11 @@ export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | 
   // (each frame's energy as it says it - its height above the lowest, or why it has none - and what it says of the frame after
   //  that: why it failed, its imaginary frequencies, its warnings. The widest, as any frame may be the one shown)
   const bars = m.energies?.length === n ? barsAbove(m.energies, m.failed, m.marksUnread) : null;
+  // (a path whose highest point was refined says each frame's energy from its start, as Molecule3DView tells its chip)
+  const fromStart = refinedFrame(m) != null;
   const said = Math.max(0, greatest(Array.from({ length: n }, (_, k) => {
     const marks = chipMarks({ imaginary: m.imaginary, calc: m.calc, failed: m.failed }, k, n);
-    return (bars ? 3 + aboveSaid(bars, k).length : 0) + (marks ? 3 + marks.length : 0);
+    return (bars ? 3 + aboveSaid(bars, k, fromStart).length : 0) + (marks ? 3 + marks.length : 0);
   })));
   return (`${numbered}${n} / ${n}${shares}`.length + said) * CHIP_CHAR + CHIP_SIDES;
 }
