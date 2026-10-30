@@ -28,7 +28,7 @@ import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
-import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
+import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
@@ -162,11 +162,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
   };
 
-  /** The step before a step, where one gives what comes into it. */
+  /** The steps before a step: each that gives what comes into one of its inputs, once - a step of two inputs may have two. */
   const before = (d: WorkspaceDocument, id: number) => {
-    const from = wireInto(d, id)?.from;
-    const prior = from ? findSet(d, from.set)?.made?.step : undefined;
-    return prior != null ? stepOf(d, prior) : undefined;
+    const ids = new Set(wiresInto(d, id).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
+    return [...ids].flatMap((k) => stepOf(d, k) ?? []);
   };
 
 
@@ -453,10 +452,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       let going = runs.get(id);
       if (!going) {
         going = (async () => {
-          const prior = before(doc.getState(), id);
-          if (prior && wanted.has(prior.id)) {
-            if (!(await run(prior.id))) return false;
-          } else if (prior?.running) await ended(prior.id);
+          // (each step before it run first, or its run under way waited for: a step of two inputs, both - never after the first alone)
+          const priors = before(doc.getState(), id).filter((prior) => wanted.has(prior.id) || prior.running);
+          if (priors.length) {
+            const went = await Promise.all(priors.map((prior) => (wanted.has(prior.id) ? run(prior.id) : ended(prior.id).then(() => true))));
+            if (went.includes(false)) return false;
+          }
           const step = stepOf(doc.getState(), id);
           if (!step) return false;
           if (begun.has(id) || step.running) {

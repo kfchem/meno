@@ -45,7 +45,7 @@ const optimised = (e: SetEntry) => e.calc?.optimised === true && !e.failed;
  */
 function unlike(start: SetEntry, end: SetEntry): string | null {
   if (start.atoms.length !== end.atoms.length || start.atoms.some((a, i) => a.el !== end.atoms[i].el))
-    return `${named(start)} and its end ${named(end)} are not the same atoms in one numbering: Re-bond them first`;
+    return `${named(start)} and its end ${named(end)} are not the same atoms in one numbering: put the end in the start's numbering first (a reaction arrow's Atom map, then Export reaction in 3D…)`;
   if (speciesOf(start) !== speciesOf(end)) return `${named(start)} and its end ${named(end)} are not of one charge and spin`;
   const not = [start, end].filter((e) => !optimised(e));
   if (not.length)

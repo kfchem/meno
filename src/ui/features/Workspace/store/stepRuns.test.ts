@@ -478,7 +478,7 @@ describe("a step that runs a plugin's program", () => {
     // (water turned on the page a quarter turn about x)
     const quarter: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
     st().setTurn3d(water, quarter);
-    const step = st().addStep("energy", "gaussian", 10, 10);
+    const step = st().addStep("optimise", "gaussian", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
@@ -500,6 +500,38 @@ describe("a step that runs a plugin's program", () => {
     ];
     const sign = Math.sign(w * want[3] + x * want[0] + y * want[1] + z * want[2]);
     [x, y, z, w].forEach((v, i) => expect(v).toBeCloseTo(sign * want[i], 6));
+  });
+
+  it("keeps a single point's geometry as it went in, and turned as it is, though Gaussian gave it back in its own orientation", async () => {
+    useReaders.setState({ state: { gaussian: "added" }, problem: {} });
+    installedAt.g16 = "/Applications/g16/g16";
+    worker.prepare.mockImplementationOnce(
+      async () => ({ jobs: [{ entries: [0], program: "g16", args: [], files: [{ name: "input.gjf", text: "# SP\n" }], stdin: "input.gjf", reads: [] }] }) as never,
+    );
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "gaussian", log: true, name: "water.log" }] }) as never);
+    const { st } = editor();
+    const water = st().molecules3d[0];
+    // (water as Gaussian gives it back: in its standard orientation - turned a half turn about z, and moved)
+    const turned = water.atoms.flatMap((a) => [0.1 - a.x, -a.y, a.z]);
+    readOutput.mockImplementationOnce(async () => ({
+      output: { schema: 1, program: "Gaussian", version: "2016+B.01", method: "B3LYP", atoms: ["O", "H", "H"], frames: [turned], energies: [-76.4] },
+      readers: ["cclib 1.9rc1"],
+    }));
+    const quarter: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    st().setTurn3d(water.id, quarter);
+    const step = st().addStep("energy", "gaussian", 10, 10);
+    st().connect({ set: st().sets[0].id }, step);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Gaussian's output" });
+    await st().lookAtJobs();
+    await ran;
+    const m = st().molecules3d[st().molecules3d.length - 1];
+    expect(m.id).not.toBe(water.id);
+    expect(m.energies).toEqual([-76.4]);
+    expect(m.atoms.map((a) => [a.x, a.y, a.z])).toEqual(water.atoms.map((a) => [a.x, a.y, a.z]));
+    st().turns3d[m.id].forEach((v, i) => expect(Math.abs(v)).toBeCloseTo(Math.abs(quarter[i]), 6));
   });
 
   it("says where to locate a program installed separately that is found nowhere - and starts nothing", async () => {
@@ -584,6 +616,29 @@ describe("a step that runs a plugin's program", () => {
     await big.st().runStep(step2);
     expect(big.st().steps.find((x) => x.id === step2)!.ran).toMatchObject({ ok: false, said: `Start holds 11 and End 10: each with each makes 110 pairs, and it makes at most ${MOST_PAIRS} - match them on a property instead, or raise At most` });
     expect(asked.started).toHaveLength(before);
+  });
+
+  it("runs a step of two inputs once each step before it is done, not after the first of them alone", async () => {
+    const { st, step: a } = editor();
+    // (two optimisations of the one set, each into Merge's inputs: the second's job ends last)
+    const b = st().addStep("optimise", "xtb", 10, 10);
+    st().connect({ set: st().sets[0].id }, b);
+    const merge = st().addStep("merge", "meno", 30, 0);
+    expect(st().connect({ set: resultOf(st(), a)!.id }, merge, "first")).toBe(true);
+    expect(st().connect({ set: resultOf(st(), b)!.id }, merge, "second")).toBe(true);
+    const all = st().runAll();
+    for (let k = 0; k < 4; k++) await settle();
+    expect(asked.started).toHaveLength(2);
+    const done = (n: number) => Object.assign(jobs.get(idOf(n))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    done(1);
+    await st().lookAtJobs();
+    for (let k = 0; k < 4; k++) await settle();
+    // (the first done, the second still running: Merge waits - never "the step before it failed")
+    expect(st().steps.find((s) => s.id === merge)!.ran).toBeUndefined();
+    done(2);
+    await st().lookAtJobs();
+    await all;
+    expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
   });
 
   it("runs a path search on pairs - each start with the end in its place - sending each its end, and a pair it cannot work out out of Failed, saying why", async () => {

@@ -3,6 +3,7 @@ import {
   CpuChipIcon,
   CursorArrowRaysIcon,
   FunnelIcon,
+  NumberedListIcon,
   PhotoIcon,
   PresentationChartLineIcon,
   QueueListIcon,
@@ -166,6 +167,27 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M7 8.8 H13 M7 11.7 H13" />
     </>
   ),
+  // (two atoms held to a wall: restraints)
+  held: (
+    <>
+      <path d="M3.2 3.5 V16.5 M3.2 10 H7 M11.2 10 H13.8" />
+      <path d="M3.2 4.2 l-1.8 1.8 M3.2 7.4 l-1.8 1.8 M3.2 10.6 l-1.8 1.8 M3.2 13.8 l-1.8 1.8" />
+      <circle cx="9" cy="10" r="2.2" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="10" r="2.2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // (four atoms anti, a torsion at 180, held: Restraints' hatching under it)
+  heldAnti: (
+    <>
+      <path d="M2.6 12.6 L7.2 5.6 L12.8 11.6 L17.4 4.6 M4.8 17 H15.2" />
+      <circle cx="2.6" cy="12.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="7.2" cy="5.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="12.8" cy="11.6" r="1.9" fill="currentColor" stroke="none" />
+      <circle cx="17.4" cy="4.6" r="1.9" fill="currentColor" stroke="none" />
+      <path d="M6.6 17 l-1.6 2 M9.4 17 l-1.6 2 M12.2 17 l-1.6 2 M15 17 l-1.6 2" />
+      <path d="M10 8.8 V17" strokeWidth={1} strokeDasharray="0.1 1.8" />
+    </>
+  ),
   // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)
   frames: (
     <>
@@ -182,6 +204,33 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <circle cx="3.1" cy="14.5" r="2.2" />
       <circle cx="16.9" cy="14.5" r="2.2" />
       <circle cx="10" cy="6.5" r="2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // (a list numbered: entries in order, their places)
+  numbered: NumberedListIcon,
+  // (two tables, a row of each linked: put on by a key)
+  join: (
+    <>
+      <rect x="2" y="3.5" width="6.5" height="13" rx="1.3" />
+      <rect x="11.5" y="3.5" width="6.5" height="13" rx="1.3" />
+      <path d="M2 7.8 H8.5 M2 12.2 H8.5 M11.5 7.8 H18 M11.5 12.2 H18" strokeWidth={1} />
+      <path d="M8.5 10 H11.5" strokeWidth={2.2} />
+    </>
+  ),
+  // (two values, summed)
+  sum: (
+    <>
+      <rect x="1.8" y="6" width="5.4" height="8" rx="1.2" />
+      <rect x="12.8" y="6" width="5.4" height="8" rx="1.2" />
+      <path d="M10 7.6 V12.4 M7.6 10 H12.4" />
+    </>
+  ),
+  // (a number typed in a field)
+  number: (
+    <>
+      <rect x="2" y="5.5" width="16" height="9" rx="2" />
+      <path d="M5.2 8.2 L6.6 7.6 V12.4 M8.9 12.4 V12.3 M11 8.4 C11.6 7.4, 13.8 7.4, 13.6 9 C13.4 10.2, 11.2 10.9, 11 12.4 H13.9" strokeWidth={1.3} />
+      <path d="M15.8 7.6 V12.4" strokeWidth={1} />
     </>
   ),
 };
