@@ -77,7 +77,7 @@ export function ensembleSet(entries: readonly SetEntry[], holds: Holds3D, v: Val
   const whys = new Map<string, number>();
   for (const e of aside) {
     const w = String(e.properties?.[SET_ASIDE]?.value ?? "");
-    const key = w.startsWith("in the ensemble of ") ? "counted in its group's ensemble" : w;
+    const key = w.startsWith("in the ensemble of ") ? "in an ensemble" : w;
     whys.set(key, (whys.get(key) ?? 0) + 1);
   }
   // (what came of it alone: the temperature is each value's own, said on its record, not the step's to say)

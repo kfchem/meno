@@ -50,7 +50,7 @@ describe("an Ensemble energy step", () => {
   it("writes each group's ensemble free energy on its lowest conformer, the others in the rest saying whose ensemble they are in", () => {
     // (G 1 and 0 kcal/mol at 298.15 K: -RT ln(1 + e^(-1/RT)) = -0.1005324 kcal/mol below the lowest)
     const doc = ensembled([waters([1, 0])], { property: "G", as: "G-ens" });
-    expect(ran(doc)).toMatchObject({ ok: true, said: "1 ensemble from 2 entries · rest 1 (1: counted in its group's ensemble)" });
+    expect(ran(doc)).toMatchObject({ ok: true, said: "1 ensemble from 2 entries · rest 1 (1: in an ensemble)" });
     const [kept] = out(doc);
     expect(kept.numbers).toEqual([2]);
     const ens = kept.properties![0]["G-ens"];
@@ -61,7 +61,7 @@ describe("an Ensemble energy step", () => {
 
   it("never counts a conformer that is no result: not converged, set aside saying so", () => {
     const doc = ensembled([waters([1, 0, 0.5], { failed: [null, { kind: "not-converged", why: "stopped" }, null] })], { property: "G", as: "G-ens" });
-    expect(ran(doc)?.said).toBe("1 ensemble from 3 entries · rest 2 (1: counted in its group's ensemble; 1: not counted: not converged)");
+    expect(ran(doc)?.said).toBe("1 ensemble from 3 entries · rest 2 (1: in an ensemble; 1: not counted: not converged)");
     expect(out(doc)[0].properties![0]["G-ens"].ensemble).toEqual({ of: 2 });
   });
 
