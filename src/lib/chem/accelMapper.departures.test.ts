@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACCEL_EXACT, Atom, Atoms, BondType, MENO_DEPARTURES, _det_ez, acosOf, getMaps, kabsch, type Departures } from "./accelMapper";
 import type { Molecule } from "./molecule";
+import { mapReaction } from "./reactionMap";
+import adduct from "./testdata/diels-alder-acrolein.json";
 import {
   ETHANE_BONDS,
   acetoneEnol,
@@ -235,5 +237,34 @@ describe("localLeastTurn", () => {
   it("Meno keeps each where it stood about the C-C and the axis of attack, as the umbrella folds", () => {
     expect(ch2(only({ localLeastTurn: true }))).toEqual(["Ha", "Hb"]);
     expect(ch2(MENO_DEPARTURES)).toEqual(["Ha", "Hb"]);
+  });
+
+  // (buta-1,3-diene and acrolein, and their adduct, each made in 3D on its own: each =CH2 end of the diene becomes a ring CH2)
+  const side = (m: { atoms: { el: string; x: number; y: number; z: number }[]; bonds: number[][] }): Molecule => ({ atoms: m.atoms, bonds: m.bonds.map(([a1, a2, order]) => ({ a1, a2, order })) }) as Molecule;
+  const da = { reactants: adduct.reactants.map(side), products: [side(adduct.product)] };
+  /** Whether, mapped, the diene's two outside hydrogens (trans to its inner carbons) stand on one face of the new ring: suprafacial. */
+  const suprafacial = (accelExact: boolean) => {
+    const m = mapReaction({ ...da, accelExact });
+    if ("error" in m) throw new Error(m.message);
+    const [r, p] = [m.reactant, m.productsInReactantNumbering[0]];
+    type V = [number, number, number];
+    const at = (x: Molecule, i: number): V => [x.atoms[i].x, x.atoms[i].y, x.atoms[i].z];
+    const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const near = (i: number) => r.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
+    // (the diene: buta-1,3-diene's atoms, the first 4 carbons of the reactants)
+    const [c1, c2, c3, c4] = [0, 1, 2, 3];
+    const outside = (c: number, partner: number, inner: number) =>
+      near(c).find((h) => r.atoms[h].el === "H" && dot(cross(sub(at(r, partner), at(r, inner)), sub(at(r, c), at(r, partner))), cross(sub(at(r, c), at(r, partner)), sub(at(r, h), at(r, c)))) < 0)!;
+    const normal = cross(sub(at(p, c3), at(p, c1)), sub(at(p, c4), at(p, c2)));
+    const face = (h: number, c: number) => Math.sign(dot(sub(at(p, h), at(p, c)), normal));
+    return face(outside(c1, c2, c3), c1) === face(outside(c4, c3, c2), c4);
+  };
+
+  it("leaves an atom whose kept bond changes order to ACCeL's own scores: a Diels-Alder's =CH2 ends stay suprafacial", () => {
+    expect(adduct.reactants[0].atoms.slice(0, 4).map((a) => a.el)).toEqual(["C", "C", "C", "C"]);
+    expect(suprafacial(true)).toBe(true);
+    expect(suprafacial(false)).toBe(true);
   });
 });

@@ -768,11 +768,12 @@ export type Chain = Pair[];
  *   `TRANSFER_MARGIN`: a hydrogen is passed along the line D-H...A, so the
  *   one already nearest that line is the one that goes.
  * - `localLeastTurn`: like hydrogens that stay on one atom, where the atom
- *   has two or more heavy neighbours, given to one another again for the
- *   least motion once the atom and those neighbours are laid over one
- *   another (`localLeastTurn`), after `transferAlignedH`: such a group
- *   cannot turn freely, so its hydrogens keep their places about their
- *   atom's frame through a step.
+ *   has two or more heavy neighbours and keeps the order of its bond to
+ *   each it keeps, given to one another again for the least motion once
+ *   the atom and those neighbours are laid over one another
+ *   (`localLeastTurn`), after `transferAlignedH`: such a group cannot turn
+ *   freely, so its hydrogens keep their places about their atom's frame
+ *   through a step.
  */
 export type Departures = {
   firstOfGroupByGeometry: boolean;
@@ -2926,8 +2927,12 @@ export function alignedTransfers(map: Chain): Chain {
  * Only for an atom with two or more heavy neighbours, which hold it in
  * place: a methyl, or an atom alone, has no frame to lay over, and is left
  * as it was. A group where a hydrogen comes or goes is left too, as
- * `transferAlignedH` placed it. Only which of an atom's like hydrogens is
- * which changes, so the map's bond changes stay the same.
+ * `transferAlignedH` placed it; and an atom whose bond to a neighbour it
+ * keeps changes order (a double bond added to, or made), which goes from
+ * one shape to another, its hydrogens following the faces the reaction
+ * meets - ACCeL's face and syn-or-anti scores placed them. Only which of
+ * an atom's like hydrogens is which changes, so the map's bond changes
+ * stay the same.
  */
 export function localLeastTurn(map: Chain): Chain {
   const out: Chain = map.map((p) => [p[0], p[1]] as Pair);
@@ -2945,6 +2950,10 @@ export function localLeastTurn(map: Chain): Chain {
     const c = toA.get(cB);
     const hs = hsB.map((x) => toA.get(x));
     if (!c || hs.some((x) => !x || x.symbol !== "H" || !x.bonds.includes(c))) continue;
+    // (an atom whose bond to a neighbour it keeps changes order - a double bond added to, or made - goes from one shape to
+    //  another, its hydrogens turned with the faces the reaction meets: left as ACCeL's own scores placed them)
+    const kind = (x: Atom, y: Atom) => (x.single.includes(y) ? 1 : x.double.includes(y) ? 2 : x.triple.includes(y) ? 3 : x.aromatic.includes(y) ? 4 : 0);
+    if (cB.bonds.some((xB) => xB.symbol !== "H" && toA.has(xB) && toA.get(xB)!.bonds.includes(c) && kind(c, toA.get(xB)!) !== kind(cB, xB))) continue;
     const frameB = [cB, ...cB.bonds.filter((x) => x.symbol !== "H" && toA.has(x))];
     if (frameB.length < 3) continue;
     const fit = kabschFit(
