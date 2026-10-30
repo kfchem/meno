@@ -642,7 +642,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "from", label: "Its value of (blank: its number)", type: "text", default: "", when: { id: "reference", in: ["each"] } },
       { id: "rs", label: "R or S too", type: "switch", default: false },
       { id: "ez", label: "E or Z too", type: "switch", default: false },
-      { id: "numbered", label: "Every centre by its atoms' numbers too", type: "switch", default: false },
+      { id: "numbered", label: "Every centre by number too", type: "switch", default: false },
       { id: "atoms", label: "Pass over atoms, from 1", type: "text", default: "" },
       { id: "elements", label: "Pass over elements", type: "text", default: "" },
       { id: "reach", label: "Bonded within \u00d7 the sum of their covalent radii (Pyykk\u00f6)", type: "number", default: BOND_REACH, min: 1, max: 2, step: 0.05 },

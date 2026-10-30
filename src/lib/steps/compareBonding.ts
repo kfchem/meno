@@ -223,12 +223,17 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
         if (skipAtom.has(c) || skipEl.has(els[c]) || centres.has(c)) continue;
         if (numberedS(xyz, atoms) !== numberedS(rxyz, atoms)) differences.push(`${els[c]}${c + 1} has its neighbours, by their numbers, the other way round from the reference's.`);
       }
+      // (a double bond whose two ends are both read is read the same at each - the same four atoms, the other way round -
+      //  so said once, by its lower-numbered end)
+      const saidBonds = new Set<string>();
       for (const { atom: c, atoms } of doubleEnds) {
         const [a, , q, b] = atoms;
-        if (passed(c, q) || doubles.has(key(c, q))) continue;
+        if (passed(c, q) || doubles.has(key(c, q)) || saidBonds.has(key(c, q))) continue;
         const here = numberedE(xyz, atoms);
         const there = numberedE(rxyz, atoms);
-        if (here !== there) differences.push(`At ${els[c]}${c + 1}, ${els[a]}${a + 1} and ${els[b]}${b + 1} stand ${here ? "trans" : "cis"} across the double bond ${said(c, q)} here and ${there ? "trans" : "cis"} in the reference.`);
+        if (here === there) continue;
+        saidBonds.add(key(c, q));
+        differences.push(`${els[a]}${a + 1} and ${els[b]}${b + 1} stand ${here ? "trans" : "cis"} across ${els[c]}${c + 1}=${els[q]}${q + 1} here and ${there ? "trans" : "cis"} in the reference.`);
       }
     }
   }

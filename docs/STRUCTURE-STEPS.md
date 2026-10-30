@@ -230,7 +230,9 @@ references, the first it is bonded as (`matchingReference`).
     and a single bond, where the atom across the double bond has two single
     bonds: whether its highest-numbered neighbour by a single bond and that
     atom's stand across the double bond from each other, their dihedral
-    past 90 degrees.
+    past 90 degrees. Read at both its ends, a double bond is read the same
+    four atoms each time, so a difference there is said once, for the
+    double bond.
 
   As there, not at an end whose partner has one single bond (an imine's
   carbon), an atom of two, or an allene's ends. A centre R or S, or E or Z,

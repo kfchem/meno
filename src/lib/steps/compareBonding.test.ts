@@ -129,14 +129,20 @@ describe("Compare bonding, every centre by its atoms' numbers", () => {
     properties: {},
     status: "done",
   });
-  // (the atom each difference names: "C2 has its neighbours ...", "At C1, ...")
-  const named = (d: string) => Number((d.match(/^(?:At )?[A-Z][a-z]?(\d+)/) ?? [])[1]) - 1;
+  // (the atoms each difference names: a centre of four by itself, "C2 has its neighbours ..."; a double bond by both its
+  //  ends, "... across C1=C2 ...", each that is read - both, where it has two)
+  const named = (c: Case, d: string): number[] => {
+    const bond = d.match(/across [A-Z][a-z]?(\d+)=[A-Z][a-z]?(\d+)/);
+    if (!bond) return [Number((d.match(/^[A-Z][a-z]?(\d+)/) ?? [])[1]) - 1];
+    const ends = new Set(numberedCentres(entry(c, c.reference, "ref").structure).doubleEnds.map((e) => e.atom));
+    return [Number(bond[1]) - 1, Number(bond[2]) - 1].filter((x) => ends.has(x));
+  };
 
   for (const c of numbered as Case[])
     it(`flags the atoms ConfoTS's check flags: ${c.name}`, () => {
       const r = comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { numbered: true });
       if ("failed" in r) throw new Error(r.failed);
-      expect(r.differences.map(named).sort((p, q) => p - q)).toEqual(c.flagged);
+      expect(r.differences.flatMap((d) => named(c, d)).sort((p, q) => p - q)).toEqual(c.flagged);
       expect(r.same).toBe(c.flagged.length === 0);
       // (and none where it is not asked)
       expect(comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"))).toEqual({ same: true, differences: [] });
@@ -146,11 +152,9 @@ describe("Compare bonding, every centre by its atoms' numbers", () => {
     const c = (numbered as Case[]).find((x) => x.name.startsWith("propene"))!;
     const r = comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { ez: true, numbered: true });
     if ("failed" in r) throw new Error(r.failed);
-    // (at each end, its highest-numbered neighbour by a single bond and the other end's, as ConfoTS's check reads them: H5 on C1, H6 on C2)
-    expect(r.differences).toEqual([
-      "At C1, H5 and H6 stand trans across the double bond C1-C2 here and cis in the reference.",
-      "At C2, H6 and H5 stand trans across the double bond C2-C1 here and cis in the reference.",
-    ]);
+    // (each end's highest-numbered neighbour by a single bond, as ConfoTS's check reads them - H5 on C1, H6 on C2: one
+    //  reading, said once for the double bond, which ConfoTS's check flags at both its ends)
+    expect(r.differences).toEqual(["H5 and H6 stand trans across C1=C2 here and cis in the reference."]);
     expect(comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { ez: true })).toEqual({ same: true, differences: [] });
   });
 
@@ -159,7 +163,7 @@ describe("Compare bonding, every centre by its atoms' numbers", () => {
     const r = comparedBonding(entry(c, c.entry, "e"), entry(c, c.reference, "ref"), { rs: true, numbered: true });
     if ("failed" in r) throw new Error(r.failed);
     // (C2 by R or S; its methyls and CH2 by number)
-    expect(r.differences.map(named).sort((p, q) => p - q)).toEqual([0, 1, 3, 4]);
+    expect(r.differences.flatMap((d) => named(c, d)).sort((p, q) => p - q)).toEqual([0, 1, 3, 4]);
     expect(r.differences.filter((d) => d.startsWith("C2 "))).toEqual(["C2 has the other configuration from the reference's."]);
   });
 
