@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
@@ -10,7 +10,7 @@
     {"id": "orca-input", "name": "ORCA input", "extensions": [".inp"], "lines": ["!", "%", "*"], "grammar": {"file": "orca-input.grammar", "tones": {"Keyword": "keyword", "BlockName": "keyword", "End": "keyword", "CoordKind": "keyword", "FileKind": "keyword", "NewJob": "keyword", "Option": "property", "Element": "tag", "Value": "value", "String": "string", "Comment": "comment"}}}
   ],
   "installed": [
-    {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"], "beside": {"orca_2mkl": {"macos": "orca_2mkl", "linux": "orca_2mkl", "windows": "orca_2mkl.exe"}}}
+    {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"], "beside": {"orca_2mkl": {"macos": "orca_2mkl", "linux": "orca_2mkl", "windows": "orca_2mkl.exe"}}, "parallel": "processes"}
   ],
   "needs": [{"plugin": "xtb", "program": "xtb", "env": "XTBEXE"}],
   "xyzEnergies": [{"id": "orca", "pattern": "(?:^|\\s)E\\s*[:=]?\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)", "unit": "hartree"}],
