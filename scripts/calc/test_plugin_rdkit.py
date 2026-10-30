@@ -1688,6 +1688,16 @@ class CoordinationBonds(unittest.TestCase):
         renumbered.GetAtomWithIdx(1).SetIntProp(self.worker.LENDS_TO, 99)
         with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
             self.worker.as_drawn(renumbered)
+        # (and one naming an atom bonded to the donor that is not its acceptor - one of the N's own hydrogens: never that
+        #  N-H written as the arrow)
+        withH = Chem.AddHs(self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])))
+        n = next(x for x in withH.GetAtoms() if x.GetSymbol() == "N")
+        h = next(x.GetIdx() for x in n.GetNeighbors() if x.GetSymbol() == "H")
+        arrows = lambda m: [(x.GetBeginAtom().GetSymbol(), x.GetEndAtom().GetSymbol()) for x in m.GetBonds() if x.GetBondType() == Chem.BondType.DATIVE]
+        self.assertEqual(arrows(self.worker.as_drawn(withH)), [("N", "B")])
+        n.SetIntProp(self.worker.LENDS_TO, h)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(withH)
         from unittest import mock
         adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
         with mock.patch.object(self.worker, "as_drawn", side_effect=ValueError("its coordination bond from N could not be written back as drawn")):

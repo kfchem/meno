@@ -183,15 +183,20 @@ def as_drawn(mol):
     """A copy of `mol` with each coordination bond held in its dipolar form
     (`dipolar_adducts`) as drawn again: a dative bond from its donor to its
     acceptor, and each atom's charge as drawn - for a drawing written back,
-    which shows what the chemist drew, not how RDKit holds it. Where a
-    donor's acceptor is no longer bonded to it - the molecule renumbered
-    since - why, in words: never a drawing written without its arrow."""
+    which shows what the chemist drew, not how RDKit holds it. Where the
+    atom a donor names as its acceptor is no longer that acceptor - not
+    bonded to it, or not a group-13 acceptor held so (its charge as drawn
+    kept, its charge here -1): the molecule renumbered since - why, in
+    words: never a drawing written without its arrow, nor with it on
+    another bond."""
     out = Chem.RWMol(mol)
     for a in mol.GetAtoms():
         if a.HasProp(LENDS_TO):
             to = a.GetIntProp(LENDS_TO)
-            bond = out.GetBondBetweenAtoms(a.GetIdx(), to) if 0 <= to < out.GetNumAtoms() else None
-            if bond is None:
+            acceptor = mol.GetAtomWithIdx(to) if 0 <= to < mol.GetNumAtoms() else None
+            bond = out.GetBondBetweenAtoms(a.GetIdx(), to) if acceptor is not None else None
+            if (bond is None or not acceptor.HasProp(DRAWN_CHARGE) or acceptor.GetSymbol() not in DIPOLAR_ACCEPTORS
+                    or acceptor.GetFormalCharge() != -1):
                 raise ValueError(f"its coordination bond from {a.GetSymbol()} could not be written back as drawn")
             bond.SetBondType(Chem.BondType.DATIVE)
             if bond.GetBeginAtomIdx() != a.GetIdx():
