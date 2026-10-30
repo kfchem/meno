@@ -999,6 +999,17 @@ point, words of the plugin's own for the rest (ORCA's: "NEB image 3 of
 frequencies were worked out. Meno works out the barriers itself, and calls
 no frame a saddle point.
 
+### Follow the reaction path
+
+A plugin filling *Follow the reaction path* is sent each point as any entry
+is. What it reads back is an output in Meno's form, its frames the path one
+end to the other, each with its energy; `converged` true for the point it
+started from alone, which becomes the molecule's entry frame; a frames
+result `path.frame` saying what each frame is, "the point it started from"
+for that one. Where a side stopped before its end, `optimised` false and a
+warning in the program's words: the molecule goes out of *Failed*, the path
+as far as it came.
+
 ### Generate
 
 *Generate* makes new structures from nothing that comes in, so it has no

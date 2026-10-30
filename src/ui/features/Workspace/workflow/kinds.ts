@@ -46,7 +46,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -187,6 +187,9 @@ export const KINDS: readonly KindInfo[] = [
       { id: "property", label: "Property", type: "text", default: "", when: { id: "pairs", in: ["property"] } },
     ],
   },
+  // (from each point given - a saddle point, as its frequencies say - down both ways, as its program follows the reaction path: one molecule
+  //  each, its frames the path from one end to the other, its entry the point it started from; Meno judges none of them - docs/WORKFLOWS.md)
+  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",

@@ -75,7 +75,7 @@ WAVEFUNCTION_KIND = "molden"
 # what ORCA's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "orca"
 
-RUNS = {"optimise": "OPT", "energy": "SP", "frequencies": "FREQ"}
+RUNS = {"optimise": "OPT", "energy": "SP", "frequencies": "FREQ", "reaction-path": "IRC"}
 # ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
 # one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
 NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
@@ -182,6 +182,10 @@ def orca_input(step, entry, options, cores):
         lines.append(f"%pal nprocs {int(cores)} end")
     if maxcore:
         lines.append(f"%maxcore {maxcore}")
+    # (a reaction path's steps each way, where said: ORCA's own else - the manual's 4.4.2 states none, ORCA 6.1.1 prints 20)
+    steps = whole(options.get("maxiter", 0), "The steps each way", 0) if step == "reaction-path" else 0
+    if steps:
+        lines.append(f"%irc maxiter {steps} end")
     lines.append(f"* xyz {charge} {multiplicity}")
     for el, a in zip(elements_of(entry), entry["atoms"]):
         x, y, z = (float(a.get(k, 0.0)) for k in ("x", "y", "z"))
@@ -332,10 +336,65 @@ def path_input(entry, options, cores):
     return "\n".join(lines) + "\n", f"{len(end_lines)}\nend\n" + "\n".join(end_lines) + "\n"
 
 
+#: A reaction path (ORCA's IRC: the ORCA 6.1 manual, 4.4 *Intrinsic Reaction Coordinate*), followed both ways from the
+#: point given - the manual's default direction - in one job. Its file, as ORCA 6.1.1 writes it for an input named
+#: input.inp: the whole path, one end to the other, each frame with its energy; its IRC PATH SUMMARY marks the point it
+#: started from ("<= TS").
+IRC_FULL = f"{BASE}_IRC_Full_trj.xyz"
+#: What each frame of a reaction path is, as the step says it: Meno judges none of them.
+IRC_STARTED_SAID = "the point it started from"
+#: What ORCA says where a side stopped at its iteration cap, before its end.
+IRC_CAPPED = "MAXIMUM NUMBER OF ITERATIONS REACHED"
+
+
+def capped_said(capped):
+    """Which sides of a reaction path stopped, in words: "The forward side", "The forward and backward sides" - or "A
+    side" where ORCA said one did and which cannot be told."""
+    if capped == ["one"]:
+        return "A side"
+    return f"The {' and '.join(capped)} {'side' if len(capped) == 1 else 'sides'}"
+
+
+def irc_output(entry, files, log, options):
+    """A reaction path's output, in Meno's form: its frames one end to the other, as ORCA wrote them, each with its
+    energy and what it is, the point it started from marked as the run's converged geometry; its level, as given; and,
+    where a side stopped at ORCA's iteration cap before its end, that said, the output then no converged one."""
+    n = len(entry["atoms"])
+    frames = xyz_frames(files.get(IRC_FULL, ""), n)
+    at = log.rfind("IRC PATH SUMMARY")
+    rows = re.findall(r"^\s*(\d+)\s+-?\d+\.\d+.*?(<= TS)?\s*$", log[at:], re.M) if at >= 0 else []
+    starts = [int(r) - 1 for r, ts in rows if ts]
+    if not frames or len(rows) != len(frames) or len(starts) != 1:
+        return {"why": "ORCA wrote no reaction path that can be read", "kind": "no-geometry"}
+    k = starts[0]
+    said = [f"backward, step {k - i} of {k}" if i < k else IRC_STARTED_SAID if i == k else f"forward, step {i - k} of {len(frames) - 1 - k}" for i in range(len(frames))]
+    # (each side as ORCA ran it - the forward first, then the backward - and whether it stopped at its cap)
+    fwd, back = log.find("FORWARD IRC"), log.find("BACKWARD IRC")
+    sides = {"forward": log[fwd:back] if 0 <= fwd < back else "", "backward": log[back:at] if 0 <= back < at else ""}
+    capped = [side for side, text in sides.items() if IRC_CAPPED in text]
+    # (ORCA said a side stopped, but which cannot be told from where it said it: a side, never read as complete)
+    if not capped and IRC_CAPPED in log:
+        capped = ["one"]
+    method, basis = path_level(options)
+    return {
+        "schema": 1,
+        "program": "ORCA",
+        **({"method": method} if method else {}),
+        **({"basis": basis} if basis else {}),
+        "atoms": elements_of(entry),
+        "frames": [places for places, _ in frames],
+        "energies": [energy for _, energy in frames],
+        "converged": [i == k for i in range(len(frames))],
+        **({"optimised": False, "warnings": [{"kind": "other", "text": f"{capped_said(capped)} stopped at ORCA's iteration cap before reaching an end (\"{IRC_CAPPED}\"): {'its end is' if len(capped) == 1 else 'their ends are'} no minimum"}]} if capped else {}),
+        "results": [{"id": PATH_FRAME, "on": "frames", "group": "Path", "label": "What it is", "values": said}],
+    }
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
-    keep = keeps_wavefunction(options)
+    # (a reaction path's step offers no wavefunction kept: none written)
+    keep = keeps_wavefunction(options) and step != "reaction-path"
     memory = memory_of(options, m.get("cores"))
     jobs = []
     if step == "path-search":
@@ -360,7 +419,7 @@ def op_prepare(m):
             "args": [INPUT],
             "files": [{"name": INPUT, "text": orca_input(step, entry, options, m.get("cores"))}],
             **({"then": [TO_MOLDEN]} if keep else {}),
-            "reads": [WAVEFUNCTION] if keep else [],
+            "reads": [IRC_FULL] if step == "reaction-path" else [WAVEFUNCTION] if keep else [],
             **({"memory": memory} if memory else {}),
             # (the xTB plugin's xtb, where an xTB method runs through it: Meno gives it as manifest.json's `needs` says)
             **({"needs": ["xtb"]} if needs_xtb(options) else {}),
@@ -579,6 +638,8 @@ def op_collect(m):
     log = m.get("log") or ""
     if m.get("ended") != "done" or not ended_well(log):
         return {"why": not_ended_why(log, m.get("ended"))}
+    if step == "reaction-path":
+        return {"outputs": [irc_output(e, m.get("files") or {}, log, m.get("options") or {}) for e in m.get("entries") or []]}
     # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}

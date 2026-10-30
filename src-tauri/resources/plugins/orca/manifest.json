@@ -53,6 +53,43 @@
         {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     },
-    {"kinds": ["path-search"], "programs": ["orca"], "options": [{"id": "method", "label": "Method", "type": "text", "default": "NATIVE-XTB2"}, {"id": "basis", "label": "Basis set", "type": "text", "default": ""}, {"id": "run", "label": "Path", "type": "choice", "choices": [{"value": "NEB-TS", "label": "A band, its highest point refined (NEB-TS)"}, {"value": "ZOOM-NEB-TS", "label": "A band, a finer one about its highest point, that refined (ZOOM-NEB-TS)"}], "default": "NEB-TS"}, {"id": "images", "label": "Images between the ends (NImages)", "type": "number", "default": 8, "min": 1, "step": 1}, {"id": "maxiter", "label": "Steps for refining its highest point (%geom MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50}, {"id": "keywords", "label": "More keywords", "type": "text", "default": ""}, {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}]}
+    {"kinds": ["path-search"], "programs": ["orca"], "options": [{"id": "method", "label": "Method", "type": "text", "default": "NATIVE-XTB2"}, {"id": "basis", "label": "Basis set", "type": "text", "default": ""}, {"id": "run", "label": "Path", "type": "choice", "choices": [{"value": "NEB-TS", "label": "A band, its highest point refined (NEB-TS)"}, {"value": "ZOOM-NEB-TS", "label": "A band, a finer one about its highest point, that refined (ZOOM-NEB-TS)"}], "default": "NEB-TS"}, {"id": "images", "label": "Images between the ends (NImages)", "type": "number", "default": 8, "min": 1, "step": 1}, {"id": "maxiter", "label": "Steps for refining its highest point (%geom MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50}, {"id": "keywords", "label": "More keywords", "type": "text", "default": ""}, {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}]},
+    {
+      "kinds": ["reaction-path"],
+      "programs": ["orca"],
+      "options": [
+        {"id": "method", "label": "Method", "type": "text", "default": ""},
+        {"id": "basis", "label": "Basis set", "type": "text", "default": ""},
+        {"id": "dispersion", "label": "Dispersion correction", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "D3BJ", "label": "D3 with Becke-Johnson damping (D3BJ)"}, {"value": "D4", "label": "D4"}], "default": "none"},
+        {"id": "solvation", "label": "Solvation", "type": "choice", "choices": [{"value": "none", "label": "None"}, {"value": "CPCM", "label": "C-PCM"}, {"value": "SMD", "label": "SMD"}], "default": "none"},
+        {"id": "solvent", "label": "Solvent", "type": "choice", "when": {"id": "solvation", "in": ["CPCM", "SMD"]}, "choices": [
+          {"value": "water", "label": "Water"},
+          {"value": "acetonitrile", "label": "Acetonitrile"},
+          {"value": "acetone", "label": "Acetone"},
+          {"value": "benzene", "label": "Benzene"},
+          {"value": "chloroform", "label": "Chloroform"},
+          {"value": "dichloromethane", "label": "Dichloromethane"},
+          {"value": "dimethylformamide", "label": "DMF"},
+          {"value": "dimethylsulfoxide", "label": "DMSO"},
+          {"value": "diethylether", "label": "Diethyl ether"},
+          {"value": "ethanol", "label": "Ethanol"},
+          {"value": "ethylacetate", "label": "Ethyl acetate"},
+          {"value": "hexane", "label": "Hexane"},
+          {"value": "methanol", "label": "Methanol"},
+          {"value": "tetrahydrofuran", "label": "THF"},
+          {"value": "toluene", "label": "Toluene"},
+          {"value": "1,4-dioxane", "label": "1,4-Dioxane"},
+          {"value": "ccl4", "label": "Carbon tetrachloride"},
+          {"value": "pyridine", "label": "Pyridine"},
+          {"value": "nitromethane", "label": "Nitromethane"},
+          {"value": "cyclohexane", "label": "Cyclohexane"},
+          {"value": "1-octanol", "label": "1-Octanol"},
+          {"value": "2-propanol", "label": "2-Propanol"}
+        ], "default": "water"},
+        {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
+        {"id": "maxiter", "label": "Steps each way (%irc MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50},
+        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}
+      ]
+    }
   ]
 }

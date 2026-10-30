@@ -43,6 +43,7 @@ export const STEP_KINDS = [
   "number",
   "add",
   "reaction",
+  "reaction-path",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 

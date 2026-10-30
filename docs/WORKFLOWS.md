@@ -297,6 +297,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy | a bolt | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
+| Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below); one whose side stopped before its end, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
@@ -428,6 +429,34 @@ are a *Frequencies* step's, wired after it.
   same places (two hydrogens swapped, say) pass, and the path found is
   then between other atoms than meant. A *Reaction* step that writes the
   products in the reactants' numbering comes later.
+
+### Follow the reaction path
+
+*Follow the reaction path* (2026-10-29) follows the reaction path down
+both ways from each point given, as its program does it (the IRC), and
+nothing else: the ends' optimisation and what they are - *Take frames*'
+*first* and *last*, *Optimise*, *Compare bonding* - are steps of their own
+after it. Meno calls none of it a saddle point or a minimum.
+
+- **One molecule for each point.** Its frames are the path, one end to the
+  other, in the order its program gives them, each with its energy and
+  saying what it is ("backward, step 3 of 7", "the point it started
+  from"). Its entry frame, which a set and the next step take, is the
+  point it started from.
+- **A side that stopped before its end** - its program's iteration cap
+  reached - leaves the path as far as it came out of *Failed*, in its
+  program's words: that end is no minimum. *Take frames* on *Failed*, and
+  an *Optimise*, carry on from it where the chemist wires them.
+- **At its start's level.** A saddle point at one level is no stationary
+  point at another, so the path's own level, as its output says it, must be
+  the one its start was found at (its frequencies', say): else it fails,
+  naming both. The step has no level of its own unless set: the chemist
+  sets the start's.
+- **ORCA's plugin** runs IRC (the ORCA 6.1 manual, 4.4 *Intrinsic Reaction
+  Coordinate*), both ways in one job, the manual's default direction, at
+  the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
+  own unless said (the manual's 4.4.2 states none; ORCA 6.1.1 prints 20).
+  The first Hessian is ORCA's: computed where none comes with the point.
 
 ### Who does a step
 
