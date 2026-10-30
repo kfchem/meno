@@ -53,7 +53,14 @@ bonds with their CTfile types) and gives:
   a map that turns a symmetric ring over pairs one side's single bonds
   with the other's double bonds, and the ring is the same. The same holds
   for every map's bond changes (`bondChanges`): the drawn arrow's reacting
-  centres and the *Reaction* step's *Bond changes* among them.
+  centres and the *Reaction* step's *Bond changes* among them. A bond given
+  as aromatic (type 4) on one side and in a Kekulé structure on the other
+  has not changed either. The rule is identity's: a ring is aromatic where
+  its bonds alternate around it, so a bond-shift isomerisation -
+  cyclooctatetraene's ring bonds shifting, cyclobutadiene's automerisation
+  - reads as no bond change, as bond-shift isomers are one structure to
+  identity (docs/WORKFLOWS-FOUNDATION.md, *Duplicates, and what judges
+  them*).
 
 `withMapNumbers` gives the structures as they came in, each atom's
 atom-atom mapping number (`map`, which Meno already reads and writes in
@@ -82,7 +89,18 @@ What it will not do:
   identity and symmetry do. The map is built over the bonds whatever their
   type, and the types are read only in a few of the checks and scores
   (`_correct_maps`, the pericyclic and face terms of `_order_maps`), so a
-  ring drawn in either Kekulé structure maps the same.
+  ring drawn in either Kekulé structure maps the same. The two readings
+  differ in both directions. ACCeL takes a ring of bonds between single
+  and double length with 4n + 2 electrons, so pyrrole, furan and thiophene
+  are aromatic to it and cyclooctatetraene and cyclobutadiene are not.
+  Meno takes a ring whose bonds alternate, the other way round. A charged
+  ring drawn with its charge on one atom (tropylium as three C=C and a C+,
+  the cyclopentadienide anion as two C=C and a C-) has no ring of
+  alternating bonds, and is handed over as drawn. On the corpus below and
+  on these rings mapped (cyclooctatetraene's ring closure to
+  bicyclo[4.2.0]octatriene, a dimethylpyrrole methylated at N, furan and
+  cyclobutadiene onto themselves), the first map is the same either way;
+  cyclooctatetraene's later maps come in another order.
 
 Mapping runs in a worker when the interface asks for it (*On a drawn
 scheme*). How long it takes, and why like molecules standing apart once

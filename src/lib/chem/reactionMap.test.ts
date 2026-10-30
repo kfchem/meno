@@ -235,6 +235,12 @@ describe("bond changes across an aromatic ring", () => {
     expect(bondChanges(ring("12"), ring("23"), same)).toEqual({ formed: [], broken: [], orderChanged: [] });
   });
 
+  it("are none where one side gives the ring's bonds as aromatic (type 4) and the other in a Kekul\u00e9 structure", () => {
+    const typed = ring("12", [4, 4, 4, 4, 4, 4]);
+    expect(bondChanges(typed, ring("23"), same)).toEqual({ formed: [], broken: [], orderChanged: [] });
+    expect(bondChanges(ring("23"), typed, same)).toEqual({ formed: [], broken: [], orderChanged: [] });
+  });
+
   it("are still said where the ring is not aromatic on one side: a cyclohexadiene's bonds against the ring's", () => {
     // (C1=C2, C3=C4 and the rest single: no ring of alternating bonds)
     const diene = ring("12", [2, 1, 2, 1, 1, 1]);
