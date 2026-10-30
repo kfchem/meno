@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Property } from "../../../../lib/entry";
 import type { Molecule3D } from "../store/types";
 import { factor } from "../../../../lib/units";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
@@ -53,7 +54,7 @@ describe("Take frames", () => {
   });
 
   it("keeps from its molecule only what Keep from its molecule names - a name Tag gave it, as it is - never a value worked out for it, and a frame's own where it holds one, said once", () => {
-    const value = (v: string | number, unit = "none") => ({ value: v, unit, status: "computed" }) as const;
+    const value = (v: string | number, unit: Property["unit"] = "none"): Property => ({ value: v, unit, status: "computed" });
     // (a reaction path's molecule, its entry frame the point it started from - the third - holding its tags and what its
     //  frequencies gave; its first frame holding a species of its own)
     const irc: Molecule3D = {
