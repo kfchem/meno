@@ -634,9 +634,13 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   another, has its equivalent atoms settled, or is made as an enantiomer's
   mirror image. Those four are for Meno's own page, which asks for them
   (`onPage`); the core sends that with *3D structure* alone, and no option
-  of the step's carries it. Where it embedded from random coordinates (an
-  η complex, or a crowded cage that would not embed otherwise), its
-  *Embedded* row says so. From RDKit plugin 0.1.14.
+  of the step's carries it. So a molecule with one shape can come back as
+  many frames of it: [OsCl6]2-, ten embeddings sought, gives nine, its
+  octahedron and eight relabellings of it (the tenth is dropped below the
+  floor), where the page shows one; a *Duplicates* step after it keeps
+  one. Where it embedded from random coordinates (an η complex, or a
+  crowded cage that would not embed otherwise), its *Embedded* row says
+  so. From RDKit plugin 0.1.14.
 
 ## Versions
 
