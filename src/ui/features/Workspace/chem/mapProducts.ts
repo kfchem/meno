@@ -12,7 +12,7 @@ type Mapped = ReturnType<typeof mapOnto>;
 type Options = Parameters<typeof mapOnto>[2];
 type Answer = { kind: "progress"; done: number } | { kind: "done"; result: Mapped } | { kind: "failed"; error: string };
 
-/** Each side of `entries` mapped onto the `reference` side (lib/chem/reactionMap `mapOnto`); `onDone` told how many are done, as each is; `stop` ends it. */
+/** The sides `entries`, each mapped onto `reference` (lib/chem/reactionMap `mapOnto`); `onDone` told how many are done, as each is; `stop` ends it. */
 export function mapOntoOff(reference: Molecule[], entries: Molecule[][], o: Options, onDone?: (done: number) => void): { result: Promise<Mapped>; stop: () => void } {
   if (typeof Worker === "undefined") {
     let stopped = false;
