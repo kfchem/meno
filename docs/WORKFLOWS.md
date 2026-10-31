@@ -1583,8 +1583,7 @@ Decided while building it, for the maintainer to confirm:
 - **Frequencies**: the vibrations - their wavenumbers, reduced masses and
   IR intensities - and the thermochemistry (Gibbs free energy, zero-point
   energy, the corrections to G and H, T·S). How each mode moves is not
-  yet shown: xtb documents no displacements in a form of its own (its
-  `g98.out` is "GAUSSIAN-format"), so they wait for a documented source.
+  yet shown.
 - **A run under way is kept in the workspace with no step to undo**, the
   workspace unsaved until it is saved; the results coming in are one step
   to undo. Each job's log is kept in the workspace with the molecules it
