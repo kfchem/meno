@@ -64,7 +64,7 @@ OUTLINE_COLOURS = {"black", "white", "grey"}
 # a scene's file's name: a plain name in the job's folder
 # the looks render.py (looks.py) makes with materials of its own
 OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "neon", "slime", "xray", "clay"}
-LOOKS = {"meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"} | OWN_LOOKS
+LOOKS = {"meno"} | OWN_LOOKS
 FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "tarnished"}}
 WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
 MARBLES = {"carrara", "swirl"}

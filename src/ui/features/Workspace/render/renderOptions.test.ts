@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
-import { askOf, bySection, filmLength, finishEntry, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
+import { askOf, bySection, filmLength, finishEntry, finishOf, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -16,18 +16,20 @@ describe("Render's look: one choice, a bundle of parts, declared by the renderer
   const options = renderOptions("picture", [], true, DECLARED);
   const look = options.find((o) => o.id === "look")! as unknown as { type: string; choices: { value: string; label: string; sets?: Record<string, unknown> }[]; default: string };
 
-  it("offers the canvas's look and then those the renderer declares, in its order, with its labels", () => {
+  it("offers the canvas's look, Meno's own, and then those the renderer declares, in its order, with its labels - one of Meno's ids once", () => {
     expect(look.type).toBe("choice");
-    expect(look.choices.map((c) => c.value)).toEqual(["meno", "cartoon", "line-art", "shiny-thing", "jelly", "pane"]);
-    expect(look.choices.map((c) => c.label)[3]).toBe("A made-up look");
+    expect(look.choices.map((c) => c.value)).toEqual(["meno", "glossy", "matte", "glass", "metal", "cartoon", "lineart", "line-art", "shiny-thing", "jelly", "pane"]);
+    expect(look.choices.map((c) => c.label)[8]).toBe("A made-up look");
     expect(look.default).toBe("meno");
   });
 
-  it("knows no look of its own but the canvas's", () => {
-    const none = renderOptions("picture", [], false).find((o) => o.id === "look") as unknown as { choices: { value: string }[] };
-    expect(none.choices.map((c) => c.value)).toEqual(["meno"]);
-    // (and one declared twice, or as the canvas's, once)
-    expect(looksOffered([{ id: "meno", label: "X" }, { id: "a", label: "A" }, { id: "a", label: "A again" }]).map((l) => l.label)).toEqual(["As the canvas draws them", "A"]);
+  it("has looks of its own made of Meno's parts alone - the renderer is asked for the parts, not their names", () => {
+    const own = renderOptions("picture", [], false).find((o) => o.id === "look") as unknown as { choices: { value: string }[] };
+    expect(own.choices.map((c) => c.value)).toEqual(["meno", "glossy", "matte", "glass", "metal", "cartoon", "lineart"]);
+    // (and one declared twice, or as Meno's, once)
+    expect(looksOffered([{ id: "meno", label: "X" }, { id: "a", label: "A" }, { id: "a", label: "A again" }]).map((l) => l.label).slice(-2)).toEqual(["Line art: white fill, outlined", "A"]);
+    expect(finishEntry(finishOf({ look: "cartoon", shading: "toon", outlines: "mixed" }))).toMatchObject({ look: "meno", shading: "toon", outlines: "mixed" });
+    expect(finishEntry(finishOf({ look: "shiny-thing" })).look).toBe("shiny-thing");
   });
 
   it("fills in the parts a look declares, the plain ones for the rest", () => {
@@ -64,12 +66,12 @@ describe("Render's look: one choice, a bundle of parts, declared by the renderer
 
   it("offers where sticks stop only under the looks declared see-through, each with the default it declares", () => {
     const sticks = options.find((o) => o.id === "sticks") as unknown as { when: { id: string; in: string[] } };
-    expect(sticks.when).toEqual({ id: "look", in: ["jelly", "pane"] });
+    expect(sticks.when).toEqual({ id: "look", in: ["glass", "jelly", "pane"] });
     const ask = askOf("picture", { width: 900, shape: "fit", look: "jelly", ...partsOf(DECLARED[3]) });
     expect(ask.finish?.sticks).toBe("stopped");
     expect(askOf("picture", { width: 900, shape: "fit", look: "pane", ...partsOf(DECLARED[4]) }).finish?.sticks).toBe("shown");
-    // (a renderer that declares none seen through: no such choice)
-    expect(renderOptions("picture", [], false, [DECLARED[0]]).some((o) => o.id === "sticks")).toBe(false);
+    // (with no renderer's look seen through, only Meno's own crystal: under it alone)
+    expect((renderOptions("picture", [], false, [DECLARED[0]]).find((o) => o.id === "sticks") as unknown as { when: unknown }).when).toEqual({ id: "look", in: ["glass"] });
   });
 });
 
@@ -157,7 +159,7 @@ describe("the card's parts: Look, Render, Scene, Motion", () => {
   it("puts each of Meno's own choices in its part", () => {
     expect(parts.motion.map((o) => o.id)).toEqual(["motion", "mode", "seconds"]);
     expect(parts.render.map((o) => o.id)).toEqual(["fps", "width", "shape"]);
-    expect(parts.look.map((o) => o.id)).toEqual(["look", "molecules", "surfaces", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(parts.look.map((o) => o.id)).toEqual(["look", "molecules", "surfaces", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     expect(parts.scene).toEqual([]);
     // (a picture has no motion)
     expect(bySection(renderOptions("picture", [], false)).motion).toEqual([]);

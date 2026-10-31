@@ -14,9 +14,9 @@ describe("Render as a step", () => {
   it("is a kind Meno defines that takes molecules or conformers, gives a set of pictures, and has Meno's own choices for a picture", () => {
     const render = kindInfo("render");
     expect(render).toMatchObject({ name: "Render", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered" });
-    expect(render.own?.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "surfaces", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(render.own?.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "surfaces", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     // (Meno's picture defaults: wide, fitted to the molecules, as the 3D style draws them)
-    expect(render.own?.map((o) => o.default)).toEqual([2400, "fit", "meno", "meno", "meno", "lit", 0.5, "none", 3, "black"]);
+    expect(render.own?.map((o) => o.default)).toEqual([2400, "fit", "meno", "meno", "meno", "shown", "lit", 0.5, "none", 3, "black"]);
     expect(KINDS.filter((k) => k.gives === "pictures").map((k) => k.kind)).toEqual(["render"]);
   });
 

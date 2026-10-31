@@ -642,7 +642,7 @@ A render plugin declares its looks in its role's `looks`, each as an object; Men
 
 | Field | Meaning |
 |---|---|
-| `id` | The look's id: lowercase letters, digits and hyphens. `meno` is the canvas's look, Meno's own, which every renderer is asked to make and no manifest declares. |
+| `id` | The look's id: lowercase letters, digits and hyphens. `meno` is the canvas's look, and `glossy`, `matte`, `glass`, `metal`, `cartoon` and `lineart` are Meno's own looks made of its parts alone (docs/RENDER.md): no manifest declares them, and a declared look of one of those ids is not offered twice. A renderer's own looks are those it makes with materials and light of its own (`own`); a bundle of Meno's parts alone is Meno's to offer, not a plugin's (the boundary, 2026-10-31). |
 | `label` | What the Look choice calls it. |
 | `description` | A short sentence saying what it is. |
 | `parts` | A bundle of Meno's own parts, each optional: `molecules` (`meno`, `glossy`, `metal`, `glass`, `matte`, `clay`, `white`) and `surfaces` (`meno`, `glass`, `glossy`, `matte`) - what the scene's file is written with; `shading` (`lit`, `toon`) and `band`; `outlines` (`none`, `thin`, `outer`, `mixed`), `outline` (width) and `outline_colour`; `sticks` (`shown`, `stopped`), where a look sees through. Those left out are the plain ones. |

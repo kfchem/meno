@@ -79,7 +79,9 @@ class Prepare(unittest.TestCase):
         for l in decls:
             self.assertTrue(l["label"] and l["description"], l["id"])
             self.assertTrue(l.get("own") or l.get("parts"), l["id"])
-        self.assertIn("cartoon", looks)
+        # (looks made of Meno's own parts alone are Meno's, not declared here: the boundary, 2026-10-31)
+        for meno_s in ("glossy", "matte", "glass", "metal", "cartoon", "lineart"):
+            self.assertNotIn(meno_s, looks)
         for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "clay", "porcelain", "slime", "neon", "xray", "fur"):
             self.assertIn(own, looks)
             self.assertIn(own, worker.LOOKS)

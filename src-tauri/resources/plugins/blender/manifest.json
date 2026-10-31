@@ -21,13 +21,7 @@
       "role": "render",
       "programs": ["blender"],
       "looks": [
-        {"id": "glossy", "label": "Lacquered: a clear coat over the element colours", "description": "The element colours under a clear, glossy coat, molecules and surfaces alike.", "parts": {"molecules": "glossy", "surfaces": "glossy"}},
-        {"id": "matte", "label": "Flat: no shine, in the element colours", "description": "The element colours with no shine at all, molecules and surfaces alike.", "parts": {"molecules": "matte", "surfaces": "matte"}},
         {"id": "clay", "label": "Terracotta: unglazed, one colour or the elements'", "description": "Unglazed fired clay in a studio's light: terracotta, or each element its colour.", "own": true, "parts": {"molecules": "clay", "surfaces": "matte"}},
-        {"id": "glass", "label": "Crystal: clear, tinted by the element colours", "description": "Clear and see-through, tinted by the element colours, the sticks running on inside.", "parts": {"molecules": "glass", "surfaces": "glass", "sticks": "shown"}, "seeThrough": true},
-        {"id": "metal", "label": "Anodised: metal in the element colours", "description": "Metal coloured by the elements, with glossy surfaces.", "parts": {"molecules": "metal", "surfaces": "glossy"}},
-        {"id": "cartoon", "label": "Cartoon: one lit band, outlined", "description": "One lit band and one in shade, outlined.", "parts": {"shading": "toon", "outlines": "mixed"}},
-        {"id": "lineart", "label": "Line art: white fill, outlined", "description": "White, outlined.", "parts": {"molecules": "white", "surfaces": "matte", "shading": "toon", "outlines": "mixed", "band": 1}},
         {"id": "gold", "label": "Gold: polished metal", "description": "Polished gold in a studio's light.", "own": true},
         {"id": "silver", "label": "Silver: mirror or satin", "description": "Silver, mirror or satin.", "own": true},
         {"id": "copper", "label": "Copper: brushed or tarnished", "description": "Copper, brushed or tarnished.", "own": true},

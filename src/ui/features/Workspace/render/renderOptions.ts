@@ -160,6 +160,21 @@ const PLAIN: LookParts = { molecules: "meno", surfaces: "meno", shading: "lit", 
  */
 export const CANVAS_LOOK: LookDecl = { id: "meno", label: "As the canvas draws them" };
 
+/**
+ * Meno's own looks besides the canvas's: each made of Meno's own parts alone - what the molecules and surfaces are made of, the
+ * shading, the outlines - so any renderer that makes the parts makes them (the boundary, 2026-10-31). A renderer is asked only
+ * for the parts; the look's name stays Meno's (`finishEntry`).
+ */
+export const MENO_LOOKS: readonly LookDecl[] = [
+  { id: "glossy", label: "Lacquered: a clear coat over the element colours", description: "The element colours under a clear, glossy coat, molecules and surfaces alike.", parts: { molecules: "glossy", surfaces: "glossy" } },
+  { id: "matte", label: "Flat: no shine, in the element colours", description: "The element colours with no shine at all, molecules and surfaces alike.", parts: { molecules: "matte", surfaces: "matte" } },
+  { id: "glass", label: "Crystal: clear, tinted by the element colours", description: "Clear and see-through, tinted by the element colours, the sticks running on inside.", parts: { molecules: "glass", surfaces: "glass", sticks: "shown" }, seeThrough: true },
+  { id: "metal", label: "Anodised: metal in the element colours", description: "Metal coloured by the elements, with glossy surfaces.", parts: { molecules: "metal", surfaces: "glossy" } },
+  { id: "cartoon", label: "Cartoon: one lit band, outlined", description: "One lit band and one in shade, outlined.", parts: { shading: "toon", outlines: "mixed" } },
+  { id: "lineart", label: "Line art: white fill, outlined", description: "White, outlined.", parts: { molecules: "white", surfaces: "matte", shading: "toon", outlines: "mixed", band: 1 } },
+];
+const MENO_LOOK_IDS = new Set([CANVAS_LOOK.id, ...MENO_LOOKS.map((l) => l.id)]);
+
 /** What a declared look fills in: its parts over the plain ones. */
 export function partsOf(look: LookDecl): LookParts {
   return { ...PLAIN, ...(look.parts as Partial<LookParts> | undefined) };
@@ -170,8 +185,8 @@ export function partsOf(look: LookDecl): LookParts {
  * twice once. `declared`: the render plugins' looks; none, only the canvas's.
  */
 export function looksOffered(declared?: readonly LookDecl[]): readonly LookDecl[] {
-  const seen = new Set([CANVAS_LOOK.id]);
-  const out: LookDecl[] = [CANVAS_LOOK];
+  const seen = new Set(MENO_LOOK_IDS);
+  const out: LookDecl[] = [CANVAS_LOOK, ...MENO_LOOKS];
   for (const l of declared ?? []) {
     if (seen.has(l.id)) continue;
     seen.add(l.id);
@@ -261,7 +276,8 @@ export function finishOf(v: OptionValues): Finish {
 /** A render's finish as an entry says it to the renderer: the look's shading and outlines, in the names its settings have. */
 export function finishEntry(f: Finish | undefined) {
   const g = f ?? finishOf({});
-  return { look: g.look, shading: g.shading, outlines: g.outlines, outline: g.outline, outline_colour: g.outlineColour, band: g.band };
+  // (a look of Meno's own is its parts alone, which the renderer is asked for: it is told the canvas's, not the name)
+  return { look: MENO_LOOK_IDS.has(g.look) ? CANVAS_LOOK.id : g.look, shading: g.shading, outlines: g.outlines, outline: g.outline, outline_colour: g.outlineColour, band: g.band };
 }
 
 /** A film's motion as an entry says it to the renderer: a motion it declares, by id, which it makes itself, and Once or Loop; none for Meno's own, keyed into the scene. */
