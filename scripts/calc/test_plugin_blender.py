@@ -14,6 +14,7 @@ at; elsewhere that test is skipped.
 
 import importlib.util
 import json
+import math
 import re
 import os
 import pathlib
@@ -197,7 +198,7 @@ class Collect(unittest.TestCase):
     def test_says_why_it_failed(self):
         log = "Blender 5.2.2\nRead blend\nError: Python: Traceback ...\nrender.py: the scene has no camera\nBlender quit\n"
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="failed")
-        self.assertEqual(said["result"], {"why": "render.py: the scene has no camera"})
+        self.assertEqual(said["result"], {"why": "The scene has no camera"})
 
     def test_says_what_python_raised_not_blenders_own_last_words(self):
         # (as Blender 5.2.2 ends a script that raised, and - after a large render - what it did not free)
@@ -366,6 +367,10 @@ class Manifest(unittest.TestCase):
         # (Once or Loop is shown for its motions, and only for them)
         mode = next(o for o in m["roles"][0]["options"] if o["id"] == "mode")
         self.assertEqual(mode["when"], {"id": "motion", "in": declared})
+        # (each says how short a film of it can be; a change, each change's; and Loop is the mode's)
+        for x in m["roles"][0]["motions"]:
+            self.assertIn("change" if x["id"].startswith("change-") else "film", x.get("shortest", {}), x["id"])
+        self.assertEqual(m["roles"][0]["loopWhen"], {"id": "mode", "in": ["loop"]})
 
 
 class Motions(unittest.TestCase):
@@ -473,11 +478,12 @@ METHANOL = {"atoms": [{"el": "C", "p": [-0.7, 0.0, 0.0]}, {"el": "O", "p": [0.7,
 class MotionsRender(unittest.TestCase):
     """Each motion built and rendered, tiny: 64x36, 4 samples, a few frames - on the dark studio and the white, Once; and a cycle's Loop."""
 
-    def film(self, motion, background, mode="once", frames=4, molecules=(METHYLAMINE,), fails=False):
+    def film(self, motion, background, mode="once", frames=5, molecules=(METHYLAMINE,), fails=False):
         with tempfile.TemporaryDirectory() as d:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": list(molecules)}}}]}
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 30, "motion": motion}
+            # (a frame a second: each film as long as its motion's shortest, in a few frames)
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 1, "motion": motion}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": background, "mode": mode, "device": "cpu"})
             self.assertTrue(said["ok"], said)
             job = said["result"]["jobs"][0]
@@ -497,7 +503,7 @@ class MotionsRender(unittest.TestCase):
         for motion in sorted(m for m in worker.MOTIONS if not m.startswith("change-")):
             for background in ("black", "white"):
                 with self.subTest(motion=motion, background=background):
-                    self.assertEqual(self.film(motion, background), 4)
+                    self.assertEqual(self.film(motion, background), 5)
 
     def test_every_change_of_molecules_on_both_studios_once_and_as_a_loop(self):
         for motion in sorted(m for m in worker.MOTIONS if m.startswith("change-")):
@@ -509,7 +515,7 @@ class MotionsRender(unittest.TestCase):
 
     def test_a_change_of_one_molecule_says_it_needs_two(self):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)
-        self.assertEqual(why, "render.py: a change of molecules needs two molecules or more, rendered together")
+        self.assertEqual(why, "A change of molecules needs two molecules or more, rendered together")
 
     def test_a_portrait_film_keeps_a_tall_molecule_whole(self):
         # (a chain standing up the canvas, in a frame twice as tall as wide: Blender's Auto would put the sensor across the
@@ -520,7 +526,7 @@ class MotionsRender(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [chain]}}}]}
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 2, "fps": 30, "motion": "pulse"}
+            entry = {"scene": "scene.gltf", "film": True, "width": 48, "height": 96, "frames": 3, "fps": 1, "motion": "pulse"}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": "cpu"})
             job = said["result"]["jobs"][0]
             for f in job["files"]:
@@ -538,8 +544,8 @@ class MotionsRender(unittest.TestCase):
             self.assertGreater(min(top, bottom), 0.6, (top, bottom, darkest))
 
     def test_a_cycle_renders_half_and_plays_it_back(self):
-        # (assemble loops as a cycle: 6 frames played, 4 rendered - forward, then back)
-        self.assertEqual(self.film("assemble", "black", "loop", frames=6), 4)
+        # (assemble loops as a cycle: 8 frames played, 5 rendered - forward, then back)
+        self.assertEqual(self.film("assemble", "black", "loop", frames=8), 5)
         # (pulse loops of itself: every frame rendered)
         self.assertEqual(self.film("pulse", "white", "loop", frames=6), 6)
 
@@ -680,7 +686,7 @@ class Renders(unittest.TestCase):
         with tempfile.TemporaryDirectory() as m:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": molecules}}}]}
             (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 4, "fps": 30, "motion": motion}
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 6, "fps": 1, "motion": motion}
             said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": device, "mode": "loop"})
             job = said["result"]["jobs"][0]
             files = {f["name"]: f["text"] for f in job["files"]}

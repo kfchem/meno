@@ -15,14 +15,23 @@ against any other program; no output of a real run is kept.
 import importlib.util
 import json
 import pathlib
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKER = ROOT / "src-tauri/resources/plugins/gaussian/worker.py"
 MANIFEST = ROOT / "src-tauri/resources/plugins/gaussian/manifest.json"
-spec = importlib.util.spec_from_file_location("plugin_gaussian", WORKER)
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
+# (the worker's folder on the path while it is loaded, as Meno runs it there: its own reader beside it, never another
+#  plugin's taken from those already imported)
+sys.path.insert(0, str(WORKER.parent))
+sys.modules.pop("reader", None)
+try:
+    spec = importlib.util.spec_from_file_location("plugin_gaussian", WORKER)
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+finally:
+    sys.path.remove(str(WORKER.parent))
+    sys.modules.pop("reader", None)
 
 WATER = {
     "name": "water",

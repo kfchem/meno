@@ -37,8 +37,8 @@ PLUGINS = ROOT / "src-tauri/resources/plugins"
 
 
 def load(plugin):
-    """A plugin's worker, loaded as its process runs it: its folder on the path, for a reader beside it - and that reader
-    let go of after, so that the next plugin's worker finds its own."""
+    # (a worker imports the modules beside it - its reader - from its own folder, as Python started on it has that folder on its
+    #  path; each plugin's own, so that one's is never another's taken from those already imported)
     folder = str(PLUGINS / plugin)
     sys.path.insert(0, folder)
     sys.modules.pop("reader", None)
@@ -46,10 +46,10 @@ def load(plugin):
         spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        return module
     finally:
         sys.path.remove(folder)
         sys.modules.pop("reader", None)
+    return module
 
 
 xtb = load("xtb")

@@ -189,7 +189,7 @@ that differ, it is given none, and says why.
 
 | Kind | Told by | Read by |
 | --- | --- | --- |
-| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | a program's own plugin, where added (ORCA's, 2026-10-31); cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
+| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | the ORCA interface (plugin, uv; ORCA's output) and the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint), each for what its program writes; cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
 | Molden file | `[Molden Format]`, as PySCF's manifest brings it | PySCF |
 | Cube file | its layout: two comment lines, four lines of a count and three numbers (`CUBE_MARK`) | cube (built in, web worker) |
 

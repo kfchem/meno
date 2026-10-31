@@ -11,7 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type RoleDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
@@ -59,6 +59,8 @@ export type PythonPlugin = ReaderBase &
     roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The motions it makes of a film for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleMotions: Partial<Record<RoleId, readonly MotionDecl[]>>;
+    /** Where a role's film loops, by role, where it says (Render's Loop: lib/plugins/manifest `loopWhen`). */
+    roleLoopWhen: Partial<Record<RoleId, NonNullable<RoleDecl["loopWhen"]>>>;
     /** The programs it runs for a role, by role, where it runs one as a job (Render). */
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
@@ -114,6 +116,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
+    roleLoopWhen: Object.fromEntries(m.roles.filter((r) => r.loopWhen).map((r) => [r.role, r.loopWhen!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
     profile: `plugin-${m.id}`,
     lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,

@@ -877,7 +877,7 @@ export type RunKeptResults = {
   unread?: number;
   restUnread?: number;
   drawn?: { made: DrawnModel[]; rest: DrawnModel[]; core?: SeriesCore };
-  /** The tables its later exits hold, by exit (a Reaction's bond changes). */
+  /** The tables its later exits hold, by exit (an Atom map's bond changes). */
   tables?: Record<string, Table>;
 };
 /**

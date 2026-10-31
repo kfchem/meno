@@ -2,7 +2,7 @@
  * Meno's steps on structures, as a workflow's steps run them
  * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine*, *Measure* and
  * *Restraints*, and those of two inputs, *Merge*, *Re-bond*, *Compare
- * bonding*, *Torsion restraints* and *Reaction* - each
+ * bonding*, *Torsion restraints* and *Atom map* - each
  * a set's entries read as Meno's entry record (`entryOfSet`), the step's own
  * function done on them (lib/nodes, lib/steps), and each entry given back as
  * a step's entry (`setEntryOfEntry`) - all it held kept where it is that
@@ -20,9 +20,9 @@ import { measured, measurementName, measurementsTyped } from "../../../../lib/st
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
 import { restraintsOf, TORSION_STEP, torsionsRestrained } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
-import { restraintsTyped, torsionsNeeds } from "./kinds";
-import { bondChangesTable, PRODUCT, renumberedEntry } from "../../../../lib/steps/reaction";
-import { mapProducts } from "../../../../lib/chem/reactionMap";
+import { atomMapNeeds, restraintsTyped, torsionsNeeds } from "./kinds";
+import { bondChangesTable, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
+import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
@@ -417,93 +417,158 @@ export const moleculeOfEntry = (e: SetEntry): Molecule => ({
   bonds: e.bonds.map((b) => ({ ...b })),
 });
 
-/** What the atom mapper made of a Reaction's products (lib/chem/reactionMap `mapProducts`), worked out here or in a worker. */
-export type ProductsMapped = ReturnType<typeof mapProducts>;
+/** What the atom mapper made of an Atom map's entries (lib/chem/reactionMap `mapOnto`), worked out here or in a worker: of each reference, the sides matched with it. */
+export type EntriesMapped = ReturnType<typeof mapOnto>;
 
-/** Whether a Reaction maps a product: finished, its hydrogens there - one not finished never comes out as one that is. */
-export const mappable = (p: SetEntry): boolean => !p.skeleton && entryState(p) === FINISHED;
+/** An Atom map's mapping, one reference at a time: the reference's side (its entries, by place in *Reference*), and each side mapped onto it (each its entries, by place in *Molecules*). */
+export type AtomMapGroup = { reference: number[]; sides: number[][] };
 
 /**
- * Why a Reaction cannot map what came in at all - not one reactant entry,
- * or one without its hydrogens - or none where it can. Its products are
- * looked at one by one (`reactionSet`).
+ * What an Atom map maps onto what (`AtomMapGroup`): each input's entries
+ * each a side of its own, or all one side together - finished, and with
+ * their hydrogens - or why it cannot map at all: options it still needs,
+ * not one reference where it is against the one, or a reference without
+ * its hydrogens. A side it does not map, with why, is in `aside`: each of
+ * its entries.
  */
-export function reactionRefused(reactants: readonly SetEntry[]): string | null {
-  if (reactants.length !== 1) return `Reactants takes one entry, the reactants as one structure (make a complex of several with Combine): ${reactants.length} came in`;
-  if (reactants[0].skeleton) return "The reactants have no hydrogens: every atom must map, hydrogens included";
-  return null;
+export function atomMapPlan(entries: readonly SetEntry[], references: readonly SetEntry[], v: OptionValues): { groups: AtomMapGroup[]; aside: { entry: number; why: string }[] } | { refused: string } {
+  const needs = atomMapNeeds(v);
+  if (needs) return { refused: needs };
+  const together = { entries: v.moleculesAre === "together", reference: v.referenceIs === "together" };
+  const byProperty = v.reference === "property";
+  if (!byProperty && !together.reference && references.length !== 1)
+    return { refused: `Against the one reference, but ${references.length} came into Reference: match them on a property, or take the reference as one side` };
+  const refSides = together.reference ? [references.map((_, i) => i)] : references.map((_, i) => [i]);
+  if (!byProperty && refSides[0].some((i) => references[i].skeleton)) return { refused: "The reference has no hydrogens: every atom must map, hydrogens included" };
+  const sides = together.entries ? [entries.map((_, i) => i)] : entries.map((_, i) => [i]);
+  // (each side's reference: the one, or - each its own - the one with the same value of the property)
+  const matched = byProperty
+    ? matchedOn(
+        entries.map((e, i) => entryOfSet(e, String(i))),
+        references.map((e, i) => entryOfSet(e, String(i))),
+        String(v.property).trim(),
+        "Reference",
+      )
+    : sides.map(() => ({ index: 0 }));
+  const groups = new Map<number, number[][]>();
+  const aside: { entry: number; why: string }[] = [];
+  sides.forEach((side, k) => {
+    const m = matched[k];
+    const said = (why: string) => side.forEach((entry) => aside.push({ entry, why }));
+    const unfinished = side.find((i) => entryState(entries[i]) !== FINISHED);
+    if (unfinished != null) return said(`not finished: ${side.length > 1 ? `${named(entries[unfinished])} is ` : ""}${entryState(entries[unfinished])}`);
+    const bare = side.find((i) => entries[i].skeleton);
+    if (bare != null) return said(`${side.length > 1 ? `${named(entries[bare])} has` : "it has"} no hydrogens: every atom must map, hydrogens included`);
+    if ("why" in m) return said(`not paired: ${m.why}`);
+    if (refSides[m.index].some((i) => references[i].skeleton)) return said("its reference has no hydrogens: every atom must map, hydrogens included");
+    groups.set(m.index, [...(groups.get(m.index) ?? []), side]);
+  });
+  return { groups: [...groups].map(([k, ss]) => ({ reference: refSides[k], sides: ss })), aside };
 }
 
 /**
- * *Reaction* (lib/chem/reactionMap `mapProducts`, lib/steps/reaction): each
- * product mapped onto the one reactant entry, atom for atom and hydrogens
- * too, and written in its numbering - by its first map, or by every map -
- * each its own compound, numbered by its map; the bonds each map forms,
- * breaks or changes in the exit *Bond changes*, a table. A product not
- * finished (failed, or its marks not read), with no hydrogens, or that does
- * not map one to one, is set aside with why - never passed on as finished.
- * A product mapped keeps its energy and its imaginary frequencies, of its
- * geometry however it is numbered; its calculation is not carried, and the
- * line says so.
- * `mapped`, where the mapping was worked out already (in a worker): of
- * `products` with no hydrogens left out, in order.
+ * *Atom map* (lib/chem/reactionMap `mapOnto`, lib/steps/reaction): each
+ * side - an entry of *Molecules*, or all of them together - mapped onto its
+ * reference - the one of *Reference*, all of them together, or the one with
+ * the same value of a property - atom for atom and hydrogens too, and
+ * written in its numbering, by its first map or by every map: a reaction's
+ * products onto its reactants, a species' conformers onto it. The bonds
+ * each map forms, breaks or changes go into *Bond changes*, a table; where
+ * bonds are to stay the same, a side whose map changes any is not mapped. A
+ * side not finished, with no hydrogens, with no reference to pair with, or
+ * that does not map one to one, is set aside with why - never passed on as
+ * mapped. A mapped entry keeps its energy and its imaginary frequencies, of
+ * its geometry however it is numbered, and one numbered as it was keeps all
+ * it held; a calculation does not follow a renumbering, and the line says
+ * so. Several entries mapped as one side come out as one, in the places the
+ * map set them in, carrying none of their own values.
+ * `mapped`, where the mapping was worked out already (in a worker): for each
+ * of `atomMapPlan`'s groups, its sides mapped, in order.
  */
-export function reactionSet(reactants: readonly SetEntry[], products: readonly SetEntry[], maps: "first" | "every", mapped?: ProductsMapped): Outcome3D {
-  const refused = reactionRefused(reactants);
-  if (refused) return { ok: false, said: refused };
-  const reactant = reactants[0];
-  const whole = products.filter(mappable);
-  // (a mapped product as its rows and it name it: the product's name or place - and its map, where every map is given)
-  // (one to each: two products of one name told apart by their places)
-  const base = whole.map((p) => p.name ?? named(p));
-  const productKey = (m: { product: number; map: number }) => {
-    const p = whole[m.product];
-    const name = base.filter((b) => b === base[m.product]).length > 1 ? `${base[m.product]} (${named(p)})` : base[m.product];
-    return `${name}${maps === "every" ? `, map ${m.map + 1}` : ""}`;
-  };
-  const out = mapped ?? mapProducts(moleculeOfEntry(reactant), whole.map(moleculeOfEntry), { every: maps === "every" });
+export function atomMapSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues, mapped?: readonly EntriesMapped[]): Outcome3D {
+  const plan = atomMapPlan(entries, references, v);
+  if ("refused" in plan) return { ok: false, said: plan.refused };
+  const every = v.maps === "every";
+  const bonds = v.bonds === "same" ? "same" : "change";
+  // (a mapped side as its rows and it name it: its entries' names or places - and its map, where every map is given; two of one name told apart by their places)
+  const base = entries.map((e) => e.name ?? named(e));
+  const nameOf = (i: number) => (base.filter((b) => b === base[i]).length > 1 ? `${base[i]} (${named(entries[i])})` : base[i]);
+  const sideKey = (side: readonly number[], map: number) => `${side.map(nameOf).join(" + ")}${every ? `, map ${map + 1}` : ""}`;
   const kept: SetEntry[] = [];
-  const aside: SetEntry[] = products.flatMap((p) =>
-    entryState(p) !== FINISHED
-      ? [withSaid(p, SET_ASIDE, `not finished: ${entryState(p)}`)]
-      : p.skeleton
-        ? [withSaid(p, SET_ASIDE, "it has no hydrogens: every atom must map, hydrogens included")]
-        : [],
-  );
-  const counts = new Map<number, number>();
+  const asideWhy = new Map<number, string[]>();
+  const why = (side: readonly number[], said: string) => side.forEach((i) => asideWhy.set(i, [...(asideWhy.get(i) ?? []), said]));
+  plan.aside.forEach((a) => why([a.entry], a.why));
+  const done: { map: number; changes: BondChangeRow[]; side: number[] }[] = [];
+  const mappedSides = new Set<number[]>();
   let replaced = 0;
-  const notMapped = [...out.notMapped];
-  const done: typeof out.mapped = [];
-  for (const m of out.mapped) {
-    const p = whole[m.product];
-    const r = renumberedEntry(entryOfSet(p, String(m.product)), m.order, `${m.product}:${m.map}`);
-    if ("failed" in r) {
-      notMapped.push({ product: m.product, map: m.map, reason: r.failed });
-      continue;
+  let calc = 0;
+  let partsOwn = 0;
+  plan.groups.forEach((g, k) => {
+    const out = mapped?.[k] ?? mapOnto(g.reference.map((i) => moleculeOfEntry(references[i])), g.sides.map((side) => side.map((i) => moleculeOfEntry(entries[i]))), { bonds, every });
+    for (const n of out.notMapped) why(g.sides[n.product], n.map != null && every ? `map ${n.map + 1}: ${n.reason}` : n.reason);
+    const maps = new Map<number[], number>();
+    for (const m of out.mapped) {
+      const side = g.sides[m.product];
+      const first = entries[side[0]];
+      // (one entry, as it was; several, as one entry - its parts' own values none of its)
+      const whole = side.length === 1 ? entryOfSet(first, String(side[0])) : combinedOf(side.map((i) => entries[i]));
+      if ("failed" in whole) {
+        why(side, whole.failed);
+        continue;
+      }
+      const r = renumberedEntry(whole, m.order, `${side.join("+")}:${m.map}`);
+      if ("failed" in r) {
+        why(side, `${every ? `map ${m.map + 1}: ` : ""}${r.failed}`);
+        continue;
+      }
+      // (several entries as one: in the places the map set them in, side by side)
+      const placed = side.length === 1 ? r : { ...r, geometry: { kind: "3d" as const, xyz: m.molecule.atoms.flatMap((a) => [a.x, a.y, a.z]) } };
+      // (its own place - every map of it, where every one is given, numbered on in its compound)
+      const number = every ? (maps.get(side) ?? 0) + 1 : first.number;
+      const e = setEntryOfEntry(placed, { compound: every ? side[0] : first.compound, number }, side.length === 1 ? first : undefined);
+      if (!e) continue;
+      maps.set(side, number);
+      mappedSides.add(side);
+      done.push({ map: m.map, changes: m.changes, side });
+      const moved = m.order.some((j, at) => j !== at);
+      let held = e;
+      if (side.length === 1 && moved) {
+        // (renumbered, its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry
+        //  and vibrations as its own properties, renumbered with it; its calculation not)
+        const carried = Object.fromEntries(CALC_CARRIED.flatMap((key) => (r.properties[key] ? [[key, r.properties[key]]] : [])));
+        held = { ...e, properties: { ...e.properties, ...carried }, ...(first.energy != null ? { energy: first.energy } : {}), ...(first.imaginary ? { imaginary: [...first.imaginary] } : {}) };
+        if (first.calc) calc++;
+      }
+      if (side.length > 1 && side.some((i) => entries[i].energy != null || entries[i].calc || Object.keys(entries[i].properties ?? {}).length)) partsOwn++;
+      if (side.length === 1 && first.properties?.[MAPPED_ENTRY]) replaced++;
+      kept.push(withSaid(held, MAPPED_ENTRY, sideKey(side, m.map)));
     }
-    const e = setEntryOfEntry(r, { compound: m.product, number: (counts.get(m.product) ?? 0) + 1 });
-    if (!e) continue;
-    done.push(m);
-    counts.set(m.product, (counts.get(m.product) ?? 0) + 1);
-    // (its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry and vibrations as
-    //  its own properties, renumbered with it; its calculation not - and which mapped product it is, as its bond changes' rows name it)
-    const carried = Object.fromEntries(CALC_CARRIED.flatMap((k) => (r.properties[k] ? [[k, r.properties[k]]] : [])));
-    const held = { ...e, properties: { ...e.properties, ...carried }, ...(p.energy != null ? { energy: p.energy } : {}), ...(p.imaginary ? { imaginary: [...p.imaginary] } : {}) };
-    if (p.properties?.[PRODUCT]) replaced++;
-    kept.push(withSaid(held, PRODUCT, productKey(m)));
-  }
-  // (a product of which no map went through, aside with why - each map's that did not, said on it)
-  const why = new Map<number, string[]>();
-  for (const n of notMapped) why.set(n.product, [...(why.get(n.product) ?? []), n.map != null ? `map ${n.map + 1}: ${n.reason}` : n.reason]);
-  whole.forEach((p, k) => {
-    if (!counts.has(k) && why.has(k)) aside.push(withSaid(p, SET_ASIDE, why.get(k)!.join(" ")));
   });
-  const changes = bondChangesTable(done, productKey);
-  const line = [`${plural(counts.size, "product")} in the reactants' numbering${maps === "every" ? `, ${plural(kept.length, "map")}` : ""}`, `${plural(changes.rows.length, "bond change")}`];
-  if (aside.length) line.push(`${aside.length} not mapped`);
-  if (done.some((m) => whole[m.product].calc)) line.push("calculations not carried");
-  if (replaced) line.push(`the ${PRODUCT} ${replaced === 1 ? "a product" : `${replaced} products`} carried replaced`);
-  return { ok: true, holds: "molecules", kept, aside, said: line.join(" \u00b7 "), tables: { changes } };
+  // (a side of which no map went through, aside with why - each map's that did not, said on it - each entry of it as it came)
+  const allSides = plan.groups.flatMap((g) => g.sides);
+  const unmapped = allSides.filter((side) => !mappedSides.has(side)).flat();
+  const asideEntries = [...new Set([...plan.aside.map((a) => a.entry), ...unmapped])].sort((p, q) => p - q);
+  const aside = asideEntries.map((i) => withSaid(entries[i], SET_ASIDE, (asideWhy.get(i) ?? []).join(" ")));
+  const changes = bondChangesTable(done, (d) => sideKey(d.side, d.map));
+  const sideCount = (v.moleculesAre === "together" ? 1 : entries.length);
+  const line = [`${mappedSides.size} of ${sideCount} mapped`];
+  if (aside.length) line.push(`${v.moleculesAre === "together" ? 1 : aside.length} not mapped`);
+  if (calc) line.push(`${calc === 1 ? "its calculation" : "calculations"} not carried`);
+  if (partsOwn) line.push("the parts' own values not carried");
+  if (replaced) line.push(`the ${MAPPED_ENTRY} ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
+  return { ok: true, holds, kept, aside, said: line.join(", "), tables: { changes } };
+}
+
+/** Several step's entries as one entry record, their atoms one after another (lib/steps `combined`), or why not. */
+function combinedOf(parts: readonly SetEntry[]): Entry | { failed: string } {
+  const out = combined(
+    parts.map((e, i) => {
+      const { group: _g, number: _n, state: _s, ...properties } = entryOfSet(e, String(i)).properties;
+      return { ...entryOfSet(e, String(i)), properties };
+    }),
+    "side",
+  );
+  return "failed" in out ? out : out.entry;
 }
 
 /**

@@ -160,6 +160,13 @@ describe("a plugin's manifest", () => {
     // (motions, each declared in full: an id - none of Meno's own -, a label, a description; what is not understood left out)
     const motions = [{ id: "ripple", label: "Ripple", description: "A ripple." }, { id: "turn", label: "Meno's own" }, { id: "No Id", label: "Bad" }, { id: "plain" }, { id: "ripple", label: "Twice" }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions }] })?.roles[0].motions).toEqual([{ id: "ripple", label: "Ripple", description: "A ripple." }]);
+    // (how short each can be, in seconds - a whole film's, a Loop's, each change's - what is not a number of seconds left out; and
+    // where the role's film loops, as a `when` says it)
+    const timed = [{ id: "melt", label: "Melt", shortest: { film: 2, change: 6, loop: "long" } }, { id: "spin", label: "Spin", shortest: { film: -1, change: 9999 } }];
+    const role = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions: timed, loopWhen: { id: "mode", in: ["loop", { x: 1 }] } }] })?.roles[0];
+    expect(role?.motions).toEqual([{ id: "melt", label: "Melt", shortest: { film: 2, change: 6 } }, { id: "spin", label: "Spin" }]);
+    expect(role?.loopWhen).toEqual({ id: "mode", in: ["loop"] });
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions: timed, loopWhen: { id: "Mode!", in: ["loop"] } }] })?.roles[0].loopWhen).toBeUndefined();
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);

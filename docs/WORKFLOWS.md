@@ -326,7 +326,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
-| Reaction | an atom, an arrow, the same atom after it, mapped (drawn) | *Reactants*: one entry, molecules in 3D with every hydrogen (several made one complex first, by *Combine*); *Products*: molecules in 3D with every hydrogen | **molecules in 3D**: each product in the reactants' numbering, atom for atom - by its first map, or by every map - out of *Mapped products*; one that does not map one to one out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Reaction*) |
+| Atom map | an atom, an arrow, the same atom after it, mapped (drawn) | *Molecules* and *Reference*: molecules in 3D with every hydrogen, each input's entries each a side of its own or one side together; whether bonds may change (a reaction) or stay the same (conformers of the reference) | **the same kind**: each side in the reference's numbering, atom for atom - by its first map, or by every map - out of *Mapped*; one that does not map one to one, or changes a bond that was to stay the same, out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Atom map*) |
 | Displace | an atom moved along, where it stood dashed (drawn) | molecules in 3D with vibrations, or a conformer set | **the same kind of set**: each geometry moved along its imaginary vibration - or one by number - the atom moving most by the amplitude (Å) given; one with no such vibration out of *Not displaced*, saying why (STRUCTURE-STEPS.md, *Displace*) |
 | Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
@@ -395,8 +395,8 @@ are a *Frequencies* step's, wired after it.
   ("paired in order, by place"): pairs by place are never a match of which
   is which. A start that carried a `path.paired` already, an earlier
   path's, has it replaced by this one's, and the line counts them ("the
-  path.paired a pair carried replaced"), as *Reaction* says of
-  `reaction.product`.
+  path.paired a pair carried replaced"), as *Atom map* says of
+  `map.entry`.
 - **Its ends minima at its own level.** A barrier from a path's start is
   one only where that start is a minimum at the level the path is worked
   out at (2026-10-28). So each start and end must be a converged
@@ -469,8 +469,8 @@ are a *Frequencies* step's, wired after it.
 - **What it does not catch.** The numbering is checked atom by atom, by
   element alone: ends numbered otherwise but with the same elements in the
   same places (two hydrogens swapped, say) pass, and the path found is
-  then between other atoms than meant. A *Reaction* step that writes the
-  products in the reactants' numbering comes later.
+  then between other atoms than meant. An *Atom map* step before it writes
+  the products in the reactants' numbering.
 
 ### Follow the reaction path
 
@@ -1433,11 +1433,22 @@ Decided while building it, for the maintainer to confirm:
   top: wires join where they always did as the card opens.
 - **A port** is round at every zoom - a ring a hair thick, or filled in
   the accent while a wire may join it - and stands exactly at its wire's
-  end. It is 9 hairs across on the screen where the page is near; zoomed
+  end. It is 9 px across on the screen where the page is near; zoomed
   out, never more than its own 11 page px - it shrinks with the page from
   there - nor than a sixth of its set's or card's height, its ring then at
   most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
   were far too big for their sets; look `portSize`).
+- **Laid out in the screen's pixels, lines drawn as shadows** (2026-10-31,
+  seen on Windows): the page's layer of HTML is laid out in its own
+  pixels and scaled to the zoom after. Chromium, Windows' WebView2, rounds
+  a box's edges and size and a border's width each to a whole one of those
+  pixels first, and zoomed in the layer magnifies that: ports came out as
+  ovals, as dots, of several sizes and off their places, and the cards'
+  and sets' hairlines six pixels thick at six times. So a port is laid out
+  in the screen's pixels, the layer's scale (`--scale`) undone on it and
+  centred by the same transform; and a card's and a set's lines a hair
+  thick are inset shadows (`inset-ring`), which are drawn as thin as they
+  are, the room a border took kept as padding.
 - **One layer of HTML for all sets and steps**: with a layer for each, a
   step's layer covered the ports of sets under it (ARCHITECTURE.md,
   *Workflows*).
@@ -1766,6 +1777,15 @@ Decided by the maintainer (2026-10-08), as it was built:
   it as well, its input written by the same code. Its id changed with its
   name (`gaussian`): added before, it is added again (no backward
   compatibility before 1.0).
+- **A program's output read by its own plugin** (2026-10-31): Gaussian's
+  output and its formatted checkpoint are read by the *Gaussian
+  interface*, the plugin that runs Gaussian - one reading, its `read`, for
+  a job's log and for a file opened by hand - written from Gaussian's own
+  reference and its outputs alone (its `reader.py`). Its `collect` judges
+  how a run went by the same reading (`run_of`). Each kind it reads says
+  in its manifest that its program writes it (`writtenBy`), so that, where
+  it is added, it is the reader of Gaussian's outputs unless another is
+  chosen in Settings, *Files*.
 - **An interface, by name**: a plugin that runs a program installed
   separately is named for what it is - the *ORCA interface*, the
   *Gaussian interface* - in Settings, *Plugins*, so that it is not taken
@@ -2007,7 +2027,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   frames chip, *Make again*, a measurement's value and the notes over a
   molecule or a figure).
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
-  `--page`, and `--hair` that the cards' lines are as wide as, lay out
+  `--page`, and `--hair` that the cards' lines are as wide as (and
+  `--scale` that ports are laid out by), lay out
   every chip and card on the page again each time they are written - some
   80 ms on a page of sixty steps, every frame of a zoom. While the zoom
   moves they are written only once it has gone half a per cent from the
@@ -3000,9 +3021,9 @@ doubled quotes); a byte-order mark before it is left out.
   exponent - nothing else: no thousands' separators, since a comma means
   one thing in one place and another elsewhere.
 - **A column's head is its label, where it has one** (`TableColumn.label`,
-  2026-10-30): "Product" over the column named "reaction.product". Its
+  2026-10-30): "Product" over the column named "map.entry". Its
   name stays its key - what rows are matched on, what a condition names -
-  and hovering on the head says both ("Product · reaction.product"). A
+  and hovering on the head says both ("Product · map.entry"). A
   number column's head stands at the right, over its numbers, and its
   numbers are written with one count of decimals, so that their points
   line up ("0.00" over "0.37"): an energy in kcal/mol with two, as a
