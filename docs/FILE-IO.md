@@ -61,7 +61,7 @@ built* below.
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
-| PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`); what the format cannot hold - a mass number but hydrogen's D and T, a charge past 9 either way - is left out, and the Export card says so before it is written, with how many atoms lose each (`pdbLeavesOut`, 2026-10-22) | wwPDB Format v3.3; see *As step 7 was built* |
+| PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`); a mass number but hydrogen's D and T, and a charge past 9 either way, are left out, and the Export card says so before it is written, with how many atoms lose each (`pdbLeavesOut`, 2026-10-22) | wwPDB Format v3.3; see *As step 7 was built* |
 | KET | not read | never | Open does not offer it; one dropped says "not supported yet" |
 
 ### Coordinates in a text
@@ -727,7 +727,8 @@ As this part of step 5 was built (#155, from main beside step 3):
   - The last choices are remembered in the settings, by role
     (`options`: `export`, `write:sdf`, ...).
   - **MOL, SD and RXN files** may be written in V3000. Otherwise they are
-    written in V2000, or in V3000 where V2000 cannot hold them, as before.
+    written in V2000, or in V3000 where they need more than V2000 holds,
+    as before.
     In an SD file the choice holds for its records in 3D too, and is
     offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
@@ -802,10 +803,10 @@ As this part of step 5 was built (#155, from main beside step 3):
     written; export the set as SD to write them all").
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
-    and in attributes alike, and what XML cannot hold at all (the controls
-    but tab and the line breaks, a surrogate without its pair, U+FFFE and
-    U+FFFF) is drawn as the replacement character, so the file is
-    well-formed whatever was pasted.
+    and in attributes alike, and a character outside the range XML takes
+    (the controls but tab and the line breaks, a surrogate without its
+    pair, U+FFFE and U+FFFF) is drawn as the replacement character, so
+    the file is well-formed whatever was pasted.
 - **What a writer takes** is said by it (step 7): Meno's own take what is
   selected on the page; a plugin's, one molecule - the molecules in 3D
   selected, several as one system. A plugin's writer is offered only where
