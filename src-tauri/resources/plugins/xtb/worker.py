@@ -535,7 +535,7 @@ def treatment_of(log):
         if not m:
             return None
         said[key] = f"{number(m.group(1)):g}"
-    return f"rotor cutoff {said['rotor cutoff']} cm-1, imag. cutoff {said['imag. cutoff']} cm-1, scaling factor {said['scaling factor']}"
+    return f"rotor cutoff {said['rotor cutoff']} cm⁻¹, imag. cutoff {said['imag. cutoff']} cm⁻¹, scaling factor {said['scaling factor']}"
 
 
 def why_of(log):

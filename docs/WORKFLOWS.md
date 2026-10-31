@@ -294,6 +294,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
+| Minimise with restraints | a well, its floor held (drawn) | molecules in 3D, or conformer sets | each minimised in a force field with its restraints held - Restraints', Torsion restraints' - from where it is, or from where its restraints were first held; one that does not converge out of *Failed* (PLUGINS.md, RDKit) |
 | Energy | a bolt | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
@@ -301,7 +302,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
-| Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
+| Energy window | a funnel | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from - and, of what its molecule holds (on its entry frame), only what *Keep from its molecule* names, one name to a line, as it is: none, unless named, so that a value worked out for the molecule never reaches its frames unasked; a frame that holds one of them itself, of another value, keeps its own, the line saying so once; a name a molecule does not hold, said, with how many ("path not on 2 molecules", "pc not on any molecule") (2026-10-30); the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
@@ -851,6 +852,31 @@ beside its edge - being drawn over all of it.
   method - is said so: "on free energies (G), conditions not stated". On free
   energies a window refuses a saddle point, as Populations does: its G is
   no minimum's;
+- **Energy window, from the lowest in each value of a property**
+  (2026-10-31, for a cap on each product's transition states): *From the
+  lowest in: Each value of a property*, and *The property* named -
+  "product", "path". Each entry is kept where its energy is within the
+  window of the lowest of those with its value; molecules as well as
+  conformer sets. Its card says the window and what it is of ("within 10
+  kcal/mol of each product's lowest"); its line which energy, chosen as
+  above, each group's alike: "3 of 5 entries kept, on electronic
+  energies · rest 2", the reasons counted only where any is more than
+  being outside it. One without the property, or without an energy, goes
+  out of *Outside it* saying so ("it has no product", "it has no
+  energy") - never into a group, never left out unsaid; one outside the
+  window says how far ("12.00 kcal/mol above the lowest of its
+  product"). A saddle point is not refused here - which entries should
+  be transition states is the chemist's to say - but a window means
+  something only within one kind: a group of minima and saddle points
+  together is set aside whole, saying so ("its product b holds minima
+  and saddle points together"), as is one where an entry's kind is not
+  known (no frequencies) beside those whose is; a group none of whose
+  kind is known is windowed, its line saying "whether minima or saddle
+  points not known". An entry that is no result (failed, not converged)
+  is refused, named, as over compounds. Molecules have no compounds: over
+  compounds each is its own group, as *Rank* takes them, so all are kept
+  and the line says so ("2 of 2 entries kept: each molecule is its own
+  group");
 - **A conformer set keeps each conformer's thermochemistry**
   (2026-10-24): *Frequencies* on a conformer set runs a job for each, and
   each conformer keeps what its own job read - its free energy, enthalpy,
@@ -1363,7 +1389,9 @@ Decided while building it, for the maintainer to confirm:
   computer of 16 physical cores running two threads on each, 32 processes
   of 32 threads each. Where the computer runs two threads on each physical
   core, the queue counts each process as two of its cores, so that two
-  such jobs never share a physical core. Its physical cores are what its
+  such jobs never share a physical core. Settings, *Calculations*, says so under its cores,
+  where the computer runs more than one thread on each: they are counted
+  in logical cores, and such a program takes that many for each process. Its physical cores are what its
   system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
   `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
   is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
@@ -1866,14 +1894,22 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   whole, on two lines where it needs them. A step Meno does may say its
   options its own way (*Choose one*: *Lowest in energy*, *Number 3*).
 - **Chips on the page** (*How it looks*): drawn at the page's scale -
-  `--page`, set on the layer the page's HTML is drawn in each time the
-  zoom changes - from where each hangs, and faded out below 75 %, with
+  `--page`, set on the layer the page's HTML is drawn in as the zoom
+  changes - from where each hangs, and faded out below 75 %, with
   the sets' names and the cards' words (`utils/pageScale`). Each is laid
   out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
   they are seen at - not drawn at one size and scaled by a transform,
   which the Mac's WebView magnifies soft up close (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
   molecule or a figure).
+- **Written as the zoom moves, half a per cent at a time** (2026-10-31):
+  `--page`, and `--hair` that the cards' lines are as wide as, lay out
+  every chip and card on the page again each time they are written - some
+  80 ms on a page of sixty steps, every frame of a zoom. While the zoom
+  moves they are written only once it has gone half a per cent from the
+  last written (`zoomWritten`) - half a pixel on a chip a hundred wide,
+  not seen - and, once it stands still, as it is. A wheel's zoom on that
+  page is over half a second sooner; the laying out itself stays.
 - **Quick Add** opens where it will stay as a panel opens below its row -
   its calculations, or the field a SMILES is typed in: its side is chosen
   once, for its largest, and it is held by its top left corner, so that

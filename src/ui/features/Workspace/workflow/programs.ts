@@ -8,7 +8,7 @@
 import { isId } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
-import { ENTRY_SCHEMA, geometryKey, type By, type Property } from "../../../../lib/entry";
+import { ENTRY_SCHEMA, geometryKey, type By, type Property, type Restraint } from "../../../../lib/entry";
 import { factor } from "../../../../lib/units";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
@@ -32,7 +32,17 @@ import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
  * reads them (lib/io/writers `speciesOf`).
  */
 /** An entry as a plugin is given it: the entry's version (lib/entry `ENTRY_SCHEMA`); its molecule - each isotope's mass with it, in daltons, where Meno knows it - its charge and multiplicity, and its files (docs/PLUGINS.md, *The entry a plugin is given*). */
-export type PluginEntry = Omit<WrittenMolecule, "atoms"> & { schema: number; atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[]; charge: number; multiplicity: number; files?: EntryFile[]; end?: PluginEntry };
+export type PluginEntry = Omit<WrittenMolecule, "atoms"> & {
+  schema: number;
+  atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[];
+  charge: number;
+  multiplicity: number;
+  files?: EntryFile[];
+  end?: PluginEntry;
+  /** Its restraints (the entry record's `Restraint`, each held by the energy the record states), where it carries some - and where a minimisation first held them (`start`: x, y and z by atom in turn). */
+  restraints?: Restraint[];
+  start?: number[];
+};
 
 /** A file an entry is given besides its geometry (a step's `files`): its kind, by id, its name and its text - the output its molecule was read from. */
 export type EntryFile = { kind: string; name: string; text: string };
@@ -83,16 +93,21 @@ export function pluginEntry(e: SetEntry): PluginEntry {
   // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
   if (!species) throw new Error(skeletonWhy());
   const { charge, multiplicity } = species;
-  // (the end it is paired with, where it is a pair's start: given as it is, beside it - Path search's)
+  // (its restraints, as Restraints and Torsion restraints left them: what a plugin that minimises with them holds - and where they were first held)
+  const held = e.properties?.restraints;
+  const restraints = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
   return {
     schema: ENTRY_SCHEMA,
     ...molecule,
     atoms,
     charge,
     multiplicity,
+    // (the end it is paired with, where it is a pair's start: given as it is, beside it - Path search's)
     ...(e.end ? { end: pluginEntry(e.end) } : {}),
     // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
     ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
+    ...(restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
+    ...(restraints?.start ? { start: [...restraints.start] } : {}),
   };
 }
 
@@ -437,6 +452,8 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(out.optimised === false && (optimising || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
     // (a saddle point's optimisation whose reader could not say whether it converged: never passed on as converged)
     ...(kind === "saddle-point" && out.optimised == null ? { failed: { kind: "failed" as const, why: "Whether the optimisation converged could not be read" } } : {}),
+    ...(out.optimised === false && kind === "minimise" ? { failed: { kind: "not-converged" as const, why: "The minimisation did not converge in the steps it was given" } } : {}),
+    ...(kind === "minimise" ? firstHeld(entry) : {}),
   };
 }
 
@@ -454,6 +471,20 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
   if (isFailure(w)) return null;
   const { energy: _energy, pathEnergies: _pathEnergies, failed: _failed, ...at } = w as Worked & { pathEnergies?: number[] };
   return { ...at, path: [[...entry.xyz], ...(w.path ?? [])] };
+}
+
+/**
+ * An entry's restraints once a minimisation has held them, saying where
+ * they were first held (`start`): where they already say, as they say;
+ * else where the entry stood as it came - so that a later minimisation,
+ * asked to, starts again from there, as case F's rounds each start from the
+ * geometry before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Nothing
+ * where it held none.
+ */
+function firstHeld(entry: SetEntry): Pick<SetEntry, "properties"> | Record<string, never> {
+  const held = entry.properties?.restraints;
+  if (held?.status !== "computed" || typeof held.value !== "object" || held.value === null || !("restraints" in held.value) || held.value.start) return {};
+  return { properties: { ...anew(entry).properties, restraints: { ...held, value: { ...held.value, start: [...entry.xyz] } } } };
 }
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
