@@ -41,6 +41,8 @@ INPUTS = {
     "hcn_b3lyp_d3bj_numfreq.out": "! B3LYP D3BJ def2-SVP NumFreq\n" + HCN,
     "hcn_b3lyp_d3bj_scan.out": "! B3LYP D3BJ def2-SVP Opt\n%geom Scan B 0 2 = 1.00, 1.20, 3 end end\n" + HCN,
     "hcn_newjob.out": "! r2SCAN-3c\n" + HCN + "$new_job\n! B97-3c\n" + HCN,
+    "hcn_wb97xd3_optfreq.out": "! wB97X-D3 6-31G(d) Opt Freq\n" + HCN,
+    "hcn_ts_wb97xd3_opttsfreq.out": "! wB97X-D3 6-31G(d) OptTS Freq\n%geom Calc_Hess true end\n* xyz 0 1\nC 0 0 0\nN 0 0 1.180\nH 1.050 0 0.600\n*\n",
 }
 
 GEOMETRY = "CARTESIAN COORDINATES (ANGSTROEM)"
@@ -111,6 +113,21 @@ class Level(unittest.TestCase):
         text = "|  1> ! B3LYP D3BJ def2-SVP\n" + self.BASIS.format("def2-SVP") + self.AUX.format("def2/J") + "The B3LYP functional is recognized\n"
         self.assertEqual(worker.orca_level(text, {"methods": ["DFT"]}), ("B3LYP", "def2-SVP"))
 
+    def test_a_functional_orca_names_its_own_way_on_a_line_that_goes_on(self):
+        # (ORCA 6 names wB97X-D3 "omegaB97X-D3", and says more after "recognized")
+        text = "|  1> ! wB97X-D3 6-31G(d) Opt Freq\n" + self.BASIS.format("6-31G(d)") + "The omegaB97X-D3 functional is recognized. Fit by Chai et al.\n"
+        self.assertEqual(worker.orca_level(text, {"methods": ["DFT"]}), ("wB97X-D3", "6-31G(d)"))
+        text = "|  1> ! omegaB97X-D3 6-31G(d)\n" + self.BASIS.format("6-31G(d)") + "The omegaB97X-D3 functional is recognized. Fit by Chai et al.\n"
+        self.assertEqual(worker.orca_level(text, {"methods": ["DFT"]}), ("omegaB97X-D3", "6-31G(d)"))
+
+    def test_omega_taken_for_w_only_where_a_name_begins_with_it(self):
+        text = "|  1> ! B97wX def2-SVP\n" + self.BASIS.format("def2-SVP") + "The B97omegaX functional is recognized\n"
+        self.assertEqual(worker.orca_level(text, {"methods": ["DFT"]}), (None, "def2-SVP"))
+
+    def test_only_a_functional_or_a_composite_method_said_recognized(self):
+        text = "|  1> ! B3LYP def2-SVP\n" + self.BASIS.format("def2-SVP") + "The B3LYP functional is recognizedly\nThe molecule is recognized as being linear\n"
+        self.assertEqual(worker.orca_level(text, {"methods": ["DFT"]}), (None, "def2-SVP"))
+
     def test_a_method_cclib_read_where_the_input_names_it(self):
         text = "|  1> ! HF def2-SVP\n" + self.BASIS.format("def2-SVP")
         self.assertEqual(worker.orca_level(text, {"methods": ["HF"]}), ("HF", "def2-SVP"))
@@ -151,6 +168,13 @@ class WholeOutputs(unittest.TestCase):
         self.assertEqual((r["method"], r["basis"]), ("B3LYP", "def2-SVP"))
         r = read("hcn.out", sample("hcn_b973c_sp.out"))
         self.assertEqual((r["method"], r["basis"]), ("B97-3c", None))
+
+    def test_a_saddle_point_and_a_minimum_of_one_level_name_it_alike(self):
+        # (a saddle point's level and its start's must read the same, for a barrier to set one against the other)
+        ts = read("hcn_ts.out", sample("hcn_ts_wb97xd3_opttsfreq.out"))
+        minimum = read("hcn.out", sample("hcn_wb97xd3_optfreq.out"))
+        self.assertEqual((ts["method"], ts["basis"]), ("wB97X-D3", "6-31G(d)"))
+        self.assertEqual((ts["method"], ts["basis"]), (minimum["method"], minimum["basis"]))
 
     def test_none_where_they_are_not_one_to_each_geometry_its_geometries_and_free_energy_kept(self):
         text = sample("hcn_r2scan3c_optfreq.out")
