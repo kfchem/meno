@@ -633,7 +633,7 @@ not taken from either.
   (RDKit's, through the roles' `conformers`, with the step's options); a
   plugin's step on entries alone at once, `run`
   asked of its worker and the entries it kept brought in, the rest set
-  aside (RDKit's *Duplicates*); a plugin's
+  aside (none of the bundled plugins does one); a plugin's
   program as jobs: `prepare` asked of its worker, a job started for each
   (lib/jobs), the run kept in the document as `running` - amended in, so
   that undo does not take a run back, but the workspace is unsaved until

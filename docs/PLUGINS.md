@@ -547,8 +547,9 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   agreed, and its raw embeddings, with no energies, atom against atom.
   (`SAME_CONFORMER`, `Sameness` in its worker.) The conformers Meno's own
   page makes (*3D structure*) are kept once each by it; a workflow's
-  *Conformers* step is given every one RDKit made (below), and its
-  *Duplicates* step keeps one of each by this same measure.
+  *Conformers* step is given every one RDKit made (below), and a
+  *Duplicates* step after it - Meno's own (`workflow/sameConformer`) -
+  keeps one of each by this same measure.
   - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
     the one conformer.** Such a shape leaves every atom of it somewhere
     else, so comparing atom against atom counted it again and again - a
@@ -906,7 +907,13 @@ The same for every plugin and for Meno's own parts:
     file is of a kind it registered (FILE-IO.md);
   - each role's own requests, by the role (*Roles*): `from_smiles
     {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
-    reaction as an RXN file holds it, as a reaction SMILES) (SMILES);
+    reaction as an RXN file holds it, as a reaction SMILES), and
+    `smiles_read {smiles}` (what the toolkit makes of a SMILES, as facts:
+    whether it reads, whether it parses at all, and the problems its own
+    check finds, each with the atoms it names - `{reads, parsed,
+    problems}`) (SMILES). A SMILES that cannot be read is refused in
+    those words alone, "This SMILES could not be read.": why is Meno's to
+    say, from the SMILES itself and those facts (`lib/chem/smilesWhy`);
     `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers: what is left open, how many stereoisomers of it can
@@ -1010,12 +1017,12 @@ The same for every plugin and for Meno's own parts:
     entry is given, in `files`, the outputs its step's `files` take;
   - `run {step, entries, options, holds}` - a kind of step it does at
     once, in its worker, with no job: the entries it kept, by their
-    place (RDKit's *Duplicates*). `holds` says whether they came as a
-    conformer set or a compound set. Where it counted a mirror image in
-    one kept, it says so beside them - `"counted": [{"entry": 0,
-    "degeneracy": 2, "mirror": [...]}]`, the atoms the mirror image swaps
-    as a permutation - and an entry given carries its `degeneracy`, where
-    it has one. `"capped": 2` says how many compounds it took atom against
+    place. (None of the bundled plugins does such a step.) `holds` says
+    whether they came as a conformer set or a compound set. Where it
+    counted a mirror image in one kept, it says so beside them -
+    `"counted": [{"entry": 0, "degeneracy": 2, "mirror": [...]}]`, the
+    atoms the mirror image swaps as a permutation - and an entry given
+    carries its `degeneracy`, where it has one. `"capped": 2` says how many compounds it took atom against
     atom, their ways onto themselves too many to try: a duplicate of one
     could be missed, and the step says so;
   - **steps on structures drawn** (`run` with `holds` "structures":

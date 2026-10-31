@@ -60,10 +60,9 @@ each is merged, this file describes what is built.
     once*).
 12. **Meno does the simple steps itself, a plugin may do them instead**,
     the chemist choosing which - as *Files* chooses who reads a kind of
-    file (FILE-IO.md). ACCeL's second version is under way, outside this
-    repository: it may come later as a plugin that fills these steps.
-    RDKit can fill *Duplicates*, if less thoroughly than ACCeL (*Who
-    does a step*).
+    file (FILE-IO.md). Which conformers are the same is Meno's own
+    judgement (the plugin boundary, 2026-10-31): *Duplicates* is Meno's
+    own step.
 13. **A conformer set is converted to only on purpose**: what the chemist
     gathers into a set is a compound set; a step of its own, *As
     conformers*, makes it a conformer set, on the page for the flow to
@@ -81,8 +80,7 @@ each is merged, this file describes what is built.
     *Calculations* lists the plugins added, each with its kinds; a step's
     card is titled with its plugin, its calculation chosen in it among
     those the plugin does. Meno stands among them, for the steps it does
-    itself. This replaces choosing who does a kind in Settings (12): RDKit's
-    *Duplicates* and Meno's are two steps to choose between.
+    itself. This replaces choosing who does a kind in Settings (12).
 17. **Settings holds the defaults; a step customises them** (the
     maintainer, 2026-10-08): Settings, *Calculations*, sets each kind's
     default options, by plugin; a step starts with them, and its options
@@ -603,19 +601,21 @@ A step is the step of what does it - a plugin added, or Meno - and of
 one of the kinds of calculation it does (decided: 16):
 
 - **Meno does the simple steps itself** - *Energy window*,
-  *Populations*, *As conformers*, *Choose one*, and *Duplicates* in a plain way (the
-  RMSD of the entries' atoms in their own order, after the best fit; it
-  does not see symmetric atoms swapped, so two copies of a structure
-  numbered differently can both be kept). Meno's part is there from the
-  start, with nothing to add.
-- **A plugin added may do any of them as well**: RDKit does *Duplicates*
-  with its best RMSD over the molecule's symmetries; ACCeL, its second
-  version, may come as a plugin that does them all as ACCeL does. Each
-  is a step of its own to choose: *RDKit*'s *Duplicates*, or *Meno*'s.
+  *Populations*, *As conformers*, *Choose one*, and *Duplicates* (by
+  the one definition, over the ways the molecule maps onto itself: *The
+  same conformer*). Meno's part is there from the start, with nothing to
+  add.
+- **A plugin added may do any of them as well**, each a step of its
+  own to choose - but *Duplicates*, which is Meno's alone (the plugin
+  boundary, 2026-10-31): which conformers are the same is Meno's own
+  judgement.
 - **The chemist chooses** in Quick Add - a plugin, then one of its
   kinds - and may change a step's calculation in it, to another its
   plugin does. Settings, *Calculations*, lists the plugins added and
-  Meno, each with its kinds and their default options.
+  Meno, each with its kinds and their default options. A step whose
+  plugin does not do its kind - one put down before the plugin changed -
+  says so as it is run, naming the plugin and the kind, before the
+  plugin is asked anything; the chemist chooses another.
 - **Steps that run a program** are done by plugins only: Meno runs no
   program of its own.
 
@@ -1329,8 +1329,7 @@ states an undo goes back to as well.
    optimise.
 4. **Chains**: running in order, *Run from here*, *Run all*, *Changed*,
    runs kept, several at once.
-5. **Conformers**: RDKit's in a step, and RDKit's *Duplicates*; then
-   CREST (macOS and Linux).
+5. **Conformers**: RDKit's in a step; then CREST (macOS and Linux).
 6. **Programs installed separately**: ORCA and Gaussian - finding them,
    their steps, reading their outputs.
 7. **Procedures**: saved, put down again, shared as a file.
@@ -1677,7 +1676,7 @@ Decided while building it, for the maintainer to confirm:
 ### Step 5: conformers (2026-10-08)
 
 Built: *Conformers* by RDKit, as a job, and by CREST, a plugin of its own
-for macOS and Linux; *Duplicates* by RDKit, at once. A conformer search's
+for macOS and Linux. A conformer search's
 results come in as a conformer set. How it works: ARCHITECTURE.md,
 *Workflows*.
 
@@ -1702,15 +1701,6 @@ Decided while building it, for the maintainer to confirm:
   a conformer of its entry's compound, numbered lowest energy first, each
   with its energy; the calculation is kept with the first. The card says
   how many: *0:45 · 17 conformers* (*... of 2 compounds*).
-- **RDKit's *Duplicates*** compares the entries of each compound - a
-  conformer set's, or in a compound set those of the same structure -
-  lowest energy first, and sets aside each that is the same conformer as
-  one kept, on the one definition (*The same conformer*; until 2026-10-22,
-  0.125 Å over the heavy atoms). A mirror image is kept apart, or counted
-  in as Meno's are - only where the two are one stereoisomer, as their
-  geometries have it. It is done at once in RDKit's worker - `run {step,
-  entries, options, holds}`, no job - and says *2 of 3 kept*, and
-  *1 mirror image counted in (degeneracy 2)* where it counted one.
 - **CREST's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF, or
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the
@@ -2175,7 +2165,7 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   least over the ways the molecule maps onto itself, laid over by turning
   and moving, never by reflecting (`workflow/sameConformer`; the RDKit
   plugin's conformers for Meno's own page use the same, while its
-  *Conformers* step gives every one RDKit made and its *Duplicates* step
+  *Conformers* step gives every one RDKit made, and Meno's *Duplicates*
   applies it: PLUGINS.md). The ways are those of its atoms but
   the hydrogens hanging on one atom, at most 1,000; those hydrogens are
   matched to the nearest of their kind once the rest are laid over.

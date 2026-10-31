@@ -17,7 +17,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { drawingOf, molblockOfSmiles, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -889,7 +889,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const g of read.made) {
         let block: string;
         try {
-          block = (await smiles.request("from_smiles", { smiles: g.smiles })).molblock;
+          block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
           notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;

@@ -945,12 +945,12 @@ describe("Quick Add's calculations", () => {
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
-      ["RDKit", ["conformers", "minimise", "duplicates", "check-structures", "stereoisomers", "descriptors"]],
+      ["RDKit", ["conformers", "minimise", "check-structures", "stereoisomers", "descriptors"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
       ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
-      ["RDKit", ["conformers", "minimise", "duplicates"]],
+      ["RDKit", ["conformers", "minimise"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
       ["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]],
     ]);
