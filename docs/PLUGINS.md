@@ -262,7 +262,7 @@ A plugin brings no guide, suggests no plugin and names no other plugin's kinds o
 
 Which plugins to suggest for a file no plugin added reads is worked out from what each plugin Meno carries says it reads - its kinds, each told by its own marks, as a kind of a plugin added is (`lib/io/kinds` `offeredKinds`). Such a file is told as that kind, and Meno says which plugins would read it ("water.out (ORCA output): cclib or PySCF would read it."), each with Add, the file read again once one is added. The plugin whose program writes the kind (its `writtenBy`) is named first, the others in Meno's order. None of them is started or asked: only what its manifest says is looked at.
 
-The plugins Meno carries come in its own folder, as trusted as Meno itself, so their manifests are read whether added or not; this replaces the rule of 2026-10-10 that only the catalogues of the plugins added were looked at. A plugin from anywhere else, once there is such a thing, is looked at only as it is added.
+The plugins Meno carries come in its own folder, as trusted as Meno itself, so their manifests are read whether added or not (the maintainer, 2026-10-31); this replaces the rule of 2026-10-10 that only the catalogues of the plugins added were looked at. A plugin from anywhere else, once there is such a thing, is looked at only as it is added.
 
 ## Licences
 
