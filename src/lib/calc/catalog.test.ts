@@ -199,6 +199,22 @@ describe("who reads a kind", () => {
     expect(readerFor("cube", both, { read: { cube: "orca-own" }, also: {} }, readers)?.id).toBe("orca-own");
   });
 
+  it("is, where none is chosen and Meno does not read it, the plugin whose own program writes it, before a reader of many programs' outputs", () => {
+    // (a plugin that runs the program whose output it is, and says so in its manifest: `writtenBy`, one of its own programs)
+    const own: ReaderPlugin = { ...other, id: "program-own", name: "The program's plugin", reads: ["orca"], ownKinds: ["orca"], profile: "plugin-program-own" };
+    const withOwn = [...READERS, own];
+    const all = new Set(["cclib", "pyscf", "program-own"]);
+    expect(readerFor("orca", all, none, withOwn)?.id).toBe("program-own");
+    // (chosen, another reads it: the chemist's choice stands)
+    expect(readerFor("orca", all, { read: { orca: "cclib" }, also: {} }, withOwn)?.id).toBe("cclib");
+    // (not added: the first added reads it, as before)
+    expect(readerFor("orca", new Set(["cclib", "pyscf"]), none, withOwn)?.id).toBe("cclib");
+    // (a kind it does not write is read as before)
+    expect(readerFor("gaussian", all, none, withOwn)?.id).toBe("cclib");
+    // (and it reads it as well, where chosen to, as any reader)
+    expect(alsoReadersFor("orca", all, { read: {}, also: { orca: ["cclib"] } }, withOwn).map((p) => p.id)).toEqual(["cclib"]);
+  });
+
   it("is none where nothing added reads it", () => {
     expect(readerFor("orca", new Set(), none, readers)).toBeNull();
     expect(readerFor("xtb", new Set(["pyscf"]), none, readers)).toBeNull();
