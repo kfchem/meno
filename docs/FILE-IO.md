@@ -1656,7 +1656,8 @@ As step 3 was built:
     all it printed; each geometry's RMS gradient; and a file's jobs
     (`$new_job`) each an output of its own.
   - A value ORCA did not print is not given: none is worked out in its
-    place. A path's own points - a band's images and the point it refined,
+    place - but the entropy, its printed *T S* term over the temperature
+    it printed, in cal/(mol K). A path's own points - a band's images and the point it refined,
     a reaction path's - are in files of their own, which a job's `collect`
     reads with the same module; an output opened by hand says they are not
     in it.

@@ -8,7 +8,8 @@ each function is given the text and gives back plain data; nothing here reads a 
 What it gives, in Meno's units: the atoms and each geometry ORCA wrote, in angstroms; each geometry's energy as
 ORCA states it, in hartrees; what the calculation was - the program and its version, the method and basis set,
 the solvation, the charge and multiplicity, each atom's mass; how the run went; and everything else as results in
-the general form (src/lib/calc/results.ts). A value ORCA did not print is not read: none is worked out in its place.
+the general form (src/lib/calc/results.ts). A value ORCA did not print is not read: none is worked out in its place -
+but the entropy, its printed T S term over the temperature it printed.
 """
 
 import math
