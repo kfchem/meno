@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "uses": [{"name": "Blender", "version": "5.2.2"}],
   "description": "Renders pictures and films of molecules in 3D with Blender 5.2.2 LTS - its official build, under its own licence, fetched by Meno as the plugin is set up and kept for Meno's own use.",
   "licence": "GPL-3.0-or-later",
