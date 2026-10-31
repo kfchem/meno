@@ -161,20 +161,14 @@ torsion, chirality and E/Z decisions agree in every case.
 
 Two sets in `_correct_maps` hold atoms - the bonds a map leaves unmatched,
 and the swaps found from them - and Python iterates a set of objects in the
-order of their memory addresses. So ACCeL's own output can change from one
-run to the next: the order of the corrected maps, and so the order of maps
-whose scores all tie, and (through `max_loop`, which stops after four rounds
-a map) now and then which maps are found at all. The port takes one fixed
+order of their memory addresses. The port takes one fixed
 order there: the unmatched bonds as they are met, each atom's own first;
 the swaps sorted by their atoms' numbers.
 
-Over the corpus below (each reaction run through ACCeL two to five times,
-each time in a new process), ACCeL's output changed between runs for three
-reactions, in both embeddings of each: two Diels-Alder reactions
-(cyclopentadiene with maleic anhydride, furan with acrylonitrile), where the
-corrected maps came in another order, and a ring-closing metathesis, where
-other maps were found. Meno's result matched one of ACCeL's runs exactly in
-each.
+Over the corpus below, three reactions in both embeddings of each (two
+Diels-Alder reactions, cyclopentadiene with maleic anhydride and furan with
+acrylonitrile; a ring-closing metathesis) depend on that order; Meno's
+result is one the original gives for them.
 
 ### Numbers
 
@@ -405,8 +399,8 @@ environment, nothing of it committed:
 - **Results.** Every stage agrees on all 147 reactions - each `_get_maps`
   call (177 492 of them for an SN2 beside four waters), `_correct_maps`,
   every map's fourteen scores, the order, and `get_maps` and `get_mapped` -
-  but for the cases above: where ACCeL's own output varies from run to run,
-  Meno's matches one of its runs; and in two reactions (a cyclopropanation
+  but for the cases above: where the original's order is not fixed, Meno's
+  result is one it gives; and in two reactions (a cyclopropanation
   and a butadiene ring closure) maps whose total RMSDs differ only in their
   last digits come in the other order. The first map agrees on every
   reaction.
