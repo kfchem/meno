@@ -52,11 +52,42 @@ export const STEP_KINDS = [
 export type StepKind = (typeof STEP_KINDS)[number];
 
 /**
- * The kinds only Meno does, by a rule of its own that runs no program
- * (docs/WORKFLOWS-FOUNDATION.md, *Enumerate is Meno's own*): a manifest's
- * step of one is left out, as one of a kind not here is.
+ * The kinds only Meno does: its judgements, and rules of its own that run no
+ * program (docs/WORKFLOWS-FOUNDATION.md, *Enumerate is Meno's own*; the plugin
+ * boundary, 2026-10-31 - a plugin runs its program and converts what it made,
+ * and fills only kinds that run one). A manifest's step of one is left out, as
+ * one of a kind not here is. *Check structures* is a plugin's still, until
+ * what it sets aside is Meno's to decide too.
  */
-export const MENO_ONLY: readonly StepKind[] = ["enumerate", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "take-frames", "displace", "atom-map", "number", "add", "restraints", "torsion-restraints", "join", "rank", "ensemble", "barrier"];
+export const MENO_ONLY: readonly StepKind[] = [
+  "energy-window",
+  "duplicates",
+  "populations",
+  "as-conformers",
+  "choose",
+  "filter",
+  "chart",
+  "energy-diagram",
+  "enumerate",
+  "tag",
+  "species",
+  "combine",
+  "measure",
+  "merge",
+  "rebond",
+  "compare-bonding",
+  "take-frames",
+  "displace",
+  "atom-map",
+  "number",
+  "add",
+  "restraints",
+  "torsion-restraints",
+  "join",
+  "rank",
+  "ensemble",
+  "barrier",
+];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;
