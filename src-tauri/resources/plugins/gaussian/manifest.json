@@ -7,7 +7,7 @@
   "homepage": "https://gaussian.com",
   "environment": "uv",
   "kinds": [
-    {"id": "gaussian", "name": "Gaussian output", "program": "Gaussian", "writtenBy": "g16", "extensions": [".log", ".out"], "marks": [{"text": "Entering Gaussian System", "at": "line-start"}], "grammar": {"file": "gaussian-output.grammar", "tones": {"WarningLine": "warning", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}},
+    {"id": "gaussian", "name": "Gaussian output", "program": "Gaussian", "writtenBy": "g16", "extensions": [".log", ".out"], "marks": [{"text": "Entering Gaussian System, Link 0=", "at": "line-start"}], "grammar": {"file": "gaussian-output.grammar", "tones": {"WarningLine": "warning", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}},
     {"id": "gaussian-fchk", "name": "Gaussian formatted checkpoint", "program": "Gaussian", "writtenBy": "g16", "extensions": [".fchk", ".fch"], "marks": [{"text": "Number of atoms I", "at": "line-start"}]},
     {"id": "gaussian-input", "name": "Gaussian input", "extensions": [".gjf", ".com"], "grammar": {"file": "gaussian-input.grammar", "tones": {"Link0Name": "keyword", "RouteStart": "keyword", "RouteWord": "keyword", "Link1": "keyword", "Number": "number", "Element": "tag", "Value": "value", "Comment": "comment"}}}
   ],

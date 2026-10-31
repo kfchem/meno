@@ -425,7 +425,7 @@ def answer(line):
 def what(m):
     """How a refusal begins: a file written, a file read, or a step."""
     if m.get("op") == "read":
-        return "The Gaussian output could not be read"
+        return "It could not be read as Gaussian's output"
     return "The Gaussian input could not be written" if m.get("op") == "write" else "Gaussian"
 
 
