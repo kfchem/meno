@@ -59,10 +59,12 @@ describe("Restraints, as a step", () => {
     expect(o.said).toBe("2 entries restrained \u00b7 no coordination bonds \u00b7 2 pairs at their distance");
   });
 
-  it("has no factor and no strength of its own: it says what it needs, and runs on nothing until it has them", () => {
+  it("has no factor of its own, and a strength measured to hold: it says what it needs, and runs on nothing until it has them", () => {
     const needs = kindInfo("restraints").needs!;
     expect(needs({})).toBe("Set the factor");
-    expect(needs({ factor: "0.9" })).toBe("Set the strength");
+    // (the strength 500 kcal/mol/Å² unless set - DISTANCE_STRENGTH's basis - and asked for where it is cleared)
+    expect(needs({ factor: "0.9" })).toBeUndefined();
+    expect(needs({ factor: "0.9", strength: "" })).toBe("Set the strength");
     expect(needs({ factor: "-1", strength: "1000" })).toBe("The factor must be a number above 0");
     expect(needs({ coordination: false })).toBe("Nothing to hold yet");
     // (atoms fixed need no strength: they are fixed)
@@ -70,6 +72,8 @@ describe("Restraints, as a step", () => {
     expect(needs({ coordination: false, distances: "1-2-3", strength: "5" })).toBe('"1-2-3" is not a pair of atoms');
     expect(runMeno("restraints", [borane], "molecules", {})).toEqual({ ok: false, said: "Set the factor" });
     expect(kindInfo("restraints").how?.({ factor: "0.9", strength: "1000", fixed: "1" })).toBe("Coordination bonds at 0.9 × van der Waals (Alvarez 2013); 1 atom fixed; 1000 kcal/mol/Å²");
+    // (the default strength unsaid)
+    expect(kindInfo("restraints").how?.({ factor: "0.9", strength: "500" })).toBe("Coordination bonds at 0.9 × van der Waals (Alvarez 2013)");
   });
 
   it("sets aside, saying why, an entry that has not the atom typed, and replaces what an entry held before", () => {
@@ -97,7 +101,7 @@ describe("Torsion restraints, as a step", () => {
     const second = runMenoPair("torsion-restraints", { entries: first.kept, holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, { step: "50" });
     if (!second.ok) throw new Error(second.said);
     expect(held(second.kept[0]).map((r) => r.strength)).toEqual([100, 100]);
-    expect(second.said).toBe("1 restrained · 0 trans already · 2 torsions held stronger");
+    expect(second.said).toBe("1 restrained · 2 torsions held stronger");
   });
 
   it("matches each entry with its reference on a property, and does nothing where one has none, saying which", () => {
@@ -121,7 +125,7 @@ describe("Torsion restraints, as a step", () => {
     const both = [tagged(dce(false), "product", "p-0"), tagged(ref, "product", "p-1")];
     const o = runMenoPair("torsion-restraints", { entries: both, holds: "molecules" }, { entries: both, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
     if (!o.ok) throw new Error(o.said);
-    expect(o.said).toBe("0 restrained · 1 trans already · 1 with no trans torsion in its reference");
+    expect(o.said).toBe("1 trans already · 1 with no trans torsion in its reference");
   });
 
   it("names every entry it could not set against a reference", () => {
@@ -130,8 +134,10 @@ describe("Torsion restraints, as a step", () => {
     expect(o).toEqual({ ok: false, said: "2 entries could not be set against a reference: a #1: no entry of Reference has its product, p-2; a #1: no entry of Reference has its product, p-3" });
   });
 
-  it("has no strength of its own to add: it says so on its card", () => {
-    expect(kindInfo("torsion-restraints").needs?.({})).toBe("Set the strength added");
+  it("adds 50 kcal/mol/rad² each time unless set - measured - and asks where it is cleared", () => {
+    expect(kindInfo("torsion-restraints").needs?.({})).toBeUndefined();
+    expect(kindInfo("torsion-restraints").needs?.({ step: "" })).toBe("Set the strength added");
+    expect(kindInfo("torsion-restraints").how?.({})).toBe("held at 180°, +50 kcal/mol/rad²");
     expect(kindInfo("torsion-restraints").inputs?.map((p) => p.name)).toEqual(["Molecules", "Reference"]);
     expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("held at 180°, +50 kcal/mol/rad², matched on product");
     expect(kindInfo("torsion-restraints").how?.({ step: "50" })).toBe("held at 180°, +50 kcal/mol/rad²");

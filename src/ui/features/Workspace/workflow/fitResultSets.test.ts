@@ -6,10 +6,11 @@ import type { Molecule3D } from "../store/types";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { reachOverFrames } from "../utils/molecule3d";
 import { setMembers, type Frame } from "./entries";
-import { BETWEEN, CHIP, SET_PAD, SET_TOP } from "./look";
+import { BETWEEN, CHIP, CHIP_CHAR, SET_PAD, SET_TOP } from "./look";
 import { addSet, addStep } from "./model";
 import { resultOf } from "./flow";
 import { chipWide, fitResultSets, placeResults, type RunWith } from "./run";
+import { PATH_FRAME, REFINED_SAID } from "./entries";
 import { style3dIn } from "../../../../lib/chem/workspaceStyle3d";
 
 /** A bent triatomic about the origin: water, or one of its kind. */
@@ -241,5 +242,35 @@ describe("a result set of molecules narrower than their frames chips", () => {
     // (its chip below its reach, and the frame's pad below that)
     expect(m.at.y - 1 - CHIP - SET_PAD).toBeCloseTo(set.y0, 6);
     for (const n of d.molecules3d!) expect(n.at.x - chipWide(n) / 2).toBeGreaterThanOrEqual(set.x0 + SET_PAD - 1e-6);
+  });
+
+  // (a saddle point's chip says "1 imaginary frequency, 450.0i ..." after its numbers, a failed one why: laid out with room for its
+  //  numbers alone, its chip ran into its neighbours' and past the set's frame)
+  it("gives a chip room for what it says of a frame besides its numbers - a saddle point's imaginary frequency, why one failed", () => {
+    const one = { ...bent(), energies: [-1], shares: [1], conformerSet: true };
+    const saddle = { ...one, imaginary: [[-450]] };
+    const failed = { ...one, failed: [{ kind: "not-converged" as const, why: "stopped at 200 cycles" }] };
+    expect(chipWide(saddle)).toBeGreaterThan(chipWide(one) + 20 * CHIP_CHAR);
+    // (one of a single frame that failed: no lowest to stand above, said in its energy's place - its chip as wide as that, and why)
+    expect(chipWide(failed)).toBeGreaterThanOrEqual(("1 / 1 · none finished: no lowest to stand above · not converged".length) * CHIP_CHAR);
+    let d = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    d = placeResults(d, d.steps![0], { molecules: [saddle, { ...saddle, imaginary: [[-1234.5]] }, failed], rest: [], holds: "molecules" }, { extentOf: reaching(0.4) });
+    const set = d.sets![0];
+    const chips = d.molecules3d!.map((m) => ({ x0: m.at.x - chipWide(m) / 2, x1: m.at.x + chipWide(m) / 2, y: m.at.y }));
+    // (each chip ends before the next begins, in a row, all within the frame)
+    for (let i = 1; i < chips.length; i++) if (chips[i].y === chips[i - 1].y) expect(chips[i].x0).toBeGreaterThanOrEqual(chips[i - 1].x1);
+    for (const c of chips) expect(c.x0).toBeGreaterThanOrEqual(set.x0);
+    for (const c of chips) expect(c.x1).toBeLessThanOrEqual(set.x1);
+  });
+
+  // (a path search's molecule, its highest point refined, says each frame's energy from its start - "3 / 3 · ΔE 12.3 kcal/mol from
+  //  its start" - not the bare height a plain set's chip says)
+  it("gives a path search's chip room for its energy from the path's start", () => {
+    const xyz = bent().atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const plain = { ...bent(), frames: [xyz, xyz], energies: [-1, -0.99, -0.995] };
+    const calc = { program: "test", results: [{ id: PATH_FRAME, group: "Path", label: "Frame", on: "frames" as const, values: ["", REFINED_SAID, ""] }] };
+    const path = { ...plain, calc } as unknown as typeof plain;
+    expect(chipWide(path)).toBeGreaterThanOrEqual("3 / 3 · ΔE 12.3 kcal/mol from its start".length * CHIP_CHAR);
+    expect(chipWide(path)).toBeGreaterThan(chipWide(plain));
   });
 });

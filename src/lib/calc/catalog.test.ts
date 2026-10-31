@@ -30,7 +30,7 @@ describe("the readers Meno knows of", () => {
     const [cclib, pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
-      version: "0.1.4",
+      version: "0.1.6",
       uses: [{ name: "cclib", version: "1.9rc1" }],
       profile: "plugin-cclib",
       lock: "resources/plugins/cclib/requirements.lock",
@@ -89,6 +89,7 @@ describe("the readers Meno knows of", () => {
         env: {},
         places: {},
         beside: { orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } },
+        parallel: "processes",
       },
     ]);
     expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" }, path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] }, places: {} }]);
@@ -106,6 +107,7 @@ describe("the readers Meno knows of", () => {
     ]);
     expect(rdkit.steps.map((d) => [d.kind, d.programs])).toEqual([
       ["conformers", ["python"]],
+      ["minimise", ["python"]],
       ["duplicates", []],
       ["check-structures", []],
       ["stereoisomers", []],

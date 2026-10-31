@@ -22,6 +22,8 @@ function digestOf(id: string): string {
 }
 /** Each program installed separately as it is now (its stamp), by where it is; one not there cannot be told. */
 const stamps: Record<string, string> = {};
+/** The computer's physical cores, as a test has them: as many as its cores, unless it says. */
+const physicalCores = vi.hoisted(() => ({ n: 8 }));
 
 vi.mock("../../../../lib/jobs", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/jobs")>()),
@@ -54,8 +56,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
-  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid)
-  computerResources: async () => ({ cores: 8, memory: 32 * 1024 }),
+  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid - its physical cores as a test has them)
+  computerResources: async () => ({ cores: 8, physical: physicalCores.n, memory: 32 * 1024 }),
 }));
 
 /** The files a job made that Meno reads itself, as the test has them: a render's pictures, by where they are. */
@@ -371,6 +373,40 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
+  it("gives a program running as processes one to each physical core, however many cores Settings gives - a program of threads all of them", async () => {
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    // (a computer running two threads on each of its 4 physical cores - whatever computer the test runs on: the cores
+    //  the webview tells, too - and Settings giving each job all 8)
+    physicalCores.n = 4;
+    Object.defineProperty(globalThis.navigator, "hardwareConcurrency", { value: 8, configurable: true });
+    const calculations = useAppSettings.getState().calculations;
+    useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
+    try {
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never);
+      const { st } = editor();
+      const orca = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, orca);
+      void st().runStep(orca);
+      await settle();
+      await settle();
+      // (ORCA, whose manifest says it runs as processes: 4 - its %pal written so, and its job counted so)
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(4);
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 4 });
+      // (xtb, of threads: all 8)
+      const xtb = st().addStep("optimise", "xtb", 10, 30);
+      st().connect({ set: st().sets[0].id }, xtb);
+      void st().runStep(xtb);
+      await settle();
+      await settle();
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(8);
+    } finally {
+      physicalCores.n = 8;
+      delete (globalThis.navigator as { hardwareConcurrency?: number }).hardwareConcurrency;
+      useAppSettings.setState({ calculations });
+    }
+  });
+
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
@@ -639,6 +675,67 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await all;
     expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
+  });
+
+  it("ends a step a branch gave nothing this time ok, its exits empty, saying which input came empty - through rounds whose last holds none, to a Merge of what they gave and one of the rests with them", async () => {
+    const { st, step: a } = editor();
+    const exit = (id: number, e: string) => st().sets.find((s) => s.made?.step === id && s.made.exit === e)!.id;
+    const ran = (id: number) => st().steps.find((s) => s.id === id)!.ran;
+    const holds = (id: number, e: string) => st().sets.find((s) => s.id === exit(id, e))!.members?.length ?? 0;
+    // (three rounds, each a Filter: the first two keep the water, the last none - every entry done with already)
+    const round = (from: number, conditions: string, x: number) => {
+      const f = st().addStep("filter", "meno", x, 0);
+      st().updateStep(f, { options: { conditions, match: "all" } });
+      st().connect({ set: from }, f);
+      return f;
+    };
+    const r1 = round(resultOf(st(), a)!.id, "number \u2265 1", 30);
+    const r2 = round(exit(r1, "out"), "number \u2265 1", 50);
+    const r3 = round(exit(r2, "out"), "number \u2265 2", 70);
+    // (the last round's own: a program's step, then a step of two inputs - nothing comes into either)
+    const o3 = st().addStep("optimise", "xtb", 90, 0);
+    st().connect({ set: exit(r3, "out") }, o3);
+    const t3 = st().addStep("torsion-restraints", "meno", 110, 0);
+    expect(st().connect({ set: exit(o3, "out") }, t3, "molecules")).toBe(true);
+    expect(st().connect({ set: st().sets[0].id }, t3, "reference")).toBe(true);
+    // (the Merge after the rounds - each round's empty out, the last's restraints and what came into them: nothing from either)
+    const merge = st().addStep("merge", "meno", 130, 0);
+    expect(st().connect({ set: exit(r3, "out") }, merge, "first")).toBe(true);
+    expect(st().connect({ set: exit(t3, "out") }, merge, "second")).toBe(true);
+    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's restraints, empty:
+    //  Merge's own rule, the rests' entries, never ended at once)
+    const rests = st().addStep("merge", "meno", 130, 20);
+    expect(st().connect({ set: exit(r1, "out") }, rests, "first")).toBe(true);
+    expect(st().connect({ set: exit(t3, "out") }, rests, "second")).toBe(true);
+    const all = st().runAll();
+    for (let k = 0; k < 4; k++) await settle();
+    expect(asked.started).toHaveLength(1);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await all;
+    expect(ran(r3)).toMatchObject({ ok: true });
+    expect(holds(r3, "out")).toBe(0);
+    // (no job for it, no worker asked: ended ok at once)
+    expect(asked.started).toHaveLength(1);
+    expect(ran(o3)).toMatchObject({ ok: true, said: "Nothing came in" });
+    expect(holds(o3, "out")).toBe(0);
+    expect(ran(t3)).toMatchObject({ ok: true, said: "Nothing came into Molecules" });
+    expect(holds(t3, "out")).toBe(0);
+    expect(ran(merge)).toMatchObject({ ok: true, said: "Nothing came into First and Second" });
+    expect(holds(merge, "out")).toBe(0);
+    expect(ran(rests)).toMatchObject({ ok: true, said: expect.stringMatching(/ · nothing came from Second$/) });
+    expect(holds(rests, "out")).toBe(1);
+  });
+
+  it("still fails a step whose empty input no step gave, or whose step before it failed", async () => {
+    const { st } = editor();
+    // (a set drawn round nothing, wired by hand)
+    const empty = st().addSet({ x0: 50, y0: 50, x1: 56, y1: 56 });
+    const o = st().addStep("optimise", "xtb", 70, 50);
+    st().connect({ set: empty }, o);
+    await st().runStep(o);
+    expect(st().steps.find((s) => s.id === o)!.ran).toMatchObject({ ok: false });
+    expect(asked.started).toHaveLength(0);
   });
 
   it("runs a path search on pairs - each start with the end in its place - sending each its end, and a pair it cannot work out out of Failed, saying why", async () => {

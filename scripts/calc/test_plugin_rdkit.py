@@ -337,11 +337,12 @@ class EquivalentAtoms(unittest.TestCase):
         self.assertLess(worst, 1e-4)
 
     def test_keeps_every_hydrogens_side_across_twenty_conformers(self):
-        # (butan-2-ol and a methylcyclohexane: each CH2's hydrogens keep the sign of their signed volume of the reference)
+        # (butan-2-ol and a methylcyclohexane: each CH2's hydrogens keep the sign of their signed volume of the reference -
+        #  on Meno's page, which settles them)
         import numpy as np
         for smiles in ["C[C@H](O)CC", "C[C@H]1CCCCC1"]:
             mol = Chem.MolFromSmiles(smiles)
-            entry = self.worker.conformers(mol, count=20)
+            entry = self.worker.conformers(mol, count=20, page=True)
             frames = entry["frames"]
             self.assertGreater(len(frames), 1)
             full = Chem.AddHs(mol)
@@ -364,6 +365,68 @@ class EquivalentAtoms(unittest.TestCase):
         self.assertEqual(text.count("settle_equivalents(mol, kept)"), 1)
         for other in ("cclib", "pyscf", "xtb", "crest", "orca", "gaussian"):
             self.assertNotIn("settle_equivalents", (ROOT / "src-tauri/resources/plugins" / other / "worker.py").read_text(encoding="utf-8"))
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class AWorkflowsSearch(unittest.TestCase):
+    """A workflow's *Conformers* step is given RDKit's own conformers: every one embedded and optimised, as RDKit made
+    it - none taken for another, laid over another, renumbered, or made as another's mirror image. Those are Meno's
+    page's alone, which asks for them (`onPage`), as a workflow's step cannot."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def test_gives_rdkits_own_conformers_frame_for_frame(self):
+        # (the known answer, RDKit's own: ETKDG v3 at the worker's seed, MMFF94 optimisation, lowest first)
+        from rdkit.Chem import rdForceFieldHelpers
+        mol = Chem.MolFromSmiles("C[C@H](O)CC")
+        made = self.worker.conformers(mol, count=12)
+        raw = Chem.AddHs(mol)
+        params = rdDistGeom.ETKDGv3()
+        params.randomSeed = self.worker.SEED
+        params.pruneRmsThresh = -1.0
+        params.numThreads = 0
+        ids = list(rdDistGeom.EmbedMultipleConfs(raw, numConfs=12, params=params))
+        energy = {cid: e for cid, (_, e) in zip(ids, rdForceFieldHelpers.MMFFOptimizeMoleculeConfs(raw, numThreads=0, maxIters=self.worker.STEPS, mmffVariant="MMFF94"))}
+        order = sorted(ids, key=lambda c: energy[c])
+        self.assertEqual(made["frames"], [[round(v, 4) for p in raw.GetConformer(c).GetPositions() for v in p] for c in order])
+        for got, cid in zip(made["energies"], order):
+            self.assertAlmostEqual(got, energy[cid] / self.worker.KCAL_PER_HARTREE, places=9)
+        rows = {r["label"]: r["text"] for r in made["how"]}
+        self.assertEqual(rows["Kept"], "12 of 12 embedded (12 sought)")
+        self.assertNotIn("The same within", rows)
+
+    def test_makes_each_enantiomer_itself_and_only_the_page_its_twins_mirror_image(self):
+        # (of butan-2-ol's two enantiomers, the one whose twin's SMILES comes first: on Meno's page, its twin reflected;
+        #  in a workflow's step, embedded itself)
+        r, s = (self.worker.op_from_smiles({"smiles": x})["molblock"] for x in ("C[C@@H](O)CC", "C[C@H](O)CC"))
+        second = next(b for b in (r, s) if self.worker.smiles_of(self.worker.mirror_of(self.worker.read(b))) < self.worker.smiles_of(self.worker.read(b)))
+        reflected, used = self.worker.reflected, []
+        self.worker.reflected = lambda entry: used.append(1) or reflected(entry)
+        try:
+            self.worker.op_conformers({"molblock": second, "options": {"count": 4}})
+            self.assertEqual(used, [])
+            self.worker.op_conformers({"molblock": second, "options": {"count": 4}, "onPage": True})
+            self.assertEqual(used, [1])
+        finally:
+            self.worker.reflected = reflected
+
+    def test_cannot_be_asked_for_the_pages_through_its_options(self):
+        # (the step's options never carry the page's flag: its card cannot set it)
+        mb = self.worker.op_from_smiles({"smiles": "CC(C)(C)C1CCCCC1"})["molblock"]
+        made = self.worker.op_conformers({"molblock": mb, "options": {"count": 30, "onPage": True, "page": True}})["isomers"][0]
+        self.assertNotIn("The same within", {r["label"] for r in made["how"]})
+        self.assertNotIn("page", self.worker.options_of({"options": {"onPage": True, "page": True}}))
+
+    def test_says_when_it_embedded_from_random_coordinates(self):
+        rows = lambda e: {r["label"]: r["text"] for r in e["how"]}
+        self.assertEqual(rows(self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=4))["Embedded"], "ETKDG v3")
+        # (an eta complex is embedded from random coordinates, its star at no fixed place)
+        fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene(), "options": {"count": 4}})["isomers"][0]
+        self.assertEqual(rows(fe)["Embedded"], "ETKDG v3, from random coordinates")
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
@@ -598,8 +661,9 @@ class SameConformer(unittest.TestCase):
         spec.loader.exec_module(cls.worker)
 
     def made(self, smiles):
+        # (on Meno's page, where the same conformer twice is kept once)
         mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
-        entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        entry = self.worker.op_conformers({"molblock": mb, "onPage": True})["isomers"][0]
         lowest = min(entry["energies"])
         return entry, [(e - lowest) * 627.5094740631 for e in entry["energies"]]
 
@@ -811,9 +875,9 @@ class MetalFloor(unittest.TestCase):
         m.UpdatePropertyCache(strict=False)
         return m
 
-    def made(self, smiles):
+    def made(self, smiles, page=False):
         mb = Chem.MolToMolBlock(self.mol(smiles), kekulize=False)
-        return self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        return self.worker.op_conformers({"molblock": mb, **({"onPage": True} if page else {})})["isomers"][0]
 
     def angles(self, entry, frame, symbol):
         import numpy as np
@@ -840,8 +904,9 @@ class MetalFloor(unittest.TestCase):
     def test_gives_hexachloroosmate_as_its_one_octahedron(self):
         # (the known answer: one conformer, Oh. Fe standing in for Os, one embedding stopped in a well 87.7
         #  kcal/mol above the octahedron, two Cl 62 degrees apart - under the floor, so dropped and counted; the
-        #  other eight are the octahedron again, relabelled)
-        entry = self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl")
+        #  other eight are the octahedron again, relabelled: on Meno's page, one; a workflow's step gives all nine)
+        self.assertEqual(len(self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl")["frames"]), 9)
+        entry = self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl", page=True)
         self.assertEqual(len(entry["frames"]), 1)
         angles, _, _, _ = self.angles(entry, 0, "Os")
         self.assertTrue(all(abs(a - 90) < 1 for a in angles[:12]), angles)
@@ -1613,19 +1678,112 @@ class CoordinationBonds(unittest.TestCase):
         iso = self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
         return "".join(sorted(a["el"] for a in iso["atoms"]))
 
-    def test_a_main_group_adduct_drawn_with_an_arrow_is_refused_in_words_never_a_hydrogen_short(self):
-        # (H3N->BH3 as plain atoms: RDKit gave the B two hydrogens - H3N->BH2 - where Meno draws three)
+    def made(self, molblock):
+        return self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
+
+    def test_a_group_13_adduct_drawn_with_an_arrow_is_held_in_its_dipolar_form_its_charges_reported_as_drawn(self):
+        # (H3N->BH3 as plain atoms: before 0.1.12 RDKit gave the B two hydrogens - H3N->BH2 - and 0.1.12 refused it)
+        iso = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
+        self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), "BHHHHHHN")
+        self.assertEqual([a["charge"] for a in iso["atoms"]], [0] * 8)
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B computed as a single bond, N+ and B\u2212"}, iso["how"])
+        n, b = iso["frames"][0][0:3], iso["frames"][0][3:6]
+        self.assertTrue(1.5 < math.dist(n, b) < 1.8, math.dist(n, b))
+        # (an alane, an ether's and a ketone's BF3, and Al2Cl6 drawn with its two bridges as arrows: each made, all its atoms)
+        for name, atoms, bonds, formula in [
+            ("Me3N->AlCl3", [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)], "AlCCCClClClHHHHHHHHHN"),
+            ("Me2O->BF3", [("O", 0, 0, 0), ("B", 1.6, 0, 0), ("F", 2.5, 1, 0), ("F", 2.5, -1, 0), ("F", 1.6, 1.5, 0), ("C", -1, 1, 0), ("C", -1, -1, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7)], "BCCFFFHHHHHHO"),
+            ("Me2C=O->BF3", [("O", 0, 0, 0), ("B", 1.6, 0, 0), ("F", 2.5, 1, 0), ("F", 2.5, -1, 0), ("F", 1.6, 1.5, 0), ("C", -1.2, 0, 0), ("C", -2, 1, 0), ("C", -2, -1, 0)],
+             [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (2, 1, 6), (1, 6, 7), (1, 6, 8)], "BCCCFFFHHHHHHO"),
+            ("Al2Cl6", [("Al", 0, 0, 0), ("Al", 3, 0, 0), ("Cl", 1.5, 1, 0), ("Cl", 1.5, -1, 0), ("Cl", -1, 1, 0), ("Cl", -1, -1, 0), ("Cl", 4, 1, 0), ("Cl", 4, -1, 0)],
+             [(1, 1, 3), (9, 3, 2), (1, 2, 4), (9, 4, 1), (1, 1, 5), (1, 1, 6), (1, 2, 7), (1, 2, 8)], "AlAlClClClClClCl"),
+        ]:
+            iso = self.made(self.block(atoms, bonds))
+            self.assertEqual("".join(sorted(a["el"] for a in iso["atoms"])), formula, name)
+            self.assertTrue(all(a["charge"] == 0 for a in iso["atoms"]), name)
+        # (two pairs, said together: Al2Cl6's two Cl->Al bridges are one pair of elements, so one; an ammine and an ether onto two B, two)
+        self.assertIn({"label": "Coordination bonds", "text": "Cl\u2192Al computed as a single bond, Cl+ and Al\u2212"}, iso["how"])
+        two = self.made(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0), ("O", 6, 0, 0), ("B", 7.6, 0, 0), ("C", -1, 1, 0), ("C", 5, 1, 0), ("C", 5, -1, 0)],
+                                   [(9, 1, 2), (9, 3, 4), (1, 1, 5), (1, 3, 6), (1, 3, 7)]))
+        self.assertIn({"label": "Coordination bonds", "text": "N\u2192B, O\u2192B computed as single bonds, each donor + and acceptor \u2212"}, two["how"])
+
+    def test_every_op_that_reads_a_drawing_reads_an_adduct_the_same_way(self):
+        # (H3N->BH3 drawn with an arrow: Check structures keeps it as drawn - no atom with more bonds than it can have -
+        #  Descriptors works it out, and the canvas's analysis marks no valence, as Conformers makes it)
         adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
-        with self.assertRaisesRegex(ValueError, r"^RDKit cannot hold the coordination bond from N to B as drawn: B takes no further bond there\. Draw the two charged instead, N\+ bonded to B-\.$"):
-            self.formula(adduct)
-        alane = self.block(
-            [("N", 0, 0, 0), ("Al", 2, 0, 0), ("Cl", 3, 1, 0), ("Cl", 3, -1, 0), ("Cl", 2, 2, 0), ("C", -1, 1, 0), ("C", -1, -1, 0), ("C", 0, 1.5, 0)],
-            [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)],
-        )
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to Al as drawn"):
-            self.formula(alane)
-        # (drawn charged, as the words say: made, its six hydrogens all there)
-        self.assertEqual(self.formula(self.block([("N", 0, 0, 1), ("B", 1.6, 0, -1)], [(1, 1, 2)])), "BHHHHHHN")
+        self.assertEqual(self.worker.step_check([{"molblocks": [adduct]}], {}), {"structures": [{"as": "drawn"}]})
+        described = self.worker.step_descriptors([{"molblocks": [adduct]}], {})["structures"][0]
+        self.assertEqual(described["as"], "drawn")
+        # (its weight: B 10.81, N 14.007, six H 1.008 each - the same in either form)
+        self.assertAlmostEqual(described["properties"]["mw"]["value"], 10.81 + 14.007 + 6 * 1.008, delta=0.01)
+        seen = self.worker.op_analyse({"molblock": adduct})
+        self.assertFalse(any("valenceError" in a for a in seen["atoms"]))
+        self.assertEqual([a["hydrogens"] for a in seen["atoms"]], [3, 3])
+        # (one it cannot hold is still set aside by Check structures, as Conformers refuses it)
+        silicon = self.block([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)])
+        self.assertEqual(self.worker.step_check([{"molblocks": [silicon]}], {})["structures"][0]["kind"], "valence")
+
+    def test_stereoisomers_of_an_adduct_are_drawn_with_its_arrow_and_its_charges_as_drawn(self):
+        # (1-fluoroethylamine->BH3, its carbon a stereocentre left open: two stereoisomers, each written back as drawn - the
+        #  N->B arrow, N and B uncharged - and each reading back as the one its SMILES, of the dipolar form, says)
+        adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
+        made = self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0]
+        self.assertEqual(len(made["made"]), 2)
+        self.assertEqual(len(set(made["smiles"])), 2)
+        for block, smiles in zip(made["made"], made["smiles"]):
+            drawn = Chem.MolFromMolBlock(block, sanitize=False, removeHs=False)
+            arrows = [b for b in drawn.GetBonds() if b.GetBondType() == Chem.BondType.DATIVE]
+            self.assertEqual([(b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()) for b in arrows], [("N", "B")])
+            self.assertTrue(all(a.GetFormalCharge() == 0 for a in drawn.GetAtoms()))
+            self.assertRegex(smiles, r"\[NH2\+\]")
+            self.assertRegex(smiles, r"\[BH3-\]")
+            self.assertEqual(Chem.MolToSmiles(self.worker.read(block)), smiles)
+
+    def test_an_adduct_renumbered_since_is_never_written_without_its_arrow(self):
+        # (H3N->BH3 held in its dipolar form, then renumbered - its B and N swapped - so that the index its N keeps of
+        #  its acceptor no longer names one bonded to it: refused in words, and Stereoisomers sets such a one aside)
+        mol = self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
+        renumbered = Chem.RenumberAtoms(mol, [1, 0] + list(range(2, mol.GetNumAtoms())))
+        self.assertEqual(renumbered.GetAtomWithIdx(1).GetIntProp(self.worker.LENDS_TO), 1)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(renumbered)
+        # (and an index past its atoms)
+        renumbered.GetAtomWithIdx(1).SetIntProp(self.worker.LENDS_TO, 99)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(renumbered)
+        # (and one naming an atom bonded to the donor that is not its acceptor - one of the N's own hydrogens: never that
+        #  N-H written as the arrow)
+        withH = Chem.AddHs(self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])))
+        n = next(x for x in withH.GetAtoms() if x.GetSymbol() == "N")
+        h = next(x.GetIdx() for x in n.GetNeighbors() if x.GetSymbol() == "H")
+        arrows = lambda m: [(x.GetBeginAtom().GetSymbol(), x.GetEndAtom().GetSymbol()) for x in m.GetBonds() if x.GetBondType() == Chem.BondType.DATIVE]
+        self.assertEqual(arrows(self.worker.as_drawn(withH)), [("N", "B")])
+        n.SetIntProp(self.worker.LENDS_TO, h)
+        with self.assertRaisesRegex(ValueError, r"^its coordination bond from N could not be written back as drawn$"):
+            self.worker.as_drawn(withH)
+        from unittest import mock
+        adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
+        with mock.patch.object(self.worker, "as_drawn", side_effect=ValueError("its coordination bond from N could not be written back as drawn")):
+            self.assertEqual(self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0],
+                             {"aside": "its coordination bond from N could not be written back as drawn", "kind": "drawing"})
+
+    def test_its_smiles_is_of_the_dipolar_form_the_same_molecule(self):
+        adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
+        self.assertEqual(self.worker.op_to_smiles({"molblock": adduct})["smiles"], Chem.MolToSmiles(Chem.MolFromSmiles("[NH3+][BH3-]")))
+
+    def test_a_main_group_adduct_it_cannot_hold_is_refused_in_words_never_a_hydrogen_short(self):
+        for atoms, bonds, why in [
+            # (Si, not of group 13; a charged acceptor; a charged donor; a donor that cannot carry the charge; two arrows onto one B)
+            ([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)], "Si is not one of B, Al, Ga, In and Tl"),
+            ([("N", 0, 0, 0), ("B", 1.6, 0, -1)], [(9, 1, 2)], "B is drawn charged"),
+            ([("N", 0, 0, 1), ("B", 1.6, 0, 0)], [(9, 1, 2)], "N is drawn charged"),
+            ([("C", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)], "C cannot carry the charge"),
+            ([("N", 0, 0, 0), ("B", 1.6, 0, 0), ("N", 3.2, 0, 0)], [(9, 1, 2), (9, 3, 2)], "B takes 2 of them"),
+        ]:
+            with self.assertRaisesRegex(ValueError, "^RDKit cannot hold the coordination bond from [A-Z][a-z]? to [A-Z][a-z]? as drawn: " + why + r"\.$"):
+                self.made(self.block(atoms, bonds))
 
     def test_a_metal_acceptor_keeps_its_ligands_hydrogens(self):
         # (cis-[PtCl2(NH3)2], each ammine's bond to Pt an arrow: six hydrogens, none taken)
@@ -1633,14 +1791,16 @@ class CoordinationBonds(unittest.TestCase):
         self.assertEqual(self.formula(cisplatin), "ClClHHHHHHNNPt")
 
     def test_a_plugin_entrys_coordination_bond_is_dative_never_a_covalent_single(self):
-        # (H3N->BH3 with all its hydrogens, its B-N bond marked: refused; a Pt ammine's N->Pt: dative)
+        # (H3N->BH3 with all its hydrogens, its B-N bond marked: its dipolar form, the charges as drawn kept; a Pt ammine's N->Pt: dative)
         h = lambda x, k: {"el": "H", "x": x, "y": 0.9 * (k - 1), "z": 0.5}
         borane = {
             "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0}, {"el": "B", "x": 1.66, "y": 0, "z": 0}] + [h(-0.4, k) for k in range(3)] + [h(2.1, k) for k in range(3)],
             "bonds": [{"a1": 0, "a2": 1, "order": 1, "coordination": True}] + [{"a1": 0, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 1, "a2": 5 + k, "order": 1} for k in range(3)],
         }
-        with self.assertRaisesRegex(ValueError, r"coordination bond from N to B as drawn"):
-            self.worker.mol_of(borane)
+        held = self.worker.mol_of(borane)
+        bond = held.GetBondBetweenAtoms(0, 1)
+        self.assertEqual((bond.GetBondType(), held.GetAtomWithIdx(0).GetFormalCharge(), held.GetAtomWithIdx(1).GetFormalCharge()), (Chem.BondType.SINGLE, 1, -1))
+        self.assertEqual([self.worker.drawn_charge(a) for a in held.GetAtoms()][:2], [0, 0])
         ammine = {
             "atoms": [{"el": "Pt", "x": 0, "y": 0, "z": 0}, {"el": "N", "x": 2.05, "y": 0, "z": 0}] + [h(2.4, k) for k in range(3)] + [{"el": "Cl", "x": -2.3, "y": 0, "z": 0}],
             "bonds": [{"a1": 1, "a2": 0, "order": 1, "coordination": True}] + [{"a1": 1, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 0, "a2": 5, "order": 1}],
@@ -1649,3 +1809,155 @@ class CoordinationBonds(unittest.TestCase):
         bond = mol.GetBondBetweenAtoms(0, 1)
         self.assertEqual((bond.GetBondType(), bond.GetBeginAtomIdx()), (Chem.BondType.DATIVE, 1))
         self.assertEqual(mol.GetAtomWithIdx(1).GetTotalNumHs(includeNeighbors=True), 3)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class MinimiseWithRestraints(unittest.TestCase):
+    """A molecule minimised with its restraints held, each by the energy the entry record states (src/lib/entry.ts):
+    a distance by k d^2 / 2 (kcal mol-1 A-2), a dihedral by k phi^2 / 2 (phi in radians, kcal mol-1 rad-2), atoms
+    fixed where they are - known answers on butane, its torsion and its ends' distance set by hand."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def butane(self, dihedral):
+        from rdkit.Chem import AllChem, rdMolTransforms
+        mol = Chem.AddHs(Chem.MolFromSmiles("CCCC"))
+        AllChem.EmbedMolecule(mol, randomSeed=11)
+        rdMolTransforms.SetDihedralDeg(mol.GetConformer(), 0, 1, 2, 3, dihedral)
+        return mol
+
+    def dihedral(self, frame):
+        import numpy as np
+        P = np.array(frame).reshape(-1, 3)[:4]
+        b1, b2, b3 = P[1] - P[0], P[2] - P[1], P[3] - P[2]
+        n1, n2 = np.cross(b1, b2), np.cross(b2, b3)
+        return math.degrees(math.atan2(np.linalg.norm(b2) * np.dot(b1, n2), np.dot(n1, n2)))
+
+    def test_holds_each_restraint_by_the_energy_the_record_states(self):
+        # (known answers, by hand: at a geometry set off from what is held, the force field with the restraint less
+        #  the force field without it is k (d - value)^2 / 2 for a distance, k (phi - value)^2 / 2 for a dihedral, phi
+        #  in radians the shorter way round - across +-180 too - in MMFF94 and in UFF alike)
+        from rdkit.Chem import rdMolTransforms
+        mol = self.butane(-170.0)
+        conf = mol.GetConformer()
+        places = [v for p in conf.GetPositions() for v in p]
+        ends = rdMolTransforms.GetBondLength(conf, 0, 3)
+        for field in ("MMFF94", "UFF"):
+            used, make = self.worker.restrained_field(mol, [], field)
+            self.assertEqual(used, field)
+            free = make(-1, ()).CalcEnergy(places)
+            held = lambda rows: make(-1, rows).CalcEnergy(places) - free
+            self.assertAlmostEqual(held([{"kind": "distance", "atoms": [0, 3], "value": ends + 0.3, "strength": 500.0}]), 500.0 * 0.3**2 / 2, delta=1e-6)
+            self.assertAlmostEqual(held([{"kind": "distance", "atoms": [0, 3], "value": ends - 0.2, "strength": 37.0}]), 37.0 * 0.2**2 / 2, delta=1e-6)
+            # (-170 against 175: 15 degrees the shorter way, across +-180, not 345)
+            for value, off in ((175.0, 15.0), (180.0, 10.0), (-150.0, 20.0)):
+                self.assertAlmostEqual(held([{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": value, "strength": 50.0}]), 50.0 * math.radians(off) ** 2 / 2, delta=1e-6)
+            # (both at once: their energies add)
+            both = [{"kind": "distance", "atoms": [0, 3], "value": ends + 0.3, "strength": 500.0}, {"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 175.0, "strength": 50.0}]
+            self.assertAlmostEqual(held(both), 500.0 * 0.3**2 / 2 + 50.0 * math.radians(15.0) ** 2 / 2, delta=1e-6)
+
+    def test_says_how_far_it_missed_what_its_restraints_hold(self):
+        # (a torsion held weakly misses: the largest miss is given back, measured on what it reached, and as results)
+        made = self.worker.minimised(self.butane(60.0), [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 2.0}])
+        miss = 180 - abs(self.dihedral(made["frame"]))
+        self.assertIsNone(made["missed"][0])
+        self.assertAlmostEqual(made["missed"][1], miss, delta=1e-3)
+        self.assertGreater(miss, 1.0)
+        self.assertEqual(self.worker.missed_results(made["missed"]), [{"id": "restraint-torsion-missed", "on": "molecule", "group": "Restraints", "label": "Largest torsion miss", "value": round(miss, 2), "quantity": "angle"}])
+        self.assertEqual(self.worker.missed_words([0.0123, 1.26]), "missed by at most 0.012 \u00c5 and 1.3\u00b0")
+        self.assertEqual(self.worker.missed_words([None, None]), "")
+
+    def test_holds_a_torsion_at_180_where_it_would_stay_gauche(self):
+        free = self.worker.minimised(self.butane(60.0), [])
+        self.assertLess(abs(self.dihedral(free["frame"])), 90)
+        held = self.worker.minimised(self.butane(60.0), [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 100.0}])
+        self.assertGreater(abs(self.dihedral(held["frame"])), 175)
+        self.assertTrue(held["converged"])
+        self.assertEqual(held["field"], "MMFF94")
+
+    def test_holds_a_distance_and_fixes_atoms_and_gives_the_force_fields_own_energy(self):
+        from rdkit.Chem import rdForceFieldHelpers
+        mol = self.butane(180.0)
+        before = mol.GetConformer().GetPositions()
+        made = self.worker.minimised(mol, [{"kind": "distance", "atoms": [0, 3], "value": 3.2, "strength": 500.0}, {"kind": "fixed", "atoms": [0]}])
+        P = [made["frame"][3 * i : 3 * i + 3] for i in range(mol.GetNumAtoms())]
+        self.assertAlmostEqual(math.dist(P[0], P[3]), 3.2, delta=0.05)
+        # (where it stood, to the 1e-5 A the frame is written to)
+        self.assertLess(math.dist(P[0], list(before[0])), 1e-4)
+        # (its energy the force field's own at the places reached, the restraints' not in it)
+        plain = rdForceFieldHelpers.MMFFGetMoleculeForceField(mol, rdForceFieldHelpers.MMFFGetMoleculeProperties(mol), ignoreInterfragInteractions=False)
+        self.assertAlmostEqual(made["energy"], plain.CalcEnergy(made["frame"]) / self.worker.KCAL_PER_HARTREE, places=6)
+
+    def test_starts_from_where_its_restraints_were_first_held_where_given(self):
+        gauche, anti = self.butane(60.0), self.butane(180.0)
+        start = [round(v, 6) for p in gauche.GetConformer().GetPositions() for v in p]
+        made = self.worker.minimised(anti, [], start=start)
+        self.assertLess(abs(self.dihedral(made["frame"])), 90)
+
+    def test_refuses_in_words_a_restraint_it_cannot_hold(self):
+        with self.assertRaisesRegex(ValueError, r"^Restraint 1 names an atom the molecule does not have$"):
+            self.worker.restraint_rows([{"kind": "distance", "atoms": [0, 99], "value": 2.0, "strength": 1.0}], 14)
+        with self.assertRaisesRegex(ValueError, r"^Restraint 2, a dihedral, has no value or strength to hold it by$"):
+            self.worker.restraint_rows([{"kind": "fixed", "atoms": [0]}, {"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0}], 14)
+
+    def test_a_conformer_search_holds_its_restraints_where_there_is_no_metal(self):
+        rows = [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 100.0}]
+        made = self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=10, rows=rows)
+        self.assertTrue(all(abs(self.dihedral(f)) > 175 for f in made["frames"]))
+        # (the row says how far the conformers kept missed it at most: the largest of theirs, measured here)
+        worst = max(180 - abs(self.dihedral(f)) for f in made["frames"])
+        self.assertIn({"label": "Held", "text": f"1 torsion held, the energies without them; missed by at most {worst:.1f}\u00b0"}, made["how"])
+        # (refused before anything is embedded: they turn on the restraints and the molecule alone)
+        from unittest import mock
+        with mock.patch.object(self.worker.rdDistGeom, "EmbedMultipleConfs", side_effect=AssertionError("embedded")):
+            with self.assertRaisesRegex(ValueError, r"^A conformer search moves every atom, so it holds no atoms fixed"):
+                self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=2, rows=[{"kind": "fixed", "atoms": [0]}])
+            with self.assertRaisesRegex(ValueError, r"^A conformer search holds restraints only where the molecule has no metal"):
+                self.worker.conformers(Chem.MolFromSmiles("N[Pt](N)(Cl)Cl"), count=2, rows=rows)
+
+    def test_a_search_embeds_a_distance_held_at_its_value(self):
+        # (pyridine's N and BH3's B, two parts, held at 0.9 of Alvarez's radii together, 3.21 A: laid where ETKDG
+        #  lays parts, a hold never brought them together - 17 A off at any strength)
+        mol = Chem.AddHs(Chem.MolFromSmiles("c1ccncc1.B"))
+        n = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "N")
+        b = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "B")
+        made = self.worker.conformers(mol, count=5, rows=[{"kind": "distance", "atoms": [n, b], "value": 3.213, "strength": 500.0}])
+        for f in made["frames"]:
+            self.assertAlmostEqual(math.dist(f[3 * n : 3 * n + 3], f[3 * b : 3 * b + 3]), 3.213, delta=0.01)
+        # (a distance no structure can have with the rest - a bond held at 5 A - refused in words)
+        with self.assertRaisesRegex(ValueError, r"^The distances held cannot all be met together in one structure$"):
+            self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=2, rows=[{"kind": "distance", "atoms": [0, 1], "value": 5.0, "strength": 500.0}])
+
+    def test_an_acid_held_at_its_base_by_its_restraint_alone(self):
+        # (H3N->BH3, its coordination bond held at 0.9 of Alvarez's radii together, 3.21 A: no bond of the force
+        #  field's between them - the restraint holds them - so B and N are each as their hydrogens make them)
+        h = lambda x, k, s: {"el": "H", "x": x, "y": 0.9 * (k - 1), "z": 0.5 * s}
+        entry = {
+            "atoms": [{"el": "N", "x": 0, "y": 0, "z": 0}, {"el": "B", "x": 1.66, "y": 0, "z": 0}] + [h(-0.4, k, 1) for k in range(3)] + [h(2.1, k, -1) for k in range(3)],
+            "bonds": [{"a1": 0, "a2": 1, "order": 1, "coordination": True}] + [{"a1": 0, "a2": 2 + k, "order": 1} for k in range(3)] + [{"a1": 1, "a2": 5 + k, "order": 1} for k in range(3)],
+        }
+        rows = [{"kind": "distance", "atoms": [0, 1], "value": 0.9 * (1.66 + 1.91), "strength": 500.0}]
+        self.assertEqual(self.worker.held_apart(entry, rows), {frozenset((0, 1))})
+        mol = self.worker.mol_of(entry, self.worker.held_apart(entry, rows))
+        self.assertIsNone(mol.GetBondBetweenAtoms(0, 1))
+        made = self.worker.minimised(mol, rows)
+        self.assertAlmostEqual(math.dist(made["frame"][0:3], made["frame"][3:6]), 3.213, delta=0.05)
+
+    def test_prepares_a_job_with_the_entrys_restraints_and_start(self):
+        import json as _json
+        mol = self.butane(60.0)
+        entry = {
+            "atoms": [{"el": a.GetSymbol(), "x": p[0], "y": p[1], "z": p[2]} for a, p in zip(mol.GetAtoms(), mol.GetConformer().GetPositions())],
+            "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": 1} for b in mol.GetBonds()],
+            "restraints": [{"kind": "dihedral", "atoms": [0, 1, 2, 3], "value": 180.0, "strength": 50.0}],
+            "start": [0.0] * (3 * mol.GetNumAtoms()),
+        }
+        job = self.worker.op_prepare({"step": "minimise", "entries": [entry], "options": {"field": "MMFF94", "steps": 2000, "start": "first"}})["jobs"][0]
+        given = _json.loads(job["files"][0]["text"])
+        self.assertEqual((job["args"][1].endswith("minimise_job.py"), job["reads"]), (True, ["minimised.json"]))
+        self.assertEqual(given["restraints"][0]["strength"], 50.0)
+        self.assertEqual(len(given["start"]), 3 * mol.GetNumAtoms())

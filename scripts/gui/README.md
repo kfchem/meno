@@ -87,6 +87,41 @@ recording dot, the pointer - no larger than 64x64 pt, are no such window. The tw
 of their own, run by hand on a Mac with no app started:
 `pwsh -NoProfile -File scripts/gui/tests/guard.tests.ps1`.
 
+A question Meno asks before it uses the network - "Download RDKit?", "Keep
+Meno up to date?" (`src/ui/network/ConsentDialog.tsx`) - is answered by the
+person at the computer, never by a run, on either desktop. Every such
+question has one yes, *Allow and download*. A click or a drag whose press
+or release would land on it, or a key, a shortcut or typing sent while it
+has the focus, stops the run before anything is sent; Escape, which answers
+no, always goes. The platform module reads the part at the point, or the
+one with the focus, and what it sits in (`[MacGui]::ChainAt` and
+`FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
+on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`.
+On Windows a press is told by the buttons themselves: Tauri lays a pane
+for its resize borders over the whole page, which lets the mouse through
+but stops UI Automation, so what is at any point reads as that pane. Every
+button of Meno's windows is read instead (`FindAll`, some 40 ms), with its
+bounds, and a press inside one named `Allow...` is stopped. A reading
+is trusted once it holds the page's parts - the page itself (a Document)
+with something in it, whatever it shows, during a talk too; never its
+buttons, as the window frame's are named in the system's language - read
+again for up to 5 s until it does, as the web view builds what it shows UI
+Automation only once asked; one that fails, never holds them, or holds
+the yes with no bounds stops the press. So does a point whose window is
+not Meno's own or one of its own processes' (its web view's) - another
+copy's, another app's - and a point read as that pane counts as unread.
+What could not be read is never taken for "not the yes": a lookup that
+fails - an error, or nothing given - stops the input as the yes does, and
+only "nothing has the keys" (`kAXErrorNoValue` for the focus) lets a key
+go. On a Mac the web view builds its page's parts for Accessibility only
+once asked, so a run's first press or key waits, up to 5 s, until the hit
+test at the window's middle reaches one; a hit test landing on the page
+itself said nothing of what is on it.
+`MENO_GUI_ANSWER_NETWORK_YES=1`, set by hand for one run, lets such input
+through, saying so; nothing in the repository sets it, and
+`tests/consent.tests.ps1` checks that, with what is taken for the yes:
+`pwsh -NoProfile -File scripts/gui/tests/consent.tests.ps1`.
+
 macOS will not let a process capture another app's window or post input until
 it has **Screen & System Audio Recording** and **Accessibility**, both in
 System Settings > Privacy & Security. They are granted not to `pwsh` but to

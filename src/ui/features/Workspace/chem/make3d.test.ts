@@ -7,7 +7,7 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -413,5 +413,14 @@ describe("withinWindow", () => {
     const m = moleculeOf(withinWindow(made(four), 30), block);
     expect(m.made?.how[1]).toEqual({ label: "Energy window", text: "within 30 kcal/mol of the lowest, 2 above it set aside" });
     expect(m.frames).toHaveLength(1);
+  });
+});
+
+describe("conformers made for the page", () => {
+  it("asks the plugin for them as the page shows them, and for nothing else", async () => {
+    const asked: { op: string; args: Record<string, unknown> }[] = [];
+    const chem = { request: async (op: string, args: Record<string, unknown>) => (asked.push({ op, args }), { isomers: [] }) } as unknown as ChemClient;
+    await conformersOf(chem, { molblock: "M  END", atoms: [], bonds: [], part: {} } as unknown as Parameters<typeof conformersOf>[1], "one", { count: 3 });
+    expect(asked).toEqual([{ op: "conformers", args: { molblock: "M  END", isomers: "one", options: { count: 3 }, onPage: true } }]);
   });
 });

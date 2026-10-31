@@ -4,6 +4,19 @@ import type { Failure } from "../workflow/failures";
 
 /** What a molecule's frames chip says where its failures are not one to each frame. */
 export const FAILURES_ASTRAY = "its frames' failures do not line up";
+/** What it says of a frame's energy where none of its frames finished. */
+export const NO_LOWEST = "none finished: no lowest to stand above";
+/** What it says of a frame's energy where that frame did not finish, though another did. */
+export const NOT_FINISHED = "not finished";
+
+/**
+ * What a frames chip says of frame `k`'s energy, where it has one, as
+ * Frames3D says it of `bars` (its widest number for one above the lowest):
+ * its height above it - or, on a path whose highest point was refined
+ * (`fromStart`), its height above the path's start - or why it has none.
+ */
+export const aboveSaid = (bars: ReturnType<typeof barsAbove>, k: number, fromStart = false): string =>
+  bars.above[k] != null ? (fromStart && bars.above[0] != null ? "ΔE 10.0 kcal/mol from its start" : "10.0 kcal/mol") : (bars.why ?? (bars.noBaseline ? NO_LOWEST : NOT_FINISHED));
 
 /**
  * Each frame's energy above the lowest of those that finished, in kcal/mol:
