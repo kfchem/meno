@@ -132,8 +132,8 @@ Everything a plugin is lives in one folder, named by its id:
   <script>.py        a script of its own that a job runs, in its environment
                      (RDKit's conformers_job.py, Blender's render.py)
   <name>.grammar     how a text of a kind it knows is coloured, where it says
-  overrides.txt      what its lock overrides, where its makers pin what cannot
-                     be installed (MolNexTR's)
+  overrides.txt      what its lock takes in place of a release its makers
+                     name (MolNexTR's)
   LICENSE            the licence of its own code, where that is not Meno's
                      (*Licences*): the Blender plugin's alone
 ```
