@@ -29,6 +29,7 @@ import importlib.util
 import json
 import pathlib
 import random
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -36,10 +37,19 @@ PLUGINS = ROOT / "src-tauri/resources/plugins"
 
 
 def load(plugin):
-    spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """A plugin's worker, loaded as its process runs it: its folder on the path, for a reader beside it - and that reader
+    let go of after, so that the next plugin's worker finds its own."""
+    folder = str(PLUGINS / plugin)
+    sys.path.insert(0, folder)
+    sys.modules.pop("reader", None)
+    try:
+        spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(folder)
+        sys.modules.pop("reader", None)
 
 
 xtb = load("xtb")

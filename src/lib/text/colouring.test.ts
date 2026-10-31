@@ -260,8 +260,10 @@ describe("a plugin's grammar", () => {
     expect(registered([m]).texts.map((t) => t.id)).toEqual(["demo-in2"]);
   });
 
-  it("is the first of two plugins' that bring a kind: cclib's before PySCF's", () => {
-    expect(carried.kinds.find((k) => k.id === "orca")?.grammar).toMatchObject({ plugin: "cclib", decl: { file: "orca-output.grammar" } });
+  it("is the plugin's whose own program writes the kind, else the first of two plugins' that bring it: cclib's before PySCF's", () => {
+    // (ORCA's output: the ORCA plugin's own, which says its program writes it; Gaussian's: the first that brings one)
+    expect(carried.kinds.find((k) => k.id === "orca")?.grammar).toMatchObject({ plugin: "orca", decl: { file: "orca-output.grammar" } });
+    expect(carried.kinds.find((k) => k.id === "gaussian")?.grammar).toMatchObject({ plugin: "cclib", decl: { file: "gaussian-output.grammar" } });
     expect(carried.texts.map((t) => [t.id, t.grammar.plugin])).toEqual([
       ["gaussian-input", "gaussian"],
       ["orca-input", "orca"],
