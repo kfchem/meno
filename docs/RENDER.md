@@ -11,8 +11,8 @@ Meno's canvas draws molecules in 3D for working with them: quickly, in the
 film of a molecule turning or moving in a vibration for a talk - lit as a
 real scene is, with true shadows, the light round the scene reaching into
 every crevice, and materials such as glass and metal. It is made by a
-program that does nothing else so well, apart from Meno, and comes back
-onto the page beside the molecules it shows.
+program apart from Meno, and comes back onto the page beside the
+molecules it shows.
 
 ## How it is asked for
 
