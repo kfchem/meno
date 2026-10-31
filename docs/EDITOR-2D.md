@@ -1343,8 +1343,8 @@ All hover-based, as above.
     General, *Write words on the page as they are meant*, turned off keeps
     every word exactly as typed. Atoms' labels have rules of their own
     (above), and the column's texts are never changed.
-  - Drawn whole: the type draws a text's letters a frame or two after it
-    is given them, and showed the old ones meanwhile - a letter deleted
+  - Drawn whole: a text's letters are drawn a frame or two after they
+    are given, and the old ones showed meanwhile - a letter deleted
     stayed on the page for a moment, the caret already before it (the
     maintainer, 2026-10-10). Each change is now set out of sight and shown
     once every letter of it is drawn, the caret and what is selected with
@@ -1355,8 +1355,8 @@ All hover-based, as above.
     move - the one being set is shown as soon as it is, then the latest:
     the words keep up with the box, a few frames behind, where each change
     given up for the next one left them standing still until the pointer
-    did (`textSets`). And none is shown before it is drawn whole: the type
-    packed a batch of letters only as it was first shown, after that
+    did (`textSets`). And none is shown before it is drawn whole: a batch
+    of letters was packed only as it was first shown, after that
     frame, and words shown in place of others were a blank for two or
     three frames (`textBatch`, the maintainer's rule against jumps).
   - Set as a label is set, word by word: a formula's counts low (K₂CO₃,
