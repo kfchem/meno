@@ -1036,9 +1036,7 @@ valence problems, R/S and E/Z - which `ChemMarks2D` lays over the drawing
 as HTML, outside the drawing and so outside any export; they run only
 while RDKit is set up (`pyEnvReady`), so drawing never starts a download.
 `analyse` makes sense of each fragment on its own only where something is
-wrong somewhere; otherwise of the whole at once, which comes out the same:
-RDKit takes fragments out of a molecule by removing atoms one at a time,
-and for a thousand records that ran on for most of an hour.
+wrong somewhere; otherwise of the whole at once, which comes out the same.
 `clean` lays each fragment out afresh and then over the drawing - turned,
 turned over, and its chains turned over their single bonds, whichever
 lies closest - keeping the drawn wedges when they still say the same
