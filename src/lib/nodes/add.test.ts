@@ -99,5 +99,9 @@ describe("Add", () => {
     // (another method, or a basis by another name - only case is passed over)
     expect(workedOutUnlike(sums(named("wB97X-D", "6-311+G(d,p)"), named("M06-2X", "6-311+G(d,p)")), "G")).toMatch(/^differ in thermal treatment: sum: energy \(wB97X-D\/6-311\+G\(d,p\), /);
     expect(workedOutUnlike(sums(named("B3LYP", "6-31G*"), named("B3LYP", "6-31G(d)")), "G")).toMatch(/^differ in thermal treatment: /);
+    // (every other part is compared as written: a solvent or a program in another case is told apart)
+    const values = (a: Property, b: Property) => [entry("x", { energy: a }), entry("y", { energy: b })];
+    expect(workedOutUnlike(values(sp(-500.1), { ...sp(-500.1), at: { ...sp(0).at!, solvent: "SMD(Chloroform)" } }), "energy")).toBe("differ in solvent: SMD(chloroform) (x) and SMD(Chloroform) (y)");
+    expect(workedOutUnlike(values(sp(-500.1), { ...sp(-500.1), by: { ...sp(0).by, program: "gaussian" } }), "energy")).toBe("differ in program: Gaussian (x) and gaussian (y)");
   });
 });
