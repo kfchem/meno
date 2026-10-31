@@ -581,6 +581,12 @@ RING_CONFORMERS = 200
 #: Methods: How Good Is Good Enough?, J. Chem. Inf. Model. 2012, 52, 1146-1158), fifty up to seven turning
 #: bonds, two hundred to twelve, three hundred beyond.
 BY_TURNS = ((7, 50), (12, 200), (None, 300))
+#: The most conformers a search may be asked for (*Conformers sought*, *This many*; the manifest's `max` for
+#: it says the same). A chain needs more than the rule above gives it: of the 1523 conformers within 3 kcal/mol
+#: of the lowest that 5000 embeddings of butyl octanoate (nine turning bonds, the rule's 200) found, 200 found
+#: 110, 500 found 266, 1000 found 487, and the lowest came only at 2000. 5000 of it is a job of about a minute
+#: on ten cores, 111 MB at most, its file 4.9 MB.
+MOST_CONFORMERS = 5000
 #: Two conformers are the same where all their atoms, hydrogens included, lie within this RMSD of each other
 #: (angstroms), laid over at their best - turned and moved, never reflected - over the ways the molecule maps
 #: onto itself: the maintainer's standard for structures fed to quantum calculations (2026-10-21), one
@@ -623,7 +629,7 @@ def options_of(m):
     # (a number, where the chemist asked for one - or where the request gives a count and no choice at all)
     asked = o.get("sought") == "fixed" or (o.get("sought") is None and ("count" in o or "count" in m))
     return {
-        "count": number("count", int(m.get("count", RING_CONFORMERS)), 1, 500) if asked else None,
+        "count": number("count", int(m.get("count", RING_CONFORMERS)), 1, MOST_CONFORMERS) if asked else None,
         "seed": number("seed", SEED, 0, 2**31 - 1),
         "field": o.get("field") if o.get("field") in FIELDS else "MMFF94",
         "iters": number("iters", STEPS, 10, 100000),

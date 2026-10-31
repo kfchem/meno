@@ -513,6 +513,27 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,
     adamantane).
+
+  A number set by hand (*This many*) may be up to 5000 (`MOST_CONFORMERS`,
+  the manifest's `max` for it; from RDKit plugin 0.1.16, up to 500
+  before). The rule's number is a floor for a chain, not enough for one.
+  For butyl octanoate (nine turning bonds, so the rule asks 200),
+  5000 embeddings found 1523 conformers within 3 kcal/mol of the lowest.
+  Each count, run on its own with the same seed, found:
+
+  | asked | of those 1523 | lowest found |
+  |---:|---:|---:|
+  | 200 | 110 | 0.32 kcal/mol above |
+  | 500 | 266 | 0.23 kcal/mol above |
+  | 1000 | 487 | 0.23 kcal/mol above |
+  | 2000 | 819 | the lowest |
+  | 5000 | 1523 | the lowest |
+
+  Conformers here are told apart by the measure below. On ten cores
+  (Apple M4), the job for 5000 of it took about a minute and 111 MB at
+  most, and wrote 4.9 MB.
+  The set they make holds them itself, off the page, as any set of more
+  than 50 does.
 - **The same conformer** (the maintainer, 2026-10-21): two conformers are
   one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
   each other, laid over at their best - turned and moved, never reflected

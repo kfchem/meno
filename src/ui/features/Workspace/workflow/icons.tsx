@@ -161,7 +161,7 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
     </>
   ),
   // (the same atom before and after: across the reaction arrow, linked)
-  reaction: (
+  mapped: (
     <>
       <circle cx="3.6" cy="7" r="2.3" fill="currentColor" stroke="none" />
       <circle cx="16.4" cy="7" r="2.3" fill="currentColor" stroke="none" />

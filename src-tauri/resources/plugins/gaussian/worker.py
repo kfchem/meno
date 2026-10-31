@@ -1,5 +1,5 @@
-"""The Gaussian plugin's worker: a molecule written as Gaussian 16 input, and
-a workflow's steps done with Gaussian 16.
+"""The Gaussian plugin's worker: a molecule written as Gaussian 16 input, a
+workflow's steps done with Gaussian 16, and Gaussian 16's output read.
 
 A plugin's worker (docs/PLUGINS.md, docs/FILE-IO.md, docs/WORKFLOWS.md),
 run in an environment of its own - Python alone, no package. Gaussian
@@ -17,6 +17,8 @@ line on stdin, one per line back on stdout, as every plugin's:
     {"id": 5, "op": "collect", "step": "optimise", "entries": [...], "files": {}, "log": "...", "ended": "done"}
     {"id": 5, "ok": true, "result": {"read": [{"kind": "gaussian", "log": true, "name": "water.log",
         "wavefunction": {"kind": "wfx", "file": "wavefunction.wfx", "name": "water.wfx"}}]}}
+    {"id": 6, "op": "read", "name": "water.log", "text": "..."}
+    {"id": 6, "ok": true, "result": {"schema": 1, "atoms": [...], "frames": [...], ...}}
     {"id": 3, "ok": false, "error": "..."}
 
 It writes what it is given and nothing else - no file of its own choosing,
@@ -34,7 +36,10 @@ Gaussian's own. `collect` reads nothing: it says that the log is
 Gaussian's output, for Meno's readers to read as one opened is - and,
 where Gaussian wrote one, that its wavefunction is kept with the molecule,
 for a step that takes one (Multiwfn's NCI) - or, where the job failed,
-why, as the output says.
+why, as the output says, judged as `read` judges it (reader.run_of).
+
+`read` reads a Gaussian output - a job's log, or a file opened by hand,
+the one reading for both - in Meno's general form (reader.py).
 
 The input is laid out as Gaussian's own reference has it (gaussian.com,
 "About Gaussian 16 Input", "Link 0 Commands", "Molecule Specifications"),
@@ -74,10 +79,13 @@ its energy.
 
 import json
 import math
+import os
 import re
 import sys
 
-VERSION = "0.3.0"
+import reader
+
+VERSION = "0.4.0"
 
 # The elements by atomic number, from 1: what an atom's element may be.
 SYMBOLS = (
@@ -326,23 +334,22 @@ def output_name(entry):
 
 def why_of(output):
     """
-    Why Gaussian stopped, as its output says: the line before it says it
-    ended in error, else that line; else - where it stopped with no word of
-    an error, as a link that dies does - the last thing it printed.
+    Why Gaussian stopped, as its output says (reader.run_of): the line before
+    it says it ended in error, else that line; else - where it stopped with
+    no word of an error, as a link that dies does - the last thing it printed.
     """
+    _, why, _ = reader.run_of(output or "")
+    if why:
+        return why
     lines = [line.strip() for line in (output or "").splitlines() if line.strip()]
-    for k in range(len(lines) - 1, -1, -1):
-        if lines[k].startswith("Error termination"):
-            return lines[k - 1] if k and not lines[k - 1].startswith("Error termination") else lines[k]
     return f"Gaussian stopped without saying why, after: {lines[-1]}" if lines else "Gaussian said nothing"
 
 
 def ended_well(output):
-    """Whether Gaussian says it ended well: its last word on how it ended is "Normal termination" - never an "Error
-    termination" after it, nor none at all. Its exit code alone is not taken for it: a run done is read only where its
-    output says it is."""
-    ends = [line.strip() for line in (output or "").splitlines() if line.strip().startswith(("Normal termination", "Error termination"))]
-    return bool(ends) and ends[-1].startswith("Normal termination")
+    """Whether Gaussian says it ended well, as `read` judges it (reader.run_of): its last lines say "Normal
+    termination", and no "Error termination" is said. Its exit code alone is not taken for it: a run done is read only
+    where its output says it is."""
+    return reader.run_of(output or "")[0] == "normal"
 
 
 def op_collect(m):
@@ -373,7 +380,30 @@ def op_write(m):
     return {"text": gaussian_input(m.get("name", ""), molecules[0], m.get("options") or {})}
 
 
-OPS = {"write": op_write, "prepare": op_prepare, "collect": op_collect}
+def op_read(m):
+    """A Gaussian output read (reader.py)."""
+    name = os.path.basename(str(m.get("name") or "output"))
+    text = m.get("text")
+    if not isinstance(text, str) or not text:
+        raise Refused("there is nothing to read")
+    try:
+        return reader.read_jobs(name, text)
+    except ValueError as e:
+        raise Refused(str(e)) from e
+
+
+def finite(value):
+    """`value` with each number that is not one - not a number, or infinite - as not known: JSON has neither."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: finite(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [finite(v) for v in value]
+    return value
+
+
+OPS = {"write": op_write, "prepare": op_prepare, "collect": op_collect, "read": op_read}
 
 
 def answer(line):
@@ -385,7 +415,7 @@ def answer(line):
     try:
         if op is None:
             raise Refused(f"no such request: {m.get('op')!r}")
-        return {"id": m.get("id"), "ok": True, "result": op(m)}
+        return {"id": m.get("id"), "ok": True, "result": finite(op(m))}
     except Refused as e:
         return {"id": m.get("id"), "ok": False, "error": f"{what(m)}: {e}."}
     except Exception as e:  # noqa: BLE001 - said, not thrown: the worker keeps answering
@@ -393,7 +423,9 @@ def answer(line):
 
 
 def what(m):
-    """How a refusal begins: a file written, or a step."""
+    """How a refusal begins: a file written, a file read, or a step."""
+    if m.get("op") == "read":
+        return "It could not be read as Gaussian's output"
     return "The Gaussian input could not be written" if m.get("op") == "write" else "Gaussian"
 
 

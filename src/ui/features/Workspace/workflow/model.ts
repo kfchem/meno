@@ -101,7 +101,7 @@ export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue 
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));
 }
 
-/** A step's result set holding a table it made (`WorkflowSet.table`; a Reaction's bond changes): nothing on the page among its members, and no molecules of its own. */
+/** A step's result set holding a table it made (`WorkflowSet.table`; an Atom map's bond changes): nothing on the page among its members, and no molecules of its own. */
 export function holdTable(doc: WorkspaceDocument, id: number, table: Table): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], table }));
 }

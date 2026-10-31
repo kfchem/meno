@@ -15,7 +15,7 @@ const headOf = (c: TableColumn) => {
   const shown = c.label ?? c.name;
   return c.kind === "number" && c.unit !== "none" ? `${shown} (${c.unit})` : shown;
 };
-/** What a column's head says on hover: its head, and the name it is matched on where a label stands for it ("Product · reaction.product"). */
+/** What a column's head says on hover: its head, and the name it is matched on where a label stands for it ("Product · map.entry"). */
 const headTitle = (c: TableColumn) => (c.label && c.label !== c.name ? `${headOf(c)} \u00b7 ${c.name}` : headOf(c));
 
 /** A cell as its frame shows it: a number as Meno writes numbers, true or false, text as it is, none as a dash. */
