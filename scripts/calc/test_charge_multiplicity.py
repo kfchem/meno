@@ -29,6 +29,7 @@ import importlib.util
 import json
 import pathlib
 import random
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -36,9 +37,18 @@ PLUGINS = ROOT / "src-tauri/resources/plugins"
 
 
 def load(plugin):
-    spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # (a worker imports the modules beside it - its reader - from its own folder, as Python started on it has that folder on its
+    #  path; each plugin's own, so that one's is never another's taken from those already imported)
+    folder = str(PLUGINS / plugin)
+    sys.path.insert(0, folder)
+    sys.modules.pop("reader", None)
+    try:
+        spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(folder)
+        sys.modules.pop("reader", None)
     return module
 
 

@@ -21,11 +21,17 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKER = ROOT / "src-tauri/resources/plugins/gaussian/worker.py"
 MANIFEST = ROOT / "src-tauri/resources/plugins/gaussian/manifest.json"
-# (the worker's folder on the path, as Meno runs it there: its reader beside it)
+# (the worker's folder on the path while it is loaded, as Meno runs it there: its own reader beside it, never another
+#  plugin's taken from those already imported)
 sys.path.insert(0, str(WORKER.parent))
-spec = importlib.util.spec_from_file_location("plugin_gaussian", WORKER)
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
+sys.modules.pop("reader", None)
+try:
+    spec = importlib.util.spec_from_file_location("plugin_gaussian", WORKER)
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+finally:
+    sys.path.remove(str(WORKER.parent))
+    sys.modules.pop("reader", None)
 
 WATER = {
     "name": "water",

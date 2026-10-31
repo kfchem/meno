@@ -15,6 +15,7 @@ calc-samples/Gaussian-gaussian/ under its name, it is read too; those
 tests are skipped where it is not.
 """
 
+import importlib.util
 import json
 import pathlib
 import sys
@@ -22,9 +23,18 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "src-tauri/resources/plugins/gaussian"
+# (the worker loaded with its own folder on the path, as Meno runs it there - its reader the one beside it, never another
+#  plugin's taken from those already imported - and that reader read)
 sys.path.insert(0, str(PLUGIN))
-import reader  # noqa: E402
-import worker  # noqa: E402
+sys.modules.pop("reader", None)
+try:
+    spec = importlib.util.spec_from_file_location("plugin_gaussian", PLUGIN / "worker.py")
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+finally:
+    sys.path.remove(str(PLUGIN))
+    sys.modules.pop("reader", None)
+reader = worker.reader
 
 SAMPLES = ROOT / "calc-samples/Gaussian-gaussian"
 
