@@ -411,7 +411,7 @@ class WholeOutputs(unittest.TestCase):
 
     def test_a_band_s_output_gives_the_geometry_it_started_from_alone(self):
         # (however many geometries it wrote after - its refinement's steps: no path's points)
-        text = echo("! NATIVE-XTB2 NEB-TS") + GEOMETRY.replace("0.117000", "0.100000") + final("-4.40") + GEOMETRY + final("-4.41") + GEOMETRY + final("-4.42")
+        text = echo("! NATIVE-XTB2 NEB-TS") + GEOMETRY.replace("0.117000", "0.100000") + final("-4.40") + GEOMETRY + final("-4.41") + GEOMETRY + final("-4.42") + "****ORCA TERMINATED NORMALLY****\n"
         r = read("band.out", text)
         self.assertEqual((len(r["frames"]), r["frames"][0][2], r["unmarked"]), (1, 0.1, "path"))
 
