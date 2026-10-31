@@ -1777,6 +1777,15 @@ Decided by the maintainer (2026-10-08), as it was built:
   it as well, its input written by the same code. Its id changed with its
   name (`gaussian`): added before, it is added again (no backward
   compatibility before 1.0).
+- **A program's output read by its own plugin** (2026-10-31): Gaussian's
+  output and its formatted checkpoint are read by the *Gaussian
+  interface*, the plugin that runs Gaussian - one reading, its `read`, for
+  a job's log and for a file opened by hand - written from Gaussian's own
+  reference and its outputs alone (its `reader.py`). Its `collect` judges
+  how a run went by the same reading (`run_of`). Each kind it reads says
+  in its manifest that its program writes it (`writtenBy`), so that, where
+  it is added, it is the reader of Gaussian's outputs unless another is
+  chosen in Settings, *Files*.
 - **An interface, by name**: a plugin that runs a program installed
   separately is named for what it is - the *ORCA interface*, the
   *Gaussian interface* - in Settings, *Plugins*, so that it is not taken
