@@ -1329,11 +1329,13 @@ Decided while building it, for the maintainer to confirm:
   paths they need not be: free energies where each has one, by the same
   method, basis, temperature and the rest, else electronic energies of
   the same program and level, or of none said; else those alike set
-  aside, saying how they differ ("energies differ in level: ... : which
-  is lower is not known") - two levels' numbers never decide; one unlike
-  any other is kept, whatever its level. Where one of those alike has no
-  energy, the first as they came is kept, the line saying so ("of those
-  alike, the first kept where one has no energy"). Its card:
+  aside, saying how they differ ("alike, but which is lower is not
+  known: energies differ in level, ..."), the line counting them as
+  "alike, energies at different levels" - two levels' numbers never
+  decide; one unlike any other is kept, whatever its level. Where one of
+  those alike has no energy, the first as they came is kept, the line
+  saying so ("where one of those alike has no energy, the first kept").
+  Its card:
   "compared within each product" - only what is not its default; its
   line "3 of 4 entries kept · rest 1", the reasons counted only where
   any is more than being alike. One without the

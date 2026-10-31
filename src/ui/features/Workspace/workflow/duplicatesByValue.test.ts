@@ -88,11 +88,11 @@ describe("Duplicates, within each value of a property", () => {
     });
     // (the same saddle point found by two paths, at two levels: the electronic energy of one never decides against the other's)
     const two = runStep(compared([at(water(0.001, -76.0, "P"), "M1"), at(water(0, -80.0, "P"), "M2")], BY), 2, W);
-    expect(asides(two)).toEqual(Array(2).fill("in its product P, energies differ in level: X \u00b7 M1 (a #1) and X \u00b7 M2 (b #1): which is lower is not known"));
-    expect(ran(two)?.said).toMatch(/^0 of 2 entries kept · rest 2 \(2: in its product P, energies differ in level/);
+    expect(asides(two)).toEqual(Array(2).fill("in its product P, alike, but which is lower is not known: energies differ in level, X \u00b7 M1 (a #1) and X \u00b7 M2 (b #1)"));
+    expect(ran(two)?.said).toBe("0 of 2 entries kept · rest 2 (2: alike, energies at different levels)");
     // (nor free energies by two methods)
     const free = runStep(compared([at(water(0.001, -76.0, "P"), "M1", -75.9), at(water(0, -80.0, "P"), "M2", -79.9)], BY), 2, W);
-    expect(asides(free)[0]).toBe("in its product P, free energies differ in method: M1 (a #1) and M2 (b #1): which is lower is not known");
+    expect(asides(free)[0]).toBe("in its product P, alike, but which is lower is not known: free energies differ in method, M1 (a #1) and M2 (b #1)");
     // (free energies alike: the lower free energy kept, whatever the electronic energies say)
     const alike = runStep(compared([at(water(0.001, -80.0, "P"), "M1", -76.0), at(water(0, -76.0, "P"), "M1", -76.01)], BY), 2, W);
     expect(asides(alike)).toEqual(["the same as b #1, which was kept"]);
@@ -104,7 +104,7 @@ describe("Duplicates, within each value of a property", () => {
   it("keeps the first of those alike where one has no energy, saying so", () => {
     const doc = runStep(compared([{ ...water(0.001, -76.0, "P"), energies: undefined }, water(0, -76.01, "P"), water(0.4, -76.02, "P")], BY), 2, W);
     expect(asides(doc)).toEqual(["the same as a #1, which was kept"]);
-    expect(ran(doc)?.said).toBe("2 of 3 entries kept · rest 1 · of those alike, the first kept where one has no energy");
+    expect(ran(doc)?.said).toBe("2 of 3 entries kept · rest 1 · where one of those alike has no energy, the first kept");
   });
 
   it("says on its card what it compares within, and what it still needs", () => {

@@ -663,7 +663,7 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
         if (members.length === 1) return members;
         const level = members.every(hasEnergy) ? levelsOf(members, levels) : null;
         if (level && "unlike" in level) {
-          for (const e of members) why.set(e, `in its ${by} ${valueOf.get(e)}, ${level.unlike}: which is lower is not known`);
+          for (const e of members) why.set(e, `in its ${by} ${valueOf.get(e)}, ${LOWER_UNKNOWN}: ${level.unlike}`);
           return [];
         }
         const first = level ? members.reduce((a, b) => (level.energy(b) < level.energy(a) ? b : a)) : members[0];
@@ -719,16 +719,19 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
   const counts = new Map<string, number>();
   for (const e of alike) {
     const w = why.get(e) ?? "";
-    const k = w.startsWith("the same as ") ? "the same as one kept" : w;
+    const k = w.startsWith("the same as ") ? "the same as one kept" : w.includes(LOWER_UNKNOWN) ? "alike, energies at different levels" : w;
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   // (the reasons counted only where any is more than being alike: its exit is named *Alike*, and each says which it is the same as)
   const only = counts.size === 1 && counts.has("the same as one kept");
   const rest = alike.length ? ` · rest ${alike.length}${only ? "" : ` (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})`}` : "";
   const kinds = unknownKinds ? ` · whether minima or saddle points not known (no frequencies)` : "";
-  const first = asCame ? ` · of those alike, the first kept where one has no energy` : "";
+  const first = asCame ? ` · where one of those alike has no energy, the first kept` : "";
   return { ok: true, holds, kept: keptOnes.map(part), aside, said: `${keptOnes.length} of ${countEntries(entries.length)} kept${rest}${first}${twins}${cap}${kinds}` };
 }
+
+/** Why those alike across compounds are set aside, before how their energies differ (`levelsOf`): the line counts them under one reason. */
+const LOWER_UNKNOWN = "alike, but which is lower is not known";
 
 /**
  * How entries' energies were worked out, where Duplicates keeps the lower
@@ -736,7 +739,7 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
  * worked out the same way (`workedOutAs`); else their electronic energies,
  * where each molecule's calculation (`levels`, by molecule id - its program
  * and level, `energyLevels`) is the same, or none says one. Else how two
- * differ - "free energies differ in method: M1 (b #1) and M2 (c #1)".
+ * differ - "free energies differ in method, M1 (b #1) and M2 (c #1)".
  */
 function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, string>): { energy: (e: SetEntry) => number } | { unlike: string } {
   const free = g.map(freeEnergyOf);
@@ -745,13 +748,13 @@ function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, string>):
     for (let i = 1; i < g.length; i++) {
       const these = workedOutAs(free[i]!);
       const k = these.findIndex(([, v], j) => v !== first[j][1]);
-      if (k >= 0) return { unlike: `free energies differ in ${first[k][0]}: ${first[k][1]} (${named(g[0])}) and ${these[k][1]} (${named(g[i])})` };
+      if (k >= 0) return { unlike: `free energies differ in ${first[k][0]}, ${first[k][1]} (${named(g[0])}) and ${these[k][1]} (${named(g[i])})` };
     }
     return { energy: (e) => freeEnergyOf(e)!.value as number };
   }
   const level = (e: SetEntry) => (e.from != null ? levels?.get(e.from) : undefined) ?? "not stated";
   const k = g.findIndex((e) => level(e) !== level(g[0]));
-  if (k >= 0) return { unlike: `energies differ in level: ${level(g[0])} (${named(g[0])}) and ${level(g[k])} (${named(g[k])})` };
+  if (k >= 0) return { unlike: `energies differ in level, ${level(g[0])} (${named(g[0])}) and ${level(g[k])} (${named(g[k])})` };
   return { energy: (e) => e.energy! };
 }
 
