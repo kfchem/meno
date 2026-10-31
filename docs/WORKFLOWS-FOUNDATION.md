@@ -1128,8 +1128,8 @@ read for it.
 | **Mode on atoms** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
 
 **Plugins may still fill these.** Decision 16 lets a plugin fill a kind
-Meno fills, so a plugin, ACCeL's among them, may later offer its own
-*Atom map* or its readers beside Meno's. None is needed for F or G.
+Meno fills, so a plugin may offer its own *Atom map* or its readers
+beside Meno's. None is needed for F or G.
 
 ## Changed and kept under the principle
 
