@@ -42,7 +42,7 @@ import { textOf } from "./lib/io/text";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
-import { useGuide } from "./lib/plugins/guides";
+import { useGuide } from "./lib/guide/guide";
 import GuideCard from "./ui/guide/GuideCard";
 import { computerResources, fileNow, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
@@ -737,13 +737,13 @@ export default function App() {
   const openFilesRef = useRef(openFiles);
   openFilesRef.current = openFiles;
   useEffect(() => useFilesAsked.subscribe((s, prev) => s.asked !== prev.asked && void openFilesRef.current([...s.files])), []);
-  // (a guide shown with no workspace in front - from Settings, Plugins - brought to one: what it points at is a workspace's)
+  // (the first steps shown with no workspace in front - from Settings, General - brought to one: what they point at is a workspace's)
   const stateNow = useRef(state);
   stateNow.current = state;
   useEffect(
     () =>
       useGuide.subscribe((g, prev) => {
-        if (!g.open || prev.open) return;
+        if (g.open == null || prev.open != null) return;
         const s = stateNow.current;
         if (s.activeId && s.tabsById[s.activeId]?.content.kind === "workspace") return;
         const workspace = [...s.tabOrder].reverse().find((id) => s.tabsById[id]?.content.kind === "workspace");

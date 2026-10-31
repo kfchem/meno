@@ -14,6 +14,7 @@ import PointerSettings from "./PointerSettings";
 import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
 import WorkspaceSizeSettings from "./WorkspaceSizeSettings";
+import FirstStepsSettings from "./FirstStepsSettings";
 import LogSettings from "./LogSettings";
 import LicenceSettings from "./LicenceSettings";
 import LabelSettings from "./LabelSettings";
@@ -104,6 +105,7 @@ export default function SettingsPanel() {
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">General</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray">How Meno works as a whole. Changes are saved as you make them.</p>
+            <FirstStepsSettings />
             <PointerSettings />
             <CanvasSettings />
             <LabelSettings />
