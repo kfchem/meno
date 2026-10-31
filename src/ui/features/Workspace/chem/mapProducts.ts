@@ -1,24 +1,25 @@
 /**
- * A Reaction step's products mapped off the thread the page runs on
+ * An Atom map step's entries mapped off the thread the page runs on
  * (productsMapWorker.ts): a worker of its own, ended when it answers or
  * when it is stopped. Where there are no workers - tests - they are mapped
  * here.
  */
-import { mapProducts } from "../../../../lib/chem/reactionMap";
+import { mapOnto } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { MappingStopped } from "./mapAtoms";
 
-type Mapped = ReturnType<typeof mapProducts>;
+type Mapped = ReturnType<typeof mapOnto>;
+type Options = Parameters<typeof mapOnto>[2];
 type Answer = { kind: "progress"; done: number } | { kind: "done"; result: Mapped } | { kind: "failed"; error: string };
 
-/** Each of `products` mapped onto `reactant` - by its first map, or by `every` map; `onDone` told how many are done, as each is; `stop` ends it. */
-export function mapProductsOff(reactant: Molecule, products: Molecule[], every: boolean, onDone?: (done: number) => void): { result: Promise<Mapped>; stop: () => void } {
+/** The sides `entries`, each mapped onto `reference` (lib/chem/reactionMap `mapOnto`); `onDone` told how many are done, as each is; `stop` ends it. */
+export function mapOntoOff(reference: Molecule[], entries: Molecule[][], o: Options, onDone?: (done: number) => void): { result: Promise<Mapped>; stop: () => void } {
   if (typeof Worker === "undefined") {
     let stopped = false;
     return {
       result: Promise.resolve().then(() => {
         if (stopped) throw new MappingStopped();
-        return mapProducts(reactant, products, { every });
+        return mapOnto(reference, entries, o);
       }),
       stop: () => (stopped = true),
     };
@@ -42,7 +43,7 @@ export function mapProductsOff(reactant: Molecule, products: Molecule[], every: 
       failWith(new Error(e.message || "the mapping stopped"));
     };
   });
-  w.postMessage({ reactant, products, every });
+  w.postMessage({ reference, entries, o });
   return {
     result,
     stop: () => {

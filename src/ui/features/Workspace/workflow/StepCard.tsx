@@ -23,7 +23,17 @@ export type PortLook = "plain" | "lit";
 
 /** A hairline on the screen, whatever the zoom: the page's layer of HTML sets it (Workflow2D). */
 export const HAIR = "var(--hair, 1px)";
-/** A port, centred where it stands in its parent: a small ring, a hair thick. `of`: its set's or card's height, on the page, in px. */
+/**
+ * A box's line a hair thick, just inside its edge, in the colour of an
+ * `inset-ring-*` class: drawn as a shadow, not a border. Chromium (Windows'
+ * WebView2) draws a border thinner than a pixel of the page's layer a whole
+ * one of them wide, and zoomed in the layer magnifies it - six pixels on
+ * the screen at six times (found 2026-10-31); a shadow it draws as thin as
+ * it is. The room the border took is kept as padding (`HAIR`), so that
+ * nothing inside moves.
+ */
+export const HAIR_LINE = "inset-ring-[length:var(--hair,1px)]";
+/** A port, centred where it stands in its parent: a small ring, a pixel thick. `of`: its set's or card's height, on the page, in px. */
 export function Port({
   look,
   style,
@@ -48,7 +58,7 @@ export function Port({
       onPointerDown={onPointerDown}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
-        // (taken hold of over at least 12 hairs, however small it is drawn: meno-port)
+        // (taken hold of over at least 12 px about its middle, however small it is drawn: meno-port)
         "meno-port absolute rounded-full select-none transition-colors duration-150 ease-meno",
         look === "lit" ? "bg-accel-base border-accel-base" : "bg-white border-gh-gray hover:bg-accel-lightbase hover:border-accel-base",
       )}
@@ -56,9 +66,12 @@ export function Port({
         ["--port" as string]: size,
         width: size,
         height: size,
-        marginLeft: `calc(${size} / -2)`,
-        marginTop: `calc(${size} / -2)`,
-        borderWidth: `min(${HAIR}, calc(${size} / 5))`,
+        // (laid out in the screen's pixels, the layer's scale undone on it, and centred by the same transform: laid out in the layer's,
+        //  Chromium rounds its width, its height, its edges and its ring each to a whole one of them, and zoomed in the layer magnifies
+        //  that - ovals, rings as thick as dots, and out of place, on Windows; in the screen's, each is rounded to a pixel there)
+        transformOrigin: "0 0",
+        transform: "scale(calc(1 / var(--scale, 1))) translate(-50%, -50%)",
+        borderWidth: `min(1px, calc(${size} / 5))`,
         borderStyle: "solid",
         pointerEvents: "auto",
         cursor: "crosshair",
@@ -203,8 +216,8 @@ export default function StepCard(p: StepCardProps) {
         role="group"
         aria-label={`Step: ${p.who}, ${p.info.name}`}
         onPointerDown={p.onCardDown}
-        className={`rounded-xl bg-white shadow-sm ${p.selected ? "border-accel-base" : "border-gh-line"}`}
-        style={{ borderWidth: HAIR, borderStyle: "solid", cursor: "default" }}
+        className={clsx("rounded-xl bg-white shadow-sm", HAIR_LINE, p.selected ? "inset-ring-accel-base" : "inset-ring-gh-line")}
+        style={{ padding: HAIR, cursor: "default" }}
       >
         {/* (its words, and its icons alone large where they are too small to read: one over the other, switched past a threshold - utils/pageScale
             `wordsReadAt` - the words fading out as the icons fade in, over a short time: never one put for the other at once, nor both half there at a zoom) */}
@@ -265,7 +278,7 @@ export default function StepCard(p: StepCardProps) {
             style={{ overflow: "hidden" }}
           >
           {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
-          <TextBars on={p.compact} className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
+          <TextBars on={p.compact} className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
             {p.kinds.length > 1 && (
               <div className="mb-3">
                 <OptionsForm

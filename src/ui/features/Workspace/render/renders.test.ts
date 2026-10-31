@@ -87,11 +87,11 @@ describe("a render", () => {
 
   it("is asked for by Meno's own choices: a picture's size and shape, a film's motion, length and rate - offered only where they can be", () => {
     const picture = renderOptions("picture", ["turn"], false);
-    expect(picture.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(picture.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     const film = renderOptions("film", ["turn", "frames"], true);
-    expect(film.map((o) => o.id)).toEqual(["motion", "seconds", "fps", "width", "shape", "look", "molecules", "surfaces", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(film.map((o) => o.id)).toEqual(["motion", "mode", "seconds", "fps", "width", "shape", "look", "molecules", "surfaces", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     const ask = askOf("film", valuesOf(film));
-    expect(ask).toEqual({ kind: "film", width: 1920, shape: "16:9", motion: "turn", seconds: 8, fps: 30, molecules: "meno", surfaces: "meno", finish: LIT });
+    expect(ask).toEqual({ kind: "film", width: 1920, shape: "16:9", motion: "turn", mode: "once", seconds: 8, fps: 30, molecules: "meno", surfaces: "meno", finish: LIT });
     expect(askOf("picture", valuesOf(picture))).toEqual({ kind: "picture", width: 2400, shape: "fit", molecules: "meno", surfaces: "meno", finish: LIT });
   });
 });
@@ -123,7 +123,7 @@ function workspace() {
 const mp4 = (seed: number) => new Uint8Array([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, seed]);
 /** How often a render's job is looked at (renders.ts). */
 const LOOK_MS = 1000;
-const FILM: RenderAsk = { kind: "film", width: 320, shape: "16:9", motion: "turn", seconds: 1, fps: 24 };
+const FILM: RenderAsk = { kind: "film", width: 320, shape: "16:9", motion: "turn", seconds: 3, fps: 8 };
 
 describe("a workspace closing", () => {
   beforeEach(() => {
@@ -201,6 +201,12 @@ describe("a workspace closing", () => {
     // asked for again as it closes: nothing begun, nothing put down
     await startRender(one.store, [one.id], FILM, {});
     expect(asked.started).toHaveLength(1);
+    expect(rendersOf(one.store).getState().list).toEqual([]);
+  });
+  it("refuses a film shorter than its motion can be read in before anything is begun, saying how long it needs", async () => {
+    const one = workspace();
+    await expect(startRender(one.store, [one.id], { ...FILM, seconds: 2 }, {})).rejects.toThrow("This film needs at least 3 s");
+    expect(asked.started).toEqual([]);
     expect(rendersOf(one.store).getState().list).toEqual([]);
   });
   it("says why one failed, and puts it away with its job's folder kept - its log, all Blender said", async () => {

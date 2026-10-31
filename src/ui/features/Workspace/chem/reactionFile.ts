@@ -90,8 +90,7 @@ function withMapMarks(drawn: Drawn, arrow: Pick<NonNullable<Drawn["arrows"]>[num
  * it "reactants>agents>products" - or why it holds none to write: more than
  * one arrow, or nothing on one side of it. None where the drawing shows no
  * reaction, which is written as a SMILES of its molecules. Never a mixture
- * of a reaction's molecules, as if they were one (the command centre,
- * 2026-10-22).
+ * of a reaction's molecules, as if they were one (2026-10-22).
  */
 export function reactionForSmiles(drawn: Drawn): { rxn: string } | { why: string } | null {
   const arrows = reactionArrows(drawn);

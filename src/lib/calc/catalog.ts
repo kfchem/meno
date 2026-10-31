@@ -11,10 +11,11 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
+import { dependencyOrder, dependentsOf, dependsRefused, missingWhy, stoppedWhy, type DependDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
 import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
@@ -69,8 +70,8 @@ export type PythonPlugin = ReaderBase &
     downloads: readonly DownloadDecl[];
     /** About how much room its environment takes once set up, in bytes, as measured (its manifest's `setUpBytes`). */
     setUpBytes?: number;
-    /** Programs of other plugins its jobs may need, where it declares any (lib/plugins/manifest `NeedDecl`). */
-    needs?: readonly NeedDecl[];
+    /** The other plugins it uses, where it declares any: each by id, with the versions it works with and the programs of it its jobs may run (lib/plugins/depends). */
+    depends?: readonly DependDecl[];
     /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
     profile: `plugin-${string}`;
     lock: string;
@@ -110,7 +111,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     installed: m.installed,
     downloads: m.downloads,
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
-    ...(m.needs ? { needs: m.needs } : {}),
+    ...(m.depends ? { depends: m.depends } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
@@ -122,8 +123,16 @@ export const pluginOf = (m: Manifest): Plugin => {
   };
 };
 
+/**
+ * The plugins Meno carries refused for the plugins they use, each with why
+ * (lib/plugins/depends `dependsRefused`): one that uses a plugin Meno does
+ * not know, or a program it does not declare, and every one of a circle.
+ * Not offered.
+ */
+export const DEPENDS_REFUSED: ReadonlyMap<string, string> = dependsRefused(MANIFESTS);
+
 /** Every plugin Meno knows of, in Meno's order: those that run something, and those that bring data alone. */
-export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.map(pluginOf);
+export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id)).map(pluginOf);
 
 /** The plugins Meno knows of that run something, in Meno's order: each that reads or writes something, or fills a role or a kind of step. */
 export const PLUGINS: readonly PythonPlugin[] = ALL_PLUGINS.filter(runs).filter((p) => p.reads.length || p.roles.length || p.writes.length || p.steps.length);
@@ -139,6 +148,37 @@ export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.fin
 
 /** The plugin of that id. */
 export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find((p) => p.id === id);
+
+/** The manifests of the plugins offered: what the use of plugins is worked out from. */
+const OFFERED = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id));
+
+/** The plugins a plugin uses, and those they use in turn, in the order they are set up - each before any that uses it. */
+export const pluginsUsedBy = (id: string): PythonPlugin[] => dependencyOrder(id, OFFERED).flatMap((m) => pluginById(m.id) ?? []);
+
+/** The plugins that use a plugin, and those that use them in turn, in the order they are taken away - each before the one it uses. */
+export const pluginsUsing = (id: string): PythonPlugin[] => dependentsOf(id, OFFERED).flatMap((m) => pluginById(m.id) ?? []);
+
+/**
+ * Why a plugin added is stopped - a plugin it uses not added, or added of a
+ * version it does not work with - in words; none, where it may run. `added`:
+ * the plugins added, by id.
+ */
+export function stoppedOf(p: Plugin, added: ReadonlySet<string>): string | null {
+  const m = manifestOf(p.id);
+  if (!m) return null;
+  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id);
+}
+
+/**
+ * Why a plugin a job of `p` needs (by id) is not there - not added, or not of
+ * a version `p` works with - in words; none, where it is. One `p` does not
+ * say it uses, or uses for no program, said so.
+ */
+export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string>): string | null {
+  const d = p.depends?.find((x) => x.plugin === id);
+  if (!d || !d.programs.length) return `${p.name} asked for ${id}'s program, which it does not say it uses`;
+  return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), (x) => anyPluginById(x)?.name ?? x);
+}
 
 /** The plugins that fill a role, in Meno's order. */
 export const pluginsFilling = (role: RoleId): PythonPlugin[] => PLUGINS.filter((p) => p.roles.includes(role));

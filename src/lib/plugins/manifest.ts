@@ -25,6 +25,7 @@
  * The plugins Meno carries for now (./known) are each read here as one
  * fetched would be.
  */
+import { rangeOf, type DependDecl, type UsedProgram } from "./depends";
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
@@ -141,7 +142,20 @@ export type LookDecl = { id: string; label: string; description?: string; parts?
  * short description. The plugin builds it from the scene and its molecules' atoms and bonds; Meno writes the scene still for it.
  * Its options - Once or Loop among them - are the role's, each `when` this motion is chosen.
  */
-export type MotionDecl = { id: string; label: string; description?: string };
+export type MotionDecl = { id: string; label: string; description?: string; shortest?: Shortest; fixed?: FixedChoice[] };
+
+/**
+ * A choice a motion is always made with, whatever was chosen - a renderer of light traced, say: the card shows it so, and says
+ * why (`why`), rather than offering what the motion would not take. `id` is one of the role's options or Render's own.
+ */
+export type FixedChoice = { id: string; value: string; why: string };
+
+/**
+ * The shortest a film of a motion can be and still be read, in seconds (docs/RENDER.md, *How long a film can be*): the whole
+ * film's (`film`), and its Loop's where that is longer (`loop`); and, for a motion that changes one molecule into the next, each
+ * change's (`change`) - Meno counts the changes, one fewer than the molecules, or as many as a Loop that comes back to the first.
+ */
+export type Shortest = { film?: number; loop?: number; change?: number };
 
 /** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
 export type RoleDecl = {
@@ -309,8 +323,8 @@ export type Manifest = {
   installed: InstalledDecl[];
   /** The files it needs downloaded besides its environment. */
   downloads: DownloadDecl[];
-  /** Programs of other plugins its jobs may need, where it declares any (`NeedDecl`). */
-  needs?: NeedDecl[];
+  /** The other plugins it uses, where it declares any: each by id, with the versions it works with and what of it is used (./depends `DependDecl`). */
+  depends?: DependDecl[];
   /** Its guide: shown once, the first time it is there. */
   guide: GuideStep[];
   /** The plugins it suggests. */
@@ -488,6 +502,30 @@ function acceptLooks(v: unknown): LookDecl[] {
 /** The ids Meno's own film motions have (render/renderScene): a plugin's motion takes none of them. */
 export const MENO_MOTIONS = ["turn", "frames", "vibration"] as const;
 
+/** A motion's shortest lengths, each a number of seconds from 0 to 600; what is not that is left out, and none of them, none. */
+function shortestOf(v: unknown): Shortest | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const r = v as Record<string, unknown>;
+  const out: Shortest = {};
+  for (const k of ["film", "loop", "change"] as const) {
+    const x = r[k];
+    if (typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 600) out[k] = x;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** The choices a motion is always made with, each an option's id, its value and why, read as data; what is not that is left out. */
+function fixedOf(v: unknown): FixedChoice[] {
+  const out: FixedChoice[] = [];
+  for (const raw of list(v).slice(0, 10)) {
+    const r = raw as Record<string, unknown> | null;
+    const why = typeof r?.why === "string" ? r.why.trim().slice(0, 120) : "";
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9_-]{0,39}$/.test(r.id) || typeof r.value !== "string" || !r.value || !why) continue;
+    if (!out.some((f) => f.id === r.id)) out.push({ id: r.id, value: r.value.slice(0, 80), why });
+  }
+  return out;
+}
+
 /** The motions a render role declares, each checked: an id (none of Meno's own), a label, a description - what is not understood is left out. */
 function acceptMotions(v: unknown): MotionDecl[] {
   const seen = new Set<string>();
@@ -499,7 +537,9 @@ function acceptMotions(v: unknown): MotionDecl[] {
     if (!label) continue;
     seen.add(r.id);
     const description = typeof r.description === "string" && r.description.trim() ? r.description.trim().slice(0, 200) : undefined;
-    out.push({ id: r.id, label, ...(description ? { description } : {}) });
+    const shortest = shortestOf(r.shortest);
+    const fixed = fixedOf(r.fixed);
+    out.push({ id: r.id, label, ...(description ? { description } : {}), ...(shortest ? { shortest } : {}), ...(fixed.length ? { fixed } : {}) });
     if (out.length >= 40) break;
   }
   return out;
@@ -569,21 +609,32 @@ function placeOk(t: unknown): t is string {
 }
 
 /**
- * A program of another plugin a plugin's jobs may need (docs/PLUGINS.md,
- * `needs`): that plugin, by its id; its program, by the name its manifest
- * gives it; and the variable the job is told where it is in. A job needs it
- * only where its plugin's worker says so of that job; Meno finds it as the
- * other plugin's own jobs would, puts it in the job's folder, and names it
- * there - so that a path with a space in it is never given (src-tauri
- * jobs.rs `need_value`). Core names no program: the manifest does.
+ * Another plugin a plugin uses (docs/PLUGINS.md, *Depends*): that plugin, by
+ * its id; the versions of it it works with (`>=0.1.4 <0.2.0`, ./depends
+ * `rangeOf`); whether only some of its work needs it (`optional`: not set
+ * up with it, and missing, only a job that needs it refused); and what of
+ * it is used - a program it declares, by its name,
+ * with the variable a job is told where it is in. A job uses one only where
+ * its plugin's worker says so of that job; Meno finds it as the other
+ * plugin's own jobs would, puts it in the job's folder, and names it there -
+ * so that a path with a space in it is never given (src-tauri jobs.rs
+ * `need_value`). Core names no plugin and no program: the manifest does.
  */
-export type NeedDecl = { plugin: string; program: string; env: string };
-
-function needOf(v: unknown, self: string): NeedDecl | null {
-  const n = v as Record<string, unknown> | null;
-  if (!isId(n?.plugin) || n.plugin === self || typeof n.program !== "string" || !FILE.test(n.program) || !fileRuns(n.program)) return null;
-  if (typeof n.env !== "string" || !ENV_NAME.test(n.env) || ENV_NEVER.some((x) => x.toLowerCase() === (n.env as string).toLowerCase())) return null;
-  return { plugin: n.plugin, program: n.program, env: n.env };
+function dependOf(v: unknown, self: string): DependDecl | null {
+  const d = v as Record<string, unknown> | null;
+  if (!isId(d?.plugin) || d.plugin === self) return null;
+  const range = rangeOf(d.versions);
+  if (!range) return null;
+  if (d.programs !== undefined && !Array.isArray(d.programs)) return null;
+  const programs = list(d.programs).map((v): UsedProgram | null => {
+    const p = v as Record<string, unknown> | null;
+    if (typeof p?.program !== "string" || !FILE.test(p.program) || !fileRuns(p.program)) return null;
+    if (typeof p.env !== "string" || !ENV_NAME.test(p.env) || ENV_NEVER.some((x) => x.toLowerCase() === (p.env as string).toLowerCase())) return null;
+    return { program: p.program, env: p.env };
+  });
+  if (programs.some((p) => p == null) || new Set(programs.map((p) => p!.env)).size !== programs.length) return null;
+  if (d.optional !== undefined && typeof d.optional !== "boolean") return null;
+  return { plugin: d.plugin, versions: (d.versions as string).trim(), range, programs: programs as UsedProgram[], ...(d.optional ? { optional: true as const } : {}) };
 }
 
 /** Places, as a manifest gives them: one, or several; null where any is not one. */
@@ -807,7 +858,13 @@ export function acceptManifest(raw: unknown): Manifest | null {
           // (options only for a role that takes them)
           const looks = acceptLooks(r.looks);
           const motions = acceptMotions(r.motions);
-          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [], ...(looks.length ? { looks } : {}), ...(motions.length ? { motions } : {}) };
+          return {
+            role: r.role,
+            programs,
+            options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
+            ...(looks.length ? { looks } : {}),
+            ...(motions.length ? { motions } : {}),
+          };
         },
         (r) => r.role,
       )
@@ -834,9 +891,13 @@ export function acceptManifest(raw: unknown): Manifest | null {
   if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
   const downloads = environment ? list(m.downloads).map(downloadOf) : [];
   if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
-  // (another plugin's programs its jobs may need: each as it must be, one each, or none is taken - the backend reads the same)
-  const needs = list(m.needs).map((v) => needOf(v, id));
-  const needsOk = needs.every((n) => n != null) && new Set(needs.map((n) => n!.plugin)).size === needs.length;
+  // (the other plugins it uses: each as it must be, each once, or the plugin is none - the backend reads the same)
+  if (m.depends !== undefined && !Array.isArray(m.depends)) return null;
+  const depends = list(m.depends).map((v) => dependOf(v, id));
+  if (depends.some((d) => d == null) || new Set(depends.map((d) => d!.plugin)).size !== depends.length) return null;
+  // (each variable once, whichever plugin's program it names)
+  const envs = depends.flatMap((d) => d!.programs.map((p) => p.env));
+  if (new Set(envs).size !== envs.length) return null;
   return {
     id,
     name,
@@ -858,7 +919,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     systems,
     installed,
     downloads: downloads as DownloadDecl[],
-    ...(needsOk && needs.length ? { needs: needs as NeedDecl[] } : {}),
+    ...(depends.length ? { depends: depends as DependDecl[] } : {}),
     guide,
     suggests,
     files,

@@ -53,8 +53,8 @@ hold both.
 - **3D coordinates.** Nothing makes them from a drawing: the chemistry
   worker gives 2D coordinates only. A MOL or SDF file's z is dropped as it
   opens in 2D, and only XYZ files reach the 3D viewer.
-- **Graphics contexts.** Every canvas is one, and only about 16 can be
-  live (`lib/core/limits.ts`). A workspace is one canvas.
+- **Graphics contexts.** Every canvas is one, and Meno keeps 16 live at
+  most (`lib/core/limits.ts`). A workspace is one canvas.
 
 The 3D viewer is simple enough that the canvas gets its own 3D layers,
 built the way the 2D layers are, rather than the viewer moved in as it is.
@@ -109,7 +109,7 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
 | 1. 3D in the canvas | 3D molecules on the canvas, with everything the 3D viewer does, in the document and saved; the 3D tab retired. | 0, in part |
 | 2. 2D and 3D joined | A drawing to 3D (RDKit's ETKDG and MMFF, the drawn stereochemistry kept); the 3D structure rising out of the drawing where it is, turned to match it, and back; hover and choice shared; a 3D structure drawn as a formula by Meno's engine; conformer sets (overlaid, by energy, Boltzmann weights). | 1 |
 | 3. Calculation output | Geometries, optimisation paths, energies, vibrations (modes animated) and charges read from ORCA, Gaussian, xTB and CREST, attached to their molecule; later orbitals and densities (cube files) as surfaces. Each program's reader a plugin, added and removed online. | 2 |
-| 4. Text and PDF | Notes on the page; a PDF on the page (pdf.js): its pages, its text searched, its figures cut out. Notes built (#172, #177); PDFs, pictures and texts as things on the page specified in [PDF.md](PDF.md) (2026-10-09). | can run beside 3 |
+| 4. Text and PDF | Notes on the page; a PDF on the page (PDFium): its pages, its text searched, its figures cut out. Notes built (#172, #177); PDFs, pictures and texts as things on the page specified in [PDF.md](PDF.md) (2026-10-09). | can run beside 3 |
 | 5. Structures from PDFs | Figures read as structures, drawn beside the figure they came from and tied to it atom by atom, for the chemist to check and correct: a figure drawn with lines and letters read from PDFium's paths and letters, in Meno itself (part A, built 2026-10-11); a figure that is a picture, or any picture, read by a model, as a plugin - MolScribe or MolNexTR, as the chemist chooses - its trained model fetched with consent (part B, built 2026-10-11). Specified in [PDF.md](PDF.md), *Stage 5*. | 4 |
 | 6. Workflows that run | Workflow steps as items on the page, tied to molecules: RDKit conformers, xTB, CREST, and ORCA or Gaussian where installed. Jobs started, stopped and logged by the app. Procedures saved and shared with their results. Specified in [WORKFLOWS.md](WORKFLOWS.md) (2026-10-08): the workspace is the node editor. | 2, 3 |
 | 7. Depth | Analogue series, conformers and reaction steps arranged in depth; detail that changes with zoom. Tried as prototypes and shown before anything is settled. | 1 on |
@@ -154,8 +154,7 @@ for each topic (one pull request per dependent chain).
   centre, a bitmap at the resolution copied pictures are made at (Settings,
   Files; 600 dpi unless changed) - drawn in tiles of at most 2048 pixels a
   side, each its part of the view, so that a picture is as sharp as asked
-  however large (a GPU's canvas has its limits, and quietly draws a smaller
-  picture past them; until lane L11, 2026-10-11, the bitmap was held to
+  however large (until 2026-10-11, the bitmap was held to
   1600 pixels across for each 300 dpi). Only past 48 million pixels, as a
   copied picture is, is it made at a lower resolution. Its balls are as
   smooth as they are large in it - at 1200 dpi a ball can be hundreds of
@@ -890,13 +889,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 - **Fetched when first needed, both of them.** uv and pixi are each
   downloaded the first time an environment needs it, the version and its
   hash pinned in Meno, under the network's consent for that environment.
-  Neither is bundled: either alone does nothing without the network, and
+  Neither is bundled: either alone needs the network, and
   bundled, every update of Meno carried it again (uv was 37 MB of a 54 MB
   app).
 - **uv** makes the environments PyPI fills, as now: the chemistry worker's
   and cclib's.
-- **pixi** makes those that need conda-forge, which has builds PyPI has
-  not - PySCF for Windows among them - from conda.anaconda.org (free of
+- **pixi** makes those that need conda-forge's builds - PySCF for
+  Windows among them - from conda.anaconda.org (free of
   Anaconda's terms, which cover its own channels). A conda environment
   is started with its activation, as Windows needs for its libraries.
 
@@ -910,7 +909,7 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   cubes, worked out off the main thread), going over to another as the
   value changes. An orbital's two phases in two colours, a density's in
   one, seen through - a lobe behind another, of either phase, showing
-  through it as it lies (since lane L11, 2026-10-11: before, the positive
+  through it as it lies (since 2026-10-11: before, the positive
   phase was laid over the negative wherever they crossed on the screen).
   A picture made of the molecule - copied or exported - shows the surface
   as the canvas does, and is as large as its lobes reach (before, pictures
@@ -966,9 +965,9 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   styles in 3D*).
 
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
-pull request (`agent/style-one-per-workspace`): L8 the change of style and
-what it converts, hunter C the style's place and its card, hunter A the
-molecules in 3D.
+pull request (`agent/style-one-per-workspace`): the change of style and
+what it converts, the style's place and its card, and the molecules in
+3D.
 
 - **One style to a workspace.** The page's unit is the bond. A bond is 1.8
   units (`NOMINAL_BOND_LENGTH`) in every style, and the style says how long
@@ -1089,7 +1088,7 @@ molecules in 3D.
   after `solidOf` in 3D that never enters the document's units, Å readouts
   or writers. A change of style keeps each object's magnification: the
   conversion moves an object's middle and leaves its factor alone.
-- **The functions.** `restyle.ts` (L8): `bondPtOf(style: StyleChoice)`, and
+- **The functions.** `restyle.ts`: `bondPtOf(style: StyleChoice)`, and
   `restyled(parts, k, about = { x: 0, y: 0 })`, which converts whatever
   page parts it is given - a whole document or a copy's parts, the fields
   of `WorkspaceDocument` that are there - and gives them back unchanged
@@ -1229,7 +1228,7 @@ their own sizes, whichever is chosen.
 
 ## Styles in 3D
 
-Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
+Built on 2026-10-10. The maintainer's ruling: a molecule in 3D
 has two looks, a thin one and a thick one, and goes from one to the other
 in a single step - seeing a molecule as ball and stick and as
 space-filling side by side is better science than either alone.
@@ -1364,8 +1363,8 @@ space-filling side by side is better science than either alone.
 - **Settings' page** (the maintainer, 2026-10-15). At the top, two slots,
   Primary and Secondary, each with its molecule drawn live and turnable;
   below them every other style, built in and the user's own, each with a
-  still picture (drawn once, a frame apart, all with one renderer - a
-  context for each took the live ones' away). A style dragged onto a slot
+  still picture (drawn once, a frame apart, all with one renderer). A
+  style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
   each card going to its new place eased, not jumping. A slot's molecule
@@ -1441,7 +1440,7 @@ space-filling side by side is better science than either alone.
   sticks' colouring, as the look or a setting changes.
 - **A shader that does not compile.** Meno's own shaders - lines on the
   balls, the line round them, sticks that bend - each name themselves
-  (utils/menoShader). One that a graphics card will not compile is said in
+  (utils/menoShader). One that does not compile on a graphics card is said in
   Meno's log, with its name and the card's own words for what was wrong
   (nothing of the document), and from then on is drawn as its plain
   three.js material: a molecule loses a line or a shade, never its atoms.
@@ -1474,7 +1473,7 @@ space-filling side by side is better science than either alone.
 
 ## Depth in 3D
 
-Built in lane L11 on 2026-10-11, the maintainer choosing each way from
+Built on 2026-10-11, the maintainer choosing each way from
 pictures of it beside the others: a molecule's shape should read at a
 glance, in the canvas where chemists look at molecules all day, without
 slowing it - and in the pictures made of it.
@@ -1506,7 +1505,7 @@ slowing it - and in the pictures made of it.
   molecule moves, turns or changes - fitted round every molecule, so
   that panning and zooming leave it, until that would make it coarser
   than the screen's pixels, when it is fitted round what is in view.
-- **Shade worked out on the screen** (lane L11, 2026-10-11, the
+- **Shade worked out on the screen** (2026-10-11, the
   maintainer finding it the prettier of the two): each style's *Shade in
   hollows* is *None*, *Per atom* (the first) or *Screen-space* - *None*
   the one way to have no shade, *How deep* beside it greyed out while it
@@ -1517,9 +1516,9 @@ slowing it - and in the pictures made of it.
   canvas's resolution, over the molecules alone - their balls, sticks and
   ribbons drawn once more into a pass of their own - and laid over them
   by a sheet multiplying what is under it, one where no molecule is, so
-  the page is drawn exactly as it was. A molecule shaded per atom still
-  hides what is behind it in that pass, its own weight none. It shows a
-  faint grain close up, as screen-space shading does. Going over to it,
+  the page is drawn exactly as it was; close up, this shade is finely
+  grained. A molecule shaded per atom still
+  hides what is behind it in that pass, its own weight none. Going over to it,
   or from it, the one shade gives way to the other.
 - **Very large drawings** (the maintainer's choice, 2026-10-11): past
   twenty thousand atoms on the canvas, drawn lighter - no shadows, and
@@ -1560,7 +1559,7 @@ slowing it - and in the pictures made of it.
 
 ## Editing in 3D
 
-Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+Built on 2026-10-10, as proposed to the maintainer and agreed:
 a molecule in 3D is edited as a quantum-chemistry program's builder edits
 one, by setting a distance, an angle or a torsion angle to a value. Only
 its shape changes; what it is made of stays the drawing's business (draw
@@ -1674,7 +1673,7 @@ as R and S are, cannot be told from its neighbours'.
 
 ## Ribbons
 
-Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+Built on 2026-10-10, as proposed to the maintainer and agreed:
 a protein's or a nucleic acid's chains drawn as ribbons, from what the PDB
 entry itself says - written from the wwPDB's format (v3.3), as every PDB
 reading in Meno is.
@@ -1825,7 +1824,7 @@ same way.
 
 ## Hydrogens and bond orders
 
-Built in lane L5 on 2026-10-11, as the maintainer asked: a file of
+Built on 2026-10-11, as the maintainer asked: a file of
 coordinates - XYZ, PDB, a calculation's output - gives no bond orders, and
 an X-ray entry no hydrogens. A molecule drawn as if they were known
 misleads as one with its hydrogens hidden does, so a molecule says what is
@@ -1858,14 +1857,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   set up because a file was opened. What is found is learnt of the
   molecule, with no undo step of its own; the 3D view draws it. A PDB
   entry's ligands are each sought alone; its chains are not.
-- **Only with its hydrogens.** RDKit's `DetermineBondOrders` works from
-  a molecule's full set of atoms, hydrogens included (tried with RDKit
-  2026.03): given biotin from entry 1STP with its hydrogens, it finds its
-  orders; without them, it finds none, and given benzoic acid without
-  them, it does not find benzoic acid's. So Meno does not seek the orders
-  of a molecule, or a ligand, without hydrogens, and says they are
-  unknown; nor of one of more than 400 atoms. Such a molecule's orders
-  can be estimated from its distances, asked for (below).
+- **Only with its hydrogens.** Meno asks for a molecule's orders, or a
+  ligand's, from its shape only where it has its full set of atoms,
+  hydrogens included, and no more than 400 of them; otherwise it says
+  they are unknown. Such a molecule's orders can be estimated from its
+  distances, asked for (below).
 - **Estimated from distances** (asked for by the maintainer, 2026-10-11:
   from the menu, worded as an estimate, and no mark once made). *Estimate
   bond orders from distances* on a ligand, or a molecule, works without

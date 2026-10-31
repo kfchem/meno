@@ -89,8 +89,10 @@ describe("a plugin's manifest", () => {
     expect(kinds([{ ...coloured, probe: true }], ["nbo-in"]).reads).toEqual(["nbo-in"]);
     // (ORCA's input, as Meno carries it: a text it colours, told among .inp files by what its lines begin with)
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
-    expect(orca.kinds.map((k) => [k.id, k.lines])).toEqual([["orca-input", ["!", "%", "*"]]]);
-    expect(orca.reads).toEqual([]);
+    expect(orca.kinds.map((k) => [k.id, k.lines])).toEqual([["orca-input", ["!", "%", "*"]], ["orca", []]]);
+    // (and ORCA's output, which its program writes: the kind it reads)
+    expect(orca.reads).toEqual(["orca"]);
+    expect(orca.kinds.find((k) => k.id === "orca")?.writtenBy).toBe("orca");
   });
 
   it("says which of its own programs writes a kind it reads - one its steps run, by name - and no other", () => {
@@ -158,6 +160,14 @@ describe("a plugin's manifest", () => {
     // (motions, each declared in full: an id - none of Meno's own -, a label, a description; what is not understood left out)
     const motions = [{ id: "ripple", label: "Ripple", description: "A ripple." }, { id: "turn", label: "Meno's own" }, { id: "No Id", label: "Bad" }, { id: "plain" }, { id: "ripple", label: "Twice" }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions }] })?.roles[0].motions).toEqual([{ id: "ripple", label: "Ripple", description: "A ripple." }]);
+    // (how short each can be, in seconds - a whole film's, a Loop's, each change's - what is not a number of seconds left out; and
+    // the choices each is always made with, each an id, a value and why)
+    const timed = [
+      { id: "melt", label: "Melt", shortest: { film: 2, change: 6, loop: "long" }, fixed: [{ id: "engine", value: "cycles", why: "Light traced" }, { id: "engine", value: "eevee", why: "Twice" }, { id: "x", value: "y" }] },
+      { id: "spin", label: "Spin", shortest: { film: -1, change: 9999 } },
+    ];
+    const role = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions: timed }] })?.roles[0];
+    expect(role?.motions).toEqual([{ id: "melt", label: "Melt", shortest: { film: 2, change: 6 }, fixed: [{ id: "engine", value: "cycles", why: "Light traced" }] }, { id: "spin", label: "Spin" }]);
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
@@ -219,17 +229,34 @@ describe("a plugin's manifest", () => {
     expect(rdkit.steps.find((d) => d.kind === "conformers")?.options).toEqual(rdkit.roles.find((r) => r.role === "conformers")?.options);
   });
 
-  it("may declare another plugin's program its jobs may need - a plugin, a program it runs, a variable to name it in - all as they must be, or none", () => {
+  it("may declare the plugins it uses - each by id, with the versions it works with and the programs of it its jobs may run - all as they must be, or the plugin is none", () => {
     const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
-    const need = { plugin: "xtb", program: "xtb", env: "XTBEXE" };
-    expect(acceptManifest({ ...steps, needs: [need] })?.needs).toEqual([need]);
-    expect(acceptManifest(steps)?.needs).toBeUndefined();
-    // (its own plugin, a shell, a path, a variable that finds programs, one plugin twice: none taken)
-    for (const bad of [{ ...need, plugin: good.id }, { ...need, program: "sh" }, { ...need, program: "bin/xtb" }, { ...need, env: "PATH" }, { ...need, env: "1X" }])
-      expect(acceptManifest({ ...steps, needs: [bad] })?.needs, JSON.stringify(bad)).toBeUndefined();
-    expect(acceptManifest({ ...steps, needs: [need, { ...need, env: "OTHER" }] })?.needs).toBeUndefined();
-    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.needs).toEqual([need]);
+    const uses = { plugin: "xtb", versions: ">=0.1.4 <0.2.0", programs: [{ program: "xtb", env: "XTBEXE" }] };
+    expect(acceptManifest({ ...steps, depends: [uses] })?.depends).toEqual([{ ...uses, range: { from: "0.1.4", before: "0.2.0" } }]);
+    expect(acceptManifest(steps)?.depends).toBeUndefined();
+    // (one used only for some of its work)
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: true }] })?.depends?.[0].optional).toBe(true);
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: false }] })?.depends?.[0].optional).toBeUndefined();
+    // (one used for no program: its presence and version alone)
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0" }] })?.depends?.[0].programs).toEqual([]);
+    // (itself, versions not as they must be, a shell, a path, a variable that finds programs, one plugin twice, one variable twice: no plugin)
+    const program = (p: object) => ({ ...uses, programs: [{ ...uses.programs[0], ...p }] });
+    for (const bad of [
+      [{ ...uses, plugin: good.id }],
+      [{ ...uses, versions: "^0.1.4" }],
+      [{ ...uses, versions: undefined }],
+      [program({ program: "sh" })],
+      [program({ program: "bin/xtb" })],
+      [program({ env: "PATH" })],
+      [program({ env: "1X" })],
+      [uses, { ...uses, programs: [] }],
+      [uses, { plugin: "other", versions: ">=1.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [{ ...uses, optional: "yes" }],
+      "xtb",
+    ])
+      expect(acceptManifest({ ...steps, depends: bad }), JSON.stringify(bad)).toBeNull();
+    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE - for its xTB methods alone)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.depends?.map((d) => [d.plugin, d.versions, d.programs, d.optional])).toEqual([["xtb", ">=0.1.4 <0.2.0", [{ program: "xtb", env: "XTBEXE" }], true]]);
   });
 
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {

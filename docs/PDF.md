@@ -19,11 +19,9 @@ stops being part of the work.
 
 ## Decided by the maintainer (2026-10-09)
 
-1. **PDFium, not pdf.js.** PDFium is the engine Chrome reads PDFs with.
-   The maintainer chose it for how fast and how faithfully it draws;
-   viewers built on pdf.js, as some publishers' have been, left a poor
-   impression. No way of changing engines is to be kept: Meno is built
-   on PDFium, for the best it can give.
+1. **PDFium.** Meno reads and draws PDFs with PDFium, the engine Chrome
+   reads PDFs with: the maintainer's choice. No way of changing engines is
+   to be kept: Meno is built on PDFium.
 2. **The best of what drawing with WebGL allows, joined to the
    workspace.** A PDF's pages are drawn on the canvas, not beside it.
    - Zoomed into, what a page holds comes up out of its preview.
@@ -67,9 +65,8 @@ stops being part of the work.
    - **What is on the page is drawn as its labels are, in signed-distance
      type (troika)**, sharp at every zoom: atoms' labels and words on the
      page, as now, and a text's sheet. **What is in the column is drawn
-     by the system's own type**, made into pictures line by line, as sharp
-     as any editor's: the column is zoomed into only as a thing opens or
-     closes.
+     by the system's own type**, made into pictures line by line: the
+     column is zoomed into only as a thing opens or closes.
 
 ## What a thing on the page is
 
@@ -190,7 +187,7 @@ stops being part of the work.
     tiles have come and faded in, at twice it, faded in over them. The
     levels lie on a grid a sixteenth of a doubling apart, so a view
     stopped a hair from where it was keeps the tiles it has.
-  - Why twice: PDFium's small letters drawn at the screen's own scale come
+  - Why twice: a page's small letters drawn at the screen's own scale come
     out lighter than drawn finer and shrunk to it. At 1 to 1.41 times, a
     paper's text was a tenth to a third lighter than 0.1.12's 1 to 2
     times (found on Windows, 2026-10-16); at twice, it is as dark at every
@@ -361,8 +358,7 @@ PDFs there - one step, which an undo takes back. It is held as any other
     set in, signed-distance glyphs made as they are needed (troika),
     sharp at every zoom.
   - **In the column**, each line is drawn by the system's own type into a
-    picture, and the pictures are textures: as sharp as an editor's, and
-    any letter Meno's own fonts lack is taken from the system's, as a
+    picture, and the pictures are textures; any letter Meno's own fonts lack is taken from the system's, as a
     browser takes it.
   - **Between the two**, a text rising from the page into the column
     moves in the page's type, and once it has settled its lines come up
@@ -507,10 +503,9 @@ together, in short eased transitions.
 - **In a process of its own**, as calculations' jobs are (`Meno --job`).
   Meno starts itself as a PDF reader, `Meno --pdf`, when a workspace
   first shows a PDF, and talks to it by its standard input and output.
-- **A PDF that breaks PDFium breaks that process only.** The PDF says
+- **A PDF that breaks the reader breaks that process only.** The PDF says
   so on the page and in the column, with *Open again*; Meno, and the
-  work not yet saved, go on. Chrome keeps PDFium apart for the same
-  reason.
+  work not yet saved, go on.
 - **It answers one request at a time**, on one thread, in the order they
   come. Parts to draw wait in the window, nearest first, three at most
   sent at a time; one no longer wanted before it is sent is dropped.
@@ -609,7 +604,7 @@ A PDF is a file from anywhere, and is treated as such.
   web link opens in the system's browser only when it is ⌘-clicked
   (Ctrl+clicked on Windows).
 - **PDFium runs apart** (*Where it runs*, above), so a PDF made to break
-  it takes nothing else with it.
+  the reader takes nothing else with it.
 - **Its text and pictures go no further than the page, the column and
   the clipboard**, as the chemist moves them.
 
@@ -667,11 +662,10 @@ page in the column in 10.6 ms (27 ms); searches in 0.5-19 ms; frames at
 made for the trial, and still far less than carrying the pictures.
 
 What it showed:
-- **PDFium draws far faster than anything waits for it**: a tile in a
-  millisecond or two, a dense page of paths in 3.
+- **Drawing is not where the time goes**: a tile takes a millisecond or
+  two, a dense page of paths 3.
 - **The time is in carrying the pictures to the window**, most of all
-  on Windows: a megabyte takes some 20-30 ms there, as WebView2 passes
-  bytes. Step 1 carries them smaller - compressed without loss in the
+  on Windows: a megabyte takes some 20-30 ms there. Step 1 carries them smaller - compressed without loss in the
   reader, a page being mostly white, and unpacked off the main thread -
   or through WebView2's shared buffers, whichever measures better on
   Windows; a tile is to reach the window within 5 ms of PDFium.
@@ -679,11 +673,11 @@ What it showed:
   zoom stops** (on Windows: soft at 0.38 s, the first sharp tiles at
   0.52 s, all of them at 0.63 s). Step 1 asks for the tiles sooner:
   when the zoom slows, at the level it is going to.
-- **PDFium's own search does not find a word broken by a hyphen at a
-  line's end** (the article's *computa-tional* among them): it gives the hyphen as U+0002 and the line's end as
-  `\r\n`. Meno searches the page's text itself, a line's end read as a
-  space and a broken word read whole, each letter pointing back to its
-  box - found and marked on both lines.
+- **Meno searches the page's text itself.** PDFium gives a hyphen at a
+  line's end as U+0002 and the line's end as `\r\n`; Meno reads a line's
+  end as a space and a broken word whole (the article's *computa-tional*
+  among them), each letter pointing back to its box - found and marked on
+  both lines.
 - **One canvas draws both views** at the display's own rate, a page
   rising from one into the other.
 - **The Mac app needs the entitlement** above.
@@ -702,7 +696,7 @@ Built:
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
-  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where it cannot be opened: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**
@@ -900,9 +894,9 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 - **A text in the column drawn by Meno** with WebGL: each line a picture drawn by the system's own type - Meno's monospaced first, any letter it lacks from the system's - only the lines in view, numbered; the caret, what is selected and what the IME is composing drawn over them. As sharp as the textarea it took the place of, at 100% and at 175%; a log of 5000 lines scrolls as a short file does.
 - **Typing through a field kept out of sight**, where the IME's candidates show at the caret, holding the caret's line and two either side, and what is selected, so that a word already written can be converted again.
   - **On a Mac** (WebKit), a textarea, lying just where the drawn lines lie. Composing, its clauses, committing, Escape, and converting again (the kana key twice) were tried with Apple's Japanese input in the built app.
-  - **On Windows** (WebView2), an EditContext on the text's own element. A textarea there tells the page neither the IME's clauses - every clause was underlined alike - nor, converting again a word the caret is in, what it replaces; through the EditContext, the clause being converted is underlined thick, and the candidates follow it. Converting again from within a word, Microsoft's IME may first take away the part before the caret, then put the whole word in again at the caret: Meno takes that as one change of the word (lib/text/field `composingIn`, `withTakenAway`), undone at once, or none where it comes back as it was.
+  - **On Windows** (WebView2), an EditContext on the text's own element: through it, the clause being converted is underlined thick, and the candidates follow it. Converting again from within a word, Microsoft's IME may first take away the part before the caret, then put the whole word in again at the caret: Meno takes that as one change of the word (lib/text/field `composingIn`, `withTakenAway`), undone at once, or none where it comes back as it was.
 - **The keys are each system's** (lib/text/keys): on a Mac, Option by words, Command to the ends, Control's keys (A, E, B, F, P, N, H, D, K), Home, End and a page moving the view, with Option the caret; on Windows, Ctrl by words, Home and End a line's ends, Ctrl with Home or End the text's, Ctrl with an arrow up or down the view a line. A page on moves the view a page with the caret.
-- **As quick to show as the textarea**: an EditContext's change comes in an event React does not know, and was drawn a frame late, 30-40 ms after the textarea's; it is now drawn in the frame after it, whatever event it came in (measured on Windows, 5-23 ms from the key to the frame).
+- **As quick to show as the textarea**: an EditContext's change comes in an event outside React's, and was drawn a frame late, 30-40 ms after the textarea's; it is now drawn in the frame after it, whatever event it came in (measured on Windows, 5-23 ms from the key to the frame).
 - **What the IME composes kept in view**, its caret where it says, as typing keeps the caret in view: begun scrolled away from the caret, or at the end of a long line.
 
 **5a: the column's text on the canvas.** A text read in the column is drawn by the workspace's one canvas, in the column's pass, as a PDF read there is (*One canvas*): on a white sheet of its own, cut off where the column is, sliding with it. Its HTML half over it is see-through: it takes the pointer - a click puts the caret, two clicks a word, three a line, a drag selects on - the wheel, and holds the field it is typed through. Each text keeps where it was read, and what was selected, while the workspace is open.
@@ -932,7 +926,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 - **The grammars the plugins Meno carries bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
   - **ORCA's input** (the ORCA interface, `.inp`): simple keyword lines, blocks with their options and values and sub-blocks with their own `end`, `%maxcore` with its one value, the geometry and its atoms, a geometry read from a file, comments (ORCA's manual, *General Structure of the Input File* and *Input of Coordinates*). Marked: a block left open - at the next block or geometry - and a geometry with no closing `*`.
   - **Gaussian's input** (the Gaussian interface, `.gjf`, `.com`): Link 0 commands, the route section and its lines on, the title, the charge and multiplicity, the atoms (Cartesian or a Z-matrix), further sections, `--Link1--`, comments (Gaussian's *Input* page). Marked: no route section, and a molecule with no charge and multiplicity line.
-  - **Gaussian's output** (cclib, PySCF): *SCF Done:*, the energies with thermal corrections, *Optimization completed.*, *Converged?* as what a reader looks for; *Stationary point found.*, *Normal termination of Gaussian* and a criterion's *YES* as a run gone well; a line from *Warning* on as a warning - as Gaussian 16 printed them.
+  - **Gaussian's output** (the Gaussian interface, cclib, PySCF): *SCF Done:*, the energies with thermal corrections, *Optimization completed.*, *Converged?* as what a reader looks for; *Stationary point found.*, *Normal termination of Gaussian* and a criterion's *YES* as a run gone well; a line from *Warning* on as a warning - as Gaussian 16 printed them.
   - **ORCA's output** (cclib, PySCF): *FINAL SINGLE POINT ENERGY*, *SCF CONVERGED AFTER*, the geometry's convergence, the free energy and enthalpy, the frequencies; *THE OPTIMIZATION HAS CONVERGED* and *ORCA TERMINATED NORMALLY* as a run gone well - as ORCA 6.1 printed them; *ORCA finished by error termination* as an error (ORCA's manual, *Troubleshooting*).
   - **xTB's output** (cclib): *TOTAL ENERGY*, *TOTAL FREE ENERGY*, *HOMO-LUMO GAP*, *SCC energy*; *GEOMETRY OPTIMIZATION CONVERGED* and *normal termination of xtb*; *[WARNING]* lines as warnings; *ERROR STOP* and *Error termination* as errors - as xTB 6.7 printed them.
   - Rules of dashes, equals signs, stars or dots in outputs are grey.
@@ -942,13 +936,13 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 - **Drawn by Meno as they will be kept**: set as the drawing sets its labels (a formula's counts low, a prefix in italics), in its typeface at its size, broken into lines as wide as they were made where they were given a width, laid as they will lie - so that what is written is what is kept, its lines broken as they will be. Lit round while they are written.
 - **The caret, what is selected and what the IME composes** are drawn over them, in the drawing's units: the caret blinking, the selection in Meno's light, what is composed underlined clause by clause. Where each place lies comes from how the words are set (lib/chem/captions `captionPlaces`): before each letter, a formula's count no wider than it is set, each space between words its own place, and spaces at a line's ends hanging off it, a space apart.
 - **Typed through the column's field** (TextEditor/typingField, now typing into any text Meno draws, `FieldHost`): an EditContext on Windows, a textarea on a Mac, laid with its caret on the drawn one, in the words' type at the size they are seen, so that the IME's candidates show at the caret.
-  - **Drawn in the frame after a change**, as the column's text is: a change through the EditContext came in an event React does not know and was drawn a frame late - 10 ms at 100 Hz, 33 ms over Remote Desktop. Drawn at once, a conversion shows before the clauses the IME gives just after it: those it gave before are kept to what it has now (lib/text/field `clausesWithin`), where the conversion made it shorter.
+  - **Drawn in the frame after a change**, as the column's text is: a change through the EditContext came in an event outside React's and was drawn a frame late - 10 ms at 100 Hz, 33 ms over Remote Desktop. Drawn at once, a conversion shows before the clauses the IME gives just after it: those it gave before are kept to what it has now (lib/text/field `clausesWithin`), where the conversion made it shorter.
   - **Checked on Windows** with Microsoft's IME (2026-10-10): composing, its clauses, Enter, Escape, converting again a word selected, the candidates at the caret after the view is zoomed or moved. Shown, the candidates stay where they are while the view moves under them, as the IME keeps them, and come to the caret again as they are next shown.
 - **The keys**: an editor's, as in the column - up and down by the lines as they are set, Home and End (Command with the arrows on a Mac) to a set line's ends. Enter keeps the words, Shift+Enter starts another line, Escape lets them go; their own undo while they are written (a run of typing one step), one step for the document once kept.
 - **The pointer**: a click among them puts the caret, two select a word, three a line, a drag selects on; the press is theirs - no box begun, no view moved. A press elsewhere keeps them, as before, and does what it does there.
 
 Decided while building it, for the maintainer to confirm:
-- **On a Mac the textarea, on Windows the EditContext**: each the one its system's webview takes the IME through best. WebKit has no EditContext.
+- **On a Mac the textarea, on Windows the EditContext**: each the one Meno takes the IME through in its system's webview.
 - **A Mac's Home, End and Page keys move the view**, the caret staying, as in the Mac's own texts; with Option, a page moves the caret too. Tab moves the keys on, as the textarea did.
 - **A sheet's size** (above), and its top left where it lies, so that a text growing at its end grows down.
 - **A text's icon is its sheet made small**, not a page's shape: its longer side as long as a PDF's icon is tall, so that a few lines make a wide, low icon and a long log a tall one, as their sheets are.
@@ -957,8 +951,8 @@ Decided while building it, for the maintainer to confirm:
 - **A plugin's grammar, not patterns** (the maintainer, 2026-10-10, from a sketch of an ORCA input and a Gaussian output coloured part by part): a grammar is data that Meno makes into tables, which no text can hold up as a pattern could, and it reads an input's structure - so that what does not read as it should can be marked (the maintainer: very good). Regular expressions are still taken from no plugin (docs/FILE-IO.md, *Marks are data*).
 - **Errors and landmarks only where a program's own words say them.** Gaussian's error line was found neither in Gaussian's own pages nor in what it printed here, so Gaussian's output marks its warnings, not its errors, for now.
 - **The colours**, from the palette the column's look is taken from, as GitHub colours code, with purple for what an output's reader looks for and green for a run gone well (the maintainer agreed to both).
-- **A letter no typeface of Meno's has - an emoji - is a white square on the page** (labels, words on the page, sheets, names), measured as one, the rest of its text drawn as ever. The canvas's text renderer looked for it on the network, which the window may not reach, and left the whole text it was in undrawn: a word typed in place with an emoji in it showed its first letters alone, and the IME's underline ran under nothing. The column draws it in the system's type, as it is. Drawing it on the page will come with a typeface fetched with leave (the maintainer, 2026-10-10: later): a purpose of its own asked about once, as Python's download is, the app fetching the typeface and keeping it, the window drawing from it - the window itself reaching nothing still (docs/ARCHITECTURE.md, *The network*). One letter at a time in one colour, as troika draws. Arabic and Hebrew letters are white squares on the page too: no typeface for them is planned (the maintainer, 2026-10-13); only emoji is to come with the typeface fetched with leave.
-- **troika changed where it is installed** (`scripts/patch-troika.mjs`, after every install; the maintainer chose it, and no report to troika): it applied every GPOS lookup whatever its feature, so IBM Plex Sans JP's half-width and proportional forms closed up its ideographic comma and the letters after it lay over it (found on Windows); and it took each letter from the font the one before came from, so the Latin after a Japanese letter came from IBM Plex Sans JP, a degree sign a full em wide. Now, as a browser does: kerning and marks alone, and each letter from the first font that has it.
+- **A letter no typeface of Meno's has - an emoji - is a white square on the page** (labels, words on the page, sheets, names), measured as one, the rest of its text drawn as ever. The window reaches no network, so the page has no typeface for it. The column draws it in the system's type, as it is. Drawing it on the page will come with a typeface fetched with leave (the maintainer, 2026-10-10: later): a purpose of its own asked about once, as Python's download is, the app fetching the typeface and keeping it, the window drawing from it - the window itself reaching nothing still (docs/ARCHITECTURE.md, *The network*). One letter at a time in one colour, as troika draws. Arabic and Hebrew letters are white squares on the page too: no typeface for them is planned (the maintainer, 2026-10-13); only emoji is to come with the typeface fetched with leave.
+- **troika changed where it is installed** (`scripts/patch-troika.mjs`, after every install; the maintainer chose it): it applies kerning and marks alone, and takes each letter from the first font that has it, as a browser does.
 - **Lenient grammars.** A text written as its program reads it should never be marked: an ORCA block's `end` closes the block on the line it opens, and a sub-block's on its own line; a value block (`%maxcore`) is told by its name; Gaussian's route may go on over lines. What a grammar cannot tell without a program's list of keywords is not marked: a missing blank line after Gaussian's route section reads as more of the route.
 
 Not yet, and where it comes:
@@ -968,7 +962,7 @@ Not yet, and where it comes:
 
 ### Markdown read formatted (2026-10-10)
 
-Built (lane L9), as *Markdown*, above, says:
+Built, as *Markdown*, above, says:
 - **Read**: `lib/text/markdown.ts` reads a text into blocks and runs, each rule citing its section of CommonMark 0.31.2 or GFM 0.29; `TextEditor/markdownLayout.ts` lays them out at a width, in rows, each a line of words and what is drawn under and round it; `TextEditor/markdownReader.ts` holds where it is read and what is selected, in its words read as one text.
 - **In the column**: `components/MarkdownText.tsx` draws each row in view as a picture drawn by the canvas in IBM Plex (`TextEditor/markdownPictures.ts`), its HTML half `TextEditor/MarkdownBody.tsx` taking the wheel, the pointer and the keys.
 - **On the page**: a Markdown text's sheet (`utils/textSheets`) shows its first rows laid out as a sheet is wide (`components/MarkdownRows.tsx`), in troika's type: IBM Plex Sans and Mono, a strong part thickened by an outline of its own colour and an emphasised one slanted, each stretched to the width its own face sets it at - the page's type has one face of each. Far off, its words are grey strokes, as a sheet's lines are.
@@ -987,12 +981,12 @@ Not yet, and where it comes:
 - **Editing in the formatted text** (the maintainer chose read formatted, written in the source).
 - **Pictures in a Markdown text**, and links to other texts: Meno does not keep where a text was opened from, and reaches no network.
 - **A letter no typeface of Meno's has on a sheet** - a superscript minus, as in mol⁻¹ - is a white square there, as on any sheet; the column draws it in the system's type.
-- **Math** (`$...$`), footnotes and other extensions GitHub draws but GFM 0.29 does not specify are shown as written.
+- **Math** (`$...$`), footnotes and other extensions GitHub draws, outside GFM 0.29, are shown as written.
 - **Searching a text** (Cmd/Ctrl+F looks in PDFs).
 
 ### With the rest of the page (2026-10-11)
 
-Built (lane L9, the maintainer's choice of the *Not yet* items):
+Built (the maintainer's choice of the *Not yet* items):
 - **A PDF is selected as a picture is.** A click on it selects it alone - on a link too; ⌘-click (Ctrl+click on Windows) on a link follows it; Ctrl/Cmd and a click adds it to the selection or takes it out; a box or a lasso takes it by the middle of what it covers; *Select all* takes it. A PDF spread is selected whole, its pages with it; a page is still moved alone by a long press on its rim. Selected, it is framed in the selection's colour, round each of its pages where they are spread.
 - **Selected, it goes with the rest.** A drag on it moves the whole selection - the view no longer - and a press held still on it does what it does on any PDF (words selected, a box drawn, a page or the stack taken hold of). Delete, Cut, Copy and Paste take it with the rest, each as one step. The selection's handle carries it round, upright, by its place. Selecting words in a PDF, or drawing a box on one, lets the PDFs selected go, and selecting a PDF lets them go: one selection.
 - **Copied**, a PDF goes in Meno's record by its file's SHA-256, as it lies - full size or an icon, spread, its pages' own places - but not where it was read; it is pasted from Meno's cache, where every PDF opened is kept, in any tab. Export is not offered for PDFs and texts' sheets alone, which it does not write.
@@ -1011,7 +1005,7 @@ Not yet, and where it comes:
 
 ### Pages placed one by one (2026-10-10)
 
-Built (lane L9):
+Built:
 - **A page spread is moved alone.** Held still a moment on its rim - or anywhere on it, where its words are too small to read - a page spread is taken hold of, the selection's shade spreading over it alone from the pointer, and the drag moves it to a place of its own, as one step. It then lies over the other pages; of those put in places of their own, the last put there lies on top. Held so on its name, the PDF is taken hold of whole, and all its pages move together.
 - **Where each lies is kept from the PDF's place** (`placed` in `workspace.json`'s `pdfs`: each page's middle from where the PDF lies, in the order they were put there), so the pages go with the PDF wherever it is moved. A page in a place of its own leaves its place in its row empty; the others keep theirs.
 - **Gathered, they go back to the stack's own place**, as before, and their places are kept: spread again, each page goes back to where it was put. *Put pages in rows*, in the PDF's menu while some lie in places of their own, puts them all back in their rows, as one step.
@@ -1673,8 +1667,8 @@ as it is in the drawing, and lit from there.
 **Marked as unsure** (the same dashed ring as part A's, going once the
 part is changed): an atom or a bond its model reports less confidence in
 than the plugin sets for that model (its worker's `UNSURE_BELOW`), and an
-isotope. A model can misread a picture: what it reports low confidence in
-is marked, so that a mark is a hint, not a check.
+isotope. What a model reports low confidence in is marked, so that a
+mark is a hint, not a check.
 
 **How long**: a picture takes well under a second on a Mac's processor
 once its model is loaded, which the first picture waits for - a few
@@ -1687,9 +1681,7 @@ one process; what a model prints as it reads goes to stderr, stdout being
 Meno's answers; and a package reading never loads, pyonmttok, is left out
 of MolNexTR's lock. Each takes the atoms and bonds its model predicts and
 leaves the model's own step of writing them as SMILES and a molfile
-undone (`graphs_unwritten`): Meno does not use what it writes, and
-writing a graph predicted from a picture that is no structure can run
-without end or crash the worker's process.
+undone (`graphs_unwritten`): Meno does not use what it writes.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.
@@ -1703,7 +1695,7 @@ than one structure; Linux.
      fast pictures go from the process to the window;
    - one canvas drawing the workspace and the column, a page going from
      one to the other;
-   - whether PDFium's search finds a word broken across a line's end.
+   - how a word broken across a line's end is found.
 1. **A PDF on the page** (built, 2026-10-09; *As built*, above): opened,
    dropped or pasted, held and saved; its stack, coming up as it is zoomed
    into, its pages turned and spread.

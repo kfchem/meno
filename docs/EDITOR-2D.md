@@ -211,8 +211,7 @@ do, or out where Settings, *General*, says so (the maintainer,
 A pinch let go while still zooming goes on zooming, as a drag let go goes on
 moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
-wheel with Ctrl, has no end of its own: it ends once no step has come for
-80 ms.
+wheel with Ctrl, is taken to end once no step has come for 80 ms.
 
 **Touch and pinch.** On a touch screen one finger does what the left
 button does: from empty space it moves the view. A second finger makes a
@@ -251,9 +250,9 @@ from a trial of two ways, #295): meanwhile its lines and their round caps
 are kept as wide on the screen as a layout at the zoom would have them,
 on the graphics card, and its wedges, the mitres where lines meet and its
 labels scale with the view.
-A step within a thousandth of a pixel of whole counts as whole: Windows'
-display scaling leaves notches that close (ten notches at once came as
-999.99993 px at 175 %), and read as fingers they moved the view a thousand
+A step within a thousandth of a pixel of whole counts as whole: with
+Windows' display scaling at 175 %, ten notches at once came as
+999.99993 px, and read as fingers they moved the view a thousand
 pixels, off the drawing.
 (PR #55. In the workspace the page never tilts: each molecule in 3D turns by
 itself, under a left drag on it - [WORKSPACE.md](WORKSPACE.md).)
@@ -1113,8 +1112,9 @@ All hover-based, as above.
     (on their new ids where it is pasted), and drawn in an exported SVG and
     in a copy's pictures, as on the canvas - its line there as the curve it
     is (an SVG path, EMF+'s Bezier curves and GDI's PolyBezier), smooth
-    however far a picture is enlarged (a Windows check found PowerPoint
-    showing corners at 17 times); a MOL, SD or RXN file has no
+    however far a picture is enlarged (a Windows check found the line,
+    once written as short straight pieces, showing corners at 17 times in
+    PowerPoint); a MOL, SD or RXN file has no
     place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
     `PushDraw2D`; `PushArrow`, `pushes`).
 - **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
@@ -1344,8 +1344,8 @@ All hover-based, as above.
     General, *Write words on the page as they are meant*, turned off keeps
     every word exactly as typed. Atoms' labels have rules of their own
     (above), and the column's texts are never changed.
-  - Drawn whole: the type draws a text's letters a frame or two after it
-    is given them, and showed the old ones meanwhile - a letter deleted
+  - Drawn whole: a text's letters are drawn a frame or two after they
+    are given, and the old ones showed meanwhile - a letter deleted
     stayed on the page for a moment, the caret already before it (the
     maintainer, 2026-10-10). Each change is now set out of sight and shown
     once every letter of it is drawn, the caret and what is selected with
@@ -1356,8 +1356,8 @@ All hover-based, as above.
     move - the one being set is shown as soon as it is, then the latest:
     the words keep up with the box, a few frames behind, where each change
     given up for the next one left them standing still until the pointer
-    did (`textSets`). And none is shown before it is drawn whole: the type
-    packed a batch of letters only as it was first shown, after that
+    did (`textSets`). And none is shown before it is drawn whole: a batch
+    of letters was packed only as it was first shown, after that
     frame, and words shown in place of others were a blank for two or
     three frames (`textBatch`, the maintainer's rule against jumps).
   - Set as a label is set, word by word: a formula's counts low (K₂CO₃,
@@ -1481,8 +1481,8 @@ All hover-based, as above.
       shrink - written, sized, made a list - rather than growing up and
       down about their middle.
   - While they are written, their box is the system's own text box, which
-    breaks lines as the system does, and may part a number from its unit;
-    kept, they break as above. Words written in place drawn by Meno itself,
+    breaks lines as the system does; kept, they break as above. Words
+    written in place drawn by Meno itself,
     as it will draw a text's typing (docs/PDF.md, step 5), will break as
     they will be kept.
   - With a selection when among it, or over an arrow among it: copied,
@@ -1495,11 +1495,9 @@ All hover-based, as above.
 
 ### 4a. A layout engine of Meno's own
 
-Agreed 2026-09-27: clean-up as it is (RDKit's layout laid over the drawing,
-PR #53) falls well short - taxol comes out unrecognisable - and neither of
-RDKit's layout engines is good enough to build on, so Meno gets its own,
-written from scratch, used for clean-up and for structures that arrive
-without coordinates (SMILES).
+Agreed 2026-09-27: Meno gets a layout engine of its own, written from
+scratch, used for clean-up and for structures that arrive without
+coordinates (SMILES).
 
 What it has to do, in the maintainer's words: rings drawn clean and regular,
 ring bonds kept plain with stereo shown on the bonds out of them - adding an
@@ -1515,12 +1513,11 @@ lipids each have their own way of being drawn, which it should know.
    untidy and for how the drawing sits - square to the lattice, its chains
    level, read left to right (`scripts/layout`, `src/lib/layout/metrics.ts`).
    The numbers are general rules, not a record of particular molecules.
-   RDKit's two engines are the baseline. (PR #58)
+   (PR #58)
 2. The engine itself (`src/lib/layout/engine.ts`, by the rules in
    `docs/LAYOUT-2D.md`): ring systems, chains, macrocycles, stereo display,
    clash removal and orientation, measured on the benchmark at each step.
-   A first pass is in; on the benchmark it scores best or level on most of
-   the molecules against RDKit's two engines.
+   A first pass is in, measured on the benchmark.
 3. Clean-up and SMILES import moved onto it: `chem/cleanUp.ts` and
    `chem/engineLayout.ts`, the engine in a worker of its own
    (`chem/layoutWorker.ts`), as a large structure takes it up to a second.
@@ -1674,19 +1671,17 @@ traced from reference drawings.
   PNG, inside Office's own clip format; an EMF that Meno writes, handed
   over in that clip format, is kept as it is, drawn as vectors, and chosen
   over a PDF or a PNG offered with it - and, stored as an EMF, it is what
-  Windows draws too. Word rewrites an SVG and drops what it carries. The
+  Windows draws too. The
   same trial on Windows (Microsoft 365, 2026-09-29) found the same: the
   EMF in Office's clip format is kept byte for byte and drawn as vectors,
-  and it is only in that clip format that Office hands it back - the EMF
-  it puts on the clipboard itself is drawn afresh, without the comment. With
+  and Meno reads it back from that clip format alone. With
   the clip format there, plain text beside it does not become a text box
-  (on either system); a PDF from a Mac shows coarse on Windows (Office draws
-  the bitmap stored with it). (PR #69: every copy carries these pictures;
-  the double-click on Windows is still to come.) Office on Windows draws
-  an EMF's lines and shapes without anti-aliasing - bonds and wedges come
-  out as stairs on screen - so the EMF draws everything twice: in EMF+
-  records, which Word and PowerPoint draw smooth, and in the EMF records
-  as before, for any reader that knows nothing of EMF+. Both keep it byte
+  (on either system); Office on Windows draws a PDF from a Mac by the
+  bitmap stored with it. (PR #69: every copy carries these pictures;
+  the double-click on Windows is still to come.) Word and PowerPoint on
+  Windows draw an EMF's EMF+ records smooth, so the EMF draws everything
+  twice: in EMF+ records, and in the EMF records as before, for any reader
+  that reads the EMF records alone. Both keep it byte
   for byte, as before (Windows, 2026-09-29; on a Mac, 2026-09-30, drawn
   smooth there too).
 - On Windows, a structure copied from Meno goes into Word and PowerPoint as
@@ -1724,15 +1719,14 @@ traced from reference drawings.
   in any box and only its stated size changes. (OLE's own cache sizes an
   EMF the same way, and keeps it so in the document; nothing seen reads
   it. A metafile picture with its size stated would keep it exact, but
-  Word takes an object's changes only as an EMF.) A Mac cannot serve
-  objects: there a document's object shows its picture, and a picture
+  Word takes an object's changes only as an EMF.) Meno serves no objects
+  on a Mac: there a document's object shows its picture, and a picture
   pasted from a Mac is a picture on Windows too - copied into Meno and
   pasted back, it becomes an object.
 - On a Mac (Word and PowerPoint for Mac, 2026-09-30), a document's object
   shows its picture - smooth, at its size - and survives being saved there
-  byte for byte, moved or not. A double-click on it only says the server
-  cannot be found: Office for Mac has no way to hand another program's
-  object to it. To edit one there, copy it - or drag it - into Meno. Word
+  byte for byte, moved or not. A double-click on it there does not open Meno.
+  To edit one there, copy it - or drag it - into Meno. Word
   and PowerPoint for Mac hand an object over as its storage (a compound
   file, `com.microsoft.Embedded-Object`), without Office's clip format;
   Meno reads its record out of the storage's `Meno` stream (or its picture,
@@ -1747,8 +1741,8 @@ traced from reference drawings.
   drop. Files from the Finder or Explorer come through the webview's own
   drag events on both platforms, as does everything on a Mac. On Windows,
   WebView2 takes every drop in a process of its own and hands the page
-  only files and text, and Meno nothing, so a drag from another program
-  that is not of files is taken from it where a zone takes such drags:
+  its files and text; a drag from another program that is not of files
+  is taken from it where a zone takes such drags:
   Meno lays a window of its own over the zone, clear to the eye, which
   Windows hands the drag to from the next move on (`src-tauri/src/drop.rs`).
   It reads what the drag carries - Meno's record in Word's object (which
@@ -1760,13 +1754,11 @@ traced from reference drawings.
   Tried on Windows (2026-09-30): Word's object dragged onto the drawing
   arrives there, selected, and Word's document is unchanged; so does a
   picture Meno put in Word (Office's clip format), which Word hands over
-  only when a block of memory is asked for, not "memory or a stream" -
-  so each is asked for in turn; both at 100% and over Remote Desktop at
+  when a block of memory alone is asked for - so a block of memory and a
+  stream are each asked for in turn; both at 100% and over Remote Desktop at
   175%. Files onto the drawing and onto a new tab open as before. What a
   drag carries is read again at the drop if nothing was to be had as it
-  came. PowerPoint for Windows
-  was not seen to let a shape be dragged out of its window at all (nothing
-  reached a plain drop target either): from there, copy and paste.
+  came. From PowerPoint for Windows, a shape comes by copy and paste.
 
 ### 6. Alongside
 
@@ -1781,5 +1773,5 @@ traced from reference drawings.
 
 ## Open questions
 
-- **Name to structure, and back**: part of a high-end editor, but outside
-  RDKit.
+- **Name to structure, and back**: part of a high-end editor; no plugin
+  fills it.

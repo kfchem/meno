@@ -22,7 +22,7 @@ import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
 import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob, trimJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
-import { finishEntry, motionEntry } from "./renderOptions";
+import { finishEntry, motionEntry, tooShort } from "./renderOptions";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -205,6 +205,9 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const taken = () => !renders.getState().list.some((r) => r.key === key);
   const plugin = renderer();
   if (!plugin) return;
+  // (a film shorter than its motion can be read in is refused here, however it was asked for: Meno's rule, which no renderer keeps)
+  const short = tooShort(ask, plugin.roleMotions?.render, ids.length);
+  if (short) throw new Error(short);
   const shown = await shownOf(store, ids);
   if (closing.aborted) return;
   const rendered = renderScene(shown, style3dOf(store.getState()), ask);

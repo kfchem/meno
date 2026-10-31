@@ -42,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.6.3"
+VERSION = "0.6.6"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
@@ -64,7 +64,7 @@ OUTLINE_COLOURS = {"black", "white", "grey"}
 # a scene's file's name: a plain name in the job's folder
 # the looks render.py (looks.py) makes with materials of its own
 OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "neon", "slime", "xray", "clay"}
-LOOKS = {"meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart"} | OWN_LOOKS
+LOOKS = {"meno"} | OWN_LOOKS
 FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "tarnished"}}
 WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
 MARBLES = {"carrara", "swirl"}
@@ -164,7 +164,7 @@ def settings_of(entry, options):
         "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
         "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
         # (a film's motion, where it is one of this plugin's: none for Meno's own, keyed into the scene; Once or Loop)
-        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(options.get("mode", "once"), "mode", MODES)} if film and entry.get("motion") is not None else {}),
+        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(entry.get("mode", "once"), "mode", MODES)} if film and entry.get("motion") is not None else {}),
     }
 
 
@@ -211,7 +211,7 @@ def op_prepare(m):
     return {"jobs": jobs}
 
 
-# (Blender's own last words, which say nothing of why: that a script failed, and the memory it did not free as it quit)
+# (Blender's own last words as it quits: "Error: script failed" and "Error: Not freed memory blocks")
 BLENDER_OWN = re.compile(r"^Error: (script failed|Not freed memory blocks)", re.I)
 # (an exception Python raised, as its traceback ends: its kind, then what it says - "TypeError: ...")
 RAISED = re.compile(r"^[A-Za-z_][\w.]*(Error|Exception|Exit)\b: ")
@@ -228,14 +228,16 @@ SAID_AFTER = re.compile(
 
 
 def why_of(log):
-    """Why Blender stopped, as it says: the last that render.py said as it stopped ("render.py: ...") or that Python
-    raised - all of it, a message of several lines as one - else its last line that says error, else its last; never
-    Blender's own last words, which say only that a script failed or what memory it did not free."""
+    """Why Blender stopped, as it says: the last that render.py said as it stopped ("render.py: ...", said without the
+    script's name, which is no word for the person) or that Python raised - all of it, a message of several lines as
+    one - else its last line that says error, else its last; never Blender's own last words as it quits, "Error:
+    script failed" and "Error: Not freed memory blocks"."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
     told = [line for line in lines if not BLENDER_OWN.match(line)]
     for k in range(len(lines) - 1, -1, -1):
         if "render.py:" in lines[k] or RAISED.match(lines[k]):
-            whole = [lines[k]]
+            first = re.sub(r"^.*?render\.py:\s*", "", lines[k]) if "render.py:" in lines[k] else lines[k]
+            whole = [first[:1].upper() + first[1:]]
             for more in lines[k + 1:]:
                 if SAID_AFTER.match(more):
                     break

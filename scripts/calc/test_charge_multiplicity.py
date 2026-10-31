@@ -325,19 +325,6 @@ class Rdkit(unittest.TestCase):
                 # (and the molecule RDKit makes of them has the entry's charge)
                 self.assertEqual(rdkit.Chem.GetFormalCharge(rdkit.mol_of(molecule)), given[i]["charge"], given[i]["name"])
 
-    def test_duplicates_never_sets_aside_one_of_another_charge_or_spin(self):
-        # (singlet and triplet methylene, in the very same shape: different species, both kept)
-        atoms = [{"el": "C", "x": 0.0, "y": 0.0, "z": 0.0}, {"el": "H", "x": 1.1, "y": 0.0, "z": 0.0}, {"el": "H", "x": -0.4, "y": 1.0, "z": 0.0}]
-        bonds = [{"a1": 0, "a2": 1, "order": 1}, {"a1": 0, "a2": 2, "order": 1}]
-        singlet = {"name": "singlet", "atoms": atoms, "bonds": bonds, "charge": 0, "multiplicity": 1, "compound": 0}
-        triplet = {"name": "triplet", "atoms": [dict(a, radical=3) if a["el"] == "C" else a for a in atoms], "bonds": bonds, "charge": 0, "multiplicity": 3, "compound": 0}
-        for holds in ("molecules", "conformers"):
-            kept = ask(rdkit, "run", step="duplicates", entries=[singlet, triplet], options={}, holds=holds)["kept"]
-            self.assertEqual(kept, [0, 1], holds)
-        # (and two of one species in that shape: one set aside)
-        kept = ask(rdkit, "run", step="duplicates", entries=[singlet, dict(singlet, name="again")], options={}, holds="molecules")["kept"]
-        self.assertEqual(kept, [0])
-
     def test_what_it_reads_back_says_no_charge_or_multiplicity(self):
         e = entries_of(7, 1)[0]
         made = json.dumps({"version": "test", "atoms": [{"el": a["el"]} for a in e["atoms"]], "frames": [[v for a in e["atoms"] for v in (a["x"], a["y"], a["z"])]], "energies": [-0.01], "field": "MMFF94"})

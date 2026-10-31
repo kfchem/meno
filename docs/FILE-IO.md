@@ -61,7 +61,7 @@ built* below.
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
-| PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`); what the format cannot hold - a mass number but hydrogen's D and T, a charge past 9 either way - is left out, and the Export card says so before it is written, with how many atoms lose each (`pdbLeavesOut`, 2026-10-22) | wwPDB Format v3.3; see *As step 7 was built* |
+| PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`); a mass number but hydrogen's D and T, and a charge past 9 either way, are left out, and the Export card says so before it is written, with how many atoms lose each (`pdbLeavesOut`, 2026-10-22) | wwPDB Format v3.3; see *As step 7 was built* |
 | KET | not read | never | Open does not offer it; one dropped says "not supported yet" |
 
 ### Coordinates in a text
@@ -189,7 +189,7 @@ that differ, it is given none, and says why.
 
 | Kind | Told by | Read by |
 | --- | --- | --- |
-| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only); xTB (plugin, pixi; xTB output, its own program's - a job's log read the same way, 2026-10-31) |
+| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | the ORCA interface (plugin, uv; ORCA's output), the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint) and the xTB plugin (plugin, pixi; xtb's output, a job's log read the same way, and its frequencies in Gaussian's form), each for what its program writes; cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
 | Molden file | `[Molden Format]`, as PySCF's manifest brings it | PySCF |
 | Cube file | its layout: two comment lines, four lines of a count and three numbers (`CUBE_MARK`) | cube (built in, web worker) |
 
@@ -727,7 +727,8 @@ As this part of step 5 was built (#155, from main beside step 3):
   - The last choices are remembered in the settings, by role
     (`options`: `export`, `write:sdf`, ...).
   - **MOL, SD and RXN files** may be written in V3000. Otherwise they are
-    written in V2000, or in V3000 where V2000 cannot hold them, as before.
+    written in V2000, or in V3000 where they need more than V2000 holds,
+    as before.
     In an SD file the choice holds for its records in 3D too, and is
     offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
@@ -802,10 +803,10 @@ As this part of step 5 was built (#155, from main beside step 3):
     written; export the set as SD to write them all").
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
-    and in attributes alike, and what XML cannot hold at all (the controls
-    but tab and the line breaks, a surrogate without its pair, U+FFFE and
-    U+FFFF) is drawn as the replacement character, so the file is
-    well-formed whatever was pasted.
+    and in attributes alike, and a character outside the range XML takes
+    (the controls but tab and the line breaks, a surrogate without its
+    pair, U+FFFE and U+FFFF) is drawn as the replacement character, so
+    the file is well-formed whatever was pasted.
 - **What a writer takes** is said by it (step 7): Meno's own take what is
   selected on the page; a plugin's, one molecule - the molecules in 3D
   selected, several as one system. A plugin's writer is offered only where
@@ -1265,12 +1266,12 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     replaced is kept by name and path (`files.before` in the settings), and
     offered back: *Use Some Viewer again*. Where that app is no longer
     there (moved to the Trash since), its record goes and the page says so;
-    the format still opens with Meno. Before macOS 12 there is no such
-    call, so the page says to choose in the Finder instead (Get Info, Open
+    the format still opens with Meno. The call came with macOS 12; before
+    it, the page says to choose in the Finder instead (Get Info, Open
     with, Change All); Meno's minimum stays 10.13. Only an installed Meno
     can be made the default, not one run from a build folder.
-  - Windows: an app cannot set a default; the user chooses it in Windows'
-    own Settings. *Use Meno* offers Meno there for that format alone, then
+  - Windows: a default is the user's to choose, in Windows' own
+    Settings. *Use Meno* offers Meno there for that format alone, then
     opens Meno's own page in Default apps - `ms-settings:defaultapps?
     registeredAppUser=Meno` on Windows 11 21H2 and 22H2 with the 2023-04
     update and 23H2 or later, Default apps itself before (Microsoft Learn,
@@ -1291,8 +1292,8 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     `UserChoice` key: Windows 11 build 26300 (tried 2026-10-22) keeps it
     under `UserChoiceLatest`, and the page read it right because it asks
     Windows. Nothing in Meno reads `UserChoice` itself. Where the program
-    is Windows' own *choose an app* (`OpenWith.exe`), which Windows names
-    as if it were an app (*Select an app*, in the user's language), no app
+    is Windows' own *choose an app* (`OpenWith.exe`), named *Select an
+    app* in the user's language, no app
     opens the format yet, and the row says *No app opens it yet*.
   - Tried on Windows 11 (2026-10-21) with exactly these keys: a
     double-click did not go to Meno, and Meno's own page in Default apps
@@ -1390,7 +1391,7 @@ web worker.
 | 11 | No Save when closing | Save offered beside Keep and Discard | 5 |
 | 12 | SMILES copied two ways | one way, through Meno's clipboard | 5 |
 | 13 | SMILES parsed two ways | what the chemist gives is read by the plugin chosen for SMILES (RDKit by default, PLUGINS.md). The dictionary's SMILES are Meno's own data and stay with Meno's own parser, which must answer while drawing. Both are said in the code and the docs | 6 |
-| 14 | Clipboard gaps | pasted text asks the one decision, so XYZ is read. EMF and DIB stay written only, and are said to be: they are for programs that take only a metafile or a bitmap, and an EMF Office hands back is drawn afresh, without Meno's record in it (`clipboard.rs` reads none on purpose); the record comes back through GVML, PNG or Meno's own flavour | 2 |
+| 14 | Clipboard gaps | pasted text asks the one decision, so XYZ is read. EMF and DIB stay written only, and are said to be: they are for programs that take only a metafile or a bitmap, and Meno reads neither back (`clipboard.rs` reads none on purpose); the record comes back through GVML, PNG or Meno's own flavour | 2 |
 | 15 | RXN not dragged in on Windows | `drop.rs` takes the RXN flavour | 2 |
 | 16 | PDB, KET offered then refused | Open offers only kinds something reads; PDB comes with its reader | 2, 7 |
 | 17 | Code no path reaches | removed | 2 |
@@ -1516,7 +1517,7 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     frame in its water - numbers them over again, or past the columns in
     a count of its own, or with stars. Those atoms' bonds are by distance;
   - HEADER's ID code and TITLE, kept for later;
-  - HELIX and SHEET records (Secondary Structure Section, since lane L5,
+  - HELIX and SHEET records (Secondary Structure Section, since
     2026-10-10), every field kept, and with them each atom's name and
     residue on the molecule in 3D: its chains drawn as ribbons
     (docs/WORKSPACE.md, *Ribbons*).
@@ -1614,37 +1615,53 @@ As step 3 was built:
     gives each one's molecule. The tests skip a file that is not there.
   - Psi3 is left out: cclib has no output of it to test with.
   - `probe` is in place, and tested with made-up plugins.
-- **An ORCA output's energy is ORCA's final one** (2026-10-24). cclib's
-  SCF energies for ORCA hold the SCF's energy and the dispersion's, and
-  not the other terms a composite method adds (gCP; B97-3c's short-range
-  basis term), which ORCA adds only in its *FINAL SINGLE POINT ENERGY*.
-  Measured on HCN, ORCA 6.1.1: 0.6 kcal/mol at r2SCAN-3c and 6.1 at
-  B97-3c. So the cclib plugin's worker gives each geometry of an ORCA
-  output the *FINAL SINGLE POINT ENERGY* written after it, one to each
-  geometry and in order (`orca_energies`). Where they are not one to each
-  geometry, it gives no electronic energy and says why ("Energies not
-  read: ..."), keeping the geometries and the free energies; it never
-  mixes them with the SCF's. That covers a single point written at no
-  geometry of its own (a displaced geometry's, for numerical frequencies),
-  a geometry with none, too few or too many, a compound job, and a nudged
-  elastic band. Each read says what its energy is: "ORCA final
-  single-point energy (includes dispersion and gCP where the method has
-  them)".
-  - The method and basis set are those the input names (the `!` line as
-    the output echoes it) that ORCA says it took as such: the functional
-    or composite method it says it recognised, else the method cclib read
-    where the input names it (HF, MP2); the orbital basis it says it used.
-    Otherwise neither is given: never cclib's "DFT", never an auxiliary
-    basis ("def2-mTZVPP/J"), and no basis after a composite method, whose
-    own it is.
-  - The PySCF plugin, which reads ORCA outputs for their orbitals, gives
-    none of an ORCA output's energies, method or basis. Meno takes each
-    from the first reader that gives one (lib/calc/read `combine`), so
-    cclib's SCF energies and "DFT" would otherwise stand in for the cclib
-    plugin's where it gives none.
-  - Gaussian and xTB have no such gap. Gaussian folds an empirical
-    dispersion into the nuclear repulsion, so *SCF Done* holds it. xtb's
-    *TOTAL ENERGY* holds its dispersion.
+- **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
+  *Several plugins, one role*): its manifest declares ORCA's output as its
+  own program's (`writtenBy`), and its `reader.py`, beside its worker,
+  reads it - a job's output, which its `collect` hands Meno to read, and a
+  file opened by hand alike. Written from the ORCA 6.1 manual and ORCA's
+  own outputs (ORCA 6.1.1, `scripts/calc/test_reader_orca.py`), it gives:
+  - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
+    point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
+    block in atomic units after it) left out; where a run of one geometry
+    wrote none, the input's one `* xyz` block, where that is surely the
+    geometry it worked at;
+  - **each geometry's energy as ORCA states it**, its *FINAL SINGLE POINT
+    ENERGY* - every term the method adds (dispersion, gCP, a composite
+    method's others, a correlated method's correlation) - one to each
+    geometry and in order, the same stated again unchanged counted once.
+    Where they are not one to each geometry - a compound job, a nudged
+    elastic band, a geometry with none, one stated where no geometry of its
+    own stands - no energy is given, and that is said ("Energies not read:
+    ..."), the geometries and the free energies kept. Each read says what
+    its energies are: "ORCA final single-point energy (includes dispersion
+    and gCP where the method has them)";
+  - **the level**, each as the input names it: the functional or composite
+    method ORCA says it recognised (its "omega" for the input's "w"), a
+    correlated method the input names (the MP2 and MDCI keywords, the
+    manual's Tables 3.34 and 3.43), Hartree-Fock, or a tight-binding method
+    by the xtb program's name; the orbital basis it says it used where the
+    input names it, none for a composite or tight-binding method; and the
+    **solvation** the input asks for - its simple keyword or its `%cpcm`
+    block, "CPCM(water)", "SMD(chloroform)" - or "none" where its input,
+    echoed whole, asks for none;
+  - the charge and multiplicity, **each atom's mass** as ORCA used it, how
+    the run went and why it stopped where it did, which geometry an
+    optimisation converged on (the one ORCA worked out once more at the
+    stationary point), and its results: the thermochemistry with its point
+    group, symmetry number, treatment of low vibrations and its correction
+    to G (*G-E(el)*); the dipole as printed, with its components and the
+    point it was taken about; each charge scheme it printed (Mulliken,
+    Löwdin, Hirshfeld, MBIS, CHELPG) and spin populations; the vibrations
+    with their IR intensities, Raman activities and motions; the orbitals,
+    all it printed; each geometry's RMS gradient; and a file's jobs
+    (`$new_job`) each an output of its own.
+  - A value ORCA did not print is not given: none is worked out in its
+    place - but the entropy, its printed *T S* term over the temperature
+    it printed, in cal/(mol K). A path's own points - a band's images and the point it refined,
+    a reaction path's - are in files of their own, which a job's `collect`
+    reads with the same module; an output opened by hand says they are not
+    in it.
 - **The one exception is closed** (the maintainer, 2026-10-15): the
   energies on an XYZ file's comment lines are read by the patterns of the
   plugins added, not by Meno. Each plugin whose program writes XYZ files

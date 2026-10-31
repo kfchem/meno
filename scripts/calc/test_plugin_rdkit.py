@@ -97,8 +97,9 @@ class FromSmiles(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
-class WhyUnreadable(unittest.TestCase):
-    """A SMILES that cannot be read: why, in a few words about the SMILES."""
+class SmilesNotRead(unittest.TestCase):
+    """A SMILES that cannot be read: said so, and what RDKit made of it given as facts (`smiles_read`). Why, in words,
+    is Meno's (src/lib/chem/smilesWhy, with its own tests)."""
 
     @classmethod
     def setUpClass(cls):
@@ -106,80 +107,28 @@ class WhyUnreadable(unittest.TestCase):
         cls.worker = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.worker)
 
-    def said(self, smiles):
-        with self.assertRaises(ValueError) as caught:
-            self.worker.op_from_smiles({"smiles": smiles})
-        return str(caught.exception)
+    def test_says_it_could_not_be_read_and_no_more(self):
+        for smiles in ("C1CCCC", "C(C)(C)(C)(C)C", "SnCl4", "hello", "c1cccc1"):
+            with self.assertRaises(ValueError) as caught:
+                self.worker.op_from_smiles({"smiles": smiles})
+            self.assertEqual(str(caught.exception), "This SMILES could not be read.")
 
-    def test_says_which_ring_is_left_open(self):
-        self.assertIn("a ring is left open: 1 is opened and not closed", self.said("C1CCCC"))
-        self.assertIn("2 is opened and not closed", self.said("C1CC2CC1"))
-        self.assertIn("%12 is opened and not closed", self.said("C%12CCC"))
-
-    def test_says_a_parenthesis_or_bracket_is_not_closed(self):
-        self.assertIn("a ( is not closed", self.said("CC(C"))
-        self.assertIn("a ) closes no (", self.said("CC)C"))
-        self.assertIn("a [ is not closed", self.said("[Na+].[Cl-"))
-
-    def test_says_which_atom_has_too_many_bonds(self):
-        self.assertIn("its 1st atom, C, has 5 bonds, more than it can take", self.said("C(C)(C)(C)(C)C"))
-        self.assertIn("its 2nd atom, O, has 3 bonds", self.said("OO=O"))
-
-    def test_says_a_formula_is_one_and_what_a_smiles_writes(self):
-        self.assertIn("it reads like a formula; a SMILES for it is Cl[Sn](Cl)(Cl)Cl", self.said("SnCl4"))
-        self.assertIn("a SMILES for it is ClC(Cl)(Cl)Cl", self.said("CCl4"))
-        self.assertIn("a SMILES for it is Cl[Al](Cl)Cl", self.said("AlCl3"))
-        self.assertIn("a SMILES for it is Cl[Fe](Cl)Cl", self.said("FeCl3"))
-        self.assertIn("a SMILES for it is FB(F)F", self.said("BF3"))
-        # (a salt of groups 1 and 2: as ions, where as many halogens as its charge)
-        self.assertIn("a SMILES for it is [Mg+2].[Cl-].[Cl-]", self.said("MgCl2"))
-        self.assertIn("a SMILES for it is [Ca+2].[Cl-].[Cl-]", self.said("CaCl2"))
-        self.assertIn("a SMILES for it is [Ba+2].[Br-].[Br-]", self.said("BaBr2"))
-        # (no such compound, or none a halide of one atom: an example only)
-        for formula in ("NaCl2", "KCl3", "MgCl3", "C6H6", "H2O", "Fe2O3", "CO2", "IF7"):
-            self.assertIn("it reads like a formula; a SMILES writes the atoms and how they are bonded", self.said(formula))
-        # (an element twice, or no count past one: as a SMILES still)
-        self.assertIn("a ring is left open: 2 is opened and not closed", self.said("CC2"))
-        self.assertIn("Na is written in brackets: [Na]", self.said("NaCl"))
-
-    def test_says_what_is_no_element_and_what_wants_brackets(self):
-        self.assertIn("Xx is not an element", self.said("[Xx]"))
-        self.assertIn("h is not an element", self.said("hello"))
-        self.assertIn("Na is written in brackets: [Na]", self.said("NaCl"))
-        self.assertIn("Fe is written in brackets: [Fe]", self.said("Fe"))
-
-    def test_says_an_aromatic_ring_cannot_alternate(self):
-        self.assertIn("its aromatic ring of 5 atoms (1, 2, 3, 4 and 5) cannot have alternating double bonds", self.said("c1cccc1"))
-
-    def test_says_an_aromatic_atom_is_in_no_ring_without_failing(self):
-        # (an aromatic atom in no ring is a problem of its own kind: it once
-        # failed to say anything, and the error shown was the reader's)
-        self.assertIn("its 2nd atom, c, is written aromatic, in lowercase, but is in no ring", self.said("Cc"))
-        self.assertIn("its 7th atom, o, is written aromatic", self.said("c1ccccc1o"))
-        for smiles, pair in (("Co", "Co"), ("CsF", "Cs"), ("Pb", "Pb"), ("CCo", "Co")):
-            self.assertIn(f"{pair} is written in brackets: [{pair}]", self.said(smiles))
-
-    def test_reads_a_three_digit_ring_label(self):
-        self.assertIn("a ring is left open: %(123) is opened and not closed", self.said("C%(123)CC"))
-
-    def test_names_a_charge_with_its_atom(self):
-        self.assertIn("its 2nd atom, O-, has 3 bonds", self.said("C[O-](C)C"))
-
-    def test_says_hydrogens_are_left_out(self):
-        self.assertIn("H is left out of a SMILES", self.said("CH3CH2OH"))
-
-    def test_says_it_as_before_where_saying_why_fails(self):
-        real = self.worker.why_unreadable
-        try:
-            self.worker.why_unreadable = lambda smiles: 1 / 0
-            self.assertEqual(self.said("C1CCCC"), "This SMILES could not be read.")
-        finally:
-            self.worker.why_unreadable = real
-
-    def test_begins_as_before_and_leaves_what_reads_alone(self):
-        self.assertTrue(self.said("C1CCCC").startswith("This SMILES could not be read: "))
+    def test_leaves_what_reads_alone(self):
         for smiles in ("Sc1ccccc1", "CCCl", "c1ccccc1Br", "[Cl-].[Na+]", "C[Hg]C"):
             self.assertIn("molblock", self.worker.op_from_smiles({"smiles": smiles}))
+
+    def test_gives_rdkits_problems_as_facts(self):
+        read = lambda smiles: self.worker.op_smiles_read({"smiles": smiles})
+        self.assertEqual(read("C(C)(C)(C)(C)C"), {"reads": False, "parsed": True, "problems": [
+            {"kind": "AtomValenceException", "atom": 0, "symbol": "C", "charge": 0, "bonds": 5}]})
+        self.assertEqual(read("C[O-](C)C")["problems"], [{"kind": "AtomValenceException", "atom": 1, "symbol": "O", "charge": -1, "bonds": 3}])
+        self.assertEqual(read("c1cccc1")["problems"], [{"kind": "KekulizeException", "atoms": [0, 1, 2, 3, 4]}])
+        self.assertEqual(read("Co")["problems"], [{"kind": "AtomKekulizeException", "atom": 1, "symbol": "O", "charge": 0, "bonds": 1}])
+        # (one that reads, one that does not parse at all)
+        self.assertEqual(read("Cl[Sn](Cl)(Cl)Cl"), {"reads": True, "parsed": True, "problems": []})
+        self.assertEqual(read("C1CC("), {"reads": False, "parsed": False, "problems": []})
+        # (and the words are not the plugin's: none of Meno's reasons is said here)
+        self.assertFalse(hasattr(self.worker, "why_unreadable"))
 
 
 if __name__ == "__main__":
@@ -642,6 +591,18 @@ class HowManySought(unittest.TestCase):
         self.assertIsNone(self.worker.options_of({"options": {"sought": "needed", "count": 12}})["count"])
         self.assertIsNone(self.worker.options_of({"options": {}})["count"])
 
+    def test_takes_as_many_as_the_manifest_lets_a_chemist_ask_for(self):
+        import json
+        manifest = json.loads((WORKER.parent / "manifest.json").read_text(encoding="utf-8"))
+        [role] = [r for r in manifest["roles"] if r.get("role") == "conformers"]
+        [count] = [o for o in role["options"] if o["id"] == "count"]
+        # (one bound, the same in the field and in the worker)
+        self.assertEqual(count["max"], self.worker.MOST_CONFORMERS)
+        self.assertEqual(self.worker.MOST_CONFORMERS, 5000)
+        # (a chain past the old 500 is given what it asks for: 1000, and the most)
+        for n in (501, 1000, 5000):
+            self.assertEqual(self.worker.options_of({"options": {"sought": "fixed", "count": n}})["count"], n)
+
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class SameConformer(unittest.TestCase):
@@ -736,65 +697,6 @@ class SameConformer(unittest.TestCase):
             "compound": 0,
             "energy": energy,
         }
-
-    def test_duplicates_keeps_a_mirror_image_apart_or_counts_it_in_with_the_atoms_it_swaps(self):
-        import numpy as np
-        mol = self.embedded("COC1CCCCC1", seed=11)
-        P = mol.GetConformer().GetPositions()
-        ring = [a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.IsInRing()]
-        c1 = next(i for i in ring if any(n.GetSymbol() == "O" for n in mol.GetAtomWithIdx(i).GetNeighbors()))
-        c2, c6 = [n.GetIdx() for n in mol.GetAtomWithIdx(c1).GetNeighbors() if n.GetIdx() in ring]
-        # (its mirror image as a conformer of the same molecule takes it: reflected, the ring's two sides swapped -
-        #  reflected alone, C1's four neighbours would turn the other way round, which no turn of a bond does)
-        swap = next(w for w in mol.GetSubstructMatches(mol, uniquify=False, maxMatches=1000) if w[c2] == c6 and w[c1] == c1)
-        reflected = P * np.array([-1.0, 1.0, 1.0])
-        M = np.empty_like(P)
-        for i, j in enumerate(swap):
-            M[j] = reflected[i]
-        mirror = self.turned(M)
-        relabelled = self.turned(P, seed=8)
-        given = [self.entry(mol, P), self.entry(mol, relabelled, 1e-6), self.entry(mol, mirror)]
-        run = lambda options: self.worker.op_run({"step": "duplicates", "entries": given, "options": options, "holds": "conformers"})
-        # (by default: the same conformer turned set aside, its mirror image kept - two)
-        self.assertEqual(run({}), {"kept": [0, 2]})
-        counted = run({"mirrors": "counted"})
-        self.assertEqual(counted["kept"], [0])
-        [twin] = counted["counted"]
-        self.assertEqual((twin["entry"], twin["degeneracy"]), (0, 2))
-        # (the ring carbons either side of the methoxy swap: C2 for C6, and each of their hydrogens)
-        self.assertEqual((twin["mirror"][c2], twin["mirror"][c6], twin["mirror"][c1]), (c6, c2, c1))
-        self.assertEqual(sorted(twin["mirror"]), list(range(mol.GetNumAtoms())))
-
-    def test_duplicates_never_counts_in_an_enantiomer(self):
-        import numpy as np
-        mol = self.embedded("CC(O)CC", seed=4)
-        P = mol.GetConformer().GetPositions()
-        given = [self.entry(mol, P), self.entry(mol, P * np.array([-1.0, 1.0, 1.0]))]
-        out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {"mirrors": "counted"}, "holds": "molecules"})
-        self.assertEqual(out, {"kept": [0, 1], "counted": []})
-
-    def test_duplicates_says_where_it_could_miss_one_past_the_ways_it_tries(self):
-        import math
-        # (a centre with 7 two-carbon arms: 7! = 5,040 ways onto itself, past the 1,000 tried - its atoms taken against
-        #  their own alone; the same conformer, two arms' labels swapped, is missed, and that is said)
-        arms = 7
-        atoms, bonds, xyz = [("W", (0.0, 0.0, 0.0))], [], []
-        for k in range(arms):
-            t = 2 * math.pi * k / arms + 0.1 * k * k
-            z = math.cos(1 + k)
-            r = math.sqrt(1 - z * z)
-            d = (r * math.cos(t), r * math.sin(t), z)
-            atoms += [("C", tuple(2.1 * v for v in d)), ("C", tuple(3.6 * v + 0.3 * (k % 2) for v in d))]
-            bonds += [(0, 1 + 2 * k), (1 + 2 * k, 2 + 2 * k)]
-        order = [0, 3, 4, 1, 2] + list(range(5, 1 + 2 * arms))
-        def entry(places):
-            return {"atoms": [{"el": el, "x": p[0], "y": p[1], "z": p[2]} for el, p in zip([a for a, _ in atoms], places)],
-                    "bonds": [{"a1": i, "a2": j, "order": 1} for i, j in bonds], "compound": 0, "energy": 0.0}
-        given = [entry([p for _, p in atoms]), entry([atoms[i][1] for i in order])]
-        out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {}, "holds": "conformers"})
-        self.assertEqual(out, {"kept": [0, 1], "capped": 1})
-        # (one of it alone: nothing to miss, nothing said)
-        self.assertEqual(self.worker.op_run({"step": "duplicates", "entries": given[:1], "options": {}, "holds": "conformers"}), {"kept": [0]})
 
     def test_bound_is_never_above_the_rmsd(self):
         import numpy as np
