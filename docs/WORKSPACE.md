@@ -688,7 +688,9 @@ read and attached to its molecule. Agreed with the maintainer on
 - **Where readers overlap, the chemist chooses** what Meno keeps one of:
   Settings lists, for each kind of output, the installed readers that read
   it, and the one chosen gives the geometries and what the calculation
-  was, its results coming first - or else the first in Meno's order. What
+  was, its results coming first - or else the plugin whose own program
+  wrote it (PLUGINS.md, *Several plugins, one role*), or else the first in
+  Meno's order. What
   a reader finds of atoms is kept only where its atoms are those of the
   geometries, in the same order.
 

@@ -171,6 +171,27 @@ describe("kinds a plugin registers", () => {
     expect(kindOf("x", ORCA, all)?.id).toBe("orca");
   });
 
+  it("are coloured by the grammar of the plugin whose own program writes them, else by the first's", () => {
+    const cclib = MANIFESTS.find((m) => m.id === "cclib")!;
+    const grammar = { file: "orca-output.grammar", tones: { Landmark: "landmark" } };
+    const own = (writtenBy?: string) =>
+      acceptManifest({
+        id: "program-own",
+        name: "The program's plugin",
+        version: "1",
+        environment: "uv",
+        reads: ["orca"],
+        kinds: [{ id: "orca", name: "ORCA output", program: "ORCA", extensions: [".out"], marks: [{ text: "* O R C A *" }], grammar, ...(writtenBy ? { writtenBy } : {}) }],
+        steps: [{ kinds: ["energy"], programs: ["orca"] }],
+      })!;
+    const orcaOf = (ms: Manifest[]) => registered(ms).kinds.find((x) => x.id === "orca")!;
+    // (its own program's plugin's, whichever comes first)
+    expect(orcaOf([cclib, own("orca")]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([own("orca"), cclib]).grammar?.plugin).toBe("program-own");
+    // (no plugin says its program writes it: the first's, as before)
+    expect(orcaOf([cclib, own()]).grammar?.plugin).toBe("cclib");
+  });
+
   it("are Meno's, where a plugin brings a kind of the id of one of Meno's", () => {
     const { kinds: all } = registered([nbo([{ id: "xyz", name: "NBO's XYZ", program: "NBO", extensions: [".nboxyz"], marks: [{ text: "NBO XYZ FRAME" }] }])]);
     expect(all.filter((x) => x.id === "xyz")).toEqual([{ id: "xyz", name: "XYZ file", extensions: [".xyz"] }]);

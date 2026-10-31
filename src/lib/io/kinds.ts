@@ -127,8 +127,9 @@ export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; ref
               extensions: [...new Set([...was.extensions, ...k.extensions])],
               marks: [...(was.marks ?? []), ...marks.filter((x) => !was.marks?.some((y) => y.text === x.text && y.at === x.at))],
               ...(k.probe || was.probe ? { probe: true as const } : {}),
-              // (coloured by the first's grammar that has one)
-              ...(was.grammar ? { grammar: was.grammar } : k.grammar ? { grammar: { plugin: m.id, decl: k.grammar } } : {}),
+              // (coloured by its own program's plugin's grammar - the one that says its program writes it (`writtenBy`) - else
+              //  by the first's that has one)
+              ...(k.grammar && k.writtenBy ? { grammar: { plugin: m.id, decl: k.grammar } } : was.grammar ? { grammar: was.grammar } : k.grammar ? { grammar: { plugin: m.id, decl: k.grammar } } : {}),
             }
           : kindFrom(k, marks, m.id),
       );

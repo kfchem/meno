@@ -34,6 +34,8 @@ type Described = {
 type ReaderBase = Described & {
   /** The kinds it reads, by id. */
   reads: readonly string[];
+  /** Of those, the kinds one of its own programs writes (its manifest's `writtenBy`): its own program's output, which it reads unless another is chosen. */
+  ownKinds?: readonly string[];
 };
 /** What any plugin may bring besides what it runs: a guide, shown once; the plugins it suggests; the kinds of file it names, and the plugins it suggests for each (lib/plugins/guide). */
 type Brings = {
@@ -100,6 +102,8 @@ export const pluginOf = (m: Manifest): Plugin => {
     ...brings(m),
     // (its own kinds, and Meno's: never another plugin's, which it does not know)
     reads: m.reads.filter((id) => MENO_IDS.has(id) || m.kinds.some((k) => k.id === id)),
+    // (of those, its own program's output: a kind one of its programs writes)
+    ownKinds: m.reads.filter((id) => m.kinds.some((k) => k.id === id && k.writtenBy)),
     roles: m.roles.map((r) => r.role),
     writes: m.writes.filter((w) => !MENO_IDS.has(w.id)),
     steps: m.steps,
@@ -203,7 +207,9 @@ export type FileChoices = {
 
 /**
  * The reader of a kind: the one chosen for it, where it is added and reads
- * it; else Meno, where Meno reads it - Meno keeps its kinds; else the first
+ * it; else Meno, where Meno reads it - Meno keeps its kinds; else the plugin
+ * added whose own program writes it (`ownKinds`) - a program's output is read
+ * by that program's plugin before a reader of many programs'; else the first
  * added that reads it, in Meno's order. None, where nothing added reads it.
  */
 export function readerFor(
@@ -213,7 +219,7 @@ export function readerFor(
   readers: readonly ReaderPlugin[] = READERS,
 ): ReaderPlugin | null {
   const can = readersOf(kind, readers).filter((p) => p.builtin || added.has(p.id));
-  return can.find((p) => p.id === choices.read[kind]) ?? can.find((p) => p.builtin) ?? can[0] ?? null;
+  return can.find((p) => p.id === choices.read[kind]) ?? can.find((p) => p.builtin) ?? can.find((p) => p.ownKinds?.includes(kind)) ?? can[0] ?? null;
 }
 
 /** The readers that read a kind as well as its reader, as chosen: each added, each reading it, the reader itself not again. */

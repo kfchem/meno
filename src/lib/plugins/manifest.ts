@@ -65,6 +65,12 @@ export type KindDecl = {
   name: string;
   /** The program that writes it, as a molecule read from it names it; unsaid for a kind many programs write. */
   program?: string;
+  /**
+   * Which of the plugin's own programs writes it - one its steps or roles run, by the name they run it by: the kind
+   * is that program's output, and the plugin its own reader, which reads it unless another is chosen (lib/calc/catalog
+   * `readerFor`). Unsaid for a kind the plugin reads but whose program it does not run.
+   */
+  writtenBy?: string;
   /** The file names it goes by, lower case, with their dot. */
   extensions: string[];
   /** What the start of such a file says, one of them at least: how a file of a kind it reads is told. */
@@ -358,6 +364,7 @@ function kindOf(v: unknown): KindDecl | null {
   const name = text(k?.name, 80);
   if (!id || !name) return null;
   const program = text(k?.program, 80);
+  const writtenBy = typeof k?.writtenBy === "string" && PROGRAM.test(k.writtenBy) ? k.writtenBy : null;
   // (what a line begins with tells a text among those of its files' names, and claims no file: as short as a letter)
   const lines = list(k?.lines)
     .map((l) => text(l, MARK_MOST))
@@ -366,6 +373,7 @@ function kindOf(v: unknown): KindDecl | null {
     id,
     name,
     ...(program ? { program } : {}),
+    ...(writtenBy ? { writtenBy } : {}),
     extensions: extensionsOf(k?.extensions),
     marks: marksOf(k?.marks),
     lines,
@@ -839,7 +847,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
     homepage: text(m.homepage, 200) ?? "",
     ...(environment ? { environment } : {}),
     ...(Number.isInteger(m.setUpBytes) && (m.setUpBytes as number) > 0 && (m.setUpBytes as number) <= DOWNLOAD_MOST ? { setUpBytes: m.setUpBytes as number } : {}),
-    kinds,
+    // (written by one of its own programs - one its steps or roles run - or by none it says)
+    kinds: kinds.map(({ writtenBy, ...k }) => (writtenBy && [...steps, ...roles].some((s) => s.programs.includes(writtenBy)) ? { ...k, writtenBy } : k)),
     reads: readable,
     writes,
     xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
