@@ -82,6 +82,21 @@ class Prepare(unittest.TestCase):
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
 
+    def test_frequencies_treat_low_vibrations_as_orca_does_unless_asked_harmonic(self):
+        # (ORCA's own, its default: nothing written - Grimme's quasi-RRHO, as ORCA 6.1.1 prints "Quasi RRHO ... True")
+        own = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"), cores=1)["jobs"][0]["files"][0]["text"]
+        self.assertNotIn("%freq", own)
+        self.assertEqual(defaults("frequencies")["vibrations"], "none")
+        # (harmonic: the rigid-rotor harmonic oscillator alone, ORCA's %freq QuasiRRHO false - checked against ORCA 6.1.1)
+        rrho = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "rrho", "maxcore": 2000}, cores=1)["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(rrho[0], "! B3LYP def2-SVP D3BJ FREQ")
+        self.assertEqual(rrho[1:3], ["%maxcore 2000", "%freq QuasiRRHO false end"])
+        # (a frequency job's alone: an optimisation has no such option, and writes nothing of it)
+        self.assertNotIn("%freq", ask("prepare", step="optimise", entries=[WATER], options={**defaults("optimise"), "vibrations": "rrho"}, cores=1)["jobs"][0]["files"][0]["text"])
+        # (a treatment it does not know: refused)
+        with self.assertRaises(Exception):
+            ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "mrrho"})
+
     def test_frequencies_at_orcas_own_xtb_are_asked_for_numerically_and_said_to_be(self):
         # (ORCA 6.1.1 has no analytic Hessian for its own xTB, and stops a FREQ run of one: NUMFREQ it runs)
         native = {**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"}
