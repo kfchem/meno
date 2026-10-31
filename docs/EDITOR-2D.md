@@ -1776,5 +1776,5 @@ traced from reference drawings.
 
 ## Open questions
 
-- **Name to structure, and back**: part of a high-end editor, but outside
-  RDKit.
+- **Name to structure, and back**: part of a high-end editor; no plugin
+  fills it.
