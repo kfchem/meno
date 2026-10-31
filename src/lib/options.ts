@@ -32,7 +32,18 @@ export type ChoiceOption = OptionBase & {
   default: string;
 };
 /** `unset`: the value that sets nothing - what is left to the program ("0 leaves it to ORCA"): not said on a step's line. */
-export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known; unset?: number };
+export type NumberOption = OptionBase & {
+  type: "number";
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  from?: Known;
+  unset?: number;
+  /** What bounds it, said under the field, where the label alone does not say it - Meno's own options' alone. */
+  note?: string;
+};
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
