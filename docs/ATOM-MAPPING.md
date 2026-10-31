@@ -200,59 +200,53 @@ maps as ACCeL does.
   with no torsion to place the first of them by - no paired neighbour, or
   none with a paired neighbour of its own, as for the methyl of an SN2 at a
   methyl - ACCeL pairs the first by atom order with the first, the rest
-  following by chirality; which way round the methyl maps then depends on
-  the atoms' order in the files, and an SN2 does not come out as the Walden
-  map. Meno pairs the first with the one nearest it once the two
-  structures are laid over one another: by the best rotation over the pairs
+  following by chirality. Meno pairs the first with the one nearest it
+  once the two structures are laid over one another: by the best rotation
+  over the pairs
   so far within the central atoms' own molecules, where at least three of
   them span a plane, else by setting the two central atoms on one another.
   Where there is a torsion to go by, nothing changes. With nothing but the
   central atoms to go by, "nearest" means something only where both sides
   stand in one frame (an IRC's two ends, structures laid over one another);
-  structures made apart give it nothing to go by, and then it is no worse
-  and no better than atom order.
+  structures made apart give it nothing to go by.
 - **A torsion of exactly 180°** (`clampTorsionCosine`). `_get_most_dihedral`
-  takes `arccos` of a cosine that rounding can push past -1; it is then not
-  a number, and the atom exactly anti loses to a gauche one (an exactly
-  staggered ethane, rigidly moved, then comes out with one methyl turned
-  against the other). Meno keeps the cosine within [-1, 1]. Real structures
+  takes `arccos` of a torsion's cosine, which rounding can push past -1;
+  Meno keeps the cosine within [-1, 1], so that an atom exactly anti is
+  taken as anti (an exactly staggered ethane, rigidly moved, keeps its
+  methyls as they were). Real structures
   are seldom exactly anti; hand-built and symmetrised ones are.
 - **A pair of faces with no face flag** (`skipUnflaggedFacePair`). Where two
   faces read the same forwards and backwards and their flag is `None`,
-  `_order_maps` computes `bool ^ None`, which Python refuses: ACCeL fails
-  on an oxa-6π electrocyclisation (a dienal closing to a 2H-pyran), for
-  one. Meno leaves that pair out of the pericyclic score.
+  Meno leaves that pair out of the pericyclic score, so that such a
+  reaction is mapped: an oxa-6π electrocyclisation (a dienal closing to a
+  2H-pyran), for one.
 
 - **A group turned, read by its sign** (`signedTorsion`). Three or more
   like atoms on an atom (a methyl's hydrogens) are placed by a torsion
   about the bond to a paired neighbour: `_get_most_dihedral` takes, on each
-  side, the atom whose torsion is furthest from 0 and pairs the two. It
-  compares sizes only, so with one hydrogen near 0 degrees and the others
-  near -120 and +120, a methyl turned a few degrees can have -124 on one
-  side and +125 on the other as the two furthest, and comes out turned 120
-  degrees. Meno keeps ACCeL's choice on the first side and pairs it with
-  the atom on the other side whose torsion, sign and all, is nearest its
-  own; the rest of the group follow as in ACCeL.
+  side, the atom whose torsion is furthest from 0 and pairs the two. Meno
+  keeps ACCeL's choice on the first side and pairs it with the atom on the
+  other side whose torsion, sign and all, is nearest its own, so that a
+  methyl turned a few degrees (-124 on one side, +125 on the other) does
+  not come out turned 120 degrees; the rest of the group follow as in
+  ACCeL.
 
 - **Fewest bonds made or broken** (`fewestBondChanges`). `_order_maps`
   ranks the maps by fourteen scores in turn. Among maps with the same first
   score (metathesis), Meno puts first those that make and break the fewest
   bonds, hydrogens' included, and only then goes on to ACCeL's second
-  score and the rest. ACCeL's second score counts new bonds between two sp3
-  carbons, and keeping it low can cost more bonds made and broken
-  elsewhere: for chloroacetaldehyde going in one step to acetyl chloride,
-  ACCeL puts first a map in which the oxygen and both CH2 hydrogens change
-  carbons. A single step makes and breaks as few bonds as it can, so Meno
+  score and the rest. For chloroacetaldehyde going in one step to acetyl
+  chloride, the map that makes and breaks the fewest bonds then comes
+  first. A single step makes and breaks as few bonds as it can, so Meno
   counts that first; between maps that change as many bonds, ACCeL's order
   stands. Like ACCeL's own scores, it orders only the maps the search
   builds.
 
 - **The hydrogen in line goes** (`transferAlignedH`). Where a map moves a
   hydrogen from one atom (the donor, D) to another (the acceptor, A) and
-  the donor holds other hydrogens like it, ACCeL's choice of which one goes
-  follows from how it placed the group, not from where A stands; in
-  hydrogen abstraction from methane by a chlorine atom lying in line with
-  one C-H, ACCeL can give the chlorine another. A hydrogen is passed along
+  the donor holds other hydrogens like it, Meno has the one in line with A
+  go: in hydrogen abstraction from methane by a chlorine atom lying in line
+  with one C-H, that hydrogen goes to the chlorine. A hydrogen is passed along
   the line D-H...A, so Meno, after ACCeL's ordering, has the one already
   nearest that line go, and puts it in the place on A in line with D where
   A holds hydrogens of its own. "Nearest the line" is the turn, about the
@@ -272,8 +266,8 @@ maps as ACCeL does.
   the same atoms on the other and gives each hydrogen the one nearest it:
   such a group cannot turn freely, so its hydrogens keep their places about
   their atom through a step. In an SN2 at a CH2, the centre inverts as an
-  umbrella folding over; ACCeL reads it as kept and swaps the two
-  hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
+  umbrella folding over, and its two hydrogens keep their places about it.
+  A methyl, or an atom with no heavy neighbour, has no frame to
   lay over and is left as ACCeL placed it, as is a group a hydrogen comes
   to or goes from. So is an atom with more neighbours on one side than on
   the other, hydrogens counted: it goes from one shape to another - a
@@ -296,9 +290,9 @@ maps as ACCeL does.
   CH2s' hydrogens: all four of its CH2s change order.)
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
-  `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
-  number; `_order_maps`' face tests read such an angle as under 90°. Meno
-  keeps those cosines within [-1, 1] too. A cosine that is not a number to
+  Meno keeps the cosines of `_det_ez` and of `_order_maps`' face tests
+  within [-1, 1] too, so that an exactly anti torsion reads as E, and as
+  over 90°. A cosine that is not a number to
   begin with (a zero vector's) stays one, in both.
 
 ### Like molecules standing apart
