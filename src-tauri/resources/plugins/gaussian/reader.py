@@ -338,14 +338,22 @@ def geometries(lines):
     return out
 
 
-# each atom's mass as Gaussian used it, in daltons, ten to a line, under its input's other per-atom values:
-# " AtmWgt=  12.0000000  12.0000000   1.0078250"
+# each atom's mass as Gaussian used it, in daltons: in a frequency job's thermochemistry, " Atom     1 has atomic
+# number  8 and mass  15.99491"; and, where the route asks for more output (#P), ten to a line under the input's
+# other per-atom values, " AtmWgt=  15.9949146   1.0078250   1.0078250"
+ATOM_MASS = re.compile(r"^ Atom\s+(\d+) has atomic number\s+\d+ and mass\s+(\S+)")
 ATOM_WEIGHTS = " AtmWgt="
 
 
 def masses_of(lines, n):
-    """Each atom's mass, in daltons, as Gaussian last printed them all (its "AtmWgt=" lines, ten to a line); None where
-    it printed none, or not one to each atom."""
+    """Each atom's mass, in daltons, as Gaussian last printed them all - its thermochemistry's, else its "AtmWgt="
+    lines; None where it printed none, or not one to each atom."""
+    said = {}
+    for m in map(ATOM_MASS.match, lines):
+        if m:
+            said[int(m.group(1))] = number(m.group(2))
+    if n and sorted(said) == list(range(1, n + 1)) and None not in said.values():
+        return [said[i] for i in range(1, n + 1)]
     values = [v for line in lines if line.startswith(ATOM_WEIGHTS) for v in numbers(line[len(ATOM_WEIGHTS):])]
     if not n or len(values) < n or len(values) % n or None in values[-n:]:
         return None
@@ -1151,8 +1159,9 @@ def fchk_items(text):
 
 def read_fchk(name, text):
     """A formatted checkpoint, in Meno's form: its atoms and their one geometry (bohr, as all its quantities, made
-    angstroms), its energy, charge and multiplicity, its method and basis, the program's version; its Mulliken
-    charges, its dipole (e bohr, made debye) about its coordinates' origin, its RMS gradient, and its orbitals."""
+    angstroms), each one's mass, its energy, charge and multiplicity, its method, basis and solvation, the program's
+    version; its Mulliken charges, its dipole (e bohr, made debye) about its coordinates' origin, its RMS gradient, its
+    orbitals and its vibrations."""
     head, items = fchk_items(text)
     zs = items.get("Atomic numbers")
     xyz = items.get("Current cartesian coordinates")
@@ -1171,6 +1180,8 @@ def read_fchk(name, text):
         "version": f"{v.group(1)}, Revision {v.group(2)}" if v else None,
         "method": method,
         "basis": head["basis"] or None,
+        # (the solvation its route says: its "Route" item, the route as given - none where it has no SCRF)
+        "solvation": solvation_of([(0, items["Route"])], []) if isinstance(items.get("Route"), str) and items["Route"].strip() else None,
         "charge": items.get("Charge") if isinstance(items.get("Charge"), int) else None,
         "multiplicity": items.get("Multiplicity") if isinstance(items.get("Multiplicity"), int) else None,
         "atoms": atoms,

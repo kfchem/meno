@@ -590,32 +590,139 @@ class TheWorker(unittest.TestCase):
         self.assertTrue(worker.ended_well(opt_freq()))
 
 
-# Gaussian 16 inputs whose outputs, run on them, are read whole where they are in calc-samples/Gaussian-gaussian/
-# under the same name with .log (and the two .fchk formchk makes): each runs in seconds.
+# Gaussian 16 inputs whose outputs, run on them (g16 NAME.gjf NAME.log), are read whole where they are in
+# calc-samples/Gaussian-gaussian/ under that name - with the formatted checkpoints formchk makes of 01's and 02's
+# checkpoints (water_optfreq.fchk, hcn_irc.fchk): each runs in seconds. Jobs 14 and 15 end in error, as meant.
 INPUTS = {
-    "water_optfreq": "%Chk=water_optfreq.chk\n# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt Freq\n\nwater\n\n0 1\nO 0.0 0.0 0.1173\nH 0.0 0.7572 -0.4692\nH 0.0 -0.7572 -0.4692\n\n",
-    "water_ghost": "# B3LYP/6-31G(d) SP\n\nwater and a ghost helium\n\n0 1\nO 0.0 0.0 0.1173\nH 0.0 0.7572 -0.4692\nH 0.0 -0.7572 -0.4692\nHe-Bq 0.0 0.0 3.0\n\n",
+    '01_water_optfreq_d3': '%Chk=water_optfreq.chk\n# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt Freq\n\nwater opt freq, D3BJ (also the fchk sample: formchk water_optfreq.chk)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '02_hcn_ts_irc': '%Chk=hcn_irc.chk\n# B3LYP/6-31G(d) Opt=(TS,CalcFC,NoEigenTest) Freq\n\nHCN/HNC transition state\n\n0 1\nC     0.000000    0.000000    0.000000\nN     0.000000    0.000000    1.180000\nH     1.150000    0.000000    0.550000\n\n--Link1--\n%Chk=hcn_irc.chk\n# B3LYP/6-31G(d) IRC=(RCFC,MaxPoints=10,StepSize=10) Geom=Check Guess=Read\n\nHCN/HNC IRC from the TS (also: formchk hcn_irc.chk)\n\n0 1\n\n',
+    '03_h2o2_relaxed_scan': '# HF/3-21G Opt=ModRedundant\n\nH2O2 relaxed scan of the HOOH dihedral\n\n0 1\nO     0.000000    0.700000    0.000000\nO     0.000000   -0.700000    0.000000\nH     0.900000    0.900000    0.300000\nH    -0.900000   -0.900000    0.300000\n\nD 3 1 2 4 S 6 30.0\n\n',
+    '04_water_rigid_scan': '# HF/3-21G Scan\n\nwater rigid scan of one OH bond\n\n0 1\nO\nH 1 R1\nH 1 R2 2 A\n\nR1 0.90 4 0.05\nR2 0.96\nA 104.5\n\n',
+    '05_water_td': '# B3LYP/6-31+G(d) TD(NStates=5)\n\nwater TD-DFT single point\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '06_h2co_td_opt': '# B3LYP/6-31G(d) TD(Root=1,NStates=3) Opt\n\nformaldehyde excited-state optimisation\n\n0 1\nC     0.000000    0.000000   -0.528000\nO     0.000000    0.000000    0.680000\nH     0.000000    0.940000   -1.110000\nH     0.000000   -0.940000   -1.110000\n\n',
+    '07_water_link1': '%Chk=water_link1.chk\n# HF/STO-3G Opt\n\nwater opt, job 1 of 2\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n--Link1--\n%Chk=water_link1.chk\n# B3LYP/6-31G(d) SP Geom=Check Guess=Read\n\nwater single point, job 2 of 2\n\n0 1\n\n',
+    '08_water_ghost': '# B3LYP/6-31G(d) SP\n\nwater with a ghost helium (Bq)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\nHe-Bq 0.000000    0.000000    3.000000\n\n',
+    '09_he2_counterpoise': '# MP2/aug-cc-pVDZ Counterpoise=2\n\nhelium dimer counterpoise\n\n0 1 0 1 0 1\nHe(Fragment=1)  0.000000  0.000000  0.000000\nHe(Fragment=2)  0.000000  0.000000  3.000000\n\n',
+    '10_ch2_triplet_optfreq': '# UB3LYP/6-31G(d) Opt Freq\n\nmethylene triplet, open shell\n\n0 3\nC     0.000000    0.000000    0.100000\nH     0.000000    0.990000   -0.300000\nH     0.000000   -0.990000   -0.300000\n\n',
+    '11_water_pop_nbo': '# B3LYP/6-31G(d) Pop=NBO\n\nwater NBO\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '12_water_pop_hirshfeld': '# B3LYP/6-31G(d) Pop=Hirshfeld\n\nwater Hirshfeld and CM5\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '13_h3o_cation_chelpg': "# B3LYP/6-31G(d) Pop=CHELPG\n\nhydronium CHELPG, a charged molecule's dipole\n\n1 1\nO     0.000000    0.000000    0.100000\nH     0.000000    0.940000   -0.170000\nH     0.814000   -0.470000   -0.170000\nH    -0.814000   -0.470000   -0.170000\n\n",
+    '14_error_multiplicity': '# B3LYP/6-31G(d) SP\n\na deliberate error: water as a doublet\n\n0 2\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '15_opt_steps_exceeded': '# HF/3-21G Opt=(MaxCycles=2)\n\nan optimisation stopped after 2 steps\n\n0 1\nO     0.000000    0.000000    0.300000\nH     0.000000    1.100000   -0.600000\nH     0.000000   -0.900000   -0.400000\n\n',
+    '16_scf_not_converged': '# UB3LYP/6-31G(d) SCF=(MaxCycle=3) SP\n\nan SCF that does not converge\n\n0 3\nC     0.000000    0.000000    0.100000\nH     0.000000    0.990000   -0.300000\nH     0.000000   -0.990000   -0.300000\n\n',
+    '17_water_mp2_opt': '# MP2/6-31G(d) Opt\n\nwater MP2 optimisation (EUMP2 per step)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '18_water_ccsdt_sp': '# CCSD(T)/6-31G(d) SP\n\nwater CCSD(T) single point\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '19_water_nosymm_opt': '# HF/3-21G Opt NoSymm\n\nwater opt with NoSymm (input orientation only)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '20_water_smd_optfreq': '# B3LYP/6-31G(d) SCRF=(SMD,Solvent=Water) Opt Freq\n\nwater opt freq in SMD water\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '21_water_raman': '# HF/3-21G Freq=Raman\n\nwater frequencies with Raman activities\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
+    '22_co2_optfreq': '# HF/3-21G Opt Freq\n\ncarbon dioxide, linear (D-infinity-h): its point group and species as printed\n\n0 1\nC     0.000000    0.000000    0.000000\nO     0.000000    0.000000    1.160000\nO     0.000000    0.000000   -1.160000\n\n',
+    '23_hcn_optfreq': '# HF/3-21G Opt Freq\n\nhydrogen cyanide, linear (C-infinity-v): its point group and species as printed\n\n0 1\nH     0.000000    0.000000   -1.070000\nC     0.000000    0.000000    0.000000\nN     0.000000    0.000000    1.150000\n\n',
 }
 
 
 class WholeOutputs(unittest.TestCase):
+    """Gaussian 16's own outputs of `INPUTS`, read whole."""
+
     def sample(self, name):
-        path = SAMPLES / f"{name}.log"
+        path = SAMPLES / name
         if not path.exists():
-            raise unittest.SkipTest(f"no Gaussian-gaussian/{name}.log in calc-samples/")
+            raise unittest.SkipTest(f"no Gaussian-gaussian/{name} in calc-samples/")
         return reader.read_jobs(path.name, path.read_text(errors="replace"))
 
     def test_an_opt_freq_its_point_one_entry_and_its_thermochemistry(self):
-        o = self.sample("water_optfreq")
-        self.assertEqual(o["atoms"], ["O", "H", "H"])
+        o = self.sample("01_water_optfreq_d3.log")
+        self.assertEqual((o["atoms"], o["method"], o["basis"], o["solvation"]), (["O", "H", "H"], "B3LYP", "6-31G(d)", "none"))
         self.assertTrue(o["optimised"])
-        self.assertEqual(sum(o["converged"]), 1)
-        self.assertTrue(o["converged"][-1])
-        self.assertIn("thermo.free-energy", results(o))
-        self.assertEqual(o["solvation"], "none")
+        self.assertEqual((sum(o["converged"]), o["converged"][-1]), (1, True))
+        self.assertEqual(o["imaginary"], [])
+        # (each atom's mass as its thermochemistry took it)
+        self.assertEqual(o["masses"], [15.99491, 1.00783, 1.00783])
+        r = results(o)
+        self.assertEqual((r["thermo.free-energy"]["value"], r["thermo.g-correction"]["value"]), (-76.406032, 0.003496))
+        self.assertEqual(len(r["vibrations"]["rows"]), 3)
+
+    def test_a_transition_state_then_its_reaction_path_two_jobs(self):
+        o = self.sample("02_hcn_ts_irc.log")
+        ts, path = o["jobs"]
+        self.assertEqual((ts["job"]["kind"], path["job"]["kind"]), ("Optimisation and frequencies", "Reaction path"))
+        self.assertEqual(len(ts["imaginary"]), 1)
+        self.assertEqual((len(path["frames"]), path["unmarked"], results(path)["run.path"]["value"]), (20, "path", "20 points"))
+        # (in the order of the reaction coordinate: from the reverse path's far end down to the start and on)
+        e = path["energies"]
+        k = e.index(max(e))
+        self.assertTrue(all(a < b for a, b in zip(e[:k], e[1 : k + 1])) and all(a > b for a, b in zip(e[k:], e[k + 1 :])))
+
+    def test_a_relaxed_scan_each_point_converged_and_a_rigid_one_a_path(self):
+        relaxed = self.sample("03_h2o2_relaxed_scan.log")
+        self.assertEqual((sum(relaxed["converged"]), results(relaxed)["run.path"]["value"]), (7, "7 points"))
+        rigid = self.sample("04_water_rigid_scan.log")
+        self.assertEqual((len(rigid["frames"]), rigid["unmarked"], results(rigid)["run.path"]["label"]), (5, "path", "Scan"))
+
+    def test_an_excited_state_s_optimisation_its_energies_unread(self):
+        o = self.sample("06_h2co_td_opt.log")
+        self.assertIsNone(o["energies"])
+        self.assertEqual(results(o)["run.energies"]["value"], "energies not read")
+
+    def test_link1_two_jobs_each_its_own_level(self):
+        o = self.sample("07_water_link1.log")
+        self.assertEqual([(j["method"], j["basis"], j["job"]["kind"]) for j in o["jobs"]], [("HF", "STO-3G", "Optimisation"), ("B3LYP", "6-31G(d)", "Single point")])
 
     def test_a_ghost_atom_left_out(self):
-        self.assertEqual(self.sample("water_ghost")["atoms"], ["O", "H", "H"])
+        self.assertEqual(self.sample("08_water_ghost.log")["atoms"], ["O", "H", "H"])
+
+    def test_an_open_shell_its_spins_and_each_spin_s_orbitals(self):
+        o = self.sample("10_ch2_triplet_optfreq.log")
+        r = results(o)
+        self.assertEqual(o["multiplicity"], 3)
+        self.assertAlmostEqual(sum(r["spins.mulliken"]["values"]), 2.0, places=3)
+        self.assertIn("orbitals.b", r)
+
+    def test_natural_hirshfeld_cm5_and_chelpg_charges(self):
+        self.assertIn("charges.natural", results(self.sample("11_water_pop_nbo.log")))
+        r = results(self.sample("12_water_pop_hirshfeld.log"))
+        self.assertIn("charges.cm5", r)
+        o = self.sample("13_h3o_cation_chelpg.log")
+        self.assertAlmostEqual(sum(results(o)["charges.chelpg"]["values"]), 1.0, places=3)
+        # (a cation's dipole as printed, with the point it was taken about: Meno takes it about the centre of mass)
+        self.assertEqual((o["charge"], results(o)["dipole"]["origin"]), (1, [0.0, 0.0, 0.0]))
+
+    def test_errors_said_in_gaussian_s_words(self):
+        o = self.sample("14_error_multiplicity.log")
+        self.assertEqual(results(o)["run.why"]["value"], "The combination of multiplicity 2 and 10 electrons is impossible.")
+        o = self.sample("15_opt_steps_exceeded.log")
+        self.assertFalse(o["optimised"])
+        self.assertTrue(results(o)["run.why"]["value"].startswith("Optimization stopped. -- Number of steps exceeded"))
+
+    def test_an_scf_not_converged_in_a_job_that_ended_normally(self):
+        o = self.sample("16_scf_not_converged.log")
+        self.assertIsNone(o["energies"])
+        self.assertEqual(results(o)["run"]["value"], "not converged")
+
+    def test_correlated_energies_each_geometry_s_most_correlated(self):
+        self.assertEqual(self.sample("17_water_mp2_opt.log")["method"], "MP2")
+        o = self.sample("18_water_ccsdt_sp.log")
+        self.assertEqual((o["method"], o["energies"]), ("CCSD(T)", [-76.207532123]))
+
+    def test_nosymm_smd_and_raman(self):
+        self.assertTrue(self.sample("19_water_nosymm_opt.log")["optimised"])
+        self.assertEqual(self.sample("20_water_smd_optfreq.log")["solvation"], "SMD(Water)")
+        o = self.sample("21_water_raman.log")
+        self.assertIsNone(o["optimised"])
+        self.assertIn("Raman activity", [c["label"] for c in results(o)["vibrations"]["columns"]])
+
+    def test_linear_molecules_in_standard_notation(self):
+        r = results(self.sample("22_co2_optfreq.log"))
+        self.assertEqual(r["thermo.point-group"]["value"], "D\u221eh")
+        self.assertEqual(r["vibrations"]["rows"][0]["cells"][1], "\u03a0u")
+        self.assertEqual(results(self.sample("23_hcn_optfreq.log"))["thermo.point-group"]["value"], "C\u221ev")
+
+    def test_formatted_checkpoints(self):
+        o = self.sample("water_optfreq.fchk")
+        self.assertEqual((o["atoms"], o["method"], o["basis"], o["solvation"]), (["O", "H", "H"], "B3LYP", "6-31G(d)", "none"))
+        v = results(o)["vibrations"]
+        self.assertEqual([row["cells"][1] for row in v["rows"]], [1713.64424, 3727.27748, 3848.81508])
+        self.assertEqual(len(v["rows"][0]["move"]), 9)
+        self.assertEqual(self.sample("hcn_irc.fchk")["atoms"], ["C", "N", "H"])
 
 
 if __name__ == "__main__":
