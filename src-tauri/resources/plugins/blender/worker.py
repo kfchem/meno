@@ -76,10 +76,6 @@ MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "ch
 # (its changes of molecules: one molecule becoming the next, piece by piece - each with the part they share beside it)
 CHANGE_SCRIPT = "change.py"
 MODES = {"once", "loop"}
-# (how short a film of each can be and still be read - the manifest's `shortest`, its one source: render.py, which counts the
-# molecules, refuses a film shorter, by the rule Meno's card keeps)
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "manifest.json"), encoding="utf-8") as f_:
-    SHORTEST = {m["id"]: m.get("shortest", {}) for r in json.load(f_)["roles"] for m in r.get("motions", [])}
 STUDIO_SCRIPT = "studio.py"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
 
@@ -168,8 +164,7 @@ def settings_of(entry, options):
         "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
         "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
         # (a film's motion, where it is one of this plugin's: none for Meno's own, keyed into the scene; Once or Loop)
-        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(options.get("mode", "once"), "mode", MODES),
-            "shortest": SHORTEST.get(entry["motion"], {})} if film and entry.get("motion") is not None else {}),
+        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(options.get("mode", "once"), "mode", MODES)} if film and entry.get("motion") is not None else {}),
     }
 
 

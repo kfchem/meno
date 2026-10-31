@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
-import { askOf, filmLength, finishEntry, lengthNote, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
+import { askOf, filmLength, finishEntry, lengthNote, tooShort, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -146,5 +146,14 @@ describe("a film's shortest length, by its motion and its molecules", () => {
     expect(filmLength("film", { motion: "glow", seconds: 8 }, { mode: "loop" }, DECLARED_MOTIONS, undefined, 3).length).toEqual({ shortest: 4, raised: false });
     // (a picture: no length)
     expect(filmLength("picture", { width: 100 }, {}, DECLARED_MOTIONS, loopWhen, 3)).toEqual({ length: { shortest: 1 }, values: { width: 100 } });
+  });
+
+  it("refuses a film asked for shorter, however it was asked, saying how long it needs - Meno's rule, kept by no renderer", () => {
+    const loopWhen = { id: "mode", in: ["loop"] };
+    expect(tooShort({ kind: "film", motion: "pour", seconds: 5 }, { mode: "once" }, DECLARED_MOTIONS, loopWhen, 3)).toBe("This film needs at least 12 s for 3 molecules");
+    expect(tooShort({ kind: "film", motion: "pour", seconds: 12 }, { mode: "loop" }, DECLARED_MOTIONS, loopWhen, 3)).toBe("This film needs at least 18 s for 3 molecules");
+    expect(tooShort({ kind: "film", motion: "glow", seconds: 3 }, {}, DECLARED_MOTIONS, loopWhen, 1)).toBe("This film needs at least 4 s");
+    expect(tooShort({ kind: "film", motion: "pour", seconds: 12 }, { mode: "once" }, DECLARED_MOTIONS, loopWhen, 3)).toBeUndefined();
+    expect(tooShort({ kind: "picture" }, {}, DECLARED_MOTIONS, loopWhen, 3)).toBeUndefined();
   });
 });

@@ -293,38 +293,6 @@ class FilmStrips(unittest.TestCase):
         self.assertEqual(self.runs(frames), [(os.path.join("job", "frames"), ["f_0001.png", "f_0002.png", "f_0003.png", "f_0002.png"], 1)])
 
 
-class ShortestFilm(unittest.TestCase):
-    """How short a film of a motion can be (render.py `shortest_film`): the rule Meno's card keeps (renderOptions
-    `shortestFilm`), from the numbers the manifest says - and passed to render.py by the worker, from its manifest."""
-
-    @classmethod
-    def setUpClass(cls):
-        import ast
-        tree = ast.parse((FOLDER / "render.py").read_text(encoding="utf-8"))
-        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "shortest_film")
-        ns = {"math": math}
-        exec(compile(ast.Module(body=[fn], type_ignores=[]), "render.py", "exec"), ns)
-        cls.shortest = staticmethod(ns["shortest_film"])
-
-    def test_as_the_card_reckons_it(self):
-        # (the cases Meno's own test keeps: renderOptions.test.ts, "a film's shortest length")
-        self.assertEqual(self.shortest({"film": 4, "loop": 6}, 1, False), 4)
-        self.assertEqual(self.shortest({"film": 4, "loop": 6}, 1, True), 6)
-        self.assertEqual(self.shortest({"change": 6}, 3, False), 12)
-        self.assertEqual(self.shortest({"change": 6}, 3, True), 18)
-        self.assertEqual(self.shortest({"change": 6}, 11, False), 60)
-        self.assertEqual(self.shortest({"film": 1, "change": 2.5}, 3, False), 6)
-        self.assertEqual(self.shortest({"film": 1, "change": 2.5}, 2, False), 4)
-        self.assertEqual(self.shortest({}, 3, False), 1)
-
-    def test_the_worker_passes_each_motion_s_own_from_its_manifest(self):
-        m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
-        for x in m["roles"][0]["motions"]:
-            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 600, "fps": 30, "motion": x["id"]}], options={})
-            settings = json.loads(next(f["text"] for f in said["result"]["jobs"][0]["files"] if f["name"] == "render.json"))
-            self.assertEqual(settings["shortest"], x["shortest"], x["id"])
-
-
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
 
@@ -544,12 +512,6 @@ class MotionsRender(unittest.TestCase):
                     # (Once: one change, methylamine to methanol; Loop: and back - every frame rendered, in two pieces)
                     rendered = self.film(motion, background, mode, frames, molecules=(METHYLAMINE, METHANOL))
                     self.assertEqual(rendered, frames)
-
-    def test_a_film_shorter_than_its_motion_can_be_read_in_is_refused_saying_how_long_it_needs(self):
-        # (however it was asked for: three molecules' ring change, Once, in 5 s - each change needs 3 s)
-        why = self.film("change-ring", "white", frames=5, molecules=(METHYLAMINE, METHANOL, METHYLAMINE), fails=True)
-        self.assertEqual(why, "This film needs at least 6 s for 3 molecules")
-        self.assertEqual(self.film("assemble", "black", "loop", frames=6, fails=True), "This film needs at least 7 s")
 
     def test_a_change_of_one_molecule_says_it_needs_two(self):
         why = self.film("change-ring", "white", molecules=(METHYLAMINE,), fails=True)

@@ -733,25 +733,6 @@ def change_film(s, meno, folder):
     return made
 
 
-def shortest_film(shortest, molecules, loop):
-    """The shortest a film of a motion can be, in whole seconds - as Meno's card reckons it (renderOptions `shortestFilm`):
-    the motion's own, its Loop's where it loops and that is longer, and each change's for each change - one fewer than the
-    molecules, or as many where the film loops back to the first."""
-    changes = max(0, molecules if loop else molecules - 1) if shortest.get("change") else 0
-    film = max(shortest.get("loop", 0), shortest.get("film", 0)) if loop else shortest.get("film", 0)
-    return max(1, math.ceil(film + shortest.get("change", 0) * changes - 1e-9))
-
-
-def long_enough(s, meno):
-    """A film of one of this plugin's motions no shorter than it can be read in, however it was asked for: else refused,
-    saying how long it needs to be."""
-    n = len(meno.get("molecules") or [])
-    need = shortest_film(s.get("shortest") or {}, n, s.get("mode") == "loop")
-    if s["frames"] < need * s["fps"]:
-        counted = (s.get("shortest") or {}).get("change") and n > 1
-        raise SystemExit(f"render.py: This film needs at least {need} s" + (f" for {n} molecules" if counted else ""))
-
-
 def main():
     s = settings_of()
     folder = os.getcwd()
@@ -759,8 +740,6 @@ def main():
     with open(scene_path, encoding="utf-8") as f:
         gltf = json.load(f)
     meno = (gltf.get("scenes") or [{}])[0].get("extras", {}).get("meno", {})
-    if s.get("motion"):
-        long_enough(s, meno)
     if s.get("motion", "").startswith("change-"):
         assemble(change_film(s, meno, folder), s, folder)
         say(f"Rendered {s['out']}")

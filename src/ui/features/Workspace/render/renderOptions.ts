@@ -103,6 +103,22 @@ export function filmLength(
   return { length: { shortest, ...(counted ? { molecules } : {}), raised }, values: raised ? { ...picked, seconds: shortest } : picked };
 }
 
+/**
+ * Why a film is refused before it is begun, however it was asked for - the card, or an ask saved or written: shorter than its
+ * motion can be read in (`filmLength`), said with how long it needs to be. None, where it is long enough or is a picture.
+ */
+export function tooShort(
+  ask: Pick<RenderAsk, "kind" | "motion" | "seconds">,
+  theirs: OptionValues,
+  declared: readonly MotionDecl[] | undefined,
+  loopWhen: { id: string; in: readonly (string | number | boolean)[] } | undefined,
+  molecules: number,
+): string | undefined {
+  if (ask.kind !== "film") return undefined;
+  const { length } = filmLength("film", { motion: ask.motion ?? "", seconds: ask.seconds ?? 0 }, theirs, declared, loopWhen, molecules);
+  return length.raised ? `This film needs at least ${length.shortest} s${length.molecules ? ` for ${length.molecules} molecules` : ""}` : undefined;
+}
+
 /** What the card says under a film's length: its shortest, and what it is for; or that the length was raised to it. */
 export function lengthNote(l: Length): string | undefined {
   if (l.shortest <= 1) return undefined;
