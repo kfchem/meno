@@ -740,7 +740,16 @@ The card offers Meno's own motions the molecules can make, then those the added 
 
 ## The boundary, kept by a test
 
-Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it there. `src/lib/plugins/boundary.test.ts` keeps this: it reads the manifest of every bundled plugin and collects what they declare - plugin ids, programs and what they provide, looks, motions, kinds of step, kinds of file read and written - and fails on any string literal equal to one of them in core's source (`src/` and `src-tauri/src`, without tests). Comments may say anything. The words core legitimately owns are in the test's `ALLOWED` list, each with why (the kinds of step Meno defines, the materials of its scene file, an element's name); a new entry is a decision, made in a review.
+Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it there. `src/lib/plugins/boundary.test.ts` keeps this. It reads the manifest and the worker of every bundled plugin, and looks through core's source (`src/` and `src-tauri/src`, the whole of each Rust file but the items it keeps for its tests) - its string literals, its regular expressions and the text of its pages (JSX); comments may say anything. It fails on:
+
+- a word a plugin declares, where a literal is exactly that word: plugin ids, programs and what they provide, the files beside them and the variables they are given, looks, motions, kinds of step, kinds of file read and written and their extensions, the files a step takes, a download's file;
+- a name a plugin gives, as a word anywhere in a literal, whatever its case: its own name, its programs' as shown, what it uses, the program a kind of file is of and the marks it is told by ("ORCA's %maxcore" is found by "ORCA");
+- an option a plugin declares, where core asks for an option of its id (`o.id === "grain"`, `options.grain`) that is none of Meno's own - a plugin's option says itself when it is shown (`when`);
+- a key a plugin's worker says - dotted or hyphenated, `thermo.zpve`, `not-converged` - unless this document or WORKFLOWS-FOUNDATION.md defines it, as Meno's general form.
+
+The words core legitimately owns are in the test's `ALLOWED` list, each with why (the kinds of step Meno defines, the materials of its scene file, an element's name); a new entry is a decision, made in a review.
+
+Not yet within its reach, and so kept by review alone: text of a program's output that no plugin declares (headings, energy lines a pasted text is read for), and numbers or defaults core took from one plugin's program (a time limit, a sameness threshold, a restraint's strength, a limit sized by one program's run time). Each is to become the plugin's declaration, or core's own value stated as such.
 
 ## When plugins run
 
