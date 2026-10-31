@@ -962,7 +962,8 @@ The same for every plugin and for Meno's own parts:
     found (`programs`, by its name: `{"orca": "/Applications/orca/orca"}`),
     the folder its jobs' PATH begins with (2026-10-31);
   - a job `prepare` gives may take fewer cores than it was given
-    (`"cores": 1`): ORCA's, with no MPI to run its processes with. Meno
+    (`"cores": 1`): ORCA's, where the computer has no MPI to run its
+    processes with. Meno
     asks for it at that many, never more than Settings gives, and the
     queue counts it so (2026-10-31);
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
