@@ -361,8 +361,7 @@ moves together, in the same time and the same way.
 ## Pointers
 
 Meno draws its own pointers wherever it shows one other than the plain
-arrow (asked for by the maintainer, 2026-10-07: the system's hands looked
-poor, and on a Windows machine the dragging hand showed white). Each says
+arrow (asked for by the maintainer, 2026-10-07). Each says
 what a drag there does, not what grabs it, and none is a hand:
 
 | Pointer | Where | The system's behind it |
