@@ -1074,8 +1074,13 @@ The same for every plugin and for Meno's own parts:
     point group", xtb's box's "symmetry"), and the rotational symmetry
     number its rotational entropy counts, `thermo.symmetry-number` (ORCA's
     "Symmetry Number: 6", Gaussian's "Rotational symmetry number", xtb's
-    "rotational number"). Not printed, not read: Meno works none of them
-    out itself (2026-10-30). Meno puts them on each thermochemical
+    "rotational number"). And the correction to G it printed,
+    `thermo.g-correction` (2026-10-31): its G less its electronic energy -
+    ORCA's "G-E(el)", Gaussian's "Thermal correction to Gibbs Free
+    Energy", xtb's "G(RRHO) contrib." - which a single point's energy at
+    another level is added to for G at that level (*Add*, WORKFLOWS.md).
+    Not printed, not read: Meno works none of them out itself
+    (2026-10-30). Meno puts them on each thermochemical
     property it makes of the readings, in its `by` (WORKFLOWS-FOUNDATION.md,
     *The entry*).
 - **Keeps nothing between requests**; what it needs is sent each time.

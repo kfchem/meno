@@ -146,6 +146,14 @@ class WholeOutputs(unittest.TestCase):
         self.assertGreater(abs(gcp), 1e-4)
         self.assertEqual((r["method"], r["basis"]), ("r2SCAN-3c", None))
 
+    def test_a_frequency_job_s_correction_to_g_is_its_g_less_its_final_energy(self):
+        # (ORCA's G-E(el): its G less the final single-point energy Meno reads - analytic and numerical frequencies)
+        for name in ("hcn_r2scan3c_optfreq.out", "hcn_ts_r2scan3c_opttsfreq.out", "hcn_b3lyp_d3bj_numfreq.out"):
+            r = read(name, sample(name))
+            self.assertAlmostEqual(said(r, "thermo.g-correction"), said(r, "thermo.free-energy") - r["energies"][-1], delta=1e-7, msg=name)
+        # (a single point has none)
+        self.assertIsNone(said(read("hcn.out", sample("hcn_b3lyp_d3bj_sp.out")), "thermo.g-correction"))
+
     def test_a_functional_and_its_basis_as_the_input_names_them(self):
         r = read("hcn.out", sample("hcn_b3lyp_d3bj_sp.out"))
         self.assertEqual((r["method"], r["basis"]), ("B3LYP", "def2-SVP"))

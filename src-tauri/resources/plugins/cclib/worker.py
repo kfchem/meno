@@ -192,18 +192,30 @@ ORCA_QRRHO = re.compile(r"QRRHO of S\. Grimme.*?reference frequency of\s+([0-9.]
 ORCA_QRRHO_SAID = re.compile(r"Quasi RRHO\s+\.\.\.\s+(True|False)")
 GAUSSIAN_GROUP = re.compile(r"Full point group\s+(\S+)")
 GAUSSIAN_NUMBER = re.compile(r"Rotational symmetry number\s+(\d+)\.")
+#: The correction to G a program prints - what its G is less its electronic energy, in hartree: ORCA 6.1.1's
+#: "G-E(el)                           ...      0.01829101 Eh     11.48 kcal/mol", Gaussian 16's
+#: " Thermal correction to Gibbs Free Energy=         0.003654"
+ORCA_G_CORRECTION = re.compile(r"^G-E\(el\)\s+\.\.\.\s+(-?\d+\.\d+) Eh", re.M)
+GAUSSIAN_G_CORRECTION = re.compile(r"^ Thermal correction to Gibbs Free Energy=\s+(-?\d+\.\d+)\s*$", re.M)
 
 
 def thermo_said(text, program):
     """The symmetry a frequency job's thermochemistry took, as its program printed it - its point group and the
-    rotational symmetry number its rotational entropy counts - and how it treated the low vibrations, where it says;
-    the last it printed, a job's of several. Meno works out none of them itself: not printed, not read."""
+    rotational symmetry number its rotational entropy counts - how it treated the low vibrations, and its correction
+    to G, where it says; the last it printed, a job's of several. Meno works out none of them itself: not printed,
+    not read."""
     out = []
 
     def add(id_, label, value, **measure):
         out.append({"id": id_, "on": "molecule", "group": "Thermochemistry", "label": label, "value": value, **measure})
 
     text = text or ""
+    # (the correction to G, as the program printed it: a single point's energy at another level added to it is a G at
+    # that level, an Add's - the last it printed, a job's of several)
+    correction = {"orca": ORCA_G_CORRECTION, "gaussian": GAUSSIAN_G_CORRECTION}.get(program)
+    printed = correction.findall(text) if correction else []
+    if printed:
+        add("thermo.g-correction", "Correction to Gibbs free energy", float(printed[-1]), quantity="energy")
     if program == "orca":
         found = list(ORCA_SYMMETRY.finditer(text))
         if found:
