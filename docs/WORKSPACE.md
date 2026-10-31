@@ -493,7 +493,10 @@ Taken on 2026-10-13:
   shares.
 - **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
   gives every conformer it made, as it made them (PLUGINS.md); the page
-  makes them its own (`chem/pageConformers`):
+  makes them its own (`chem/pageConformers`), in a worker of its own so
+  that the page goes on meanwhile (`chem/shownConformers`: 5000 conformers
+  of butyl octanoate kept as 3027 in 0.37 s there, no frame of the page
+  more than 40 ms apart, in the app on an Apple M4, 2026-11-01):
   - **lowest first**, by their energies - or, where the molecule's are not
     given, by those of the model they were optimised in (a lighter metal
     standing in, η rings held), as the line that says how they were made

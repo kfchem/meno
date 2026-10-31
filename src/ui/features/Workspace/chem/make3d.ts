@@ -32,7 +32,7 @@ import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
-import { asThePageShows } from "./pageConformers";
+import { shownConformers } from "./shownConformers";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -516,14 +516,14 @@ export function rowFrom(items: Turned[], at: { x: number; y: number }): { x: num
  * Each stereoisomer asked for, its conformers made for the page - with the
  * options the plugin takes for the role, as chosen in Settings - as the page
  * shows them: lowest first, each once, laid over the first, alike atoms in
- * like places (`asThePageShows`). `onPage` asks the plugin to make one of
- * two enantiomers as the other's mirror image (docs/PLUGINS.md); a
- * workflow's *Conformers* step never sends it, and is given the program's
- * own.
+ * like places (`asThePageShows`, in a worker of its own: `shownConformers`).
+ * `onPage` asks the plugin to make one of two enantiomers as the other's
+ * mirror image (docs/PLUGINS.md); a workflow's *Conformers* step never sends
+ * it, and is given the program's own.
  */
 export async function conformersOf(chem: ChemClient, block: Block, isomers: "one" | "all", options: OptionValues = {}): Promise<Conformers[]> {
   const like = block.like ? { like: block.like } : {};
-  return (await chem.request("conformers", { molblock: block.molblock, isomers, ...like, options, onPage: true }, CONFORMERS_MS)).isomers.map(asThePageShows);
+  return shownConformers((await chem.request("conformers", { molblock: block.molblock, isomers, ...like, options, onPage: true }, CONFORMERS_MS)).isomers);
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

@@ -1041,7 +1041,8 @@ metal; every conformer as made, in the order made, with every centre's CIP
 label; of two enantiomers, the one whose SMILES comes first is made and the
 other is its mirror image), and the page keeps each once, lowest first,
 laid over the first, equivalent atoms in the first's places
-(`chem/pageConformers`; WORKSPACE.md, *The page's conformers*). Both take
+(`chem/pageConformers`, in a worker of its own: `chem/shownConformers`;
+WORKSPACE.md, *The page's conformers*). Both take
 `like`, a molecule in 3D made before from the
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
