@@ -29,5 +29,5 @@ export const FIRST_STEPS: readonly GuideStep[] = [
   { title: "Hold to select", text: "Press and hold on a structure to select all of it. Keep holding and drag to move it.", at: "structure", until: "selected" },
   { title: "Right-click", text: "Right-click anything for what can be done with it. The icons along the top are those used most.", at: "menu" },
   { title: "Save", text: "Save keeps the whole workspace - drawings, molecules in 3D, results - as one .meno file. Settings is beside it.", at: "save" },
-  { title: "Plugins", text: "Meno does more with plugins: add them in Settings, Plugins. Each is downloaded only when you add it, after Meno asks." },
+  { title: "Plugins", text: "Meno does more with plugins: add them in Settings, Plugins. Each is set up only when you add it, after Meno asks." },
 ];
