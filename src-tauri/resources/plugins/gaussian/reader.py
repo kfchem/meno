@@ -67,13 +67,23 @@ def numbers(text):
 # --- a file's jobs, and how a run went -----------------------------------------
 
 
+# where Gaussian starts a job, its first link: " Entering Link 1 = /g16/l1.exe PID=      9552." - printed at the start
+# of each job of a file of several (Link1), after the command it was started by (" Initial command:") where it prints
+# that: before each job, or (Gaussian 16 on Windows) before the first alone
+JOB_START = " Entering Link 1 = "
+
+
 def jobs(text):
     """The jobs a file holds one after another (Link1, "About Gaussian 16 Input"), each a text of its own: each begun
-    by Gaussian's " Initial command:" - which it prints at the start of each - after the file's first line, which says
-    it is Gaussian's. An Opt Freq's frequencies are a second step of its one job, and stay with it. The file itself,
-    where it holds one."""
+    where Gaussian enters its first link - with the command it was started by just before, where it printed one -
+    after the file's first line, which says it is Gaussian's. An Opt Freq's frequencies are a second step of its one
+    job, and stay with it. The file itself, where it holds one."""
     lines = text.split("\n")
-    starts = [k for k, line in enumerate(lines) if line.startswith(" Initial command:")]
+    starts = []
+    for k, line in enumerate(lines):
+        if line.startswith(JOB_START):
+            said = next((j for j in range(k - 1, max(-1, k - 5), -1) if lines[j].startswith(" Initial command:")), None)
+            starts.append(said if said is not None else k)
     if len(starts) < 2:
         return [text]
     ends = starts[2:] + [len(lines)]
@@ -88,16 +98,29 @@ SCF_UNMET = ">>>>>>>>>> Convergence criterion not met"
 SCF_DONE = re.compile(r"^ SCF Done:\s+E\((\S+)\)\s+=\s+(\S+)")
 
 
+# an optimisation that stopped short of its point (Opt), and why, on the line after:
+# " Optimization stopped.", "    -- Number of steps exceeded,  NStep=   2"; its job then ends in error in link 9999,
+# which prints a quotation before it says so
+OPT_STOPPED = "Optimization stopped."
+
+
 def run_of(text):
     """How a run went, as Gaussian says it: "normal" where its last lines say it came to its normal end, "error" where
-    it stopped on an error - and why, in its words: the line before its last "Error termination", else that line - or
-    "cut" where it says neither, cut short or still running; and whether each SCF it ran converged, in order (an SCF
-    Done after "Convergence criterion not met" did not)."""
+    it stopped on an error - and why, in its words: the line before its last "Error termination" (or the first of
+    those it says one after another), else that line; where it ended in link 9999 after an optimisation stopped, that
+    and why - or "cut" where it says neither, cut short or still running; and whether each SCF it ran converged, in
+    order (an SCF Done after "Convergence criterion not met" did not)."""
     lines = [line.strip() for line in (text or "").split("\n") if line.strip()]
     why = None
     for k in range(len(lines) - 1, -1, -1):
         if lines[k].startswith(ERROR):
-            why = lines[k - 1] if k and not lines[k - 1].startswith(ERROR) else lines[k]
+            while k and lines[k - 1].startswith(ERROR):
+                k -= 1
+            why = lines[k - 1] if k else lines[k]
+            if any("9999" in line for line in lines[k : k + 3] if line.startswith(ERROR)):
+                stop = max((j for j in range(k) if lines[j] == OPT_STOPPED), default=None)
+                if stop is not None:
+                    why = " ".join(lines[stop : stop + 2])
             break
     if why:
         ended = "error"
@@ -383,7 +406,13 @@ CC_ENERGY = re.compile(r"^\s*(?:CCSD\(T\)|QCISD\(T\)|QCISD|CCSD)\s*=\s*(\S+)")
 def frame_energies(lines, frames, ends):
     """Each geometry's energy, in hartrees, as Gaussian prints it after it - and before the next: the most
     correlated one of each, where each geometry has one of that kind (CCSD(T) and the like, else MP2 and higher,
-    else the SCF's), its last of that kind; or None, where one has none. `ends`, each geometry's last line."""
+    else the SCF's), its last of that kind; or None, where one has none. `ends`, each geometry's last line. A
+    geometry whose last SCF did not converge - "Convergence criterion not met" before its "SCF Done" - has none:
+    what was worked out from it is no energy of it."""
+    for i, (k, _, _) in enumerate(frames):
+        said = [j for j in range(k, ends[i]) if SCF_DONE.match(lines[j])]
+        if said and any(lines[j].strip().startswith(SCF_UNMET) for j in range(max(k, said[-1] - 3), said[-1])):
+            return None
     kinds = []
     for pattern in (CC_ENERGY, MP_ENERGY):
         found = []
@@ -486,18 +515,23 @@ def unmarked_of(frames, ended, kind):
     return "path" if kind in ("scan", "irc") else "unstated"
 
 
-def irc_order(text, frames):
-    """A reaction path's points in the order of its reaction coordinate - the second path's (the reverse direction)
-    last first, the transition state, then the first path's - where the output gives the transition state and each
-    path's points one after another, as many as its geometries (gaussian.com, IRC); otherwise None."""
-    last = {}
-    for m in IRC_POINT.finditer(text or ""):
-        point, path = int(m.group(1)), int(m.group(2))
-        last[path] = max(last.get(path, 0), point)
-    ahead, back = last.get(1, 0), last.get(2, 0)
-    if not back or set(last) - {1, 2} or 1 + ahead + back != frames:
+def irc_order(lines, frames):
+    """A reaction path's points in the order of its reaction coordinate, as Gaussian's own summary lists them (IRC):
+    the second path's (the reverse direction) last first, the starting point where the job gives its geometry, then
+    the first path's. Each geometry is the point the summary after it names - " Point Number:   3          Path
+    Number:   1" - before the next geometry; None where any is named by none, or two by one."""
+    names = []
+    for i, (k, _, _) in enumerate(frames):
+        end = frames[i + 1][0] if i + 1 < len(frames) else len(lines)
+        found = [m for m in map(IRC_POINT.search, lines[k:end]) if m]
+        if not found:
+            return None
+        names.append((int(found[0].group(2)), int(found[0].group(1))))
+    if len(set(names)) != len(names) or any(path not in (1, 2) for path, _ in names):
         return None
-    return list(range(frames - 1, ahead, -1)) + [0] + list(range(1, ahead + 1))
+    # (the reverse path's points from its far end, the start, the forward path's from the start)
+    key = [(-point if path == 2 else point) if point else 0 for path, point in names]
+    return sorted(range(len(frames)), key=lambda i: key[i])
 
 
 # --- what the job found besides ----------------------------------------------------------------
@@ -1019,15 +1053,16 @@ def path_said(kind, frames, text, excited):
 
 
 def scan_points(text):
-    """How many points a relaxed scan's summary lists: its rows, each begun by its number, under its heading."""
+    """How many points a relaxed scan's summary lists: its points' numbers, over each block of five columns
+    ("                           1         2         3"), up to the blank line after it (Scan; Opt=ModRedundant)."""
     k = text.rfind(RELAXED_SCAN)
     count = 0
     for line in text[k:].split("\n")[1:]:
         t = line.split()
-        if t and t[0].isdigit() and len(t) > 1:
-            count = max(count, int(t[0]))
-        elif count and not line.strip().startswith(("-", "Eigenvalues", "Scan")) and not t:
+        if not t:
             break
+        if all(w.isdigit() for w in t):
+            count = max(count, *map(int, t))
     return count
 
 
@@ -1056,8 +1091,10 @@ def point_group(label):
 
 # --- a formatted checkpoint ------------------------------------------------------------------------
 #
-# Written from Gaussian's reference, "Interfacing to Gaussian 16" > "Structure of the Formatted Checkpoint File", and
-# its example file there: a title (A72); the job type, method and basis (A10, A30, A30); then each item a line - its
+# Written from Gaussian's reference, "Interfacing to Gaussian 16" > "Structure of the Formatted Checkpoint File", its
+# example file there, and the files formchk writes: a title (A72); the job type in its first ten characters, then the
+# method and the basis, each one word ("Freq      RB3LYP    ...    6-31G(d)" - Gaussian 16 sets them further apart than
+# the reference's A30, A30: they are read as the two words they are); then each item a line - its
 # label (A40), its type (I integer, R real, C and H text, L logical), and its value - or, for a list, "N=" and how many,
 # its values on the lines after: integers six to a line (I12), reals five (E16.8), texts five (A12) or nine (A8),
 # logicals 72 (L1). Every quantity in atomic units, its geometry in the standard orientation where one was found.
@@ -1079,10 +1116,11 @@ def is_fchk(text):
 
 def fchk_items(text):
     """A formatted checkpoint's items, each by its label: a number, a text, or a list of them; and its title and its
-    second line's job type, method and basis (A10, A30, A30)."""
+    second line's job type, method and basis."""
     lines = text.split("\n")
     second = lines[1] if len(lines) > 1 else ""
-    head = {"title": lines[0].strip(), "job": second[:10].strip(), "method": second[10:40].strip(), "basis": second[40:70].strip()}
+    words = second[10:].split()
+    head = {"title": lines[0].strip(), "job": second[:10].strip(), "method": words[0] if words else "", "basis": words[1] if len(words) > 1 else ""}
     items = {}
     k = 2
     while k < len(lines):
@@ -1154,8 +1192,27 @@ def read_fchk(name, text):
         out.append({"id": "rms-gradient", "on": "frames", "group": "Optimisation", "label": "RMS gradient", "unit": "Eh/bohr", "digits": 6,
                     "values": [(sum(c * c for c in g) / len(g)) ** 0.5]})
     out += fchk_orbitals(items)
+    out += vibration_list(fchk_modes(items, len(zs)), len(zs))
     result["results"] = out
     return result
+
+
+def fchk_modes(items, n):
+    """A formatted checkpoint's vibrations, as formchk writes them: "Number of Normal Modes" of them; "Vib-E2" holding,
+    a block of that many after another, their frequencies (cm-1, an imaginary one negative), reduced masses (amu),
+    force constants and IR intensities (km/mol); "Vib-Modes" each mode's displacements, x, y and z of each atom, one
+    mode after another. None where they are not so many, or not all numbers."""
+    count = items.get("Number of Normal Modes")
+    e2, modes = items.get("Vib-E2"), items.get("Vib-Modes")
+    if not isinstance(count, int) or count < 1 or not isinstance(e2, list) or len(e2) < 4 * count:
+        return []
+    if None in e2[: 4 * count]:
+        return []
+    moves = modes if isinstance(modes, list) and len(modes) == 3 * n * count and None not in modes else None
+    return [{
+        "freq": e2[i], "mass": e2[count + i], "ir": e2[3 * count + i],
+        **({"move": moves[3 * n * i : 3 * n * (i + 1)]} if moves else {}),
+    } for i in range(count)]
 
 
 def fchk_orbitals(items):
@@ -1198,6 +1255,7 @@ def read(name, text, followed=False):
     ended itself, and is held to it)."""
     if not isinstance(text, str) or not text:
         raise ValueError("there is nothing to read")
+    text = text.replace("\r\n", "\n")
     lines = text.split("\n")
     frames = geometries(lines)
     if not frames:
@@ -1273,7 +1331,7 @@ def read(name, text, followed=False):
         freqs = [row["cells"][col] for row in modes["rows"]] if modes else []
         result["imaginary"] = sorted(f for f in freqs if f < 0)[:nimag]
     # (a reaction path's points in the order of its reaction coordinate, as its own summary lists them)
-    order = irc_order(text, len(frames)) if kind == "irc" else None
+    order = irc_order(lines, frames) if kind == "irc" else None
     if order:
         result["frames"] = [result["frames"][k] for k in order]
         if result["energies"]:
@@ -1300,6 +1358,9 @@ def read_jobs(name, text):
     """What a file holds: as `read` reads it - or, where it holds several jobs, each job read as a file of its own,
     said by its place among them and what it did (`job`), all of them in order (`jobs`), and the answer's own fields
     its last job's. A job nothing is read of is left out; its place is kept."""
+    # (Gaussian on Windows ends its lines with a carriage return as well: each line read the same either way)
+    if isinstance(text, str):
+        text = text.replace("\r\n", "\n")
     if is_fchk(text):
         return read_fchk(name, text)
     texts = jobs(text) if isinstance(text, str) and text else [text]

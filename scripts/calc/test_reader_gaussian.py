@@ -79,6 +79,7 @@ def head(route_text, charge=0, multiplicity=1):
         " Entering Gaussian System, Link 0=g16",
         " Initial command:",
         " /g16/l1.exe \"/tmp/Gau-1.inp\" -scrdir=\"/tmp/\"",
+        " Entering Link 1 = /g16/l1.exe PID=      9552.",
         " ******************************************",
         " Gaussian 16:  ES64L-G16RevC.01  3-Jul-2019",
         "                 1-Nov-2026 ",
@@ -241,6 +242,19 @@ class TheRun(unittest.TestCase):
     def test_an_scf_that_did_not_converge(self):
         unmet = " >>>>>>>>>> Convergence criterion not met.\n SCF Done:  E(RHF) =  -75.98\n SCF Done:  E(RHF) =  -75.99\n"
         self.assertEqual(reader.run_of(unmet)[2], [False, True])
+
+    def test_a_job_that_ended_normally_with_its_scf_not_converged_says_so_and_gives_no_energy(self):
+        text = "\n".join(head("#p ub3lyp/6-31G(d) scf=(maxcycle=3)", 0, 3) + orientation(WATER) + [" >>>>>>>>>> Convergence criterion not met."]
+                         + scf(-39.1495, "UB3LYP") + [" Normal termination of Gaussian 16 at Sat Oct 31 19:58:17 2026."])
+        o = reader.read("w.log", text)
+        self.assertIsNone(o["energies"])
+        self.assertEqual((results(o)["run"]["label"], results(o)["run"]["value"]), ("SCF", "not converged"))
+
+    def test_an_optimisation_out_of_steps_says_so_not_the_quotation_before_its_end(self):
+        text = ("\n Optimization stopped.\n    -- Number of steps exceeded,  NStep=   2\n    -- Flag reset to prevent archiving.\n"
+                " SOME WORDS OF WISDOM.\n\n                       -- AN AUTHOR\n Error termination request processed by link 9999.\n"
+                " Error termination via Lnk1e in /g16/l9999.exe at Sat Oct 31 19:58:16 2026.\n Job cpu time:       0 days\n")
+        self.assertEqual(reader.run_of(text)[:2], ("error", "Optimization stopped. -- Number of steps exceeded,  NStep=   2"))
 
     def test_an_opt_freq_cut_in_its_frequencies_did_not_come_to_its_end(self):
         text = opt_freq()
@@ -425,9 +439,19 @@ class OtherCharges(unittest.TestCase):
 
 class Paths(unittest.TestCase):
     def test_a_reaction_path_s_points_in_the_order_of_its_coordinate(self):
-        text = "\n".join(["Point Number:  0   Path Number:  1", "Point Number:  2   Path Number:  1", "Point Number:  1   Path Number:  2"])
-        self.assertEqual(reader.irc_order(text, 4), [3, 0, 1, 2])
-        self.assertIsNone(reader.irc_order(text, 5))
+        # (each point's geometry, then its summary; the start's, where the job gives it, before its own)
+        def point(xyz, e, n, path):
+            return orientation(xyz, "Input orientation:") + scf(e) + [f" Point Number:{n:4d}          Path Number:{path:4d}"]
+        moved = [(z, x, y + 0.1, w) for z, x, y, w in WATER]
+        text = "\n".join(head("#p b3lyp/6-31G(d) irc=(calcfc,maxpoints=2)") + point(WATER, -76.40, 0, 1) + point(WATER_2, -76.41, 1, 1)
+                         + point(moved, -76.42, 2, 1) + point(WATER_2, -76.43, 1, 2) + [" Normal termination of Gaussian 16"])
+        o = reader.read("w.log", text)
+        self.assertEqual(o["energies"], [-76.43, -76.40, -76.41, -76.42])
+        self.assertEqual((o["unmarked"], results(o)["run.path"]["value"]), ("path", "4 points"))
+        # (a path started from the checkpoint: its start's geometry not among them)
+        text = "\n".join(head("#p b3lyp/6-31G(d) irc=(rcfc,maxpoints=2) geom=check") + [" Point Number:   0          Path Number:   1"]
+                         + point(WATER_2, -76.41, 1, 1) + point(moved, -76.42, 2, 1) + point(WATER, -76.43, 1, 2) + [" Normal termination of Gaussian 16"])
+        self.assertEqual(reader.read("w.log", text)["energies"], [-76.43, -76.41, -76.42])
 
     def test_a_rigid_scan_s_points_are_a_path_not_an_optimisation(self):
         text = "\n".join(head("#p hf/3-21g scan") + orientation(WATER) + scf(-75.5) + orientation(WATER_2) + scf(-75.6)
@@ -484,6 +508,12 @@ class Jobs(unittest.TestCase):
         out = reader.read_jobs("water.log", one + "\n" + two)
         self.assertEqual([j["job"] for j in out["jobs"]], [{"number": 1, "of": 2, "kind": "Optimisation and frequencies"}, {"number": 2, "of": 2, "kind": "Single point"}])
         self.assertEqual(out["energies"], [-76.45])
+
+    def test_each_begun_where_it_enters_its_first_link_with_no_command_said_before_it(self):
+        # (Gaussian 16 on Windows says the command it was started by before its first job alone)
+        two = "\n".join([line for line in head("#p geom=allcheck b3lyp/6-311+G(d,p)")[1:] if "Initial command" not in line and "Gau-1.inp" not in line]
+                        + orientation(WATER_2) + scf(-76.45) + [" Normal termination of Gaussian 16", ""])
+        self.assertEqual(len(reader.jobs(opt_freq() + "\n" + two)), 2)
 
     def test_a_file_of_one_job_read_whole(self):
         self.assertNotIn("jobs", reader.read_jobs("water.log", opt_freq()))
