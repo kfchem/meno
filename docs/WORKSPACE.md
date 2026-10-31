@@ -1495,7 +1495,7 @@ slowing it - and in the pictures made of it.
   light from all round is taken by it, and a little of the light from
   above right. Chosen over shading worked out on the screen each frame,
   which would take the whole canvas - the page too - through another
-  pass; atoms of other
+  pass, flicker as a molecule turns and cost more; atoms of other
   molecules, and ribbons, do not shade it.
 - **Shadows.** The light from above right casts them, on the molecule and
   on others beside it, never on the page (the drawings and words on it
