@@ -11,7 +11,7 @@ import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { arch, platform } from "@tauri-apps/plugin-os";
 import { pixiDownload, pixiPlatform } from "./pixiLock";
-import { askToConnect } from "./net/network";
+import { askToConnect, type ConsentRequest } from "./net/network";
 import { PLUGINS, type PythonPlugin } from "./calc/catalog";
 import { systemHere } from "./plugins/here";
 
@@ -202,7 +202,19 @@ async function baseInfo(
 }
 
 /** `through` false: its files' SHA-256 not read, only whether each is there (`filesOf`). */
-type EnvOptions = { lockPath?: string; pythonVersion?: string; through?: boolean };
+type EnvOptions = {
+  lockPath?: string;
+  pythonVersion?: string;
+  through?: boolean;
+  /**
+   * Its questions asked already, with others, in one (`setUpQuestions`, lib/net/network `askToConnectAll`): each not
+   * asked again - but still no where Meno went offline since, or the leave was withdrawn; and one that is not among them
+   * - a file found changed since, say - asked as ever.
+   */
+  asked?: readonly ConsentRequest[];
+  /** Its questions only gathered here, nothing set up or fetched (`setUpQuestions`). */
+  gather?: ConsentRequest[];
+};
 
 /** Where a profile's environment stands, and whether it needs setting up. */
 async function envState(profile: PyProfile, opts?: EnvOptions) {
@@ -299,6 +311,18 @@ export async function ensurePyEnv(
     profile,
     opts
   );
+  // (asked of the user - or, gathering, kept to be asked with others; asked already with others, not again)
+  const gather = opts?.gather;
+  const ask = async (request: ConsentRequest): Promise<boolean> => {
+    if (gather) {
+      gather.push(request);
+      return true;
+    }
+    // (asked with others, the same question: that yes allowed its purpose - looked at again now, as anything that uses the
+    //  network is; a question not asked then is asked now)
+    const same = opts?.asked?.some((a) => a.purpose === request.purpose && a.detail === request.detail);
+    return askToConnect(same ? { ...request, again: false } : request);
+  };
   // (a file there that could not be read - held by another program, not allowed, a share gone: not known to be changed, so neither
   //  fetched over nor run with; said, with why, and read again the next time)
   if (unreadable.length) throw new Error(`${unreadable.join("; ")} - ${unreadable.length === 1 ? "it" : "they"} could not be read, so ${pluginOf(profile)?.name ?? profile} cannot run. Meno reads ${unreadable.length === 1 ? "it" : "them"} again the next time.`);
@@ -316,7 +340,7 @@ export async function ensurePyEnv(
     const mb = Math.round(download.bytes / 1e6 / 10) * 10;
     // (where from, as said - and all the set-up may reach: net.rs)
     const setUp = pixiSetUp(download.pypi, setUpFiles(plugin));
-    const allowed = await askToConnect({
+    const allowed = await ask({
       purpose: info.purpose,
       title: consentTitle(plugin),
       again: untold,
@@ -331,6 +355,7 @@ export async function ensurePyEnv(
     if (!allowed) {
       throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
     }
+    if (gather) return venvPy as string;
     await invoke("py_env_setup_pixi", { payload: { ...info, hosts: setUp.hosts } });
     await stampNow();
   } else if (needSetup) {
@@ -341,7 +366,7 @@ export async function ensurePyEnv(
     const hashed = /^\s*--hash=/m.test(lockText);
     const plugin = pluginFor(profile);
     const setUp = uvSetUp(lockText, setUpFiles(plugin));
-    const allowed = await askToConnect({
+    const allowed = await ask({
       purpose: info.purpose,
       title: consentTitle(plugin),
       again: untold,
@@ -366,6 +391,7 @@ export async function ensurePyEnv(
           " (Meno is offline, or the download was declined).",
       );
     }
+    if (gather) return venvPy as string;
     await invoke("py_env_setup_uv", { payload: { ...info, hosts: setUp.hosts } });
     await stampNow();
   }
@@ -376,7 +402,7 @@ export async function ensurePyEnv(
     // (one there that is not the file Meno fetched - its fingerprint not the one Meno carries - is said plainly, and asked again, even where
     //  setting it up was allowed: it is downloaded anew only with a yes)
     const unlike = changedSaid(changed);
-    const allowed = await askToConnect({
+    const allowed = await ask({
       purpose: info.purpose,
       title: consentTitle(plugin),
       again: (untold && !needSetup) || !!unlike,
@@ -385,11 +411,19 @@ export async function ensurePyEnv(
       hosts: extra.hosts,
     });
     if (!allowed) throw new Error(`${unlike}${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
+    if (gather) return venvPy as string;
     if (untold && !needSetup) await stampNow();
     await fetchFiles(plugin, extra.hosts);
   }
 
   return venvPy as string;
+}
+
+/** What setting a plugin up would ask of the network: gathered, nothing set up or fetched - none, where it needs nothing (lib/calc/workers, asking for a plugin and those it uses at once). */
+export async function setUpQuestions(profile: PyProfile): Promise<ConsentRequest[]> {
+  const gather: ConsentRequest[] = [];
+  await ensurePyEnv(profile, { gather });
+  return gather;
 }
 
 /**

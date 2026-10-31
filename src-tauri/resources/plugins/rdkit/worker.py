@@ -279,186 +279,37 @@ def op_to_smiles(m):
     return {"smiles": Chem.MolToSmiles(Chem.RemoveHs(read(m["molblock"])))}
 
 
-# The atoms a SMILES may write without brackets, and those aromatic in brackets.
-ORGANIC = {"B", "C", "N", "O", "P", "S", "F", "Cl", "Br", "I", "b", "c", "n", "o", "p", "s", "*"}
-AROMATIC_IN_BRACKETS = {"b", "c", "n", "o", "p", "s", "se", "as", "te"}
-
-
-def ordinal(k):
-    """1st, 2nd, 3rd, 4th..."""
-    return f"{k}{'th' if 10 <= k % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(k % 10, 'th')}"
-
-
-def is_element(symbol):
-    try:
-        return Chem.GetPeriodicTable().GetAtomicNumber(symbol) > 0
-    except RuntimeError:
-        return False
-
-
-def with_charge(atom):
-    """An atom's symbol and charge as written: O-, N+, Fe2+."""
-    q = atom.GetFormalCharge()
-    return atom.GetSymbol() + ("" if q == 0 else ("" if abs(q) == 1 else str(abs(q))) + ("+" if q > 0 else "-"))
-
-
-# A text written as a formula - SnCl4, C6H6, H2O: element symbols, each once,
-# a count after one of them at least.
-FORMULA = re.compile(r"(?:[A-Z][a-z]?\d*)+")
-HALOGENS = {"F", "Cl", "Br", "I"}
-# The charges of groups 1 and 2's ions: their halides salts, written as ions.
-IONIC = {**dict.fromkeys(("Li", "Na", "K", "Rb", "Cs", "Fr"), 1), **dict.fromkeys(("Be", "Mg", "Ca", "Sr", "Ba", "Ra"), 2)}
-
-
-def as_formula(text):
-    """The elements of a text that reads like a formula, with their counts,
-    in order - or None."""
-    if not FORMULA.fullmatch(text):
-        return None
-    parts = [(name, int(n) if n else 1) for name, n in re.findall(r"([A-Z][a-z]?)(\d*)", text)]
-    names = [name for name, _ in parts]
-    if len(set(names)) != len(names) or not all(is_element(name) for name in names):
-        return None
-    return parts if max(n for _, n in parts) >= 2 else None
-
-
-def formula_said(parts):
-    """What a SMILES for a formula is like: a halide's of one atom - a salt
-    of groups 1 and 2 as ions, [Mg+2].[Cl-].[Cl-], where as many halogens
-    as its charge; any other, each halogen bonded to the one atom, SnCl4 as
-    Cl[Sn](Cl)(Cl)Cl, where that reads - or an example. A SMILES for it,
-    not the one: a formula does not say how its atoms are bonded (AlCl3 is
-    two in one as a solid)."""
-    if len(parts) == 2 and parts[0][1] == 1 and parts[0][0] != "H" and parts[1][0] in HALOGENS:
-        (centre, _), (x, n) = parts
-        if centre in IONIC:
-            charge = IONIC[centre]
-            smiles = f"[{centre}+{charge if charge > 1 else ''}]" + f".[{x}-]" * n if n == charge else None
-        else:
-            atom = centre if centre in ORGANIC else f"[{centre}]"
-            smiles = x + atom + f"({x})" * (n - 2) + x
-        if smiles and Chem.MolFromSmiles(smiles) is not None:
-            return f"it reads like a formula; a SMILES for it is {smiles}"
-    return "it reads like a formula; a SMILES writes the atoms and how they are bonded, as CCO for ethanol"
-
-
-def why_unreadable(smiles):
-    """Why a SMILES cannot be read, in a few plain words about the SMILES
-    itself - a formula written for it, a ring left open, a parenthesis or
-    bracket not closed, a symbol that is no element or wants brackets, an
-    atom with more bonds than it can take - or None where none of these says
-    it."""
-    s = smiles.strip()
-    if not s:
-        return "it is empty"
-    formula = as_formula(s)
-    if formula:
-        return formula_said(formula)
-    depth = 0
-    rings = {}
-    atoms = []  # (where each atom is written, as it is written), in order
-    i = 0
-    while i < len(s):
-        ch = s[i]
-        if ch == "[":
-            end = s.find("]", i)
-            if end < 0:
-                return "a [ is not closed"
-            inside = s[i + 1 : end]
-            sym = re.match(r"\d*([A-Z][a-z]?|se|as|te|[a-z]|\*)", inside)
-            if not sym:
-                return f"[{inside}] names no element"
-            name = sym.group(1)
-            if name != "*" and not (name in AROMATIC_IN_BRACKETS or is_element(name)):
-                return f"{name} is not an element"
-            atoms.append((i, s[i : end + 1]))
-            i = end + 1
-            continue
-        if ch == "]":
-            return "a ] closes no ["
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            if depth == 0:
-                return "a ) closes no ("
-            depth -= 1
-        elif ch.isdigit() or ch == "%":
-            if ch == "%" and s[i + 1 : i + 2] == "(":
-                close = s.find(")", i)
-                label = s[i : close + 1] if close > 0 else s[i:]
-                step = len(label)
-            else:
-                label = s[i : i + 3] if ch == "%" else ch
-                step = len(label)
-            if label in rings:
-                del rings[label]
-            else:
-                rings[label] = i
-            i += step
-            continue
-        elif ch.isalpha() or ch == "*":
-            two = s[i : i + 2]
-            if two in ("Cl", "Br"):
-                atoms.append((i, two))
-                i += 2
-                continue
-            if ch == "H":
-                return "H is left out of a SMILES, or written in brackets with its atom: CCO, or [CH3]"
-            if ch not in ORGANIC:
-                # (an element written without the brackets it needs - Na, Fe, the
-                # capital read as an atom of its own - or no element at all)
-                pair = s[i - 1] + ch if i > 0 and ch.islower() and s[i - 1].isupper() else None
-                if pair and is_element(pair):
-                    return f"{pair} is written in brackets: [{pair}]"
-                own = two if len(two) == 2 and two[1].islower() and is_element(two) else ch
-                if own[0].isupper() and is_element(own):
-                    return f"{own} is written in brackets: [{own}]"
-                return f"{ch} is not an element"
-            atoms.append((i, ch))
-        i += 1
-    if rings:
-        label = min(rings, key=rings.get)
-        return f"a ring is left open: {label} is opened and not closed"
-    if depth > 0:
-        return "a ( is not closed"
-    mol = Chem.MolFromSmiles(s, sanitize=False)
-    if mol is None:
-        return None
-    for problem in Chem.DetectChemistryProblems(mol):
-        kind = problem.GetType()
-        if kind == "AtomValenceException":
-            k = problem.GetAtomIdx()
-            atom = mol.GetAtomWithIdx(k)
-            bonds = int(round(sum(b.GetBondTypeAsDouble() for b in atom.GetBonds()) + atom.GetNumExplicitHs()))
-            return f"its {ordinal(k + 1)} atom, {with_charge(atom)}, has {bonds} bonds, more than it can take"
-        if kind == "AtomKekulizeException":
-            # (an aromatic atom, in lowercase, in no ring: an element written
-            # without its brackets - Co, Cs, Pb, read as C and o - or so)
-            k = problem.GetAtomIdx()
-            if k < len(atoms):
-                at, written = atoms[k]
-                pair = s[at - 1] + written if at > 0 and len(written) == 1 and written.islower() and s[at - 1].isupper() else None
-                if pair and is_element(pair):
-                    return f"{pair} is written in brackets: [{pair}]"
-            atom = mol.GetAtomWithIdx(k)
-            return f"its {ordinal(k + 1)} atom, {atom.GetSymbol().lower()}, is written aromatic, in lowercase, but is in no ring"
-        if kind == "KekulizeException":
-            ring = sorted(problem.GetAtomIndices())
-            listed = ", ".join(str(a + 1) for a in ring[:-1]) + f" and {ring[-1] + 1}"
-            return f"its aromatic ring of {len(ring)} atoms ({listed}) cannot have alternating double bonds"
-    return None
-
-
 def op_from_smiles(m):
     mol = Chem.MolFromSmiles(m["smiles"])
     if mol is None:
-        # (and where saying why fails, said as it always was)
-        try:
-            why = why_unreadable(m["smiles"])
-        except Exception:
-            why = None
-        raise ValueError(f"This SMILES could not be read: {why}." if why else "This SMILES could not be read.")
+        # (why, in words, is Meno's to say - from the SMILES itself, and what RDKit made of it: `smiles_read`)
+        raise ValueError("This SMILES could not be read.")
     return {"molblock": drawing_block(mol)}
+
+
+def op_smiles_read(m):
+    """What RDKit makes of a SMILES, as facts: whether it reads (`MolFromSmiles`); whether it parses at all,
+    unsanitised; and, where it does, the problems RDKit's own check finds (`DetectChemistryProblems`), each its kind as
+    RDKit names it with the atoms it names - for one atom, its symbol, its charge, and its bonds (their orders and its
+    explicit hydrogens summed, as written). Saying why in words is Meno's (chem/smilesWhy)."""
+    s = str(m.get("smiles") or "")
+    reads = Chem.MolFromSmiles(s) is not None
+    mol = Chem.MolFromSmiles(s, sanitize=False)
+    if mol is None:
+        return {"reads": reads, "parsed": False, "problems": []}
+    problems = []
+    for problem in Chem.DetectChemistryProblems(mol):
+        kind = problem.GetType()
+        if kind in ("AtomValenceException", "AtomKekulizeException"):
+            k = problem.GetAtomIdx()
+            atom = mol.GetAtomWithIdx(k)
+            bonds = int(round(sum(b.GetBondTypeAsDouble() for b in atom.GetBonds()) + atom.GetNumExplicitHs()))
+            problems.append({"kind": kind, "atom": k, "symbol": atom.GetSymbol(), "charge": atom.GetFormalCharge(), "bonds": bonds})
+        elif kind == "KekulizeException":
+            problems.append({"kind": kind, "atoms": sorted(problem.GetAtomIndices())})
+        else:
+            problems.append({"kind": kind})
+    return {"reads": reads, "parsed": True, "problems": problems}
 
 
 def drawing_block(mol):
@@ -2744,68 +2595,10 @@ def op_collect(m):
 
 
 def op_run(m):
-    """A step done at once. *Duplicates*: within each compound - a conformer
-    set's, or in a compound set the entries of the same structure - lowest
-    energy first, each entry set aside that is the same conformer as one kept
-    (Sameness: all atoms within SAME_CONFORMER, over the ways the molecule
-    maps onto itself, never reflected). Never two of different charge or
-    spin: they are different species.
-
-    A conformer's mirror image is kept apart - an average by atom over both
-    needs both - unless `mirrors` is "counted" (the maintainer, 2026-10-22):
-    then it is counted in the one kept, only where the two are one
-    stereoisomer as their geometries have it (a chiral molecule's mirror
-    image is its enantiomer); the one kept's degeneracy counts both, and the
-    atoms the mirror image swaps are given (`counted`: its atom i is atom
-    `mirror[i]` of the mirror image)."""
+    """A step done at once: one of the steps on structures drawn (`STRUCTURE_STEPS`)."""
     if m.get("step") in STRUCTURE_STEPS:
         return STRUCTURE_STEPS[m["step"]](m.get("entries") or [], m.get("options") or {})
-    if m.get("step") != "duplicates":
-        raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
-    counting = (m.get("options") or {}).get("mirrors") == "counted"
-    entries = m.get("entries") or []
-    mols = []
-    groups = {}
-    for i, entry in enumerate(entries):
-        mol = mol_of(entry)
-        key = (
-            entry.get("compound") if m.get("holds") == "conformers" else Chem.MolToSmiles(Chem.RemoveHs(mol)),
-            entry.get("charge", 0),
-            entry.get("multiplicity", 1),
-        )
-        mols.append(mol)
-        groups.setdefault(key, []).append(i)
-    kept = []
-    counted = {}
-    # (compounds with too many ways onto themselves to try, taken atom against atom: a duplicate of one could be
-    #  missed - how many, said)
-    capped = 0
-    for members in groups.values():
-        energy = lambda i: entries[i].get("energy") if isinstance(entries[i].get("energy"), (int, float)) else float("inf")
-        same = Sameness(mols[members[0]])
-        capped += same.capped and len(members) > 1
-        place = lambda i: mols[i].GetConformer().GetPositions()
-        mine = []
-        for i in sorted(members, key=lambda i: (energy(i), i)):
-            P = place(i)
-            sig = same.signature(P)
-            near = [k for k in mine if same.bound(same.signature(place(k)), sig) <= SAME_CONFORMER]
-            if any(same.same(place(k), P) for k in near):
-                continue
-            if counting:
-                # (one stereoisomer, as their geometries have it: the same isomeric SMILES)
-                iso = Chem.MolToSmiles(mols[i])
-                twin = next((k for k in near if k not in counted and Chem.MolToSmiles(mols[k]) == iso and same.mirror_of(place(k), P)), None)
-                if twin is not None:
-                    counted[twin] = {
-                        "entry": twin,
-                        "degeneracy": int(entries[twin].get("degeneracy") or 1) + int(entries[i].get("degeneracy") or 1),
-                        "mirror": same.mirror_of(place(twin), P),
-                    }
-                    continue
-            mine.append(i)
-        kept += mine
-    return {"kept": sorted(kept), **({"counted": [counted[k] for k in sorted(counted)]} if counting else {}), **({"capped": int(capped)} if capped else {})}
+    raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
 
 
 # --- Steps on structures drawn ------------------------------------------------
@@ -3014,6 +2807,7 @@ OPS = {
     "to_smiles": op_to_smiles,
     "rxn_to_smiles": op_rxn_to_smiles,
     "from_smiles": op_from_smiles,
+    "smiles_read": op_smiles_read,
     "analyse": op_analyse,
     "open_stereo": op_open_stereo,
     "stereo_left_open": op_stereo_left_open,

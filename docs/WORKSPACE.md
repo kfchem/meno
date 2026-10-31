@@ -53,8 +53,8 @@ hold both.
 - **3D coordinates.** Nothing makes them from a drawing: the chemistry
   worker gives 2D coordinates only. A MOL or SDF file's z is dropped as it
   opens in 2D, and only XYZ files reach the 3D viewer.
-- **Graphics contexts.** Every canvas is one, and only about 16 can be
-  live (`lib/core/limits.ts`). A workspace is one canvas.
+- **Graphics contexts.** Every canvas is one, and Meno keeps 16 live at
+  most (`lib/core/limits.ts`). A workspace is one canvas.
 
 The 3D viewer is simple enough that the canvas gets its own 3D layers,
 built the way the 2D layers are, rather than the viewer moved in as it is.
@@ -154,8 +154,7 @@ for each topic (one pull request per dependent chain).
   centre, a bitmap at the resolution copied pictures are made at (Settings,
   Files; 600 dpi unless changed) - drawn in tiles of at most 2048 pixels a
   side, each its part of the view, so that a picture is as sharp as asked
-  however large (a GPU's canvas has its limits, and quietly draws a smaller
-  picture past them; until lane L11, 2026-10-11, the bitmap was held to
+  however large (until 2026-10-11, the bitmap was held to
   1600 pixels across for each 300 dpi). Only past 48 million pixels, as a
   copied picture is, is it made at a lower resolution. Its balls are as
   smooth as they are large in it - at 1200 dpi a ball can be hundreds of
@@ -890,13 +889,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 - **Fetched when first needed, both of them.** uv and pixi are each
   downloaded the first time an environment needs it, the version and its
   hash pinned in Meno, under the network's consent for that environment.
-  Neither is bundled: either alone does nothing without the network, and
+  Neither is bundled: either alone needs the network, and
   bundled, every update of Meno carried it again (uv was 37 MB of a 54 MB
   app).
 - **uv** makes the environments PyPI fills, as now: the chemistry worker's
   and cclib's.
-- **pixi** makes those that need conda-forge, which has builds PyPI has
-  not - PySCF for Windows among them - from conda.anaconda.org (free of
+- **pixi** makes those that need conda-forge's builds - PySCF for
+  Windows among them - from conda.anaconda.org (free of
   Anaconda's terms, which cover its own channels). A conda environment
   is started with its activation, as Windows needs for its libraries.
 
@@ -1364,8 +1363,8 @@ space-filling side by side is better science than either alone.
 - **Settings' page** (the maintainer, 2026-10-15). At the top, two slots,
   Primary and Secondary, each with its molecule drawn live and turnable;
   below them every other style, built in and the user's own, each with a
-  still picture (drawn once, a frame apart, all with one renderer - a
-  context for each took the live ones' away). A style dragged onto a slot
+  still picture (drawn once, a frame apart, all with one renderer). A
+  style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
   each card going to its new place eased, not jumping. A slot's molecule
@@ -1441,7 +1440,7 @@ space-filling side by side is better science than either alone.
   sticks' colouring, as the look or a setting changes.
 - **A shader that does not compile.** Meno's own shaders - lines on the
   balls, the line round them, sticks that bend - each name themselves
-  (utils/menoShader). One that a graphics card will not compile is said in
+  (utils/menoShader). One that does not compile on a graphics card is said in
   Meno's log, with its name and the card's own words for what was wrong
   (nothing of the document), and from then on is drawn as its plain
   three.js material: a molecule loses a line or a shade, never its atoms.
@@ -1517,9 +1516,9 @@ slowing it - and in the pictures made of it.
   canvas's resolution, over the molecules alone - their balls, sticks and
   ribbons drawn once more into a pass of their own - and laid over them
   by a sheet multiplying what is under it, one where no molecule is, so
-  the page is drawn exactly as it was. A molecule shaded per atom still
-  hides what is behind it in that pass, its own weight none. It shows a
-  faint grain close up, as screen-space shading does. Going over to it,
+  the page is drawn exactly as it was; close up, this shade is finely
+  grained. A molecule shaded per atom still
+  hides what is behind it in that pass, its own weight none. Going over to it,
   or from it, the one shade gives way to the other.
 - **Very large drawings** (the maintainer's choice, 2026-10-11): past
   twenty thousand atoms on the canvas, drawn lighter - no shadows, and
@@ -1858,14 +1857,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   set up because a file was opened. What is found is learnt of the
   molecule, with no undo step of its own; the 3D view draws it. A PDB
   entry's ligands are each sought alone; its chains are not.
-- **Only with its hydrogens.** RDKit's `DetermineBondOrders` works from
-  a molecule's full set of atoms, hydrogens included (tried with RDKit
-  2026.03): given biotin from entry 1STP with its hydrogens, it finds its
-  orders; without them, it finds none, and given benzoic acid without
-  them, it does not find benzoic acid's. So Meno does not seek the orders
-  of a molecule, or a ligand, without hydrogens, and says they are
-  unknown; nor of one of more than 400 atoms. Such a molecule's orders
-  can be estimated from its distances, asked for (below).
+- **Only with its hydrogens.** Meno asks for a molecule's orders, or a
+  ligand's, from its shape only where it has its full set of atoms,
+  hydrogens included, and no more than 400 of them; otherwise it says
+  they are unknown. Such a molecule's orders can be estimated from its
+  distances, asked for (below).
 - **Estimated from distances** (asked for by the maintainer, 2026-10-11:
   from the menu, worded as an estimate, and no mark once made). *Estimate
   bond orders from distances* on a ligand, or a molecule, works without

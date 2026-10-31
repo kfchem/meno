@@ -14,7 +14,7 @@
   "installed": [
     {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"], "beside": {"orca_2mkl": {"macos": "orca_2mkl", "linux": "orca_2mkl", "windows": "orca_2mkl.exe"}}, "parallel": "processes"}
   ],
-  "needs": [{"plugin": "xtb", "program": "xtb", "env": "XTBEXE"}],
+  "depends": [{"plugin": "xtb", "versions": ">=0.1.4 <0.2.0", "optional": true, "programs": [{"program": "xtb", "env": "XTBEXE"}]}],
   "xyzEnergies": [{"id": "orca", "pattern": "(?:^|\\s)E\\s*[:=]?\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)", "unit": "hartree"}],
   "xyzSteps": [{"id": "orca-opt", "file": "*_trj.xyz", "comment": "^Coordinates from ORCA-job \\S+ E\\s+-?\\d"}],
   "steps": [

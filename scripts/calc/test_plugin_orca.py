@@ -262,7 +262,7 @@ class Prepare(unittest.TestCase):
             self.assertNotIn("needs", job, method)
         # (what it asks for, its manifest declares)
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        self.assertEqual(manifest["needs"], [{"plugin": "xtb", "program": "xtb", "env": "XTBEXE"}])
+        self.assertEqual(manifest["depends"], [{"plugin": "xtb", "versions": ">=0.1.4 <0.2.0", "optional": True, "programs": [{"program": "xtb", "env": "XTBEXE"}]}])
 
     def test_refuses_what_it_does_not_know(self):
         for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):

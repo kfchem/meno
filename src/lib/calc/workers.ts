@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { ensurePyEnv, pyEnvReady, removePyEnv } from "../pyEnv";
-import { anyPluginById, manifestOf, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
+import { anyPluginById, manifestOf, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { askToConnectAll, type ConsentRequest } from "../net/network";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
 import type { ReaderClient, Reader } from "./client";
@@ -84,15 +85,75 @@ let setUps: Promise<unknown> = Promise.resolve();
 const asked = new Map<string, number>();
 let lastAsked = 0;
 
+/** The plugins added now, by id. */
+export function addedNow(): Set<string> {
+  const now = useReaders.getState().state;
+  return new Set(Object.keys(now).filter((id) => now[id] === "added"));
+}
+
+/** A list in words: "a", "a and b", "a, b and c". */
+const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 /**
- * Adds a plugin: sets its environment up, asking first whether it may
- * download - after any set-up asked for before it (`setUps`); one that runs
- * nothing, at once. Asked again while it waits or is being set up, nothing
- * more. Where it is not added, why is said on it (`problem`) until it is
- * asked for again.
+ * Adds a plugin, and first the plugins it uses that are not added, each
+ * before any that uses it (docs/PLUGINS.md, *Depends*) - all asked of the
+ * network in one question; no, and none is set up. Where one of those it
+ * uses is not set up, neither is it, saying why.
  */
 export async function addPlugin(p: Plugin): Promise<void> {
   if (!forThisSystem(p)) throw new Error(`${p.name} is not made for this system.`);
+  const first = runs(p) ? pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added") : [];
+  if (!first.length) return addOne(p);
+  const missing = first.find((q) => !forThisSystem(q));
+  if (missing) {
+    const why = `${p.name} was not added: it uses ${missing.name}, which is not made for this system.`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
+  }
+  // (one question for all of them: each one's own words under its name)
+  const all = [...first, p as PythonPlugin];
+  let asks: { name: string; request: Awaited<ReturnType<typeof setUpQuestions>>[number] }[];
+  try {
+    asks = (await Promise.all(all.map(async (q) => (await setUpQuestions(q.profile)).map((request) => ({ name: q.name, request }))))).flat();
+  } catch (e) {
+    const why = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+    setState(p.id, "absent", why);
+    throw e;
+  }
+  // (an interface to a program installed separately is set up, never that program downloaded: "the ORCA interface", as its own question says it)
+  const named = (q: PythonPlugin) => (q.installed.length ? `the ${q.name}` : q.name);
+  const them = listSaid(first.map(named));
+  const allowed = await askToConnectAll(
+    `${(p as PythonPlugin).installed.length ? "Set up" : "Download"} ${named(p as PythonPlugin)}, with ${them}?`,
+    `It uses ${them}, which ${first.length === 1 ? "is" : "are"} set up first.`,
+    asks,
+  );
+  if (!allowed) {
+    const why = `${p.name} was not added: it needs the network, and was not allowed it (Meno is offline, or the download was declined).`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
+  }
+  const askedOf = (q: Plugin) => asks.filter((a) => a.name === q.name).map((a) => a.request);
+  for (const q of first) {
+    try {
+      await addOne(q, askedOf(q));
+    } catch (e) {
+      const why = `${p.name} was not added: ${q.name}, which it uses, could not be set up.`;
+      setState(p.id, "absent", why);
+      throw e;
+    }
+  }
+  return addOne(p, askedOf(p));
+}
+
+/**
+ * Adds one plugin: sets its environment up, asking first whether it may
+ * download - unless that was asked already, with others - after
+ * any set-up asked for before it (`setUps`); one that runs nothing, at once.
+ * Asked again while it waits or is being set up, nothing more. Where it is
+ * not added, why is said on it (`problem`) until it is asked for again.
+ */
+async function addOne(p: Plugin, askedWithOthers?: readonly ConsentRequest[]): Promise<void> {
   if (!runs(p)) {
     markTakenAway(p, false);
     setState(p.id, "added");
@@ -110,7 +171,7 @@ export async function addPlugin(p: Plugin): Promise<void> {
     skips.delete(p.id);
     setState(p.id, "adding");
     try {
-      await ensurePyEnv(p.profile);
+      await ensurePyEnv(p.profile, askedWithOthers ? { asked: askedWithOthers } : undefined);
       markTakenAway(p, false);
       setState(p.id, "added");
     } catch (e) {
@@ -163,13 +224,33 @@ export function waitingSaid(now: Record<string, ReaderState>): string {
   return name ? `Waiting for ${name}'s set-up…` : "Waiting…";
 }
 
+/** The plugins added that use a plugin, and those that use them in turn, in the order they are taken away: what taking it away takes away too. */
+export function addedUsing(id: string): PythonPlugin[] {
+  const added = addedNow();
+  return pluginsUsing(id).filter((q) => added.has(q.id));
+}
+
 /**
- * Takes a plugin away: the jobs of its named (`stopping`) stopped and
- * ended first - the chemist having said they may be - its worker stopped,
- * its environment removed - and, where it fills a role, not set up again of
- * itself; one that runs nothing, at once.
+ * Takes a plugin away, and first the plugins added that use it, each before
+ * the one it uses (docs/PLUGINS.md, *Depends*) - those only where the
+ * chemist said they may go too (`withUsing`: Settings, *Plugins*, asks),
+ * else nothing is taken away, saying why: never one alone that another
+ * added uses, nor one taken away unasked. The jobs named (`stopping`) are stopped and ended first - the
+ * chemist having said they may be.
  */
-export async function removePlugin(p: Plugin, stopping: readonly string[] = []): Promise<void> {
+export async function removePlugin(p: Plugin, stopping: readonly string[] = [], withUsing = false): Promise<void> {
+  const using = addedUsing(p.id);
+  if (using.length && !withUsing) throw new Error(`${p.name} was not removed: ${listSaid(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it.`);
+  for (const q of using) await removeOne(q, stopping);
+  return removeOne(p, stopping);
+}
+
+/**
+ * Takes one plugin away: the jobs named (`stopping`) stopped and ended
+ * first, its worker stopped, its environment removed - and, where it fills
+ * a role, not set up again of itself; one that runs nothing, at once.
+ */
+async function removeOne(p: Plugin, stopping: readonly string[] = []): Promise<void> {
   if (!runs(p)) {
     markTakenAway(p, true);
     setState(p.id, "absent");

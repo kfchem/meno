@@ -131,10 +131,9 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
   tab behind waits, unanswered, the keys the tab's in front, Escape too,
   until its own tab comes back.
-- Because every live canvas holds a WebGL context and browsers keep only about
-  16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
-  past the limit is refused with a notice rather than silently blanking the
-  oldest view.
+- Every live canvas holds a WebGL context, and `lib/core/limits.ts`
+  budgets them, 16 in all: a workspace costs one, and opening past the
+  limit is refused with a notice.
 - Meno starts on a workspace, and "+" makes another: the canvas is
   the workspace (docs/WORKSPACE.md), so there is no start page.
 - **Open** (Ctrl/Cmd+O, or the menu) reads the files picked in the system's
@@ -202,7 +201,7 @@ fiber passes an error inside its `<Canvas>` out to the tree round it) and
 the canvas's own HTML by the canvas's; the panel beside the canvas and
 Settings by their tab's; the title bar and the notices by the
 window's. Errors thrown in event handlers, timers, promises and `useFrame`
-are not React's to catch and do not blank the window; they are not shown.
+reach no boundary and do not blank the window; they are not shown.
 
 Nothing a part shows lives in the part, so a part made again shows the same:
 
@@ -256,8 +255,7 @@ start. On Windows the window's own placement is kept as it is
 with the window still hidden (`SetWindowPlacement`, `SW_HIDE`: the system's
 own caption is never seen), maximized hidden where it was, and then shown by
 Tauri as elsewhere, so that the frame it goes back to as it is unmaximized
-round-trips exactly - the size set and read back is not the same measure
-there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
+round-trips exactly. Elsewhere the inner size is kept. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log
@@ -361,8 +359,7 @@ moves together, in the same time and the same way.
 ## Pointers
 
 Meno draws its own pointers wherever it shows one other than the plain
-arrow (asked for by the maintainer, 2026-10-07: the system's hands looked
-poor, and on a Windows machine the dragging hand showed white). Each says
+arrow (asked for by the maintainer, 2026-10-07). Each says
 what a drag there does, not what grabs it, and none is a hand:
 
 | Pointer | Where | The system's behind it |
@@ -636,7 +633,7 @@ not taken from either.
   (RDKit's, through the roles' `conformers`, with the step's options); a
   plugin's step on entries alone at once, `run`
   asked of its worker and the entries it kept brought in, the rest set
-  aside (RDKit's *Duplicates*); a plugin's
+  aside (none of the bundled plugins does one); a plugin's
   program as jobs: `prepare` asked of its worker, a job started for each
   (lib/jobs), the run kept in the document as `running` - amended in, so
   that undo does not take a run back, but the workspace is unsaved until
@@ -1039,9 +1036,7 @@ valence problems, R/S and E/Z - which `ChemMarks2D` lays over the drawing
 as HTML, outside the drawing and so outside any export; they run only
 while RDKit is set up (`pyEnvReady`), so drawing never starts a download.
 `analyse` makes sense of each fragment on its own only where something is
-wrong somewhere; otherwise of the whole at once, which comes out the same:
-RDKit takes fragments out of a molecule by removing atoms one at a time,
-and for a thousand records that ran on for most of an hour.
+wrong somewhere; otherwise of the whole at once, which comes out the same.
 `clean` lays each fragment out afresh and then over the drawing - turned,
 turned over, and its chains turned over their single bonds, whichever
 lies closest - keeping the drawn wedges when they still say the same
@@ -1177,7 +1172,7 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   - opens a PDF from the cache when first asked about it, and answers a
   line of JSON at a time on its standard output: a frame of JSON, then
   bytes. Meno starts it when a PDF is first wanted and again if it has
-  gone, so that a PDF that breaks PDFium breaks it alone.
+  gone, so that a PDF that stops the reader stops that process alone.
 - **Parts of pages drawn** (`pdf_render`) come back as PNGs - a page is
   mostly white, so a 512-pixel tile is a quarter of its pixels or less, and
   carrying bytes is what takes the time - and are taken apart off the main
@@ -1469,9 +1464,8 @@ path it is given:
   be `python-env:<name>` - never a purpose that needs no asking.
 - Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
   (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
-  system's code page: on Windows that is the ANSI one otherwise, in which a request
-  naming a file in Japanese stopped a worker (English Windows) or came back garbled
-  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  system's code page, so that a request naming a file in Japanese reaches a worker
+  whole, and comes back so, on a Windows in any language. What a sidecar or a setup says is read a line at a time,
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
@@ -1551,8 +1545,8 @@ to be able to work with nothing going out at all.
   put on the record (`securitypolicyviolation`). A letter no typeface of
   Meno's has - an emoji - is drawn on the canvas as a white square, and
   measured as one (`lib/chem/labelFonts` `STAND_IN`), so that the canvas's
-  text renderer never looks for it on its CDN - which it may not reach,
-  and which left the whole text the letter was in undrawn.
+  text renderer never looks for it on the network, which the window does
+  not reach.
 - **Everything else goes through the app's proxy** (`src-tauri/src/net.rs`),
   on the loopback address. A child process that may use the network - uv
   or pixi setting up a plugin's environment - is begun as a *task* with a

@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "uses": [{"name": "Blender", "version": "5.2.2"}],
   "description": "Renders pictures and films of molecules in 3D with Blender 5.2.2 LTS - its official build, under its own licence, fetched by Meno as the plugin is set up and kept for Meno's own use.",
   "licence": "GPL-3.0-or-later",
@@ -69,7 +69,7 @@
         {"id": "key", "label": "Key light, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},
         {"id": "ambient", "label": "Light all round, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},
         {"id": "softness", "label": "Shadows' softness", "type": "number", "default": 10, "min": 0, "max": 90, "step": 1, "unit": "°"},
-        {"id": "quality", "label": "A film's quality", "type": "choice", "choices": [{"value": "high", "label": "High"}, {"value": "medium", "label": "Medium: smaller"}, {"value": "lossless", "label": "Nearly lossless: largest"}], "default": "high"}
+        {"id": "quality", "when": {"id": "kind", "in": ["film"]}, "label": "A film's quality", "type": "choice", "choices": [{"value": "high", "label": "High"}, {"value": "medium", "label": "Medium: smaller"}, {"value": "lossless", "label": "Nearly lossless: largest"}], "default": "high"}
       ]
     }
   ]

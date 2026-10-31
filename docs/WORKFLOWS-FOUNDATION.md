@@ -365,7 +365,7 @@ SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
 made by `scripts/identity/rdkit.py`, with RDKit's version and the commands
 that made it). The fixture holds each molfile by its SHA-256: the test
 writes the molfiles again and checks them against it. The bond-shift
-isomers, which RDKit keeps apart, are listed by name.
+isomers, which Meno's rule takes as one structure, are listed by name.
 
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
@@ -590,8 +590,8 @@ some kinds of option are Meno's, so that every plugin shows them the same
 way:
 - **solvent**: a name from Meno's list of solvents with their usual aliases
   (*chloroform*, *CHCl3*, *CDCl3*), or none. Each plugin maps the name to
-  its program's model and keyword, and says when its model does not know
-  that solvent;
+  its program's model and keyword, and says when there is none for that
+  solvent;
 - **temperature** and **pressure**, with units.
 
 Charge and multiplicity are each entry's *species*, not options. A *Species*
@@ -899,9 +899,8 @@ known answers are (#507):
 - the test checks that each product is the compound written for it, and
   that Meno's identity splits the products into the same groups as RDKit's
   canonical SMILES do;
-- where the two rules differ by design (bond-shift isomers, which RDKit's
-  aromaticity does not join), the fixture lists the case, and the test
-  holds Meno to its own rule there.
+- where Meno's rule takes two forms as one (bond-shift isomers), the
+  fixture lists the case, and the test holds Meno to its own rule there.
 
 RDKit is in the script and the fixture only, never in core.
 
@@ -1128,8 +1127,8 @@ read for it.
 | **Mode on atoms** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
 
 **Plugins may still fill these.** Decision 16 lets a plugin fill a kind
-Meno fills, so a plugin, ACCeL's among them, may later offer its own
-*Atom map* or its readers beside Meno's. None is needed for F or G.
+Meno fills, so a plugin may offer its own *Atom map* or its readers
+beside Meno's. None is needed for F or G.
 
 ## Changed and kept under the principle
 
@@ -1691,7 +1690,9 @@ jobs elsewhere. In their manifests they declare:
 - the model formats they read.
 
 **The guards.** The boundary guard (`src/lib/plugins/boundary.test.ts`)
-keeps program, scheduler and model names out of core. Property and failure
+keeps program, scheduler and model names out of core - its literals, its
+regular expressions and its pages' text (PLUGINS.md, *The boundary, kept by
+a test*). Property and failure
 names given by plugins are data, never literals in core. Core names only the
 quantities its own nodes compute or use: *energy*, *thermal correction*,
 *share*, *degeneracy*, *vibrations*, *group*, *shielding*, *excited
