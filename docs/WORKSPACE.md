@@ -1516,9 +1516,9 @@ slowing it - and in the pictures made of it.
   canvas's resolution, over the molecules alone - their balls, sticks and
   ribbons drawn once more into a pass of their own - and laid over them
   by a sheet multiplying what is under it, one where no molecule is, so
-  the page is drawn exactly as it was. A molecule shaded per atom still
-  hides what is behind it in that pass, its own weight none. It shows a
-  faint grain close up, as screen-space shading does. Going over to it,
+  the page is drawn exactly as it was; close up, this shade is finely
+  grained. A molecule shaded per atom still
+  hides what is behind it in that pass, its own weight none. Going over to it,
   or from it, the one shade gives way to the other.
 - **Very large drawings** (the maintainer's choice, 2026-10-11): past
   twenty thousand atoms on the canvas, drawn lighter - no shadows, and
