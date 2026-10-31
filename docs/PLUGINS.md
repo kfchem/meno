@@ -927,8 +927,10 @@ The same for every plugin and for Meno's own parts:
   - `collect` may answer, for one entry of a job, why that entry alone
     failed - `{"why": "...", "kind": "no-geometry"}` in its place among
     the outputs - the others taken as they are. A `kind` is one of
-    core's failure kinds (WORKFLOWS.md, *Failed*); any other, or none,
-    is taken as `failed`, its words kept. An output whose `optimised` is
+    core's failure kinds (WORKFLOWS.md, *Failed*): `not-started`,
+    `stopped`, `program-error`, `refused`, `wrong-molecule`,
+    `no-geometry`, `not-converged` or `failed`; any other, or none, is
+    taken as `failed`, its words kept. An output whose `optimised` is
     false is not done: its last geometry goes out of the *Failed* exit as
     *not converged*. An output's `warnings` - `[{"kind":
     "hessian-not-stationary", "text": "..."}]`, the text the program's
