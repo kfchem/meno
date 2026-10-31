@@ -987,7 +987,7 @@ Not yet, and where it comes:
 - **Editing in the formatted text** (the maintainer chose read formatted, written in the source).
 - **Pictures in a Markdown text**, and links to other texts: Meno does not keep where a text was opened from, and reaches no network.
 - **A letter no typeface of Meno's has on a sheet** - a superscript minus, as in mol⁻¹ - is a white square there, as on any sheet; the column draws it in the system's type.
-- **Math** (`$...$`), footnotes and other extensions GitHub draws but GFM 0.29 does not specify are shown as written.
+- **Math** (`$...$`), footnotes and other extensions GitHub draws, outside GFM 0.29, are shown as written.
 - **Searching a text** (Cmd/Ctrl+F looks in PDFs).
 
 ### With the rest of the page (2026-10-11)
