@@ -143,6 +143,14 @@ def xmol(e, comment):
     return "\n".join([str(len(e["atoms"])), comment] + [f"{a['el']}  {a['x']:.6f} {a['y']:.6f} {a['z']:.6f}" for a in e["atoms"]]) + "\n"
 
 
+def xtb_log(e):
+    """An xtb run's log of an entry, as xtb 6.7.1 prints its parts the worker reads: the table of its atoms (each
+    on a row of its own), its total energy, and its end - the charge and unpaired electrons of its setup left out,
+    so that what is read back is the entry's."""
+    rows = "".join(f"    {k + 1}    {xtb.reader.ELEMENTS.index(a['el'])} {a['el']:<2}     {k + 1}\n" for k, a in enumerate(e["atoms"]))
+    return f"   ID    Z sym.   atoms\n{rows}\n          | TOTAL ENERGY               -5.070000000000 Eh   |\n * finished run on 2026/01/01 at 12:00:01.000\n"
+
+
 def flag(args, name):
     """The value given after a flag on a command line, where it is there once."""
     at = [i for i, a in enumerate(args) if a == name]
@@ -172,16 +180,12 @@ class Xtb(unittest.TestCase):
                     self.assertEqual(written(job), {}, "a .CHRG or .UHF file besides the command line")
 
     def test_what_it_reads_back_keeps_each_entry_s_own(self):
-        dump = json.dumps({"total energy": -5.07})
         for given in sets():
             for kind in ("optimise", "energy", "frequencies"):
                 for e in given:
-                    files = {"xtbout.json": dump, **({"xtbopt.log": xmol(e, " energy: -5.06 gnorm: 0.1") + xmol(e, " energy: -5.07 gnorm: 0.0001"), ".xtboptok": ""} if kind == "optimise" else {})}
-                    out = ask(xtb, "collect", step=kind, entries=[e], options=defaults("xtb", kind), files=files, log="", ended="done")["outputs"]
+                    files = {"xtbopt.log": xmol(e, " energy: -5.06 gnorm: 0.1") + xmol(e, " energy: -5.07 gnorm: 0.0001")} if kind == "optimise" else {}
+                    out = ask(xtb, "collect", step=kind, entries=[e], options=defaults("xtb", kind), files=files, log=xtb_log(e), ended="done")["outputs"]
                     self.assertEqual([state(o) for o in out], [state(e)], e["name"])
-            # (several read back at once: each its own, never another's)
-            out = ask(xtb, "collect", step="energy", entries=given, options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"]
-            self.assertEqual([state(o) for o in out], [state(e) for e in given])
 
 
 class Crest(unittest.TestCase):

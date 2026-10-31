@@ -1531,7 +1531,11 @@ documentation has them (xtb-docs.readthedocs.io) - the command line, the
 optimisation's trajectory and the files that say whether it converged,
 the machine-readable dump (`$write json=true`), the thermochemistry it
 prints - and the plugin's tests are written after its examples; no output
-of a real run is kept in the repository.
+of a real run is kept in the repository. (Since 2026-10-31 a job's log is
+read as an xTB output opened by hand is, by the plugin's reader, from what
+xtb prints - no dump - and adds only an optimisation's path and the
+geometry a run began with: docs/PLUGINS.md, the xTB plugin's
+`reader.py`.)
 
 Decided while building it, for the maintainer to confirm:
 

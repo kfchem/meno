@@ -24,7 +24,7 @@ const none = { read: {}, also: {} };
 
 describe("the readers Meno knows of", () => {
   it("are Meno's own, then each plugin from its manifest in its folder", () => {
-    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "orca", "pyscf", "wfx"]);
+    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "orca", "pyscf", "wfx", "xtb"]);
     // (the structure files Meno reads on the page, and the cube, under the readers' contract)
     expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
     const [cclib, gaussian, , pyscf] = READER_PLUGINS;
@@ -50,6 +50,8 @@ describe("the readers Meno knows of", () => {
       env: "pixi",
       reads: ["orca", "gaussian", "gaussian-fchk", "molden"],
     });
+    // (a program's plugin that reads its own program's output, the kind its manifest declares)
+    expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb", "xtb-g98"], ownKinds: ["xtb", "xtb-g98"], env: "pixi", worker: "resources/plugins/xtb/worker.py" });
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
@@ -57,7 +59,7 @@ describe("the readers Meno knows of", () => {
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "wfx"]);
+    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "wfx", "xtb"]);
     // (ORCA's own output read by the plugin whose program writes it: its own kind, by its manifest's writtenBy)
     expect(READER_PLUGINS.find((p) => p.id === "orca")).toMatchObject({ reads: ["orca"], ownKinds: ["orca"] });
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
@@ -98,9 +100,9 @@ describe("the readers Meno knows of", () => {
     ]);
     expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" }, path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] }, places: {} }]);
     expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
-    // (and those that fill kinds of step: xTB, made by pixi - and RDKit, a 3D structure besides its roles)
+    // (and those that fill kinds of step: xTB, made by pixi, which reads its own program's output too - and RDKit, a 3D structure besides its roles)
     const xtb = PLUGINS.find((p) => p.id === "xtb")!;
-    expect(xtb).toMatchObject({ reads: [], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
+    expect(xtb).toMatchObject({ reads: ["xtb", "xtb-g98"], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
     expect(xtb.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     const crest = PLUGINS.find((p) => p.id === "crest")!;
     expect(crest).toMatchObject({ profile: "plugin-crest", env: "pixi", systems: ["macos", "linux"] });
