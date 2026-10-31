@@ -1667,8 +1667,8 @@ as it is in the drawing, and lit from there.
 **Marked as unsure** (the same dashed ring as part A's, going once the
 part is changed): an atom or a bond its model reports less confidence in
 than the plugin sets for that model (its worker's `UNSURE_BELOW`), and an
-isotope. A model can misread a picture: what it reports low confidence in
-is marked, so that a mark is a hint, not a check.
+isotope. What a model reports low confidence in is marked, so that a
+mark is a hint, not a check.
 
 **How long**: a picture takes well under a second on a Mac's processor
 once its model is loaded, which the first picture waits for - a few
@@ -1681,9 +1681,7 @@ one process; what a model prints as it reads goes to stderr, stdout being
 Meno's answers; and a package reading never loads, pyonmttok, is left out
 of MolNexTR's lock. Each takes the atoms and bonds its model predicts and
 leaves the model's own step of writing them as SMILES and a molfile
-undone (`graphs_unwritten`): Meno does not use what it writes, and
-writing a graph predicted from a picture that is no structure can run
-without end or crash the worker's process.
+undone (`graphs_unwritten`): Meno does not use what it writes.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.
