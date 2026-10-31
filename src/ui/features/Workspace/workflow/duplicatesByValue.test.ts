@@ -80,6 +80,24 @@ describe("Duplicates, within each value of a property", () => {
     expect(ran(none)?.said).toBe("1 of 2 entries kept · rest 1 · whether minima or saddle points not known (no frequencies)");
   });
 
+  it("keeps the lower only where both energies were worked out alike - free energies where each has one - else sets the two aside, saying how they differ", () => {
+    const at = (m: Omit<Molecule3D, "id">, method: string, g?: number): Omit<Molecule3D, "id"> => ({
+      ...m,
+      calc: { readers: ["meno"], program: "X", method },
+      ...(g == null ? {} : { properties: [{ ...m.properties![0], "thermo.free-energy": { value: g, unit: "Eh", status: "computed", by: { program: "X", method } } }] }),
+    });
+    // (the same saddle point found by two paths, at two levels: the electronic energy of one never decides against the other's)
+    const two = runStep(compared([at(water(0.001, -76.0, "P"), "M1"), at(water(0, -80.0, "P"), "M2")], BY), 2, W);
+    expect(asides(two)).toEqual(Array(2).fill("in its product P, energies differ in level: X \u00b7 M1 (a #1) and X \u00b7 M2 (b #1): which is lower is not known"));
+    expect(ran(two)?.said).toMatch(/^0 of 2 entries kept · rest 2 \(2: in its product P, energies differ in level/);
+    // (nor free energies by two methods)
+    const free = runStep(compared([at(water(0.001, -76.0, "P"), "M1", -75.9), at(water(0, -80.0, "P"), "M2", -79.9)], BY), 2, W);
+    expect(asides(free)[0]).toBe("in its product P, free energies differ in method: M1 (a #1) and M2 (b #1): which is lower is not known");
+    // (free energies alike: the lower free energy kept, whatever the electronic energies say)
+    const alike = runStep(compared([at(water(0.001, -76.0, "P"), "M1", -76.01), at(water(0, -80.0, "P"), "M1", -76.0)], BY), 2, W);
+    expect(asides(alike)).toEqual(["the same as a #1, which was kept"]);
+  });
+
   it("says on its card what it compares within, and what it still needs", () => {
     const info = kindInfo("duplicates");
     // (only what is not its default: at all its defaults, nothing - the card says "Duplicates")
