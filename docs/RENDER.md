@@ -159,6 +159,24 @@ make, then the declared ones; chosen, the entry says the motion's id
 bonds in its extras. The options that adjust a motion are the role's,
 each `when` it is chosen - Once or Loop among them.
 
+### How long a film can be
+
+A film is never asked shorter than its motion can be read in (the
+maintainer, 2026-10-28): each motion says its shortest - Meno's own
+(turning once round 3 s; through its frames, or in a vibration, 2 s), a
+renderer's in its manifest (`shortest`, docs/PLUGINS.md, *Motions*). A
+motion that changes one molecule into the next says each change's
+shortest, and Meno multiplies it by the changes - one fewer than the
+molecules, or as many where the film loops back to the first (the role's
+`loopWhen` says when). The card's *Length* is bounded by it, and says so
+under it ("At least 12 s for 3 molecules"); a length chosen before that is
+shorter is raised to it, and the card says that instead. The longest it
+asks is 60 s, or the shortest where that is longer. However a film is
+asked for - the card, a saved or written ask - Meno refuses one shorter
+before anything is rendered, saying how long it needs to be ("This film
+needs at least 6 s for 3 molecules"): the rule is Meno's, and no renderer
+keeps a copy of it (the boundary, 2026-10-31).
+
 ## Render as a step
 
 **Render** is a kind of a workflow's step too (WORKFLOWS.md, *Kinds of
@@ -441,7 +459,8 @@ uv, no package), and the script Blender runs, `render.py`.
   the render says it). A film's line says it in hundredths of its length,
   *Rendering 37%...*.
 - **Why one failed** is what the render script said as it stopped
-  (`render.py: ...`) or what Python raised, as its traceback ends
+  (`render.py: ...`, said without the script's name, which means nothing
+  to the person) or what Python raised, as its traceback ends
   (`TypeError: ...`) - all of it, a message of several lines as one, up
   to what Blender says next (its progress, its own last words); else Blender's last line that says error; else its
   last. Never Blender's own last words, which say only that a script

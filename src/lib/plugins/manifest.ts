@@ -66,6 +66,12 @@ export type KindDecl = {
   name: string;
   /** The program that writes it, as a molecule read from it names it; unsaid for a kind many programs write. */
   program?: string;
+  /**
+   * Which of the plugin's own programs writes it - one its steps or roles run, by the name they run it by: the kind
+   * is that program's output, and the plugin its own reader, which reads it unless another is chosen (lib/calc/catalog
+   * `readerFor`). Unsaid for a kind the plugin reads but whose program it does not run.
+   */
+  writtenBy?: string;
   /** The file names it goes by, lower case, with their dot. */
   extensions: string[];
   /** What the start of such a file says, one of them at least: how a file of a kind it reads is told. */
@@ -136,7 +142,14 @@ export type LookDecl = { id: string; label: string; description?: string; parts?
  * short description. The plugin builds it from the scene and its molecules' atoms and bonds; Meno writes the scene still for it.
  * Its options - Once or Loop among them - are the role's, each `when` this motion is chosen.
  */
-export type MotionDecl = { id: string; label: string; description?: string };
+export type MotionDecl = { id: string; label: string; description?: string; shortest?: Shortest };
+
+/**
+ * The shortest a film of a motion can be and still be read, in seconds (docs/RENDER.md, *How long a film can be*): the whole
+ * film's (`film`), and its Loop's where that is longer (`loop`); and, for a motion that changes one molecule into the next, each
+ * change's (`change`) - Meno counts the changes, one fewer than the molecules, or as many as a Loop that comes back to the first.
+ */
+export type Shortest = { film?: number; loop?: number; change?: number };
 
 /** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
 export type RoleDecl = {
@@ -147,6 +160,8 @@ export type RoleDecl = {
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
   motions?: MotionDecl[];
+  /** Where a film comes back to its start, over and over: while its option `id` has one of these values (Render's Loop). */
+  loopWhen?: { id: string; in: (string | number | boolean)[] };
 };
 
 /**
@@ -359,6 +374,7 @@ function kindOf(v: unknown): KindDecl | null {
   const name = text(k?.name, 80);
   if (!id || !name) return null;
   const program = text(k?.program, 80);
+  const writtenBy = typeof k?.writtenBy === "string" && PROGRAM.test(k.writtenBy) ? k.writtenBy : null;
   // (what a line begins with tells a text among those of its files' names, and claims no file: as short as a letter)
   const lines = list(k?.lines)
     .map((l) => text(l, MARK_MOST))
@@ -367,6 +383,7 @@ function kindOf(v: unknown): KindDecl | null {
     id,
     name,
     ...(program ? { program } : {}),
+    ...(writtenBy ? { writtenBy } : {}),
     extensions: extensionsOf(k?.extensions),
     marks: marksOf(k?.marks),
     lines,
@@ -481,6 +498,26 @@ function acceptLooks(v: unknown): LookDecl[] {
 /** The ids Meno's own film motions have (render/renderScene): a plugin's motion takes none of them. */
 export const MENO_MOTIONS = ["turn", "frames", "vibration"] as const;
 
+/** A motion's shortest lengths, each a number of seconds from 0 to 600; what is not that is left out, and none of them, none. */
+function shortestOf(v: unknown): Shortest | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const r = v as Record<string, unknown>;
+  const out: Shortest = {};
+  for (const k of ["film", "loop", "change"] as const) {
+    const x = r[k];
+    if (typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 600) out[k] = x;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Where a role's film loops, read as a `when` is: an option's id and the values that loop it; what is not that, none. */
+function loopWhenOf(v: unknown): RoleDecl["loopWhen"] {
+  const r = v as Record<string, unknown> | null;
+  if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || !Array.isArray(r.in)) return undefined;
+  const values = r.in.filter((x): x is string | number | boolean => typeof x === "string" || typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x))).slice(0, 20);
+  return values.length ? { id: r.id, in: values } : undefined;
+}
+
 /** The motions a render role declares, each checked: an id (none of Meno's own), a label, a description - what is not understood is left out. */
 function acceptMotions(v: unknown): MotionDecl[] {
   const seen = new Set<string>();
@@ -492,7 +529,8 @@ function acceptMotions(v: unknown): MotionDecl[] {
     if (!label) continue;
     seen.add(r.id);
     const description = typeof r.description === "string" && r.description.trim() ? r.description.trim().slice(0, 200) : undefined;
-    out.push({ id: r.id, label, ...(description ? { description } : {}) });
+    const shortest = shortestOf(r.shortest);
+    out.push({ id: r.id, label, ...(description ? { description } : {}), ...(shortest ? { shortest } : {}) });
     if (out.length >= 40) break;
   }
   return out;
@@ -811,7 +849,15 @@ export function acceptManifest(raw: unknown): Manifest | null {
           // (options only for a role that takes them)
           const looks = acceptLooks(r.looks);
           const motions = acceptMotions(r.motions);
-          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [], ...(looks.length ? { looks } : {}), ...(motions.length ? { motions } : {}) };
+          const loopWhen = motions.length ? loopWhenOf(r.loopWhen) : undefined;
+          return {
+            role: r.role,
+            programs,
+            options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
+            ...(looks.length ? { looks } : {}),
+            ...(motions.length ? { motions } : {}),
+            ...(loopWhen ? { loopWhen } : {}),
+          };
         },
         (r) => r.role,
       )
@@ -855,7 +901,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
     homepage: text(m.homepage, 200) ?? "",
     ...(environment ? { environment } : {}),
     ...(Number.isInteger(m.setUpBytes) && (m.setUpBytes as number) > 0 && (m.setUpBytes as number) <= DOWNLOAD_MOST ? { setUpBytes: m.setUpBytes as number } : {}),
-    kinds,
+    // (written by one of its own programs - one its steps or roles run - or by none it says)
+    kinds: kinds.map(({ writtenBy, ...k }) => (writtenBy && [...steps, ...roles].some((s) => s.programs.includes(writtenBy)) ? { ...k, writtenBy } : k)),
     reads: readable,
     writes,
     xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
