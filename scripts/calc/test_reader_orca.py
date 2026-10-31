@@ -227,6 +227,11 @@ class Thermochemistry(unittest.TestCase):
         self.assertEqual((got["thermo.temperature"], got["thermo.pressure"]), (298.15, 1.0))
         self.assertEqual((got["thermo.point-group"], got["thermo.symmetry-number"], got["thermo.treatment"]), ("C2v", 2, "RRHO"))
 
+    def test_a_linear_molecule_s_point_group_in_standard_notation(self):
+        linear = self.TEXT.replace("Point Group:  C2v, Symmetry Number:   2", "Point Group:  C(inf)v, Symmetry Number:   1")
+        self.assertEqual(next(r["value"] for r in reader.thermo_of(linear) if r["id"] == "thermo.point-group"), "C\u221ev")
+        self.assertEqual(next(r["value"] for r in reader.thermo_of(linear.replace("C(inf)v", "D(inf)h")) if r["id"] == "thermo.point-group"), "D\u221eh")
+
     def test_quasi_rrho_and_its_frequency(self):
         grimme = self.TEXT.replace("Quasi RRHO          ...    False\n", "Quasi RRHO          ...     True\n") + "Vibrational entropy computed according to the QRRHO of S. Grimme\nChem.Eur.J. 2012 18 9955 using a reference frequency of 100.0 cm-1\n"
         self.assertEqual(next(r["value"] for r in reader.thermo_of(grimme) if r["id"] == "thermo.treatment"), "quasi-RRHO (Grimme), 100 cm⁻¹")

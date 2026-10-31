@@ -589,7 +589,8 @@ def thermo_of(text):
         add("thermo.pressure", "Pressure", got["pressure"], unit="atm", digits=2)
     sym = list(SYMMETRY.finditer(part))
     if sym:
-        add("thermo.point-group", "Point group", sym[-1].group(1), quantity="symmetry")
+        # (in Meno's form, standard notation: ORCA's "C(inf)v", "D(inf)h" a linear molecule's C∞v, D∞h)
+        add("thermo.point-group", "Point group", re.sub(r"\(?inf\)?", "\u221e", sym[-1].group(1), flags=re.I), quantity="symmetry")
         add("thermo.symmetry-number", "Symmetry number", int(sym[-1].group(2)), unit="none", digits=0)
     said = list(QRRHO_SAID.finditer(part))
     q = list(QRRHO.finditer(part))
