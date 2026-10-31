@@ -707,6 +707,35 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
   });
 
+  it("runs, of a step of two inputs, the side not done - never again the side done, nearer though it is: no job asked for anew", async () => {
+    const { st, step: a } = editor();
+    const ran = (id: number) => st().steps.find((s) => s.id === id)!.ran;
+    // (the optimisation run, its job done)
+    const first = st().runStep(a);
+    for (let k = 0; k < 4; k++) await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await first;
+    const done = ran(a);
+    expect(done).toMatchObject({ ok: true });
+    // (the other side: two Filters, neither run - the first further back than the optimisation - then Merge of both)
+    const filter = (from: number, x: number) => {
+      const f = st().addStep("filter", "meno", x, 20);
+      st().updateStep(f, { options: { conditions: "number ≥ 1", match: "all" } });
+      st().connect({ set: from }, f);
+      return f;
+    };
+    const p = filter(st().sets[0].id, 10);
+    const q = filter(resultOf(st(), p)!.id, 20);
+    const merge = st().addStep("merge", "meno", 30, 0);
+    expect(st().connect({ set: resultOf(st(), a)!.id }, merge, "first")).toBe(true);
+    expect(st().connect({ set: resultOf(st(), q)!.id }, merge, "second")).toBe(true);
+    await st().runAll();
+    expect(asked.started).toHaveLength(1);
+    expect(ran(a)).toBe(done);
+    expect([p, q, merge].map((id) => ran(id)?.ok)).toEqual([true, true, true]);
+  });
+
   it("ends a step a branch gave nothing this time ok, its exits empty, saying which input came empty - through rounds whose last holds none, to a Merge of what they gave and one of the rests with them", async () => {
     const { st, step: a } = editor();
     const exit = (id: number, e: string) => st().sets.find((s) => s.made?.step === id && s.made.exit === e)!.id;

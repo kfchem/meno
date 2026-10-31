@@ -817,12 +817,12 @@ Conformers go through a workflow as any set does (decided):
 
 | From | What |
 | --- | --- |
-| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run, has changed, failed or stopped, however far back, and every step from that one on |
+| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run, has changed, failed or stopped, however far back, and every step on a way from one of those to this one; a step done on no such way is not run, however near - of a step of two inputs, the side done is left as it is |
 | | *Run from here* - this step and every step after it |
 | | *Stop* - while it is waiting or running |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
 | | *Don't keep raw outputs* - a step a plugin does: its jobs' files kept in the workspace's file are what they were given, what Meno read back and their logs (docs/FILE-IO.md, *A step's jobs*) |
-| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order |
+| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order; no other |
 | | *Stop all* - while any runs |
 
 No key starts a run (decided: menus, at first). Steps run in the order
