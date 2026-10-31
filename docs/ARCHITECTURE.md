@@ -1547,8 +1547,8 @@ to be able to work with nothing going out at all.
   put on the record (`securitypolicyviolation`). A letter no typeface of
   Meno's has - an emoji - is drawn on the canvas as a white square, and
   measured as one (`lib/chem/labelFonts` `STAND_IN`), so that the canvas's
-  text renderer never looks for it on its CDN - which it may not reach,
-  and which left the whole text the letter was in undrawn.
+  text renderer never looks for it on the network, which the window does
+  not reach.
 - **Everything else goes through the app's proxy** (`src-tauri/src/net.rs`),
   on the loopback address. A child process that may use the network - uv
   or pixi setting up a plugin's environment - is begun as a *task* with a
