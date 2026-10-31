@@ -89,8 +89,10 @@ describe("a plugin's manifest", () => {
     expect(kinds([{ ...coloured, probe: true }], ["nbo-in"]).reads).toEqual(["nbo-in"]);
     // (ORCA's input, as Meno carries it: a text it colours, told among .inp files by what its lines begin with)
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
-    expect(orca.kinds.map((k) => [k.id, k.lines])).toEqual([["orca-input", ["!", "%", "*"]]]);
-    expect(orca.reads).toEqual([]);
+    expect(orca.kinds.map((k) => [k.id, k.lines])).toEqual([["orca-input", ["!", "%", "*"]], ["orca", []]]);
+    // (and ORCA's output, which its program writes: the kind it reads)
+    expect(orca.reads).toEqual(["orca"]);
+    expect(orca.kinds.find((k) => k.id === "orca")?.writtenBy).toBe("orca");
   });
 
   it("says which of its own programs writes a kind it reads - one its steps run, by name - and no other", () => {

@@ -24,10 +24,10 @@ const none = { read: {}, also: {} };
 
 describe("the readers Meno knows of", () => {
   it("are Meno's own, then each plugin from its manifest in its folder", () => {
-    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "pyscf", "wfx"]);
+    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "orca", "pyscf", "wfx"]);
     // (the structure files Meno reads on the page, and the cube, under the readers' contract)
     expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
-    const [cclib, gaussian, pyscf] = READER_PLUGINS;
+    const [cclib, gaussian, , pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
       version: "0.1.6",
@@ -57,7 +57,9 @@ describe("the readers Meno knows of", () => {
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "pyscf", "wfx"]);
+    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "wfx"]);
+    // (ORCA's own output read by the plugin whose program writes it: its own kind, by its manifest's writtenBy)
+    expect(READER_PLUGINS.find((p) => p.id === "orca")).toMatchObject({ reads: ["orca"], ownKinds: ["orca"] });
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);
     // (two that read structures from pictures, each standing alone: the chemist chooses, in Settings, Chemistry)
@@ -182,7 +184,7 @@ describe("who reads a kind", () => {
   const readers = [...READERS, other];
 
   it("is any reader that reads it, in Meno's order: Meno first, where it reads it", () => {
-    expect(readersOf("orca", readers).map((p) => p.id)).toEqual(["cclib", "pyscf", "orca-own"]);
+    expect(readersOf("orca", readers).map((p) => p.id)).toEqual(["cclib", "orca", "pyscf", "orca-own"]);
     expect(readersOf("molden", readers).map((p) => p.id)).toEqual(["pyscf"]);
     expect(readersOf("cube", readers).map((p) => p.id)).toEqual(["meno", "orca-own"]);
   });

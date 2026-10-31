@@ -314,7 +314,7 @@ plugins and outside programs do (the maintainer, 2026-10-06 and
 - `files` - the kinds of file it names, each told by the catalogue's own
   marks, with the plugins it suggests to read it. A file no plugin added
   reads, of one of these kinds, is told as it, and Meno says which plugins
-  would read it ("water.out (ORCA output): cclib or PySCF would read
+  would read it ("water.out (ORCA output): the ORCA interface would read
   it."), each with Add, the file read again once one is added.
 
 Only the catalogues of the plugins added are looked at, and the manifests
