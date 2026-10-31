@@ -2171,7 +2171,10 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   plugin's conformers for Meno's own page use the same, while its
   *Conformers* step gives every one RDKit made, and Meno's *Duplicates*
   applies it: PLUGINS.md). The ways are those of its atoms but
-  the hydrogens hanging on one atom, at most 1,000, each bond taken onto
+  the hydrogens hanging on one atom, at most 1,000 - searched for atom by
+  atom, each taken only to one of its kind and bonded as it is, the search
+  stopping past them: Pd(PPh3)4's, millions, in some 40,000 steps a
+  search, 12 ms in all (Apple M4, 2026-11-01) - each bond taken onto
   one of its order - a ring of single and double bonds in turn, of 4n + 2
   atoms (Hückel's rule), all of one: which of a benzene ring's bonds a
   Kekulé structure makes double is no part of its shape, so a phenyl
