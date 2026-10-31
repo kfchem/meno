@@ -6,9 +6,13 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import OptionsForm from "../../../options/OptionsForm";
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, filmLength, remembered, renderContext, renderOptions, type Kind } from "./renderOptions";
+import { askOf, bySection, filmLength, remembered, renderContext, renderOptions, withFixed, type Kind } from "./renderOptions";
+import { OPTION_SECTIONS, type OptionSection } from "../../../../lib/options";
 import { useInFront } from "../../../layouts/inFront";
 import { escapeLeft } from "../../../controls/keys";
+
+/** What each part of the card is called. */
+const PART_NAMES: Record<OptionSection, string> = { look: "Look", render: "Render", scene: "Scene", motion: "Motion" };
 
 /**
  * Render, asked before it begins (docs/RENDER.md): a picture or a film;
@@ -49,9 +53,18 @@ export default function RenderCard({
   const picked = chosen[kind] ?? valuesOf(plain, saved[remembered(kind)]);
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
   // (a film no shorter than its motion can be read in - for a change, its changes' - a length chosen before raised to it)
-  const { length, values } = filmLength(kind, picked, theirValues, declared, plugin.roleLoopWhen?.render, molecules);
-  const own = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared, length);
+  const { length, values: lengthened } = filmLength(kind, picked, declared, molecules);
+  // (what the motion is always made with, shown so and said why, whatever was chosen: Meno's own choices and the renderer's)
+  const fixed = kind === "film" ? declared?.find((d) => d.id === lengthened.motion)?.fixed : undefined;
+  const mine = withFixed(renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared, length), lengthened, fixed);
+  const yours = withFixed(theirs, theirValues, fixed);
+  const values = mine.values;
+  const own = mine.options;
+  const ours = bySection(own);
+  const setMine = (v: OptionValues) => setChosen((c) => ({ ...c, [kind]: v }));
+  // (the renderer's options are told the card's choices and what is rendered, `kind`; a part with none of them shown has no heading)
   const theirContext = renderContext(values, kind);
+  const its = bySection(shownOptions(yours.options, yours.values, theirContext));
 
   const renderRef = useRef<HTMLButtonElement>(null);
   // (the keys given to Render as it opens, once: not again each time the
@@ -77,7 +90,7 @@ export default function RenderCard({
     rememberOptions("render", { kind });
     rememberOptions(remembered(kind), values);
     rememberOptions(roleOptionsRole("render"), theirValues);
-    onRender(askOf(kind, values), theirValues);
+    onRender(askOf(kind, values), yours.values);
   };
 
   return (
@@ -111,15 +124,24 @@ export default function RenderCard({
           </button>
         ))}
       </div>
-      <motion.div key={kind} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
-        <OptionsForm options={own} values={values} onChange={(v) => setChosen((c) => ({ ...c, [kind]: v }))} />
+      <motion.div key={kind} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }}>
+        {/* (one card, in its parts - what the molecules look like, how it is rendered, the scene, a film's motion - Meno's own
+            choices and the renderer's in each, where the renderer says they belong; those it does not place, last, under its name) */}
+        {[...OPTION_SECTIONS.filter((p) => kind === "film" || p !== "motion"), "own" as const].map((part, i) => {
+          if (!ours[part].length && !its[part].length) return null;
+          return (
+            <section key={part} className={`mb-3 ${i > 0 ? "border-t border-gh-line pt-3" : ""}`}>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gh-gray">{part === "own" ? plugin.name : PART_NAMES[part]}</h3>
+              {/* (Meno's own first, then the renderer's - a look's own choices just under it - and what Meno folds, last) */}
+              <div className="space-y-3">
+                {ours[part].some((o) => !o.group) && <OptionsForm options={ours[part].filter((o) => !o.group)} values={values} onChange={setMine} context={yours.values} />}
+                {its[part].length > 0 && <OptionsForm options={its[part]} values={yours.values} onChange={setChosenTheirs} context={theirContext} />}
+                {ours[part].some((o) => o.group) && <OptionsForm options={ours[part].filter((o) => o.group)} values={values} onChange={setMine} context={yours.values} />}
+              </div>
+            </section>
+          );
+        })}
       </motion.div>
-      {shownOptions(theirs, theirValues, theirContext).length > 0 && (
-        <section className="mb-3 border-t border-gh-line pt-3">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gh-gray">{plugin.name}</h3>
-          <OptionsForm options={theirs} values={theirValues} onChange={setChosenTheirs} context={theirContext} />
-        </section>
-      )}
       {/* (kept in view at the card's foot, however many options there are above: on its own ground, parted from them by a line, so that none shows through it) */}
       <div className="sticky -bottom-3 -mx-3 -mb-3 flex justify-end gap-2 border-t border-gh-line bg-white px-3 pb-3 pt-3">
         <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 outline-none hover:bg-gh-base focus-visible:border-accel-base focus-visible:ring-2 focus-visible:ring-accel-lightbase">

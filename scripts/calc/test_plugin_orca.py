@@ -20,9 +20,25 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKER = ROOT / "src-tauri/resources/plugins/orca/worker.py"
 MANIFEST = ROOT / "src-tauri/resources/plugins/orca/manifest.json"
-spec = importlib.util.spec_from_file_location("plugin_orca", WORKER)
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
+
+
+
+def load_worker(path, name):
+    """A plugin's worker, loaded as its process runs it: its folder on the path, for the reader beside it - and that
+    reader let go of after, so that another plugin's worker loaded in the same tests finds its own."""
+    sys.path.insert(0, str(path.parent))
+    sys.modules.pop("reader", None)
+    try:
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(str(path.parent))
+        sys.modules.pop("reader", None)
+
+
+worker = load_worker(WORKER, "plugin_orca")
 # (MPI's launcher taken to be there, whatever this computer has: each test that says otherwise says so)
 worker.which = lambda name, path=None: f"/usr/local/bin/{name}"
 
@@ -160,9 +176,7 @@ class Prepare(unittest.TestCase):
         from unittest import mock
         for platform, name in (("darwin", "mpirun"), ("linux", "mpirun"), ("win32", "mpiexec")):
             with mock.patch.object(sys, "platform", platform):
-                spec = importlib.util.spec_from_file_location(f"orca_worker_{platform}", WORKER)
-                fresh = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(fresh)
+                fresh = load_worker(WORKER, f"orca_worker_{platform}")
             self.assertEqual(fresh.LAUNCHER, name)
             asked = []
             self.assertFalse(fresh.launcher_found(lambda n, path=None: asked.append(n)))
@@ -529,7 +543,8 @@ class Collect(unittest.TestCase):
         # (one brought down under way says no error: not its settings' "Startup error" line, but where it got to)
         down = "   Startup error        DIISStart       ....  0.200000\n ... \n               ***  Starting incremental Fock matrix formation  ***\n"
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=down, ended="failed"), {"why": "ORCA stopped without saying why, after: ***  Starting incremental Fock matrix formation  ***"})
-        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.strip())
+        # (its error's own message, the words after "Error (ORCA_LEANSCF):", as its output is read: reader `why_of`)
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.split("): ", 1)[1].strip())
         # (a line that begins ERROR - ORCA 6.1.1's programs print such, "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY" one - or
         #  FATAL ERROR is its own words, before any other line that says error)
         unitary = "   Startup error        DIISStart       ....  0.200000\nERROR IN SCHMIDT-MATRIX IS NOT UNITARY\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"

@@ -1,14 +1,16 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.3.10",
+  "version": "0.4.0",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
   "environment": "uv",
   "kinds": [
-    {"id": "orca-input", "name": "ORCA input", "extensions": [".inp"], "lines": ["!", "%", "*"], "grammar": {"file": "orca-input.grammar", "tones": {"Keyword": "keyword", "BlockName": "keyword", "End": "keyword", "CoordKind": "keyword", "FileKind": "keyword", "NewJob": "keyword", "Option": "property", "Element": "tag", "Value": "value", "String": "string", "Comment": "comment"}}}
+    {"id": "orca-input", "name": "ORCA input", "extensions": [".inp"], "lines": ["!", "%", "*"], "grammar": {"file": "orca-input.grammar", "tones": {"Keyword": "keyword", "BlockName": "keyword", "End": "keyword", "CoordKind": "keyword", "FileKind": "keyword", "NewJob": "keyword", "Option": "property", "Element": "tag", "Value": "value", "String": "string", "Comment": "comment"}}},
+    {"id": "orca", "name": "ORCA output", "program": "ORCA", "writtenBy": "orca", "extensions": [".out", ".log"], "marks": [{"text": "* O R C A *"}], "grammar": {"file": "orca-output.grammar", "tones": {"ErrorLine": "error", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}}
   ],
+  "reads": ["orca"],
   "installed": [
     {"name": "orca", "label": "ORCA", "files": {"macos": "orca", "linux": "orca", "windows": "orca.exe"}, "path": ["{folder}"], "beside": {"orca_2mkl": {"macos": "orca_2mkl", "linux": "orca_2mkl", "windows": "orca_2mkl.exe"}}, "parallel": "processes"}
   ],

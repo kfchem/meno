@@ -79,7 +79,9 @@ class Prepare(unittest.TestCase):
         for l in decls:
             self.assertTrue(l["label"] and l["description"], l["id"])
             self.assertTrue(l.get("own") or l.get("parts"), l["id"])
-        self.assertIn("cartoon", looks)
+        # (looks made of Meno's own parts alone are Meno's, not declared here: the boundary, 2026-10-31)
+        for meno_s in ("glossy", "matte", "glass", "metal", "cartoon", "lineart"):
+            self.assertNotIn(meno_s, looks)
         for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "clay", "porcelain", "slime", "neon", "xray", "fur"):
             self.assertIn(own, looks)
             self.assertIn(own, worker.LOOKS)
@@ -354,7 +356,13 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "device", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish", "mode"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "device", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish"})
+        # (each in the part of Render's card it belongs to: a look's own choices with the look, the background and the lights with
+        # the scene, the rest with how it is rendered)
+        sections = {o["id"]: o.get("section") for o in m["roles"][0]["options"]}
+        self.assertEqual({k for k, v in sections.items() if v == "look"}, {"silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish"})
+        self.assertEqual({k for k, v in sections.items() if v == "scene"}, {"background", "key", "ambient", "softness"})
+        self.assertEqual({k for k, v in sections.items() if v == "render"}, {"engine", "samples", "denoise", "device", "colours", "quality"})
 
     def test_its_motions_are_the_worker_s_each_with_its_script(self):
         m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
@@ -364,20 +372,18 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / worker.motion_script(mid)).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), mid)
         for shared in ("studio.py", "change.py"):
             self.assertTrue((FOLDER / shared).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), shared)
-        # (Once or Loop is shown for its motions, and only for them)
-        mode = next(o for o in m["roles"][0]["options"] if o["id"] == "mode")
-        self.assertEqual(mode["when"], {"id": "motion", "in": declared})
-        # (each says how short a film of it can be; a change, each change's; and Loop is the mode's)
+        # (each says how short a film of it can be - a change, each change's - and that it is made with light traced: its studio
+        # is Cycles')
         for x in m["roles"][0]["motions"]:
             self.assertIn("change" if x["id"].startswith("change-") else "film", x.get("shortest", {}), x["id"])
-        self.assertEqual(m["roles"][0]["loopWhen"], {"id": "mode", "in": ["loop"]})
+            self.assertEqual(x.get("fixed"), [{"id": "engine", "value": "cycles", "why": "This motion is made with light traced"}], x["id"])
 
 
 class Motions(unittest.TestCase):
     FILM = {**SCENE, "film": True, "frames": 60, "fps": 30, "motion": "pulse"}
 
     def test_a_motion_s_film_carries_its_script_and_the_studio(self):
-        said = ask("prepare", step="render", entries=[self.FILM], options={"mode": "loop"})
+        said = ask("prepare", step="render", entries=[{**self.FILM, "mode": "loop"}], options={})
         self.assertTrue(said["ok"], said)
         files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
         self.assertEqual(files["studio.py"], (FOLDER / "studio.py").read_text(encoding="utf-8"))
@@ -396,14 +402,14 @@ class Motions(unittest.TestCase):
         self.assertNotIn("change.py", {f["name"] for f in said["result"]["jobs"][0]["files"]})
 
     def test_meno_s_own_motions_carry_none(self):
-        said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 60, "fps": 30}], options={"mode": "loop"})
+        said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 60, "fps": 30, "mode": "loop"}], options={})
         files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
         self.assertNotIn("studio.py", files)
         self.assertNotIn("motion", json.loads(files["render.json"]))
 
     def test_a_motion_it_does_not_make_or_a_mode_it_has_not_is_refused(self):
         self.assertFalse(ask("prepare", step="render", entries=[{**self.FILM, "motion": "wobble"}], options={})["ok"])
-        self.assertFalse(ask("prepare", step="render", entries=[self.FILM], options={"mode": "forever"})["ok"])
+        self.assertFalse(ask("prepare", step="render", entries=[{**self.FILM, "mode": "forever"}], options={})["ok"])
 
 
 def blender():
@@ -483,8 +489,8 @@ class MotionsRender(unittest.TestCase):
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": list(molecules)}}}]}
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
             # (a frame a second: each film as long as its motion's shortest, in a few frames)
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 1, "motion": motion}
-            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": background, "mode": mode, "device": "cpu"})
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 1, "motion": motion, "mode": mode}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": background, "device": "cpu"})
             self.assertTrue(said["ok"], said)
             job = said["result"]["jobs"][0]
             for f in job["files"]:
@@ -686,8 +692,8 @@ class Renders(unittest.TestCase):
         with tempfile.TemporaryDirectory() as m:
             scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": molecules}}}]}
             (pathlib.Path(m) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
-            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 6, "fps": 1, "motion": motion}
-            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": device, "mode": "loop"})
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": 6, "fps": 1, "motion": motion, "mode": "loop"}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": "white", "device": device})
             job = said["result"]["jobs"][0]
             files = {f["name"]: f["text"] for f in job["files"]}
             if probe_file:

@@ -189,7 +189,7 @@ that differ, it is given none, and says why.
 
 | Kind | Told by | Read by |
 | --- | --- | --- |
-| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | cclib (plugin, uv); the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint, written by its program); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
+| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | the ORCA interface (plugin, uv; ORCA's output) and the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint), each for what its program writes; cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
 | Molden file | `[Molden Format]`, as PySCF's manifest brings it | PySCF |
 | Cube file | its layout: two comment lines, four lines of a count and three numbers (`CUBE_MARK`) | cube (built in, web worker) |
 
@@ -1517,7 +1517,7 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     frame in its water - numbers them over again, or past the columns in
     a count of its own, or with stars. Those atoms' bonds are by distance;
   - HEADER's ID code and TITLE, kept for later;
-  - HELIX and SHEET records (Secondary Structure Section, since lane L5,
+  - HELIX and SHEET records (Secondary Structure Section, since
     2026-10-10), every field kept, and with them each atom's name and
     residue on the molecule in 3D: its chains drawn as ribbons
     (docs/WORKSPACE.md, *Ribbons*).
@@ -1615,37 +1615,53 @@ As step 3 was built:
     gives each one's molecule. The tests skip a file that is not there.
   - Psi3 is left out: cclib has no output of it to test with.
   - `probe` is in place, and tested with made-up plugins.
-- **An ORCA output's energy is ORCA's final one** (2026-10-24). cclib's
-  SCF energies for ORCA hold the SCF's energy and the dispersion's, and
-  not the other terms a composite method adds (gCP; B97-3c's short-range
-  basis term), which ORCA adds only in its *FINAL SINGLE POINT ENERGY*.
-  Measured on HCN, ORCA 6.1.1: 0.6 kcal/mol at r2SCAN-3c and 6.1 at
-  B97-3c. So the cclib plugin's worker gives each geometry of an ORCA
-  output the *FINAL SINGLE POINT ENERGY* written after it, one to each
-  geometry and in order (`orca_energies`). Where they are not one to each
-  geometry, it gives no electronic energy and says why ("Energies not
-  read: ..."), keeping the geometries and the free energies; it never
-  mixes them with the SCF's. That covers a single point written at no
-  geometry of its own (a displaced geometry's, for numerical frequencies),
-  a geometry with none, too few or too many, a compound job, and a nudged
-  elastic band. Each read says what its energy is: "ORCA final
-  single-point energy (includes dispersion and gCP where the method has
-  them)".
-  - The method and basis set are those the input names (the `!` line as
-    the output echoes it) that ORCA says it took as such: the functional
-    or composite method it says it recognised, else the method cclib read
-    where the input names it (HF, MP2); the orbital basis it says it used.
-    Otherwise neither is given: never cclib's "DFT", never an auxiliary
-    basis ("def2-mTZVPP/J"), and no basis after a composite method, whose
-    own it is.
-  - The PySCF plugin, which reads ORCA outputs for their orbitals, gives
-    none of an ORCA output's energies, method or basis. Meno takes each
-    from the first reader that gives one (lib/calc/read `combine`), so
-    cclib's SCF energies and "DFT" would otherwise stand in for the cclib
-    plugin's where it gives none.
-  - Gaussian and xTB have no such gap. Gaussian folds an empirical
-    dispersion into the nuclear repulsion, so *SCF Done* holds it. xtb's
-    *TOTAL ENERGY* holds its dispersion.
+- **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
+  *Several plugins, one role*): its manifest declares ORCA's output as its
+  own program's (`writtenBy`), and its `reader.py`, beside its worker,
+  reads it - a job's output, which its `collect` hands Meno to read, and a
+  file opened by hand alike. Written from the ORCA 6.1 manual and ORCA's
+  own outputs (ORCA 6.1.1, `scripts/calc/test_reader_orca.py`), it gives:
+  - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
+    point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
+    block in atomic units after it) left out; where a run of one geometry
+    wrote none, the input's one `* xyz` block, where that is surely the
+    geometry it worked at;
+  - **each geometry's energy as ORCA states it**, its *FINAL SINGLE POINT
+    ENERGY* - every term the method adds (dispersion, gCP, a composite
+    method's others, a correlated method's correlation) - one to each
+    geometry and in order, the same stated again unchanged counted once.
+    Where they are not one to each geometry - a compound job, a nudged
+    elastic band, a geometry with none, one stated where no geometry of its
+    own stands - no energy is given, and that is said ("Energies not read:
+    ..."), the geometries and the free energies kept. Each read says what
+    its energies are: "ORCA final single-point energy (includes dispersion
+    and gCP where the method has them)";
+  - **the level**, each as the input names it: the functional or composite
+    method ORCA says it recognised (its "omega" for the input's "w"), a
+    correlated method the input names (the MP2 and MDCI keywords, the
+    manual's Tables 3.34 and 3.43), Hartree-Fock, or a tight-binding method
+    by the xtb program's name; the orbital basis it says it used where the
+    input names it, none for a composite or tight-binding method; and the
+    **solvation** the input asks for - its simple keyword or its `%cpcm`
+    block, "CPCM(water)", "SMD(chloroform)" - or "none" where its input,
+    echoed whole, asks for none;
+  - the charge and multiplicity, **each atom's mass** as ORCA used it, how
+    the run went and why it stopped where it did, which geometry an
+    optimisation converged on (the one ORCA worked out once more at the
+    stationary point), and its results: the thermochemistry with its point
+    group, symmetry number, treatment of low vibrations and its correction
+    to G (*G-E(el)*); the dipole as printed, with its components and the
+    point it was taken about; each charge scheme it printed (Mulliken,
+    Löwdin, Hirshfeld, MBIS, CHELPG) and spin populations; the vibrations
+    with their IR intensities, Raman activities and motions; the orbitals,
+    all it printed; each geometry's RMS gradient; and a file's jobs
+    (`$new_job`) each an output of its own.
+  - A value ORCA did not print is not given: none is worked out in its
+    place - but the entropy, its printed *T S* term over the temperature
+    it printed, in cal/(mol K). A path's own points - a band's images and the point it refined,
+    a reaction path's - are in files of their own, which a job's `collect`
+    reads with the same module; an output opened by hand says they are not
+    in it.
 - **The one exception is closed** (the maintainer, 2026-10-15): the
   energies on an XYZ file's comment lines are read by the patterns of the
   plugins added, not by Meno. Each plugin whose program writes XYZ files

@@ -2,7 +2,7 @@
 
 Hydrogen bonds, van der Waals contacts and steric clashes shown where they
 are: a surface between the atoms, coloured by how strongly they attract or
-repel. Written on 2026-10-11 with the maintainer (lane L7, part B); what is
+repel. Written on 2026-10-11 with the maintainer; what is
 decided is under *Decided*.
 
 ## What it is for
