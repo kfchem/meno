@@ -113,6 +113,7 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
   };
   const imaginary = taken.find((f) => sameFrames(f.output) && Array.isArray(f.output.imaginary))?.output.imaginary;
   const warnings = first((o) => (Array.isArray(o.warnings) && o.warnings.length ? o.warnings : null));
+  const masses = first((o) => (Array.isArray(o.masses) && o.masses.length === atoms.length ? o.masses : null));
   return {
     output: {
       schema: OUTPUT_SCHEMA,
@@ -125,6 +126,8 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       multiplicity: first((o) => o.multiplicity),
       optimised: first((o) => o.optimised),
       atoms,
+      // (each atom's mass as the program used it, from the first that gives one to each)
+      ...(masses ? { masses } : {}),
       frames,
       energies: first((o) => (sameFrames(o) && o.energies?.length === frames.length ? o.energies : null)),
       // (each geometry's population and degeneracy, where a reader gives them - of these geometries, as energies are)

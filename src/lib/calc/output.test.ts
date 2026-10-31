@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { calcLine, calcOf, imaginaryWords, levelOf, marksOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
+import { ABOUT_CENTRE, calcLine, calcOf, imaginaryWords, levelOf, marksOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
+import type { ListResult, MoleculeResult } from "./results";
 import { combine, whoReads, checked } from "./read";
 import { READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { kindById, registered } from "../io/kinds";
@@ -333,3 +334,65 @@ describe("how a conformer search took conformers as one, as its program said it"
     ]);
   });
 });
+
+describe("a calculation's results in Meno's own form", () => {
+  // (hydroxide, made up: O at the origin, H 0.97 Å up z; its dipole as a program printed it, about a point 0.1 Å up z)
+  const hydroxide = (extra: Partial<ReaderOutput> = {}, dipole: Record<string, unknown> = {}): ReaderOutput => ({
+    schema: 1,
+    charge: -1,
+    multiplicity: 1,
+    atoms: ["O", "H"],
+    frames: [[0, 0, 0, 0, 0, 0.97]],
+    masses: [15.999, 1.008],
+    results: [{ id: "dipole", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", rank: 2, value: 1.0, vector: [0, 0, 1.0], origin: [0, 0, 0.1], ...dipole }],
+    ...extra,
+  });
+  const dipoleOf = (o: ReaderOutput) => calcOf(o, ["reader 1"]).results!.find((r) => r.id === "dipole") as MoleculeResult;
+
+  it("takes a charged molecule's dipole about the centre of mass of its last geometry, with the masses the program used - once", () => {
+    const d = dipoleOf(hydroxide());
+    // (the centre: 0.97 × 1.008 / 17.007 Å up z; μ' = μ - q (C - O), q = -1, in debye per e Å)
+    const centre = (0.97 * 1.008) / (15.999 + 1.008);
+    expect(d.label).toBe(ABOUT_CENTRE);
+    expect(d.origin![2]).toBeCloseTo(centre, 12);
+    expect(d.vector![2]).toBeCloseTo(1.0 + (centre - 0.1) * 4.803204712570263, 12);
+    expect(d.value as number).toBeCloseTo(Math.abs(d.vector![2]), 12);
+    // (read again - a workspace kept - it is not moved again: its origin is the centre now)
+    const again = calcOf({ ...hydroxide(), results: [d] }, ["reader 1"]).results!.find((r) => r.id === "dipole") as MoleculeResult;
+    expect([again.value, again.origin, again.label]).toEqual([d.value, d.origin, d.label]);
+  });
+
+  it("takes it about the centre of mass the program printed with it, where it did - before one worked out from masses", () => {
+    const d = dipoleOf(hydroxide({ masses: null }, { centre: [0, 0, 0.05] }));
+    expect([d.label, d.origin]).toEqual([ABOUT_CENTRE, [0, 0, 0.05]]);
+    expect(d.vector![2]).toBeCloseTo(1.0 + (0.05 - 0.1) * 4.803204712570263, 12);
+  });
+
+  it("takes it, where the program gave no masses, with the elements' standard atomic weights", () => {
+    const d = dipoleOf(hydroxide({ masses: null }));
+    // (NIST's standard atomic weights: O's interval [15.99903,15.99977], its midpoint; H's [1.00784,1.00811], its midpoint)
+    const centre = (0.97 * 1.007975) / (15.9994 + 1.007975);
+    expect([d.label, d.origin![2]]).toEqual([ABOUT_CENTRE, expect.closeTo(centre, 12)]);
+    // (masses not one to each atom: the standard weights too)
+    expect(dipoleOf(hydroxide({ masses: [1] })).origin![2]).toBeCloseTo(centre, 12);
+  });
+
+  it("leaves a dipole as given where it does not depend on the point - neutral - or cannot be moved: no origin, or no weight for an element", () => {
+    expect(dipoleOf(hydroxide({ charge: 0 })).value).toBe(1.0);
+    expect(dipoleOf(hydroxide({}, { origin: undefined })).value).toBe(1.0);
+    expect(dipoleOf(hydroxide({ masses: null, atoms: ["O", "Og"] })).label).toBe("Dipole moment");
+  });
+
+  it("writes a point group and Mulliken symbols as Meno writes them, for display and comparison", () => {
+    const out = hydroxide({
+      results: [
+        { id: "thermo.point-group", on: "molecule", group: "Thermochemistry", label: "Point group", value: "c2v" },
+        { id: "vibrations", on: "list", group: "Vibrations", label: "Vibrations", columns: [{ label: "Symmetry", quantity: "symmetry" }, { label: "Frequency", quantity: "wavenumber" }], rows: [{ cells: ["BU", 3600] }, { cells: ["a'", 1600] }] },
+      ],
+    });
+    const calc = calcOf(out, ["reader 1"]);
+    expect(calc.results!.find((r) => r.id === "thermo.point-group")).toMatchObject({ value: "C2v" });
+    expect((calc.results!.find((r) => r.id === "vibrations") as ListResult).rows.map((r) => r.cells)).toEqual([["Bu", 3600], ["A'", 1600]]);
+  });
+});
+
