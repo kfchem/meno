@@ -131,10 +131,9 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
   tab behind waits, unanswered, the keys the tab's in front, Escape too,
   until its own tab comes back.
-- Because every live canvas holds a WebGL context and browsers keep only about
-  16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
-  past the limit is refused with a notice rather than silently blanking the
-  oldest view.
+- Every live canvas holds a WebGL context, and `lib/core/limits.ts`
+  budgets them, 16 in all: a workspace costs one, and opening past the
+  limit is refused with a notice.
 - Meno starts on a workspace, and "+" makes another: the canvas is
   the workspace (docs/WORKSPACE.md), so there is no start page.
 - **Open** (Ctrl/Cmd+O, or the menu) reads the files picked in the system's

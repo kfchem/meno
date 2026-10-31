@@ -53,8 +53,8 @@ hold both.
 - **3D coordinates.** Nothing makes them from a drawing: the chemistry
   worker gives 2D coordinates only. A MOL or SDF file's z is dropped as it
   opens in 2D, and only XYZ files reach the 3D viewer.
-- **Graphics contexts.** Every canvas is one, and only about 16 can be
-  live (`lib/core/limits.ts`). A workspace is one canvas.
+- **Graphics contexts.** Every canvas is one, and Meno keeps 16 live at
+  most (`lib/core/limits.ts`). A workspace is one canvas.
 
 The 3D viewer is simple enough that the canvas gets its own 3D layers,
 built the way the 2D layers are, rather than the viewer moved in as it is.
@@ -1364,8 +1364,8 @@ space-filling side by side is better science than either alone.
 - **Settings' page** (the maintainer, 2026-10-15). At the top, two slots,
   Primary and Secondary, each with its molecule drawn live and turnable;
   below them every other style, built in and the user's own, each with a
-  still picture (drawn once, a frame apart, all with one renderer - a
-  context for each took the live ones' away). A style dragged onto a slot
+  still picture (drawn once, a frame apart, all with one renderer). A
+  style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
   each card going to its new place eased, not jumping. A slot's molecule
