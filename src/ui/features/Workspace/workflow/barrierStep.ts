@@ -184,10 +184,13 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
     value: kcal(sv) - kcal(tv) - lessSigma,
     unit: "kcal/mol",
     at: { geometry: geometryKey(saddle.xyz), ...(sv.at?.kelvin != null ? { kelvin: sv.at.kelvin } : {}), ...(sv.at?.atm != null ? { atm: sv.at.atm } : {}), ...(sv.at?.solvent != null ? { solvent: sv.at.solvent } : {}) },
-    by: { ...level, treatment: `${what}: the saddle point's less its start ${t}'s${symmetry}${imaginary}` },
+    by: { ...level, treatment: `${what}: the saddle point's less its start ${t}'s${symmetry}${imaginary}${unstated(sv) ? "; solvation not stated" : ""}` },
     status: "computed",
   };
 }
+
+/** Whether a value says no solvation, its own or any part a program worked out: one side's matched the other's as not stated, never silently. */
+const unstated = (p: Property): boolean => (p.parts ? p.parts.some((q) => q.at && q.at.solvent == null) : p.at?.solvent == null);
 
 /** The level and conditions a barrier is of, in a few words: "G at GFN2-xTB, 298.15 K" - of a sum, its parts. */
 function ofWords(p: Property, energy: BarrierEnergy, free: string): string {
