@@ -162,6 +162,12 @@ class Gaussian(unittest.TestCase):
         # (its first mode as Gaussian printed it: AU, 53.1981 cm-1, 3.2266 amu, 0.0342 km/mol)
         self.assertEqual(v["rows"][0]["cells"], [1, "AU", 53.1981, 3.2266, 0.0342])
 
+    def test_the_correction_to_g_is_its_g_less_its_energy(self):
+        # (Gaussian prints both to six places; a single point prints none)
+        r = read(sample("Gaussian/dvb_ir.out"))["result"]
+        self.assertAlmostEqual(result(r, "thermo.g-correction")["value"], result(r, "thermo.free-energy")["value"] - r["energies"][-1], delta=1e-6)
+        self.assertIsNone(result(read(sample("Gaussian/dvb_sp.out"))["result"], "thermo.g-correction"))
+
     def test_a_correlated_energy_over_the_scf(self):
         r = read(sample("Gaussian/water_mp2.log"))["result"]
         self.assertEqual(r["method"], "MP2")

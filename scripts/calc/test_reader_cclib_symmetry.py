@@ -1,6 +1,6 @@
-"""The cclib plugin's reading of the symmetry a frequency job's thermochemistry took, and how it treated its low
-vibrations, as ORCA and Gaussian print them (`thermo_said`). Made-up fragments in each program's printed form - ORCA
-6.1.1's, Gaussian 16's - no program's output in the repository.
+"""The cclib plugin's reading of the symmetry a frequency job's thermochemistry took, how it treated its low
+vibrations, and its correction to G, as ORCA and Gaussian print them (`thermo_said`). Made-up fragments in each
+program's printed form - ORCA 6.1.1's, Gaussian 16's - no program's output in the repository.
 
 They need cclib, as the plugin's other tests do (scripts/calc/test_reader_cclib.py says how to make its environment):
 
@@ -57,6 +57,19 @@ class Symmetry(unittest.TestCase):
 
     def test_gaussian_its_point_group_and_rotational_symmetry_number(self):
         self.assertEqual(self.said(GAUSSIAN, "gaussian"), {"thermo.point-group": "C2V", "thermo.symmetry-number": 2})
+
+    def test_the_correction_to_g_as_each_program_printed_it(self):
+        # (ORCA 6.1.1's "G-E(el)" in the Gibbs free energy section; Gaussian 16's line among its thermal corrections)
+        orca = ORCA + "Final Gibbs free energy         ...     -4.40213610 Eh\nG-E(el)                           ...      0.01829101 Eh     11.48 kcal/mol\n"
+        self.assertEqual(self.said(orca, "orca")["thermo.g-correction"], 0.01829101)
+        gaussian = GAUSSIAN + " Thermal correction to Enthalpy=                 0.025104\n Thermal correction to Gibbs Free Energy=         0.003654\n"
+        self.assertEqual(self.said(gaussian, "gaussian")["thermo.g-correction"], 0.003654)
+        # (in hartree, an energy; of several jobs, the last)
+        r = next(x for x in worker.thermo_said(orca + orca.replace("0.01829101", "0.02000000"), "orca") if x["id"] == "thermo.g-correction")
+        self.assertEqual((r["value"], r["quantity"]), (0.02, "energy"))
+        # (each program's line, not another's)
+        self.assertNotIn("thermo.g-correction", self.said(orca, "gaussian"))
+        self.assertNotIn("thermo.g-correction", self.said(gaussian, "orca"))
 
     def test_none_where_none_is_printed(self):
         # (not printed, not read: Meno works none out itself)
