@@ -2119,8 +2119,7 @@ Then, of the leftovers the maintainer chose:
   difference), its population threshold and its energy window (kcal/mol),
   each the last value the run printed - are said on the conformer set's
   frames chip, under *Same conformer (CREGEN)*: never as asked, never a
-  default. One it does not print is not said (CREST 2.12 prints no pair
-  energy threshold). A search's results are of its run, so the conformer
+  default. One it does not print is not said. A search's results are of its run, so the conformer
   set keeps them; a job run on each conformer keeps its own with that
   conformer, never with the set.
 - **Each conformer's degeneracy, as CREST finds it** (2026-10-13): the
