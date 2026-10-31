@@ -247,7 +247,7 @@ export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDoc
  * endpoints are not all atoms of the part, the bond binds no ring and keeps
  * none (a plain bond to its star). Left as they were, endpoints named atoms
  * gone, drawn from nowhere, and a set round the complex took a frame of
- * NaN (the command centre's document fuzzer, 2026-10-13). An edit to the
+ * NaN (a document fuzzer, 2026-10-13). An edit to the
  * drawing takes such a bond away with its star instead (chem/eta `etaHeld`).
  */
 export function endpointsHeld(model: Model): Model {
