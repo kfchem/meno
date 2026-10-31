@@ -1309,11 +1309,10 @@ states an undo goes back to as well.
   conda-forge with the chemist's consent; their licences are shown in
   Settings, *Plugins*, as each plugin's is.
 - **Programs installed separately** are found, never fetched or shipped.
-- **ACCeL** (MIT), if its second version comes as a plugin, is fetched
-  like any other, its notice shown with it. Meno's own steps on entries
-  are written for Meno from this specification and published methods;
-  ACCeL's code is not copied into Meno (were it ever, its MIT notice
-  would go with it - Meno is Apache-2.0).
+- **ACCeL** (MIT): Meno's atom mapping is first a port of ACCeL's
+  mapper, with the maintainer's permission and its MIT notice kept
+  (ATOM-MAPPING.md). Meno's other steps on entries are written for Meno
+  from this specification and published methods.
 - **Figures and icons** here and in the app are Meno's own.
 
 ## Where this leaves what is there
