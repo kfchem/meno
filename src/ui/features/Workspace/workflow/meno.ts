@@ -10,7 +10,7 @@ import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
-import { entries as countEntries, workedOutAs } from "../../../../lib/nodes/base";
+import { alikeIn, entries as countEntries, workedOutAs, workedOutDiffer } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
 import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, atomMapSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, torsionsSet, withSaid } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
@@ -27,7 +27,7 @@ import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
-import { imaginaryWords } from "../../../../lib/calc/output";
+import { imaginaryWords, levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import { numberText } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "./failures";
 
@@ -45,8 +45,11 @@ export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; 
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** A molecule's calculation as far as its energies' level goes: its program, method, basis and solvation (run `energyLevels`). */
+export type CalcLevel = Pick<CalcInfo, "program" | "method" | "basis" | "solvation">;
+
 /** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`), and each molecule's, by id, where it compares them across molecules (`energyLevels`). */
-export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, levels?: ReadonlyMap<number, string>): Outcome3D {
+export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, levels?: ReadonlyMap<number, CalcLevel>): Outcome3D {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
@@ -198,7 +201,7 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
  * stopped: null. The other steps take no time to speak of, and are done
  * at once.
  */
-export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}, levels?: ReadonlyMap<number, string>): Promise<Outcome3D | null> {
+export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}, levels?: ReadonlyMap<number, CalcLevel>): Promise<Outcome3D | null> {
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy, levels);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   const now = how.now ?? (() => performance.now());
@@ -447,11 +450,9 @@ function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly
   const without = entries.find((e) => !g.get(e));
   if (without) return electronic(`${name(without)} has none`);
   for (const { said, entries: c } of groups) {
-    const first = workedOutAs(g.get(c[0])!);
     for (const e of c.slice(1)) {
-      const these = workedOutAs(g.get(e)!);
-      const k = these.findIndex(([, v], i) => v !== first[i][1]);
-      if (k >= 0) return electronic(`${said} differ in ${first[k][0]}: ${first[k][1]} (${name(c[0])}) and ${these[k][1]} (${name(e)})`);
+      const d = workedOutDiffer(g.get(c[0])!, g.get(e)!);
+      if (d) return electronic(`${said} differ in ${d[0]}: ${d[1]} (${name(c[0])}) and ${d[2]} (${name(e)})`);
     }
   }
   if (kelvin != null) {
@@ -604,7 +605,7 @@ const mirrorsOf = (options: OptionValues): Mirrors => (options.mirrors === "coun
  * conformers (`partOf`); those kept, the compound as it came, its copies
  * merged. In a compound set they are copies of a structure, of no search.
  */
-function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean, groupBy?: string, levels?: ReadonlyMap<number, string>): Generator<number, Outcome3D> {
+function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean, groupBy?: string, levels?: ReadonlyMap<number, CalcLevel>): Generator<number, Outcome3D> {
   if (mirrors === "counted") {
     const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
     if (unknown >= 0) return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: a mirror image is counted in only where it is the same stereoisomer` };
@@ -747,23 +748,29 @@ const LOWER_UNKNOWN = "alike, but which is lower is not known";
  * of those alike across compounds: their free energies, where each has one
  * worked out the same way (`workedOutAs`); else their electronic energies,
  * where each molecule's calculation (`levels`, by molecule id - its program
- * and level, `energyLevels`) is the same, or none says one. Else how two
+ * and level, `energyLevels`) is the same, or none says one: the method and
+ * basis whatever their case (lib/nodes `alikeIn`). Else how two
  * differ - "free energies differ in method, M1 (b #1) and M2 (c #1)".
  */
-function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, string>): { energy: (e: SetEntry) => number } | { unlike: string } {
+function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, CalcLevel>): { energy: (e: SetEntry) => number } | { unlike: string } {
   const free = g.map(freeEnergyOf);
   if (free.every(Boolean)) {
-    const first = workedOutAs(free[0]!);
     for (let i = 1; i < g.length; i++) {
-      const these = workedOutAs(free[i]!);
-      const k = these.findIndex(([, v], j) => v !== first[j][1]);
-      if (k >= 0) return { unlike: `free energies differ in ${first[k][0]}, ${first[k][1]} (${named(g[0])}) and ${these[k][1]} (${named(g[i])})` };
+      const d = workedOutDiffer(free[0]!, free[i]!);
+      if (d) return { unlike: `free energies differ in ${d[0]}, ${d[1]} (${named(g[0])}) and ${d[2]} (${named(g[i])})` };
     }
     return { energy: (e) => freeEnergyOf(e)!.value as number };
   }
-  const level = (e: SetEntry) => (e.from != null ? levels?.get(e.from) : undefined) ?? "not stated";
-  const k = g.findIndex((e) => level(e) !== level(g[0]));
-  if (k >= 0) return { unlike: `energies differ in level, ${level(g[0])} (${named(g[0])}) and ${level(g[k])} (${named(g[k])})` };
+  const level = (e: SetEntry) => (e.from != null ? levels?.get(e.from) : undefined);
+  const said = (e: SetEntry) => {
+    const c = level(e);
+    return c ? [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ") : "not stated";
+  };
+  // (the method and basis whatever their case, as every value's are compared - lib/nodes `alikeIn`)
+  const alike = (a?: CalcLevel, b?: CalcLevel) =>
+    !a || !b ? a === b : a.program === b.program && a.solvation === b.solvation && alikeIn("method", a.method ?? "", b.method ?? "") && alikeIn("basis", a.basis ?? "", b.basis ?? "");
+  const k = g.findIndex((e) => !alike(level(e), level(g[0])));
+  if (k >= 0) return { unlike: `energies differ in level, ${said(g[0])} (${named(g[0])}) and ${said(g[k])} (${named(g[k])})` };
   return { energy: (e) => e.energy! };
 }
 

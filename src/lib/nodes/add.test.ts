@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { geometryKey, type Property } from "../entry";
 import { add, partSaid, type GivenPart } from "./add";
+import { workedOutUnlike } from "./base";
+import { rank } from "./rank";
 import { standardStateBy, standardStateTerm } from "./standardState";
 import { entry } from "./testEntries";
 
@@ -80,5 +82,22 @@ describe("Add", () => {
     expect(add([], { parts: ["energy"], as: "G" })).toEqual({ ok: false, said: "Name two parts or more to add" });
     expect(add([], { parts: ["energy", "x"], as: " " })).toEqual({ ok: false, said: "Name what the sum is written as" });
     expect(add([], { parts: ["energy", "energy"], as: "G" })).toEqual({ ok: false, said: "A property is named twice" });
+  });
+
+  it("gives sums whose parts' method and basis differ in case alone that are worked out alike - each part as read - and still tells another method apart", () => {
+    const named = (method: string, basis: string): Property => ({ ...sp(-500.1), by: { program: "Gaussian", method, basis } });
+    const sums = (a: Property, b: Property) => {
+      const out = add([entry("x", { energy: a, "thermo.g-correction": gcorr(0.12) }, "g"), entry("y", { energy: b, "thermo.g-correction": gcorr(0.11) }, "g")], { parts: ["energy", "thermo.g-correction"], as: "G" });
+      if (!out.ok) throw new Error(out.said);
+      return out.exits.done;
+    };
+    const alike = sums(named("wB97X-D", "6-311+G(d,p)"), named("WB97X-D", "6-311+g(d,p)"));
+    expect(alike[1].properties.G.parts![0].by).toMatchObject({ method: "WB97X-D", basis: "6-311+g(d,p)" });
+    expect(workedOutUnlike(alike, "G")).toBeNull();
+    const ranked = rank(alike, { property: "G", order: "lowest first", keep: 1, within: "each group" });
+    expect(ranked.ok && ranked.exits.kept.map((e) => e.id)).toEqual(["y"]);
+    // (another method, or a basis by another name - only case is passed over)
+    expect(workedOutUnlike(sums(named("wB97X-D", "6-311+G(d,p)"), named("M06-2X", "6-311+G(d,p)")), "G")).toMatch(/^differ in thermal treatment: sum: energy \(wB97X-D\/6-311\+G\(d,p\), /);
+    expect(workedOutUnlike(sums(named("B3LYP", "6-31G*"), named("B3LYP", "6-31G(d)")), "G")).toMatch(/^differ in thermal treatment: /);
   });
 });

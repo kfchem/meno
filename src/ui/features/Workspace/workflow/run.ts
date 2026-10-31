@@ -27,7 +27,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 
 export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
-import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
+import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
 import { measuredSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -376,8 +376,13 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
 }
 
 /** Each molecule's energies' program and level, by its id, where its calculation said either: how Duplicates tells energies of two levels apart across molecules. */
-export function energyLevels(molecules: readonly Pick<Molecule3D, "id" | "calc">[]): Map<number, string> {
-  return new Map(molecules.flatMap((m) => (m.calc && (m.calc.program || levelOf(m.calc)) ? [[m.id, [m.calc.program, levelOf(m.calc)].filter(Boolean).join(" \u00b7 ")] as const] : [])));
+export function energyLevels(molecules: readonly Pick<Molecule3D, "id" | "calc">[]): Map<number, CalcLevel> {
+  return new Map(
+    molecules.flatMap((m) => {
+      const c = m.calc;
+      return c && (c.program || levelOf(c)) ? [[m.id, { program: c.program, method: c.method, basis: c.basis, solvation: c.solvation }] as const] : [];
+    }),
+  );
 }
 
 /** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
