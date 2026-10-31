@@ -67,9 +67,8 @@ stops being part of the work.
    - **What is on the page is drawn as its labels are, in signed-distance
      type (troika)**, sharp at every zoom: atoms' labels and words on the
      page, as now, and a text's sheet. **What is in the column is drawn
-     by the system's own type**, made into pictures line by line, as sharp
-     as any editor's: the column is zoomed into only as a thing opens or
-     closes.
+     by the system's own type**, made into pictures line by line: the
+     column is zoomed into only as a thing opens or closes.
 
 ## What a thing on the page is
 
@@ -190,7 +189,7 @@ stops being part of the work.
     tiles have come and faded in, at twice it, faded in over them. The
     levels lie on a grid a sixteenth of a doubling apart, so a view
     stopped a hair from where it was keeps the tiles it has.
-  - Why twice: PDFium's small letters drawn at the screen's own scale come
+  - Why twice: a page's small letters drawn at the screen's own scale come
     out lighter than drawn finer and shrunk to it. At 1 to 1.41 times, a
     paper's text was a tenth to a third lighter than 0.1.12's 1 to 2
     times (found on Windows, 2026-10-16); at twice, it is as dark at every
@@ -361,8 +360,7 @@ PDFs there - one step, which an undo takes back. It is held as any other
     set in, signed-distance glyphs made as they are needed (troika),
     sharp at every zoom.
   - **In the column**, each line is drawn by the system's own type into a
-    picture, and the pictures are textures: as sharp as an editor's, and
-    any letter Meno's own fonts lack is taken from the system's, as a
+    picture, and the pictures are textures; any letter Meno's own fonts lack is taken from the system's, as a
     browser takes it.
   - **Between the two**, a text rising from the page into the column
     moves in the page's type, and once it has settled its lines come up
