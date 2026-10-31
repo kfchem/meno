@@ -975,13 +975,12 @@ The same for every plugin and for Meno's own parts:
     entry is given, in `files`, the outputs its step's `files` take;
   - `run {step, entries, options, holds}` - a kind of step it does at
     once, in its worker, with no job: the entries it kept, by their
-    place. (None of the bundled plugins does such a step: *Duplicates*,
-    the one there was, is Meno's own since RDKit plugin 0.1.16.) `holds` says whether they came as a
-    conformer set or a compound set. Where it counted a mirror image in
-    one kept, it says so beside them - `"counted": [{"entry": 0,
-    "degeneracy": 2, "mirror": [...]}]`, the atoms the mirror image swaps
-    as a permutation - and an entry given carries its `degeneracy`, where
-    it has one. `"capped": 2` says how many compounds it took atom against
+    place. (None of the bundled plugins does such a step.) `holds` says
+    whether they came as a conformer set or a compound set. Where it
+    counted a mirror image in one kept, it says so beside them -
+    `"counted": [{"entry": 0, "degeneracy": 2, "mirror": [...]}]`, the
+    atoms the mirror image swaps as a permutation - and an entry given
+    carries its `degeneracy`, where it has one. `"capped": 2` says how many compounds it took atom against
     atom, their ways onto themselves too many to try: a duplicate of one
     could be missed, and the step says so;
   - **steps on structures drawn** (`run` with `holds` "structures":
