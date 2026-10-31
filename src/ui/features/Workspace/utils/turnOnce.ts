@@ -12,7 +12,7 @@ import type { Turn3D } from "../store/types";
  * them, stops it gently and leaves it to them.
  */
 
-/** How long a turn once round takes, in ms (the command centre, 2026-10-16: as a film's turn is proposed). */
+/** How long a turn once round takes, in ms (2026-10-16: as a film's turn is proposed). */
 export const TURN_ONCE_MS = 4000;
 /** How long a turn stopped takes to come to rest, in ms. */
 export const STOP_MS = 400;

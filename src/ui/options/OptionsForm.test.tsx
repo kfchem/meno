@@ -22,4 +22,16 @@ describe("a role's options in a card", () => {
     expect(html).toMatch(/<span class="-m-0\.5 [^"]*overflow-y-auto p-0\.5"/);
     expect(html).toMatch(/<textarea[^>]*class="[^"]*outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"/);
   });
+
+  it("says a choice with only one to have as text, with no control, its note beneath", () => {
+    const options: Option[] = [
+      { id: "engine", label: "Renderer", type: "choice", default: "cycles", choices: [{ value: "cycles", label: "Cycles: light traced" }], note: "This motion is made with light traced" },
+    ];
+    const html = renderToString(<OptionsForm options={options} values={{ engine: "cycles" }} onChange={() => {}} />);
+    expect(html).toContain("Renderer");
+    expect(html).toContain("Cycles: light traced");
+    expect(html).toContain("This motion is made with light traced");
+    expect(html).not.toContain('role="radiogroup"');
+    expect(html).not.toContain('type="radio"');
+  });
 });

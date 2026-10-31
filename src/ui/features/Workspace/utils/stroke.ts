@@ -66,7 +66,7 @@ type StrokeAtom = StrokeModel["atoms"][number];
 /**
  * A drawing as a stroke asks of it, made once as it changes, not at every
  * step of a stroke - over a drawing of 28 000 atoms that took 36 to 112 ms
- * a step (the command centre's hot-path audit): each atom by its id, with
+ * a step (a hot-path audit): each atom by its id, with
  * its place in the drawing; what each is bonded to; and the atoms by
  * square, `GRID` a side, to find one near a point.
  */

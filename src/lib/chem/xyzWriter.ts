@@ -45,8 +45,7 @@ export function writeXyz(frames: readonly XyzFrame[]): string {
  * words: it holds each atom's element and position only, so their charges,
  * radicals, isotopes and bonds are not written - each said, with how many,
  * where there are any; null where there is nothing it leaves out. The
- * format's own limit, said rather than kept silent (the command centre,
- * 2026-10-22).
+ * format's own limit, said rather than kept silent (2026-10-22).
  */
 export function xyzLeavesOut(molecules: readonly { atoms: readonly { charge?: number; radical?: unknown; isotope?: number }[]; bonds: readonly unknown[] }[]): string | null {
   const atoms = molecules.flatMap((m) => m.atoms);

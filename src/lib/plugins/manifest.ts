@@ -142,7 +142,13 @@ export type LookDecl = { id: string; label: string; description?: string; parts?
  * short description. The plugin builds it from the scene and its molecules' atoms and bonds; Meno writes the scene still for it.
  * Its options - Once or Loop among them - are the role's, each `when` this motion is chosen.
  */
-export type MotionDecl = { id: string; label: string; description?: string; shortest?: Shortest };
+export type MotionDecl = { id: string; label: string; description?: string; shortest?: Shortest; fixed?: FixedChoice[] };
+
+/**
+ * A choice a motion is always made with, whatever was chosen - a renderer of light traced, say: the card shows it so, and says
+ * why (`why`), rather than offering what the motion would not take. `id` is one of the role's options or Render's own.
+ */
+export type FixedChoice = { id: string; value: string; why: string };
 
 /**
  * The shortest a film of a motion can be and still be read, in seconds (docs/RENDER.md, *How long a film can be*): the whole
@@ -160,8 +166,6 @@ export type RoleDecl = {
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
   motions?: MotionDecl[];
-  /** Where a film comes back to its start, over and over: while its option `id` has one of these values (Render's Loop). */
-  loopWhen?: { id: string; in: (string | number | boolean)[] };
 };
 
 /**
@@ -502,12 +506,16 @@ function shortestOf(v: unknown): Shortest | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-/** Where a role's film loops, read as a `when` is: an option's id and the values that loop it; what is not that, none. */
-function loopWhenOf(v: unknown): RoleDecl["loopWhen"] {
-  const r = v as Record<string, unknown> | null;
-  if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || !Array.isArray(r.in)) return undefined;
-  const values = r.in.filter((x): x is string | number | boolean => typeof x === "string" || typeof x === "boolean" || (typeof x === "number" && Number.isFinite(x))).slice(0, 20);
-  return values.length ? { id: r.id, in: values } : undefined;
+/** The choices a motion is always made with, each an option's id, its value and why, read as data; what is not that is left out. */
+function fixedOf(v: unknown): FixedChoice[] {
+  const out: FixedChoice[] = [];
+  for (const raw of list(v).slice(0, 10)) {
+    const r = raw as Record<string, unknown> | null;
+    const why = typeof r?.why === "string" ? r.why.trim().slice(0, 120) : "";
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9_-]{0,39}$/.test(r.id) || typeof r.value !== "string" || !r.value || !why) continue;
+    if (!out.some((f) => f.id === r.id)) out.push({ id: r.id, value: r.value.slice(0, 80), why });
+  }
+  return out;
 }
 
 /** The motions a render role declares, each checked: an id (none of Meno's own), a label, a description - what is not understood is left out. */
@@ -522,7 +530,8 @@ function acceptMotions(v: unknown): MotionDecl[] {
     seen.add(r.id);
     const description = typeof r.description === "string" && r.description.trim() ? r.description.trim().slice(0, 200) : undefined;
     const shortest = shortestOf(r.shortest);
-    out.push({ id: r.id, label, ...(description ? { description } : {}), ...(shortest ? { shortest } : {}) });
+    const fixed = fixedOf(r.fixed);
+    out.push({ id: r.id, label, ...(description ? { description } : {}), ...(shortest ? { shortest } : {}), ...(fixed.length ? { fixed } : {}) });
     if (out.length >= 40) break;
   }
   return out;
@@ -807,14 +816,12 @@ export function acceptManifest(raw: unknown): Manifest | null {
           // (options only for a role that takes them)
           const looks = acceptLooks(r.looks);
           const motions = acceptMotions(r.motions);
-          const loopWhen = motions.length ? loopWhenOf(r.loopWhen) : undefined;
           return {
             role: r.role,
             programs,
             options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
             ...(looks.length ? { looks } : {}),
             ...(motions.length ? { motions } : {}),
-            ...(loopWhen ? { loopWhen } : {}),
           };
         },
         (r) => r.role,

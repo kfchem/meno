@@ -206,7 +206,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const plugin = renderer();
   if (!plugin) return;
   // (a film shorter than its motion can be read in is refused here, however it was asked for: Meno's rule, which no renderer keeps)
-  const short = tooShort(ask, options, plugin.roleMotions?.render, plugin.roleLoopWhen?.render, ids.length);
+  const short = tooShort(ask, plugin.roleMotions?.render, ids.length);
   if (short) throw new Error(short);
   const shown = await shownOf(store, ids);
   if (closing.aborted) return;
