@@ -60,9 +60,7 @@ each is merged, this file describes what is built.
     once*).
 12. **Meno does the simple steps itself, a plugin may do them instead**,
     the chemist choosing which - as *Files* chooses who reads a kind of
-    file (FILE-IO.md). ACCeL's second version is under way, outside this
-    repository: it may come later as a plugin that fills these steps.
-    RDKit can fill *Duplicates* too (*Who does a step*).
+    file (FILE-IO.md). RDKit can fill *Duplicates* too (*Who does a step*).
 13. **A conformer set is converted to only on purpose**: what the chemist
     gathers into a set is a compound set; a step of its own, *As
     conformers*, makes it a conformer set, on the page for the flow to
