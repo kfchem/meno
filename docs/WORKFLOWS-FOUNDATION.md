@@ -284,6 +284,15 @@ Populations reads `thermo.free-energy`, and groups only values worked out
 alike: the same temperature, solvent and pressure, by the same program,
 method, basis and treatment.
 
+**A method and a basis, whatever their case** (2026-11-01; lib/nodes
+`alikeIn`). Wherever values are compared for how they were worked out -
+*Rank*, *Relative*, *Ensemble energy*, *Populations*, *Duplicates*,
+*Barrier*, and sums made by *Add* - a method or a basis named in another
+case is the same one: inputs name them either way ("B3LYP", "b3lyp"), and
+a program prints each as its input named it. Each is shown as read. Case
+is all that is passed over: "6-31G*" and "6-31G(d)" are two names, and
+are told apart.
+
 **Shapes a value takes** (`src/lib/entry.ts`, `valueFault` holds each to
 its entry):
 - **a list says what it is per**, always: three numbers are three atoms'

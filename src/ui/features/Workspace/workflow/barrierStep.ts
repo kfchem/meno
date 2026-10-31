@@ -22,8 +22,8 @@
  * The barrier is written on the saddle point, in kcal/mol: (X(saddle point)
  * - X(start)) at the hartree's CODATA 2018 value (lib/units).
  */
-import { geometryKey, type Property, type PropertyPart } from "../../../../lib/entry";
-import { workedOutAs } from "../../../../lib/nodes/base";
+import { geometryKey, type Property } from "../../../../lib/entry";
+import { partValue, workedOutDiffer } from "../../../../lib/nodes/base";
 import { R_GAS } from "../../../../lib/nodes/standardState";
 import { convert, isUnit, sameDimension, type Unit } from "../../../../lib/units";
 import { convergedOf } from "./converged";
@@ -65,15 +65,10 @@ export function barrierHow(v: Record<string, string | number | boolean>): string
   return `${of}, each saddle point less its start, ${pairs}`;
 }
 
-/** A sum's part as a value of its own, so that how it was worked out reads as a value's does (lib/nodes `workedOutAs`). */
-const asValue = (p: PropertyPart): Property => ({ value: p.value, unit: p.unit, ...(p.at ? { at: p.at } : {}), ...(p.by ? { by: p.by } : {}), status: "computed" });
-
-/** How two values were worked out differently, in a few words - "temperature: 298.15 K and 310 K" - or nothing where alike. */
+/** How two values were worked out differently, in a few words - "temperature: 298.15 K and 310 K" - or nothing where alike (lib/nodes `workedOutDiffer`). */
 function differ(a: Property, b: Property): string | null {
-  const x = workedOutAs(a);
-  const y = workedOutAs(b);
-  const k = x.findIndex(([, v], i) => v !== y[i][1]);
-  return k < 0 ? null : `${x[k][0]}: ${x[k][1]} and ${y[k][1]}`;
+  const d = workedOutDiffer(a, b);
+  return d ? `${d[0]}: ${d[1]} and ${d[2]}` : null;
 }
 
 /** The value `name` of an entry, of its own geometry, worked out, an energy: or why not. */
@@ -99,7 +94,7 @@ function unlikeValues(s: Property, t: Property, name: string, start: string, g: 
     if (!sp || !tp || sp.length !== tp.length || sp.some((q, i) => q.property !== tp[i].property))
       return `${name} of the saddle point is ${said(s)}, of its start ${start} ${said(t)}: not summed of the same parts`;
     for (let i = 0; i < sp.length; i++) {
-      const d = differ(asValue(sp[i]), asValue(tp[i]));
+      const d = differ(partValue(sp[i]), partValue(tp[i]));
       if (d) return `their ${sp[i].property} in ${name} were not worked out alike - ${d}`;
       if (g && thermal(sp[i].property) && (sp[i].by?.symmetryNumber == null || tp[i].by?.symmetryNumber == null))
         return `the rotational symmetry number ${sp[i].property} in ${name} was worked out with was not read of ${sp[i].by?.symmetryNumber == null ? "the saddle point" : `its start ${start}`}: its rotational entropy cannot be told`;
