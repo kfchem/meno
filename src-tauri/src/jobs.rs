@@ -2235,28 +2235,79 @@ pub struct JobAsk {
 }
 
 /// A program of another plugin a plugin's jobs may need, as its manifest
-/// declares it (`needs`): that plugin, its program by the name its manifest
-/// gives it, and the variable the job is told where it is in.
+/// declares it (`depends`, docs/PLUGINS.md *Depends*): that plugin, the
+/// versions of it it works with, its program by the name that plugin's
+/// manifest gives it, and the variable the job is told where it is in.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Need {
     pub plugin: String,
+    pub versions: String,
     pub program: String,
     pub env: String,
 }
 
-/// What a manifest declares its jobs may need of other plugins' programs - all as they must be, or none.
+/// A version as numbers - "0.1.4", [0, 1, 4]; none, where it is not one (as lib/plugins/depends `versionParts`).
+fn version_parts(v: &str) -> Option<Vec<u64>> {
+    let parts: Vec<&str> = v.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 || parts.iter().any(|p| p.is_empty() || p.len() > 6 || !p.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    Some(parts.iter().map(|p| p.parse().unwrap_or(0)).collect())
+}
+
+/// Which of two versions comes first ("1.2" is "1.2.0").
+fn version_order(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
+    (0..a.len().max(b.len())).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal)
+}
+
+/// Versions as a manifest writes them - `>=A`, or `>=A <B`, each of three numbers, B after A - read (as lib/plugins/depends `rangeOf`).
+fn range_of(text: &str) -> Option<(Vec<u64>, Option<Vec<u64>>)> {
+    let semver = |v: &str| version_parts(v).filter(|p| p.len() == 3);
+    let rest = text.trim().strip_prefix(">=")?;
+    let mut words = rest.split(' ');
+    let from = semver(words.next()?)?;
+    let before = match words.next() {
+        None => None,
+        Some(w) => Some(semver(w.strip_prefix('<')?)?),
+    };
+    if words.next().is_some() || before.as_ref().is_some_and(|b| version_order(&from, b).is_ge()) {
+        return None;
+    }
+    Some((from, before))
+}
+
+/// Whether a plugin of `version` is one a range of versions takes; one that is no version is in none.
+pub fn in_versions(version: &str, versions: &str) -> bool {
+    let (Some(v), Some((from, before))) = (version_parts(version), range_of(versions)) else { return false };
+    version_order(&v, &from).is_ge() && before.is_none_or(|b| version_order(&v, &b).is_lt())
+}
+
+/// What a manifest declares its jobs may need of other plugins' programs, from the plugins it uses (`depends`) - all as they must be, or none.
 pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need>, String> {
-    let Some(list) = manifest.get("needs") else { return Ok(Vec::new()) };
-    let list = list.as_array().ok_or_else(|| format!("{id}'s needs are not a list"))?;
+    let Some(list) = manifest.get("depends") else { return Ok(Vec::new()) };
+    let list = list.as_array().ok_or_else(|| format!("{id}'s plugins it uses are not a list"))?;
     let mut out: Vec<Need> = Vec::new();
-    for n in list {
-        let field = |k: &str| n.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        let need = Need { plugin: field("plugin"), program: field("program"), env: field("env") };
-        let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
-        if !plugin_id(&need.plugin) || need.plugin == id || !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.plugin == need.plugin) {
-            return Err(format!("{id} declares a need Meno cannot give: {n}"));
+    let mut plugins: Vec<String> = Vec::new();
+    for d in list {
+        let field = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+        let (plugin, versions) = (field(d, "plugin"), field(d, "versions"));
+        let optional_ok = d.get("optional").is_none_or(|o| o.is_boolean());
+        if !plugin_id(&plugin) || plugin == id || range_of(&versions).is_none() || plugins.contains(&plugin) || !optional_ok {
+            return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
         }
-        out.push(need);
+        plugins.push(plugin.clone());
+        let programs = match d.get("programs") {
+            None => Vec::new(),
+            Some(p) => p.as_array().ok_or_else(|| format!("{id} declares a plugin it uses that Meno cannot give: {d}"))?.clone(),
+        };
+        for p in programs {
+            let need = Need { plugin: plugin.clone(), versions: versions.clone(), program: field(&p, "program"), env: field(&p, "env") };
+            let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
+            if !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.env == need.env) {
+                return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
+            }
+            out.push(need);
+        }
     }
     Ok(out)
 }
@@ -2300,16 +2351,27 @@ pub fn needs_given(data: &Path, manifest: &serde_json::Value, id: &str, needs: &
     }
     let declared = needs_declared(manifest, id)?;
     for other in needs {
-        let need = declared.iter().find(|n| &n.plugin == other).ok_or_else(|| format!("{id} declares no need of {other}"))?;
+        let of: Vec<&Need> = declared.iter().filter(|n| &n.plugin == other).collect();
+        if of.is_empty() {
+            return Err(format!("{id} declares no program of {other} that it uses"));
+        }
         if needs.iter().filter(|n| *n == other).count() > 1 {
             return Err(format!("{id} needs {other} twice"));
         }
-        let other_dir = dir_of(&need.plugin)?;
-        let name = manifest_of(&other_dir, &need.plugin).ok().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| need.plugin.clone());
-        let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
-        let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
-        env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
-        links.push((file, found.program));
+        let other_dir = dir_of(other)?;
+        let other_manifest = manifest_of(&other_dir, other).ok();
+        let name = other_manifest.as_ref().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| other.clone());
+        // (of a version it works with, as its manifest says - read from that plugin's own folder, never from the spec)
+        let version = other_manifest.as_ref().and_then(|m| m.get("version").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_default();
+        if !in_versions(&version, &of[0].versions) {
+            return Err(format!("{id} needs {name} {}; {} is here", of[0].versions, if version.is_empty() { "no version of it" } else { &version }));
+        }
+        for need in of {
+            let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
+            let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+            env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
+            links.push((file, found.program));
+        }
     }
     Ok((env, links))
 }
@@ -4265,20 +4327,43 @@ mod tests {
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
         // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
         let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
-        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
+        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
         assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
-        // (its own program, a shell, a path, a variable that finds or loads programs, one plugin twice: none of them)
+        // (one used only for some of its work: its programs needed by the jobs that say so, as any)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        // (a plugin used for no program: none of its programs needed)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0"}]}), "orca").unwrap(), vec![]);
+        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
+        // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
-            serde_json::json!([{"plugin": "orca", "program": "orca", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "sh", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "bin/xtb", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "PATH"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "DYLD_INSERT_LIBRARIES"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "A"}, {"plugin": "xtb", "program": "xtb", "env": "B"}]),
+            serde_json::json!([{"plugin": "orca", "versions": ">=0.1.0", "programs": [{"program": "orca", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": "^0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "xtb", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([uses("sh", "X")]),
+            serde_json::json!([uses("bin/xtb", "X")]),
+            serde_json::json!([uses("xtb", "PATH")]),
+            serde_json::json!([uses("xtb", "DYLD_INSERT_LIBRARIES")]),
+            serde_json::json!([uses("xtb", "A"), uses("xtb", "B")]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
             serde_json::json!({"plugin": "xtb"}),
         ] {
-            assert!(needs_declared(&serde_json::json!({ "needs": bad }), "orca").is_err(), "{bad}");
+            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn takes_a_plugins_version_only_within_the_versions_a_plugin_that_uses_it_works_with() {
+        assert!(in_versions("0.1.4", ">=0.1.4 <0.2.0"));
+        assert!(in_versions("0.1.10", ">=0.1.4 <0.2.0"));
+        assert!(!in_versions("0.2.0", ">=0.1.4 <0.2.0"));
+        assert!(!in_versions("0.1.3", ">=0.1.4 <0.2.0"));
+        assert!(in_versions("3.0.0", ">=0.1.4"));
+        assert!(in_versions("1.2", ">=1.2.0 <1.3.0"));
+        assert!(!in_versions("", ">=0.1.0"));
+        assert!(!in_versions("one", ">=0.1.0"));
+        assert!(!in_versions("0.1.5", ">=0.1"));
     }
 
     #[test]
@@ -4379,16 +4464,28 @@ mod tests {
         fs::create_dir_all(plugins.join("asker")).unwrap();
         fs::write(
             plugins.join("asker").join("manifest.json"),
-            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "needs": [{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]}"#,
+            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "depends": [{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]}"#,
         )
         .unwrap();
         fs::create_dir_all(plugins.join("helper")).unwrap();
-        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "1.2.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
         script(&data.join("uv/plugin-asker/venv/bin/main"), "#!/bin/sh\necho main ran\n\"$TOOLEXE\"\n");
         if helper_set_up {
             script(&data.join("uv/plugin-helper/venv/bin/tool"), "#!/bin/sh\necho the tool ran\n");
         }
         (base, data, plugins)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gives_no_program_of_a_plugin_of_a_version_the_plugin_that_uses_it_does_not_work_with() {
+        let (base, data, plugins) = needing(true);
+        let asker = manifest_of(&plugins.join("asker"), "asker").unwrap();
+        assert!(needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| Ok(plugins.join(p))).is_ok());
+        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "2.0.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        let err = needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| Ok(plugins.join(p))).unwrap_err();
+        assert_eq!(err, "asker needs Helper >=1.0.0 <2.0.0; 2.0.0 is here");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[cfg(unix)]
@@ -4416,7 +4513,7 @@ mod tests {
             assert!(spec_allowed(&data, &plugins, &bad, &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
         }
         // (a need its plugin does not declare, or twice)
-        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no need of other"));
+        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no program of other that it uses"));
         assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[]).is_err());
         // (the needed plugin not set up: refused, saying so)
         let (gone, gone_data, gone_plugins) = needing(false);
@@ -4473,11 +4570,11 @@ mod tests {
         let ranked = plugins.join("ranked");
         fs::create_dir_all(&ranked).unwrap();
         let declare = |parallel: &str| {
-            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]) };
+            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]) };
             let manifest = serde_json::json!({
                 "id": "ranked",
                 "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "parallel": parallel}],
-                "needs": needed,
+                "depends": needed,
                 "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
             });
             fs::write(ranked.join("manifest.json"), manifest.to_string()).unwrap();

@@ -471,7 +471,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
   });
 
-  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so", async () => {
+  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so - the plugin otherwise running as it does", async () => {
     installedAt.orca = "/Applications/orca_6/orca";
     const needing = async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 Opt\n" }], reads: [], needs: ["xtb"] }] }) as never;
     // (the xTB plugin not added: refused before any job is made)
@@ -482,7 +482,7 @@ describe("a step that runs a plugin's program", () => {
     first.st().connect({ set: first.st().sets[0].id }, step);
     await first.st().runStep(step);
     expect(asked.started).toEqual([]);
-    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "The xTB plugin is needed for this: add it in Settings, Plugins" });
+    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Needs xTB, which is not added." });
     // (added: the job asks for it, by the plugin's id)
     useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     worker.prepare.mockImplementationOnce(needing);
