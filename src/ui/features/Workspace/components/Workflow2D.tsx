@@ -475,7 +475,8 @@ export default function Workflow2D() {
   }, [anyRunning, newest, store]);
 
   // the zoom: where it crosses what a card's words need to be read; what
-  // a hair on the screen is on the page's layer of HTML (`--hair`); and, by
+  // a hair on the screen is on the page's layer of HTML (`--hair`), and how
+  // many of the screen's pixels its pixel is (`--scale`); and, by
   // steps of a few per cent, what the wires are made as wide on the screen for
   const [compact, setCompact] = useState(false);
   const read = useRef(true);
@@ -510,8 +511,10 @@ export default function Workflow2D() {
     const h = hair.current;
     if (h.layer !== layer.current || h.ports !== portsLayer.current || zoomWritten(h.zoom, z, still)) {
       hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z };
-      layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
-      portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+      for (const el of [layer.current, portsLayer.current]) {
+        el?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+        el?.style.setProperty("--scale", `${z * PX}`);
+      }
     } else if (h.zoom !== z) invalidate();
     layer.current?.style.setProperty("--words", read.current ? "1" : "0");
     layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");

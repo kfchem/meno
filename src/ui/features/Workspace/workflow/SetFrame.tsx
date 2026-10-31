@@ -6,7 +6,7 @@ import type { DiagramLevel } from "../../../../lib/energyDiagram";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, tableBodyPx } from "./look";
 import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
-import { HAIR, Port } from "./StepCard";
+import { HAIR_LINE, Port } from "./StepCard";
 import SummaryBody from "./SummaryBody";
 
 /** How wide the band along a frame's edge is that a press takes to size it, in px. */
@@ -56,14 +56,13 @@ export default function SetFrame(p: SetFrameProps) {
   const [naming, setNaming] = useState<string | null>(null);
   const w = (p.set.x1 - p.set.x0) / PX;
   const h = (p.set.y1 - p.set.y0) / PX;
-  const line = p.chosen ? "border-accel-base" : p.hovered ? "border-gh-gray" : "border-gh-line";
-  const hair: CSSProperties = { borderWidth: HAIR, borderStyle: "solid" };
+  const line = p.chosen ? "inset-ring-accel-base" : p.hovered ? "inset-ring-gh-gray" : "inset-ring-gh-line";
   const edge = (e: Edge, style: CSSProperties) => (
     <div key={e} onPointerDown={(ev) => p.onEdgeDown(e, ev)} className="absolute" style={{ pointerEvents: "auto", cursor: cursorOf[e], ...style }} />
   );
   return (
     <div className="meno-fade-in relative select-none" style={{ width: w, height: h, pointerEvents: "none" }} onContextMenu={p.onContextMenu}>
-      <div className={clsx("absolute inset-0 rounded-xl transition-colors duration-150 ease-meno", line)} style={hair} />
+      <div className={clsx("absolute inset-0 rounded-xl transition-shadow duration-150 ease-meno", HAIR_LINE, line)} />
       {edge("n", { left: EDGE, right: EDGE, top: -EDGE / 2, height: EDGE })}
       {edge("s", { left: EDGE, right: EDGE, bottom: -EDGE / 2, height: EDGE })}
       {edge("w", { top: EDGE, bottom: EDGE, left: -EDGE / 2, width: EDGE })}

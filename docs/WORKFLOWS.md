@@ -1433,11 +1433,22 @@ Decided while building it, for the maintainer to confirm:
   top: wires join where they always did as the card opens.
 - **A port** is round at every zoom - a ring a hair thick, or filled in
   the accent while a wire may join it - and stands exactly at its wire's
-  end. It is 9 hairs across on the screen where the page is near; zoomed
+  end. It is 9 px across on the screen where the page is near; zoomed
   out, never more than its own 11 page px - it shrinks with the page from
   there - nor than a sixth of its set's or card's height, its ring then at
   most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
   were far too big for their sets; look `portSize`).
+- **Laid out in the screen's pixels, lines drawn as shadows** (2026-10-31,
+  seen on Windows): the page's layer of HTML is laid out in its own
+  pixels and scaled to the zoom after. Chromium, Windows' WebView2, rounds
+  a box's edges and size and a border's width each to a whole one of those
+  pixels first, and zoomed in the layer magnifies that: ports came out as
+  ovals, as dots, of several sizes and off their places, and the cards'
+  and sets' hairlines six pixels thick at six times. So a port is laid out
+  in the screen's pixels, the layer's scale (`--scale`) undone on it and
+  centred by the same transform; and a card's and a set's lines a hair
+  thick are inset shadows (`inset-ring`), which are drawn as thin as they
+  are, the room a border took kept as padding.
 - **One layer of HTML for all sets and steps**: with a layer for each, a
   step's layer covered the ports of sets under it (ARCHITECTURE.md,
   *Workflows*).
@@ -2007,7 +2018,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   frames chip, *Make again*, a measurement's value and the notes over a
   molecule or a figure).
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
-  `--page`, and `--hair` that the cards' lines are as wide as, lay out
+  `--page`, and `--hair` that the cards' lines are as wide as (and
+  `--scale` that ports are laid out by), lay out
   every chip and card on the page again each time they are written - some
   80 ms on a page of sixty steps, every frame of a zoom. While the zoom
   moves they are written only once it has gone half a per cent from the
