@@ -275,7 +275,21 @@ export const KINDS: readonly KindInfo[] = [
         ],
         default: "apart",
       },
+      // (each compound's conformers, or a compound set's same structures, as it was; or those with one value of a property - a product, a path - across compounds: never grouped by guess)
+      {
+        id: "within",
+        label: "Compared within",
+        type: "choice",
+        choices: [
+          { value: "each compound", label: "Each compound" },
+          { value: "each value", label: "Each value of a property" },
+        ],
+        default: "each compound",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
     ],
+    how: (v) => duplicatesHow(v),
+    needs: (v) => (v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined),
     perceives: "configurations",
     perceivesWith: (v) => v.mirrors === "counted",
   },
@@ -1129,6 +1143,13 @@ export function rankNeeds(v: Record<string, string | number | boolean>): string 
   if (!String(v.property ?? "").trim()) return "Name the property to rank by";
   if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
   return undefined;
+}
+
+/** How a Duplicates step does its work, in a line: only what is not its default - "compared within each product", "mirror images counted as one" - and nothing at all where all is (the card says "Duplicates"). */
+export function duplicatesHow(v: Record<string, string | number | boolean>): string {
+  const by = String(v.groupBy ?? "").trim();
+  if (v.within === "each value" && !by) return "Name the property whose values are the groups";
+  return [...(v.mirrors === "counted" ? ["mirror images counted as one"] : []), ...(v.within === "each value" ? [`compared within each ${by}`] : [])].join(" · ");
 }
 
 /** What an Energy window still needs before it can run: the property, where its groups are a property's values. */

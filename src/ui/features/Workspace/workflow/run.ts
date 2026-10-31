@@ -119,7 +119,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
-      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules));
+      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules), energyLevels(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
 
@@ -369,6 +369,11 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
   const c = molecules.find((m) => m.energies?.length && (m.calc?.program || m.calc?.method))?.calc;
   if (!c) return undefined;
   return [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ");
+}
+
+/** Each molecule's energies' program and level, by its id, where its calculation said either: how Duplicates tells energies of two levels apart across molecules. */
+export function energyLevels(molecules: readonly Pick<Molecule3D, "id" | "calc">[]): Map<number, string> {
+  return new Map(molecules.flatMap((m) => (m.calc && (m.calc.program || levelOf(m.calc)) ? [[m.id, [m.calc.program, levelOf(m.calc)].filter(Boolean).join(" \u00b7 ")] as const] : [])));
 }
 
 /** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
