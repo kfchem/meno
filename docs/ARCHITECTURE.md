@@ -202,7 +202,7 @@ fiber passes an error inside its `<Canvas>` out to the tree round it) and
 the canvas's own HTML by the canvas's; the panel beside the canvas and
 Settings by their tab's; the title bar and the notices by the
 window's. Errors thrown in event handlers, timers, promises and `useFrame`
-are not React's to catch and do not blank the window; they are not shown.
+reach no boundary and do not blank the window; they are not shown.
 
 Nothing a part shows lives in the part, so a part made again shows the same:
 
