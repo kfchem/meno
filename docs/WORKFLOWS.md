@@ -535,6 +535,17 @@ them a saddle point.
   or ORCA's model one. At ORCA's own xTB, which has no analytic Hessian,
   ORCA computes it numerically, and the step's line says so. ORCA's OptTS
   takes no sides: wired, the step is refused.
+- **Gaussian's plugin** (2026-10-31) runs, from the guess alone,
+  `Opt=(TS,NoEigenTest)` - eigenvector following, the number of negative
+  curvatures not checked as it goes - and, where both sides are wired,
+  `Opt=(QST3)`: the reactant side, the product side and the guess, in
+  that order, each a molecule specification of its own with its title,
+  the atoms in one order (the Gaussian 16 reference, *Opt*, QST2 and
+  QST3). Its *First Hessian* computed at the start adds `CalcFC`, else
+  Gaussian's own estimate; *Tight convergence* adds `Tight`. So a chain
+  can run a saddle point from a reaction path's two ends and its highest
+  point. Not yet run with Gaussian itself: none on the computer it was
+  built on can.
 
 ### Barrier
 
