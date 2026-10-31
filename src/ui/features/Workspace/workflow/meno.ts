@@ -628,17 +628,12 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
     keyOf = (e: SetEntry) => `${valueOf.get(e)}|${atomsOf(e)}|${bondsOf(e)}|${speciesOf(e)}`;
   }
   const energies = valued.every(hasEnergy);
-  // (across compounds, which of two alike is kept is the lower's only where their energies were worked out alike - across
-  //  paths they need not be: free energies where each has one, else electronic, as Energy window's basis; energies of two
-  //  levels never decide, the group set aside saying how they differ)
-  const lowerBy = new Map<SetEntry[], (e: SetEntry) => number>();
-  const groups = [...valued.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()].filter((g) => {
-    if (!by || !energies || g.length < 2) return true;
-    const level = levelsOf(g, levels);
-    if ("unlike" in level) for (const e of g) why.set(e, `in its ${by} ${valueOf.get(e)}, ${level.unlike}: which is lower is not known`);
-    else lowerBy.set(g, level.energy);
-    return !("unlike" in level);
-  });
+  const groups = [...valued.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
+  // (across compounds, of those alike - first found so, as they came - the lower is kept only where their energies were
+  //  worked out alike: across paths they need not be. Free energies where each has one, else electronic, as Energy
+  //  window's basis; energies of two levels never decide, those alike set aside saying how they differ - those unlike
+  //  any other kept, whatever their level. Where one of those alike has no energy, the first kept, the line saying so)
+  let asCame = 0;
   // (ranked by energy, which copy is kept is the lowest's: one that is no minimum - not converged, a saddle point, its
   //  marks not read - would be kept for an energy that is not a minimum's. Refused, naming it, as Populations does; in
   //  each value of a property, saddle points are compared with saddle points, as the kinds above are kept apart)
@@ -653,10 +648,33 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
     const same = new Sameness(g[0].atoms, g[0].bonds, g[0].xyz);
     if (same.capped && g.length > 1) capped++;
     const here: { e: SetEntry; sig: Float64Array }[] = [];
-    const lower = lowerBy.get(g) ?? ((e: SetEntry) => e.energy!);
-    for (const e of energies ? [...g].sort((p, q) => lower(p) - lower(q)) : g) {
+    let order: readonly SetEntry[] = energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g;
+    if (by) {
+      const seeds: { e: SetEntry; sig: Float64Array; members: SetEntry[] }[] = [];
+      for (const e of g) {
+        if (done > 0 && due()) yield done;
+        done++;
+        const sig = same.signature(e.xyz);
+        const seed = seeds.find((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9 && same.same(k.e.xyz, e.xyz));
+        if (seed) seed.members.push(e);
+        else seeds.push({ e, sig, members: [e] });
+      }
+      order = seeds.flatMap(({ members }) => {
+        if (members.length === 1) return members;
+        const level = members.every(hasEnergy) ? levelsOf(members, levels) : null;
+        if (level && "unlike" in level) {
+          for (const e of members) why.set(e, `in its ${by} ${valueOf.get(e)}, ${level.unlike}: which is lower is not known`);
+          return [];
+        }
+        const first = level ? members.reduce((a, b) => (level.energy(b) < level.energy(a) ? b : a)) : members[0];
+        if (!level) asCame++;
+        for (const e of members) if (e !== first) why.set(e, `the same as ${named(first)}, which was kept`);
+        return [first];
+      });
+    }
+    for (const e of order) {
       if (done > 0 && due()) yield done;
-      done++;
+      if (!by) done++;
       const sig = same.signature(e.xyz);
       // (only those it could be within reach of: a mirror image's atoms lie as far from its centre)
       const near = here.filter((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9);
@@ -708,7 +726,8 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
   const only = counts.size === 1 && counts.has("the same as one kept");
   const rest = alike.length ? ` · rest ${alike.length}${only ? "" : ` (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})`}` : "";
   const kinds = unknownKinds ? ` · whether minima or saddle points not known (no frequencies)` : "";
-  return { ok: true, holds, kept: keptOnes.map(part), aside, said: `${keptOnes.length} of ${countEntries(entries.length)} kept${rest}${twins}${cap}${kinds}` };
+  const first = asCame ? ` · of those alike, the first kept where one has no energy` : "";
+  return { ok: true, holds, kept: keptOnes.map(part), aside, said: `${keptOnes.length} of ${countEntries(entries.length)} kept${rest}${first}${twins}${cap}${kinds}` };
 }
 
 /**

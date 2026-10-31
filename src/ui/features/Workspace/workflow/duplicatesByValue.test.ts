@@ -94,8 +94,17 @@ describe("Duplicates, within each value of a property", () => {
     const free = runStep(compared([at(water(0.001, -76.0, "P"), "M1", -75.9), at(water(0, -80.0, "P"), "M2", -79.9)], BY), 2, W);
     expect(asides(free)[0]).toBe("in its product P, free energies differ in method: M1 (a #1) and M2 (b #1): which is lower is not known");
     // (free energies alike: the lower free energy kept, whatever the electronic energies say)
-    const alike = runStep(compared([at(water(0.001, -76.0, "P"), "M1", -76.01), at(water(0, -80.0, "P"), "M1", -76.0)], BY), 2, W);
-    expect(asides(alike)).toEqual(["the same as a #1, which was kept"]);
+    const alike = runStep(compared([at(water(0.001, -80.0, "P"), "M1", -76.0), at(water(0, -76.0, "P"), "M1", -76.01)], BY), 2, W);
+    expect(asides(alike)).toEqual(["the same as b #1, which was kept"]);
+    // (levels decide only between those alike: two saddle points unlike each other, at two levels, both kept)
+    const unlike = runStep(compared([at(water(0.4, -76.0, "P"), "M1"), at(water(0, -80.0, "P"), "M2")], BY), 2, W);
+    expect(ran(unlike)?.said).toBe("2 of 2 entries kept");
+  });
+
+  it("keeps the first of those alike where one has no energy, saying so", () => {
+    const doc = runStep(compared([{ ...water(0.001, -76.0, "P"), energies: undefined }, water(0, -76.01, "P"), water(0.4, -76.02, "P")], BY), 2, W);
+    expect(asides(doc)).toEqual(["the same as a #1, which was kept"]);
+    expect(ran(doc)?.said).toBe("2 of 3 entries kept · rest 1 · of those alike, the first kept where one has no energy");
   });
 
   it("says on its card what it compares within, and what it still needs", () => {
