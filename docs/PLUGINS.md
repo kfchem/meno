@@ -427,9 +427,8 @@ As the programs stand (the maintainer, 2026-10-12):
 - **ORCA** and **Gaussian** are not fetched: each is obtained under its
   makers' own terms, which each user accepts.
 - **Multiwfn** is not fetched: its licence asks each user to agree to its
-  terms, and there is no official macOS build.
-- **NCIPLOT** is not fetched: it is published as its source, with no
-  official build.
+  terms.
+- **NCIPLOT** is not fetched: it is published as its source.
 
 ## Room for what comes next
 
