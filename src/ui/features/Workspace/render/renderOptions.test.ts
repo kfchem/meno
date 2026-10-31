@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
-import { askOf, bySection, filmLength, finishEntry, finishOf, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
+import { askOf, bySection, filmLength, finishEntry, finishOf, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderContext, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -94,6 +94,20 @@ describe("a film's motion: Meno's own, then those the renderer declares", () => 
     expect(motionEntry({ kind: "film", motion: "ripple" })).toEqual({ motion: "ripple", mode: "once" });
     expect(motionEntry({ kind: "film", motion: "turn" })).toEqual({});
     expect(motionEntry({ kind: "picture", motion: "ripple" })).toEqual({});
+  });
+});
+
+describe("a render plugin's options", () => {
+  it("are shown by the card's own options and by whether a picture or a film is made, each as its manifest says", () => {
+    const theirs = [
+      { id: "grain", label: "Grain", type: "choice" as const, choices: [{ value: "fine", label: "Fine" }], default: "fine", when: { id: "kind", in: ["film"] } },
+      { id: "rim", label: "Rim", type: "switch" as const, default: false, when: { id: "look", in: ["cartoon"] } },
+      { id: "glow", label: "Glow", type: "switch" as const, default: false },
+    ];
+    const ids = (kind: "picture" | "film", look: string) => shownOptions(theirs, valuesOf(theirs), renderContext({ look }, kind)).map((o) => o.id);
+    expect(ids("picture", "meno")).toEqual(["glow"]);
+    expect(ids("film", "meno")).toEqual(["grain", "glow"]);
+    expect(ids("film", "cartoon")).toEqual(["grain", "rim", "glow"]);
   });
 });
 

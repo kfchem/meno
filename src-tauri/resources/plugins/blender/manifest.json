@@ -61,7 +61,7 @@
         {"id": "key", "section": "scene", "label": "Key light, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},
         {"id": "ambient", "section": "scene", "label": "Light all round, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},
         {"id": "softness", "section": "scene", "label": "Shadows' softness", "type": "number", "default": 10, "min": 0, "max": 90, "step": 1, "unit": "°"},
-        {"id": "quality", "section": "render", "label": "A film's quality", "type": "choice", "choices": [{"value": "high", "label": "High"}, {"value": "medium", "label": "Medium: smaller"}, {"value": "lossless", "label": "Nearly lossless: largest"}], "default": "high"}
+        {"id": "quality", "section": "render", "when": {"id": "kind", "in": ["film"]}, "label": "A film's quality", "type": "choice", "choices": [{"value": "high", "label": "High"}, {"value": "medium", "label": "Medium: smaller"}, {"value": "lossless", "label": "Nearly lossless: largest"}], "default": "high"}
       ]
     }
   ]

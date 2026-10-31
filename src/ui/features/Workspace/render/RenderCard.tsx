@@ -1,12 +1,12 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { valuesOf, type OptionValues } from "../../../../lib/options";
+import { shownOptions, valuesOf, type OptionValues } from "../../../../lib/options";
 import { roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import OptionsForm from "../../../options/OptionsForm";
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, bySection, filmLength, remembered, renderOptions, withFixed, type Kind } from "./renderOptions";
+import { askOf, bySection, filmLength, remembered, renderContext, renderOptions, withFixed, type Kind } from "./renderOptions";
 import { OPTION_SECTIONS, type OptionSection } from "../../../../lib/options";
 import { useInFront } from "../../../layouts/inFront";
 import { escapeLeft } from "../../../controls/keys";
@@ -46,7 +46,8 @@ export default function RenderCard({
   // (the looks this plugin declares, after the canvas's)
   const declared = plugin.roleMotions.render;
   const plain = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared);
-  const theirs = (plugin.roleOptions.render ?? []).filter((o) => kind === "film" || o.id !== "quality");
+  // (the plugin's own options, each shown `when` it says - of the card's options, or a picture's or a film's, `kind`)
+  const theirs = plugin.roleOptions.render ?? [];
   const [chosen, setChosen] = useState<Partial<Record<Kind, OptionValues>>>({});
   const [chosenTheirs, setChosenTheirs] = useState<OptionValues | null>(null);
   const picked = chosen[kind] ?? valuesOf(plain, saved[remembered(kind)]);
@@ -61,7 +62,9 @@ export default function RenderCard({
   const own = mine.options;
   const ours = bySection(own);
   const setMine = (v: OptionValues) => setChosen((c) => ({ ...c, [kind]: v }));
-  const its = bySection(yours.options);
+  // (the renderer's options are told the card's choices and what is rendered, `kind`; a part with none of them shown has no heading)
+  const theirContext = renderContext(values, kind);
+  const its = bySection(shownOptions(yours.options, yours.values, theirContext));
 
   const renderRef = useRef<HTMLButtonElement>(null);
   // (the keys given to Render as it opens, once: not again each time the
@@ -132,7 +135,7 @@ export default function RenderCard({
               {/* (Meno's own first, then the renderer's - a look's own choices just under it - and what Meno folds, last) */}
               <div className="space-y-3">
                 {ours[part].some((o) => !o.group) && <OptionsForm options={ours[part].filter((o) => !o.group)} values={values} onChange={setMine} context={yours.values} />}
-                {its[part].length > 0 && <OptionsForm options={its[part]} values={yours.values} onChange={setChosenTheirs} context={values} />}
+                {its[part].length > 0 && <OptionsForm options={its[part]} values={yours.values} onChange={setChosenTheirs} context={theirContext} />}
                 {ours[part].some((o) => o.group) && <OptionsForm options={ours[part].filter((o) => o.group)} values={values} onChange={setMine} context={yours.values} />}
               </div>
             </section>

@@ -5,7 +5,7 @@ import { Leaving, QUESTION_ARRIVING_MS } from "../theme/leaving";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
 import { useCallback, useRef } from "react";
 import { useAskedKeys } from "../layouts/asking";
-import { purposeName, useNetwork } from "../../lib/net/network";
+import { purposeName, useNetwork, type ConsentRequest } from "../../lib/net/network";
 import { questionKey } from "./questionKey";
 
 /**
@@ -39,21 +39,7 @@ export default function ConsentDialog() {
       >
         <div className="flex items-start gap-3">
           <GlobeAltIcon className="h-6 w-6 shrink-0 text-accel-base" />
-          <div className="min-w-0">
-            <h2 id="consent-title" className="font-semibold">
-              {asking.title}
-            </h2>
-            <p className="mt-2 text-gh-gray">{asking.detail}</p>
-            <ul className="mt-2 space-y-0.5 text-gh-black">
-              {asking.sources.map((s) => (
-                <li key={s} className="flex gap-2">
-                  <span className="text-gh-gray">·</span>
-                  <span className="break-words">{s}</span>
-                </li>
-              ))}
-            </ul>
-            <ConsentSmallPrint purpose={asking.purpose} />
-          </div>
+          <ConsentWords asking={asking} />
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -76,6 +62,42 @@ export default function ConsentDialog() {
     </Leaving>
     )}
     </AnimatePresence>
+  );
+}
+
+/** A question's words: what it asks, and from where - and, where several are asked in one, each one's own under its name (a plugin and those it uses); then what every question says. */
+export function ConsentWords({ asking }: { asking: ConsentRequest }) {
+  return (
+    <div className={asking.parts?.length ? "min-w-0 max-h-[70vh] overflow-y-auto" : "min-w-0"}>
+      <h2 id="consent-title" className="font-semibold">
+        {asking.title}
+      </h2>
+      <p className="mt-2 text-gh-gray">{asking.detail}</p>
+      <Sources sources={asking.sources} />
+      {asking.parts?.map((part) => (
+        <section key={part.name} className="mt-3">
+          <h3 className="font-semibold">{part.name}</h3>
+          <p className="mt-1 text-gh-gray">{part.detail}</p>
+          <Sources sources={part.sources} />
+        </section>
+      ))}
+      <ConsentSmallPrint purpose={asking.purpose} />
+    </div>
+  );
+}
+
+/** Where a question's downloads come from, a line each. */
+function Sources({ sources }: { sources: readonly string[] }) {
+  if (!sources.length) return null;
+  return (
+    <ul className="mt-2 space-y-0.5 text-gh-black">
+      {sources.map((s) => (
+        <li key={s} className="flex gap-2">
+          <span className="text-gh-gray">·</span>
+          <span className="break-words">{s}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

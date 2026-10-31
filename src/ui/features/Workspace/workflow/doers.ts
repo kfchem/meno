@@ -142,7 +142,7 @@ export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsF
 export function setName(set: Pick<WorkflowSet, "made" | "name">, steps: readonly WorkflowStep[]): string {
   const made = set.made ? steps.find((s) => s.id === set.made!.step) : undefined;
   const exit = made && set.made ? exitOf(made.kind, set.made.exit) : undefined;
-  // (any exit but the first by its own name: a Reaction's Bond changes, as much as what a step set aside)
+  // (any exit but the first by its own name: an Atom map's Bond changes, as much as what a step set aside)
   return made && exit ? (exit.id !== exitsOf(made.kind)[0].id ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
 }
 

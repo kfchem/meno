@@ -291,35 +291,41 @@ export function bondChangeRows(reactant: Molecule, product: Molecule, map: reado
 }
 
 /**
- * What the *Reaction* step does (docs/WORKFLOWS-FOUNDATION.md, *Atom
- * mapping, and what Meno does itself*): each product mapped onto the one
- * reactant structure (a complex where there are several, made beforehand),
- * in 3D with every hydrogen, and written in the reactants' numbering - by its
- * first map, or by `every` map - with the bonds that map forms, breaks or
- * changes. A product that cannot be mapped one to one, atom for atom, is
- * said with the reason, never passed on in part.
+ * What *Atom map* does, in a workflow and on the page
+ * (docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does
+ * itself*): each entry mapped onto the reference, in 3D with every
+ * hydrogen, and written in its numbering - by its first map, or by `every`
+ * map - with the bonds that map forms, breaks or changes. The reference and
+ * each entry are a side of one or more structures, set side by side as one
+ * as `mapReaction` sets them: a reaction's reactants and one of its
+ * products (or all of them), or a compound and one of its conformers. With
+ * `bonds` "same", the entry is to be the reference's own structure, and a
+ * map that forms, breaks or changes any bond is said, never passed on. An
+ * entry that cannot be mapped one to one, atom for atom, is said with the
+ * reason, never passed on in part.
  */
-export function mapProducts(
-  reactant: Molecule,
-  products: readonly Molecule[],
-  o: { every?: boolean; accelExact?: boolean } = {},
+export function mapOnto(
+  reference: readonly Molecule[],
+  entries: readonly (readonly Molecule[])[],
+  o: { bonds: "change" | "same"; every?: boolean; accelExact?: boolean },
 ): { mapped: MappedProduct[]; notMapped: ProductNotMapped[] } {
   const mapped: MappedProduct[] = [];
   const notMapped: ProductNotMapped[] = [];
-  products.forEach((p, product) => {
-    if (p.atoms.length !== reactant.atoms.length) {
-      notMapped.push({
-        product,
-        reason: `The product has ${p.atoms.length} atoms and the reactants ${reactant.atoms.length}: every atom must map one to one, hydrogens included.`,
-      });
+  const atomsOf = (side: readonly Molecule[]) => side.reduce((n, m) => n + m.atoms.length, 0);
+  const n = atomsOf(reference);
+  // (a side's atoms as one, for counting its elements)
+  const all = (side: readonly Molecule[]): Molecule => ({ atoms: side.flatMap((m) => m.atoms), bonds: [] });
+  entries.forEach((p, product) => {
+    if (atomsOf(p) !== n) {
+      notMapped.push({ product, reason: `It has ${atomsOf(p)} atoms and the reference ${n}: every atom must map one to one, hydrogens included.` });
       return;
     }
-    const unlike = elementsDiffer(reactant, p);
+    const unlike = elementsDiffer(all(reference), all(p));
     if (unlike) {
       notMapped.push({ product, reason: unlike });
       return;
     }
-    const result = mapReaction({ reactants: [reactant], products: [p], accelExact: o.accelExact });
+    const result = mapReaction({ reactants: [...reference], products: [...p], accelExact: o.accelExact });
     if ("error" in result) {
       notMapped.push({ product, reason: result.message });
       return;
@@ -334,16 +340,23 @@ export function mapProducts(
       const j = m.findIndex((i, j) => i >= 0 && result.reactant.atoms[i].el !== result.product.atoms[j].el);
       if (j >= 0) {
         const [a, b] = [result.product.atoms[j].el, result.reactant.atoms[m[j]].el];
-        notMapped.push({ product, map: k, reason: `The map pairs the product's atom ${j + 1} (${a}) with the reactants' atom ${m[j] + 1} (${b}): an atom maps only to one of its own element.` });
+        notMapped.push({ product, map: k, reason: `The map pairs its atom ${j + 1} (${a}) with the reference's atom ${m[j] + 1} (${b}): an atom maps only to one of its own element.` });
         continue;
       }
       if (!result.complete[k]) {
         notMapped.push({ product, map: k, reason: "The map leaves atoms of one side unpaired." });
         continue;
       }
+      const changes = bondChangeRows(result.reactant, result.product, m);
+      if (o.bonds === "same" && changes.length) {
+        const words = { formed: "formed", broken: "broken", order: "of another order" } as const;
+        const said = changes.map((c) => `${c.a1 + 1}-${c.a2 + 1} ${words[c.change]}`).join(", ");
+        notMapped.push({ product, map: k, reason: `The map has bonds ${said}, and its bonds are to stay the same.` });
+        continue;
+      }
       const order: number[] = new Array(m.length);
       m.forEach((r, j) => (order[r] = j));
-      mapped.push({ product, map: k, molecule: renumbered(result.product, m, reactant.atoms.length), order, changes: bondChangeRows(result.reactant, result.product, m) });
+      mapped.push({ product, map: k, molecule: renumbered(result.product, m, n), order, changes });
     }
   });
   return { mapped, notMapped };
@@ -362,7 +375,7 @@ function elementsDiffer(reactant: Molecule, product: Molecule): string | null {
   const fewer = els.filter((e) => (p.get(e) ?? 0) < (r.get(e) ?? 0)).map((e) => `${(r.get(e) ?? 0) - (p.get(e) ?? 0)} ${e}`);
   if (!more.length && !fewer.length) return null;
   const said = [more.length ? `${more.join(", ")} more` : "", fewer.length ? `${fewer.join(", ")} fewer` : ""].filter(Boolean).join(" and ");
-  return `The product has ${said} than the reactants: every atom must map to one of its own element.`;
+  return `It has ${said} than the reference: every atom must map to one of its own element.`;
 }
 
 /** A full map's pairs between heavy atoms only - for showing on a drawing: (reactant atom, product atom). */

@@ -53,7 +53,7 @@ bonds with their CTfile types) and gives:
   a map that turns a symmetric ring over pairs one side's single bonds
   with the other's double bonds, and the ring is the same. The same holds
   for every map's bond changes (`bondChanges`): the drawn arrow's reacting
-  centres and the *Reaction* step's *Bond changes* among them. A bond given
+  centres and the *Atom map* step's *Bond changes* among them. A bond given
   as aromatic (type 4) on one side and in a Kekulé structure on the other
   has not changed either. The rule is identity's: a ring is aromatic where
   its bonds alternate around it, so a bond-shift isomerisation -
@@ -161,20 +161,14 @@ torsion, chirality and E/Z decisions agree in every case.
 
 Two sets in `_correct_maps` hold atoms - the bonds a map leaves unmatched,
 and the swaps found from them - and Python iterates a set of objects in the
-order of their memory addresses. So ACCeL's own output can change from one
-run to the next: the order of the corrected maps, and so the order of maps
-whose scores all tie, and (through `max_loop`, which stops after four rounds
-a map) now and then which maps are found at all. The port takes one fixed
+order of their memory addresses. The port takes one fixed
 order there: the unmatched bonds as they are met, each atom's own first;
 the swaps sorted by their atoms' numbers.
 
-Over the corpus below (each reaction run through ACCeL two to five times,
-each time in a new process), ACCeL's output changed between runs for three
-reactions, in both embeddings of each: two Diels-Alder reactions
-(cyclopentadiene with maleic anhydride, furan with acrylonitrile), where the
-corrected maps came in another order, and a ring-closing metathesis, where
-other maps were found. Meno's result matched one of ACCeL's runs exactly in
-each.
+Over the corpus below, three reactions in both embeddings of each (two
+Diels-Alder reactions, cyclopentadiene with maleic anhydride and furan with
+acrylonitrile; a ring-closing metathesis) depend on that order; Meno's
+result is one the original gives for them.
 
 ### Numbers
 
@@ -200,59 +194,53 @@ maps as ACCeL does.
   with no torsion to place the first of them by - no paired neighbour, or
   none with a paired neighbour of its own, as for the methyl of an SN2 at a
   methyl - ACCeL pairs the first by atom order with the first, the rest
-  following by chirality; which way round the methyl maps then depends on
-  the atoms' order in the files, and an SN2 does not come out as the Walden
-  map. Meno pairs the first with the one nearest it once the two
-  structures are laid over one another: by the best rotation over the pairs
+  following by chirality. Meno pairs the first with the one nearest it
+  once the two structures are laid over one another: by the best rotation
+  over the pairs
   so far within the central atoms' own molecules, where at least three of
   them span a plane, else by setting the two central atoms on one another.
   Where there is a torsion to go by, nothing changes. With nothing but the
   central atoms to go by, "nearest" means something only where both sides
   stand in one frame (an IRC's two ends, structures laid over one another);
-  structures made apart give it nothing to go by, and then it is no worse
-  and no better than atom order.
+  structures made apart give it nothing to go by.
 - **A torsion of exactly 180°** (`clampTorsionCosine`). `_get_most_dihedral`
-  takes `arccos` of a cosine that rounding can push past -1; it is then not
-  a number, and the atom exactly anti loses to a gauche one (an exactly
-  staggered ethane, rigidly moved, then comes out with one methyl turned
-  against the other). Meno keeps the cosine within [-1, 1]. Real structures
+  takes `arccos` of a torsion's cosine, which rounding can push past -1;
+  Meno keeps the cosine within [-1, 1], so that an atom exactly anti is
+  taken as anti (an exactly staggered ethane, rigidly moved, keeps its
+  methyls as they were). Real structures
   are seldom exactly anti; hand-built and symmetrised ones are.
 - **A pair of faces with no face flag** (`skipUnflaggedFacePair`). Where two
   faces read the same forwards and backwards and their flag is `None`,
-  `_order_maps` computes `bool ^ None`, which Python refuses: ACCeL fails
-  on an oxa-6π electrocyclisation (a dienal closing to a 2H-pyran), for
-  one. Meno leaves that pair out of the pericyclic score.
+  Meno leaves that pair out of the pericyclic score, so that such a
+  reaction is mapped: an oxa-6π electrocyclisation (a dienal closing to a
+  2H-pyran), for one.
 
 - **A group turned, read by its sign** (`signedTorsion`). Three or more
   like atoms on an atom (a methyl's hydrogens) are placed by a torsion
   about the bond to a paired neighbour: `_get_most_dihedral` takes, on each
-  side, the atom whose torsion is furthest from 0 and pairs the two. It
-  compares sizes only, so with one hydrogen near 0 degrees and the others
-  near -120 and +120, a methyl turned a few degrees can have -124 on one
-  side and +125 on the other as the two furthest, and comes out turned 120
-  degrees. Meno keeps ACCeL's choice on the first side and pairs it with
-  the atom on the other side whose torsion, sign and all, is nearest its
-  own; the rest of the group follow as in ACCeL.
+  side, the atom whose torsion is furthest from 0 and pairs the two. Meno
+  keeps ACCeL's choice on the first side and pairs it with the atom on the
+  other side whose torsion, sign and all, is nearest its own, so that a
+  methyl turned a few degrees (-124 on one side, +125 on the other) does
+  not come out turned 120 degrees; the rest of the group follow as in
+  ACCeL.
 
 - **Fewest bonds made or broken** (`fewestBondChanges`). `_order_maps`
   ranks the maps by fourteen scores in turn. Among maps with the same first
   score (metathesis), Meno puts first those that make and break the fewest
   bonds, hydrogens' included, and only then goes on to ACCeL's second
-  score and the rest. ACCeL's second score counts new bonds between two sp3
-  carbons, and keeping it low can cost more bonds made and broken
-  elsewhere: for chloroacetaldehyde going in one step to acetyl chloride,
-  ACCeL puts first a map in which the oxygen and both CH2 hydrogens change
-  carbons. A single step makes and breaks as few bonds as it can, so Meno
+  score and the rest. For chloroacetaldehyde going in one step to acetyl
+  chloride, the map that makes and breaks the fewest bonds then comes
+  first. A single step makes and breaks as few bonds as it can, so Meno
   counts that first; between maps that change as many bonds, ACCeL's order
   stands. Like ACCeL's own scores, it orders only the maps the search
   builds.
 
 - **The hydrogen in line goes** (`transferAlignedH`). Where a map moves a
   hydrogen from one atom (the donor, D) to another (the acceptor, A) and
-  the donor holds other hydrogens like it, ACCeL's choice of which one goes
-  follows from how it placed the group, not from where A stands; in
-  hydrogen abstraction from methane by a chlorine atom lying in line with
-  one C-H, ACCeL can give the chlorine another. A hydrogen is passed along
+  the donor holds other hydrogens like it, Meno has the one in line with A
+  go: in hydrogen abstraction from methane by a chlorine atom lying in line
+  with one C-H, that hydrogen goes to the chlorine. A hydrogen is passed along
   the line D-H...A, so Meno, after ACCeL's ordering, has the one already
   nearest that line go, and puts it in the place on A in line with D where
   A holds hydrogens of its own. "Nearest the line" is the turn, about the
@@ -272,8 +260,8 @@ maps as ACCeL does.
   the same atoms on the other and gives each hydrogen the one nearest it:
   such a group cannot turn freely, so its hydrogens keep their places about
   their atom through a step. In an SN2 at a CH2, the centre inverts as an
-  umbrella folding over; ACCeL reads it as kept and swaps the two
-  hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
+  umbrella folding over, and its two hydrogens keep their places about it.
+  A methyl, or an atom with no heavy neighbour, has no frame to
   lay over and is left as ACCeL placed it, as is a group a hydrogen comes
   to or goes from. So is an atom with more neighbours on one side than on
   the other, hydrogens counted: it goes from one shape to another - a
@@ -296,9 +284,9 @@ maps as ACCeL does.
   CH2s' hydrogens: all four of its CH2s change order.)
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
-  `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
-  number; `_order_maps`' face tests read such an angle as under 90°. Meno
-  keeps those cosines within [-1, 1] too. A cosine that is not a number to
+  Meno keeps the cosines of `_det_ez` and of `_order_maps`' face tests
+  within [-1, 1] too, so that an exactly anti torsion reads as E, and as
+  over 90°. A cosine that is not a number to
   begin with (a zero vector's) stays one, in both.
 
 ### Like molecules standing apart
@@ -308,9 +296,7 @@ the reaction's pieces and the waters in every order: an SN2 beside n waters
 gives 2, 2, 8, 96 and 768 maps for n = 0 to 4 (ACCeL 0.3.0 itself, and the
 port, alike: n!·2ⁿ pairings of the waters), calling its search 177 492
 times for n = 4. Its own placement of isolated molecules by RMSD
-(modeler.py 1161-1228) would settle them at once, but it waits until the
-chains left are all alike - after every other piece is placed, by which
-time the shallower levels have tried every order.
+(modeler.py 1161-1228) places them once every other piece is placed.
 
 Meno departs here, on the maintainer's ruling (2026-10-17):
 
@@ -338,12 +324,11 @@ beside four or five waters, methanols or acetonitriles):
   molecules are gone from *Other map*;
 - the first map pairs the rest the same way, and ranks the same on all of
   ACCeL's keys but the last;
-- its total RMSD is never higher: the same in 22 of the 32 runs that have
-  like molecules, lower in 10 - ACCeL's ordering, given the maps it never
-  tried, would have put them first.
+- its total RMSD is the same in 22 of the 32 runs that have like
+  molecules, and lower in 10.
 
-Where the port cannot finish (six waters and more), the refined map is
-never worse than ACCeL's own placement.
+Where the port cannot finish (six waters and more), the refined map's
+total RMSD is never above that of the placement it starts from.
 
 ## Speed
 
@@ -361,11 +346,11 @@ corpus, exactly and with the departures, every map in its order):
   within 1e-9 of one another, Meno's geometric fit near its threshold. Such
   a call is made afresh.
 
-| | ACCeL 0.3.0 | port, as first written | now |
-|---|---|---|---|
-| SN2 beside four waters | 37 s | 10.5 s | 0.6 s (exactly) · 2 ms (like molecules placed) |
-| the corpus (225 inputs), exactly | 91 s | 23 s | 2.9 s |
-| SN2 beside 6 / 10 / 20 waters | over 5 min each | - | 0.4 s / 35 ms / 0.1 s |
+| | port, as first written | now |
+|---|---|---|
+| SN2 beside four waters | 10.5 s | 0.6 s (exactly) · 2 ms (like molecules placed) |
+| the corpus (225 inputs), exactly | 23 s | 2.9 s |
+| SN2 beside 6 / 10 / 20 waters | - | 0.4 s / 35 ms / 0.1 s |
 
 (One machine, the minimum of three runs, while other work shared it.)
 
@@ -405,8 +390,8 @@ environment, nothing of it committed:
 - **Results.** Every stage agrees on all 147 reactions - each `_get_maps`
   call (177 492 of them for an SN2 beside four waters), `_correct_maps`,
   every map's fourteen scores, the order, and `get_maps` and `get_mapped` -
-  but for the cases above: where ACCeL's own output varies from run to run,
-  Meno's matches one of its runs; and in two reactions (a cyclopropanation
+  but for the cases above: where the original's order is not fixed, Meno's
+  result is one it gives; and in two reactions (a cyclopropanation
   and a butadiene ring closure) maps whose total RMSDs differ only in their
   last digits come in the other order. The first map agrees on every
   reaction.
@@ -468,29 +453,50 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   charge) shows nothing new: the menu offers *Atom map* again, and *Hide
   atom map* where its numbers are still on the drawing.
 
-## For a workflow's *Reaction* step
+## For a workflow's *Atom map* step
 
-`mapProducts` (`reactionMap.ts`) is what the *Reaction* step does
-(docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does itself*):
+`mapOnto` (`reactionMap.ts`) is what the *Atom map* step does
+(docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does itself*;
+docs/STRUCTURE-STEPS.md, *Atom map*), and what the page calls for the same:
 
-- **One reactant structure, any number of products.** Several reactants are
-  one structure beforehand (a complex). Each product is mapped onto it on
-  its own, in 3D with every hydrogen, as above.
-- **Mapped products.** Each product is written in the reactants' numbering:
-  its own atoms, where they stand in the product, put at the places of the
-  reactant atoms they map to, and its bonds renumbered with them. Its first
-  map gives one; *every* map gives one for each, best first.
-- **Bond changes.** For each mapped product, a table: each bond the map
-  forms, breaks or changes in order, its two atoms in the reactants'
-  numbering with their elements - from 0 as `mapProducts` gives them, as an
+- **A reference side, and sides mapped onto it.** Each side is one or more
+  structures, set side by side as one as above: a reaction's reactants and
+  one product, or all its products; a compound and one of its conformers.
+  Each side is mapped onto the reference on its own, in 3D with every
+  hydrogen.
+- **Mapped.** Each side is written in the reference's numbering: its own
+  atoms, where they stand, put at the places of the reference atoms they
+  map to, and its bonds renumbered with them (`order`: for each atom of
+  the reference, the side's atom that is it). Its first map gives one;
+  *every* map gives one for each, best first.
+- **Bonds that may change, or not.** With `bonds` "change", a reaction.
+  With "same", the side is to be the reference's own structure - a
+  conformer of it - and a map that forms, breaks or changes any bond is
+  not passed on, the bonds said. A map of a conformer onto its compound
+  pairs like atoms as ACCeL's map extension does (a CH2's hydrogens by
+  their handedness, an =CH2's by E or Z, a methyl's by the torsion), so
+  each comes out where the reference has it.
+- **Bond changes.** For each mapped side, a table: each bond the map
+  forms, breaks or changes in order, its two atoms in the reference's
+  numbering with their elements - from 0 as `mapOnto` gives them, as an
   entry's bonds number them; from 1 in the step's table on the page, as a
   card numbers them - and its bond type before and after (0 where there is none; 4,
   aromatic). The types are the structures'
   own; nothing is perceived from the geometry here. A bond of an aromatic
   ring on both sides is no order change (`changes` above).
-- **Nothing in part.** A product whose atoms cannot all be paired one to
-  one - a different number of atoms, a flat drawing, a map that leaves an
-  atom out - is not passed on, and the reason is said for it.
+- **Nothing in part.** A side whose atoms cannot all be paired one to
+  one - a different number of atoms, other elements, a flat drawing, a map
+  that leaves an atom out - is not passed on, and the reason is said for
+  it. A map in part, for showing on a drawing, is `mapReaction`'s (each
+  map with its `complete`).
+- **Conformers of a mapped structure, the light way.** Where a structure
+  is already mapped and only its conformers - the same structure in the
+  same numbering - are to follow, `numberedLike`
+  (`referenceNumbering.ts`) swaps their equivalent atoms' numbers as ConfoTS's
+  `map_numbers` does, without a full map: on a conformer of a 60-atom
+  compound with tert-butyl groups, about a tenth of a millisecond where a
+  full map takes a few seconds. `throughRepresentative` carries a
+  conformer through the representative its structure was mapped by.
 - **Checked against known answers.** The tests hold hand-made reactions
   whose map is known by construction: a Diels-Alder (two bonds formed,
   four orders changed, nothing broken), an SN2 (C-Cl formed, C-Br
@@ -500,3 +506,10 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   products, the two bonds formed and four orders changed are those the
   reactant's diene and enone call for, every hydrogen stays on its own
   atom, and each product keeps its R or S at the ring fusion.
+- **Conformers, checked the same way.** Propene with its =CH2 hydrogens
+  each in the other's place comes back to propene's places, atom for atom,
+  by the full map and by `numberedLike`; so do 2-chloropropane's two
+  methyls swapped whole. Outside the repository, on RDKit's conformers of
+  two compounds of 60 and 99 atoms with several tert-butyl groups, every
+  conformer came out with each equivalent atom where its reference has
+  it, by both.

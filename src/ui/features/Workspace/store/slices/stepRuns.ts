@@ -4,11 +4,11 @@ import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { DocumentStore } from "../../../../../lib/doc";
-import { anyKindById, pluginById, type PythonPlugin } from "../../../../../lib/calc/catalog";
+import { anyKindById, neededWhy, pluginById, stoppedOf, type PythonPlugin } from "../../../../../lib/calc/catalog";
 import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
-import { pluginClient, useReaders } from "../../../../../lib/calc/workers";
+import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
 import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
@@ -17,7 +17,7 @@ import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
-import { drawingOf, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
+import { drawingOf, molblockOfSmiles, withoutStereoOpen, stereoOpenOf, stereoOpenSaid, type StereoOpen } from "../../chem/fromSmiles";
 import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -37,8 +37,8 @@ import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
-import { mappable, moleculeOfEntry, reactionRefused, reactionSet } from "../../workflow/structureSteps";
-import { mapProductsOff } from "../../chem/mapProducts";
+import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
+import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
@@ -199,11 +199,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }
     if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
-    if (by === "meno" && step.kind === "reaction") return menoReaction(id, at);
+    if (by === "meno" && step.kind === "atom-map") return menoAtomMap(id, at);
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
+    // (a plugin stopped - one it uses not added, or not of a version it works with - runs nothing, saying why)
+    const stopped = stoppedOf(plugin, addedNow());
+    if (stopped) return void fail(id, `${plugin.name} is stopped. ${stopped}.`, at, key);
     if (takesNothing(step.kind)) return runGenerate(id, plugin, at);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
     if (step.kind === "render") return renderEach(id, plugin, at);
@@ -361,38 +364,52 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   }
 
   /**
-   * Meno's Reaction, its products mapped in a worker (chem/mapProducts) -
-   * each can take seconds, which the page does not wait on - its card
-   * saying how many are done, and stopped with the step; its results put in
-   * at the end as one edit, as Meno's other steps'.
+   * Meno's Atom map, its entries mapped in a worker (chem/mapProducts) -
+   * each can take seconds, which the page does not wait on - those of each
+   * reference in turn, its card saying how many are done, and stopped with
+   * the step; its results put in at the end as one edit, as Meno's other
+   * steps'.
    */
-  async function menoReaction(id: number, at: number): Promise<void> {
+  async function menoAtomMap(id: number, at: number): Promise<void> {
     if (get().menoWorking[id]) return;
     menoStops.delete(id);
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, "meno");
-    const [r, p] = [inputOf(d, id, "reactants")!, inputOf(d, id, "products")!];
-    const reactants = setEntries(r.molecules, r.holds as Holds3D);
-    const products = setEntries(p.molecules, p.holds as Holds3D);
-    const refused = reactionRefused(reactants);
-    if (refused) return void fail(id, refused, at, key);
-    const every = optionsOf(kindInfo("reaction").options ?? [], step.options).maps === "every";
-    const whole = products.filter(mappable);
+    const [m, r] = [inputOf(d, id, "molecules")!, inputOf(d, id, "reference")!];
+    const entries = setEntries(m.molecules, m.holds as Holds3D);
+    const references = setEntries(r.molecules, r.holds as Holds3D);
+    const v = optionsOf(kindInfo("atom-map").options ?? [], step.options);
+    const plan = atomMapPlan(entries, references, v);
+    if ("refused" in plan) return void fail(id, plan.refused, at, key);
+    const total = plan.groups.reduce((n, g) => n + g.sides.length, 0);
     const working = (patch: { done: number } | null) =>
       set((prev) => {
         const rest = { ...prev.menoWorking };
-        if (patch) rest[id] = { since: at, total: whole.length, ...patch };
+        if (patch) rest[id] = { since: at, total, ...patch };
         else delete rest[id];
         return { ...prev, menoWorking: rest };
       });
     working({ done: 0 });
-    const job = mapProductsOff(moleculeOfEntry(reactants[0]), whole.map(moleculeOfEntry), every, (done) => working({ done }));
-    menoKills.set(id, job.stop);
-    let mapped;
+    const mapped: EntriesMapped[] = [];
+    let stopped = false;
     try {
-      mapped = await job.result;
+      // (each reference's entries in turn, the count done going on across them)
+      let before = 0;
+      for (const g of plan.groups) {
+        const job = mapOntoOff(
+          g.reference.map((i) => moleculeOfEntry(references[i])),
+          g.sides.map((side) => side.map((i) => moleculeOfEntry(entries[i]))),
+          { bonds: v.bonds === "same" ? "same" : "change", every: v.maps === "every" },
+          (done) => working({ done: before + done }),
+        );
+        menoKills.set(id, job.stop);
+        mapped.push(await job.result);
+        before += g.sides.length;
+        if (menoStops.has(id)) break;
+      }
     } catch (e) {
+      stopped = true;
       if (!menoStops.has(id)) return void fail(id, `The mapping stopped: ${e instanceof Error ? e.message : String(e)}`, at, key);
     } finally {
       working(null);
@@ -402,12 +419,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!still) return;
     const took = Date.now() - at;
     const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
-    if (!mapped || menoStops.has(id)) {
+    if (stopped || menoStops.has(id) || mapped.length < plan.groups.length) {
       menoStops.delete(id);
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     // (no time said: Meno's own steps say none)
-    const outcome = reactionSet(reactants, products, every ? "every" : "first", mapped);
+    const outcome = atomMapSet(entries, references, m.holds as Holds3D, v, mapped);
     doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
   }
 
@@ -875,7 +892,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const g of read.made) {
         let block: string;
         try {
-          block = (await smiles.request("from_smiles", { smiles: g.smiles })).molblock;
+          block = await molblockOfSmiles(smiles, g.smiles);
         } catch (e) {
           notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;
@@ -1048,11 +1065,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
-    // (another plugin's program its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: one its manifest declares, and that
-    //  plugin added, or no job starts - said, naming it)
+    // (a program of another plugin its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: of one its manifest says it uses,
+    //  that plugin added and of a version it works with - or no job starts, said, naming it; one used only for some of its work
+    //  stops the plugin for nothing else)
     for (const n of [...new Set(prepared.flatMap((p) => p.needs ?? []))]) {
-      if (!plugin.needs?.some((d) => d.plugin === n)) return void fail(id, `${plugin.name} asked for ${n}'s program, which it does not declare`, at, key);
-      if (useReaders.getState().state[n] !== "added") return void fail(id, `The ${pluginById(n)?.name ?? n} plugin is needed for this: add it in Settings, Plugins`, at, key);
+      const why = neededWhy(plugin, n, addedNow());
+      if (why) return void fail(id, `${why}.`, at, key);
     }
     const jobs: StepJob[] = [];
     try {
