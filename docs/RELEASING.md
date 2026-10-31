@@ -125,9 +125,7 @@ computer:
   Intel, and 64-bit Windows) - `cargo tree --offline -e normal --target`,
   Meno's normal dependencies and theirs, proc-macros among them, not build
   scripts' or tests', with features unified as a build unifies them - and
-  the systems taken together. (Not `cargo metadata`'s graph: it turns on
-  every feature any user of a crate asks for, build scripts' and tests'
-  among them, and so names crates no build links.)
+  the systems taken together.
 
 For each: its name, version and licence as its manifest gives them, where
 its source is kept, and every licence and notice file at the top of its
