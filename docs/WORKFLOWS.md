@@ -1250,7 +1250,7 @@ states an undo goes back to as well.
 - **CREST**: *Conformers*, by a plugin made the same way - crest 2.12
   with xtb 6.7.1, LGPL-3.0-or-later, on conda-forge for macOS and Linux
   only. On Windows it cannot be added, and *Conformers* is filled by RDKit
-  alone there. (Not 3.0.2: *As built*, step 5.)
+  alone there.
 - **Programs installed separately** (ORCA, Gaussian; step 6): never fetched by
   Meno - their licences do not allow it. A plugin's manifest says which
   program it needs and how to know it (its name, and the line its version
@@ -1732,16 +1732,10 @@ Decided while building it, for the maintainer to confirm:
   search is (full, or CREST's three quicker ones), and the energy window
   (6 kcal/mol by default). The charge and spin multiplicity are those
   Export reads, as for xTB. Its search samples with the natural masses:
-  CREST is given none (its help lists no way to), which changes how it
-  explores, not the conformers or energies it gives.
-- **CREST 2.12, not 3.0.2.** conda-forge's CREST 3.0.2 for macOS keeps
-  only the lowest conformer, whatever energy window it is given: its
-  CREGEN sorting takes the window as 0 (github.com/crest-lab/crest/issues/431,
-  open; seen here with n-butane, 1 conformer where 2.12 finds 3). 2.12
-  runs xtb as a program, which 3.0 does within itself - slower (n-butane
-  2 min 21 s against 11 s, on 8 cores) - but one version on both
-  systems finds the same conformers. A later build that keeps the window
-  is a change of the plugin's lock alone.
+  the plugin gives CREST none, which changes how it explores, not the
+  conformers or energies it gives.
+- **CREST 2.12.** The plugin's lock holds crest 2.12 with xtb 6.7.1, the
+  same on macOS and Linux; another version is a change of the lock alone.
 - **A plugin for some systems only** says so in its manifest
   (`systems`); elsewhere Settings, *Plugins*, says *For macOS and Linux
   only* in place of *Add*, and it cannot be added.
