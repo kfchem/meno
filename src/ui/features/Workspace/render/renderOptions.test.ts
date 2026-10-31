@@ -157,8 +157,8 @@ describe("the card's parts: Look, Render, Scene, Motion", () => {
   const parts = bySection(options);
 
   it("puts each of Meno's own choices in its part", () => {
-    expect(parts.motion.map((o) => o.id)).toEqual(["motion", "mode", "seconds"]);
-    expect(parts.render.map((o) => o.id)).toEqual(["fps", "width", "shape"]);
+    expect(parts.motion.map((o) => o.id)).toEqual(["motion", "mode", "seconds", "fps"]);
+    expect(parts.render.map((o) => o.id)).toEqual(["width", "shape"]);
     expect(parts.look.map((o) => o.id)).toEqual(["look", "molecules", "surfaces", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     expect(parts.scene).toEqual([]);
     // (a picture has no motion)

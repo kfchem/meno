@@ -243,7 +243,7 @@ export function renderOptions(
             section: "motion" as const,
             ...(lengthNote(length) ? { note: lengthNote(length) } : {}),
           },
-          { id: "fps", label: "Frames a second", type: "choice" as const, choices: ["24", "30", "60"].map((v) => ({ value: v, label: v })), default: "30", section: "render" as const },
+          { id: "fps", label: "Frames a second", type: "choice" as const, choices: ["24", "30", "60"].map((v) => ({ value: v, label: v })), default: "30", section: "motion" as const },
         ]
       : []),
     { id: "width", label: "Width", type: "number", default: film ? 1920 : 2400, min: 16, max: film ? 3840 : 8192, step: film ? 16 : 100, unit: "px", section: "render" },

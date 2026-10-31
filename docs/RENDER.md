@@ -65,17 +65,17 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
 and a film alike, in four parts, in this order - **Look** (the look, its own
 choices just under it, *Adjust this look* folded), **Render** (the
 renderer, its samples, noise, where it renders, its colours, the width and
-shape, a film's frames a second and quality), **Scene** (the background, the
-lights) and, for a film, **Motion** (the motion, *Once or Loop*, the
-length). Meno's own choices each have their part; a plugin's option says
+shape, a film's quality), **Scene** (the background, the lights) and, for
+a film, **Motion** (the motion, *Once or Loop*, the length and the frames a
+second). Meno's own choices each have their part; a plugin's option says
 which part it belongs to (`section`, docs/PLUGINS.md), and one that says
 none is shown last, under the plugin's name. *Once or Loop* is Meno's, for
 every motion that can come back to its start - turning, and those a
 renderer makes: *turning once round* Once eases in and comes to rest where
 it began, as the canvas's *Turn once* does; as a Loop it turns at one speed,
 seamlessly. A choice a motion is always made with - the Blender plugin's
-motions are made with light traced, in Cycles - is shown as that one alone,
-saying why, whatever was chosen (`fixed`, docs/PLUGINS.md, *Motions*).
+motions are made with light traced, in Cycles - is said as text in its
+row, with no control, and why beneath it, whatever was chosen (`fixed`, docs/PLUGINS.md, *Motions*).
 
 Each is remembered: Meno's for a picture and a film apart, the plugin's as
 the role's options, which Settings, *Chemistry*, shows as well, on its *3D* card.
