@@ -586,8 +586,8 @@ some kinds of option are Meno's, so that every plugin shows them the same
 way:
 - **solvent**: a name from Meno's list of solvents with their usual aliases
   (*chloroform*, *CHCl3*, *CDCl3*), or none. Each plugin maps the name to
-  its program's model and keyword, and says when its model does not know
-  that solvent;
+  its program's model and keyword, and says when there is none for that
+  solvent;
 - **temperature** and **pressure**, with units.
 
 Charge and multiplicity are each entry's *species*, not options. A *Species*
