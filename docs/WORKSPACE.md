@@ -1440,7 +1440,7 @@ space-filling side by side is better science than either alone.
   sticks' colouring, as the look or a setting changes.
 - **A shader that does not compile.** Meno's own shaders - lines on the
   balls, the line round them, sticks that bend - each name themselves
-  (utils/menoShader). One that a graphics card will not compile is said in
+  (utils/menoShader). One that does not compile on a graphics card is said in
   Meno's log, with its name and the card's own words for what was wrong
   (nothing of the document), and from then on is drawn as its plain
   three.js material: a molecule loses a line or a shade, never its atoms.
