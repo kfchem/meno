@@ -670,6 +670,20 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   had no reason to: a Zeise-type complex's alkene carbon and cis Cl, and a
   cis dihydride's hydrides, though there the force field's own angles
   stayed above it (77° and 88° here, as now).
+- **A structure of more than one part, its parts side by side** (RDKit
+  plugin 0.1.15). A salt's ions, or a mixture's molecules, are embedded
+  each where the others are and optimised with nothing between them
+  counted, so that they lay on one another - NaCl's two ions 0.00 Å
+  apart, two benzenes' rings through each other. Each conformer's parts
+  (each fragment, an eta ring one with its metal) are now turned as the
+  first conformer's are, part by part, over the ways each maps onto
+  itself, and set side by side along one axis, largest first: each beyond
+  the parts before it, the gap between the two atoms that face each other
+  across it the sum of their van der Waals radii (Alvarez's, the app's).
+  Where they lie against each other, or how they face, is no result of
+  the method, and the card says so (*Parts: 2, side by side: where they
+  lie against each other is not modelled*); a salt has as many conformers
+  as its parts make between them - sodium acetate as many as acetate.
 - **Where a lighter metal stands in, or eta rings are held, that model's
   energies order the conformers.** Where UFF has no type for a metal and a
   lighter one of its group stands in, or a ring bound through its atoms is

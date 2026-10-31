@@ -1312,6 +1312,22 @@ RADII = {
     "Lv": (175, None, None), "Ts": (165, None, None), "Og": (157, None, None),
 }
 
+#: Alvarez's van der Waals radii, in angstroms (Dalton Trans. 2013, 42, 8617; for Po to Ra, Mantina and others'):
+#: the same as src/lib/chem/elements.ts (whose comment gives the sources), held so by test_plugin_rdkit.py.
+VDW = {
+    "H": 1.2, "He": 1.43, "Li": 2.12, "Be": 1.98, "B": 1.91, "C": 1.77, "N": 1.66, "O": 1.5, "F": 1.46, "Ne": 1.58,
+    "Na": 2.5, "Mg": 2.51, "Al": 2.25, "Si": 2.19, "P": 1.9, "S": 1.89, "Cl": 1.82, "Ar": 1.83, "K": 2.73,
+    "Ca": 2.62, "Sc": 2.58, "Ti": 2.46, "V": 2.42, "Cr": 2.45, "Mn": 2.45, "Fe": 2.44, "Co": 2.4, "Ni": 2.4,
+    "Cu": 2.38, "Zn": 2.39, "Ga": 2.32, "Ge": 2.29, "As": 1.88, "Se": 1.82, "Br": 1.86, "Kr": 2.25, "Rb": 3.21,
+    "Sr": 2.84, "Y": 2.75, "Zr": 2.52, "Nb": 2.56, "Mo": 2.45, "Tc": 2.44, "Ru": 2.46, "Rh": 2.44, "Pd": 2.15,
+    "Ag": 2.53, "Cd": 2.49, "In": 2.43, "Sn": 2.42, "Sb": 2.47, "Te": 1.99, "I": 2.04, "Xe": 2.06, "Cs": 3.48,
+    "Ba": 3.03, "La": 2.98, "Ce": 2.88, "Pr": 2.92, "Nd": 2.95, "Sm": 2.9, "Eu": 2.87, "Gd": 2.83, "Tb": 2.79,
+    "Dy": 2.87, "Ho": 2.81, "Er": 2.83, "Tm": 2.79, "Yb": 2.8, "Lu": 2.74, "Hf": 2.63, "Ta": 2.53, "W": 2.57,
+    "Re": 2.49, "Os": 2.48, "Ir": 2.41, "Pt": 2.29, "Au": 2.32, "Hg": 2.45, "Tl": 2.47, "Pb": 2.6, "Bi": 2.54,
+    "Po": 1.97, "At": 2.02, "Rn": 2.2, "Fr": 3.48, "Ra": 2.83, "Ac": 2.8, "Th": 2.93, "Pa": 2.88, "U": 2.71,
+    "Np": 2.82, "Pu": 2.81, "Am": 2.83, "Cm": 3.05, "Bk": 3.4, "Cf": 3.05, "Es": 2.7
+}
+
 #: How far a metal's bond may be from its covalent length while embedding (A).
 METAL_BOND_SLACK = 0.05
 #: The narrowest angle two atoms bonded to one metal, of different ligands, are let make while embedding and
@@ -1657,6 +1673,69 @@ def floor_pairs(mol):
                 continue
             pairs.append((metal.GetIdx(), j.GetIdx(), k.GetIdx(), angle))
     return pairs
+
+
+def parts_of(mol, eta=()):
+    """The parts of a structure, largest first (by heavy atoms, then by first atom): each a fragment of it, an eta
+    ring's one with its metal's - [sorted atom indices]."""
+    part = {i: k for k, frag in enumerate(Chem.GetMolFrags(mol)) for i in frag}
+    for m, _, atoms in eta:
+        joined = {part[a] for a in atoms}
+        part = {i: part[m] if k in joined else k for i, k in part.items()}
+    groups = {}
+    for i, k in part.items():
+        groups.setdefault(k, []).append(i)
+    heavy = lambda g: sum(1 for i in g if mol.GetAtomWithIdx(i).GetAtomicNum() > 1)
+    return sorted((sorted(g) for g in groups.values()), key=lambda g: (-heavy(g), g[0]))
+
+
+def parts_apart(mol, ids, parts):
+    """Each conformer's parts turned as the first conformer's are, part by part, and set side by side along x,
+    largest first: each beyond the parts before it, the gap
+    between the two atoms that face each other across it the sum of their van der Waals radii (VDW; 1.5 A for an
+    element with none). Each part is embedded where the others are, at the origin, and optimised with nothing
+    between parts counted, so that they lay on one another - a salt's two ions at 0.00 A: where they lie against
+    each other is no result of the method, and is not given as one."""
+    import numpy as np
+
+    radius = [VDW.get(a.GetSymbol(), 1.5) if a.GetAtomicNum() > 0 else 0.0 for a in mol.GetAtoms()]
+    # (each part of two atoms or more as a molecule of its own, its conformers with it, its atoms in their order -
+    # laid over the first conformer's at its best over the ways it maps onto itself, a methyl's hydrogens among them)
+    subs = []
+    for part in parts:
+        if len(part) < 2:
+            subs.append(None)
+            continue
+        sub = Chem.RWMol(mol)
+        for i in sorted(set(range(mol.GetNumAtoms())) - set(part), reverse=True):
+            sub.RemoveAtom(i)
+        sub = sub.GetMol()
+        sub.UpdatePropertyCache(strict=False)
+        Chem.GetSymmSSSR(sub)
+        subs.append(sub)
+    for cid in ids:
+        conf = mol.GetConformer(cid)
+        # (each part turned and moved onto the same part of the first conformer: how parts face each other is no
+        #  result either, and conformers whose parts are each the same are then the same conformer)
+        if cid != ids[0]:
+            for part, sub in zip(parts, subs):
+                if sub is None:
+                    continue
+                _, t, _ = rdMolAlign.GetBestAlignmentTransform(sub, sub, prbCid=cid, refCid=ids[0], maxMatches=ALIKE_WAYS)
+                q = conf.GetPositions()[part]
+                moved = q @ np.asarray(t)[:3, :3].T + np.asarray(t)[:3, 3]
+                for i, x in zip(part, moved):
+                    conf.SetAtomPosition(i, Point3D(float(x[0]), float(x[1]), float(x[2])))
+        p = conf.GetPositions()
+        placed = list(parts[0])
+        for part in parts[1:]:
+            a = max(placed, key=lambda i: p[i][0] + radius[i])
+            b = min(part, key=lambda i: p[i][0] - radius[i])
+            shift = (p[a][0] + radius[a]) - (p[b][0] - radius[b])
+            for i in part:
+                p[i][0] += shift
+                conf.SetAtomPosition(i, Point3D(float(p[i][0]), float(p[i][1]), float(p[i][2])))
+            placed += part
 
 
 def angle_at(mol, cid, m, j, k):
@@ -2230,6 +2309,10 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
             conf = mol.GetConformer(cid)
             c = conf.GetPositions()[atoms].mean(axis=0)
             conf.SetAtomPosition(star, Point3D(float(c[0]), float(c[1]), float(c[2])))
+    # (a structure of more than one part - a salt, a mixture - its parts set side by side, not on one another)
+    parts = parts_of(mol, eta)
+    if len(parts) > 1:
+        parts_apart(mol, ids, parts)
     # (a conformer whose ligands came out closer at a metal than the floor they were held to while embedding
     # and optimising is no shape the method allows: it sat in a well of the force field the hold could not
     # pull it out of - [OsCl6]2- with Fe standing in, 87.7 kcal/mol above the octahedron, two Cl 62 degrees
@@ -2309,6 +2392,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
                 f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} closer than the {angle:g}\u00b0 floor held"
                 f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
                 for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()}))}] if dropped else []),
+            # (where it is of more than one part: how many, and that where they lie against each other is no result)
+            *([{"label": "Parts", "text": f"{len(parts)}, side by side: where they lie against each other is not modelled"}] if len(parts) > 1 else []),
             {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"
              + (f", {len(left) - len(kept)} the same as one kept" if len(left) > len(kept) else "")},
             *([{"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"

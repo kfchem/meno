@@ -513,6 +513,73 @@ class Metals(unittest.TestCase):
         }
         self.assertEqual(self.worker.RADII, app)
 
+    def test_holds_the_same_van_der_waals_radii_as_the_app(self):
+        import re
+        text = (ROOT / "src/lib/chem/elements.ts").read_text(encoding="utf-8")
+        app = {sym: float(v) for sym, v in re.findall(r'symbol: "(\w+)",[^\n]*?vdw: ([0-9.]+)', text)}
+        self.assertEqual(self.worker.VDW, app)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class PartsApart(unittest.TestCase):
+    """A structure of more than one part - a salt, a mixture - its parts embedded each where the others are and
+    optimised with nothing between them counted: set side by side, each beyond the ones before it at van der Waals
+    contact, turned as in the first conformer - where they lie against each other being no result."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles, count=10):
+        return self.worker.op_conformers({"molblock": Chem.MolToMolBlock(Chem.MolFromSmiles(smiles)), "options": {"sought": "fixed", "count": count}})["isomers"][0]
+
+    def nearest_across(self, entry):
+        """The least, over its conformers, of the distance between two atoms of two parts over their van der Waals sum."""
+        import numpy as np
+        m = Chem.RWMol()
+        for a in entry["atoms"]:
+            m.AddAtom(Chem.Atom(a["el"]))
+        for b in entry["bonds"]:
+            m.AddBond(b["a1"], b["a2"], Chem.BondType.SINGLE)
+        frags = Chem.GetMolFrags(m)
+        els = [a["el"] for a in entry["atoms"]]
+        least = 9.0
+        for frame in entry["frames"]:
+            P = np.array(frame).reshape(-1, 3)
+            for x, a in enumerate(frags):
+                for b in frags[x + 1:]:
+                    least = min(least, min(float(np.linalg.norm(P[i] - P[j])) / (self.worker.VDW[els[i]] + self.worker.VDW[els[j]]) for i in a for j in b))
+        return least
+
+    def test_finds_a_structures_parts_largest_first_an_eta_ring_with_its_metal(self):
+        self.assertEqual(self.worker.parts_of(Chem.MolFromSmiles("[Na+].CC(=O)[O-]")), [[1, 2, 3, 4], [0]])
+        fe = self.worker.read(EtaBound.ferrocene())
+        self.assertEqual(len(self.worker.parts_of(fe, self.worker.eta_systems(fe))), 1)
+
+    def test_sets_a_salts_ions_side_by_side_not_on_one_another(self):
+        # (on main: NaCl's two ions 0.00 A apart, a copper acetate's three parts 0.00, two benzenes 0.00)
+        for smiles, parts in (("[Na+].[Cl-]", 2), ("C[NH3+].[Cl-]", 2), ("CC(=O)[O-].[Na+]", 2), ("CCN(CC)CC.Cl", 2),
+                              ("[Na+].C1COCCOCCOCCOCCO1", 2), ("CC(=O)[O-].CC(=O)[O-].[Cu+2]", 3), ("c1ccccc1.c1ccccc1", 2)):
+            entry = self.made(smiles)
+            self.assertGreaterEqual(self.nearest_across(entry), 0.999, smiles)
+            rows = {r["label"]: r["text"] for r in entry["how"]}
+            self.assertEqual(rows["Parts"], f"{parts}, side by side: where they lie against each other is not modelled", smiles)
+
+    def test_makes_as_many_conformers_of_a_salt_as_of_its_parts(self):
+        # (its parts turned as in the first conformer: conformers whose parts are each the same are one)
+        self.assertEqual(len(self.made("CC(=O)[O-].[Na+]")["frames"]), len(self.made("CC(=O)[O-]")["frames"]))
+        self.assertEqual(len(self.made("c1ccccc1.c1ccccc1")["frames"]), 1)
+        self.assertEqual(len(self.made("C[NH3+].[Cl-]")["frames"]), 1)
+        # (two parts that each turn: water with ethanol, as many as ethanol alone - water's one shape adds none)
+        self.assertEqual(len(self.made("O.CCO", 30)["frames"]), len(self.made("CCO", 30)["frames"]))
+
+    def test_says_nothing_of_parts_of_a_structure_of_one(self):
+        for block in (Chem.MolToMolBlock(Chem.MolFromSmiles("CCO")), EtaBound.ferrocene()):
+            entry = self.worker.op_conformers({"molblock": block, "options": {"sought": "fixed", "count": 3}})["isomers"][0]
+            self.assertNotIn("Parts", {r["label"] for r in entry["how"]})
+
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class RingChairs(unittest.TestCase):
