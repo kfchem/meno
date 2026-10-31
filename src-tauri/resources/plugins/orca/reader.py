@@ -193,8 +193,9 @@ def xtb_of(text):
 
 def level_of(text):
     """The method and basis set, each as the input names it: the functional or composite method ORCA says it
-    recognised, else one the manual lists that the input names (`FUNCTIONALS`); a correlated method the input names (its final energy is that method's); Hartree-Fock, where ORCA says
-    it ran it and the input names it, or names no method at all; a tight-binding method, as the xtb program names it.
+    recognised, else one the manual lists that the input names (`FUNCTIONALS`, `COMPOSITES`); a correlated method the
+    input names (its final energy is that method's); Hartree-Fock, where ORCA says it ran it and the input names it, or
+    names no method at all; a tight-binding method, as the xtb program names it.
     The basis set ORCA says it used, where the input names it - none for a composite or tight-binding method, whose own
     it is. Otherwise none: never a kind of method in a method's place."""
     words = keywords(text)
