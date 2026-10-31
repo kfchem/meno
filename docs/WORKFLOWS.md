@@ -69,10 +69,8 @@ each is merged, this file describes what is built.
     conformers*, makes it a conformer set, on the page for the flow to
     show.
 14. **Meno's own words, and its own design** (the maintainer, 2026-10-08):
-    what holds a workflow's entries is not called a *box* - ACCeL's
-    word for its own class (its second version calls it a *Flow*) - but
-    a **set**; and the implementation and the interface are what suit
-    Meno best, not ACCeL's.
+    what holds a workflow's entries is called a **set**, and the
+    implementation and the interface are Meno's own.
 15. **The figures here are conceptual** (the maintainer, 2026-10-08): they
     show what is where, not how it looks. The look follows Meno's own
     design (*How it looks*); the figures' colours, transparency, line
