@@ -1814,6 +1814,7 @@ function WorkspaceContent({
             plugin={renderer()!}
             motions={rendering.motions}
             surfaces={rendering.surfaces}
+            molecules={rendering.ids.length}
             onCancel={() => setRendering(null)}
             onRender={(ask, options) => {
               const ids = rendering.ids;

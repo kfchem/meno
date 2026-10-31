@@ -42,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
@@ -228,14 +228,16 @@ SAID_AFTER = re.compile(
 
 
 def why_of(log):
-    """Why Blender stopped, as it says: the last that render.py said as it stopped ("render.py: ...") or that Python
-    raised - all of it, a message of several lines as one - else its last line that says error, else its last; never
-    Blender's own last words, which say only that a script failed or what memory it did not free."""
+    """Why Blender stopped, as it says: the last that render.py said as it stopped ("render.py: ...", said without the
+    script's name, which is no word for the person) or that Python raised - all of it, a message of several lines as
+    one - else its last line that says error, else its last; never Blender's own last words, which say only that a
+    script failed or what memory it did not free."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
     told = [line for line in lines if not BLENDER_OWN.match(line)]
     for k in range(len(lines) - 1, -1, -1):
         if "render.py:" in lines[k] or RAISED.match(lines[k]):
-            whole = [lines[k]]
+            first = re.sub(r"^.*?render\.py:\s*", "", lines[k]) if "render.py:" in lines[k] else lines[k]
+            whole = [first[:1].upper() + first[1:]]
             for more in lines[k + 1:]:
                 if SAID_AFTER.match(more):
                     break
