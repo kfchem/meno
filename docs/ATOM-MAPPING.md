@@ -308,9 +308,7 @@ the reaction's pieces and the waters in every order: an SN2 beside n waters
 gives 2, 2, 8, 96 and 768 maps for n = 0 to 4 (ACCeL 0.3.0 itself, and the
 port, alike: n!·2ⁿ pairings of the waters), calling its search 177 492
 times for n = 4. Its own placement of isolated molecules by RMSD
-(modeler.py 1161-1228) would settle them at once, but it waits until the
-chains left are all alike - after every other piece is placed, by which
-time the shallower levels have tried every order.
+(modeler.py 1161-1228) places them once every other piece is placed.
 
 Meno departs here, on the maintainer's ruling (2026-10-17):
 
@@ -338,12 +336,11 @@ beside four or five waters, methanols or acetonitriles):
   molecules are gone from *Other map*;
 - the first map pairs the rest the same way, and ranks the same on all of
   ACCeL's keys but the last;
-- its total RMSD is never higher: the same in 22 of the 32 runs that have
-  like molecules, lower in 10 - ACCeL's ordering, given the maps it never
-  tried, would have put them first.
+- its total RMSD is the same in 22 of the 32 runs that have like
+  molecules, and lower in 10.
 
-Where the port cannot finish (six waters and more), the refined map is
-never worse than ACCeL's own placement.
+Where the port cannot finish (six waters and more), the refined map's
+total RMSD is never above that of the placement it starts from.
 
 ## Speed
 
