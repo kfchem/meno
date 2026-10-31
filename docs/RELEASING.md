@@ -217,9 +217,9 @@ so an Intel build would need only its own runner.
 It is signed **ad hoc** (`signingIdentity: "-"`, in the job's arguments),
 the whole bundle, and not with Apple's Developer ID, which the project has
 not taken up. Without that the bundle would carry only the linker's
-signature on its executable, which macOS takes for a damaged app: a Meno
-downloaded that way cannot be opened at all ("“Meno” is damaged and can't
-be opened"), short of clearing its quarantine in a terminal.
+signature on its executable, and macOS would not open a Meno downloaded
+that way at all ("“Meno” is damaged and can't be opened"), short of
+clearing its quarantine in a terminal.
 
 Signed ad hoc, as seen on macOS 26 (with a local update standing in for
 a release's):
