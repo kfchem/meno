@@ -722,7 +722,7 @@ A plugin may use other plugins, as a library uses libraries (the maintainer, 202
 - **Taking away** a plugin another added uses is never done alone: Settings asks ("Remove xTB?" - "ORCA interface uses it. Removing xTB removes it too." - *Remove both*), and those that use it go first, their jobs asked about as its own are; asked to take it away alone otherwise, Meno takes none away, saying why ("xTB was not removed: ORCA interface uses it.").
 - **Stopped** is a plugin added that a plugin it needs is not added for, or one it uses - optionally or not - added of a version it does not work with: Settings says so on it ("Stopped: needs xTB, which is not added."), and its steps run nothing, saying the same ("ORCA interface is stopped. Needs xTB from 0.1.4 to before 0.2.0; 0.2.0 is added."); a job of it that would run that plugin's program is refused by the backend too, reading that plugin's version from its own folder, never from what the job's spec says ("orca needs xTB >=0.1.4 <0.2.0; 0.2.0 is here").
 - **Settings** shows, on each plugin, the plugins it uses with their versions ("Uses the plugin xTB, from 0.1.4 to before 0.2.0, for some steps, where it is added.") and those that use it ("Used by ORCA interface.").
-- **Asked once** for several, a set-up is not asked again for what it fetches having grown; but where Meno went offline since, or that leave was withdrawn, it is asked - or refused - as anything that uses the network is.
+- **Asked once** for several, a set-up is not asked again for what it fetches having grown; but where Meno went offline since, or that leave was withdrawn, it is asked - or refused - as anything that uses the network is; and a question it did not ask then (a file found changed since) is asked as ever.
 
 ## Looks
 

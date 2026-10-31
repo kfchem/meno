@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
 import { anyPluginById, manifestOf, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
-import { askToConnectAll } from "../net/network";
+import { askToConnectAll, type ConsentRequest } from "../net/network";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
 import type { ReaderClient, Reader } from "./client";
@@ -133,16 +133,17 @@ export async function addPlugin(p: Plugin): Promise<void> {
     setState(p.id, "absent", why);
     throw new Error(why);
   }
+  const askedOf = (q: Plugin) => asks.filter((a) => a.name === q.name).map((a) => a.request);
   for (const q of first) {
     try {
-      await addOne(q, true);
+      await addOne(q, askedOf(q));
     } catch (e) {
       const why = `${p.name} was not added: ${q.name}, which it uses, could not be set up.`;
       setState(p.id, "absent", why);
       throw e;
     }
   }
-  return addOne(p, true);
+  return addOne(p, askedOf(p));
 }
 
 /**
@@ -152,7 +153,7 @@ export async function addPlugin(p: Plugin): Promise<void> {
  * Asked again while it waits or is being set up, nothing more. Where it is
  * not added, why is said on it (`problem`) until it is asked for again.
  */
-async function addOne(p: Plugin, askedWithOthers = false): Promise<void> {
+async function addOne(p: Plugin, askedWithOthers?: readonly ConsentRequest[]): Promise<void> {
   if (!runs(p)) {
     markTakenAway(p, false);
     setState(p.id, "added");
@@ -170,7 +171,7 @@ async function addOne(p: Plugin, askedWithOthers = false): Promise<void> {
     skips.delete(p.id);
     setState(p.id, "adding");
     try {
-      await ensurePyEnv(p.profile, askedWithOthers ? { asked: true } : undefined);
+      await ensurePyEnv(p.profile, askedWithOthers ? { asked: askedWithOthers } : undefined);
       markTakenAway(p, false);
       setState(p.id, "added");
     } catch (e) {
@@ -232,9 +233,9 @@ export function addedUsing(id: string): PythonPlugin[] {
 /**
  * Takes a plugin away, and first the plugins added that use it, each before
  * the one it uses (docs/PLUGINS.md, *Depends*) - those only where the
- * chemist said they may go too (`withUsing`), else nothing is taken away,
- * saying why: never one alone that another added uses, nor one taken away
- * unasked. The jobs named (`stopping`) are stopped and ended first - the
+ * chemist said they may go too (`withUsing`: Settings, *Plugins*, asks),
+ * else nothing is taken away, saying why: never one alone that another
+ * added uses, nor one taken away unasked. The jobs named (`stopping`) are stopped and ended first - the
  * chemist having said they may be.
  */
 export async function removePlugin(p: Plugin, stopping: readonly string[] = [], withUsing = false): Promise<void> {

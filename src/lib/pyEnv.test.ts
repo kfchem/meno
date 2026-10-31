@@ -236,10 +236,11 @@ describe("setting a plugin up, with what it downloads besides", () => {
     expect(fetched()).toBe(false);
   });
 
-  it("asked with others and allowed, sets up without asking again - but asks where that leave was withdrawn since, and fetches nothing on a no", async () => {
+  it("asked with others and allowed, sets up without asking again - but asks where that leave was withdrawn since, or what it asks is not what was asked, and fetches nothing on a no", async () => {
     // (allowed in the one question: not asked again, though what it fetches is more than it was told of)
+    const gathered = await setUpQuestions("plugin-blender");
     state.granted.add("python-env:plugin-blender");
-    await ensurePyEnv("plugin-blender", { asked: true });
+    await ensurePyEnv("plugin-blender", { asked: gathered });
     expect(asked).toEqual([]);
     expect(commands.map((c) => c.cmd)).toContain("py_env_setup_uv");
     // (the leave withdrawn between the question and its set-up: asked again; no, and nothing is set up)
@@ -248,9 +249,15 @@ describe("setting a plugin up, with what it downloads besides", () => {
     commands.length = 0;
     state.granted.clear();
     state.allowed = false;
-    await expect(ensurePyEnv("plugin-blender", { asked: true })).rejects.toThrow(/was not allowed it/);
+    await expect(ensurePyEnv("plugin-blender", { asked: gathered })).rejects.toThrow(/was not allowed it/);
     expect(asked).toHaveLength(1);
     expect(commands.map((c) => c.cmd)).not.toContain("py_env_setup_uv");
+    // (a question not among those asked with others - its words changed since: a file found changed, say - asked as ever)
+    asked.length = 0;
+    state.granted.add("python-env:plugin-blender");
+    state.allowed = true;
+    await ensurePyEnv("plugin-blender", { asked: [{ ...gathered[0], detail: "What was asked then." }] });
+    expect(asked).toHaveLength(1);
   });
 
   it("fetches nothing where the user says no", async () => {
