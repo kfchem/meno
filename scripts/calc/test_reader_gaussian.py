@@ -81,7 +81,7 @@ def head(route_text, charge=0, multiplicity=1):
         " /g16/l1.exe \"/tmp/Gau-1.inp\" -scrdir=\"/tmp/\"",
         " Entering Link 1 = /g16/l1.exe PID=      9552.",
         " ******************************************",
-        " Gaussian 16:  ES64L-G16RevC.01  3-Jul-2019",
+        " Gaussian 16:  ES64L-G16RevA.03  25-Dec-2016",
         "                 1-Nov-2026 ",
         " ******************************************",
         *route(route_text),
@@ -166,7 +166,7 @@ def frequencies():
 def archive(nimag=0, sep="\\"):
     """An archive entry, wrapped at 70 characters, each line begun by a space."""
     body = sep.join(["1", "1", "GINC-HOST", "Freq", "RB3LYP", "6-31G(d)", "H2O1", "USER", "1-Nov-2026", "0", "", "#p b3lyp/6-31G(d) freq",
-                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevC.01", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
+                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevA.03", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
     return [" " + body[i : i + 70] for i in range(0, len(body), 70)]
 
 
@@ -276,7 +276,7 @@ class AnOptFreq(unittest.TestCase):
 
     def test_what_the_calculation_was(self):
         o = self.out
-        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision C.01", "B3LYP", "6-31G(d)"))
+        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision A.03", "B3LYP", "6-31G(d)"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
         self.assertEqual(o["atoms"], ["O", "H", "H"])
         self.assertEqual(o["masses"], [15.9949146, 1.007825, 1.007825])
@@ -542,7 +542,7 @@ Mulliken Charges                           R   N=           3
 Dipole Moment                              R   N=           3
   0.00000000E+00  0.00000000E+00 -8.00000000E-01
 Gaussian Version                           C   N=           2
-ES64L-G16RevC.01
+ES64L-G16RevA.03
 """
 
 
@@ -561,7 +561,7 @@ class AFormattedCheckpoint(unittest.TestCase):
         o = self.out
         self.assertEqual(o["atoms"], ["O", "H", "H"])
         self.assertAlmostEqual(o["frames"][0][4], 1.44 * reader.BOHR)
-        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision C.01"))
+        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision A.03"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
 
     def test_its_charges_dipole_in_debye_and_orbitals(self):

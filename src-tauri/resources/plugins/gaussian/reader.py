@@ -208,7 +208,7 @@ def options_of(word):
 # --- what the calculation was --------------------------------------------------------
 
 
-# " Gaussian 16:  ES64L-G16RevC.01  3-Jul-2019"
+# " Gaussian 16:  ES64L-G16RevA.03  25-Dec-2016"
 VERSION = re.compile(r"^ Gaussian (\d+):\s+\S*?Rev([A-Z]\.\d+)")
 # " Charge =  0 Multiplicity = 1", " Charge =  0 Multiplicity = 1 in supermolecule" (a counterpoise job's whole)
 CHARGE = re.compile(r"^ Charge =\s*(-?\d+) Multiplicity =\s*(\d+)(?: in supermolecule)?\s*$")
