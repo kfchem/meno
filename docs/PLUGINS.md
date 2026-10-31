@@ -524,7 +524,7 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
 
   Conformers here are told apart by the measure below. On ten cores
   (Apple M4), the job for 5000 of it took about a minute and 111 MB at
-  most, and wrote 4.9 MB.
+  most, and wrote 4.9 MB. A *Duplicates* step then took 55 s over them.
 - **The same conformer** (the maintainer, 2026-10-21): two conformers are
   one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
   each other, laid over at their best - turned and moved, never reflected
