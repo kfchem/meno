@@ -442,8 +442,7 @@ are a *Frequencies* step's, wired after it.
   the run took, as ORCA counts them ("NEB 5 · TS optimization 4"). A band
   that did not converge in the iterations ORCA allows is not read: that
   pair goes out of *Failed*, *not converged*, saying so and after how many
-  iterations - never in the words of the error return ORCA ends it by. An
-  image whose SCF did not converge while ORCA carried on with the band is
+  iterations. An image whose SCF did not converge while ORCA carried on with the band is
   a warning on the molecule, in ORCA's words; it moves nothing.
 - **Its highest point not refined.** Where the band converged but
   refining its highest point took the most steps ORCA allows (ORCA: "The
@@ -452,10 +451,7 @@ are a *Frequencies* step's, wired after it.
   no entry: that pair goes out of *Failed*, *not converged*, saying how
   many iterations the band took and how many steps the refining, and to
   raise *Steps for refining its highest point* or give ends nearer the
-  path (2026-10-30). ORCA goes on to its properties after it, and may stop
-  there by an error whose words say nothing of it ("ERROR (SHARK): Failed
-  to read input file", "error termination in PROPERTIES") - on one core or
-  many - or end normally: either way it is said so, never in those words.
+  path (2026-10-30). However ORCA's run ends after it, it is said so.
 - **Frequencies, after it.** A *Frequencies* step wired after it works out
   the point refined's: its `imaginary`, `imaginary.first` and
   `imaginary.second` are then the chemist's to select on with *Filter*
@@ -2376,8 +2372,7 @@ them again*; the maintainer's rulings of 2026-10-22):
   by its words ("The optimization did not converge but reached the
   maximum number of optimization cycles"), never as a result even where
   ORCA then ended normally, and said *not converged* with how many cycles
-  (2026-10-30; before, in the words of the error ORCA's properties may
-  then stop by). A plugin's reason for a whole job is of the kind it
+  (2026-10-30). A plugin's reason for a whole job is of the kind it
   names, one of core's, else a program's error.
 - **A plugin may refuse one entry alone** as it prepares the others'
   jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
