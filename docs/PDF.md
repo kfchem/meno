@@ -19,11 +19,9 @@ stops being part of the work.
 
 ## Decided by the maintainer (2026-10-09)
 
-1. **PDFium, not pdf.js.** PDFium is the engine Chrome reads PDFs with.
-   The maintainer chose it for how fast and how faithfully it draws;
-   viewers built on pdf.js, as some publishers' have been, left a poor
-   impression. No way of changing engines is to be kept: Meno is built
-   on PDFium, for the best it can give.
+1. **PDFium.** Meno reads and draws PDFs with PDFium, the engine Chrome
+   reads PDFs with: the maintainer's choice. No way of changing engines is
+   to be kept: Meno is built on PDFium.
 2. **The best of what drawing with WebGL allows, joined to the
    workspace.** A PDF's pages are drawn on the canvas, not beside it.
    - Zoomed into, what a page holds comes up out of its preview.
