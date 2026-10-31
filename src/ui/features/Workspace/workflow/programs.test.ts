@@ -76,6 +76,9 @@ describe("the jobs a plugin prepares", () => {
     // (the memory its plugin declares, in MiB, for the queue to count: a whole number within reason, else none said)
     expect(readPrepared({ jobs: [{ ...job, memory: 12000 }] }, 1)).toEqual([{ ...job, memory: 12000 }]);
     for (const memory of [0, -5, 1.5, "8GB", 2 ** 40]) expect(readPrepared({ jobs: [{ ...job, memory }] }, 1)).toEqual([job]);
+    // (the cores it takes, where its plugin says so - ORCA with no MPI, one: a whole number, at least one, else none said)
+    expect(readPrepared({ jobs: [{ ...job, cores: 1 }] }, 1)).toEqual([{ ...job, cores: 1 }]);
+    for (const cores of [0, -1, 1.5, "1"]) expect(readPrepared({ jobs: [{ ...job, cores }] }, 1)).toEqual([job]);
   });
 
   it("are refused where they cannot", () => {

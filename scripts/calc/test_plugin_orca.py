@@ -14,6 +14,7 @@ run is kept.
 import importlib.util
 import json
 import pathlib
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -22,6 +23,8 @@ MANIFEST = ROOT / "src-tauri/resources/plugins/orca/manifest.json"
 spec = importlib.util.spec_from_file_location("plugin_orca", WORKER)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
+# (MPI's launcher taken to be there, whatever this computer has: each test that says otherwise says so)
+worker.which = lambda name, path=None: f"/usr/local/bin/{name}"
 
 WATER = {
     "name": "water",
@@ -81,6 +84,89 @@ class Prepare(unittest.TestCase):
         lines = freq["files"][0]["text"].splitlines()
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
+
+    def test_with_no_mpi_to_run_its_processes_each_job_runs_on_one_core_said_once_never_failed_at_its_start(self):
+        from unittest import mock
+        found = mock.patch.object(worker, "which", lambda name, path=None: f"/usr/local/bin/{name}")
+        missing = mock.patch.object(worker, "which", lambda name, path=None: None)
+        opts = {**defaults("energy"), "maxcore": 2000}
+        # (MPI there: its processes, as before - no fewer cores asked, nothing said)
+        with found:
+            there = ask("prepare", step="energy", entries=[WATER, WATER], options=opts, cores=4)
+        self.assertIn("%pal nprocs 4 end", there["jobs"][0]["files"][0]["text"])
+        self.assertNotIn("cores", there["jobs"][0])
+        self.assertNotIn("note", there)
+        self.assertEqual(there["jobs"][0]["memory"], 8000)
+        # (none: one core, each job - no %pal, one core asked for the queue to count, its memory for one - said once, on the step)
+        with missing:
+            alone = ask("prepare", step="energy", entries=[WATER, WATER], options=opts, cores=4)
+        for job in alone["jobs"]:
+            self.assertNotIn("%pal", job["files"][0]["text"])
+            self.assertEqual(job["cores"], 1)
+            self.assertEqual(job["memory"], 2000)
+        self.assertEqual(alone["note"], "run on one core: no MPI on this computer")
+        # (one core given - Settings set so, or a computer of one - nothing to say, nothing changed)
+        with missing:
+            one = ask("prepare", step="energy", entries=[WATER], options=opts, cores=1)
+        self.assertNotIn("note", one)
+        self.assertNotIn("cores", one["jobs"][0])
+        # (said beside what else the step says: frequencies at ORCA's own xTB, computed numerically)
+        with missing:
+            numeric = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": ""}, cores=4)
+        self.assertEqual(numeric["note"], "frequencies computed numerically; run on one core: no MPI on this computer")
+        # (a path search too)
+        with missing:
+            path = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), cores=4)
+        self.assertNotIn("%pal", path["jobs"][0]["files"][0]["text"])
+        self.assertEqual(path["jobs"][0]["cores"], 1)
+
+    @unittest.skipIf(sys.platform == "win32", "a launcher made runnable as macOS and Linux run one")
+    def test_the_launcher_looked_for_on_the_path_its_jobs_are_given_not_this_workers(self):
+        import os
+        import shutil
+        import stat
+        import tempfile
+        from unittest import mock
+        base = tempfile.mkdtemp()
+        try:
+            def program(folder, name):
+                os.makedirs(folder, exist_ok=True)
+                path = os.path.join(folder, name)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n")
+                os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                return path
+            orca = program(os.path.join(base, "orca_6"), "orca")
+            own = os.path.join(base, "env")
+            program(os.path.join(own, "bin"), worker.LAUNCHER)
+            plain = os.path.join(base, "usr", "bin")
+            os.makedirs(plain)
+            with mock.patch.object(worker, "which", shutil.which), mock.patch.object(worker.sys, "prefix", own), \
+                    mock.patch.dict(os.environ, {"PATH": os.pathsep.join([os.path.join(own, "bin"), plain])}):
+                # (in this worker's own environment alone: no job is given it - not found)
+                self.assertFalse(worker.launcher_found(programs={"orca": orca}))
+                # (beside ORCA, where it was found: its jobs' PATH begins there - found)
+                program(os.path.join(base, "orca_6"), worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs={"orca": orca}))
+                # (on the PATH Meno was started with: found, ORCA's folder given or not)
+                os.remove(os.path.join(base, "orca_6", worker.LAUNCHER))
+                program(plain, worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs=None))
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+    def test_the_mpi_launcher_looked_for_is_each_systems(self):
+        import importlib.util
+        from unittest import mock
+        for platform, name in (("darwin", "mpirun"), ("linux", "mpirun"), ("win32", "mpiexec")):
+            with mock.patch.object(sys, "platform", platform):
+                spec = importlib.util.spec_from_file_location(f"orca_worker_{platform}", WORKER)
+                fresh = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(fresh)
+            self.assertEqual(fresh.LAUNCHER, name)
+            asked = []
+            self.assertFalse(fresh.launcher_found(lambda n, path=None: asked.append(n)))
+            self.assertEqual(asked, [name])
 
     def test_frequencies_treat_low_vibrations_as_orca_does_unless_asked_harmonic(self):
         # (ORCA's own, its default: nothing written - Grimme's quasi-RRHO, as ORCA 6.1.1 prints "Quasi RRHO ... True")

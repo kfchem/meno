@@ -48,7 +48,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
 export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height";
 
 /**
@@ -275,7 +275,21 @@ export const KINDS: readonly KindInfo[] = [
         ],
         default: "apart",
       },
+      // (each compound's conformers, or a compound set's same structures, as it was; or those with one value of a property - a product, a path - across compounds: never grouped by guess)
+      {
+        id: "within",
+        label: "Compared within",
+        type: "choice",
+        choices: [
+          { value: "each compound", label: "Each compound" },
+          { value: "each value", label: "Each value of a property" },
+        ],
+        default: "each compound",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
     ],
+    how: (v) => duplicatesHow(v),
+    needs: (v) => (v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined),
     perceives: "configurations",
     perceivesWith: (v) => v.mirrors === "counted",
   },
@@ -1198,6 +1212,13 @@ export function rankNeeds(v: Record<string, string | number | boolean>): string 
   if (!String(v.property ?? "").trim()) return "Name the property to rank by";
   if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
   return undefined;
+}
+
+/** How a Duplicates step does its work, in a line: only what is not its default - "compared within each product", "mirror images counted as one" - and nothing at all where all is (the card says "Duplicates"). */
+export function duplicatesHow(v: Record<string, string | number | boolean>): string {
+  const by = String(v.groupBy ?? "").trim();
+  if (v.within === "each value" && !by) return "Name the property whose values are the groups";
+  return [...(v.mirrors === "counted" ? ["mirror images counted as one"] : []), ...(v.within === "each value" ? [`compared within each ${by}`] : [])].join(" · ");
 }
 
 /** What an Energy window still needs before it can run: the property, where its groups are a property's values. */

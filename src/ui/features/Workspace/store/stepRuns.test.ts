@@ -239,7 +239,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     // prepared by the plugin with what came in, its job started - with the cores it takes
-    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
+    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number), {});
     expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
@@ -403,6 +403,36 @@ describe("a step that runs a plugin's program", () => {
     } finally {
       physicalCores.n = 8;
       delete (globalThis.navigator as { hardwareConcurrency?: number }).hardwareConcurrency;
+      useAppSettings.setState({ calculations });
+    }
+  });
+
+  it("runs a job on the fewer cores its plugin says it takes - ORCA with no MPI, one - and says why once, on the step's line", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const calculations = useAppSettings.getState().calculations;
+    useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
+    try {
+      const NO_MPI = "run on one core: no MPI on this computer";
+      const one = { program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [], cores: 1 };
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }], note: NO_MPI }) as never);
+      worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+      const { st } = editor();
+      const step = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, step);
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      // (its plugin told where ORCA was found: its jobs' PATH begins with that folder, where it looks for MPI's launcher)
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[4]).toEqual({ orca: "/Applications/orca_6/orca" });
+      // (Settings give each job 8: this one is asked for, and counted by the queue, at 1)
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 1 });
+      Object.assign(jobs.get(idOf(asked.started.length))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output" });
+      await st().lookAtJobs();
+      await ran;
+      const said = st().steps.find((s) => s.id === step)!.ran!.said!;
+      expect(said.split(NO_MPI).length - 1).toBe(1);
+    } finally {
       useAppSettings.setState({ calculations });
     }
   });
@@ -675,6 +705,35 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await all;
     expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
+  });
+
+  it("runs, of a step of two inputs, the side not done - never again the side done, nearer though it is: no job asked for anew", async () => {
+    const { st, step: a } = editor();
+    const ran = (id: number) => st().steps.find((s) => s.id === id)!.ran;
+    // (the optimisation run, its job done)
+    const first = st().runStep(a);
+    for (let k = 0; k < 4; k++) await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await first;
+    const done = ran(a);
+    expect(done).toMatchObject({ ok: true });
+    // (the other side: two Filters, neither run - the first further back than the optimisation - then Merge of both)
+    const filter = (from: number, x: number) => {
+      const f = st().addStep("filter", "meno", x, 20);
+      st().updateStep(f, { options: { conditions: "number ≥ 1", match: "all" } });
+      st().connect({ set: from }, f);
+      return f;
+    };
+    const p = filter(st().sets[0].id, 10);
+    const q = filter(resultOf(st(), p)!.id, 20);
+    const merge = st().addStep("merge", "meno", 30, 0);
+    expect(st().connect({ set: resultOf(st(), a)!.id }, merge, "first")).toBe(true);
+    expect(st().connect({ set: resultOf(st(), q)!.id }, merge, "second")).toBe(true);
+    await st().runAll();
+    expect(asked.started).toHaveLength(1);
+    expect(ran(a)).toBe(done);
+    expect([p, q, merge].map((id) => ran(id)?.ok)).toEqual([true, true, true]);
   });
 
   it("ends a step a branch gave nothing this time ok, its exits empty, saying which input came empty - through rounds whose last holds none, to a Merge of what they gave and one of the rests with them", async () => {

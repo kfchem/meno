@@ -45,8 +45,8 @@ export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; 
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`). */
-export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string): Outcome3D {
+/** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`), and each molecule's, by id, where it compares them across molecules (`energyLevels`). */
+export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, levels?: ReadonlyMap<number, string>): Outcome3D {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
@@ -55,7 +55,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
     case "energy-window":
       return options.within === "each value" ? energyWindowByValue(entries, holds, Number(options.window), String(options.groupBy ?? "")) : energyWindow(entries, Number(options.window), holds);
     case "duplicates":
-      return drain(duplicates(entries, holds, mirrorsOf(options), never));
+      return drain(duplicates(entries, holds, mirrorsOf(options), never, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels));
     case "populations":
       return populations(entries, Number(options.temperature));
     case "choose":
@@ -198,15 +198,15 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
  * stopped: null. The other steps take no time to speak of, and are done
  * at once.
  */
-export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome3D | null> {
-  if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
+export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}, levels?: ReadonlyMap<number, string>): Promise<Outcome3D | null> {
+  if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy, levels);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   const now = how.now ?? (() => performance.now());
   const least = how.slice ?? TURN_MS;
   let slice = least;
   let began = now();
   let told = began;
-  const turns = duplicates(entries, holds, mirrorsOf(options), () => now() - began >= slice);
+  const turns = duplicates(entries, holds, mirrorsOf(options), () => now() - began >= slice, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels);
   for (;;) {
     const turn = turns.next();
     if (turn.done) return turn.value;
@@ -604,17 +604,49 @@ const mirrorsOf = (options: OptionValues): Mirrors => (options.mirrors === "coun
  * conformers (`partOf`); those kept, the compound as it came, its copies
  * merged. In a compound set they are copies of a structure, of no search.
  */
-function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean): Generator<number, Outcome3D> {
+function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean, groupBy?: string, levels?: ReadonlyMap<number, string>): Generator<number, Outcome3D> {
   if (mirrors === "counted") {
     const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
     if (unknown >= 0) return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: a mirror image is counted in only where it is the same stereoisomer` };
   }
-  const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
-  const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
-  const energies = entries.every(hasEnergy);
+  // (in each value of a property - a product, a path - across compounds: each saddle point its own compound, the same one found by two paths is two entries of one value)
+  const by = groupBy?.trim();
+  if (groupBy != null && !by) return { ok: false, said: "Name the property whose values are the groups" };
+  const why = new Map<SetEntry, string>();
+  let unknownKinds = 0;
+  let valued = entries;
+  let valueOf = new Map<SetEntry, string | undefined>();
+  let keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
+  if (by) {
+    const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
+    if (failed) return { ok: false, said: failed };
+    const keys = valueKeysOf(entries.map((e, i) => entryOfSet(e, String(i))), by);
+    valueOf = new Map(entries.map((e, i) => [e, keys[i]]));
+    for (const e of entries) if (valueOf.get(e) == null) why.set(e, `it has no ${by}`);
+    // (a comparison means something within one kind, as a window does: minima and saddle points of one value are set aside together, and one whose kind is not known beside one whose is)
+    const ofValue = new Map<string, SetEntry[]>();
+    for (const e of entries) if (valueOf.get(e) != null) pushTo(ofValue, valueOf.get(e)!, e);
+    for (const [key, g] of ofValue) {
+      const kinds = g.map(kindOf);
+      const unlike = kinds.includes("minimum") && kinds.includes("saddle point") ? `its ${by} ${key} holds minima and saddle points together: not compared with each other` : null;
+      const open = kinds.includes("not known") && kinds.some((k) => k !== "not known") ? `in its ${by} ${key}, whether ${named(g[kinds.indexOf("not known")])} is a minimum or a saddle point is not known (no frequencies)` : null;
+      if (unlike ?? open) for (const e of g) why.set(e, (unlike ?? open)!);
+      else if (kinds.every((k) => k === "not known")) unknownKinds++;
+    }
+    valued = entries.filter((e) => !why.has(e));
+    keyOf = (e: SetEntry) => `${valueOf.get(e)}|${atomsOf(e)}|${bondsOf(e)}|${speciesOf(e)}`;
+  }
+  const energies = valued.every(hasEnergy);
+  const groups = [...valued.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
+  // (across compounds, of those alike - first found so, as they came - the lower is kept only where their energies were
+  //  worked out alike: across paths they need not be. Free energies where each has one, else electronic, as Energy
+  //  window's basis; energies of two levels never decide, those alike set aside saying how they differ - those unlike
+  //  any other kept, whatever their level. Where one of those alike has no energy, the first kept, the line saying so)
+  let asCame = 0;
   // (ranked by energy, which copy is kept is the lowest's: one that is no minimum - not converged, a saddle point, its
-  //  marks not read - would be kept for an energy that is not a minimum's. Refused, naming it, as Populations does)
-  const notMinimum = energies ? notAllMinima(entries) : null;
+  //  marks not read - would be kept for an energy that is not a minimum's. Refused, naming it, as Populations does; in
+  //  each value of a property, saddle points are compared with saddle points, as the kinds above are kept apart)
+  const notMinimum = energies && !by ? notAllMinima(entries) : null;
   if (notMinimum) return { ok: false, said: notMinimum };
   const kept = new Map<SetEntry, { degeneracy: number; mirror?: number[] }>();
   let done = 0;
@@ -625,13 +657,41 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
     const same = new Sameness(g[0].atoms, g[0].bonds, g[0].xyz);
     if (same.capped && g.length > 1) capped++;
     const here: { e: SetEntry; sig: Float64Array }[] = [];
-    for (const e of energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g) {
+    let order: readonly SetEntry[] = energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g;
+    if (by) {
+      const seeds: { e: SetEntry; sig: Float64Array; members: SetEntry[] }[] = [];
+      for (const e of g) {
+        if (done > 0 && due()) yield done;
+        done++;
+        const sig = same.signature(e.xyz);
+        const seed = seeds.find((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9 && same.same(k.e.xyz, e.xyz));
+        if (seed) seed.members.push(e);
+        else seeds.push({ e, sig, members: [e] });
+      }
+      order = seeds.flatMap(({ members }) => {
+        if (members.length === 1) return members;
+        const level = members.every(hasEnergy) ? levelsOf(members, levels) : null;
+        if (level && "unlike" in level) {
+          for (const e of members) why.set(e, `in its ${by} ${valueOf.get(e)}, ${LOWER_UNKNOWN}: ${level.unlike}`);
+          return [];
+        }
+        const first = level ? members.reduce((a, b) => (level.energy(b) < level.energy(a) ? b : a)) : members[0];
+        if (!level) asCame++;
+        for (const e of members) if (e !== first) why.set(e, `the same as ${named(first)}, which was kept`);
+        return [first];
+      });
+    }
+    for (const e of order) {
       if (done > 0 && due()) yield done;
-      done++;
+      if (!by) done++;
       const sig = same.signature(e.xyz);
       // (only those it could be within reach of: a mirror image's atoms lie as far from its centre)
       const near = here.filter((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9);
-      if (near.some((k) => same.same(k.e.xyz, e.xyz))) continue;
+      const twinOf = near.find((k) => same.same(k.e.xyz, e.xyz));
+      if (twinOf) {
+        if (by) why.set(e, `the same as ${named(twinOf.e)}, which was kept`);
+        continue;
+      }
       if (mirrors === "counted") {
         const twin = near.find((k) => !kept.get(k.e)!.mirror && stereoIdentity(k.e.stereo) === stereoIdentity(e.stereo) && same.mirrorOf(k.e.xyz, e.xyz));
         if (twin) {
@@ -654,9 +714,57 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
   // (those alike, the copies taken out - in a conformer set, a part of its compound's conformers; in a compound set, copies of a
   // structure, of no search, as they came)
   const alike = entries.filter((e) => !kept.has(e));
-  const aside = holds === "conformers" ? asPart(alike) : alike;
   const twins = counted ? ` · ${counted} mirror image${counted === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
-  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${onesSaid(entries)}${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}` };
+  const cap = capped ? ` \u00b7 ${cappedSaid(capped)}` : "";
+  if (!by) {
+    const aside = holds === "conformers" ? asPart(alike) : alike;
+    return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${onesSaid(entries)}${twins}${cap}` };
+  }
+  // (each set aside saying why - the one it is the same as, named; a compound's conformers split between the two exits, a part of it in each)
+  const outOf = new Set(alike.map((e) => e.compound));
+  const inOf = new Set(keptOnes.map((e) => e.compound));
+  const part = (e: SetEntry): SetEntry => (holds === "conformers" && outOf.has(e.compound) && inOf.has(e.compound) ? { ...e, partOf: true as const } : e);
+  const aside = alike.map((e) => withSaid(part(e), SET_ASIDE, why.get(e) ?? "the same as one kept"));
+  const counts = new Map<string, number>();
+  for (const e of alike) {
+    const w = why.get(e) ?? "";
+    const k = w.startsWith("the same as ") ? "the same as one kept" : w.includes(LOWER_UNKNOWN) ? "alike, energies at different levels" : w;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  // (the reasons counted only where any is more than being alike: its exit is named *Alike*, and each says which it is the same as)
+  const only = counts.size === 1 && counts.has("the same as one kept");
+  const rest = alike.length ? ` · rest ${alike.length}${only ? "" : ` (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})`}` : "";
+  const kinds = unknownKinds ? ` · whether minima or saddle points not known (no frequencies)` : "";
+  const first = asCame ? ` · where one of those alike has no energy, the first kept` : "";
+  return { ok: true, holds, kept: keptOnes.map(part), aside, said: `${keptOnes.length} of ${countEntries(entries.length)} kept${rest}${first}${twins}${cap}${kinds}` };
+}
+
+/** Why those alike across compounds are set aside, before how their energies differ (`levelsOf`): the line counts them under one reason. */
+const LOWER_UNKNOWN = "alike, but which is lower is not known";
+
+/**
+ * How entries' energies were worked out, where Duplicates keeps the lower
+ * of those alike across compounds: their free energies, where each has one
+ * worked out the same way (`workedOutAs`); else their electronic energies,
+ * where each molecule's calculation (`levels`, by molecule id - its program
+ * and level, `energyLevels`) is the same, or none says one. Else how two
+ * differ - "free energies differ in method, M1 (b #1) and M2 (c #1)".
+ */
+function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, string>): { energy: (e: SetEntry) => number } | { unlike: string } {
+  const free = g.map(freeEnergyOf);
+  if (free.every(Boolean)) {
+    const first = workedOutAs(free[0]!);
+    for (let i = 1; i < g.length; i++) {
+      const these = workedOutAs(free[i]!);
+      const k = these.findIndex(([, v], j) => v !== first[j][1]);
+      if (k >= 0) return { unlike: `free energies differ in ${first[k][0]}, ${first[k][1]} (${named(g[0])}) and ${these[k][1]} (${named(g[i])})` };
+    }
+    return { energy: (e) => freeEnergyOf(e)!.value as number };
+  }
+  const level = (e: SetEntry) => (e.from != null ? levels?.get(e.from) : undefined) ?? "not stated";
+  const k = g.findIndex((e) => level(e) !== level(g[0]));
+  if (k >= 0) return { unlike: `energies differ in level, ${level(g[0])} (${named(g[0])}) and ${level(g[k])} (${named(g[k])})` };
+  return { energy: (e) => e.energy! };
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");

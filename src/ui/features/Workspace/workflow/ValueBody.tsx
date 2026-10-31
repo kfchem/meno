@@ -23,7 +23,7 @@ const cellText = (v: string | number | boolean | null, decimals?: number) => (v 
 /**
  * How many decimals a number column's numbers are written with, one count
  * for the column, so that their points line up - "0.00" over "0.37": an
- * energy in kcal/mol as a molecule's chip writes it (calc/results
+ * energy in kcal/mol as a molecule's chip writes one under ten (calc/results
  * `aboveText`, two), so that the same value reads the same in both; any
  * other as many as the one of those shown that needs most (`numberText`).
  */

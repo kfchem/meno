@@ -61,7 +61,9 @@ It keeps nothing between requests, and reaches no network.
 
 import json
 import math
+import os
 import re
+import shutil
 import sys
 
 VERSION = "0.2.0"
@@ -437,9 +439,41 @@ def irc_output(entry, files, log, options):
     }
 
 
+#: The program ORCA starts its processes with, where it runs more than one (the ORCA 6.1 manual, 2.5.2.1): Open MPI's
+#: mpirun on macOS and Linux, Microsoft MPI's mpiexec on Windows - looked for where ORCA's jobs look for it, on the PATH.
+LAUNCHER = "mpiexec" if sys.platform == "win32" else "mpirun"
+#: Said once on the step's line where it is not there: each job then runs on one core, whatever the cores each job is
+#: given - they apply to the other programs, which need no launcher - never refused, never failed at ORCA's start-up.
+NO_LAUNCHER_SAID = "run on one core: no MPI on this computer"
+
+
+#: How a program is looked for on a PATH: the standard library's (its tests give their own).
+which = shutil.which
+
+
+def job_path(programs):
+    """The PATH ORCA's job is given (jobs.rs `installed_env`): ORCA's own folder, where it was found, before the PATH Meno
+    was started with - this worker's, less its own environment's folders, which no job is given."""
+    own = os.path.realpath(sys.prefix)
+    rest = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p and not os.path.realpath(p).startswith(own + os.sep)]
+    found = (programs or {}).get(PROGRAM)
+    return os.pathsep.join(([os.path.dirname(found)] if isinstance(found, str) and found else []) + rest)
+
+
+def launcher_found(look=None, programs=None):
+    """Whether the program ORCA starts its processes with is there (`LAUNCHER`), on the PATH its jobs are given."""
+    return (look or which)(LAUNCHER, path=job_path(programs)) is not None
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
+    # (more than one core, and no MPI to run ORCA's processes with: one core each job, said - never a job ORCA ends at its
+    #  start-up, as every one would, "mpirun: command not found")
+    given = whole(m.get("cores"), "The cores", 1) if m.get("cores") else 1
+    alone = given > 1 and not launcher_found(programs=m.get("programs"))
+    if alone:
+        m = {**m, "cores": 1}
     # (a reaction path's step offers no wavefunction kept: none written)
     # (a saddle point's step offers no wavefunction kept: none written)
     keep = keeps_wavefunction(options) and step != "reaction-path" and step != "saddle-point"
@@ -459,7 +493,7 @@ def op_prepare(m):
             })
         if not jobs:
             raise Refused("nothing came in")
-        return {"jobs": jobs}
+        return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": NO_LAUNCHER_SAID} if alone else {})}
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
             "entries": [i],
@@ -474,8 +508,9 @@ def op_prepare(m):
         })
     if not jobs:
         raise Refused("nothing came in")
-    note = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
-    return {"jobs": jobs, **({"note": note} if note else {})}
+    said = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
+    note = "; ".join(n for n in (said, NO_LAUNCHER_SAID if alone else None) if n)
+    return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": note} if note else {})}
 
 
 def output_name(entry):
