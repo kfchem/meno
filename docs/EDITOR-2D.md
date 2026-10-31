@@ -1747,8 +1747,8 @@ traced from reference drawings.
   drop. Files from the Finder or Explorer come through the webview's own
   drag events on both platforms, as does everything on a Mac. On Windows,
   WebView2 takes every drop in a process of its own and hands the page
-  only files and text, and Meno nothing, so a drag from another program
-  that is not of files is taken from it where a zone takes such drags:
+  its files and text; a drag from another program that is not of files
+  is taken from it where a zone takes such drags:
   Meno lays a window of its own over the zone, clear to the eye, which
   Windows hands the drag to from the next move on (`src-tauri/src/drop.rs`).
   It reads what the drag carries - Meno's record in Word's object (which
@@ -1760,13 +1760,11 @@ traced from reference drawings.
   Tried on Windows (2026-09-30): Word's object dragged onto the drawing
   arrives there, selected, and Word's document is unchanged; so does a
   picture Meno put in Word (Office's clip format), which Word hands over
-  only when a block of memory is asked for, not "memory or a stream" -
-  so each is asked for in turn; both at 100% and over Remote Desktop at
+  when a block of memory alone is asked for - so a block of memory and a
+  stream are each asked for in turn; both at 100% and over Remote Desktop at
   175%. Files onto the drawing and onto a new tab open as before. What a
   drag carries is read again at the drop if nothing was to be had as it
-  came. PowerPoint for Windows
-  was not seen to let a shape be dragged out of its window at all (nothing
-  reached a plain drop target either): from there, copy and paste.
+  came. From PowerPoint for Windows, a shape comes by copy and paste.
 
 ### 6. Alongside
 
