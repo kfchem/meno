@@ -957,35 +957,6 @@ export function seedsSaid(tally: readonly SeedTally[], most = SEEDS_NAMED): stri
   ].join("; ");
 }
 
-/**
- * The entries a plugin's *Duplicates* counted a mirror image in (`counted`
- * beside `kept`): each by its place among those given, how many it now
- * stands for, and the atoms its mirror image swaps - a permutation of its
- * `atoms[k]` atoms. Each must be one it kept; any that is not as said, none.
- */
-export function readCounted(raw: unknown, kept: readonly number[], atoms: readonly number[]): Map<number, { degeneracy: number; mirror: number[] }> {
-  const out = new Map<number, { degeneracy: number; mirror: number[] }>();
-  const list = (raw as { counted?: unknown } | null)?.counted;
-  if (!Array.isArray(list)) return out;
-  for (const c of list) {
-    const g = c as { entry?: unknown; degeneracy?: unknown; mirror?: unknown } | null;
-    const k = g?.entry;
-    if (typeof k !== "number" || !kept.includes(k) || out.has(k)) return new Map();
-    const n = atoms[k];
-    const mirror = g!.mirror;
-    const ok = Number.isInteger(g!.degeneracy) && (g!.degeneracy as number) >= 2 && Array.isArray(mirror) && mirror.length === n && mirror.every((i) => Number.isInteger(i) && i >= 0 && i < n) && new Set(mirror).size === n;
-    if (!ok) return new Map();
-    out.set(k, { degeneracy: g!.degeneracy as number, mirror: [...(mirror as number[])] });
-  }
-  return out;
-}
-
-/** How many compounds a plugin's Duplicates took atom against atom, their ways onto themselves too many to try (`capped`): 0 where it says none, or not as it should. */
-export function readCapped(raw: unknown): number {
-  const n = (raw as { capped?: unknown } | null)?.capped;
-  return Number.isInteger(n) && (n as number) > 0 ? (n as number) : 0;
-}
-
 /** What a step says of a program installed separately that is found nowhere: where to say where it is. */
 export const notFound = (label: string) => `${label} is not found: locate it in Settings, Plugins`;
 

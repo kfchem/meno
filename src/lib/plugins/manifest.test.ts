@@ -187,8 +187,11 @@ describe("a plugin's manifest", () => {
         { kinds: ["optimise"], programs: ["other"] },
         { kinds: ["Not A Kind", "frequencies"], programs: ["xtb"] },
         { kinds: ["conformers"], takes: ["molecules", "drawings", "conformers", "chart"] },
+        // (Meno's judgements - which are the same, which kept, how many, how weighted - never a plugin's: the plugin
+        //  boundary, 2026-10-31. A plugin fills only kinds that run its program)
         { kinds: ["duplicates"], takes: [] },
-        { kinds: ["energy-window"], takes: ["table", "number"] },
+        { kinds: ["energy-window", "filter", "rank", "choose"], takes: ["table", "number"] },
+        { kinds: ["populations", "ensemble", "barrier", "as-conformers"] },
         { kind: "populations" },
       ],
     };
@@ -199,9 +202,6 @@ describe("a plugin's manifest", () => {
       { kind: "frequencies", programs: ["xtb"], options: [] },
       // (what it takes, of what flows: none said, all its kind takes)
       { kind: "conformers", programs: [], options: [], takes: ["molecules", "conformers"] },
-      { kind: "duplicates", programs: [], options: [] },
-      // (a table and a number flow too - a chart, Meno's alone, none says)
-      { kind: "energy-window", programs: [], options: [], takes: ["table", "number"] },
     ]);
     // (xTB's and ORCA's, as Meno carries them)
     const xtb = MANIFESTS.find((m) => m.id === "xtb")!;

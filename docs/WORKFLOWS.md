@@ -58,11 +58,10 @@ each is merged, this file describes what is built.
 11. **A step on many entries runs a job for each**, by default; a plugin
     may say that its program takes them all in one job (*Several at
     once*).
-12. **Meno does the simple steps itself, a plugin may do them instead**,
-    the chemist choosing which - as *Files* chooses who reads a kind of
-    file (FILE-IO.md). Which conformers are the same is Meno's own
-    judgement (the plugin boundary, 2026-10-31): *Duplicates* is Meno's
-    own step.
+12. **Meno does the simple steps itself, and no plugin does them** (the
+    plugin boundary, 2026-10-31): which are the same, which kept, how
+    many and how weighted are Meno's own judgements, and a plugin runs
+    its program and converts what it wrote (*Who does a step*).
 13. **A conformer set is converted to only on purpose**: what the chemist
     gathers into a set is a compound set; a step of its own, *As
     conformers*, makes it a conformer set, on the page for the flow to
@@ -80,7 +79,7 @@ each is merged, this file describes what is built.
     *Calculations* lists the plugins added, each with its kinds; a step's
     card is titled with its plugin, its calculation chosen in it among
     those the plugin does. Meno stands among them, for the steps it does
-    itself. This replaces choosing who does a kind in Settings (12).
+    itself. This replaces choosing who does a kind in Settings.
 17. **Settings holds the defaults; a step customises them** (the
     maintainer, 2026-10-08): Settings, *Calculations*, sets each kind's
     default options, by plugin; a step starts with them, and its options
@@ -605,10 +604,11 @@ one of the kinds of calculation it does (decided: 16):
   the one definition, over the ways the molecule maps onto itself: *The
   same conformer*). Meno's part is there from the start, with nothing to
   add.
-- **A plugin added may do any of them as well**, each a step of its
-  own to choose - but *Duplicates*, which is Meno's alone (the plugin
-  boundary, 2026-10-31): which conformers are the same is Meno's own
-  judgement.
+- **No plugin does them** (the plugin boundary, 2026-10-31): they are
+  Meno's judgements - which are the same, which kept, how many, how
+  weighted - and a plugin fills only kinds that run its program. A
+  manifest's step of one is left out (PLUGINS.md, the manifest's
+  `steps`).
 - **The chemist chooses** in Quick Add - a plugin, then one of its
   kinds - and may change a step's calculation in it, to another its
   plugin does. Settings, *Calculations*, lists the plugins added and

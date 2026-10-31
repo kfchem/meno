@@ -1126,9 +1126,10 @@ read for it.
 | **Atom map**: conformers onto their species | The same full map, its bonds to stay the same: ACCeL pairs like atoms as it extends a map - a methylene's hydrogens by their handedness, an =CH2's by E or Z, a methyl's by the torsion - so only equivalent atoms take each other's numbers |
 | **Mode on atoms** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
 
-**Plugins may still fill these.** Decision 16 lets a plugin fill a kind
-Meno fills, so a plugin may offer its own *Atom map* or its readers
-beside Meno's. None is needed for F or G.
+**Meno's alone.** These are Meno's judgements, so no plugin fills them
+(the plugin boundary, 2026-10-31: WORKFLOWS.md, *Who does a step*). A
+program plugin reads its program's output into Meno's general form, a
+vibration's displacements among it, and *Mode on atoms* works on that.
 
 ## Changed and kept under the principle
 
