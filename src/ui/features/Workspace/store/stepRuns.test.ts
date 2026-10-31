@@ -408,7 +408,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("runs a job on the fewer cores its plugin says it takes - ORCA with no MPI, one - and says why once, on the step's line", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
     const calculations = useAppSettings.getState().calculations;
     useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
@@ -438,7 +438,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never);
     worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
@@ -460,18 +460,19 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
   });
 
-  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so", async () => {
+  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing: the plugin stopped, saying so", async () => {
     installedAt.orca = "/Applications/orca_6/orca";
     const needing = async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 Opt\n" }], reads: [], needs: ["xtb"] }] }) as never;
-    // (the xTB plugin not added: refused before any job is made)
+    // (the xTB plugin not added: the ORCA interface stopped, refused before it is asked to prepare any job)
     useReaders.setState({ state: { orca: "added" }, problem: {} });
-    worker.prepare.mockImplementationOnce(needing);
+    const preparedBefore = worker.prepare.mock.calls.length;
     const first = editor();
     const step = first.st().addStep("energy", "orca", 10, 10);
     first.st().connect({ set: first.st().sets[0].id }, step);
     await first.st().runStep(step);
     expect(asked.started).toEqual([]);
-    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "The xTB plugin is needed for this: add it in Settings, Plugins" });
+    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "ORCA interface is stopped. Needs xTB, which is not added." });
+    expect(worker.prepare.mock.calls.length).toBe(preparedBefore);
     // (added: the job asks for it, by the plugin's id)
     useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     worker.prepare.mockImplementationOnce(needing);
@@ -485,7 +486,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("runs the programs installed beside it after it, and keeps the wavefunction it wrote with what was read - saved with the workspace", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
     const then = [{ program: "orca_2mkl", args: ["input", "-molden"] }];
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], then, reads: ["input.molden.input"] }] }) as never);
@@ -510,7 +511,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("keeps no wavefunction where the job wrote none", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: ["input.molden.input"] }] }) as never);
     worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction: { kind: "molden", file: "input.molden.input", name: "water.molden" } }] }) as never);
@@ -601,7 +602,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("says where to locate a program installed separately that is found nowhere - and starts nothing", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = null;
     const { st } = editor();
     const step = st().addStep("energy", "orca", 10, 10);
@@ -612,7 +613,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("says why a program installed separately found only too old will not do - and starts nothing", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = null;
     const why = "Meno needs ORCA 6.0 or later; this one is 5.0.4";
     useInstalled.setState({ chosen: { "orca:orca": { path: "/opt/orca_5/orca", version: "5.0.4", why } } });
@@ -889,7 +890,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("puts an optimisation that stopped under way out of Failed at the geometry it reached, from which a step after it starts afresh - saying so", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
     const { st } = editor();
     const water = st().molecules3d[0];
@@ -1418,7 +1419,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("keys a program installed separately by itself as it is now: replaced, its job runs again; not to be told, none is taken up again", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
     stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n1";
     const orca = () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never;
