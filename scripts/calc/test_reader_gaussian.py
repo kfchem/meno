@@ -87,6 +87,10 @@ def head(route_text, charge=0, multiplicity=1):
         " -------",
         " water",
         " -------",
+        " NAtoms=      3 NQM=        3 NQMF=       0 NMMI=      0 NMMIF=      0",
+        " IAtWgt=          16           1           1",
+        " AtmWgt=  15.9949146   1.0078250   1.0078250",
+        " NucSpn=           0           1           1",
         " Symbolic Z-matrix:",
         f" Charge = {charge:2d} Multiplicity = {multiplicity}",
         " O                     0.        0.        0.119 ",
@@ -261,6 +265,7 @@ class AnOptFreq(unittest.TestCase):
         self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision C.01", "B3LYP", "6-31G(d)"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
         self.assertEqual(o["atoms"], ["O", "H", "H"])
+        self.assertEqual(o["masses"], [15.9949146, 1.007825, 1.007825])
 
     def test_each_geometry_with_its_energy_the_reprint_not_again(self):
         o = self.out
@@ -292,6 +297,7 @@ class AnOptFreq(unittest.TestCase):
     def test_its_vibrations_each_moving_the_molecule(self):
         v = results(self.out)["vibrations"]
         self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "Reduced mass", "IR intensity"])
+        self.assertEqual(v["columns"][1]["quantity"], "symmetry")
         self.assertEqual(v["rows"][0]["cells"], [1, "A1", 1700.1234, 1.08, 70.1])
         self.assertEqual(v["rows"][2]["move"], [0.0, 0.07, 0.0, 0.0, -0.56, 0.43, 0.0, -0.56, -0.43])
         self.assertEqual(self.out["imaginary"], [])

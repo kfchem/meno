@@ -315,6 +315,20 @@ def geometries(lines):
     return out
 
 
+# each atom's mass as Gaussian used it, in daltons, ten to a line, under its input's other per-atom values:
+# " AtmWgt=  12.0000000  12.0000000   1.0078250"
+ATOM_WEIGHTS = " AtmWgt="
+
+
+def masses_of(lines, n):
+    """Each atom's mass, in daltons, as Gaussian last printed them all (its "AtmWgt=" lines, ten to a line); None where
+    it printed none, or not one to each atom."""
+    values = [v for line in lines if line.startswith(ATOM_WEIGHTS) for v in numbers(line[len(ATOM_WEIGHTS):])]
+    if not n or len(values) < n or len(values) % n or None in values[-n:]:
+        return None
+    return values[-n:]
+
+
 # --- ghost atoms ------------------------------------------------------------------------
 
 
@@ -344,6 +358,8 @@ def without(result, gone):
     n = len(result["atoms"])
     keep = [i for i in range(n) if i not in set(gone)]
     result["atoms"] = [result["atoms"][i] for i in keep]
+    if result.get("masses") and len(result["masses"]) == n:
+        result["masses"] = [result["masses"][i] for i in keep]
     result["frames"] = [[f[3 * i + k] for i in keep for k in range(3)] for f in result["frames"]]
     for r in result.get("results") or []:
         if r.get("on") == "atoms" and len(r.get("values") or []) == n:
@@ -676,7 +692,7 @@ def orbitals(lines):
             first = max(0, homo - ROWS_MOST // 2 + 1)
             last = min(len(e) - 1, first + ROWS_MOST - 1)
             first = max(0, last - ROWS_MOST + 1)
-        columns = [{"label": "Orbital"}] + ([{"label": "Symmetry"}] if sym is not None else []) + [{"label": "Energy", "unit": "eV", "digits": 3}]
+        columns = [{"label": "Orbital"}] + ([{"label": "Symmetry", "quantity": "symmetry"}] if sym is not None else []) + [{"label": "Energy", "unit": "eV", "digits": 3}]
         rows = [{"cells": [orbital_name(i, homo)] + ([sym[i]] if sym is not None else []) + [e[i]]} for i in range(last, first - 1, -1)]
         out.append({
             "id": "orbitals" if len(present) == 1 else f"orbitals.{'ab'[s]}",
@@ -800,7 +816,7 @@ def vibration_list(modes, n):
     masses, irs, ramans = each("mass"), each("ir"), each("raman")
     columns = [{"label": "Mode", "quantity": "number", "digits": 0}]
     if syms is not None:
-        columns.append({"label": "Symmetry"})
+        columns.append({"label": "Symmetry", "quantity": "symmetry"})
     columns.append({"label": "Frequency", "quantity": "wavenumber"})
     if masses is not None:
         columns.append({"label": "Reduced mass", "unit": "amu", "digits": 2})
@@ -898,7 +914,7 @@ def thermochemistry(lines):
     if k is not None:
         groups = [m.group(1) for m in map(POINT_GROUP.match, lines[:k]) if m]
         if groups:
-            add("thermo.point-group", "Point group", point_group(groups[-1]))
+            add("thermo.point-group", "Point group", point_group(groups[-1]), quantity="symmetry")
         add("thermo.symmetry-number", "Symmetry number", int(SYMMETRY_NUMBER.match(lines[k]).group(1)), unit="none", digits=0)
     add("thermo.g-correction", "Correction to Gibbs free energy", found["thermo.g-correction"], quantity="energy")
     return out
@@ -1109,6 +1125,8 @@ def read_fchk(name, text):
     v = re.search(r"G(\d+)Rev([A-Z]\.\d+)", version or "")
     method = re.sub(r"^(RO|R|U)(?=[A-Za-z])", "", head["method"]) or None
     energy = items.get("Total Energy")
+    # (each atom's mass as the program used it: "Real atomic weights", in daltons)
+    masses = items.get("Real atomic weights")
     result = {
         "schema": SCHEMA,
         "program": "Gaussian",
@@ -1118,6 +1136,7 @@ def read_fchk(name, text):
         "charge": items.get("Charge") if isinstance(items.get("Charge"), int) else None,
         "multiplicity": items.get("Multiplicity") if isinstance(items.get("Multiplicity"), int) else None,
         "atoms": atoms,
+        "masses": masses if isinstance(masses, list) and len(masses) == len(zs) and None not in masses else None,
         "frames": [[c * BOHR for c in xyz]],
         "energies": [energy] if isinstance(energy, float) else None,
     }
@@ -1221,6 +1240,7 @@ def read(name, text, followed=False):
         "charge": int(charge.group(1)) if charge else None,
         "multiplicity": int(charge.group(2)) if charge else None,
         "atoms": atoms,
+        "masses": masses_of(lines, len(atoms)),
         "frames": [xyz for _, _, xyz in frames],
         "energies": energies,
         # (whether an optimisation came to its end: a scan's or a reaction path's last geometry is no optimum)
