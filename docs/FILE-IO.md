@@ -1390,7 +1390,7 @@ web worker.
 | 11 | No Save when closing | Save offered beside Keep and Discard | 5 |
 | 12 | SMILES copied two ways | one way, through Meno's clipboard | 5 |
 | 13 | SMILES parsed two ways | what the chemist gives is read by the plugin chosen for SMILES (RDKit by default, PLUGINS.md). The dictionary's SMILES are Meno's own data and stay with Meno's own parser, which must answer while drawing. Both are said in the code and the docs | 6 |
-| 14 | Clipboard gaps | pasted text asks the one decision, so XYZ is read. EMF and DIB stay written only, and are said to be: they are for programs that take only a metafile or a bitmap, and an EMF Office hands back is drawn afresh, without Meno's record in it (`clipboard.rs` reads none on purpose); the record comes back through GVML, PNG or Meno's own flavour | 2 |
+| 14 | Clipboard gaps | pasted text asks the one decision, so XYZ is read. EMF and DIB stay written only, and are said to be: they are for programs that take only a metafile or a bitmap, and Meno reads neither back (`clipboard.rs` reads none on purpose); the record comes back through GVML, PNG or Meno's own flavour | 2 |
 | 15 | RXN not dragged in on Windows | `drop.rs` takes the RXN flavour | 2 |
 | 16 | PDB, KET offered then refused | Open offers only kinds something reads; PDB comes with its reader | 2, 7 |
 | 17 | Code no path reaches | removed | 2 |
