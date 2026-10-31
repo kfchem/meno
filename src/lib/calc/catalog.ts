@@ -11,7 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type RoleDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
