@@ -381,7 +381,7 @@ says no configuration, and none is drawn - unless its name is of one
 enantiomer (Shi's ketone, made from D-fructose); (±) says none too. An
 axially chiral one - BINAP, SEGPHOS, DTBM-SEGPHOS, and so Krische's
 catalyst and RuCl2[(S)-BINAP][(S,S)-DPEN] - has its axis given with it,
-which SMILES has no way to say: the bond C1-C1' (BINAP's), and the
+beside its SMILES: the bond C1-C1' (BINAP's), and the
 P-bearing carbon at each end, CIP's first, turned as (R) is - M, a
 negative torsion between those two. (S) turns it the other way. Written
 out, the axis is drawn by one wedge out of an end of it, narrow there, on
@@ -463,8 +463,8 @@ it (but not turned). Pictures - SVG, and the EMF and PNG a copy puts on the
 clipboard - show them, and Meno's own record of a copied drawing keeps
 them. Words written over or under an arrow - the reagents' and conditions'
 names, as text - go with it the same way (docs/EDITOR-2D.md, *Text*); an
-Rxnfile has no place for text, and does not keep them: a reagent written
-as a structure above the arrow is the file's reagent.
+Rxnfile holds molecules, and the words are not written to it: a reagent
+written as a structure above the arrow is the file's reagent.
 
 ## Writing
 
@@ -535,8 +535,8 @@ showing a reaction, or more than one, is not saved as an RXN file: the save
 says why. An arrow alone - on a slide, with nothing near its ends - shows
 none, and is left out.
 
-MOL files are written V2000 where that can say everything, and V3000
-where it cannot: past 999 atoms, bonds or Sgroups, a mapping number past
+MOL files are written V2000 where that holds everything, and V3000
+otherwise: past 999 atoms, bonds or Sgroups, a mapping number past
 999 or a coordinate past xxxxx.xxxx (V2000's fields are fixed in width:
 the format's *automatic V3000 output*, long fields); an atom list past the
 16 symbols an M  ALS line holds; a data Sgroup's field name past the 30

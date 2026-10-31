@@ -131,10 +131,9 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
   tab behind waits, unanswered, the keys the tab's in front, Escape too,
   until its own tab comes back.
-- Because every live canvas holds a WebGL context and browsers keep only about
-  16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
-  past the limit is refused with a notice rather than silently blanking the
-  oldest view.
+- Every live canvas holds a WebGL context, and `lib/core/limits.ts` budgets
+  them, 16 in all: a workspace costs one, and opening past the limit is
+  refused with a notice.
 - Meno starts on a workspace, and "+" makes another: the canvas is
   the workspace (docs/WORKSPACE.md), so there is no start page.
 - **Open** (Ctrl/Cmd+O, or the menu) reads the files picked in the system's
@@ -202,7 +201,7 @@ fiber passes an error inside its `<Canvas>` out to the tree round it) and
 the canvas's own HTML by the canvas's; the panel beside the canvas and
 Settings by their tab's; the title bar and the notices by the
 window's. Errors thrown in event handlers, timers, promises and `useFrame`
-are not React's to catch and do not blank the window; they are not shown.
+reach no boundary and do not blank the window; they are not shown.
 
 Nothing a part shows lives in the part, so a part made again shows the same:
 
@@ -256,8 +255,7 @@ start. On Windows the window's own placement is kept as it is
 with the window still hidden (`SetWindowPlacement`, `SW_HIDE`: the system's
 own caption is never seen), maximized hidden where it was, and then shown by
 Tauri as elsewhere, so that the frame it goes back to as it is unmaximized
-round-trips exactly - the size set and read back is not the same measure
-there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
+round-trips exactly. Elsewhere the inner size is kept. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log
@@ -361,8 +359,7 @@ moves together, in the same time and the same way.
 ## Pointers
 
 Meno draws its own pointers wherever it shows one other than the plain
-arrow (asked for by the maintainer, 2026-10-07: the system's hands looked
-poor, and on a Windows machine the dragging hand showed white). Each says
+arrow (asked for by the maintainer, 2026-10-07). Each says
 what a drag there does, not what grabs it, and none is a hand:
 
 | Pointer | Where | The system's behind it |
@@ -607,7 +604,7 @@ not taken from either.
   ribbons; sets, step cards (`workflow/SetFrame.tsx`, `StepCard.tsx`) and
   ports are HTML on **one** layer laid on the page at its scale (drei's
   `Html` in transform mode, `workflow/look.ts` `PX`). One layer, not one
-  per part: WebKit finds what is under the pointer among layers in their
+  per part: what is under the pointer is found among layers in their
   order, and a part's layer covered the parts on the layers below it.
   Lines are a hair on the screen at any zoom: the layer's `--hair` is set
   each frame from the zoom, and wires are made as wide on the screen for
@@ -897,7 +894,7 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   spectrum (the maintainer).
 - The first reader is cclib's (`resources/plugins/cclib/worker.py`), cclib
   used as a library, its version pinned in its folder's
-  `requirements.lock` (1.9rc1: 1.8.1 does not read ORCA 6). Its manifest
+  `requirements.lock` (1.9rc1). Its manifest
   brings every program cclib reads, each told by its own banner as cclib
   tells it. Its tests read sample outputs from `calc-samples/`, which
   git ignores - no program's output is committed - and run by hand
@@ -911,7 +908,7 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   not come to its end" - cut short, or still running. An SCF that did not
   converge gives no energy ("SCF: not converged"), and where the run
   stopped, the geometries after the last it worked out an energy for are
-  left out. Where cclib cannot read an output as it is, it is read again
+  left out. Where an output does not read as it is, it is read again
   with a number that overflowed its field (asterisks) taken as not known,
   and then as far as it reads - its last lines left off, more each time;
   where the run itself came to its end, the chip says "Read: only in
@@ -919,8 +916,8 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
   not atoms of the molecule and are left out; ORCA's point charges ("Q")
   are taken out before cclib reads it, and so is the dipole moment ORCA
-  prints as its total alone after an xTB run through the xtb program,
-  which cclib cannot read: that total is given as printed, with its
+  prints as its total alone after an xTB run through the xtb program:
+  that total is given as printed, with its
   magnitude as printed, and the run's energies are ORCA's final
   single-point ones, one to each geometry, as for any ORCA output. Where
   ORCA wrote no geometry at all - as for frequencies such a run works out
@@ -961,8 +958,8 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   (`scripts/calc/test_reader_pyscf_species.py`, in CI).
   Where an output
   holds the basis set and the orbitals' coefficients, cclib writes them as
-  a Molden file (each p shell's functions put in x, y, z order, as ORCA's
-  are not) for PySCF to read back, and the orbitals are checked
+  a Molden file (each p shell's functions put in x, y, z order) for PySCF
+  to read back, and the orbitals are checked
   orthonormal in their basis before any surface is promised - where they
   are not, it says to open a Molden file the program wrote. Its lists'
   rows promise each orbital's surface and the densities' (`orbital:<spin>:
@@ -1033,9 +1030,7 @@ valence problems, R/S and E/Z - which `ChemMarks2D` lays over the drawing
 as HTML, outside the drawing and so outside any export; they run only
 while RDKit is set up (`pyEnvReady`), so drawing never starts a download.
 `analyse` makes sense of each fragment on its own only where something is
-wrong somewhere; otherwise of the whole at once, which comes out the same:
-RDKit takes fragments out of a molecule by removing atoms one at a time,
-and for a thousand records that ran on for most of an hour.
+wrong somewhere; otherwise of the whole at once, which comes out the same.
 `clean` lays each fragment out afresh and then over the drawing - turned,
 turned over, and its chains turned over their single bonds, whichever
 lies closest - keeping the drawn wedges when they still say the same
@@ -1046,8 +1041,8 @@ A drawn structure made in 3D (`Workspace/chem/make3d.ts`, stage 2 of
 docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
-their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in, ordering them, and
+their covalent lengths and the metal typed for UFF, or, where the metal
+has no UFF type, a lighter metal of its group standing in, ordering them, and
 no energies given; a ring bound through all its atoms, written as a
 multi-centre bond by `chem/etaBound.ts`, held over its metal; the same
 conformer twice kept once (PLUGINS.md, *The same conformer*);
@@ -1072,10 +1067,9 @@ structure is being made, stops the worker and lets the question go at
 once). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
-RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
-CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
-double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
+RDKit's own depictor lays out (`lay_out_2d` in the worker). A SMILES whose
+layout does not read back as the SMILES is laid out by RDKit's own
+depictor instead. Meno
 lays both drawings out again with its own engine; only their
 stereochemistry and scale come from these coordinates.
 
@@ -1171,7 +1165,7 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   - opens a PDF from the cache when first asked about it, and answers a
   line of JSON at a time on its standard output: a frame of JSON, then
   bytes. Meno starts it when a PDF is first wanted and again if it has
-  gone, so that a PDF that breaks PDFium breaks it alone.
+  gone, so that a PDF that stops the reader stops that process alone.
 - **Parts of pages drawn** (`pdf_render`) come back as PNGs - a page is
   mostly white, so a 512-pixel tile is a quarter of its pixels or less, and
   carrying bytes is what takes the time - and are taken apart off the main
@@ -1463,9 +1457,8 @@ path it is given:
   be `python-env:<name>` - never a purpose that needs no asking.
 - Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
   (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
-  system's code page: on Windows that is the ANSI one otherwise, in which a request
-  naming a file in Japanese stopped a worker (English Windows) or came back garbled
-  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  system's code page: on Windows that is the ANSI one otherwise. What a
+  sidecar or a setup says is read a line at a time,
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
@@ -1545,8 +1538,8 @@ to be able to work with nothing going out at all.
   put on the record (`securitypolicyviolation`). A letter no typeface of
   Meno's has - an emoji - is drawn on the canvas as a white square, and
   measured as one (`lib/chem/labelFonts` `STAND_IN`), so that the canvas's
-  text renderer never looks for it on its CDN - which it may not reach,
-  and which left the whole text the letter was in undrawn.
+  text renderer never looks for it on the network, which the window does
+  not reach.
 - **Everything else goes through the app's proxy** (`src-tauri/src/net.rs`),
   on the loopback address. A child process that may use the network - uv
   or pixi setting up a plugin's environment - is begun as a *task* with a

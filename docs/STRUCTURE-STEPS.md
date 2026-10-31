@@ -325,7 +325,7 @@ strength. Restraints are a label: they name no geometry, and ride along.
   says both: "2 entries' earlier distances and atoms fixed replaced · 2
   entries' torsions kept".
 - **Refused, with the reason** (out of *Failed*): an atom the entry does not
-  have, an element Alvarez gives no radius for, or an entry with no 3D
+  have, an element with no Alvarez radius, or an entry with no 3D
   places or with frames.
 - **Its line** counts what it held: "12 entries restrained · 3 coordination
   bonds held". Coordination bonds asked and none marked are said ("no
