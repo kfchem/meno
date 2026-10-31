@@ -17,7 +17,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
 import { askToConnect, useNetwork, type ConsentRequest, type NetTask } from "./net/network";
 import { useAppSettings } from "./settings/appSettings";
-import { useGuide } from "./plugins/guides";
+import { useGuide } from "./guide/guide";
 import { afterFirstAction } from "./firstAction";
 
 /** The purpose Meno's network knows updating by. */
@@ -229,7 +229,7 @@ export function startUpdates(): () => void {
     let pressed = false;
     const ask = afterFirstAction(
       askNow,
-      () => pressed || !!useGuide.getState().open,
+      () => pressed || useGuide.getState().open != null,
       (changed) => {
         const down = () => {
           pressed = true;

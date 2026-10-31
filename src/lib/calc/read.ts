@@ -6,8 +6,8 @@
  * readers chosen to read it as well, whose results join it as they come,
  * so that a slow one never holds the file up. Every reader's results are
  * kept, each its own; Meno's own forms - the geometries, what the
- * calculation was - are the reader's. What nothing added reads says what
- * would, as the catalogues of the plugins added suggest.
+ * calculation was - are the reader's. What nothing added reads says which
+ * plugins not added would, as each says it reads (lib/io/kinds `offeredKinds`).
  */
 import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
@@ -21,8 +21,8 @@ import { checkedStructures, type StructureRead } from "../io/structures";
 
 /**
  * Why a file is not read: no plugin added reads it. `suggest` holds the
- * plugins a catalogue of a plugin added suggests for it, by id - those
- * Meno has and that are made for this system - each to add.
+ * plugins not added that read it, by id - those Meno has and that are made
+ * for this system - each to add.
  */
 export class NotRead extends Error {
   constructor(
@@ -35,9 +35,9 @@ export class NotRead extends Error {
 
 /**
  * Who reads a file of `kind`: its reader, and those that read it as well;
- * or why no one can - no reader added reads it - with the plugins the
- * catalogues of the plugins added suggest for it (`kind.suggest`). Meno
- * itself names none.
+ * or why no one can - no reader added reads it - with the plugins not
+ * added that read it (`kind.suggest`, as each says it reads). Meno itself
+ * names none.
  */
 export function whoReads(
   kind: Kind,

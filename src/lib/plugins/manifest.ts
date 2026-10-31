@@ -7,13 +7,14 @@
  * fills (`roles`) and the kinds of a workflow's step (`steps`), each with
  * its options; the systems it can be added on, the programs installed
  * separately its steps run, and the files it needs downloaded besides its
- * environment (`downloads`); and, besides, a guide Meno shows once and a
- * catalogue of plugins it suggests - for files of the kinds it names, too.
+ * environment (`downloads`). Nothing else: no guide, and no word of another
+ * plugin - which Meno would suggest for a file is worked out from what each
+ * plugin says it reads (lib/io/kinds `offeredKinds`).
  *
  * A plugin stands alone: it knows of no other, and Meno of no program. Two
  * plugins that read the same kind each bring it, by the same id; Meno puts
  * them together (lib/io/kinds). A plugin that runs nothing - no environment
- * - brings only data: a guide, a catalogue, texts it colours.
+ * - brings only texts it colours.
  *
  * It is read as data, and checked here, whoever wrote it: what reads wrong
  * in it is left out, and what it cannot do without makes it none. A kind is
@@ -29,7 +30,6 @@ import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
 import { isStepKind, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
-import { GUIDE_EVENTS, GUIDE_PLACES, type GuideStep, type Suggestion } from "./guide";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
 export type Mark = {
@@ -259,8 +259,6 @@ const UNPACKS: readonly Unpack[] = ["dmg", "zip", "tar.xz", "gz"];
 /** How a program installed separately says its version, and the least Meno takes. */
 export type VersionRule = { args: string[]; after: string; least: string };
 
-/** A kind of file a plugin's catalogue names, and the plugins it suggests for one: told by its marks, as a kind a plugin reads is. */
-export type CatalogueFile = { id: string; name: string; extensions: string[]; marks: Mark[]; suggest: string[] };
 
 /** What makes a plugin's environment: uv, from PyPI (its requirements.lock), or pixi, where it needs conda-forge (its pixi.toml and pixi.lock). */
 export type Maker = "uv" | "pixi";
@@ -311,12 +309,6 @@ export type Manifest = {
   downloads: DownloadDecl[];
   /** Programs of other plugins its jobs may need, where it declares any (`NeedDecl`). */
   needs?: NeedDecl[];
-  /** Its guide: shown once, the first time it is there. */
-  guide: GuideStep[];
-  /** The plugins it suggests. */
-  suggests: Suggestion[];
-  /** The kinds of file it names, and the plugins it suggests for each. */
-  files: CatalogueFile[];
 };
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -726,40 +718,6 @@ function programPathOk(p: string): boolean {
   return p.length <= 200 && parts.length >= 1 && parts.length <= 8 && parts.every((x) => x === "*" || (!!x && x !== "." && x !== ".." && !/[\\:*]/.test(x) && /^[\x20-\x7e]+$/.test(x)));
 }
 
-/** How long a guide's words may be: a title, a step's text. */
-const TITLE_MOST = 60;
-const STEP_MOST = 300;
-/** How many steps a guide has at most. */
-const STEPS_MOST = 12;
-
-function guideStepOf(v: unknown): GuideStep | null {
-  const s = v as Record<string, unknown> | null;
-  const title = text(s?.title, TITLE_MOST);
-  const said = text(s?.text, STEP_MOST);
-  if (!title || !said) return null;
-  const at = GUIDE_PLACES.find((p) => p === s?.at);
-  const until = GUIDE_EVENTS.find((e) => e === s?.until);
-  const suggest = ids(s?.suggest);
-  return { title, text: said, ...(at ? { at } : {}), ...(until ? { until } : {}), ...(suggest.length ? { suggest } : {}) };
-}
-
-function suggestionOf(v: unknown): Suggestion | null {
-  const s = v as Record<string, unknown> | null;
-  const plugin = isId(s?.plugin) ? s.plugin : null;
-  const what = text(s?.for, 120);
-  return plugin && what ? { plugin, for: what } : null;
-}
-
-function catalogueFileOf(v: unknown): CatalogueFile | null {
-  const f = v as Record<string, unknown> | null;
-  const id = isId(f?.id) ? f.id : null;
-  const name = text(f?.name, 80);
-  const marks = marksOf(f?.marks);
-  const suggest = ids(f?.suggest);
-  // (told by its marks - no plugin added to ask - and some plugin to suggest)
-  return id && name && marks.length && suggest.length ? { id, name, extensions: extensionsOf(f?.extensions), marks, suggest } : null;
-}
-
 /** Each of a list read, those that do not read left out, and of those with the same key the first. */
 function read<T>(raw: unknown, one: (v: unknown) => T | null, key: (t: T) => string): T[] {
   const out: T[] = [];
@@ -814,19 +772,13 @@ export function acceptManifest(raw: unknown): Manifest | null {
     : [];
   // (each kind of step once)
   const steps = environment ? list(m.steps).flatMap((v) => stepsOf(v, roles)).filter((d, i, all) => all.findIndex((e) => e.kind === d.kind) === i) : [];
-  const guide = list(m.guide)
-    .map(guideStepOf)
-    .filter((g): g is GuideStep => g != null)
-    .slice(0, STEPS_MOST);
-  const suggests = read(m.suggests, suggestionOf, (s) => s.plugin).filter((s) => s.plugin !== id);
-  const files = read(m.files, catalogueFileOf, (f) => f.id);
   // (a kind it reads is told: by its marks, or by asking it - and then by its files' names first)
   const told = (k: KindDecl) => k.marks.length > 0 || (!!k.probe && k.extensions.length > 0);
   const readable = reads.filter((r) => !own(r) || told(own(r)!));
   // (a text it only colours: by its files' names, with its grammar)
   const colours = kinds.some((k) => !readable.includes(k.id) && !writes.some((w) => w.id === k.id) && k.extensions.length && k.grammar);
   // (a plugin that does nothing is none)
-  if (!readable.length && !writes.length && !roles.length && !steps.length && !colours && !guide.length && !suggests.length && !files.length) return null;
+  if (!readable.length && !writes.length && !roles.length && !steps.length && !colours) return null;
   const systems = SYSTEMS.filter((s) => list(m.systems).includes(s));
   // (each program installed separately once, and only one a step or a role runs)
   const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => [...steps, ...roles].some((s) => s.programs.includes(d.name)));
@@ -859,9 +811,6 @@ export function acceptManifest(raw: unknown): Manifest | null {
     installed,
     downloads: downloads as DownloadDecl[],
     ...(needsOk && needs.length ? { needs: needs as NeedDecl[] } : {}),
-    guide,
-    suggests,
-    files,
   };
 }
 

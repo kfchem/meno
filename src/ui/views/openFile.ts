@@ -21,9 +21,8 @@ const EXT_TEXT = new Set([
 
 /**
  * The files Open offers, as it is asked: every kind Meno takes in
- * (lib/io/kinds) - its own, those the plugins added bring, and those the
- * catalogues of the plugins added name, so that a plugin not added can be
- * suggested - and text: what the plugins added know besides - a
+ * (lib/io/kinds) - its own, those the plugins added bring, and those only
+ * plugins not added read, so that one of them can be suggested - and text: what the plugins added know besides - a
  * calculation's input they write, or colour - to be read and changed in a
  * workspace's column.
  */

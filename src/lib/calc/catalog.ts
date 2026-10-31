@@ -11,8 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
-import type { GuideStep, Suggestion } from "../plugins/guide";
+import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
 import type { RoleId } from "../plugins/roles";
@@ -37,13 +36,10 @@ type ReaderBase = Described & {
   /** Of those, the kinds one of its own programs writes (its manifest's `writtenBy`): its own program's output, which it reads unless another is chosen. */
   ownKinds?: readonly string[];
 };
-/** What any plugin may bring besides what it runs: a guide, shown once; the plugins it suggests; the kinds of file it names, and the plugins it suggests for each (lib/plugins/guide). */
+/** What any plugin says besides what it runs: the systems it can be added on. */
 type Brings = {
   /** The systems it can be added on; none, every one. */
   systems: readonly System[];
-  guide: readonly GuideStep[];
-  suggests: readonly Suggestion[];
-  files: readonly CatalogueFile[];
 };
 /** A plugin that runs something: what it reads and writes, the roles it fills besides, and what it runs - a worker in a Python environment of its own. */
 export type PythonPlugin = ReaderBase &
@@ -91,7 +87,7 @@ export const runs = (p: Plugin): p is PythonPlugin => !("data" in p);
 
 const MENO_IDS: ReadonlySet<string> = new Set(Object.values(MENO_KINDS).map((k) => k.id));
 
-const brings = (m: Manifest): Brings => ({ systems: m.systems, guide: m.guide, suggests: m.suggests, files: m.files });
+const brings = (m: Manifest): Brings => ({ systems: m.systems });
 
 /** A plugin, from its manifest. */
 export const pluginOf = (m: Manifest): Plugin => {

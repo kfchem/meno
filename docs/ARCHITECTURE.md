@@ -52,9 +52,9 @@ src/
   lib/roles/              the roles' workers (RDKit's, for now): client, sidecar, the MOL blocks they are asked about
   lib/calc/               readers of calculation output: the catalog, reading, promises, Meno's own reading
   lib/plugins/            plugins' manifests (data), read and checked; the plugins Meno carries, found in their folders;
-                          the roles and kinds of step Meno defines; each plugin's one worker (process.ts); guides
-                          and catalogues (guide.ts, guides.ts)
-  ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
+                          the roles and kinds of step Meno defines; each plugin's one worker (process.ts)
+  lib/guide/              Meno's first steps (steps.ts) and the one shown (guide.ts)
+  ui/guide/               the first steps, shown in Meno's own card beside the part each points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
   lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
@@ -804,10 +804,10 @@ reading (`MENO`) first. Meno's core knows no program (the maintainer,
 2026-10-06): `lib/io/kinds.ts` knows Meno's own kinds only, and registers
 the kinds of the plugins added - while they are added (`lib/calc/workers.ts`)
 - refusing a mark that one of Meno's own sample files holds. A plugin not
-added is never looked at: a file no plugin added reads is told only by the
-kinds the catalogues of the plugins added name (`catalogued`, Getting
-started's), to say which plugin would read it (`lib/calc/probe.ts`
-`kindOfFile`, `lib/calc/read.ts` `whoReads`).
+added is never started or asked: a file no plugin added reads is told by
+the kinds the plugins Meno carries but not added say they read, by their
+own marks (`offeredKinds`, `catalogued`), to say which plugins would read
+it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
 - A plugin is added in Settings, *Plugins*: `ensurePyEnv`, with the
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.

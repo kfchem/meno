@@ -520,9 +520,9 @@ How these behave:
 - **Open uses the system's dialog through Tauri**, so Meno has the file's
   path. It reads bytes, and decodes the text kinds. It offers `.meno`,
   text, and the kinds something reads: Meno, or a plugin added - and,
-  since 2026-10-10, the kinds the catalogues of the plugins added name
-  (PLUGINS.md, *A plugin's catalogue*). A file whose reader is not added
-  says which plugin the catalogue suggests, with Add. What a plugin added
+  the kinds the plugins Meno carries but not added read (PLUGINS.md, *A
+  plugin to suggest for a file*). A file whose reader is not added says
+  which plugins would read it, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
 - **A file's text is read as its bytes are written** (2026-10-13,
@@ -1425,7 +1425,7 @@ Each step is a pull request from main.
    - kinds registered: Meno's own, and each added plugin's from its
      manifest while it is added; marks as data, tried on Meno's samples;
      `probe`; a file no plugin added reads naming the plugin that would
-     (since 2026-10-10, as a catalogue suggests: PLUGINS.md);
+     (from what each plugin Meno carries says it reads: PLUGINS.md);
    - each plugin a folder of its own, found by Meno and named by none of
      its code;
    - ids, and the kind sent with each request;

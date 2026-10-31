@@ -150,9 +150,6 @@ describe("the readers Meno knows of", () => {
       writes: [],
       xyzEnergies: [],
       xyzSteps: [],
-      guide: [],
-      suggests: [],
-      files: [],
       kinds: [{ id: "nbo-47", name: "NBO input", program: "NBO", extensions: [".47"], marks: [{ text: "$GENNBO" }], lines: [] }],
     });
     expect(nbo).toMatchObject({ reads: ["nbo-47", "xyz"], lock: "resources/plugins/nbo/requirements.lock", worker: "resources/plugins/nbo/worker.py" });
@@ -162,7 +159,7 @@ describe("the readers Meno knows of", () => {
       for (const id of p.reads) expect(anyKindById(id), `${p.id} reads ${id}`).toBeDefined();
     }
     registerKinds([]);
-    // (no mark of the plugins Meno carries - their kinds', their catalogues' - claims a file of Meno's own)
+    // (no mark of the plugins Meno carries claims a file of Meno's own)
     expect(REFUSED).toEqual([]);
   });
 
