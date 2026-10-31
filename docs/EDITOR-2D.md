@@ -1495,11 +1495,9 @@ All hover-based, as above.
 
 ### 4a. A layout engine of Meno's own
 
-Agreed 2026-09-27: clean-up as it is (RDKit's layout laid over the drawing,
-PR #53) falls well short - taxol comes out unrecognisable - and neither of
-RDKit's layout engines is good enough to build on, so Meno gets its own,
-written from scratch, used for clean-up and for structures that arrive
-without coordinates (SMILES).
+Agreed 2026-09-27: Meno gets a layout engine of its own, written from
+scratch, used for clean-up and for structures that arrive without
+coordinates (SMILES).
 
 What it has to do, in the maintainer's words: rings drawn clean and regular,
 ring bonds kept plain with stereo shown on the bonds out of them - adding an
@@ -1515,12 +1513,11 @@ lipids each have their own way of being drawn, which it should know.
    untidy and for how the drawing sits - square to the lattice, its chains
    level, read left to right (`scripts/layout`, `src/lib/layout/metrics.ts`).
    The numbers are general rules, not a record of particular molecules.
-   RDKit's two engines are the baseline. (PR #58)
+   (PR #58)
 2. The engine itself (`src/lib/layout/engine.ts`, by the rules in
    `docs/LAYOUT-2D.md`): ring systems, chains, macrocycles, stereo display,
    clash removal and orientation, measured on the benchmark at each step.
-   A first pass is in; on the benchmark it scores best or level on most of
-   the molecules against RDKit's two engines.
+   A first pass is in, measured on the benchmark.
 3. Clean-up and SMILES import moved onto it: `chem/cleanUp.ts` and
    `chem/engineLayout.ts`, the engine in a worker of its own
    (`chem/layoutWorker.ts`), as a large structure takes it up to a second.
