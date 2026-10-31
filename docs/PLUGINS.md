@@ -815,7 +815,7 @@ fills.
   before it, such as a picture plugin loading its model for its first
   picture, which has five minutes. A picture after that, the model loaded,
   has a minute and a half: one is read in seconds, the slowest in about
-  half a minute, and one that takes longer is not going to end. The part
+  half a minute. The part
   that asked says *Reading the picture took too long, so nothing was read
   from it*, and the next picture starts the worker afresh, with the five
   minutes again for its model (`readByPlugin` in
