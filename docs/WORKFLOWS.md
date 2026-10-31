@@ -56,8 +56,8 @@ each is merged, this file describes what is built.
     workspace's editor is built anew: neither the tab nor ReactFlow's
     code is looked at (*Licences*).
 11. **A step on many entries runs a job for each**, by default; a plugin
-    may say that its program takes them all in one job, where it does
-    that better (*Several at once*).
+    may say that its program takes them all in one job (*Several at
+    once*).
 12. **Meno does the simple steps itself, a plugin may do them instead**,
     the chemist choosing which - as *Files* chooses who reads a kind of
     file (FILE-IO.md). ACCeL's second version is under way, outside this
@@ -1151,8 +1151,8 @@ states an undo goes back to as well.
   above - each with its own log, a failure its own, several at once
   where Settings allows.
 - **Unless its plugin says otherwise**: a plugin's manifest may say that
-  a kind it fills takes all its entries in one job, where its program
-  does that better - CREST optimising an ensemble in one run
+  a kind it fills takes all its entries in one job, as its program
+  can - CREST optimising an ensemble in one run
   (`crest --mdopt`), ORCA chaining jobs in one input. Then the step runs
   one job, with one log, and the entries that came out of it are told
   apart in the results; a failure is the whole job's.
