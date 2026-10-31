@@ -46,7 +46,6 @@ from rdkit.Chem import (
     rdDepictor,
     rdDistGeom,
     rdForceFieldHelpers,
-    rdMolAlign,
     rdMolDescriptors,
 )
 from rdkit.Chem.EnumerateStereoisomers import (
@@ -59,13 +58,19 @@ from rdkit.Chem.EnumerateStereoisomers import (
 RDLogger.DisableLog("rdApp.*")
 rdDepictor.SetPreferCoordGen(True)
 
-# 2D coordinates come from CoordGen, except for a ring of LARGEST_RING atoms
-# or more, or MOST_RINGS rings or more: for these, Compute2DCoords with
-# CoordGen took from seconds to over 20 s here (RDKit 2026.03.6: a chain of
-# 32 para-linked benzene rings 2.2 s, of 35 over 8 s; a ring of 34 carbons
-# 2.5 s, of 37 over 20 s), so RDKit's own depictor lays them out. Meno lays
-# both of the worker's drawings out again with its own engine (from_smiles,
-# drawing_of); only their stereochemistry and scale come from here.
+# Meno's rule for which of RDKit's two depictors lays a drawing out: CoordGen,
+# except for a ring of LARGEST_RING atoms or more, or MOST_RINGS rings or
+# more, where RDKit's own does - by how long CoordGen takes. Measured with
+# Compute2DCoords, RDKit 2026.03.6, on an Apple M4, 2026-11-01: CoordGen's
+# time grows unevenly past some 25 rings or a ring of some 30 atoms - a chain
+# of para-linked benzene rings 0.00 s at 25 rings, 1.1 s at 26, 0.01 s at 31,
+# 2.1 s at 32, 9.0 s at 35; a ring of carbons 0.04 s at 30 atoms, 1.3 s at
+# 33, 1.2 s at 34, 18.9 s at 37 - where RDKit's own took 0.01 s at most. The
+# bounds are those set on 2026-10-11, when a ring of 34 carbons took 2.5 s
+# and of 37 over 20 s, a chain of 32 rings 2.2 s and of 35 over 8 s. Meno
+# lays both of the worker's drawings out again with its own engine
+# (from_smiles, drawing_of); only their stereochemistry and scale come from
+# here.
 LARGEST_RING = 34
 MOST_RINGS = 25
 
@@ -320,9 +325,10 @@ def drawing_block(mol):
     # (an adduct held in its dipolar form written as drawn: its arrow, and its charges as drawn - `as_drawn`)
     written = lambda: Chem.MolToV3KMolBlock(as_drawn(mol) if held_dipolar(mol) else mol)
     block = written()
-    # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
-    # says (Z): where what is written does not read back as the molecule,
-    # RDKit's own depictor lays it out instead (it keeps that one)
+    # where what is written does not read back as the molecule, RDKit's own
+    # depictor lays it out instead: (E)-cyclooctene laid out by CoordGen
+    # reads back (Z), its double bond drawn cis, and by RDKit's own (E)
+    # (RDKit 2026.03.6, 2026-11-01)
     if not reads_as(block, mol):
         rdDepictor.Compute2DCoords(mol, forceRDKit=True)
         block = written()
@@ -438,22 +444,6 @@ BY_TURNS = ((7, 50), (12, 200), (None, 300))
 #: 110, 500 found 266, 1000 found 487, and the lowest came only at 2000. 5000 of it is a job of about a minute
 #: on ten cores, 111 MB at most, its file 4.9 MB.
 MOST_CONFORMERS = 5000
-#: Two conformers are the same where all their atoms, hydrogens included, lie within this RMSD of each other
-#: (angstroms), laid over at their best - turned and moved, never reflected - over the ways the molecule maps
-#: onto itself: the maintainer's standard for structures fed to quantum calculations (2026-10-21), one
-#: definition for the whole app. It keeps an OH or NH turned the other way, and a conformer's mirror image, as
-#: conformers of their own. Nothing is made one on any looser measure, nor by energy.
-SAME_CONFORMER = 0.01
-#: How many ways a molecule maps onto itself are tried when telling two of its conformers apart - a tert-butyl's
-#: three methyls, a phenyl flipped, a ring read round either way - and the most that are looked for at all. A
-#: hydrogen is never one of these: those on one atom are matched each to the nearest of the other's. Past this,
-#: atoms at the end of a chain that are alike on one atom - the four chlorides of an osmium - are matched so too,
-#: and the ways of the rest are tried; past it still, conformers are told apart atom against atom. Matching to
-#: the nearest, or atom against atom, can only fail to find a conformer the same as another, never make two
-#: different ones one: whatever matching is tried, two conformers it lays within SAME_CONFORMER are the same.
-#: Trying every way of a Pd(PPh3)4, whose four phosphines and twelve phenyls map onto each other every way
-#: round, took 2.1 s for a single pair of conformers here, where 1000 ways took 0.002 s.
-ALIKE_WAYS = 1000
 # conformers' random seed, and how many steps an optimisation may take, unless asked
 SEED = 0x4D45
 STEPS = 2000
@@ -869,257 +859,6 @@ def reflected(entry):
         **entry,
         "frames": [[-v if k % 3 == 0 else v for k, v in enumerate(f)] for f in entry["frames"]],
     }
-
-
-# --- the same atoms, the same places: conformers of equivalent branches ---------------------------------
-
-#: How many whole branches a group may have for every way of laying them out to be tried (4! = 24).
-MOST_BRANCHES = 4
-#: The largest pendant ring turned about its bond, and how many of its symmetries are tried.
-MOST_RING_ATOMS = 16
-MOST_SYMMETRIES = 64
-
-
-def settle_equivalents(mol, cids):
-    """Conformers of one molecule made by RDKit, their equivalent branches given the same places as in the
-    first. RDKit's embedding takes no account of which of a CH2's two hydrogens, or of an isopropyl's two methyls,
-    is which: one index can be on one side in one conformer and on the other in the next, and switching between
-    them moves them across each other. Here each equivalent group - neighbours of one atom of the same rank in
-    the graph (no chirality), each the root of a branch that joins the rest only through it: H's, a methyl, a
-    t-butyl, CF3, an oxygen of a nitro group - is laid out as it is in the first conformer, as the whole branches
-    permute (an atom with its branch, its atoms by their ranks), whichever way fits best in the parent's frame:
-    the sum of squared distances, the parent and the atoms about it laid over the first's. A pendant ring that
-    is symmetric about its bond (phenyl) may flip likewise. Went from the molecule's centre outward, so that a
-    branch's own groups are settled after the branch is. Local and greedy: no automorphism of the whole molecule
-    is searched for. Only heavy atoms of whole branches move, and only to places an equivalent branch had.
-    The first conformer is the reference and is not touched; `mol`'s conformers `cids` are changed in place."""
-    import itertools
-    import numpy as np
-
-    if len(cids) < 2:
-        return
-    n = mol.GetNumAtoms()
-    nbrs = [[x.GetIdx() for x in a.GetNeighbors()] for a in mol.GetAtoms()]
-    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False, includeChirality=False))
-    # from the centre outward: the atom of the least eccentricity, the lowest index of them
-    def distances(src):
-        d = {src: 0}
-        order = [src]
-        for a in order:
-            for b in nbrs[a]:
-                if b not in d:
-                    d[b] = d[a] + 1
-                    order.append(b)
-        return d, order
-
-    best = None
-    for a in range(n):
-        d, _ = distances(a)
-        if len(d) != n:
-            return  # (more than one molecule: left as it is)
-        ecc = max(d.values())
-        if best is None or ecc < best[0]:
-            best = (ecc, a)
-    depth, order = distances(best[1])
-    parent = {best[1]: None}
-    for a in order:
-        for b in nbrs[a]:
-            if b not in parent and depth[b] == depth[a] + 1:
-                parent[b] = a
-
-    def branch_of(p, c):
-        """The atoms hanging from p by c alone - None where c's side joins the rest of the molecule another way."""
-        seen = {c}
-        stack = [c]
-        while stack:
-            a = stack.pop()
-            for b in nbrs[a]:
-                if b == p:
-                    if a != c:
-                        return None
-                    continue
-                if b not in seen:
-                    seen.add(b)
-                    stack.append(b)
-        return seen
-
-    def symmetries(root, bset):
-        """The maps of a pendant ring's atoms onto themselves that keep its root, by ranks and bonds."""
-        atoms = sorted(bset, key=lambda a: (depth[a], a))
-        found = []
-
-        def extend(i, m, used):
-            if len(found) >= MOST_SYMMETRIES:
-                return
-            if i == len(atoms):
-                found.append(dict(m))
-                return
-            a = atoms[i]
-            if a == root:
-                m[a] = a
-                used.add(a)
-                extend(i + 1, m, used)
-                used.discard(a)
-                return
-            for t in sorted(bset):
-                if t in used or ranks[t] != ranks[a] or len(nbrs[t]) != len(nbrs[a]):
-                    continue
-                if all((m[b] in nbrs[t]) == (b in nbrs[a]) for b in m if b in bset):
-                    m[a] = t
-                    used.add(t)
-                    extend(i + 1, m, used)
-                    used.discard(t)
-                    del m[a]
-
-        extend(0, {}, set())
-        return found
-
-    groups = []  # (p, [branches as lists of atoms, root first], whether more than one)
-    ambiguous = set()
-    for p in order:
-        pend = {}
-        for c in nbrs[p]:
-            bset = branch_of(p, c)
-            if bset is not None:
-                pend[c] = bset
-        by_rank = {}
-        for c in pend:
-            by_rank.setdefault(ranks[c], []).append(c)
-        for roots in by_rank.values():
-            roots.sort()
-            if len(roots) > 1 and len(roots) <= MOST_BRANCHES:
-                groups.append((p, roots, pend))
-                for c in roots:
-                    ambiguous |= pend[c]
-            elif len(roots) == 1:
-                bset = pend[roots[0]]
-                bonds_inside = sum(1 for a in bset for b in nbrs[a] if b in bset) // 2
-                if bonds_inside >= len(bset) and len(bset) <= MOST_RING_ATOMS:
-                    moved = symmetries(roots[0], bset)
-                    if len(moved) > 1:
-                        groups.append((p, roots, pend))
-                        # (atoms every symmetry keeps - the root, the para atom - stay where the frame can lean on them)
-                        ambiguous |= {a for a in bset if any(m[a] != a for m in moved)}
-
-    def pair_up(ra, rb, bset_a, bset_b):
-        """A map of one branch onto an equivalent one - a parallel walk, equal ranks at each step, bonds kept - or None."""
-        m = {ra: rb}
-        queue = [(ra, rb)]
-        for a, b in queue:
-            ca = sorted((x for x in nbrs[a] if x in bset_a and x not in m), key=lambda x: (ranks[x], x))
-            cb = sorted((x for x in nbrs[b] if x in bset_b and x not in m.values()), key=lambda x: (ranks[x], x))
-            if len(ca) != len(cb) or [ranks[x] for x in ca] != [ranks[x] for x in cb]:
-                return None
-            for x, y in zip(ca, cb):
-                m[x] = y
-                queue.append((x, y))
-        if len(m) != len(bset_a) or len(set(m.values())) != len(m):
-            return None
-        for a in bset_a:
-            for b in nbrs[a]:
-                if b in bset_a and m[b] not in nbrs[m[a]]:
-                    return None
-        return m
-
-    def handedness(roots_at, anchors_at, centre):
-        """The signs of the triple products of the vectors from the centre to the roots and to the atoms about it, each triple with a root."""
-        vs = [np.asarray(x) - centre for x in roots_at + anchors_at]
-        k = len(roots_at)
-        out = []
-        for i, j, l in itertools.combinations(range(len(vs)), 3):
-            if min(i, j, l) < k:
-                out.append(1 if float(np.linalg.det(np.array([vs[i], vs[j], vs[l]]))) > 0 else -1)
-        return tuple(out)
-
-    settled = set(range(n)) - ambiguous
-    seen_roots = {}
-    for p, roots, pend in groups:
-        key = (p, tuple(roots))
-        if key in seen_roots:
-            continue
-        seen_roots[key] = True
-        branches = [pend[c] for c in roots]
-        inside = set().union(*branches)
-        # candidate re-labellings of the branches' atoms: new place of a <- old place of m[a]
-        cands = []
-        if len(roots) > 1:
-            maps = {}
-            ok = True
-            for i, ri in enumerate(roots):
-                for j, rj in enumerate(roots):
-                    mm = pair_up(ri, rj, branches[i], branches[j])
-                    if mm is None:
-                        ok = False
-                    maps[(i, j)] = mm
-            if not ok:
-                continue
-            for perm in itertools.permutations(range(len(roots))):
-                cand = {}
-                for i, j in enumerate(perm):
-                    cand.update(maps[(i, j)])
-                cands.append(cand)
-        else:
-            cands = symmetries(roots[0], branches[0])
-            if len(cands) < 2:
-                continue
-        # the parent's frame: it and the atoms about it, outside the branches - those settled; where they are too few
-        # or lie in a line, those of an equivalent pair too, which a flip of theirs may still turn
-        shell = {p}
-        for x in nbrs[p]:
-            if x not in inside:
-                shell.add(x)
-                shell.update(y for y in nbrs[x] if y not in inside)
-        if len(roots) == 1:
-            shell.add(roots[0])
-        reference = mol.GetConformer(cids[0])
-
-        def usable(atoms):
-            pts = np.array([list(reference.GetAtomPosition(x)) for x in atoms])
-            return len(atoms) >= 3 and np.linalg.matrix_rank(pts - pts.mean(axis=0), tol=1e-3) >= 2
-
-        frame = sorted(x for x in shell if x in settled or x == p or (len(roots) == 1 and x == roots[0]))
-        if not usable(frame):
-            frame = sorted(shell)
-            if not usable(frame):
-                continue
-        anchors = sorted(x for x in nbrs[p] if x not in inside)[:2]
-        ref = {x: np.array(mol.GetConformer(cids[0]).GetAtomPosition(x)) for x in set(frame) | inside | {p} | set(anchors)}
-        for cid in cids[1:]:
-            conf = mol.GetConformer(cid)
-            now = conf.GetPositions()  # (all at once: one array per atom took 40 s for a Grubbs catalyst's 30)
-            P = np.array([now[x] for x in frame])
-            Q = np.array([ref[x] for x in frame])
-            pc, qc = P.mean(axis=0), Q.mean(axis=0)
-            u, _, vt = np.linalg.svd((P - pc).T @ (Q - qc))
-            d = np.sign(np.linalg.det(vt.T @ u.T)) or 1.0
-            rot = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
-            def placed(x):
-                return rot @ (now[x] - pc) + qc
-            scored = []
-            for cand in cands:
-                cost = sum(float(np.sum((placed(cand[a]) - ref[a]) ** 2)) for a in inside)
-                scored.append(cost)
-            identity = next((k for k, c in enumerate(cands) if all(c[a] == a for a in inside)), 0)
-            # (first its handedness: the roots and the atoms about their parent keep the sense they have in the first - a CH2's hydrogens
-            # keep their sides, a methyl's its cyclic order - and then the fit)
-            keep = list(range(len(cands)))
-            if len(roots) > 1 and len(roots) + len(anchors) >= 3:
-                p_now = now[p]
-                want = handedness([ref[r] for r in roots], [ref[x] for x in anchors], ref[p])
-                same = [
-                    k for k, cand in enumerate(cands)
-                    if handedness([now[cand[r]] for r in roots], [now[x] for x in anchors], p_now) == want
-                ]
-                if same:
-                    keep = same
-            pick = min(keep, key=lambda k: scored[k] if k != identity else scored[k] - 1e-9)
-            if pick != identity and (identity not in keep or scored[pick] < scored[identity] - 1e-6):
-                chosen = cands[pick]
-                for a in inside:
-                    x = now[chosen[a]]
-                    conf.SetAtomPosition(a, Point3D(float(x[0]), float(x[1]), float(x[2])))
-        settled |= inside
-
 
 
 # --- metals ------------------------------------------------------------------
@@ -1782,171 +1521,6 @@ def sought(mol):
     return many
 
 
-class Sameness:
-    """Whether two conformers of one molecule are the same (SAME_CONFORMER): their RMSD over all atoms,
-    hydrogens included, at its least over the ways the molecule maps onto itself, each laid over the other by
-    turning and moving it - never by reflecting it, so that a conformer and its mirror image stay two.
-
-    The ways are those of its atoms but its hydrogens, at most ALIKE_WAYS of them; the hydrogens on each atom
-    are matched each to the nearest of those on the atom it is taken to, once the rest are laid over (past
-    ALIKE_WAYS, so are its atoms at the end of a chain that are alike on one atom). A molecule with fewer than
-    three such atoms not in a line - water, ethyne - has nothing to lay over by them: the ways of all its atoms
-    are tried instead. Each pair is first held to a bound that it cannot be under (`bound`), and each way to the
-    RMSD of the atoms it maps alone, which the whole cannot be under either: only ways that might give
-    SAME_CONFORMER are taken further."""
-
-    def __init__(self, mol):
-        import numpy as np
-
-        n = mol.GetNumAtoms()
-        self.n = n
-        # (a hydrogen on one atom that is no hydrogen - not one of H2, nor a lone one)
-        hangs = {a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 1 and a.GetDegree() == 1
-                 and a.GetNeighbors()[0].GetAtomicNum() != 1}
-        ways, core = self._ways(mol, hangs)
-        if len(ways) > ALIKE_WAYS:
-            ends = hangs | {a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1 and a.GetDegree() == 1
-                            and not is_metal(a)}
-            fewer, rest = self._ways(mol, ends)
-            if len(fewer) <= ALIKE_WAYS and len(rest) >= 3:
-                ways, core, hangs = fewer, rest, ends
-        if len(core) < 3 or not self._spread(mol, core):
-            ways, core = self._ways(mol, set())
-            hangs = set()
-        self.capped = len(ways) > ALIKE_WAYS
-        self.core = np.array(core)
-        # (each way as where each atom of the core goes; past ALIKE_WAYS, each to itself)
-        self.ways = np.array([[core[j] for j in w] for w in ways]) if not self.capped else self.core[None, :]
-        # (what hangs on each atom of the core, by its kind: element, charge, bond)
-        self.hanging = {}
-        for i in hangs:
-            a = mol.GetAtomWithIdx(i)
-            b = a.GetBonds()[0]
-            self.hanging.setdefault(b.GetOtherAtomIdx(i), {}).setdefault(
-                (a.GetAtomicNum(), a.GetFormalCharge(), b.GetBondType()), []).append(i)
-        # (the atoms of each element: the bound sorts their distances from the centre)
-        by = {}
-        for a in mol.GetAtoms():
-            by.setdefault(a.GetAtomicNum(), []).append(a.GetIdx())
-        self.elements = [np.array(v) for _, v in sorted(by.items())]
-
-    @staticmethod
-    def _ways(mol, hangs):
-        """The ways `mol` without `hangs` maps onto itself (at most ALIKE_WAYS + 1 of them), and its atoms
-        left, in order: a way's k-th entry is where the k-th of those goes, as its place among them."""
-        rw = Chem.RWMol(mol)
-        for i in sorted(hangs, reverse=True):
-            rw.RemoveAtom(i)
-        q = rw.GetMol()
-        q.UpdatePropertyCache(strict=False)
-        ways = q.GetSubstructMatches(q, uniquify=False, useQueryQueryMatches=True, maxMatches=ALIKE_WAYS + 1)
-        return ways or (tuple(range(q.GetNumAtoms())),), [i for i in range(mol.GetNumAtoms()) if i not in hangs]
-
-    @staticmethod
-    def _spread(mol, atoms):
-        """Whether `atoms` lie other than in a line in `mol`'s first conformer, if it has one: else they
-        could be turned about that line and lay over all the same."""
-        import numpy as np
-
-        if not mol.GetNumConformers():
-            return True
-        p = mol.GetConformer().GetPositions()[atoms]
-        return bool(np.linalg.matrix_rank(p - p.mean(axis=0), tol=1e-3) >= 2)
-
-    def signature(self, P):
-        """What `bound` compares of a conformer: each element's atoms' distances from its centre, in order."""
-        import numpy as np
-
-        r = np.linalg.norm(P - P.mean(axis=0), axis=1)
-        return np.concatenate([np.sort(r[e]) for e in self.elements])
-
-    def bound(self, a, b):
-        """A least RMSD that two conformers of `signature` a and b can be apart: laid over at their best,
-        their centres are one, so each atom's distance from it moves no more than the atom does; and of the
-        ways of pairing atoms of one element, distances sorted pair the closest (any way maps an atom only
-        to one of its element)."""
-        import numpy as np
-
-        return float(np.sqrt(((a - b) ** 2).sum() / self.n))
-
-    def apart(self, A, B):
-        """The RMSD of conformer A from B (places, n x 3) at its least over the ways tried, or a number
-        above SAME_CONFORMER where no way could bring it under that."""
-        return self.laid(A, B)[0]
-
-    def laid(self, A, B):
-        """`apart`, and where each atom of A is taken in B at that least (None where none was within reach)."""
-        import numpy as np
-
-        P = A[self.core] - A[self.core].mean(axis=0)
-        Q = B[self.ways]  # (each way, the atoms of B that A's core is taken to)
-        q0 = Q.mean(axis=1)
-        Q = Q - q0[:, None, :]
-        u, s, vt = np.linalg.svd(np.einsum("ki,wkj->wij", P, Q))
-        d = np.sign(np.linalg.det(u @ vt))
-        # (the least each way's core can be apart, turned and moved - over all n atoms, a bound on the whole)
-        rest = (P ** 2).sum() + (Q ** 2).sum(axis=(1, 2)) - 2 * (s[:, 0] + s[:, 1] + d * s[:, 2])
-        least = np.sqrt(np.maximum(rest, 0.0) / self.n)
-        best, best_to = float("inf"), None
-        for w in np.argsort(least):
-            if least[w] > SAME_CONFORMER or least[w] >= best:
-                break
-            # (A laid over B by its core, as this way takes it)
-            r = u[w] @ np.diag([1.0, 1.0, d[w]]) @ vt[w]
-            laid = (A - A[self.core].mean(axis=0)) @ r + q0[w]
-            to = np.arange(self.n)
-            to[self.core] = self.ways[w]
-            if not self._hang(laid, B, to):
-                continue
-            here = rmsd_laid(A, B[to])
-            if here < best:
-                best, best_to = here, [int(j) for j in to]
-        return best, best_to
-
-    def mirror_of(self, A, B):
-        """Whether B is the mirror image of A - A reflected and laid over it within SAME_CONFORMER - and, where it
-        is, where each atom of A is taken in it: A's atom i plays in B the part of its atom `to[i]`. Else None."""
-        import numpy as np
-
-        r, to = self.laid(np.asarray(A) * np.array([-1.0, 1.0, 1.0]), np.asarray(B))
-        return to if r <= SAME_CONFORMER else None
-
-    def _hang(self, laid, B, to):
-        """Each atom that hangs on one of the core taken to the nearest free one of its kind on the atom
-        that one is taken to (`to`, filled in); False where those do not hang alike."""
-        import numpy as np
-
-        for i, kinds in self.hanging.items():
-            theirs = self.hanging.get(int(to[i]), {})
-            for kind, mine in kinds.items():
-                other = theirs.get(kind, [])
-                if len(other) != len(mine):
-                    return False
-                d = np.linalg.norm(laid[mine][:, None, :] - B[other][None, :, :], axis=2)
-                free_a, free_b = set(range(len(mine))), set(range(len(other)))
-                for _, x, y in sorted((float(d[x, y]), x, y) for x in range(len(mine)) for y in range(len(other))):
-                    if x in free_a and y in free_b:
-                        to[mine[x]] = other[y]
-                        free_a.discard(x)
-                        free_b.discard(y)
-        return True
-
-    def same(self, A, B):
-        """Whether conformers A and B (places, n x 3) are the one conformer."""
-        return self.apart(A, B) <= SAME_CONFORMER
-
-
-def rmsd_laid(P, Q):
-    """The RMSD of P from Q (n x 3, atom for atom) laid over at their best, turned and moved, never reflected."""
-    import numpy as np
-
-    p = P - P.mean(axis=0)
-    q = Q - Q.mean(axis=0)
-    u, s, vt = np.linalg.svd(p.T @ q)
-    s[-1] *= np.sign(np.linalg.det(u @ vt))
-    return float(np.sqrt(max((p ** 2).sum() + (q ** 2).sum() - 2 * s.sum(), 0.0) / len(P)))
-
-
 def conformers_of(iso, how, made, page=False):
     """A stereoisomer's conformers. On Meno's own page (`page`), of two
     enantiomers the one whose SMILES comes first is made, and the other is
@@ -1959,7 +1533,6 @@ def conformers_of(iso, how, made, page=False):
         if smiles not in made:
             made[smiles] = conformers(iso, **how)
         return made[smiles]
-    how = {**how, "page": True}
     mirror = mirror_of(iso)
     twin = smiles_of(mirror) if mirror is not None else smiles
     if twin >= smiles:
@@ -1977,24 +1550,21 @@ def conformers_of(iso, how, made, page=False):
     return entry
 
 
-def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(), page=False):
+def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=()):
     """A stereoisomer's conformers, embedded (ETKDG) and optimised (MMFF94,
-    MMFF94s or UFF, as asked - UFF where MMFF has no parameters), lowest
-    energy first - every one RDKit made, as it made it; and, for Meno's own
-    page alone (`page`: its 3D structure, never a workflow's step), the
-    same conformer twice kept once (SAME_CONFORMER), each laid over the
-    first by its heavy atoms, and their equivalent branches settled
-    (`settle_equivalents`); and how they were made,
-    said as rows to show
-    (`how`). How many are tried is `count`, or as many as the molecule needs
-    where it gives none (`sought`). A metal's bonds are embedded at their
-    covalent lengths, its ligands at least a floor's angle apart where one
-    holds (FLOORS), and a conformer that comes out narrower is dropped and
-    counted. Where no force field has parameters for a metal, a lighter one
-    of its group stands in (STAND_IN): its energies order them, and none are
-    given; where none may, the embedded shapes are kept as they are, with
-    no energies, and the rows say why. An eta system is held over its metal (eta_systems), its star set at
-    its centre, which `stars` names; it gives no energies."""
+    MMFF94s or UFF, as asked - UFF where MMFF has no parameters) - every one
+    RDKit made, as it made it, in the order it embedded them, with their
+    energies; and how they were made, said as rows to show (`how`). How many
+    are tried is `count`, or as many as the molecule needs where it gives
+    none (`sought`). A metal's bonds are embedded at their covalent lengths,
+    its ligands at least a floor's angle apart where one holds (FLOORS), and
+    a conformer that comes out narrower is dropped and counted. Where no
+    force field has parameters for a metal, a lighter one of its group
+    stands in (STAND_IN): its energies are given as the model's
+    (`modelEnergies`), none as the molecule's; where none may, the embedded
+    shapes are kept as they are, with no energies, and the rows say why. An
+    eta system is held over its metal (eta_systems), its star set at its
+    centre, which `stars` names; it gives the model's energies alone."""
     # (before its hydrogens are put on: how many turning bonds and flipping rings it has are of the molecule)
     count = count or sought(mol)
     eta = eta_systems(mol)
@@ -2003,8 +1573,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
     params.randomSeed = seed
     # (nothing pruned while embedding: ETKDG's raw coordinates are not yet chairs, and two embeddings that would
     # relax into different chairs can sit close to each other there - one was thrown away before the force
-    # field could tell them apart, and which of a ring's two chairs survived was arbitrary. They are pruned once,
-    # after optimisation, on the geometry the chemist is given.)
+    # field could tell them apart, and which of a ring's two chairs survived was arbitrary. Every one optimised
+    # is given back, as it came out.)
     params.pruneRmsThresh = -1.0
     params.numThreads = 0  # (every core)
     bounds = metal_bounds(mol, eta)
@@ -2074,14 +1644,13 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
         stood = uff_stood_in(mol, ids, iters)
         stood_in = stood is not None
     energy = {cid: e for cid, (_, e) in zip(ids, results)} if results else None
-    # (what orders them: their energies, else those of the model they were optimised in - a lighter metal of
-    # the group standing in, eta rings held - whose energies are not the molecule's, so none are given, but
-    # whose order is said, once, in the line that says how they were made - else the order they were embedded in)
-    order = energy or ({cid: e for cid, (_, e) in zip(ids, stood)} if stood else None)
+    # (the energies of the model they were optimised in, where that is not the molecule - a lighter metal of the
+    # group standing in, eta rings held: not the molecule's, so not given as its energies, but given as the
+    # model's, and the model said in the line that says how they were made)
+    model = {cid: e for cid, (_, e) in zip(ids, stood)} if stood else None
     method = method_of(mol, ids, field, stood_in, metals, eta)
     if stood:
-        model = [f"{STAND_IN[el]} for {el}" for el in untyped] + (["the \u03b7 rings held"] if eta else [])
-        method += "; ordered by " + ("the stand-in field, " if untyped else "UFF's energies, ") + ", ".join(model)
+        method += "; modelled: " + ", ".join([f"{STAND_IN[el]} for {el}" for el in untyped] + (["the \u03b7 rings held"] if eta else []))
     for _, star, atoms in eta:
         for cid in ids:
             conf = mol.GetConformer(cid)
@@ -2102,28 +1671,9 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
         m, angle = next((m, angle) for _, m, angle in dropped.values())
         raise ValueError(f"every structure made of it came out with two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} "
                          f"closer than the {angle:g}\u00b0 they were held apart")
-    # (lowest first)
-    ranked = sorted(left, key=lambda c: order[c]) if order else left
-    sameness = None
-    if not page:
-        # (a workflow's step: every conformer as RDKit made it - none taken for another, moved or renumbered. Its
-        #  Duplicates step keeps one of each where a workflow asks for that)
-        kept = ranked
-    else:
-        # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
-        sameness = Sameness(mol)
-        places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
-        marks = {cid: sameness.signature(places[cid]) for cid in left}
-        kept = []
-        for cid in ranked:
-            if not any(sameness.bound(marks[cid], marks[k]) <= SAME_CONFORMER and sameness.same(places[cid], places[k]) for k in kept):
-                kept.append(cid)
-        # (each laid over the lowest by its heavy atoms, for the overlay)
-        heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
-        for cid in kept[1:]:
-            rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
-        # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
-        settle_equivalents(mol, kept)
+    # (every conformer as RDKit made it, in the order it embedded them - none taken for another, moved, renumbered
+    #  or ranked)
+    kept = left
     # (how far the conformers kept missed what their restraints hold, the largest of each kind over them all)
     misses = [restraints_missed([v for p in mol.GetConformer(cid).GetPositions() for v in p], rows) for cid in kept] if rows else []
     missed = [max((m[k] for m in misses if m[k] is not None), default=None) for k in (0, 1)]
@@ -2140,6 +1690,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
             [round(v, 4) for p in mol.GetConformer(cid).GetPositions() for v in p] for cid in kept
         ],
         **({"energies": [energy[cid] / KCAL_PER_HARTREE for cid in kept]} if energy else {}),
+        **({"modelEnergies": [model[cid] / KCAL_PER_HARTREE for cid in kept]} if model and not energy else {}),
         **({"stars": sorted(star for _, star, _ in eta)} if eta else {}),
         "field": field or ("UFF" if stood_in else "none"),
         # (how they were made, in one line - and what was held that the force field does not say: shown with them)
@@ -2166,10 +1717,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(),
                 f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} closer than the {angle:g}\u00b0 floor held"
                 f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
                 for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()}))}] if dropped else []),
-            {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"
-             + (f", {len(left) - len(kept)} the same as one kept" if len(left) > len(kept) else "")},
-            *([{"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
-                + (", atom against atom: too many ways it maps onto itself to try" if sameness.capped else ", over its symmetries")}] if sameness else []),
+            {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"},
             {"label": "Made by", "text": f"RDKit {rdBase.rdkitVersion}"},
         ],
     }
@@ -2182,11 +1730,10 @@ def op_conformers(m):
     the CIP label of every stereocentre and double bond (`cip`), and of the
     ones that were left open (`chosen`), atom by atom and bond by bond. Those
     `like` gives a configuration (see `kept`) are made so, and count as
-    chosen. `onPage`, which Meno's own page sends and a workflow's step
-    never does, has them made for the page: each conformer once, laid over
-    the first, its equivalent branches settled, and an enantiomer the mirror
-    image of its twin (`conformers`, `conformers_of`); else they are RDKit's
-    own."""
+    chosen. Each is every conformer RDKit made, in the order it embedded
+    them (`conformers`). `onPage`, which Meno's own page sends and a
+    workflow's step never does, has an enantiomer made as the mirror image
+    of its twin (`conformers_of`); else each is made itself."""
     drawn = read(m["molblock"])
     as_ligand_anions(drawn, eta_systems(drawn))
     atoms, bonds = open_stereo(drawn)
@@ -2550,9 +2097,9 @@ def missed_results(missed):
 
 def op_collect(m):
     """What a conformer search's job wrote, as Meno's output form: each
-    conformer a geometry, lowest energy first, with its energy. Or a
-    restrained minimisation's: the geometry it reached, its energy, and
-    whether it converged."""
+    conformer a geometry, in the order RDKit embedded them, with its
+    energy. Or a restrained minimisation's: the geometry it reached, its
+    energy, and whether it converged."""
     if m.get("step") not in ("conformers", "minimise"):
         raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
     if m.get("ended") != "done":
