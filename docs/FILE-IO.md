@@ -1640,6 +1640,9 @@ As step 3 was built:
     none of an ORCA output's energies, method or basis. Meno takes each
     from the first reader that gives one (lib/calc/read `combine`), so
     where the cclib plugin gives none, none is given.
+  - A Gaussian or xTB output's energy is taken as the output gives it:
+    Gaussian's *SCF Done* holds an empirical dispersion, folded into the
+    nuclear repulsion, and xtb's *TOTAL ENERGY* holds its dispersion.
 - **The one exception is closed** (the maintainer, 2026-10-15): the
   energies on an XYZ file's comment lines are read by the patterns of the
   plugins added, not by Meno. Each plugin whose program writes XYZ files

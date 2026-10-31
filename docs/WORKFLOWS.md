@@ -62,15 +62,14 @@ each is merged, this file describes what is built.
     the chemist choosing which - as *Files* chooses who reads a kind of
     file (FILE-IO.md). ACCeL's second version is under way, outside this
     repository: it may come later as a plugin that fills these steps.
+    RDKit can fill *Duplicates* too (*Who does a step*).
 13. **A conformer set is converted to only on purpose**: what the chemist
     gathers into a set is a compound set; a step of its own, *As
     conformers*, makes it a conformer set, on the page for the flow to
     show.
 14. **Meno's own words, and its own design** (the maintainer, 2026-10-08):
-    what holds a workflow's entries is not called a *box* - ACCeL's
-    word for its own class (its second version calls it a *Flow*) - but
-    a **set**; and the implementation and the interface are what suit
-    Meno best, not ACCeL's.
+    what holds a workflow's entries is called a **set**, and the
+    implementation and the interface are Meno's own.
 15. **The figures here are conceptual** (the maintainer, 2026-10-08): they
     show what is where, not how it looks. The look follows Meno's own
     design (*How it looks*); the figures' colours, transparency, line
@@ -1877,6 +1876,8 @@ Decided while building it, for the maintainer to confirm:
 
 Not put right here:
 
+- **A Gaussian job that ends with an error** marks its step failed, and
+  the step says where Gaussian stopped.
 - **ORCA in parallel** still needs OpenMPI (step 6, *Not yet*): with the
   cores left unset, all of a computer's go to a job, so ORCA is given
   `%pal`, which it runs through OpenMPI. Settings, *Calculations*,
