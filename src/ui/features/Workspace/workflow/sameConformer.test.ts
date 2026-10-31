@@ -68,7 +68,79 @@ describe("the same conformer", () => {
     expect(s.same(a, renumbered(a, [1, 0, 3, 2]))).toBe(true);
     expect(SAME_CONFORMER).toBe(0.01);
   });
+
+  it("takes a phenyl turned half about its bond for the same conformer, whichever ring bonds its Kekulé structure makes double", () => {
+    const a = toluene();
+    // (the ring and its hydrogens turned 180° about the x axis, its bond to the methyl; the methyl as it was)
+    const ring = new Set([0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11]);
+    const b = a.map((v, k) => (ring.has(Math.floor(k / 3)) && k % 3 !== 0 ? -v : v));
+    // (its ortho and meta carbons now each where the other was: C1=C2 lies where C1-C6 was)
+    expect(Math.hypot(b[3] - a[15], b[4] - a[16], b[5] - a[17])).toBeLessThan(1e-9);
+    const s = new Sameness(TOLUENE.atoms, TOLUENE.bonds, a);
+    expect(s.apart(a, turned(b, 50, [1, 2, 3]))!.rmsd).toBeLessThan(1e-6);
+    // (and the other Kekulé structure the same)
+    expect(new Sameness(TOLUENE.atoms, TOLUENE_OTHER_KEKULE, a).same(a, b)).toBe(true);
+  });
+
+  it("keeps a cyclooctatetraene's double bonds where they are: its bonds shifted round by one are another geometry", () => {
+    const a = cyclooctatetraene();
+    // (each atom where the next was: the same places, its double bonds now where its single bonds were - 4n atoms, no Hückel ring)
+    const shifted = renumbered(a, [1, 2, 3, 4, 5, 6, 7, 0, 9, 10, 11, 12, 13, 14, 15, 8]);
+    const s = new Sameness(COT.atoms, COT.bonds, a);
+    expect(s.same(a, shifted)).toBe(false);
+    expect(s.same(a, turned(renumbered(a, [2, 3, 4, 5, 6, 7, 0, 1, 10, 11, 12, 13, 14, 15, 8, 9]), 20))).toBe(true);
+  });
 });
+
+/** Cyclooctatetraene, flat here: C1=C2 1.34 Å, C2-C3 1.47 Å and so on round, each corner 135°; then each carbon's H, outwards. */
+function cyclooctatetraene(): number[] {
+  const cs: number[][] = [[0, 0, 0]];
+  for (let k = 0; k < 7; k++) {
+    const [x, y] = cs[k];
+    const t = (k * Math.PI) / 4;
+    const d = k % 2 ? 1.47 : 1.34;
+    cs.push([x + d * Math.cos(t), y + d * Math.sin(t), 0]);
+  }
+  const c = [0, 1].map((d) => cs.reduce((m, p) => m + p[d] / 8, 0));
+  const hs = cs.map(([x, y]) => {
+    const r = Math.hypot(x - c[0], y - c[1]);
+    return [x + (1.08 * (x - c[0])) / r, y + (1.08 * (y - c[1])) / r, 0];
+  });
+  return [...cs, ...hs].flat();
+}
+const COT = {
+  atoms: [...Array.from({ length: 8 }, () => ({ el: "C" })), ...Array.from({ length: 8 }, () => ({ el: "H" }))],
+  bonds: [...Array.from({ length: 8 }, (_, k) => ({ a1: k, a2: (k + 1) % 8, order: k % 2 ? 1 : 2 })), ...Array.from({ length: 8 }, (_, k) => ({ a1: k, a2: 8 + k, order: 1 }))],
+};
+
+/** Toluene: the ring's carbons C1 (ipso) to C6, the methyl's C7, H on C2 to C6, then the methyl's three, none in the ring's plane. */
+function toluene(): number[] {
+  const out: number[] = [];
+  for (let k = 0; k < 6; k++) out.push(1.39 * Math.cos((k * Math.PI) / 3), 1.39 * Math.sin((k * Math.PI) / 3), 0);
+  out.push(2.9, 0, 0);
+  for (let k = 1; k < 6; k++) out.push(2.47 * Math.cos((k * Math.PI) / 3), 2.47 * Math.sin((k * Math.PI) / 3), 0);
+  for (let k = 0; k < 3; k++) {
+    const t = (2 * k * Math.PI) / 3 + 0.4;
+    out.push(3.26, 1.03 * Math.cos(t), 1.03 * Math.sin(t));
+  }
+  return out;
+}
+const TOLUENE = {
+  atoms: [...Array.from({ length: 7 }, () => ({ el: "C" })), ...Array.from({ length: 8 }, () => ({ el: "H" }))],
+  bonds: [
+    { a1: 0, a2: 1, order: 2 },
+    { a1: 1, a2: 2, order: 1 },
+    { a1: 2, a2: 3, order: 2 },
+    { a1: 3, a2: 4, order: 1 },
+    { a1: 4, a2: 5, order: 2 },
+    { a1: 5, a2: 0, order: 1 },
+    { a1: 0, a2: 6, order: 1 },
+    ...[1, 2, 3, 4, 5].map((c, k) => ({ a1: c, a2: 7 + k, order: 1 })),
+    ...[12, 13, 14].map((h) => ({ a1: 6, a2: h, order: 1 })),
+  ],
+};
+/** Toluene's other Kekulé structure: each of the ring's bonds the other order. */
+const TOLUENE_OTHER_KEKULE = TOLUENE.bonds.map((b, k) => (k < 6 ? { ...b, order: 3 - b.order } : b));
 
 /** Conformers of one compound, as a conformer set gives them: each geometry, its energy - and, where given, which stereoisomer it is. */
 function conformers(xyzs: readonly number[][], energies: readonly number[], key?: (k: number) => string): SetEntry[] {
