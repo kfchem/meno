@@ -17,6 +17,7 @@ import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
+import { convergedAt, convergedOf } from "./converged";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
@@ -361,7 +362,7 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * conformer's free energy, its vibrations (entries `CALC_CARRIED`) - which
  * the new one reads again, or is no longer so.
  */
-const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, sides: _sides, paired: _paired, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, end: _end, sides: _sides, paired: _paired, converged: _converged, ...entry }: SetEntry): SetEntry => withoutCarried(entry);
 
 /** The property a path search writes on each path: how its start and end were paired ("in order, by place: start a #2 with end b #2"). */
 export const PAIRED = "path.paired";
@@ -436,6 +437,25 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
+  const failed =
+    out.optimised === false && (optimising || kind === "frequencies")
+      ? { kind: "not-converged" as const, why: "The optimisation did not converge" }
+      : // (a saddle point's optimisation whose reader could not say whether it converged: never passed on as converged)
+        kind === "saddle-point" && out.optimised == null
+        ? { kind: "failed" as const, why: "Whether the optimisation converged could not be read" }
+        : undefined;
+  // (where it ended converged, as the program said: an optimisation's, a saddle point's - or, frequencies at the geometry
+  //  one converged at, that still: carried on, at the geometry as the program gave it back)
+  const was = convergedOf(entry);
+  const converged = failed
+    ? undefined
+    : kind === "optimise" && out.optimised === true
+      ? convergedAt("optimisation", last)
+      : kind === "saddle-point" && out.optimised === true
+        ? convergedAt("saddle point optimisation", last)
+        : kind === "frequencies" && was && sameShape(entry.xyz, last)
+          ? convergedAt(was.how, last)
+          : undefined;
   return {
     // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
     ...(entry.failed ? startOnly(entry) : kind === "optimise" || kind === "frequencies" ? anewWithoutEnergy(entry) : anew(entry)),
@@ -445,11 +465,10 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
-    ...(out.optimised === false && (optimising || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
-    // (a saddle point's optimisation whose reader could not say whether it converged: never passed on as converged)
-    ...(kind === "saddle-point" && out.optimised == null ? { failed: { kind: "failed" as const, why: "Whether the optimisation converged could not be read" } } : {}),
+    ...(failed ? { failed } : {}),
     ...(out.optimised === false && kind === "minimise" ? { failed: { kind: "not-converged" as const, why: "The minimisation did not converge in the steps it was given" } } : {}),
     ...(kind === "minimise" ? firstHeld(entry) : {}),
+    ...(converged ? { converged } : {}),
   };
 }
 
@@ -533,6 +552,8 @@ function singlePointWorked(entry: SetEntry, last: number[], energies: readonly n
     energy: energies[energies.length - 1],
     calc,
     ...(Object.keys(properties).length ? { properties } : {}),
+    // (where a run ended converged at it, that still: its geometry is the entry's own)
+    ...(convergedOf(entry) ? { converged: entry.converged } : {}),
   };
 }
 
@@ -608,6 +629,8 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
     after: frames.slice(k + 1),
     afterEnergies: energies.slice(k + 1),
     calc,
+    // (the point it refined: where it ended converged)
+    converged: convergedAt("highest point refined", frames[k]),
     properties: {
       ...was.properties,
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),

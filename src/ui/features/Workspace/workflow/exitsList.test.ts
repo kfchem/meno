@@ -40,6 +40,7 @@ describe("a kind's exits, as a list", () => {
       "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       rank: [first("The first {keep}", "same"), rest("The rest", "same")],
       join: [first("Joined", "same"), rest("Not joined", "same")],
+      barrier: [first("With barriers", "molecules"), failed()],
       restraints: [first("Restrained", "same"), failed()],
       "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
       number: [first("Number", "number")],
