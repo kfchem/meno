@@ -724,7 +724,7 @@ A render plugin declares its looks in its role's `looks`, each as an object; Men
 | `own` | `true` for a look the plugin makes with materials and light of its own: the molecules are left as the scene's file has them, and the plugin is sent the look's id. |
 | `seeThrough` | `true` where what is inside a ball shows: the card then offers where the sticks stop. |
 
-The options that adjust a look are the role's own, each shown `when` its look is chosen (`when: {id: "look", in: [...]}`). The card offers the canvas's look and then those the added render plugins declare, in their order. A plugin that adds a look changes no line of core.
+The options that adjust a look are the role's own, each shown `when` its look is chosen (`when: {id: "look", in: [...]}`). An option may be shown by any of the card's own options so, and by whether a picture or a film is made - `when: {id: "kind", in: ["film"]}` for an option of a film alone; core names none of a plugin's options. The card offers the canvas's look and then those the added render plugins declare, in their order. A plugin that adds a look changes no line of core.
 
 ## Motions
 

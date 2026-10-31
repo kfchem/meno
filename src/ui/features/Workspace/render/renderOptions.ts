@@ -160,6 +160,16 @@ export function motionEntry(ask: Pick<RenderAsk, "kind" | "motion">): { motion?:
 }
 
 /** What a render is asked to make, from Render's own choices. */
+/**
+ * What a render plugin's options are shown by, each `when` its manifest says:
+ * the card's own options as chosen, and whether a picture or a film is made
+ * (`kind`) - so that a plugin's option for a film alone says so itself, and
+ * core names none of them.
+ */
+export function renderContext(v: OptionValues, kind: Kind): OptionValues {
+  return { ...v, kind };
+}
+
 export function askOf(kind: Kind, v: OptionValues): RenderAsk {
   return {
     kind,

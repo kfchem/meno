@@ -1,12 +1,12 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { valuesOf, type OptionValues } from "../../../../lib/options";
+import { shownOptions, valuesOf, type OptionValues } from "../../../../lib/options";
 import { roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import OptionsForm from "../../../options/OptionsForm";
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, remembered, renderOptions, type Kind } from "./renderOptions";
+import { askOf, remembered, renderContext, renderOptions, type Kind } from "./renderOptions";
 import { useInFront } from "../../../layouts/inFront";
 import { escapeLeft } from "../../../controls/keys";
 
@@ -38,10 +38,12 @@ export default function RenderCard({
   const [kind, setKind] = useState<Kind>(saved.render?.kind === "film" ? "film" : "picture");
   // (the looks this plugin declares, after the canvas's)
   const own = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, plugin.roleMotions.render);
-  const theirs = (plugin.roleOptions.render ?? []).filter((o) => kind === "film" || o.id !== "quality");
+  // (the plugin's own options, each shown `when` it says - of the card's options, or a picture's or a film's, `kind`)
+  const theirs = plugin.roleOptions.render ?? [];
   const [chosen, setChosen] = useState<Partial<Record<Kind, OptionValues>>>({});
   const [chosenTheirs, setChosenTheirs] = useState<OptionValues | null>(null);
   const values = chosen[kind] ?? valuesOf(own, saved[remembered(kind)]);
+  const theirContext = renderContext(values, kind);
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
 
   const renderRef = useRef<HTMLButtonElement>(null);
@@ -105,10 +107,10 @@ export default function RenderCard({
       <motion.div key={kind} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
         <OptionsForm options={own} values={values} onChange={(v) => setChosen((c) => ({ ...c, [kind]: v }))} />
       </motion.div>
-      {theirs.length > 0 && (
+      {shownOptions(theirs, theirValues, theirContext).length > 0 && (
         <section className="mb-3 border-t border-gh-line pt-3">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gh-gray">{plugin.name}</h3>
-          <OptionsForm options={theirs} values={theirValues} onChange={setChosenTheirs} context={values} />
+          <OptionsForm options={theirs} values={theirValues} onChange={setChosenTheirs} context={theirContext} />
         </section>
       )}
       {/* (kept in view at the card's foot, however many options there are above: on its own ground, parted from them by a line, so that none shows through it) */}

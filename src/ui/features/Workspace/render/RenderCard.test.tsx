@@ -19,4 +19,23 @@ describe("the Render card", () => {
     expect(render).toContain("outline-none");
     expect(render).toContain("focus-visible:ring-");
   });
+
+  it("opens on a picture without a plugin's option for a film alone", () => {
+    const options = [
+      { id: "grain", label: "Grain of the film", type: "choice", choices: [{ value: "fine", label: "Fine" }], default: "fine", when: { id: "kind", in: ["film"] } },
+      { id: "glow", label: "Glow", type: "switch", default: false },
+    ];
+    const withOptions = { ...plugin, roleOptions: { render: options } } as unknown as PythonPlugin;
+    const html = renderToString(<RenderCard plugin={withOptions} motions={["turn"]} surfaces={false} onRender={() => {}} onCancel={() => {}} />);
+    // (the card opens on a picture)
+    expect(html).toContain("Glow");
+    expect(html).not.toContain("Grain of the film");
+  });
+
+  it("shows no heading of a plugin's options where none of them is for what is rendered", () => {
+    const options = [{ id: "grain", label: "Grain of the film", type: "choice", choices: [{ value: "fine", label: "Fine" }], default: "fine", when: { id: "kind", in: ["film"] } }];
+    const withOptions = { ...plugin, roleOptions: { render: options } } as unknown as PythonPlugin;
+    const html = renderToString(<RenderCard plugin={withOptions} motions={["turn"]} surfaces={false} onRender={() => {}} onCancel={() => {}} />);
+    expect(html).not.toContain(">Renderer</h3>");
+  });
 });
