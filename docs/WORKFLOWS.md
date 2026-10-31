@@ -1885,6 +1885,18 @@ Not put right here:
   (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
   install Open MPI* - ORCA's own words being only that it ended by an error at its
   start-up. Meno never runs it on fewer cores than asked without a word.
+  Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
+  processes with before any job is made - Open MPI's `mpirun` on macOS
+  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
+  jobs are given: ORCA's own folder, where it was found, before the PATH
+  Meno was started with - never the plugin's own environment's folders,
+  which no job is given. Not there, each job runs on one core - no
+  `%pal` written, one core asked, so that the queue counts it as one and
+  as many run side by side as there are cores - and the step's line says
+  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
+  applies to every program, and those that need no launcher still take
+  it. The failure above stays for a launcher found that ORCA's job then
+  cannot run.
 - **A conformer set worked out by Gaussian** keeps each conformer in its
   standard orientation: the turn is one for the molecule, not each frame.
 
@@ -2333,14 +2345,14 @@ them again*; the maintainer's rulings of 2026-10-22):
 - **A structure that is no minimum is marked so** with the imaginary
   frequencies its program judged it has - xtb's "significant" ones,
   Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
-  on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
+  on its chip: *1 imaginary frequency, 382.6i cm⁻¹*. A conformer set
   keeps each conformer's.
 - **Populations refuses a group with one that is no result or no
   minimum** - one that failed, by any kind (not converged, refused, an
   error...), or whose marks did not read, then one marked with an
   imaginary frequency - naming every one: *Not every entry is a result to
   stand on: a #2: ... ; a #4 refused - take them out first*, *a #2 has 1
-  imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
+  imaginary frequency, 382.6i cm⁻¹: it is no minimum - take it out first*
   (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
   not converged alone before). *Energy window* refuses the same: one that
   failed or whose marks did not read, and a saddle point on electronic
@@ -3446,7 +3458,7 @@ molecules of one geometry - which a step that works on entries refuses
   lowest (meno `notResults`).
 - **Imaginary frequencies are said, not judged**: which level should be a
   saddle point the step cannot tell, so each level, pointed at, says those
-  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm-1",
+  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm⁻¹",
   "no imaginary frequency", or "frequencies not computed" (lib/
   energyDiagram `frequenciesSaid`, entries `imaginaryOf`).
 - **The lines**: each row of the table into *Connects* - its

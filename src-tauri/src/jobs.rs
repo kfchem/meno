@@ -4511,6 +4511,9 @@ mod tests {
         // (the queue: each process a whole physical core - two of its cores, where the computer runs two threads on each)
         assert_eq!(taken(&spec, Resources { cores: 32, physical: 16, memory: 0 }), 32);
         assert_eq!(taken(&spec, Resources { cores: 10, physical: 10, memory: 0 }), 16);
+        // (one process - ORCA with no MPI to run more, its plugin asking one core: one physical core, ten such side by side)
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 10, physical: 10, memory: 0 }), 1);
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 2);
         assert_eq!(taken(&JobSpec { processes: false, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 16);
 
         // the same program declared to run as threads: told its 16 cores, and counted as told

@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
@@ -87,7 +87,7 @@
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
         {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500},
-        {"id": "vibrations", "label": "Low-frequency vibrations", "type": "choice", "choices": [{"value": "none", "label": "Quasi-RRHO (Grimme)"}, {"value": "rrho", "label": "Harmonic (RRHO)"}], "default": "none"},
+        {"id": "vibrations", "label": "Low-frequency vibrations", "type": "choice", "choices": [{"value": "none", "label": "ORCA's own"}, {"value": "rrho", "label": "Harmonic (RRHO)"}], "default": "none"},
         {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     },
