@@ -408,7 +408,7 @@ function centreOf(xyz: readonly number[], n: number, atoms?: readonly number[]):
  * J. Opt. Soc. Am. A 4, 629 (1987)), the eigenvector by Jacobi's rotations.
  * `turn` takes a point of `p` to its place over `q`.
  */
-function bestTurn(p: Float64Array, q: Float64Array): { lambda: number; turn: number[][] } {
+export function bestTurn(p: Float64Array, q: Float64Array): { lambda: number; turn: number[][] } {
   let xx = 0, xy = 0, xz = 0, yx = 0, yy = 0, yz = 0, zx = 0, zy = 0, zz = 0;
   for (let i = 0; i < p.length; i += 3) {
     xx += p[i] * q[i]; xy += p[i] * q[i + 1]; xz += p[i] * q[i + 2];

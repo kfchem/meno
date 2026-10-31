@@ -46,7 +46,7 @@ export type ChemRequests = {
     /**
      * `options`: those the plugin declares for the role (its manifest's
      * roleOptions), as chosen in Settings. `onPage`: made for Meno's own page
-     * (each conformer once, laid over the first, alike atoms in like places -
+     * (of two enantiomers, one made as the other's mirror image -
      * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
      */
     args: { molblock: string; isomers?: "one" | "all"; count?: number; like?: Like; options?: OptionValues; onPage?: true };
@@ -112,19 +112,27 @@ export type Like = Record<number, [number, number, number]>;
 
 /**
  * One stereoisomer's conformers: its atoms - those of the block in their
- * order, then the hydrogens made for them - its bonds by index, each
- * conformer's coordinates in angstroms, laid over the first, and its energy
- * in hartrees, lowest first - none where no force field had parameters for a
- * metal in it, and the conformers are not ranked; the force field's name
- * ("none" where none was used); and the CIP label of
- * every stereocentre and double bond, and of those that were left open and
- * chosen, by the block's atom and bond index.
+ * order, then the hydrogens made for them - its bonds by index, and every
+ * conformer the search made, in the order it made them: its coordinates in
+ * angstroms and its energy in hartrees - none where no force field had
+ * parameters for a metal in it, and then those of the model it was optimised
+ * in, where it gives them (`modelEnergies`); the force field's name ("none"
+ * where none was used); and the CIP label of every stereocentre and double
+ * bond, and of those that were left open and chosen, by the block's atom and
+ * bond index. The page keeps each conformer once and lays them over each
+ * other (Workspace/chem/pageConformers).
  */
 export type Conformers = {
   atoms: { el: string; charge: number }[];
   bonds: { a1: number; a2: number; order: 1 | 2 | 3 }[];
   frames: number[][];
   energies?: number[];
+  /**
+   * The energies of the model the conformers were optimised in, in hartrees,
+   * where that is not the molecule - a lighter metal of its group standing
+   * in, eta rings held - and `energies` are not given: for their order alone.
+   */
+  modelEnergies?: number[];
   /** The stars at the centres of the rings or chains bound to a metal through all their atoms (V3000 ENDPTS), by atom: placed at each one's centre, and no atoms of the molecule. */
   stars?: number[];
   field: string;
