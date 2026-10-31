@@ -637,14 +637,14 @@ export function placeResults(
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
   if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
   else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
-  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set: under the others as they have grown)
+  // (a table it gave at a later exit - an Atom map's bond changes - in that exit's set: under the others as they have grown)
   const tables = Object.entries(results.tables ?? {});
   for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);
   return tables.length ? keepExitsUnder(doc, step) : doc;
 }
 
 /**
- * `doc` with an exit's set holding `table`, a step's (a Reaction's bond
+ * `doc` with an exit's set holding `table`, a step's (an Atom map's bond
  * changes): the set that exit made, what it held gone, as large as a table
  * set is put down - in its place, or made now.
  */

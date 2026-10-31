@@ -1,19 +1,19 @@
 /**
- * *Reaction* (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures):
- * what the step makes of a product once it is mapped onto the reactants
- * (lib/chem/reactionMap `mapProducts`) - the product entry renumbered as
- * the reactants are, and the bonds the map forms, breaks or changes, as a
- * table.
+ * *Atom map* (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures):
+ * what the step makes of an entry once it is mapped onto its reference
+ * (lib/chem/reactionMap `mapOnto`) - a product onto the reactants, a
+ * conformer onto its species - the entry renumbered as the reference is,
+ * and the bonds the map forms, breaks or changes, as a table.
  *
  * - **Renumbered**: the same structure and geometry, its atoms in the
- *   reactants' order. What names atoms by number - a list per atom, a
+ *   reference's order. What names atoms by number - a list per atom, a
  *   vibration's modes, restraints, its stereo elements - is renumbered with
  *   them, and a value worked out at its geometry still names that geometry,
  *   now in the new order. Nothing else changes: its species, its other
  *   properties, its status.
  * - **Bond changes**: one row a bond, its atoms from 1 as a chemist reads
  *   them, with each atom's element, its order before and after (0 where
- *   there is none) and what changed - for each product, and each map of it.
+ *   there is none) and what changed - for each entry, and each map of it.
  */
 import { geometryKey, type Entry, type Property, type PropertyValue } from "../entry";
 import type { BondChangeRow } from "../chem/reactionMap";
@@ -27,7 +27,7 @@ import { ATOMS_FROM_1, type Table } from "../table";
 export function renumberedEntry(e: Entry, order: readonly number[], id: string): Entry | { failed: string } {
   const n = e.structure.atoms.length;
   if (order.length !== n || new Set(order).size !== n || order.some((j) => !(Number.isInteger(j) && j >= 0 && j < n)))
-    return { failed: `The map does not give each of its ${n} atoms one place in the reactants' numbering.` };
+    return { failed: `The map does not give each of its ${n} atoms one place in the reference's numbering.` };
   // (where each of its atoms is now)
   const now = new Array<number>(n);
   order.forEach((j, i) => (now[j] = i));
@@ -65,29 +65,30 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
 }
 
 /**
- * The column of a Reaction's bond changes, and the property of each product
- * it mapped, that names the mapped product: a name of Meno's own, dotted as
+ * The column of an Atom map's bond changes, and the property of each entry
+ * it mapped, that names the mapped entry: a name of Meno's own, dotted as
  * its others are (imaginary.first), which no chemist's property is taken
- * for - one a product carried already is replaced, and said.
+ * for - one an entry carried already is replaced, and said.
  */
-export const PRODUCT = "reaction.product";
+export const MAPPED_ENTRY = "map.entry";
 
 /** What a bond change is called in its table's *Change* column. */
 const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };
 
 /**
- * The bond changes of each product mapped, as one table: a row a bond -
- * the mapped product it is of (`product`, as `productKey` names it - and
- * the mapped product carries the same, so that a step taking atoms from
- * the table matches rows to it), the map (from 1, where there are several
- * of a product), what changed, its two atoms (from 1, the columns saying
- * so) and their elements, and its order before and after.
+ * The bond changes of each entry mapped, as one table: a row a bond - the
+ * mapped entry it is of (`product`, as `productKey` names it - and the
+ * mapped entry carries the same, so that a step taking atoms from the table
+ * matches rows to it), the map (from 1, where there are several of an
+ * entry), what changed, its two atoms (from 1, the columns saying so) and
+ * their elements, and its order before and after. An entry mapped onto its
+ * own species changes no bonds, and has no rows.
  */
-export function bondChangesTable(mapped: readonly { product: number; map: number; changes: readonly BondChangeRow[] }[], productKey: (m: { product: number; map: number }) => string): Table {
+export function bondChangesTable<M extends { map: number; changes: readonly BondChangeRow[] }>(mapped: readonly M[], productKey: (m: M) => string): Table {
   const maps = mapped.some((m) => m.map > 0);
   return {
     columns: [
-      { name: PRODUCT, kind: "text" },
+      { name: MAPPED_ENTRY, kind: "text", label: "Product" },
       ...(maps ? [{ name: "Map", kind: "number" as const, unit: "none" as const }] : []),
       { name: "Change", kind: "text" },
       { name: "Atom 1", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },

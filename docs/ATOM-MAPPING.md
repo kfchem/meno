@@ -53,7 +53,7 @@ bonds with their CTfile types) and gives:
   a map that turns a symmetric ring over pairs one side's single bonds
   with the other's double bonds, and the ring is the same. The same holds
   for every map's bond changes (`bondChanges`): the drawn arrow's reacting
-  centres and the *Reaction* step's *Bond changes* among them. A bond given
+  centres and the *Atom map* step's *Bond changes* among them. A bond given
   as aromatic (type 4) on one side and in a Kekulé structure on the other
   has not changed either. The rule is identity's: a ring is aromatic where
   its bonds alternate around it, so a bond-shift isomerisation -
@@ -468,29 +468,50 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   charge) shows nothing new: the menu offers *Atom map* again, and *Hide
   atom map* where its numbers are still on the drawing.
 
-## For a workflow's *Reaction* step
+## For a workflow's *Atom map* step
 
-`mapProducts` (`reactionMap.ts`) is what the *Reaction* step does
-(docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does itself*):
+`mapOnto` (`reactionMap.ts`) is what the *Atom map* step does
+(docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does itself*;
+docs/STRUCTURE-STEPS.md, *Atom map*), and what the page calls for the same:
 
-- **One reactant structure, any number of products.** Several reactants are
-  one structure beforehand (a complex). Each product is mapped onto it on
-  its own, in 3D with every hydrogen, as above.
-- **Mapped products.** Each product is written in the reactants' numbering:
-  its own atoms, where they stand in the product, put at the places of the
-  reactant atoms they map to, and its bonds renumbered with them. Its first
-  map gives one; *every* map gives one for each, best first.
-- **Bond changes.** For each mapped product, a table: each bond the map
-  forms, breaks or changes in order, its two atoms in the reactants'
-  numbering with their elements - from 0 as `mapProducts` gives them, as an
+- **A reference side, and sides mapped onto it.** Each side is one or more
+  structures, set side by side as one as above: a reaction's reactants and
+  one product, or all its products; a compound and one of its conformers.
+  Each side is mapped onto the reference on its own, in 3D with every
+  hydrogen.
+- **Mapped.** Each side is written in the reference's numbering: its own
+  atoms, where they stand, put at the places of the reference atoms they
+  map to, and its bonds renumbered with them (`order`: for each atom of
+  the reference, the side's atom that is it). Its first map gives one;
+  *every* map gives one for each, best first.
+- **Bonds that may change, or not.** With `bonds` "change", a reaction.
+  With "same", the side is to be the reference's own structure - a
+  conformer of it - and a map that forms, breaks or changes any bond is
+  not passed on, the bonds said. A map of a conformer onto its compound
+  pairs like atoms as ACCeL's map extension does (a CH2's hydrogens by
+  their handedness, an =CH2's by E or Z, a methyl's by the torsion), so
+  each comes out where the reference has it.
+- **Bond changes.** For each mapped side, a table: each bond the map
+  forms, breaks or changes in order, its two atoms in the reference's
+  numbering with their elements - from 0 as `mapOnto` gives them, as an
   entry's bonds number them; from 1 in the step's table on the page, as a
   card numbers them - and its bond type before and after (0 where there is none; 4,
   aromatic). The types are the structures'
   own; nothing is perceived from the geometry here. A bond of an aromatic
   ring on both sides is no order change (`changes` above).
-- **Nothing in part.** A product whose atoms cannot all be paired one to
-  one - a different number of atoms, a flat drawing, a map that leaves an
-  atom out - is not passed on, and the reason is said for it.
+- **Nothing in part.** A side whose atoms cannot all be paired one to
+  one - a different number of atoms, other elements, a flat drawing, a map
+  that leaves an atom out - is not passed on, and the reason is said for
+  it. A map in part, for showing on a drawing, is `mapReaction`'s (each
+  map with its `complete`).
+- **Conformers of a mapped structure, the light way.** Where a structure
+  is already mapped and only its conformers - the same structure in the
+  same numbering - are to follow, `numberedLike`
+  (`referenceNumbering.ts`) swaps their equivalent atoms' numbers as ConfoTS's
+  `map_numbers` does, without a full map: on a conformer of a 60-atom
+  compound with tert-butyl groups, about a tenth of a millisecond where a
+  full map takes a few seconds. `throughRepresentative` carries a
+  conformer through the representative its structure was mapped by.
 - **Checked against known answers.** The tests hold hand-made reactions
   whose map is known by construction: a Diels-Alder (two bonds formed,
   four orders changed, nothing broken), an SN2 (C-Cl formed, C-Br
@@ -500,3 +521,10 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   products, the two bonds formed and four orders changed are those the
   reactant's diene and enone call for, every hydrogen stays on its own
   atom, and each product keeps its R or S at the ring fusion.
+- **Conformers, checked the same way.** Propene with its =CH2 hydrogens
+  each in the other's place comes back to propene's places, atom for atom,
+  by the full map and by `numberedLike`; so do 2-chloropropane's two
+  methyls swapped whole. Outside the repository, on RDKit's conformers of
+  two compounds of 60 and 99 atoms with several tert-butyl groups, every
+  conformer came out with each equivalent atom where its reference has
+  it, by both.

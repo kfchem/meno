@@ -6,7 +6,7 @@ one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
 `src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
 *Combine*, *Measure* and *Restraints* are steps of a workflow, and so are the
 steps of two inputs, *Merge*, *Re-bond*, *Compare bonding*, *Torsion
-restraints* and *Reaction* (docs/WORKFLOWS.md, *Kinds of step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
+restraints* and *Atom map* (docs/WORKFLOWS.md, *Kinds of step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
 entry records, and gives each back as a step's entry - all it held kept
 where it is that entry still, what was worked out at another structure,
 places or state never carried (`setEntryOfEntry`). The rest follow. Each is tested against answers known by construction,
@@ -91,13 +91,13 @@ its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
   entry with frames gets a list, one value per frame.
 - **Atoms typed, or from a table.** *Atoms* is *Typed* (on the card, from
   1) or *From the table* wired into its second input, *Atoms*, where wanted
-  (a Reaction's bond changes). From a table, each row's atoms are measured:
+  (an Atom map's bond changes). From a table, each row's atoms are measured:
   the cells of the columns that say they hold atoms and how they count
   them (`atomsOfRows`, `src/lib/table.ts`), two a distance, three an angle,
   four a dihedral. Every row goes to every entry, or - *Rows matched on* a
   name - the rows whose value in the column of that name is the entry's
-  value of the property of that name (`reaction.product`, which a Reaction
-  writes on each product it maps and in each row). Atoms typed with a table
+  value of the property of that name (`map.entry`, which an Atom map
+  writes on each entry it maps and in each row). Atoms typed with a table
   wired in are measured as typed, and the line says the table was not read. A table whose columns do not
   say how they count atoms is refused: a table read from a file never
   says, and its numbers are not guessed.
@@ -116,14 +116,14 @@ its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
 
 ## Steps of two inputs
 
-*Merge*, *Re-bond*, *Compare bonding* and *Reaction* each take two inputs, named on the
+*Merge*, *Re-bond*, *Compare bonding* and *Atom map* each take two inputs, named on the
 step, and will not run until both are wired. Each pairs entries of the two
 in a way said on its card, never by an implicit rule: each with each, or
 *matched on* a property the chemist types - an ID a *Tag* gave, which rides
 along with every entry made from it (`lib/nodes/match.ts`). An entry with
 none to pair with, or more than one, is not paired, and says why. Every
 entry a step sets aside goes out of its second exit with why written on it
-as a property: `set_aside` (Merge, Re-bond, Reaction), `bonding` (Compare bonding).
+as a property: `set_aside` (Merge, Re-bond, Atom map), `bonding` (Compare bonding).
 Each is a text, to read in the set's table and to filter on.
 
 ## Merge
@@ -153,7 +153,7 @@ start of a restrained minimisation towards the product.
   the geometry entry aside, naming the bonding entry and why ("onto b #1: …").
 
 - **One numbering.** The two must hold the same atoms in one numbering, atom
-  by atom; a *Reaction* step writes its products in the reactants'. Where
+  by atom; an *Atom map* step writes its products in the reactants'. Where
   they do not, nothing is made, and the first atom that differs is said.
 - **What comes from each.**
   - The structure and species are the bonding entry's: its atoms' charges,
@@ -384,59 +384,84 @@ H to H are the E isomer's trans torsions, methyl to H the Z's. Flat
 cyclobutene's two exocyclic torsions are taken and its ring torsion is not.
 Benzene's Kekulé double bonds give none. Z against E: two torsions held at
 the step, then at twice it; a torsion held and trans now keeps its strength.
-## Reaction
+## Atom map
 
-Each product mapped onto the reactants, atom for atom and every hydrogen
-too, and written in the reactants' numbering (`mapProducts`,
-`lib/chem/reactionMap.ts`; docs/ATOM-MAPPING.md, *For a workflow's
-Reaction step*), so that both ends of a path search, a QST3's sides and an
-IRC's ends are in one numbering without leaving the workflow.
+Each entry mapped onto a reference, atom for atom and every hydrogen too,
+and written in the reference's numbering (`mapOnto`,
+`lib/chem/reactionMap.ts`; docs/ATOM-MAPPING.md, *For a workflow's Atom
+map step*): a reaction's products onto its reactants, so that both ends of
+a path search, a QST3's sides and an IRC's ends are in one numbering; or a
+species' conformers onto the species, so that atom 7 is the same atom, on
+the same side, in every conformer (as ConfoTS's `map_numbers` settles its
+conformers, case F, F2).
 
-- **As a step.** It takes *Reactants*, one entry: the reactants as one
-  structure, several made one complex first by *Combine*. And *Products*,
-  any number. Both are molecules in 3D with every hydrogen: a structure
-  drawn is given its 3D structure first. *Maps* is *First map* or *Every
-  map*.
-- **Mapped products.** Each product the same entry renumbered
-  (`renumberedEntry`, `src/lib/steps/reaction.ts`): its atoms where they
-  stand in the product, in the order of the reactant atoms they map to, its
-  bonds with them. What names atoms by number is renumbered too: a list
-  per atom, a vibration's modes, restraints, its stereo elements. A value
-  worked out at its geometry still names that geometry, in the new order.
-  Each product is a compound of its own, its maps numbered from 1.
+- **As a step.** It takes *Molecules* and *Reference*, molecules in 3D
+  with every hydrogen: a structure drawn is given its 3D structure first.
+  On the card, none of these has a default, as none has a basis; the card
+  asks for each until it is chosen:
+  - *Molecules* and *Reference*: *Each its own*, every entry a side of its
+    own; or *One side together*, all of that input's entries one side, set
+    side by side as one as `mapReaction` sets several structures. So A + B
+    to C needs no *Combine*: its reference is *One side together*. A + B to
+    C + D has both inputs together.
+  - *Bonds*: *May change (a reaction)*, or *Stay the same (conformers)* -
+    an entry whose map forms, breaks or changes any bond is then not
+    mapped, the bonds said.
+
+  *Against* is *The one reference* (the default), or *Matched on* a
+  property - a Tag's *species* - with both inputs each their own. *Maps* is
+  *First map* (the default) or *Every map*.
+- **Mapped.** Each entry the same entry renumbered (`renumberedEntry`,
+  `src/lib/steps/reaction.ts`): its atoms where they stand in it, in the
+  order of the reference atoms they map to, its bonds with them. What names
+  atoms by number is renumbered too: a list per atom, a vibration's modes,
+  restraints, its stereo elements. A value worked out at its geometry
+  still names that geometry, in the new order. An entry keeps its place in
+  its set - its compound and its number - and with every map, each entry
+  is a compound of its own, its maps numbered from 1. A side of several
+  entries comes out as one entry, in the places the map set them in, with
+  none of its parts' own values.
 - **Bond changes**, a table (`bondChangesTable`): a row a bond each map
-  forms, breaks or changes in order - `reaction.product`, naming the mapped
-  product (its name or place - with its place too where two products share
-  a name - and its map where every map is given; the mapped product carries
-  the same as its property `reaction.product`, a name of Meno's own: one a
-  product carried already is replaced, and the line says so), *Map* where a
-  product has several, what changed, its two atoms and their elements, and
-  its order before and after, 0 where there is none. The two atom columns
-  count from 1, as a card and the 3D view do, and say so (`atoms: "from
-  1"`): a step that takes atoms from the table reads them by that, never
-  by assumption (*Measure*).
-- **State.** A product not finished - failed, or its marks not read - is
-  set aside as not finished, never passed on as one that is. A product
-  mapped keeps its energy and its imaginary frequencies, which are of its
-  geometry however it is numbered, and its thermochemistry and vibrations
-  as properties of its own, renumbered with it; its calculation is not
-  carried, and the step's line says so.
-- **Nothing in part.** A product with no hydrogens, or one whose atoms do
-  not all map one to one, goes out of *Not mapped* with why written on it
-  (`set_aside`). Reactants that are not one entry, or have no hydrogens,
-  are refused.
-- **Off the page's thread.** Mapping a product can take seconds; the step
-  maps in a worker of its own, its card saying how many products are done,
-  and stops with the step.
+  forms, breaks or changes in order - `map.entry`, naming the mapped entry
+  (its name or place, the names of a side's entries joined with " + ", with
+  its place too where two share a name, and its map where every map is
+  given; the mapped entry carries the same as its property `map.entry`, a
+  name of Meno's own: one an entry carried already is replaced, and the
+  line says so), *Map* where an entry has several, what changed, its two
+  atoms and their elements, and its order before and after, 0 where there
+  is none. A bond of an aromatic ring on both sides is no change, whichever
+  Kekulé structure each is drawn in (docs/ATOM-MAPPING.md). The two atom
+  columns count from 1, as a card and the 3D view do, and say so (`atoms:
+  "from 1"`): a step that takes atoms from the table reads them by that,
+  never by assumption (*Measure*). A conformer mapped onto its species has
+  no rows.
+- **State.** An entry not finished - failed, or its marks not read - is
+  set aside as not finished, never passed on as one that is. An entry
+  renumbered keeps its energy and its imaginary frequencies, which are of
+  its geometry however it is numbered, and its thermochemistry and
+  vibrations as properties of its own, renumbered with it; its calculation
+  is not carried, and the step's line says so. One numbered as it was keeps
+  all it held.
+- **Nothing in part.** An entry with no hydrogens, with no reference to
+  pair with, or one whose atoms do not all map one to one, goes out of *Not
+  mapped* with why written on it (`set_aside`). Not one reference where it
+  is against the one, or a reference with no hydrogens, is refused.
+- **Off the page's thread.** Mapping an entry can take seconds (a 60-atom
+  conformer, a few); the step maps in a worker of its own, its card saying
+  how many are done, and stops with the step.
 
 Checked: the Diels-Alder of the mapping tests, as a step and laid out on
 the page - the product in the reactants' numbering, every atom where it
 stands in the product, and six bond changes (two formed, four orders
-changed); two reactant entries refused; a product of other atoms, a
-skeleton and a product not finished set aside, each saying why. End to
-end on the page, its bond changes into *Measure*: the bond it forms, C1
-to C5, measured on the mapped product as long as it is in the product as
-drawn.
+changed); two reference entries refused; a product of other atoms, a
+skeleton and a product not finished set aside, each saying why; with bonds
+to stay the same, the product set aside, its bonds named. Propene's
+conformer with its =CH2 hydrogens each in the other's place, mapped onto
+propene: the reference's places, atom for atom, no rows. The SN2's
+products, CH3Cl and Br-, as one side: one entry, a bond formed and one
+broken. End to end on the page, its bond changes into *Measure*: the bond
+it forms, C1 to C5, measured on the mapped product as long as it is in the
+product as drawn.
 
 ## Displace
 
@@ -479,6 +504,6 @@ atom a step takes or gives as data (a measurement's atoms, atoms passed
 over, a restraint's) is from 0. What is said to a chemist (a property's
 name, a reason) numbers them from 1, as a card shows them. A table's
 column of atoms says how it counts them (`TableColumn.atoms`): a
-Reaction's bond changes count from 1, as the table is shown, and every
+Atom map's bond changes count from 1, as the table is shown, and every
 step that takes atoms from a table reads them through `atomsOfRows`,
 which refuses a column that does not say.
