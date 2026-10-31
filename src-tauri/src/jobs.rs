@@ -2291,7 +2291,8 @@ pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need
     for d in list {
         let field = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
         let (plugin, versions) = (field(d, "plugin"), field(d, "versions"));
-        if !plugin_id(&plugin) || plugin == id || range_of(&versions).is_none() || plugins.contains(&plugin) {
+        let optional_ok = d.get("optional").is_none_or(|o| o.is_boolean());
+        if !plugin_id(&plugin) || plugin == id || range_of(&versions).is_none() || plugins.contains(&plugin) || !optional_ok {
             return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
         }
         plugins.push(plugin.clone());
@@ -4328,6 +4329,8 @@ mod tests {
         let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
         assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
         assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
+        // (one used only for some of its work: its programs needed by the jobs that say so, as any)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
         // (a plugin used for no program: none of its programs needed)
         assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0"}]}), "orca").unwrap(), vec![]);
         let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
@@ -4343,6 +4346,7 @@ mod tests {
             serde_json::json!([uses("xtb", "DYLD_INSERT_LIBRARIES")]),
             serde_json::json!([uses("xtb", "A"), uses("xtb", "B")]),
             serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
             serde_json::json!({"plugin": "xtb"}),
         ] {
             assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");

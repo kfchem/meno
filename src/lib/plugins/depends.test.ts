@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, declaredPrograms, dependencyOrder, dependentsOf, dependsRefused, inRange, rangeOf, rangeSaid, stoppedWhy, type DependDecl, type DependingManifest } from "./depends";
+import { compareVersions, declaredPrograms, dependencyOrder, dependentsOf, dependsRefused, inRange, missingWhy, rangeOf, rangeSaid, stoppedWhy, type DependDecl, type DependingManifest } from "./depends";
 
-/** A plugin as the use of plugins sees it: made up, as no plugin Meno carries. */
+/** A plugin as the use of plugins sees it: made up, as no plugin Meno carries. A plugin's id ending "?" is used only for some of its work (`optional`). */
 function plugin(id: string, uses: [string, string, string[]?][] = [], programs: string[] = [id]): DependingManifest {
-  const depends: DependDecl[] = uses.map(([p, versions, used]) => ({ plugin: p, versions, range: rangeOf(versions)!, programs: (used ?? []).map((program, i) => ({ program, env: `E${i}` })) }));
+  const depends: DependDecl[] = uses.map(([p, versions, used]) => ({ plugin: p.replace(/\?$/, ""), versions, range: rangeOf(versions)!, programs: (used ?? []).map((program, i) => ({ program, env: `E${i}` })), ...(p.endsWith("?") ? { optional: true as const } : {}) }));
   return { id, name: id.toUpperCase(), version: "1.0.0", ...(depends.length ? { depends } : {}), steps: [{ programs }], roles: [], installed: [], downloads: [] };
 }
 
@@ -49,11 +49,24 @@ describe("the plugins one uses", () => {
     const all = [plugin("top", [["mid", ">=1.0.0"], ["base", ">=1.0.0"]]), plugin("mid", [["base", ">=1.0.0"]]), plugin("base"), plugin("side", [["base", ">=1.0.0"]])];
     expect(dependencyOrder("top", all).map((m) => m.id)).toEqual(["base", "mid"]);
     expect(dependencyOrder("base", all)).toEqual([]);
-    const away = dependentsOf("base", all).map((m) => m.id);
-    expect(away.sort()).toEqual(["mid", "side", "top"]);
-    // (one that uses another taken away before it)
-    const order = dependentsOf("base", all).map((m) => m.id);
-    expect(order.indexOf("top")).toBeLessThan(order.indexOf("mid"));
+    // (taken away: each before the one it uses, along a chain - whichever order the catalogue has them in)
+    expect(dependentsOf("base", all).map((m) => m.id)).toEqual(["top", "mid", "side"]);
+    const chain = [plugin("base"), plugin("mid", [["base", ">=1.0.0"]]), plugin("top", [["mid", ">=1.0.0"]]), plugin("tip", [["top", ">=1.0.0"]])];
+    expect(dependentsOf("base", chain).map((m) => m.id)).toEqual(["tip", "top", "mid"]);
+    expect(dependentsOf("base", [...chain].reverse()).map((m) => m.id)).toEqual(["tip", "top", "mid"]);
+    expect(dependencyOrder("tip", chain).map((m) => m.id)).toEqual(["base", "mid", "top"]);
+  });
+
+  it("one used only for some of a plugin's work is not set up with it, but is taken away with it - and stops nothing, missing", () => {
+    const all = [plugin("asks", [["tool?", ">=1.0.0 <2.0.0", ["tool"]], ["base", ">=1.0.0"]]), plugin("tool"), plugin("base")];
+    expect(dependencyOrder("asks", all).map((m) => m.id)).toEqual(["base"]);
+    expect(dependentsOf("tool", all).map((m) => m.id)).toEqual(["asks"]);
+    const name = (id: string) => id.toUpperCase();
+    expect(stoppedWhy(all[0], (id) => (id === "base" ? "1.0.0" : undefined), name)).toBeNull();
+    // (there, of a version it does not work with: stopped, as one it needs is)
+    expect(stoppedWhy(all[0], () => "2.1.0", name)).toBe("Needs TOOL from 1.0.0 to before 2.0.0; 2.1.0 is added");
+    // (a job that needs its program, it missing: refused, in the same words)
+    expect(missingWhy(all[0].depends![0], () => undefined, name)).toBe("Needs TOOL, which is not added");
   });
 
   it("stop a plugin added where one it uses is not added, or added of another version, saying why", () => {

@@ -206,7 +206,7 @@ type EnvOptions = {
   lockPath?: string;
   pythonVersion?: string;
   through?: boolean;
-  /** Asked already, with others, in one question (`setUpQuestions`, lib/net/network `askToConnectAll`): not asked again. */
+  /** Asked already, with others, in one question (`setUpQuestions`, lib/net/network `askToConnectAll`): not asked again for what it fetches having grown - but still no where Meno went offline since, or the leave was withdrawn. */
   asked?: boolean;
   /** Its questions only gathered here, nothing set up or fetched (`setUpQuestions`). */
   gather?: ConsentRequest[];
@@ -314,7 +314,8 @@ export async function ensurePyEnv(
       gather.push(request);
       return true;
     }
-    return opts?.asked ? true : askToConnect(request);
+    // (asked with others: that yes allowed its purpose - looked at again now, as anything that uses the network is)
+    return askToConnect(opts?.asked ? { ...request, again: false } : request);
   };
   // (a file there that could not be read - held by another program, not allowed, a share gone: not known to be changed, so neither
   //  fetched over nor run with; said, with why, and read again the next time)

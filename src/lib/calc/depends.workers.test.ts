@@ -16,6 +16,11 @@ vi.mock("../pyEnv", () => ({
   pyEnvReady: async () => false,
   removePyEnv: async (profile: string) => void removed.push(profile),
 }));
+// (the ORCA interface as needing xTB for all its work, not only for some: how a plugin that needs another is added and taken away)
+vi.mock("../plugins/known", async (importOriginal) => {
+  const known = await importOriginal<typeof import("../plugins/known")>();
+  return { ...known, MANIFESTS: known.MANIFESTS.map((m) => (m.id === "orca" ? { ...m, depends: m.depends?.map(({ optional: _, ...d }) => d) } : m)) };
+});
 vi.mock("../net/network", () => ({
   askToConnectAll: async (title: string, detail: string, asks: { name: string }[]) => {
     questions.push({ title, detail, asks });
@@ -84,10 +89,17 @@ describe("a plugin taken away that another added uses", () => {
     useReaders.setState({ state: {}, problem: {} });
   });
 
-  it("is never taken away alone: those that use it go first", async () => {
+  it("is never taken away alone, nor are those that use it taken away unasked: none is, saying why", async () => {
     useReaders.setState({ state: { xtb: "added", orca: "added" }, problem: {} });
     expect(addedUsing("xtb").map((p) => p.id)).toEqual(["orca"]);
-    await removePlugin(xtb);
+    await expect(removePlugin(xtb)).rejects.toThrow("xTB was not removed: ORCA interface uses it.");
+    expect(removed).toEqual([]);
+    expect(useReaders.getState().state).toMatchObject({ xtb: "added", orca: "added" });
+  });
+
+  it("is taken away with those that use it, where the chemist said they may go too - they first", async () => {
+    useReaders.setState({ state: { xtb: "added", orca: "added" }, problem: {} });
+    await removePlugin(xtb, [], true);
     expect(removed).toEqual([orca.profile, xtb.profile]);
     expect(useReaders.getState().state).toMatchObject({ xtb: "absent", orca: "absent" });
   });

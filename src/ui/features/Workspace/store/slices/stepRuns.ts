@@ -4,7 +4,7 @@ import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { DocumentStore } from "../../../../../lib/doc";
-import { anyKindById, pluginById, stoppedOf, type PythonPlugin } from "../../../../../lib/calc/catalog";
+import { anyKindById, neededWhy, pluginById, stoppedOf, type PythonPlugin } from "../../../../../lib/calc/catalog";
 import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
@@ -1051,10 +1051,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
-    // (a program of another plugin its jobs need: of one its manifest says it uses, and a program of it it says so - that plugin
-    //  added, of a version it works with, as the step's start found - or no job starts, said, naming it)
+    // (a program of another plugin its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: of one its manifest says it uses,
+    //  that plugin added and of a version it works with - or no job starts, said, naming it; one used only for some of its work
+    //  stops the plugin for nothing else)
     for (const n of [...new Set(prepared.flatMap((p) => p.needs ?? []))]) {
-      if (!plugin.depends?.some((d) => d.plugin === n && d.programs.length)) return void fail(id, `${plugin.name} asked for ${n}'s program, which it does not say it uses`, at, key);
+      const why = neededWhy(plugin, n, addedNow());
+      if (why) return void fail(id, `${why}.`, at, key);
     }
     const jobs: StepJob[] = [];
     try {

@@ -15,7 +15,7 @@ import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDe
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
-import { dependencyOrder, dependentsOf, dependsRefused, stoppedWhy, type DependDecl } from "../plugins/depends";
+import { dependencyOrder, dependentsOf, dependsRefused, missingWhy, stoppedWhy, type DependDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
 import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
@@ -163,6 +163,17 @@ export function stoppedOf(p: Plugin, added: ReadonlySet<string>): string | null 
   const m = manifestOf(p.id);
   if (!m) return null;
   return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id);
+}
+
+/**
+ * Why a plugin a job of `p` needs (by id) is not there - not added, or not of
+ * a version `p` works with - in words; none, where it is. One `p` does not
+ * say it uses, or uses for no program, said so.
+ */
+export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string>): string | null {
+  const d = p.depends?.find((x) => x.plugin === id);
+  if (!d || !d.programs.length) return `${p.name} asked for ${id}'s program, which it does not say it uses`;
+  return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), (x) => anyPluginById(x)?.name ?? x);
 }
 
 /** The plugins that fill a role, in Meno's order. */

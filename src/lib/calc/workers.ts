@@ -231,12 +231,16 @@ export function addedUsing(id: string): PythonPlugin[] {
 
 /**
  * Takes a plugin away, and first the plugins added that use it, each before
- * the one it uses (docs/PLUGINS.md, *Depends*) - never one alone that
- * another added uses: the jobs named (`stopping`) stopped and ended first -
- * the chemist having said they may be.
+ * the one it uses (docs/PLUGINS.md, *Depends*) - those only where the
+ * chemist said they may go too (`withUsing`), else nothing is taken away,
+ * saying why: never one alone that another added uses, nor one taken away
+ * unasked. The jobs named (`stopping`) are stopped and ended first - the
+ * chemist having said they may be.
  */
-export async function removePlugin(p: Plugin, stopping: readonly string[] = []): Promise<void> {
-  for (const q of addedUsing(p.id)) await removeOne(q, stopping);
+export async function removePlugin(p: Plugin, stopping: readonly string[] = [], withUsing = false): Promise<void> {
+  const using = addedUsing(p.id);
+  if (using.length && !withUsing) throw new Error(`${p.name} was not removed: ${listSaid(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it.`);
+  for (const q of using) await removeOne(q, stopping);
   return removeOne(p, stopping);
 }
 

@@ -211,6 +211,9 @@ describe("a plugin's manifest", () => {
     const uses = { plugin: "xtb", versions: ">=0.1.4 <0.2.0", programs: [{ program: "xtb", env: "XTBEXE" }] };
     expect(acceptManifest({ ...steps, depends: [uses] })?.depends).toEqual([{ ...uses, range: { from: "0.1.4", before: "0.2.0" } }]);
     expect(acceptManifest(steps)?.depends).toBeUndefined();
+    // (one used only for some of its work)
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: true }] })?.depends?.[0].optional).toBe(true);
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: false }] })?.depends?.[0].optional).toBeUndefined();
     // (one used for no program: its presence and version alone)
     expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0" }] })?.depends?.[0].programs).toEqual([]);
     // (itself, versions not as they must be, a shell, a path, a variable that finds programs, one plugin twice, one variable twice: no plugin)
@@ -225,11 +228,12 @@ describe("a plugin's manifest", () => {
       [program({ env: "1X" })],
       [uses, { ...uses, programs: [] }],
       [uses, { plugin: "other", versions: ">=1.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [{ ...uses, optional: "yes" }],
       "xtb",
     ])
       expect(acceptManifest({ ...steps, depends: bad }), JSON.stringify(bad)).toBeNull();
-    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.depends?.map((d) => [d.plugin, d.versions, d.programs])).toEqual([["xtb", ">=0.1.4 <0.2.0", [{ program: "xtb", env: "XTBEXE" }]]]);
+    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE - for its xTB methods alone)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.depends?.map((d) => [d.plugin, d.versions, d.programs, d.optional])).toEqual([["xtb", ">=0.1.4 <0.2.0", [{ program: "xtb", env: "XTBEXE" }], true]]);
   });
 
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {

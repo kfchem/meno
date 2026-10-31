@@ -564,7 +564,9 @@ function placeOk(t: unknown): t is string {
 /**
  * Another plugin a plugin uses (docs/PLUGINS.md, *Depends*): that plugin, by
  * its id; the versions of it it works with (`>=0.1.4 <0.2.0`, ./depends
- * `rangeOf`); and what of it is used - a program it declares, by its name,
+ * `rangeOf`); whether only some of its work needs it (`optional`: not set
+ * up with it, and missing, only a job that needs it refused); and what of
+ * it is used - a program it declares, by its name,
  * with the variable a job is told where it is in. A job uses one only where
  * its plugin's worker says so of that job; Meno finds it as the other
  * plugin's own jobs would, puts it in the job's folder, and names it there -
@@ -584,7 +586,8 @@ function dependOf(v: unknown, self: string): DependDecl | null {
     return { program: p.program, env: p.env };
   });
   if (programs.some((p) => p == null) || new Set(programs.map((p) => p!.env)).size !== programs.length) return null;
-  return { plugin: d.plugin, versions: (d.versions as string).trim(), range, programs: programs as UsedProgram[] };
+  if (d.optional !== undefined && typeof d.optional !== "boolean") return null;
+  return { plugin: d.plugin, versions: (d.versions as string).trim(), range, programs: programs as UsedProgram[], ...(d.optional ? { optional: true as const } : {}) };
 }
 
 /** Places, as a manifest gives them: one, or several; null where any is not one. */

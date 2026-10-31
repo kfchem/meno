@@ -5,7 +5,9 @@
  * declares in its own manifest, never its files. Meno keeps each one's
  * presence and version, and never what it does: it sets up the ones used
  * first, never takes one away that another added uses, and stops one whose
- * plugin is missing or of another version, saying why. Core names none.
+ * plugin is missing or of another version, saying why. One used only for
+ * some of its work is optional: not set up with it, and missing, only a job
+ * that needs it refused. Core names none.
  */
 
 /** Versions a plugin works with, of another: from one, and before another where it says one (`>=0.1.4 <0.2.0`). */
@@ -14,8 +16,8 @@ export type VersionRange = { from: string; before?: string };
 /** A program of the plugin used that a job may run: its name, as that plugin's manifest declares it, and the variable the job is told where it is in. */
 export type UsedProgram = { program: string; env: string };
 
-/** A plugin used: its id, the versions it works with - as written, and read - and what of it is used. */
-export type DependDecl = { plugin: string; versions: string; range: VersionRange; programs: UsedProgram[] };
+/** A plugin used: its id, the versions it works with - as written, and read - what of it is used, and whether only some of its work needs it (`optional`). */
+export type DependDecl = { plugin: string; versions: string; range: VersionRange; programs: UsedProgram[]; optional?: true };
 
 /** A version as numbers - "0.1.4", [0, 1, 4]; none, where it is not one. */
 export function versionParts(v: string): number[] | null {
@@ -131,7 +133,7 @@ export function dependsRefused<M extends DependingManifest>(manifests: readonly 
   return refused;
 }
 
-/** The plugins `id` uses, and those they use in turn, in the order they are to be set up - each before any that uses it - without `id`; each once. None that Meno does not know. */
+/** The plugins `id` needs - those it uses, not those it uses only for some of its work (`optional`) - and those they need in turn, in the order they are to be set up - each before any that uses it - without `id`; each once. None that Meno does not know. */
 export function dependencyOrder<M extends DependingManifest>(id: string, manifests: readonly M[]): M[] {
   const byId = new Map(manifests.map((m) => [m.id, m]));
   const out: M[] = [];
@@ -139,7 +141,7 @@ export function dependencyOrder<M extends DependingManifest>(id: string, manifes
   const visit = (m: M) => {
     for (const d of m.depends ?? []) {
       const used = byId.get(d.plugin);
-      if (!used || seen.has(used.id)) continue;
+      if (d.optional || !used || seen.has(used.id)) continue;
       seen.add(used.id);
       visit(used);
       out.push(used);
@@ -150,7 +152,7 @@ export function dependencyOrder<M extends DependingManifest>(id: string, manifes
   return out;
 }
 
-/** The plugins that use `id`, and those that use them in turn, in the order they are to be taken away - each before the one it uses; each once. */
+/** The plugins that use `id` - optionally or not - and those that use them in turn, in the order they are to be taken away - each before the one it uses; each once. */
 export function dependentsOf<M extends DependingManifest>(id: string, manifests: readonly M[]): M[] {
   const out: M[] = [];
   const seen = new Set<string>([id]);
@@ -166,18 +168,27 @@ export function dependentsOf<M extends DependingManifest>(id: string, manifests:
   return out;
 }
 
+/** Why a plugin used is not there for a plugin that uses it: not added ("Needs xTB, which is not added"), or added of a version it does not work with ("Needs xTB from 0.1.4 to before 0.2.0; 0.3.0 is added"); none, where it is. */
+export function missingWhy(d: DependDecl, added: (id: string) => string | undefined, nameOf: (id: string) => string): string | null {
+  const version = added(d.plugin);
+  if (version === undefined) return `Needs ${nameOf(d.plugin)}, which is not added`;
+  if (!inRange(version, d.range)) return `Needs ${nameOf(d.plugin)} ${rangeSaid(d.range)}; ${version} is added`;
+  return null;
+}
+
 /**
- * Why a plugin added is stopped, where it is: a plugin it uses not added
- * ("Needs xTB, which is not added"), or added of a version it does not work
- * with ("Needs xTB from 0.1.4 to before 0.2.0; 0.3.0 is added"). `added`
- * gives each plugin added's version, by id; `nameOf`, each one's name.
- * None, where it may run.
+ * Why a plugin added is stopped, where it is: a plugin it needs not added,
+ * or one it uses - optionally or not - added of a version it does not work
+ * with (`missingWhy`). One it uses only for some of its work, not added,
+ * stops nothing: a job that needs it is refused alone. `added` gives each
+ * plugin added's version, by id; `nameOf`, each one's name. None, where it
+ * may run.
  */
 export function stoppedWhy(m: DependingManifest, added: (id: string) => string | undefined, nameOf: (id: string) => string): string | null {
   for (const d of m.depends ?? []) {
-    const version = added(d.plugin);
-    if (version === undefined) return `Needs ${nameOf(d.plugin)}, which is not added`;
-    if (!inRange(version, d.range)) return `Needs ${nameOf(d.plugin)} ${rangeSaid(d.range)}; ${version} is added`;
+    if (d.optional && added(d.plugin) === undefined) continue;
+    const why = missingWhy(d, added, nameOf);
+    if (why) return why;
   }
   return null;
 }

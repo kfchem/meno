@@ -76,7 +76,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         if (jobs.length) {
           setBusy(false);
           setLive(jobs);
-        } else run(removePlugin);
+        } else run((q) => removePlugin(q, [], true));
       });
   };
   // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
@@ -125,7 +125,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         )}
         {runs(p) && (p.depends ?? []).length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
-            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}`).join("; ")}.
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
           </p>
         )}
         {pluginsUsing(p.id).length > 0 && (
@@ -189,7 +189,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
           <motion.div key="using" {...FADE} className="fixed inset-0 z-[100]">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
-              message={`${listOf(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it, and cannot run without it. Removing ${p.name} removes ${using.length === 1 ? "it" : "them"} too.`}
+              message={`${listOf(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it. Removing ${p.name} removes ${using.length === 1 ? "it" : "them"} too.`}
               discardLabel={using.length === 1 ? "Remove both" : `Remove all ${using.length + 1}`}
               onCancel={() => setUsing(null)}
               onDiscard={() => {
@@ -210,7 +210,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
               onDiscard={() => {
                 const ids = live.map((j) => j.id);
                 setLive(null);
-                run((q) => removePlugin(q, ids));
+                run((q) => removePlugin(q, ids, true));
               }}
             />
           </motion.div>

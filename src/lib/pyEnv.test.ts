@@ -60,7 +60,7 @@ vi.mock("./net/network", () => ({
   },
 }));
 
-const { ensurePyEnv, pyEnvReady, setUpFiles, useCheckingFiles } = await import("./pyEnv");
+const { ensurePyEnv, pyEnvReady, setUpFiles, setUpQuestions, useCheckingFiles } = await import("./pyEnv");
 // (what was said of a check of its files, as the check went)
 const checkingSeen: string[] = [];
 const { PLUGINS } = await import("./calc/catalog");
@@ -225,6 +225,32 @@ describe("setting a plugin up, with what it downloads besides", () => {
     expect(checkingSeen).toEqual(["Blender"]);
     expect(asked).toHaveLength(1);
     expect(asked[0].detail.startsWith(`${dmg.file} is not the file Meno downloaded`)).toBe(true);
+  });
+
+  it("gathers what it would ask, with others, setting nothing up and fetching nothing", async () => {
+    const questions = await setUpQuestions("plugin-blender");
+    expect(questions).toHaveLength(1);
+    expect(questions[0]).toMatchObject({ purpose: "python-env:plugin-blender", title: "Download Blender?" });
+    expect(asked).toEqual([]);
+    expect(commands.map((c) => c.cmd)).not.toContain("py_env_setup_uv");
+    expect(fetched()).toBe(false);
+  });
+
+  it("asked with others and allowed, sets up without asking again - but asks where that leave was withdrawn since, and fetches nothing on a no", async () => {
+    // (allowed in the one question: not asked again, though what it fetches is more than it was told of)
+    state.granted.add("python-env:plugin-blender");
+    await ensurePyEnv("plugin-blender", { asked: true });
+    expect(asked).toEqual([]);
+    expect(commands.map((c) => c.cmd)).toContain("py_env_setup_uv");
+    // (the leave withdrawn between the question and its set-up: asked again; no, and nothing is set up)
+    files.clear();
+    files.set(blender.lock, LOCK);
+    commands.length = 0;
+    state.granted.clear();
+    state.allowed = false;
+    await expect(ensurePyEnv("plugin-blender", { asked: true })).rejects.toThrow(/was not allowed it/);
+    expect(asked).toHaveLength(1);
+    expect(commands.map((c) => c.cmd)).not.toContain("py_env_setup_uv");
   });
 
   it("fetches nothing where the user says no", async () => {
