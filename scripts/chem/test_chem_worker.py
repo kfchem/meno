@@ -497,10 +497,10 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertFalse(worker.answer("not json")["ok"])
 
     def test_says_what_it_could_not_read_without_naming_a_program(self):
-        # (the words are shown as they are, in Quick Add and elsewhere: the maintainer, 2026-10-12 - and since
-        # d481563f a SMILES says why, in a few words about it, still naming no program)
+        # (the words are shown as they are, in Quick Add and elsewhere: the maintainer, 2026-10-12 - naming no program. Why
+        # a SMILES cannot be read is Meno's to say, from what `smiles_read` gives: src/lib/chem/smilesWhy)
         said = ask("from_smiles", smiles="C1CC")["error"]
-        self.assertEqual(said, "This SMILES could not be read: a ring is left open: 1 is opened and not closed.")
+        self.assertEqual(said, "This SMILES could not be read.")
         self.assertNotIn("RDKit", said)
         self.assertEqual(ask("to_smiles", molblock="no structure")["error"], "This structure could not be read.")
 
