@@ -679,11 +679,11 @@ What it showed:
   zoom stops** (on Windows: soft at 0.38 s, the first sharp tiles at
   0.52 s, all of them at 0.63 s). Step 1 asks for the tiles sooner:
   when the zoom slows, at the level it is going to.
-- **PDFium's own search does not find a word broken by a hyphen at a
-  line's end** (the article's *computa-tional* among them): it gives the hyphen as U+0002 and the line's end as
-  `\r\n`. Meno searches the page's text itself, a line's end read as a
-  space and a broken word read whole, each letter pointing back to its
-  box - found and marked on both lines.
+- **Meno searches the page's text itself.** PDFium gives a hyphen at a
+  line's end as U+0002 and the line's end as `\r\n`; Meno reads a line's
+  end as a space and a broken word whole (the article's *computa-tional*
+  among them), each letter pointing back to its box - found and marked on
+  both lines.
 - **One canvas draws both views** at the display's own rate, a page
   rising from one into the other.
 - **The Mac app needs the entitlement** above.
@@ -1703,7 +1703,7 @@ than one structure; Linux.
      fast pictures go from the process to the window;
    - one canvas drawing the workspace and the column, a page going from
      one to the other;
-   - whether PDFium's search finds a word broken across a line's end.
+   - how a word broken across a line's end is found.
 1. **A PDF on the page** (built, 2026-10-09; *As built*, above): opened,
    dropped or pasted, held and saved; its stack, coming up as it is zoomed
    into, its pages turned and spread.
