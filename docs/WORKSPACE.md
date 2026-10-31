@@ -889,13 +889,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 - **Fetched when first needed, both of them.** uv and pixi are each
   downloaded the first time an environment needs it, the version and its
   hash pinned in Meno, under the network's consent for that environment.
-  Neither is bundled: either alone does nothing without the network, and
+  Neither is bundled: either alone needs the network, and
   bundled, every update of Meno carried it again (uv was 37 MB of a 54 MB
   app).
 - **uv** makes the environments PyPI fills, as now: the chemistry worker's
   and cclib's.
-- **pixi** makes those that need conda-forge, which has builds PyPI has
-  not - PySCF for Windows among them - from conda.anaconda.org (free of
+- **pixi** makes those that need conda-forge's builds - PySCF for
+  Windows among them - from conda.anaconda.org (free of
   Anaconda's terms, which cover its own channels). A conda environment
   is started with its activation, as Windows needs for its libraries.
 
