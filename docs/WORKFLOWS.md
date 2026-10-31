@@ -1240,13 +1240,8 @@ states an undo goes back to as well.
   xtb 6.7.1, LGPL-3.0-or-later, for macOS (Apple silicon and Intel),
   Windows and Linux. It fills *Optimise*, *Energy* and *Frequencies*, and
   reads its own outputs back. *Frequencies* of an entry with an isotope is
-  refused, naming it (2026-10-13): xtb 6.7.1 says it takes an atom's mass
-  (xcontrol(7), `$hess`) and that it changed it, but its frequencies and
-  thermochemistry came out as the natural element's - D2O's as H2O's, run
-  here. Geometries and energies do not depend on the masses, so
-  *Optimise* and *Energy* run as before. ORCA writes each isotope's mass
-  ("M =" after the atom's coordinates, as its manual has it), and
-  Gaussian its mass number ("(Iso=n)").
+  refused, naming it (2026-10-13). Geometries and energies do not depend
+  on the masses, so *Optimise* and *Energy* take such an entry.
 - **CREST**: *Conformers*, by a plugin made the same way - crest 2.12
   with xtb 6.7.1, LGPL-3.0-or-later, on conda-forge for macOS and Linux
   only. On Windows it cannot be added, and *Conformers* is filled by RDKit
@@ -1809,12 +1804,14 @@ Decided while building it, for the maintainer to confirm:
   line - the method, basis set, dispersion correction (D3BJ or D4), the run
   (SP, OPT, FREQ) and C-PCM or SMD with one of 22 solvents - `%pal nprocs`
   where a job may use more than one core, `%maxcore` where it is set, and
-  the coordinates. It is run by its full path, its folder first where
+  the coordinates, each isotope's mass after its atom's ("M =", as its
+  manual has it). It is run by its full path, its folder first where
   programs are looked for, as the manual asks; what it prints is its
   output.
 - **Gaussian** is given the input *Export* writes - the job of the step's
   kind (Opt, SP, Freq), PCM or SMD with one of 22 solvents as SCRF says,
-  %NProcShared from the cores a job may use, no checkpoint file - and run
+  %NProcShared from the cores a job may use, no checkpoint file, an
+  isotope by its mass number ("(Iso=n)") - and run
   as `g16 <input.gjf` (`g16 input` until 2026-10-09: *Real runs*, below),
   given `g16root` (the folder above its own) and GAUSS_EXEDIR (its own
   folder), its scratch files where it runs. Why a run failed is read from
