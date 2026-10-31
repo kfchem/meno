@@ -664,11 +664,10 @@ page in the column in 10.6 ms (27 ms); searches in 0.5-19 ms; frames at
 made for the trial, and still far less than carrying the pictures.
 
 What it showed:
-- **PDFium draws far faster than anything waits for it**: a tile in a
-  millisecond or two, a dense page of paths in 3.
+- **Drawing is not where the time goes**: a tile takes a millisecond or
+  two, a dense page of paths 3.
 - **The time is in carrying the pictures to the window**, most of all
-  on Windows: a megabyte takes some 20-30 ms there, as WebView2 passes
-  bytes. Step 1 carries them smaller - compressed without loss in the
+  on Windows: a megabyte takes some 20-30 ms there. Step 1 carries them smaller - compressed without loss in the
   reader, a page being mostly white, and unpacked off the main thread -
   or through WebView2's shared buffers, whichever measures better on
   Windows; a tile is to reach the window within 5 ms of PDFium.
