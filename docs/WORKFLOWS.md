@@ -2167,8 +2167,13 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   plugin's conformers for Meno's own page use the same, while its
   *Conformers* step gives every one RDKit made, and Meno's *Duplicates*
   applies it: PLUGINS.md). The ways are those of its atoms but
-  the hydrogens hanging on one atom, at most 1,000; those hydrogens are
-  matched to the nearest of their kind once the rest are laid over.
+  the hydrogens hanging on one atom, at most 1,000, each bond taken onto
+  one of its order - a ring of single and double bonds in turn, of 4n + 2
+  atoms (Hückel's rule), all of one: which of a benzene ring's bonds a
+  Kekulé structure makes double is no part of its shape, so a phenyl
+  turned half about its bond is the same conformer, while a
+  cyclooctatetraene's double bonds stay where they are; those hydrogens
+  are matched to the nearest of their kind once the rest are laid over.
   Past 1,000 ways - a centre with seven alike arms has 5,040 - its atoms
   are taken against their own alone: a duplicate can then be missed,
   never two different conformers made one, and *Duplicates* says so on
