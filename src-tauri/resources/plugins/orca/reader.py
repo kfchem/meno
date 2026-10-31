@@ -153,6 +153,27 @@ XTB = {
     "NATIVE-GFN-XTB": ("GFN1-xTB", "orca"), "NATIVE-GFN1-XTB": ("GFN1-xTB", "orca"), "NATIVE-XTB1": ("GFN1-xTB", "orca"),
     "NATIVE-XTB": ("GFN2-xTB", "orca"), "NATIVE-GFN2-XTB": ("GFN2-xTB", "orca"), "NATIVE-XTB2": ("GFN2-xTB", "orca"),
 }
+#: The density functionals' simple keywords, as the ORCA 6.1 manual lists them (3.3, "Density Functional Theory"):
+#: Table 3.1, the local functionals; 3.2, the (meta-)GGAs; 3.4, the global hybrids; 3.6, the range-separated hybrids;
+#: 3.8 and 3.9, the global and range-separated double hybrids. Matched whole, in any case, as ORCA takes them - a
+#: functional ORCA says it recognised named first, so these are for the rest (B3LYP with no dispersion correction says
+#: none). The composite methods among them (3.2, 3.4, 3.6) have their own basis set.
+FUNCTIONALS = {w.upper() for w in """
+    HFS LDA LSD VWN VWN5 VWN3 PWLDA
+    BP86 BLYP OLYP GLYP XLYP PW91 MPWPW MPWLYP PBE RPBE REVPBE RPW86PBE PWP
+    B97M-V B97M-D3BJ B97M-D4 SCANFUNC RSCAN R2SCAN M06L TPSS REVTPSS
+    B1LYP B3LYP B3LYP/G O3LYP X3LYP B1P86 B3P86 B3PW91 PW1PW MPW1PW MPW1LYP PBE0 REVPBE0 REVPBE38 BHANDHLYP
+    M06 M062X PW6B95 TPSSH TPSS0 R2SCANH R2SCAN0 R2SCAN50
+    WB97 WB97X WB97X-V WB97X-D3 WB97X-D3BJ WB97X-D4 WB97X-D4REV CAM-B3LYP LC-BLYP LC-PBE
+    WB97M-V WB97M-D3BJ WB97M-D4 WB97M-D4REV WR2SCAN
+    DSD-BLYP DSD-BLYP/2013 DSD-PBEP86 DSD-PBEP86/2013 DSD-PBEB95 B2PLYP MPW2PLYP B2GP-PLYP B2K-PLYP B2T-PLYP B2NC-PLYP
+    PWPB95 PBE-QIDH PBE0-DH REVDSD-PBEP86/2021 REVDSD-PBEP86-D4/2021 REVDOD-PBEP86/2021 REVDOD-PBEP86-D4/2021
+    R2SCAN-CIDH R2SCAN-QIDH R2SCAN0-2 R2SCAN0-DH PR2SCAN50 PR2SCAN69 KPR2SCAN50
+    SCS/SOS-B2PLYP21 SCS-PBE-QIDH SOS-PBE-QIDH SCS-B2GP-PLYP21 SOS-B2GP-PLYP21
+    WB97M(2) WB97X-2 WPR2SCAN50 RSX-QIDH RSX-0DH WB2PLYP WB2GP-PLYP WB88PP86 WPBEPP86
+    SCS/SOS-WB2PLYP SCS-WB2GP-PLYP SOS-WB2GP-PLYP SCS-RSX-QIDH SOS-RSX-QIDH SCS-WB88PP86 SOS-WB88PP86 SCS-WPBEPP86 SOS-WPBEPP86
+""".split()}
+COMPOSITES = {"B97-3C", "R2SCAN-3C", "PBEH-3C", "B3LYP-3C", "WB97X-3C"}
 #: Who ran a tight-binding method, said beside it.
 XTB_BY = {"xtb": "the xtb program, through ORCA", "orca": "ORCA itself (its native implementation)"}
 #: Hartree-Fock, as the SCF settings say the Hamiltonian is: "Ab initio Hamiltonian  Method .... Hartree-Fock(GTOs)" -
@@ -172,7 +193,7 @@ def xtb_of(text):
 
 def level_of(text):
     """The method and basis set, each as the input names it: the functional or composite method ORCA says it
-    recognised; a correlated method the input names (its final energy is that method's); Hartree-Fock, where ORCA says
+    recognised, else one the manual lists that the input names (`FUNCTIONALS`); a correlated method the input names (its final energy is that method's); Hartree-Fock, where ORCA says
     it ran it and the input names it, or names no method at all; a tight-binding method, as the xtb program names it.
     The basis set ORCA says it used, where the input names it - none for a composite or tight-binding method, whose own
     it is. Otherwise none: never a kind of method in a method's place."""
@@ -186,6 +207,9 @@ def level_of(text):
     correlated = [w for w in words if CORRELATED.fullmatch(w)]
     recognised = {key(x) for x in RECOGNISED.findall(text or "")}
     named = [w for w in words if key(w) in recognised]
+    # (a functional or composite method the manual lists, where ORCA said it recognised none - and only where it ran DFT)
+    listed = [w for w in words if w.upper() in FUNCTIONALS | COMPOSITES] if not named and DFT_HAMILTONIAN.search(text or "") else []
+    named = named or listed
     xtb = xtb_of(text)
     if correlated:
         method = correlated[0] if len({w.upper() for w in correlated}) == 1 else None
@@ -198,7 +222,7 @@ def level_of(text):
         method = said[0] if said else "HF" if not words else None
     else:
         method = None
-    composite = bool(named) and not correlated and re.search(r"composite method is recognized", text or "") is not None
+    composite = bool(named) and not correlated and (re.search(r"composite method is recognized", text or "") is not None or any(w.upper() in COMPOSITES for w in named))
     basis = BASIS.search(text or "")
     basis = basis.group(1) if basis and not composite and any(w.lower() == basis.group(1).lower() for w in words) else None
     return method, basis
