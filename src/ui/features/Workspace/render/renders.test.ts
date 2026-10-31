@@ -87,11 +87,11 @@ describe("a render", () => {
 
   it("is asked for by Meno's own choices: a picture's size and shape, a film's motion, length and rate - offered only where they can be", () => {
     const picture = renderOptions("picture", ["turn"], false);
-    expect(picture.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(picture.map((o) => o.id)).toEqual(["width", "shape", "look", "molecules", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     const film = renderOptions("film", ["turn", "frames"], true);
-    expect(film.map((o) => o.id)).toEqual(["motion", "seconds", "fps", "width", "shape", "look", "molecules", "surfaces", "shading", "band", "outlines", "outline", "outline_colour"]);
+    expect(film.map((o) => o.id)).toEqual(["motion", "mode", "seconds", "fps", "width", "shape", "look", "molecules", "surfaces", "sticks", "shading", "band", "outlines", "outline", "outline_colour"]);
     const ask = askOf("film", valuesOf(film));
-    expect(ask).toEqual({ kind: "film", width: 1920, shape: "16:9", motion: "turn", seconds: 8, fps: 30, molecules: "meno", surfaces: "meno", finish: LIT });
+    expect(ask).toEqual({ kind: "film", width: 1920, shape: "16:9", motion: "turn", mode: "once", seconds: 8, fps: 30, molecules: "meno", surfaces: "meno", finish: LIT });
     expect(askOf("picture", valuesOf(picture))).toEqual({ kind: "picture", width: 2400, shape: "fit", molecules: "meno", surfaces: "meno", finish: LIT });
   });
 });

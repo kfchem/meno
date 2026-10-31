@@ -38,14 +38,14 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
           </span>
         )}
       </span>
-      {option.note && <span className="mt-1 block text-xs text-gh-gray">{option.note}</span>}
     </label>
   );
 }
 
 /**
  * A role's options, drawn from their general form (lib/options): a choice
- * as its choices, each to pick - or, of many, a list to pick from; a number
+ * as its choices, each to pick - or, of many, a list to pick from; of one,
+ * said as text; a number
  * with its unit; a text; a switch; lines of text, each with what it was
  * read as beside it, where the kind says.
  * Whoever fills the role declares them - Meno, or a plugin - and this draws
@@ -87,6 +87,12 @@ export default function OptionsForm({
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
               <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} size="sm" className="w-full" />
             </label>
+          ) : o.type === "choice" && o.choices.length === 1 ? (
+            // (a choice with only one to have - a motion's fixed renderer - said, not offered as a control with nothing to pick)
+            <div>
+              <span className="mb-1 block text-xs text-gh-gray">{o.label}</span>
+              <span className="block text-sm text-gh-black">{o.choices[0].label}</span>
+            </div>
           ) : o.type === "choice" ? (
             <RadioGroup label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} />
           ) : o.type === "atoms" ? (
@@ -128,9 +134,9 @@ export default function OptionsForm({
                 )}
                 {o.type === "number" && o.unit && <span className="shrink-0 whitespace-nowrap text-xs text-gh-gray">{o.unit}</span>}
               </span>
-              {o.type === "number" && o.note && <span className="mt-1 block text-xs text-gh-gray">{o.note}</span>}
             </label>
           )}
+          {o.note && <span className="mt-1 block text-xs text-gh-gray">{o.note}</span>}
         </div>
   );
   return (

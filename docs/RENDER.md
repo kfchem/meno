@@ -11,8 +11,8 @@ Meno's canvas draws molecules in 3D for working with them: quickly, in the
 film of a molecule turning or moving in a vibration for a talk - lit as a
 real scene is, with true shadows, the light round the scene reaching into
 every crevice, and materials such as glass and metal. It is made by a
-program that does nothing else so well, apart from Meno, and comes back
-onto the page beside the molecules it shows.
+program apart from Meno, and comes back onto the page beside the
+molecules it shows.
 
 ## How it is asked for
 
@@ -38,13 +38,14 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     shape exactly, grown, never cut;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
-    outlined. **The looks are the renderer's**: the card offers the
-    canvas's own look, *as the canvas draws them*, which every renderer is
-    asked to make, and then those the renderer's manifest declares (a
-    label, a description, and its parts or that it makes it with materials
-    and light of its own - docs/PLUGINS.md, *Looks*), in its order;
-    Meno keeps no list of them, and a look is added by the plugin alone
-    (2026-10-15). Folded under it, *Adjust this
+    outlined. The card offers the canvas's own look, *as the canvas
+    draws them*; then **Meno's own looks, each made of Meno's parts
+    alone** - *Lacquered*, *Flat*, *Crystal*, *Anodised*, *Cartoon* and
+    *Line art* - which any renderer that makes the parts makes, and of
+    which a renderer is told only the parts (the boundary, 2026-10-31);
+    and then those the renderer's manifest declares, made with materials
+    and light of its own (a label, a description, docs/PLUGINS.md,
+    *Looks*), in its order, Meno keeping no list of them. Folded under it, *Adjust this
     look* shows its parts, filled in from it, each the chemist's to change
     for this render alone: the molecules' material (as the 3D style draws
     them, glossy, metal, glass, matte, clay, white); where a surface is
@@ -59,6 +60,22 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     declares the looks it can make (`looks`, PLUGINS.md).
 - The plugin's options, as its manifest declares them (the Blender
   plugin's below).
+
+**The card's parts** (the maintainer, 2026-10-29): one model for a picture
+and a film alike, in four parts, in this order - **Look** (the look, its own
+choices just under it, *Adjust this look* folded), **Render** (the
+renderer, its samples, noise, where it renders, its colours, the width and
+shape, a film's quality), **Scene** (the background, the lights) and, for
+a film, **Motion** (the motion, *Once or Loop*, the length and the frames a
+second). Meno's own choices each have their part; a plugin's option says
+which part it belongs to (`section`, docs/PLUGINS.md), and one that says
+none is shown last, under the plugin's name. *Once or Loop* is Meno's, for
+every motion that can come back to its start - turning, and those a
+renderer makes: *turning once round* Once eases in and comes to rest where
+it began, as the canvas's *Turn once* does; as a Loop it turns at one speed,
+seamlessly. A choice a motion is always made with - the Blender plugin's
+motions are made with light traced, in Cycles - is said as text in its
+row, with no control, and why beneath it, whatever was chosen (`fixed`, docs/PLUGINS.md, *Motions*).
 
 Each is remembered: Meno's for a picture and a film apart, the plugin's as
 the role's options, which Settings, *Chemistry*, shows as well, on its *3D* card.
@@ -128,8 +145,7 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   large as the molecules are drawn there.
 - **The key light** as the canvas has it: directional
   (`KHR_lights_punctual`), from the same side, as strong. The light all
-  round the canvas has, for which glTF has no word, is said in the scene's
-  `extras` (`meno.ambientLight`), with the picture's size and frames.
+  round the canvas has is said in the scene's `extras` (`meno.ambientLight`), with the picture's size and frames.
 - **A film's motion** as one animation (3.11): a key for each of its
   frames, every one worked out by Meno - the turn of each molecule, or the
   place of each atom and stick - so that the film is what Meno meant, not
@@ -156,8 +172,8 @@ a label and a description (docs/PLUGINS.md, *Motions*); Meno keeps no list
 of them. The card's *Moving* offers Meno's own motions the molecules can
 make, then the declared ones; chosen, the entry says the motion's id
 (`motion`), and Meno writes the scene still, with the molecules' atoms and
-bonds in its extras. The options that adjust a motion are the role's,
-each `when` it is chosen - Once or Loop among them.
+bonds in its extras, and *Once or Loop* (`mode`: `once` or `loop`). The
+options that adjust a motion are the role's, each `when` it is chosen.
 
 ### How long a film can be
 
@@ -167,8 +183,8 @@ maintainer, 2026-10-28): each motion says its shortest - Meno's own
 renderer's in its manifest (`shortest`, docs/PLUGINS.md, *Motions*). A
 motion that changes one molecule into the next says each change's
 shortest, and Meno multiplies it by the changes - one fewer than the
-molecules, or as many where the film loops back to the first (the role's
-`loopWhen` says when). The card's *Length* is bounded by it, and says so
+molecules, or as many where the film loops back to the first (*Once or
+Loop*). The card's *Length* is bounded by it, and says so
 under it ("At least 12 s for 3 molecules"); a length chosen before that is
 shorter is raised to it, and the card says that instead. The longest it
 asks is 60 s, or the shortest where that is longer. However a film is
@@ -315,7 +331,7 @@ uv, no package), and the script Blender runs, `render.py`.
   the background asked for - after the colours are transformed, so that
   white is white - writing a PNG, or an MP4 (H.264) through Blender's own
   video writer.
-- **Its options**: the renderer (Cycles, light traced, or EEVEE, fast),
+- **Its options**: the renderer (Cycles, light traced, or EEVEE, drawn in real time),
   samples for each pixel, noise removal, where it renders (the faster of
   the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender
   can use one - and the processor, or either), the background
@@ -331,8 +347,7 @@ uv, no package), and the script Blender runs, `render.py`.
   Outlines: Freestyle's silhouettes, borders and creases for the thin
   line, one pixel; and for the outer edge, the picture's own silhouette
   grown by the width, in the colour, under the picture - one edge round
-  the molecule however its shapes overlap, which Freestyle's own external
-  contour (each shape's) is not. Meno's looks keep the picture's place
+  the molecule however its shapes overlap. Meno's looks keep the picture's place
   and size.
 - **Looks with materials and light of their own** (`looks.py`, beside
   `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
@@ -390,7 +405,7 @@ uv, no package), and the script Blender runs, `render.py`.
   carried by colour and shadow rather than glow - **Black** or **Grey**
   the dark studio: a pool of light on a dark cyclorama, coloured rims,
   bloom. Each motion has its own tuning on each. *Once or Loop* (the
-  option `mode`): Once eases in and holds a composed last frame; Loop
+  entry's `mode`, Meno's choice): Once eases in and holds a composed last frame; Loop
   repeats seamlessly - Pulse and Scan, and Reveal in the dark studio, loop
   of themselves (three waves a period; a sheet up and down as the molecule
   turns once; the rims circling); the others loop as a cycle, played
@@ -447,7 +462,7 @@ uv, no package), and the script Blender runs, `render.py`.
   is kept. The step's line says *Checking which is
   faster...* while it times, and, after, **Rendered on the processor**,
   in small words, where the render was on the processor - by the choice,
-  by the timing, or because Blender has no graphics processor it can use
+  by the timing, or because there is no graphics processor Blender can use
   (nothing is shown where it rendered on the graphics processor). The
   job's log (*Show log* on the step's menu) says which in each case, and
   the two times - it is not in `meno.log`. The old on/off switch's
@@ -463,8 +478,8 @@ uv, no package), and the script Blender runs, `render.py`.
   to the person) or what Python raised, as its traceback ends
   (`TypeError: ...`) - all of it, a message of several lines as one, up
   to what Blender says next (its progress, its own last words); else Blender's last line that says error; else its
-  last. Never Blender's own last words, which say only that a script
-  failed or what memory it did not free as it quit (`worker.py` `why_of`).
+  last. Never Blender's own last words as it quits, "Error: script failed"
+  and "Error: Not freed memory blocks" (`worker.py` `why_of`).
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer
@@ -522,7 +537,7 @@ one starts from its first choice.
 ## Not yet
 - The words the canvas puts on molecules in 3D - atom numbers, R and S,
   E and Z, a measurement's value - are not in the scene yet: they are
-  words, which glTF has no word for, so they would be written as shapes.
+  words, which would be written in the scene as shapes.
 - Films with a transparent background (a video kind that keeps it, which
   every system's web view plays, is wanted first).
 - A render is not picked up again as a workflow's job is: its workspace's
