@@ -1266,12 +1266,12 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     replaced is kept by name and path (`files.before` in the settings), and
     offered back: *Use Some Viewer again*. Where that app is no longer
     there (moved to the Trash since), its record goes and the page says so;
-    the format still opens with Meno. Before macOS 12 there is no such
-    call, so the page says to choose in the Finder instead (Get Info, Open
+    the format still opens with Meno. The call came with macOS 12; before
+    it, the page says to choose in the Finder instead (Get Info, Open
     with, Change All); Meno's minimum stays 10.13. Only an installed Meno
     can be made the default, not one run from a build folder.
-  - Windows: an app cannot set a default; the user chooses it in Windows'
-    own Settings. *Use Meno* offers Meno there for that format alone, then
+  - Windows: a default is the user's to choose, in Windows' own
+    Settings. *Use Meno* offers Meno there for that format alone, then
     opens Meno's own page in Default apps - `ms-settings:defaultapps?
     registeredAppUser=Meno` on Windows 11 21H2 and 22H2 with the 2023-04
     update and 23H2 or later, Default apps itself before (Microsoft Learn,
@@ -1292,8 +1292,8 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     `UserChoice` key: Windows 11 build 26300 (tried 2026-10-22) keeps it
     under `UserChoiceLatest`, and the page read it right because it asks
     Windows. Nothing in Meno reads `UserChoice` itself. Where the program
-    is Windows' own *choose an app* (`OpenWith.exe`), which Windows names
-    as if it were an app (*Select an app*, in the user's language), no app
+    is Windows' own *choose an app* (`OpenWith.exe`), named *Select an
+    app* in the user's language, no app
     opens the format yet, and the row says *No app opens it yet*.
   - Tried on Windows 11 (2026-10-21) with exactly these keys: a
     double-click did not go to Meno, and Meno's own page in Default apps
