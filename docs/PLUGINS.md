@@ -1071,9 +1071,8 @@ The same for every plugin and for Meno's own parts:
   - with a frequency job's thermochemistry, as results of their own: the
     temperature it is at, `thermo.temperature` (K) - of several, the one
     the program used; the pressure, `thermo.pressure` (atm), only where
-    the program prints one (xtb prints none, and its documentation states
-    none); and how it was worked out, `thermo.treatment`, a text in the
-    program's words, its units as Meno writes them (cm⁻¹, 2026-10-31): xtb's `rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹,
+    the program prints one; and how it was worked out, `thermo.treatment`,
+    a text in the program's words, its units as Meno writes them (cm⁻¹, 2026-10-31): xtb's `rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹,
     scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
     ORCA's `quasi-RRHO (Grimme), 100 cm⁻¹`, from where it says its
     vibrational entropy is the QRRHO of S. Grimme and at which reference
