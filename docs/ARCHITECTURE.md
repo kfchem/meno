@@ -256,8 +256,7 @@ start. On Windows the window's own placement is kept as it is
 with the window still hidden (`SetWindowPlacement`, `SW_HIDE`: the system's
 own caption is never seen), maximized hidden where it was, and then shown by
 Tauri as elsewhere, so that the frame it goes back to as it is unmaximized
-round-trips exactly - the size set and read back is not the same measure
-there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
+round-trips exactly. Elsewhere the inner size is kept. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log
