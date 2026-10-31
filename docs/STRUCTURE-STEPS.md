@@ -305,9 +305,17 @@ strength. Restraints are a label: they name no geometry, and ride along.
   doi:10.1039/c3dt50599e), named on the card.
 - **Listed pairs of atoms** are kept at their distance in the entry, and
   **listed atoms** are fixed where they stand. Both are typed from 1.
-- **No defaults.** The factor and the strength are the chemist's: the card
-  says "Set the factor" and "Set the strength" until they are typed. A
-  factor has no source to take a default from. Case F's workflow sets 0.9:
+- **The factor has no default; the strength has a measured one.** The
+  factor is the chemist's: the card says "Set the factor" until it is
+  typed, as no source gives one. The strength is 500 kcal mol⁻¹ Å⁻² unless
+  set (`DISTANCE_STRENGTH`), and each can be changed. Measured on eight
+  acid–base pairs held at 0.9 of their radii together (H3N…BH3, Me3N…BF3,
+  H2O…BF3, Et2O…BF3, pyridine…BH3, Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten
+  conformers each, the RDKit plugin's search), the distance held came
+  within 0.18 Å of its value at 10, 0.04 at 100, 0.02 at 239 and 0.01 at
+  500: the default holds within 0.01 Å
+  (`scripts/calc/measure_restraint_strengths.py` measures it again).
+  Case F's workflow sets 0.9:
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
   about 1.6 Å).
@@ -363,7 +371,13 @@ minimisation (docs/WORKFLOWS-FOUNDATION.md), its numbers the chemist's.
   with, another numbering, no 3D places), nothing is done and the step
   names each such entry with why. Its only other exit is *Trans already*,
   and no entry goes on as trans that was never looked at.
-- **No default** for the step: "Set the strength added".
+- **The step's default, measured**: 50 kcal mol⁻¹ rad⁻² unless set
+  (`TORSION_STEP`). On six Z isomers held towards their E isomers
+  (but-2-ene, pent-2-ene, stilbene, methyl crotonate, hexa-2,4-diene E,Z
+  to E,E, crotononitrile; the RDKit plugin's minimisation, each round from
+  the original start), a step of 10 took up to four rounds and 25 up to
+  two. At 50 each was right in one round and held within 1.5°
+  (`scripts/calc/measure_restraint_strengths.py` measures it again).
 
 Checked: (E)- and (Z)-but-2-ene, with their hydrogens: methyl to methyl and
 H to H are the E isomer's trans torsions, methyl to H the Z's. Flat

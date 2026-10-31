@@ -1259,13 +1259,15 @@ one complex by *Combine*); set **P** holds the products drawn.
     ride through *Re-bond* onto E, which takes the bonding entry's
     restraints.
 13. **Minimise with restraints** (a force-field plugin): E, its coordination
-    bonds held, no torsions yet.
+    bonds held, no torsions yet. Its result records where its restraints
+    were first held.
 14. **Torsion restraints** (Meno) against P′, matched on *product*: each
     torsion trans across P′'s double bonds (hydrogens' included) and not
     trans after the minimisation is held at 180°, at the step the workflow
     sets. *Trans already* goes on [ConfoTS's trans-torsion check].
 15. **Its *restrained*, again, drawn:** **Minimise with restraints** from
-    the geometry the first minimisation started from, then **Torsion
+    the geometry the first minimisation started from (*Start from: where
+    its restraints were first held*), then **Torsion
     restraints**, each torsion still not trans a step stronger (a
     torsion held once stays held), and a **Merge** with 14's *trans
     already*. Pasted once more for each further attempt; the last

@@ -56,8 +56,8 @@ describe("what a reader hands back", () => {
   it("keeps the imaginary frequencies the program judged it has, in plain words - and what it warned of - read back from a file as they were", () => {
     const saddle = calcOf({ ...water, imaginary: [-382.63], warnings: [{ kind: "hessian-not-stationary", text: "Hessian on incompletely optimized geometry!" }] }, ["xtb 6.7.1"]);
     expect(saddle.imaginary).toEqual([-382.63]);
-    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm-1");
-    expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm-1");
+    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm⁻¹");
+    expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm⁻¹");
     expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
     // (judged none: kept as none, apart from not judged - and read back so)
     const none = calcOf({ ...water, imaginary: [] }, ["xtb 6.7.1"]);

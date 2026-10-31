@@ -1,7 +1,7 @@
 import { useContext, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { PageHtmlLayer } from "./coverLayer";
-import { pageScale, wordsReadAt, WORDS_LEAST } from "../utils/pageScale";
+import { pageScale, wordsReadAt, WORDS_LEAST, zoomWritten } from "../utils/pageScale";
 
 /**
  * The page's scale, told to what is drawn on it in HTML (utils/pageScale):
@@ -15,13 +15,22 @@ import { pageScale, wordsReadAt, WORDS_LEAST } from "../utils/pageScale";
 export default function PageScale() {
   const layer = useContext(PageHtmlLayer);
   const camera = useThree((s) => s.camera);
+  const invalidate = useThree((s) => s.invalidate);
   const told = useRef<{ layer: HTMLElement | null; zoom: number }>({ layer: null, zoom: NaN });
   // (whether the words are read now: switched past their threshold, as the zoom goes)
   const read = useRef(pageScale(camera.zoom || 1) >= WORDS_LEAST);
+  // (the zoom the frame before: standing as it was, it is written as it is - utils/pageScale `zoomWritten`)
+  const before = useRef(NaN);
   useFrame(() => {
     if (!layer) return;
     const zoom = camera.zoom || 1;
-    if (told.current.layer === layer && told.current.zoom === zoom) return;
+    const still = zoom === before.current;
+    before.current = zoom;
+    if (told.current.layer === layer && !zoomWritten(told.current.zoom, zoom, still)) {
+      // (a frame more asked for, where it is not yet as it is: the canvas draws only when asked, and standing still it is then written as it is)
+      if (told.current.zoom !== zoom) invalidate();
+      return;
+    }
     told.current = { layer, zoom };
     layer.style.setProperty("--page", pageScale(zoom).toFixed(4));
     read.current = wordsReadAt(zoom, read.current);

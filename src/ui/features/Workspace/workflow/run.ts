@@ -571,7 +571,7 @@ export function withResults(
 }
 
 /** The kinds of step whose results are what came in, worked out: each laid over what it was worked out from as it is put down (`laidOver`). */
-export const LAID_OVER: readonly StepKind[] = ["optimise", "energy", "frequencies", "nci"];
+export const LAID_OVER: readonly StepKind[] = ["optimise", "minimise", "energy", "frequencies", "nci"];
 
 /**
  * How each molecule a step gave is first turned, where it is what came in
@@ -1030,6 +1030,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
         ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
+        // (where a run ended converged at it: of its own frame alone - a path's frames before and after it, none)
+        ...(e.converged ? { converged: [...(path ?? []).map(() => null), e.converged, ...after.map(() => null)] } : {}),
         ...e.keep,
       };
     });
@@ -1073,6 +1075,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       ...keptKnown(first),
       // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
       ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
+      // (where a run ended converged at each conformer: its own)
+      ...(g.some((e) => e.converged) ? { converged: g.map((e) => e.converged ?? null) } : {}),
       ...(alike ? keptAlike(g) : {}),
     };
   });

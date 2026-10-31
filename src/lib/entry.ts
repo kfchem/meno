@@ -77,7 +77,9 @@ export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number
  * table (one row per vibration or excited state, each column with its
  * unit), a vibration's modes (one row per mode, in its table's row order,
  * x, y and z by atom in turn - as the program gave them, their scale not
- * relied on), or restraints.
+ * relied on), or restraints - and the places they were first held at by a
+ * minimisation (`start`, x, y and z by atom in turn), for a later one to
+ * start from again.
  */
 export type PropertyValue =
   | number
@@ -88,7 +90,7 @@ export type PropertyValue =
   | { vector: number[] }
   | { table: { columns: Column[]; rows: (number | string | null)[][] } }
   | { modes: number[][] }
-  | { restraints: Restraint[] };
+  | { restraints: Restraint[]; start?: number[] };
 
 /**
  * Where a property was worked out: the geometry (its key, `geometryKey`),
@@ -285,6 +287,7 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
     const k = value.modes.findIndex((m) => m.length !== 3 * atoms);
     return k < 0 ? null : `Mode ${k + 1} has ${value.modes[k].length} numbers for ${atoms} atoms`;
   }
+  if (value.start && (value.start.length !== 3 * atoms || !value.start.every(Number.isFinite))) return `Where the restraints were first held has ${value.start.length} numbers for ${atoms} atoms`;
   for (const [k, r] of value.restraints.entries()) {
     const n = r.kind === "fixed" ? null : RESTRAINT_ATOMS[r.kind];
     if (n != null ? r.atoms.length !== n : r.atoms.length < 1) return `Restraint ${k + 1}, a ${r.kind}, has ${r.atoms.length} atoms`;
@@ -324,15 +327,18 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
 }
 
 /**
- * Restraints as a file gives them, read back (`Restraint`): each row a
+ * Restraints as a file gives them, read back (`Restraint`) - and where a
+ * minimisation first held them (`start`), each a finite number: each row a
  * distance, a dihedral or atoms fixed, as many atoms as its kind holds,
  * each a whole number from 0, a
  * finite value and a strength above 0 where its kind has them, none where
  * it has not. None where any row does not read - nothing held in part.
  * Whether its atoms are the entry's is `valueFault`'s, as for any value.
  */
-function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
+function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] } | undefined {
   const rows = (v as { restraints?: unknown } | null)?.restraints;
+  const start = (v as { start?: unknown } | null)?.start;
+  if (start != null && (!Array.isArray(start) || !start.every((x) => typeof x === "number" && Number.isFinite(x)))) return undefined;
   if (!Array.isArray(rows)) return undefined;
   const out: Restraint[] = [];
   for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
@@ -348,7 +354,7 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
     if (typeof r.value !== "number" || !Number.isFinite(r.value) || typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
     out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, strength: r.strength });
   }
-  return { restraints: out };
+  return { restraints: out, ...(start != null ? { start: [...(start as number[])] } : {}) };
 }
 
 /**
@@ -359,8 +365,8 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
  * and a pressure numbers), and whether it was. None where any of that does
  * not read, or its value is of another kind - a list, a table of other
  * cells, modes - which a molecule on the page does not keep as a property.
- * (Restraints read back from 2026-10-30: a workspace saved before kept them
- * only until it was opened again.)
+ * (A workspace saved before restraints were read back kept them only until
+ * it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
   const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown; ensemble?: unknown } | null;
