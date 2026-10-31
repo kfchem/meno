@@ -637,7 +637,7 @@ def orbital_symmetries(lines):
         if current is None:
             current = []
             spins.append(current)
-        current += found
+        current += [species(f) for f in found]
     return spins
 
 
@@ -740,7 +740,7 @@ def vibrations(lines, n):
             # (a block begins: its symmetries are the line above, its mode numbers above them)
             syms = lines[i - 1].split()
             values = numbers(line.split("--", 1)[1])
-            current = [{"sym": syms[j] if len(syms) == len(values) else None, "freq": v} for j, v in enumerate(values)]
+            current = [{"sym": species(syms[j]) if len(syms) == len(values) else None, "freq": v} for j, v in enumerate(values)]
             modes += current
         elif label and current:
             values = numbers(line.split("--", 1)[1])
@@ -898,7 +898,7 @@ def thermochemistry(lines):
     if k is not None:
         groups = [m.group(1) for m in map(POINT_GROUP.match, lines[:k]) if m]
         if groups:
-            add("thermo.point-group", "Point group", groups[-1])
+            add("thermo.point-group", "Point group", point_group(groups[-1]))
         add("thermo.symmetry-number", "Symmetry number", int(SYMMETRY_NUMBER.match(lines[k]).group(1)), unit="none", digits=0)
     add("thermo.g-correction", "Correction to Gibbs free energy", found["thermo.g-correction"], quantity="energy")
     return out
@@ -1013,6 +1013,29 @@ def scan_points(text):
         elif count and not line.strip().startswith(("-", "Eigenvalues", "Scan")) and not t:
             break
     return count
+
+
+# --- symmetry labels ----------------------------------------------------------------------------
+
+
+# a linear molecule's symmetry species, as Gaussian spells their Greek letters out ("SGG", "SGU", "PIU", "DLTG", "PHIU";
+# C-infinity-v's without g or u: "SG", "PI"): each letter in its place, its g or u after it
+GREEK = {"SG": "\u03a3", "PI": "\u03a0", "DLT": "\u0394", "PHI": "\u03a6"}
+LINEAR_SPECIES = re.compile(r"^(SG|PI|DLT|PHI)([GU]?)$")
+
+
+def species(label):
+    """A symmetry species in standard notation where Gaussian spells it its own way - a linear molecule's: "SGG" is
+    Σg, "PIU" Πu, "SG" Σ - and otherwise as printed ("BU", "A'"): its case is Meno's to set."""
+    m = LINEAR_SPECIES.match(label or "")
+    return GREEK[m.group(1)] + m.group(2).lower() if m else label
+
+
+def point_group(label):
+    """A point group in standard notation where Gaussian writes it its own way - infinity as "*": "C*V" is C∞v, "D*H"
+    D∞h - and otherwise as printed ("C2V"): its case is Meno's to set."""
+    m = re.fullmatch(r"([CD])\*([VH])", label or "")
+    return f"{m.group(1)}\u221e{m.group(2).lower()}" if m else label
 
 
 # --- a formatted checkpoint ------------------------------------------------------------------------

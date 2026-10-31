@@ -434,6 +434,21 @@ class Paths(unittest.TestCase):
         self.assertEqual(r["orbitals"]["label"], "Molecular orbitals")
 
 
+class SymmetryLabels(unittest.TestCase):
+    def test_a_linear_molecule_s_species_and_point_group_in_standard_notation(self):
+        self.assertEqual([reader.species(x) for x in ("SGG", "SGU", "PIU", "PIG", "DLTG", "PHIU", "SG", "PI")], ["\u03a3g", "\u03a3u", "\u03a0u", "\u03a0g", "\u0394g", "\u03a6u", "\u03a3", "\u03a0"])
+        self.assertEqual((reader.point_group("D*H"), reader.point_group("C*V")), ("D\u221eh", "C\u221ev"))
+
+    def test_others_as_printed(self):
+        self.assertEqual([reader.species(x) for x in ("BU", "A'", 'A"', "?A")], ["BU", "A'", 'A"', "?A"])
+        self.assertEqual(reader.point_group("C2V"), "C2V")
+
+    def test_as_read_from_a_linear_molecule_s_lines(self):
+        lines = [" Orbital symmetries:", "       Occupied  (SGG) (SGU) (SGG) (SGU) (SGG) (PIU) (PIU)", "                 (PIG) (PIG)",
+                 "       Virtual   (PIU) (PIU) (SGG)", " The electronic state is 1-SGG."]
+        self.assertEqual(reader.orbital_symmetries(lines)[0][:6], ["\u03a3g", "\u03a3u", "\u03a3g", "\u03a3u", "\u03a3g", "\u03a0u"])
+
+
 class Archive(unittest.TestCase):
     def test_nimag_even_where_a_line_break_splits_it(self):
         lines = archive(1)
