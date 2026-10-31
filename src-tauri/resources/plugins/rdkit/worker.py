@@ -2784,30 +2784,26 @@ def op_run(m):
         energy = lambda i: entries[i].get("energy") if isinstance(entries[i].get("energy"), (int, float)) else float("inf")
         same = Sameness(mols[members[0]])
         capped += same.capped and len(members) > 1
-        # (each kept one's places and signature worked out once, as the page's search does: worked out again for
-        #  every one after it, 5000 conformers of a chain took 448 s here, the signatures nearly all of it)
         place = lambda i: mols[i].GetConformer().GetPositions()
         mine = []
-        marks = {}
         for i in sorted(members, key=lambda i: (energy(i), i)):
             P = place(i)
             sig = same.signature(P)
-            near = [k for k in mine if same.bound(marks[k][1], sig) <= SAME_CONFORMER]
-            if any(same.same(marks[k][0], P) for k in near):
+            near = [k for k in mine if same.bound(same.signature(place(k)), sig) <= SAME_CONFORMER]
+            if any(same.same(place(k), P) for k in near):
                 continue
             if counting:
                 # (one stereoisomer, as their geometries have it: the same isomeric SMILES)
                 iso = Chem.MolToSmiles(mols[i])
-                twin = next((k for k in near if k not in counted and Chem.MolToSmiles(mols[k]) == iso and same.mirror_of(marks[k][0], P)), None)
+                twin = next((k for k in near if k not in counted and Chem.MolToSmiles(mols[k]) == iso and same.mirror_of(place(k), P)), None)
                 if twin is not None:
                     counted[twin] = {
                         "entry": twin,
                         "degeneracy": int(entries[twin].get("degeneracy") or 1) + int(entries[i].get("degeneracy") or 1),
-                        "mirror": same.mirror_of(marks[twin][0], P),
+                        "mirror": same.mirror_of(place(twin), P),
                     }
                     continue
             mine.append(i)
-            marks[i] = (P, sig)
         kept += mine
     return {"kept": sorted(kept), **({"counted": [counted[k] for k in sorted(counted)]} if counting else {}), **({"capped": int(capped)} if capped else {})}
 

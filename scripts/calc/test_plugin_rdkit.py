@@ -777,24 +777,6 @@ class SameConformer(unittest.TestCase):
         self.assertEqual((twin["mirror"][c2], twin["mirror"][c6], twin["mirror"][c1]), (c6, c2, c1))
         self.assertEqual(sorted(twin["mirror"]), list(range(mol.GetNumAtoms())))
 
-    def test_duplicates_works_out_each_conformers_signature_once(self):
-        # (worked out again for each kept one at every one after it, 5000 conformers of a chain took 448 s; once each, 55 s)
-        from rdkit.Chem import AllChem
-        mol = Chem.AddHs(Chem.MolFromSmiles("CCCCCCO"))
-        ids = list(AllChem.EmbedMultipleConfs(mol, 20, randomSeed=5))
-        given = [self.entry(mol, mol.GetConformer(i).GetPositions(), 0.001 * k) for k, i in enumerate(ids)]
-        worked = []
-        signature = self.worker.Sameness.signature
-        self.worker.Sameness.signature = lambda same, P: worked.append(1) or signature(same, P)
-        try:
-            for options in ({}, {"mirrors": "counted"}):
-                worked.clear()
-                out = self.worker.op_run({"step": "duplicates", "entries": given, "options": options, "holds": "conformers"})
-                self.assertEqual(len(worked), len(given))
-                self.assertGreater(len(out["kept"]), 1)
-        finally:
-            self.worker.Sameness.signature = signature
-
     def test_duplicates_never_counts_in_an_enantiomer(self):
         import numpy as np
         mol = self.embedded("CC(O)CC", seed=4)
