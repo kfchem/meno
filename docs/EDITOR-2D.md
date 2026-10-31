@@ -211,8 +211,7 @@ do, or out where Settings, *General*, says so (the maintainer,
 A pinch let go while still zooming goes on zooming, as a drag let go goes on
 moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
-wheel with Ctrl, has no end of its own: it ends once no step has come for
-80 ms.
+wheel with Ctrl, is taken to end once no step has come for 80 ms.
 
 **Touch and pinch.** On a touch screen one finger does what the left
 button does: from empty space it moves the view. A second finger makes a
@@ -251,9 +250,9 @@ from a trial of two ways, #295): meanwhile its lines and their round caps
 are kept as wide on the screen as a layout at the zoom would have them,
 on the graphics card, and its wedges, the mitres where lines meet and its
 labels scale with the view.
-A step within a thousandth of a pixel of whole counts as whole: Windows'
-display scaling leaves notches that close (ten notches at once came as
-999.99993 px at 175 %), and read as fingers they moved the view a thousand
+A step within a thousandth of a pixel of whole counts as whole: with
+Windows' display scaling at 175 %, ten notches at once came as
+999.99993 px, and read as fingers they moved the view a thousand
 pixels, off the drawing.
 (PR #55. In the workspace the page never tilts: each molecule in 3D turns by
 itself, under a left drag on it - [WORKSPACE.md](WORKSPACE.md).)
