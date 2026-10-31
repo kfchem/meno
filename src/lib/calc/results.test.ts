@@ -256,6 +256,9 @@ describe("results in Meno's own forms", () => {
     expect([again.rows, again.focus, again.shown, again.trimmed]).toEqual([list.rows, list.focus, list.shown, list.trimmed]);
     // (a count that does not fit its rows is not taken)
     expect((readResults([{ ...list, trimmed: { from: 1, to: 5, of: 50 } }], 3, 1)[0] as ListResult).trimmed).toBeUndefined();
+    // (one that says it keeps all it has is no list kept so: core's rule trims it all the same)
+    const all = readResults([{ id: "orbitals", on: "list", group: "Orbitals", label: "Molecular orbitals", columns: [{ label: "Orbital" }, { label: "Energy", unit: "eV" }], rows, focus: 30, trimmed: { from: 1, to: 50, of: 50 } }], 3, 1)[0] as ListResult;
+    expect([all.rows.length, all.trimmed]).toEqual([20, { from: 22, to: 41, of: 50 }]);
     // (one given as Meno keeps it - twenty about its focus - as it was, nothing said; one that opens on no row, whole)
     const kept = readResults([{ ...list, trimmed: undefined, focus: 9 }], 3, 1)[0] as ListResult;
     expect([kept.rows.length, kept.trimmed]).toEqual([20, undefined]);

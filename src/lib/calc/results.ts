@@ -168,12 +168,12 @@ function rowOf(v: unknown, columns: number, atoms: number, frames: number): Row 
   return row;
 }
 
-/** Which rows a list says it keeps, where that is so of the `rows` it has: as many as from its first to its last, of no fewer in all; otherwise none. */
+/** Which rows a list says it keeps, where that is so of the `rows` it has: as many as from its first to its last, of more in all - a list kept so already; otherwise none, and core's own rule trims it. */
 function trimmedOf(v: unknown, rows: number): Trimmed | undefined {
   const t = v as Partial<Trimmed> | null | undefined;
   if (!t || !Number.isInteger(t.from) || !Number.isInteger(t.to) || !Number.isInteger(t.of)) return undefined;
   const { from, to, of } = t as Trimmed;
-  return from >= 1 && to - from + 1 === rows && to <= of && of <= ROWS_MOST * 1000 ? { from, to, of } : undefined;
+  return from >= 1 && to - from + 1 === rows && to <= of && rows < of && of <= ROWS_MOST * 1000 ? { from, to, of } : undefined;
 }
 
 /** What colours a surface, as given: a grid or a promise, and the values its scale runs between, the first below the second; otherwise none. */
