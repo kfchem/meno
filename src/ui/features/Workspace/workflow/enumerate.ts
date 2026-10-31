@@ -13,110 +13,71 @@
  * Meno's identity (lib/chem/identity `identity`), the first by number is
  * made and each later one set aside, saying which it is the same as.
  */
-import { abbreviationOf, abbreviationStructure, smilesGroup, structureProblem } from "../../../../lib/chem/abbreviations";
 import { identity } from "../../../../lib/chem/identity";
-import type { GroupStructure } from "../../../../lib/chem/ligands";
-import { structureFormula } from "../../../../lib/chem/ligands";
-import { readSmiles } from "../../../../lib/chem/smiles";
-import { keptLabel } from "../../../../lib/chem/smartLabel";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
 import { identityInputOf } from "../chem/identityOf";
 import { degrees, narrowEnd } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
-import { labelReading, readLabel } from "../utils/labelTyping";
+import { resolve, type Reading } from "../chem/resolve";
 import { changedAt, wedgesHeld } from "./stereoKept";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
 export const MOST_COMBINATIONS = 10_000;
 
 /** What a typed line was read as: an element's atom, or a group - a label's, or a SMILES with its "*" - with its formula. */
-export type OptionRead =
-  | { typed: string; as: "element"; el: string; charge?: number; isotope?: number; formula: string }
-  | { typed: string; as: "label" | "smiles"; label: string; group: GroupStructure; formula: string };
+export type OptionRead = Reading;
 
 /** A line that could not be read, or reads as something an R group cannot be: why, in words. */
 export type OptionProblem = { typed: string; problem: string };
 
-/** A group's formula, its bond out counted as a bond (structureFormula counts no star): CH3 for Me. */
-function groupFormula(g: GroupStructure): string {
-  const star = g.atoms.length;
-  return structureFormula({ ...g, atoms: [...g.atoms, { el: "*" }], bonds: [...g.bonds, { a1: g.attach[0], a2: star, order: 1 }] });
-}
-
 /**
- * A line of a list, read: as a SMILES where it has a "*" - exactly one,
- * bonded by one single bond to the atom the group is attached by, read as
- * a chemist's own abbreviation is (`structureProblem`) - and otherwise as
- * a label typed on the canvas is: given its case by smart labels (`otbs`
- * is OTBS), then an element's symbol as that atom (Cl, H), and else a
- * group by the dictionary, its label grammar and the chemist's own
- * abbreviations (`abbreviationStructure`). A line without a "*" is never
- * read as a SMILES. Or why it cannot be an R group: it reads as nothing, or
- * as a group attached by none of its atoms or by more than one, a ligand
- * that lends a pair, or a pi system.
+ * A line of a list, read as an R group is wherever one is typed
+ * (chem/resolve, `"group"`): its one reading, or why it cannot be an R
+ * group.
  */
 export function readOption(typed: string): OptionRead | OptionProblem {
-  const text = typed.normalize("NFKC").trim();
-  if (text.includes("*")) {
-    const problem = structureProblem(text);
-    if (problem) return { typed, problem };
-    const read = readSmiles(text);
-    const star = read.atoms.findIndex((a) => a.el === "*");
-    if (read.bonds.find((b) => b.a1 === star || b.a2 === star)!.order !== 1) return { typed, problem: 'The "*" is bonded by one single bond to the atom the group is attached by.' };
-    const group = smilesGroup(text);
-    return { typed, as: "smiles", label: text, group, formula: groupFormula(group) };
-  }
-  const label = keptLabel(text, labelReading);
-  const read = readLabel(label, isElementSymbol);
-  // (an element's symbol that is a group's name too - Ac, Pr, Ts - is the group, as on the canvas)
-  const named = read.kind === "element" && isElementSymbol(label) && abbreviationOf(label);
-  if (read.kind === "element" && !named) {
-    const formula = `${read.isotope ? `${read.isotope}` : ""}${read.el}${read.charge ? (read.charge > 0 ? "+" : "-").repeat(Math.abs(read.charge)) : ""}`;
-    return { typed, as: "element", el: read.el, ...(read.charge ? { charge: read.charge } : {}), ...(read.isotope ? { isotope: read.isotope } : {}), formula };
-  }
-  const group = read.kind === "charge" ? null : abbreviationStructure(label);
-  if (!group) return { typed, problem: `"${text}" is not an element, a group Meno knows, or a SMILES with a "*"` };
-  if (!group.attach.length) return { typed, problem: `${label} is a whole molecule, not a group: it is attached by none of its atoms` };
-  if (group.attach.length > 1) return { typed, problem: `${label} is attached by ${group.attach.length} atoms: an R group is attached by one` };
-  if (group.lends?.[0]) return { typed, problem: `${label} is a ligand, bound by a pair it lends: an R group is bonded by one single bond` };
-  if (group.haptic?.length) return { typed, problem: `${label} is bound through a pi system: an R group is bonded by one single bond` };
-  return { typed, as: "label", label, group, formula: groupFormula(group) };
+  const { readings, problem } = resolve(typed, "group");
+  return readings[0] ?? { typed, problem: problem! };
 }
 
+/** A line that starts an R number's list - R1:, r1: - and what follows on it. */
+const HEAD = /^R(\d+)\s*:\s*(.*)$/iu;
+
 /**
- * What each line of the step's text was read as, line for line, as the
- * step shows it beside the lines (`LinesOption.readAs`): an R number's
- * start, an option's reading and formula ("OTBS · C6H15OSi"), or why it
- * cannot be read - blank for a blank line.
+ * The options a line holds: one, or several apart by commas or semicolons
+ * ("Me, Et; Cl"), each as typed, trimmed - a comma between two digits, a
+ * locant's, kept within its option (2,4-(MeO)2C6H3). An option empty
+ * between two of them is one, "" (said, not passed over); one after the
+ * last, ending the line, is none.
  */
-export function listsReadAs(text: string): LineRead[] {
-  let started = false;
-  return text.split(/\r?\n/).map((raw): LineRead => {
-    const line = raw.normalize("NFKC").trim();
-    if (!line) return { said: "" };
-    const head = /^R(\d+)\s*:\s*(.*)$/.exec(line);
-    const option = head ? head[2].trim() : line;
-    if (head) started = true;
-    else if (!started) return { said: "Start with an R number, as R1:", problem: true };
-    if (!option) return { said: `R${head![1]}` };
-    const read = readOption(option);
-    if ("problem" in read) return { said: read.problem, problem: true };
-    // (the group's formula; and its label, where it reads as other than typed: otbs as OTBS)
-    return { said: read.as === "label" && read.label !== option ? `${read.label} \u00b7 ${read.formula}` : read.formula };
-  });
+export function optionsOn(line: string): string[] {
+  const out: string[] = [];
+  let from = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === ";" || (ch === "," && !(/[\d'\u2032]/u.test(line[i - 1] ?? "") && /\d/u.test(line[i + 1] ?? "")))) {
+      out.push(line.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  const last = line.slice(from).trim();
+  if (last || !out.length) out.push(last);
+  return out.length === 1 && !out[0] ? [] : out;
 }
 
-/** The lists typed on the step, by R number, each line read - and what could not be, by its R number and line. */
-export type Lists = { lists: Map<number, (OptionRead | OptionProblem)[]>; problems: string[] };
+/** What makes two options of a list the same option, as typed and read: a label's, an element's or a SMILES's reading. */
+const sameAs = (o: OptionRead) => (o.as === "element" ? o.formula : o.label);
 
 /**
- * The step's text read as lists, one option to a line: a line `R1:` (or
- * `R1: Me`) starts R1's list, and each line after it is one more option,
- * until the next. Blank lines are passed over; a line before any R number,
- * an R number listed twice, or a list with no option in it is said.
+ * The step's text read as lists, by R number: a line `R1:` - or `r1:`,
+ * with or without its groups after it - starts R1's list or adds to it, and
+ * each group on a line, one or several apart by commas or semicolons
+ * (`optionsOn`), is one more option of the last R number started. Blank
+ * lines are passed over. Said, each: a group before any R number, an empty
+ * one, one given twice in one R's list (never dropped as if it were not),
+ * an R number with no option in it, and an option that does not read.
  */
 export function readLists(text: string): Lists {
   const lists = new Map<number, (OptionRead | OptionProblem)[]>();
@@ -125,19 +86,25 @@ export function readLists(text: string): Lists {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.normalize("NFKC").trim();
     if (!line) continue;
-    const head = /^R(\d+)\s*:\s*(.*)$/.exec(line);
+    const head = HEAD.exec(line);
     if (head) {
       at = Number.parseInt(head[1], 10);
-      if (lists.has(at)) problems.push(`R${at} is listed twice`);
-      else lists.set(at, []);
-      if (head[2].trim()) lists.get(at)!.push(readOption(head[2]));
-      continue;
-    }
-    if (at == null) {
+      if (!lists.has(at)) lists.set(at, []);
+    } else if (at == null) {
       problems.push(`"${line}" comes before any R number: start each list with its number, as "R1:"`);
       continue;
     }
-    lists.get(at)!.push(readOption(line));
+    const list = lists.get(at)!;
+    for (const typed of optionsOn(head ? head[2] : line)) {
+      if (!typed) {
+        problems.push(`R${at} has an empty option in "${line}"`);
+        continue;
+      }
+      const read = readOption(typed);
+      const twice = !("problem" in read) && list.some((o) => !("problem" in o) && sameAs(o) === sameAs(read));
+      if (twice) problems.push(`R${at} lists ${sameAs(read as OptionRead)} twice`);
+      else list.push(read);
+    }
   }
   for (const [n, options] of lists) {
     if (!options.length) problems.push(`R${n} has no options`);
@@ -147,6 +114,43 @@ export function readLists(text: string): Lists {
   }
   return { lists, problems };
 }
+
+/**
+ * What each line of the step's text was read as, line for line, as the
+ * step shows it beside the lines (`LinesOption.readAs`), as `readLists`
+ * reads them: an R number's start, each option's reading and formula
+ * ("OTBS · C6H15OSi"; several apart by commas), or why one cannot be read
+ * or is not wanted there - blank for a blank line.
+ */
+export function listsReadAs(text: string): LineRead[] {
+  const seen = new Map<number, string[]>();
+  let at: number | null = null;
+  return text.split(/\r?\n/).map((raw): LineRead => {
+    const line = raw.normalize("NFKC").trim();
+    if (!line) return { said: "" };
+    const head = HEAD.exec(line);
+    if (head) at = Number.parseInt(head[1], 10);
+    else if (at == null) return { said: "Start with an R number, as R1: Me, Et", problem: true };
+    const options = optionsOn(head ? head[2] : line);
+    if (!options.length) return { said: `R${at}` };
+    const had = seen.get(at!) ?? [];
+    seen.set(at!, had);
+    const said: string[] = [];
+    for (const typed of options) {
+      if (!typed) return { said: "An empty option between two commas", problem: true };
+      const read = readOption(typed);
+      if ("problem" in read) return { said: read.problem, problem: true };
+      if (had.includes(sameAs(read))) return { said: `${sameAs(read)} is in R${at}'s list already`, problem: true };
+      had.push(sameAs(read));
+      // (the group's formula; and its label, where it reads as other than typed: otbs as OTBS)
+      said.push(read.as === "label" && read.label !== typed ? `${read.label} \u00b7 ${read.formula}` : read.formula);
+    }
+    return { said: said.join(", ") };
+  });
+}
+
+/** The lists typed on the step, by R number, each line read - and what could not be, by its R number and line. */
+export type Lists = { lists: Map<number, (OptionRead | OptionProblem)[]>; problems: string[] };
 
 /**
  * A template's R atoms, by number, each number's atoms by id in the
@@ -180,7 +184,7 @@ export function templateRs(template: Model): { rs: Map<number, number[]>; proble
     rs.set(n, [...(rs.get(n) ?? []), a.id]);
   }
   const unread = identityInputOf(template).unread;
-  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or on an atom with a lone pair)`);
+  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration)`);
   return { rs, problems };
 }
 

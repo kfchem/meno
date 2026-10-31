@@ -41,11 +41,11 @@ describe("a list's lines, read", () => {
       [expect.stringMatching(/^OTBS · /), false],
       ["Cl", false],
       ["C3H6NO", false],
-      ['"Qqx" is not an element, a group Meno knows, or a SMILES with a "*"', true],
+      ['"Qqx" is not a group, an element or a SMILES with "*"', true],
       ["", false],
       ["R2", false],
     ]);
-    expect(listsReadAs("Me")[0]).toEqual({ said: "Start with an R number, as R1:", problem: true });
+    expect(listsReadAs("Me")[0]).toEqual({ said: "Start with an R number, as R1: Me, Et", problem: true });
   });
 
   it("as a label is read on the canvas - its case by smart labels - an element as that atom, a SMILES only with a *", () => {
@@ -56,6 +56,39 @@ describe("a list's lines, read", () => {
     expect(readOption("*C(=O)N(C)C")).toMatchObject({ as: "smiles", formula: "C3H6NO" });
     // (no *: never a SMILES - CO is a label, carbonyl)
     expect(readOption("CO")).not.toMatchObject({ as: "smiles" });
+  });
+
+  it("as lists, by R number - its groups one to a line, or several on one, apart by commas or semicolons - each said, or why not", () => {
+    const listed = (text: string) => {
+      const { lists, problems } = readLists(text);
+      return problems.length ? problems : [...lists].map(([n, os]) => `R${n} = ${os.map((o) => ("label" in o ? o.label : "el" in o ? o.el : "?")).join(" ")}`);
+    };
+    const cases: [string, string[]][] = [
+      // (the maintainer's: a label given again adds to its list)
+      ["R1:Me\nR1:Et\nR2:Cl\nR2:Br", ["R1 = Me Et", "R2 = Cl Br"]],
+      // (a line with no label goes on with the last; several on one line; spaces after the colon; either case)
+      ["R1:Me\nEt\nR2:Cl\nBr", ["R1 = Me Et", "R2 = Cl Br"]],
+      ["R1: Me, Et\nR2: Cl; Br", ["R1 = Me Et", "R2 = Cl Br"]],
+      ["r1:   Me,Et,\nR2:\nCl, Br", ["R1 = Me Et", "R2 = Cl Br"]],
+      ["R1: Me\nr1: Et, OMe", ["R1 = Me Et OMe"]],
+      // (a comma between two digits is a locant's, within its group)
+      ["R1: 2,4-(MeO)2C6H3, Me", ["R1 = 2,4-(MeO)2C6H3 Me"]],
+      // (refused, and said)
+      ["Me\nR1: Et", ['"Me" comes before any R number: start each list with its number, as "R1:"']],
+      ["R1: Me,,Et", ['R1 has an empty option in "R1: Me,,Et"']],
+      ["R1: Me\nR1: Me", ["R1 lists Me twice"]],
+      ["R1: Me, me, Et", ["R1 lists Me twice"]],
+      ["R1:", ["R1 has no options"]],
+    ];
+    expect(cases.map(([text]) => [text, listed(text)])).toEqual(cases);
+    // (beside each line: each option's formula, or why it is not wanted)
+    expect(listsReadAs("R1: Me, Et\nR1: Me\nR2: Cl,,Br").map((r) => [r.said, !!r.problem])).toEqual([
+      ["CH3, C2H5", false],
+      ["Me is in R1's list already", true],
+      ["An empty option between two commas", true],
+    ]);
+    // (an R with a list but not in the drawing, as before)
+    expect(problems(enumerated(template("*c1ccccc1"), "R1: Me\nR2: Cl"))).toEqual(["R2 has a list but is not in the drawing"]);
   });
 
   it("as lists, by R number, one option to a line", () => {
@@ -151,17 +184,18 @@ describe("Enumerate's known answers", () => {
   });
 
   it(`makes ${MOST_COMBINATIONS} combinations, and stops before making any of ${MOST_COMBINATIONS + 1}`, () => {
-    const lines = (n: number, el: string) => Array(n).fill(el).join("\n");
+    // (each list's groups apart - one group twice in a list is refused - each an atom, of an isotope of its own)
+    const lines = (n: number, el: string) => Array.from({ length: n }, (_, k) => `*[${k + 100}${el}]`).join("\n");
     const at = ok(enumerated(template("*C*"), `R1: ${lines(100, "F")}\nR2: ${lines(100, "Cl")}`));
     expect(at.made.length + at.aside.length).toBe(MOST_COMBINATIONS);
-    expect(problems(enumerated(template("*C"), `R1: ${lines(MOST_COMBINATIONS + 1, "F")}`))).toEqual(["a list of 10001 make 10,001 combinations; Enumerate makes at most 10,000"]);
+    expect(problems(enumerated(template("*C*"), `R1: ${lines(101, "F")}\nR2: ${lines(100, "Cl")}`))).toEqual(["lists of 101 and 100 make 10,100 combinations; Enumerate makes at most 10,000"]);
   }, measured(60_000));
 });
 
 describe("what stops Enumerate before it runs, each said", () => {
   const benzene = () => template("*c1ccccc1");
   it("a line that reads as nothing, named, with what was tried", () => {
-    expect(problems(enumerated(benzene(), "R1: Me\nQqx"))).toEqual(['R1, option 2 ("Qqx"): "Qqx" is not an element, a group Meno knows, or a SMILES with a "*"']);
+    expect(problems(enumerated(benzene(), "R1: Me\nQqx"))).toEqual(['R1, option 2 ("Qqx"): "Qqx" is not a group, an element or a SMILES with "*"']);
   });
   it("a group attached by more than one atom, or by none - a chelating ligand, a whole molecule", () => {
     expect(problems(enumerated(benzene(), "R1: THF"))[0]).toMatch(/^R1, option 1 \("THF"\): THF is a ligand, bound by a pair it lends|^R1, option 1 \("THF"\): THF is a whole molecule/);
@@ -193,7 +227,7 @@ describe("what stops Enumerate before it runs, each said", () => {
   it("a drawing with no R, and lists that are not lists", () => {
     expect(problems(enumerated(drawnFromSmiles("c1ccccc1"), ""))).toEqual(["The drawing has no R group: draw R1, R2 where the groups go"]);
     expect(problems(enumerated(benzene(), "Me\nR1: Cl"))).toEqual(['"Me" comes before any R number: start each list with its number, as "R1:"']);
-    expect(problems(enumerated(benzene(), "R1: Me\nR1: Cl"))).toEqual(["R1 is listed twice"]);
+    expect(problems(enumerated(benzene(), "R1: Me\nR1: Me"))).toEqual(["R1 lists Me twice"]);
     expect(problems(enumerated(benzene(), "R1:"))).toEqual(["R1 has no options"]);
   });
   it("names the template's R atoms by number, in the template's order", () => {

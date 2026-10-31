@@ -37,7 +37,14 @@
       ],
       "entitlements": "Entitlements.plist",
       "files": {
-        "Resources/meno-document.icns": "icons/document/meno-document.icns"
+        "Resources/meno-document.icns": "icons/document/meno-document.icns",
+        "Resources/meno-pdf.icns": "icons/formats/pdf.icns",
+        "Resources/meno-mol.icns": "icons/formats/mol.icns",
+        "Resources/meno-sdf.icns": "icons/formats/sdf.icns",
+        "Resources/meno-rxn.icns": "icons/formats/rxn.icns",
+        "Resources/meno-xyz.icns": "icons/formats/xyz.icns",
+        "Resources/meno-pdb.icns": "icons/formats/pdb.icns",
+        "Resources/meno-cube.icns": "icons/formats/cube.icns"
       }
     }
   }

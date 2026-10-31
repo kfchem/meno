@@ -188,10 +188,10 @@ Loop*). The card's *Length* is bounded by it, and says so
 under it ("At least 12 s for 3 molecules"); a length chosen before that is
 shorter is raised to it, and the card says that instead. The longest it
 asks is 60 s, or the shortest where that is longer. However a film is
-asked for - the card, a workflow's step, a saved or written ask - the
-Blender plugin refuses one shorter, by the same rule and from its own
-manifest's numbers, saying how long it needs to be ("This film needs at
-least 12 s for 3 molecules").
+asked for - the card, a saved or written ask - Meno refuses one shorter
+before anything is rendered, saying how long it needs to be ("This film
+needs at least 6 s for 3 molecules"): the rule is Meno's, and no renderer
+keeps a copy of it (the boundary, 2026-10-31).
 
 ## Render as a step
 
@@ -250,6 +250,11 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
   itself, puts it on the page, and takes the job's folder away.
 
 ## On the page
+
+The frame is moved as anything on the page is: a drag on it - not on its
+button - carries it, kept clear of where it now stands, and what the
+render makes lands where it stands as it ends (the maintainer,
+2026-10-28; `moveRender`).
 
 While it renders, a dashed frame stands where what it makes will lie,
 as large as it will be - beside the molecules, on the right, as large as
@@ -347,7 +352,7 @@ uv, no package), and the script Blender runs, `render.py`.
   and size.
 - **Looks with materials and light of their own** (`looks.py`, beside
   `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
-  wood, marble, terracotta (the look `clay`), porcelain, slime, ice (melting: its surface in lumps by displacement, with wet highlights), neon,
+  wood, marble, terracotta (the look `clay`), porcelain, slime, neon,
   X-ray and fur are not a colour and a gloss: each is a
   material of Blender's own shader nodes, put on the molecules by their
   shapes' names (`ball #909090`, `stick #000000`: the element's colour is
@@ -434,17 +439,6 @@ uv, no package), and the script Blender runs, `render.py`.
     spheres and sticks (a Voronoi fracture made in the script, Bullet
     rigid bodies, the floor), and the shards gather into B's atoms, which
     fuse in a wave up from the paper.
-  - **Liquid** (`change-liquid`, the white studio only): each molecule
-    melts from the top down into a pool of molten gold (Mantaflow, as
-    viscous as honey; its grid as fine as the film's width asks, 192 cells
-    at 1920 px); a pool draws up into one round drop and spreads out as the
-    next molecule's pool, which rises into it - its melt played backwards.
-    It is made in stages: each molecule's melt once, its pool's last
-    surface kept in the job's folder, then each change between two pools.
-    Each melt is a simulation of its own: the longest of all to render.
-    Every melt ends with the camera where every reform stays: at the
-    least distance from which the whole of the liquid's domain - sized for
-    the widest molecule - is in the frame, so no pool is ever cut.
   - Each piece is made in a Blender of its own - the studio, the part the
     changes share (`change.py`) and the change's script - after the one
     before. Every molecule stands on the same floor, turned as the canvas
@@ -455,9 +449,8 @@ uv, no package), and the script Blender runs, `render.py`.
     (every piece's files have the same names). Shaders that glow are not sampled as lights,
     which would change how a molecule at rest is rendered between pieces.
   - Each change is timed in a length of its own (Ring, Scan and Shatter
-    5 s; the liquid 8 s a melt and 1.6 s a reform), and the film's length
-    is shared out among the pieces, each played faster or slower to fit -
-    a liquid's simulation too.
+    5 s), and the film's length is shared out among the pieces, each played
+    faster or slower to fit.
 - **Where it renders** (2026-10-16, the maintainer): a three-way choice,
   *Render on*: **Automatic (the faster one)**, the default; **Graphics
   processor**; **Processor**. Automatic times the two once on this
@@ -532,6 +525,15 @@ By the maintainer, 2026-10-10 to 2026-10-12:
    wired from the step, as a calculation's results are; one for each
    entry; pictures only; a run again replaces them, one step to undo; its
    own options, from Meno's defaults.
+
+**Withdrawn for now** (the maintainer, 2026-10-29: something half-finished
+is not offered at all): the Blender plugin's liquid change of molecules
+(`change-liquid`) and its ice look. Both are kept, with a note of where
+they stand and what a fresh start should question first, on the branch
+`agent/films-liquid-shelved` (`docs/FILMS-LIQUID-SHELVED.md`,
+`docs/LOOK-ICE-SHELVED.md`). An ask for either - a step saved with it, a
+written ask - is refused ("no look is called 'ice'"); a card that last chose
+one starts from its first choice.
 
 ## Not yet
 - The words the canvas puts on molecules in 3D - atom numbers, R and S,

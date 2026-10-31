@@ -1,3 +1,4 @@
+import { acceptOptions } from "../../../../lib/options";
 import { describe, expect, it } from "vitest";
 import type { Property } from "../../../../lib/entry";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
@@ -121,12 +122,40 @@ describe("a Filter step", () => {
     expect([ran(other)?.said, out(other)[0].properties?.[0].energy]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not nll < 30 (50))", own(-1)]);
   });
 
+  it("compares a property with another of the same entry (\"its\"): kept where they agree, the rest saying why - one missing either never kept; Meno's own name on either side read as on one", () => {
+    const word = (value: string): Property => ({ value, unit: "none", status: "computed" });
+    const saddles = [
+      water([{ "last end": word("b"), product: word("b") }]),
+      water([{ "last end": word("c"), product: word("b") }], { at: { x: 2, y: 0 } }),
+      water([{ product: word("b") }], { at: { x: -2, y: 0 } }),
+    ];
+    const doc = runStep(filtering(saddles, "last end = its product"), 2, W);
+    expect(ran(doc)).toMatchObject({ ok: true, said: "1 of 3 entries kept \u00b7 rest 2 (1: it has no last end; 1: not last end = its product (c and b))" });
+    expect(out(doc).map((m) => m.properties?.[0]["last end"])).toEqual([word("b")]);
+    // (a name that is Meno's own and an entry's too, on the right as on the left: refused, never read as either)
+    const own = (v: number): Property => ({ value: v, unit: "Eh", by: { plugin: "gen" }, status: "computed" });
+    const shadowed = runStep(filtering([water([{ energy: own(-1), e2: own(-1) }])], "e2 = its energy"), 2, W);
+    expect(ran(shadowed)).toMatchObject({ ok: false, said: '"energy" is Meno\'s own, and 1 entry carries one of its own by that name too: which is meant cannot be told' });
+    expect(filterHow("last end = its product", "all")).toBe("last end = its product");
+  });
+
   it("says how it filters on its card: its conditions as read, all or any", () => {
     const info = kindInfo("filter");
     expect(howOf(info.options!, { conditions: "nll<30;mw <= 500", match: "all" }, info.how)).toBe("nll < 30 and mw \u2264 500");
     expect(filterHow("nll < 30; mw <= 500", "any")).toBe("nll < 30 or mw \u2264 500");
     expect(filterHow("", "all")).toBe("No conditions yet");
     expect(filterHow("nll 30", "all")).toMatch(/compares nothing/);
+  });
+
+  it("says of a plugin's step only the options that apply - none that sets nothing", () => {
+    const options = acceptOptions([
+      { id: "method", label: "Method", type: "text", default: "B3LYP" },
+      { id: "solvation", label: "Solvation", type: "choice", choices: [{ value: "none", label: "None" }, { value: "SMD", label: "SMD" }], default: "none" },
+      { id: "solvent", label: "Solvent", type: "choice", when: { id: "solvation", in: ["SMD"] }, choices: [{ value: "water", label: "Water" }], default: "water" },
+      { id: "maxcore", label: "Memory for each core", type: "number", default: 0, unset: 0, unit: "MB" },
+    ]);
+    expect(howOf(options, { method: "NATIVE-XTB2" })).toBe("NATIVE-XTB2");
+    expect(howOf(options, { method: "B3LYP", solvation: "SMD", maxcore: 3000 })).toBe("B3LYP \u00b7 SMD \u00b7 Water \u00b7 3000 MB");
   });
 
   it("is run again when the properties of what comes in change", () => {

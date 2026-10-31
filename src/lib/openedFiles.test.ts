@@ -34,7 +34,7 @@ describe("Meno as the app for its workspace files", () => {
   // (read from the app's own configuration, as the bundler reads it)
   const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
-  it("is the same type, by the same names, on each system - .meno alone", () => {
+  it("is the same type, by the same names, on each system - .meno alone; the formats it opens, a viewer's, with their own icons", () => {
     const windows = JSON.parse(read("src-tauri/tauri.windows.conf.json")).bundle;
     expect(windows.fileAssociations).toEqual([
       { ext: ["meno"], name: "Meno.Workspace", description: "Meno workspace", role: "Editor", mimeType: MENO_MEDIA_TYPE },
@@ -46,7 +46,15 @@ describe("Meno as the app for its workspace files", () => {
     const plist = read("src-tauri/Info.plist");
     for (const s of ["<string>dev.kfchem.meno.workspace</string>", "<string>meno</string>", `<string>${MENO_MEDIA_TYPE}</string>`, "<string>Owner</string>", "<string>meno-document.icns</string>"]) expect(plist).toContain(s);
     expect(plist).not.toContain("<string>public.zip-archive</string>");
-    expect(JSON.parse(read("src-tauri/tauri.macos.conf.json")).bundle.macOS.files).toEqual({ "Resources/meno-document.icns": "icons/document/meno-document.icns" });
+    // (Owner of .meno alone: every other document type - a format Meno opens, with its own icon - a Viewer, an Alternate)
+    expect(plist.match(/<string>Owner<\/string>/g)).toHaveLength(1);
+    const types = [...plist.matchAll(/<key>CFBundleTypeRole<\/key>\s*<string>(\w+)<\/string>\s*<key>LSHandlerRank<\/key>\s*<string>(\w+)<\/string>/g)].map((m) => `${m[1]} ${m[2]}`);
+    expect(types[0]).toBe("Editor Owner");
+    expect(new Set(types.slice(1))).toEqual(new Set(["Viewer Alternate"]));
+    const files: Record<string, string> = JSON.parse(read("src-tauri/tauri.macos.conf.json")).bundle.macOS.files;
+    expect(files["Resources/meno-document.icns"]).toBe("icons/document/meno-document.icns");
+    // (the others, the formats' icons: each from icons/formats, by its name)
+    for (const [to, from] of Object.entries(files)) if (to !== "Resources/meno-document.icns") expect(from).toBe(`icons/formats/${/^Resources\/meno-(\w+)\.icns$/.exec(to)![1]}.icns`);
     // (no other kind of file is claimed anywhere)
     expect(JSON.parse(read("src-tauri/tauri.conf.json")).bundle.fileAssociations).toBeUndefined();
   });

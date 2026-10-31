@@ -10,8 +10,8 @@ import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
-import { cleanUp, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partOf } from "./cleanUp";
-import { overlapsMade } from "./engineLayout";
+import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
+import { overlapsMade, sameStereo } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
 import { MENO } from "../../../../lib/chem/style";
@@ -270,15 +270,72 @@ describe("cleanUp", () => {
         (e: Error) => e.message,
       );
       const after = store.getState().model;
-      if (settled === "laid out") {
-        // (laid out, it has none of its atoms on each other or on a bond)
-        const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
-        expect(overlapsMade(drawn, moved)).toEqual([]);
-      } else {
-        expect(settled).toMatch(/one atom on another or on a bond, so nothing was moved/);
-        expect(after).toEqual(drawn);
-      }
+      // (laid out now - the small ring regular, the chain round it - with
+      // none of its atoms on each other or on a bond, 2026-10-29; refused,
+      // moving nothing, before)
+      expect(settled).toBe("laid out");
+      const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
+      expect(overlapsMade(drawn, moved)).toEqual([]);
     }
+  });
+
+  it("lays out the rest when it must leave one structure as drawn, and names that one by its formula and why", async () => {
+    // the made-up bridged macrocycle drawn round a circle (the engine lays an atom on a bond there), and a butane
+    const input = fromSmiles("C1CCCCC2CCC(CO2)CCCCCCCC1");
+    const n = input.atoms.length;
+    const R = (n * NOMINAL_BOND_LENGTH) / (2 * Math.PI);
+    const ring = input.atoms.map((a, i) => atom(i + 1, R * Math.cos((2 * Math.PI * i) / n), R * Math.sin((2 * Math.PI * i) / n), a.el));
+    const ringBonds: Bond[] = input.bonds.map((b, i) => ({ id: 100 + i, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 }));
+    const butane = [0, 1, 2, 3].map((i) => atom(300 + i, 40 + i, i % 2 ? 0.6 : 0));
+    const butaneBonds: Bond[] = [0, 1, 2].map((i) => ({ id: 400 + i, a: 300 + i, b: 301 + i, order: 1 }));
+    const drawn: Model = { atoms: [...ring, ...butane], bonds: [...ringBonds, ...butaneBonds] };
+    expect(partFormula({ atoms: ring, bonds: ringBonds })).toBe("C18H34O");
+    const { store, doc } = canvas(drawn);
+    const refused = await cleanUp(store).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    const after = store.getState().model;
+    // (laid out now, both of them, with nothing on anything)
+    if (!refused) {
+      const moved = { atoms: after.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y })), bonds: [] as never[] };
+      expect(overlapsMade(drawn, moved)).toEqual([]);
+    }
+    if (refused) {
+      expect(refused).toBeInstanceOf(CleanUpRefused);
+      expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C18H34O: .*one atom on another or on a bond/);
+      // (the macrocycle as drawn; the butane laid out, at the style's bond, in one step)
+      for (const a of ring) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
+      const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);
+      expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+      expect(doc.history().undoDepth).toBe(1);
+    }
+  });
+
+  it("lays out the rest beside one whose wedges cannot be kept - drawn crossed - and names it, with its charge where it has one", async () => {
+    // a centre with a wedge and a hash in line, its other two bonds across: what Clean-up cannot keep; and a butane
+    const cross = [atom(1, 0, 0), atom(2, 1.8, 0), atom(3, -1.8, 0), atom(4, 0, 1.8), atom(5, 0, -1.8, "N")];
+    const crossBonds: Bond[] = [
+      { id: 11, a: 1, b: 2, order: 1, stereo: "up", stereoOrient: "principle" },
+      { id: 12, a: 1, b: 3, order: 1, stereo: "down", stereoOrient: "principle" },
+      { id: 13, a: 1, b: 4, order: 1 },
+      { id: 14, a: 1, b: 5, order: 1 },
+    ];
+    const butane = [0, 1, 2, 3].map((i) => atom(300 + i, 40 + i, i % 2 ? 0.6 : 0));
+    const butaneBonds: Bond[] = [0, 1, 2].map((i) => ({ id: 400 + i, a: 300 + i, b: 301 + i, order: 1 }));
+    const { store } = canvas({ atoms: [...cross, ...butane], bonds: [...crossBonds, ...butaneBonds] });
+    const refused = await cleanUp(store).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(refused).toBeInstanceOf(CleanUpRefused);
+    expect((refused as CleanUpRefused).message).toMatch(/^Clean-up left 1 of 2 structures as drawn - C4H11N: the wedges at C .*, so it was left as it is\.$/);
+    const after = store.getState().model;
+    for (const a of cross) expect(after.atoms.find((x) => x.id === a.id)).toEqual(a);
+    const [p, q] = [300, 301].map((id) => after.atoms.find((x) => x.id === id)!);
+    expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
+    // (a formula's charge: NH4+)
+    expect(partFormula({ atoms: [{ ...atom(1, 0, 0, "N"), charge: 1 }], bonds: [] })).toBe("H4N+");
   });
 
   it("lays out only the structure an atom is in, when asked about one", async () => {
@@ -396,18 +453,43 @@ describe("cleanUp", () => {
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
-    // methyl phenyl sulfoxide's S, wedged: its fourth group a lone pair
-    const sulfoxide: Model = {
-      atoms: [atom(1, 0, 0, "S"), atom(2, 0, 1, "O"), atom(3, -1, -0.5), atom(4, 1, -0.5)],
+    // a selenoxide's Se, wedged: a centre with a lone pair that a wedge
+    // states to no reader, so none that Clean-up can lay out and keep
+    const selenoxide: Model = {
+      atoms: [atom(1, 0, 0, "Se"), atom(2, 0, 1, "O"), atom(3, -1, -0.5), atom(4, 1, -0.5)],
       bonds: [
         { id: 5, a: 1, b: 2, order: 2 },
         { id: 6, a: 1, b: 3, order: 1, stereo: "up" },
         { id: 7, a: 1, b: 4, order: 1 },
       ],
     };
-    const { store } = canvas(sulfoxide);
+    const { store } = canvas(selenoxide);
     await expect(cleanUp(store)).rejects.toThrow(/nothing was moved/);
-    expect(store.getState().model).toEqual(sulfoxide);
+    expect(store.getState().model).toEqual(selenoxide);
+  });
+
+  it("lays out a centre with a lone pair for its fourth group, keeping its configuration on one wedge", async () => {
+    // methyl ethyl sulfoxide's S, a phosphine's P, a sulfonium's S: each
+    // wedged, each the other way round too
+    const centre = (el: string, stereo: "up" | "down", charge?: number, doubled = true): Model => ({
+      atoms: [{ ...atom(1, 0, 0, el), ...(charge ? { charge } : {}) }, atom(2, 0, 1, doubled ? "O" : "C"), atom(3, -1, -0.5), atom(4, 1, -0.5), atom(5, 2, 0)],
+      bonds: [
+        { id: 6, a: 1, b: 2, order: doubled ? 2 : 1 },
+        { id: 7, a: 1, b: 3, order: 1, stereo },
+        { id: 8, a: 1, b: 4, order: 1 },
+        { id: 9, a: 4, b: 5, order: 1 },
+      ],
+    });
+    for (const [el, charge, doubled] of [["S", 0, true], ["P", 0, false], ["S", 1, false]] as const) {
+      for (const stereo of ["up", "down"] as const) {
+        const before = centre(el, stereo, charge, doubled);
+        const { store } = canvas(before);
+        await cleanUp(store);
+        const after = store.getState().model;
+        expect(sameStereo(before, after), `${el}${charge ? "+" : ""} ${stereo}`).toBe(true);
+        expect(after.bonds.filter((b) => b.stereo === "up" || b.stereo === "down")).toHaveLength(1);
+      }
+    }
   });
 
   it("drops a wedge that says nothing, on a CH2", async () => {

@@ -313,6 +313,8 @@ export type Manifest = {
   installed: InstalledDecl[];
   /** The files it needs downloaded besides its environment. */
   downloads: DownloadDecl[];
+  /** Programs of other plugins its jobs may need, where it declares any (`NeedDecl`). */
+  needs?: NeedDecl[];
   /** Its guide: shown once, the first time it is there. */
   guide: GuideStep[];
   /** The plugins it suggests. */
@@ -594,6 +596,24 @@ function placeOk(t: unknown): t is string {
   return rest.startsWith("/") && rest.slice(1).split("/").every((part) => part !== "" && part !== "." && part !== "..");
 }
 
+/**
+ * A program of another plugin a plugin's jobs may need (docs/PLUGINS.md,
+ * `needs`): that plugin, by its id; its program, by the name its manifest
+ * gives it; and the variable the job is told where it is in. A job needs it
+ * only where its plugin's worker says so of that job; Meno finds it as the
+ * other plugin's own jobs would, puts it in the job's folder, and names it
+ * there - so that a path with a space in it is never given (src-tauri
+ * jobs.rs `need_value`). Core names no program: the manifest does.
+ */
+export type NeedDecl = { plugin: string; program: string; env: string };
+
+function needOf(v: unknown, self: string): NeedDecl | null {
+  const n = v as Record<string, unknown> | null;
+  if (!isId(n?.plugin) || n.plugin === self || typeof n.program !== "string" || !FILE.test(n.program) || !fileRuns(n.program)) return null;
+  if (typeof n.env !== "string" || !ENV_NAME.test(n.env) || ENV_NEVER.some((x) => x.toLowerCase() === (n.env as string).toLowerCase())) return null;
+  return { plugin: n.plugin, program: n.program, env: n.env };
+}
+
 /** Places, as a manifest gives them: one, or several; null where any is not one. */
 function placesOf(v: unknown): string[] | null {
   const given = typeof v === "string" ? [v] : Array.isArray(v) ? v : null;
@@ -847,6 +867,9 @@ export function acceptManifest(raw: unknown): Manifest | null {
   if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
   const downloads = environment ? list(m.downloads).map(downloadOf) : [];
   if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
+  // (another plugin's programs its jobs may need: each as it must be, one each, or none is taken - the backend reads the same)
+  const needs = list(m.needs).map((v) => needOf(v, id));
+  const needsOk = needs.every((n) => n != null) && new Set(needs.map((n) => n!.plugin)).size === needs.length;
   return {
     id,
     name,
@@ -867,6 +890,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     systems,
     installed,
     downloads: downloads as DownloadDecl[],
+    ...(needsOk && needs.length ? { needs: needs as NeedDecl[] } : {}),
     guide,
     suggests,
     files,

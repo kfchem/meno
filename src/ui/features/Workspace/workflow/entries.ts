@@ -6,7 +6,7 @@
  * it.
  */
 import { FAILURE_WORDS, type Failure } from "./failures";
-import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
+import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
@@ -17,7 +17,7 @@ import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
-import { numberText } from "../../../../lib/calc/results";
+import { aboveText, numberText } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -210,7 +210,7 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
   const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
   let key = identities.get(drawn);
   if (key == null) {
-    // (wedges identity cannot read - crossed, or on an atom with a lone pair - or a search it could not finish: its configuration
+    // (wedges identity cannot read - crossed, or at a three-bonded N, B, Se, Te or Sb - or a search it could not finish: its configuration
     // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
     const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
     key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
@@ -492,6 +492,12 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
 
+/** A number as Meno writes one: an energy in kcal/mol as the chips write it ("1.89 kcal/mol"), else with all its digits and its unit. */
+export function numberShown(n: { value: number; unit: string }): string {
+  if (n.unit === "kcal/mol") return aboveText(n.value);
+  return `${numberText(n.value)}${n.unit !== "none" ? ` ${n.unit}` : ""}`;
+}
+
 /** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
 export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
   // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
@@ -505,7 +511,7 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
     : count.holds === "table"
       ? plural(count.entries, "row")
     : count.holds === "number" && b.number
-      ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
+      ? numberShown(b.number)
     : count.holds === "chart"
       ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
     : count.holds === "pictures"
@@ -616,6 +622,12 @@ export type SetEntry = {
    */
   calc?: CalcInfo;
   keep?: Kept;
+  /** The end it is paired with, where it is the start of a pair a step of two inputs works out (workflow/pairs: Path search's). */
+  end?: SetEntry;
+  /** Its sides, where it is a guess an *Optimise to a saddle point* step pairs with a reactant side and a product side (workflow/pairs `sideUnlike`). */
+  sides?: { reactant: SetEntry; product: SetEntry };
+  /** How it was paired with its end, in words (workflow/pairs): "in order, by place: start a #2 with end b #2", "each with each", "matched on pc". */
+  paired?: string;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -752,7 +764,8 @@ export type FrameMarks = { failed?: Failure | null; imaginary?: number[] | null;
 export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed" | "imaginary" | "marksUnread"> {
   return {
     ...(frames.some((f) => f.failed) ? { failed: frames.map((f) => f.failed ?? null) } : {}),
-    ...(frames.some((f) => f.imaginary?.length) ? { imaginary: frames.map((f) => (f.imaginary?.length ? f.imaginary : null)) } : {}),
+    // (each frame's as its calculation judged it - none, [], as well as some - null where none judged it)
+    ...(frames.some((f) => Array.isArray(f.imaginary)) ? { imaginary: frames.map((f) => (Array.isArray(f.imaginary) ? f.imaginary : null)) } : {}),
     ...(frames.some((f) => f.marksUnread) ? { marksUnread: true as const } : {}),
   };
 }
@@ -760,18 +773,42 @@ export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed
 /** A molecule's own marks of frame `f` of `n` (`FrameMarks`). */
 export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUnread">, f: number, n: number): FrameMarks => ({
   ...(m.failed?.length === n && m.failed[f] ? { failed: m.failed[f] } : {}),
-  ...(m.imaginary?.length === n && m.imaginary[f]?.length ? { imaginary: m.imaginary[f] } : {}),
+  ...(m.imaginary?.length === n && Array.isArray(m.imaginary[f]) ? { imaginary: m.imaginary[f]! } : {}),
   ...(m.marksUnread ? { marksUnread: true as const } : {}),
 });
 
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
 export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
 
-/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
-const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
-  (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
+/** What a path search writes on each of its path's frames (ORCA's worker: `PATH_FRAME`), and on the point it refined. */
+export const PATH_FRAME = "path.frame";
+export const REFINED_SAID = "highest point refined";
 
-export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
+/** What a reaction path's program writes on the frame it started from (ORCA's worker: `IRC_STARTED_SAID`). */
+export const STARTED_SAID = "the point it started from";
+
+/** The one frame of a molecule its frames say is `what`; none where none is, or more than one. */
+function frameSaid(m: Pick<Molecule3D, "calc">, what: string): number | null {
+  const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
+  if (!said || said.on !== "frames") return null;
+  const k = said.values.indexOf(what);
+  return k >= 0 && said.values.lastIndexOf(what) === k ? k : null;
+}
+
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export const refinedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, REFINED_SAID);
+
+/** Of a reaction path's molecule, the frame it started from, as its frames say; none for any other molecule. */
+export const startedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, STARTED_SAID);
+
+/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, a reaction path's, the point it started from, its path going on past it. */
+const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
+
+/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
+const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
+  (m.imaginary?.length === n ? m.imaginary[f] : f === calcFrame(m, n) ? m.calc?.imaginary : undefined) ?? undefined;
+
+export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers", frames?: (m: Molecule3D) => readonly number[]): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
     const n = framesOf(m);
@@ -792,8 +829,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
-    // (a path: its last frame alone; an opened optimisation or scan, the frames it converged on)
-    const taken = m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
+    // (those asked for - Take frames' - else a path's last frame alone; an opened optimisation or scan, the frames it converged on)
+    const taken = frames ? frames(m) : m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
     for (const f of taken) {
       const xyz = frameXyz(m, f);
       const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });
@@ -813,7 +850,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
-        ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        ...(m.calc ? { calc: f === calcFrame(m, n) ? m.calc : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
@@ -844,9 +881,10 @@ export const THERMO_PROPERTIES = ["thermo.free-energy", "thermo.enthalpy", "ther
 /**
  * What an entry's calculation was, for its properties (lib/entry `By`): the
  * plugin that read it, the program, method and basis - and, for a thermal
- * quantity, the treatment of its vibrations as the program said it.
+ * quantity, the treatment of its vibrations and the symmetry it took (its
+ * point group, its rotational symmetry number), as the program said them.
  */
-function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
+function byOf(calc: SetEntry["calc"], thermal?: Pick<By, "treatment" | "pointGroup" | "symmetryNumber">): By | undefined {
   if (!calc) return undefined;
   const plugin = calc.readers[0]?.split(" ")[0];
   const by: By = {
@@ -854,7 +892,9 @@ function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
     ...(calc.program ? { program: calc.program } : {}),
     ...(calc.method ? { method: calc.method } : {}),
     ...(calc.basis ? { basis: calc.basis } : {}),
-    ...(treatment ? { treatment } : {}),
+    ...(thermal?.treatment ? { treatment: thermal.treatment } : {}),
+    ...(thermal?.pointGroup ? { pointGroup: thermal.pointGroup } : {}),
+    ...(thermal?.symmetryNumber != null ? { symmetryNumber: thermal.symmetryNumber } : {}),
   };
   return Object.keys(by).length ? by : undefined;
 }
@@ -878,13 +918,20 @@ function thermoOf(e: SetEntry, geometry: string): Partial<Record<(typeof THERMO_
   const kelvin = readingOf(calc, "thermo.temperature");
   const atm = readingOf(calc, "thermo.pressure");
   const treatment = readingOf(calc, "thermo.treatment");
+  const pointGroup = readingOf(calc, "thermo.point-group");
+  const sigma = readingOf(calc, "thermo.symmetry-number");
   const at: At = {
     geometry,
     ...(typeof kelvin === "number" ? { kelvin } : {}),
     ...(typeof atm === "number" ? { atm } : {}),
     ...(calc.solvation ? { solvent: calc.solvation } : {}),
   };
-  const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
+  // (each carries the symmetry it was worked out with, as the program printed it: a G with its own sigma, wherever it goes)
+  const by = byOf(calc, {
+    ...(typeof treatment === "string" ? { treatment } : {}),
+    ...(typeof pointGroup === "string" ? { pointGroup } : {}),
+    ...(typeof sigma === "number" && Number.isInteger(sigma) && sigma >= 1 ? { symmetryNumber: sigma } : {}),
+  });
   const out: Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> = {};
   for (const id of THERMO_PROPERTIES) {
     const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
@@ -961,11 +1008,12 @@ export function freeEnergyOf(e: SetEntry): Property | undefined {
 }
 
 /**
- * An entry's imaginary frequencies (cm-1): as its calculation judged them;
- * else, where its vibrations were worked out - its calculation's, or those
- * it carries (`calcProperties`) - those the table lists as negative, none
- * where it lists none: a table with one never reads as none; "not computed"
- * where they were not worked out.
+ * An entry's imaginary frequencies (cm-1): as its calculation judged them,
+ * where it judged some; else, where its vibrations were worked out - its
+ * calculation's, or those it carries (`calcProperties`) - those the table
+ * lists as negative, none where it lists none: a table with one never reads
+ * as none; else none, where its calculation judged none with no table read
+ * beside it; "not computed" where none was worked out or judged.
  */
 export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties">): number[] | "not computed" {
   if (e.imaginary?.length) return [...e.imaginary];
@@ -975,16 +1023,17 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties
     return k < 0 ? [] : list.rows.map((r) => r.cells[k]).filter((f): f is number => typeof f === "number" && f < 0);
   }
   const table = e.properties?.vibrations?.value;
-  if (!e.properties?.vibrations) return "not computed";
+  // (none read: its calculation's verdict of none, where it gave one)
+  if (!e.properties?.vibrations) return Array.isArray(e.imaginary) ? [] : "not computed";
   const rows = typeof table === "object" && table && "table" in table ? table.table.rows : [];
   return rows.map((r) => r[0]).filter((f): f is number => typeof f === "number" && f < 0);
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
-const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name", "state"] as const;
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state", "failure"] as const;
 export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
 
-/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name, its state. */
+/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has and the two largest, its name, its state, and why it failed, where it did. */
 function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
@@ -999,11 +1048,33 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
     ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
     ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
-    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
-    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
+    ...imaginaryProperties(e, at),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
     // (whether it is a result to stand on: finished - converged, not failed, its marks read - or why not, in a step's line's words)
     state: { value: entryState(e), unit: "none", status: "computed" },
+    // (why it failed, where it did, in its program's own words: for a Filter to send each kind of failure its own way - Runs again)
+    ...(e.failed ? { failure: { value: e.failed.why, unit: "none" as const, status: "computed" as const } } : {}),
+  };
+}
+
+/**
+ * An entry's imaginary frequencies as properties, for a chemist to select on
+ * with Filter ("imaginary = 1", "imaginary.second < 50 cm-1"): how many its
+ * calculation judged it has - 0 where its vibrations were worked out and
+ * none is, none at all where they were not (`imaginaryOf`) - and the largest
+ * and the next, each as its size in cm-1 (120.5 for 120.5i), where it has
+ * them. Meno judges nothing by them: whether one is a minimum, or a saddle
+ * point, is the chemist's to say.
+ */
+function imaginaryProperties(e: SetEntry, at: At): Partial<Record<"imaginary" | "imaginary.first" | "imaginary.second", Property>> {
+  const found = imaginaryOf(e);
+  if (found === "not computed") return {};
+  const sizes = found.map(Math.abs).sort((p, q) => q - p);
+  const of = (value: number, unit: "none" | "cm-1"): Property => ({ value, unit, at, status: "computed" });
+  return {
+    imaginary: of(sizes.length, "none"),
+    ...(sizes.length > 0 ? { "imaginary.first": of(sizes[0], "cm-1") } : {}),
+    ...(sizes.length > 1 ? { "imaginary.second": of(sizes[1], "cm-1") } : {}),
   };
 }
 
@@ -1086,7 +1157,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
   return {
     id,
     from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
-    structure: { atoms, bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
+    // (a coordination bond - the CTfile's type, as a molecule in 3D holds it - as the record marks one: single, so marked)
+    structure: { atoms, bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1 as const, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
     geometry: { kind: "3d", xyz: [...e.xyz] },
     species: speciesOf(written, e),
     properties,
@@ -1124,7 +1196,7 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     y: xyz[3 * i + 1],
     z: xyz[3 * i + 2],
   }));
-  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order }));
+  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.coordination ? COORDINATION_BOND : b.order }));
   const own = Object.fromEntries(Object.entries(e.properties).filter(([k]) => !MENO_OWN.has(k)));
   const name = e.properties.name?.value;
   const made: SetEntry = {

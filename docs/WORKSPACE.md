@@ -229,7 +229,7 @@ Taken on 2026-10-03:
     the pointer swells a little on a spring. No frame: the maintainer
     asked for a highlight along the outline, in a modern way, rather than
     a rectangle round it.
-  - **Held still, a press selects the molecule** (0.32 s, as in 2D), the
+  - **Held still, a press selects the molecule** (a long press, as in 2D), the
     selection's outline spreading out from the atom pressed on as it is
     held; a drag from there moves it. A molecule selected moves when
     dragged, with all that is selected; one not selected turns. (Agreed
@@ -554,7 +554,17 @@ Taken on 2026-10-13:
   have. How it was made is said in one line with it, in the plugin's
   words (`method`: "ETKDG v3 + UFF; restrained: eta rings: metal-ring
   atom distances, rings ≥ 2.9 Å apart"), first under *How it was made*
-  where it is pointed at, and kept with it in a workspace. An eta complex's
+  where it is pointed at, and kept with it in a workspace. Shut, *How it
+  was made* takes no room: the card it is on is as wide as what it shows,
+  no wider (the maintainer, 2026-10-28). Opened, the card first grows to
+  it, wider and taller together in 160 ms, and only then do its lines fade
+  in, in 120 ms, as gently at first as at the end; shut, they fade out
+  first, the same way, and the card then shrinks back. It widens to the
+  right only as *How it was made* opens, and back, so the toggle at its
+  left stays under the pointer that pressed it.
+  A frames chip opens to its details the same way. Opened or shut again
+  part way, it goes back from where it is (the maintainer, 2026-10-29;
+  `theme/opening`). An eta complex's
   shape most of all is held, not modelled: a real geometry comes from
   optimising it - an xTB or DFT step of a workflow.
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
@@ -830,8 +840,11 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
   says its results on a card beside it. The molecule's menu opens each list
   under it: a row pointed at outlines its atoms, one chosen moves the
   molecule or shows its frame. A list opened with too little room below it
-  glides the view until the molecule and the list are both seen, and an
-  opened chip rises to stay within the canvas. No colouring.
+  glides the view until the molecule and the list are both seen. A chip
+  stands only where its molecule puts it: opened at the window's edge, it
+  goes past the edge rather than chase it, and moves with its molecule as
+  the view moves (the maintainer, 2026-10-28: following the edge, it
+  jittered). No colouring.
 - **Vibrations** are a list whose rows move the molecule: the atom that
   moves most goes 0.3 Å, once every 1.2 s, eased in and out.
 - **Found on Windows** and put right: the reader's tests read the samples
@@ -1330,7 +1343,20 @@ space-filling side by side is better science than either alone.
   context for each took the live ones' away). A style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
-  each card going to its new place eased, not jumping. A press, or Enter,
+  each card going to its new place eased, not jumping. A slot's molecule
+  is turned by a drag that begins on its atoms or bonds, the pointer the
+  turning one only there; a drag anywhere else on the card moves the card
+  (the maintainer, 2026-10-28: a drag on the card had always turned its
+  molecule, and only its name moved it). A slot's molecule turns by itself
+  all the time, slowly - a turn in about half a minute, about the screen's
+  upright - but while it is turned by hand or coasting from it, taking up
+  its own turn again eased after; its own turn is drawn 30 times a second,
+  on every other of the screen's frames at 60 Hz, every slot in the same
+  frame, and turning it - by hand or by itself - draws only the frame,
+  nothing round it; nothing is drawn for it while the page is out of sight,
+  and with no slot seen, nothing keeps time for it either. A card carried has the hand's pointer all the way,
+  over the other slot's molecule too; the window left, or Escape, puts it
+  back where it came from. A press, or Enter,
   sets a style below; a right-click, or the menu key, offers Use as
   primary, Use as secondary, Duplicate, Export style… - and, for the user's
   own, Rename and Delete. A built-in style's changes are kept apart,

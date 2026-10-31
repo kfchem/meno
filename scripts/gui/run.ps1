@@ -37,6 +37,8 @@ $onMac = $PSVersionTable.PSEdition -eq "Core" -and $IsMacOS
 Import-Module (Join-Path $PSScriptRoot $(if ($onMac) { "MenoGui.macOS.psm1" } else { "MenoGui.psm1" })) -Force
 # (which running copies of Meno are the app, not a job, the PDF reader or the like: MenoModes.psm1)
 Import-Module (Join-Path $PSScriptRoot "MenoModes.psm1") -Force
+# (what the Meno under test was told in its Settings, where a run must know: the wheel's way)
+Import-Module (Join-Path $PSScriptRoot "MenoSettings.psm1") -Force
 if (-not $Exe) { $Exe = Get-MenoBuild }
 
 $scenarioPath = Join-Path $PSScriptRoot "scenarios/$Scenario.ps1"
@@ -163,6 +165,25 @@ function Invoke-MenoChainFromHere {
         Invoke-MenoClick -X $ToX -Y $ToY
         Wait-MenoSettled | Out-Null
     }
+}
+
+function Invoke-MenoZoom {
+    <#
+      .SYNOPSIS
+      Zoom the page at a point with the wheel: positive notches in, negative
+      out, on every machine.
+
+      .DESCRIPTION
+      Which way a turn of the wheel zooms is the Meno under test's own
+      setting (General, The wheel turned upwards: Zooms in, its default, or
+      Zooms out), so it is read from the settings.json the run's Meno keeps,
+      as it stands, and the wheel turned the way that zooms as meant. A
+      turn over something that takes the wheel itself - a frames chip -
+      is Invoke-MenoWheel's.
+    #>
+    param([Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y, [int] $Notches = 1)
+    $up = Read-MenoWheelUp -Path (Join-Path (Get-MenoProfile) "settings.json")
+    Invoke-MenoWheel -X $X -Y $Y -Notches $(if ($up -eq "out") { -$Notches } else { $Notches })
 }
 
 function Invoke-MenoQuickAdd {

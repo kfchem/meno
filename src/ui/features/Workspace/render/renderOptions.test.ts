@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
-import { askOf, bySection, filmLength, finishEntry, lengthNote, withFixed, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
+import { askOf, bySection, filmLength, finishEntry, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -180,5 +180,17 @@ describe("the card's parts: Look, Render, Scene, Motion", () => {
     expect(withFixed(theirs, { engine: "eevee" }, undefined)).toEqual({ options: theirs, values: { engine: "eevee" } });
     // (a renderer's option that says no part: its own)
     expect(bySection([{ ...theirs[0], section: undefined }]).own.map((o) => o.id)).toEqual(["engine"]);
+  });
+
+  it("refuses a film asked for shorter, however it was asked, saying how long it needs - Meno's rule, kept by no renderer", () => {
+    const DECLARED_MOTIONS: MotionDecl[] = [
+      { id: "glow", label: "Glow", shortest: { film: 4, loop: 6 } },
+      { id: "pour", label: "Pour", shortest: { change: 6 } },
+    ];
+    expect(tooShort({ kind: "film", motion: "pour", mode: "once", seconds: 5 }, DECLARED_MOTIONS, 3)).toBe("This film needs at least 12 s for 3 molecules");
+    expect(tooShort({ kind: "film", motion: "pour", mode: "loop", seconds: 12 }, DECLARED_MOTIONS, 3)).toBe("This film needs at least 18 s for 3 molecules");
+    expect(tooShort({ kind: "film", motion: "glow", seconds: 3 }, DECLARED_MOTIONS, 1)).toBe("This film needs at least 4 s");
+    expect(tooShort({ kind: "film", motion: "pour", mode: "once", seconds: 12 }, DECLARED_MOTIONS, 3)).toBeUndefined();
+    expect(tooShort({ kind: "picture" }, DECLARED_MOTIONS, 3)).toBeUndefined();
   });
 });

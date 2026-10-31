@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
@@ -116,6 +116,12 @@ describe("the jobs a plugin prepares", () => {
       expect(readPrepared({ ...raw, refused: bad }, 3)).toBe("It prepared no job for some of what came in");
     }
   });
+
+  it("say what the plugin says of how it prepared them, in a line of plain words - none where it says none", () => {
+    expect(readNote({ jobs: [job], note: "  frequencies computed\n numerically " })).toBe("frequencies computed numerically");
+    for (const raw of [{ jobs: [job] }, { jobs: [job], note: " " }, { jobs: [job], note: 3 }, null]) expect(readNote(raw)).toBeUndefined();
+    expect(readNote({ jobs: [job], note: "x".repeat(400) })?.length).toBe(300);
+  });
 });
 
 describe("what a plugin reads back of a job", () => {
@@ -174,6 +180,20 @@ describe("what a plugin reads back of a job", () => {
     expect(workedOf("energy", WATER, { ...out, frames: [[1, 2]] }, ["xtb 6.7.1"])).toEqual({ kind: "no-geometry", why: "It read back no geometry" });
   });
 
+  it("starts a failed run's entry from its geometry alone: no energy, calculation or mark of it carried on, where the program reads none", () => {
+    // (a run that stopped, its entry out of Failed - with an energy on it, as a stale one would be - worked out again by a program that read no energy)
+    const stopped: SetEntry = { ...WATER, energy: -76.1, calc: { readers: [], program: "ORCA", method: "B3LYP" }, failed: { kind: "program-error", why: "ORCA finished by error termination in SCF" } };
+    const unread = { ...out, energies: undefined };
+    const w = workedOf("optimise", stopped, unread, ["xtb 6.7.1"]);
+    if (isFailure(w)) throw new Error(w.why);
+    expect(w.energy).toBeUndefined();
+    expect(w.failed).toBeUndefined();
+    expect(w.calc).toMatchObject({ program: "xtb" });
+    // (and where it reads one, that one alone)
+    const read = workedOf("optimise", stopped, out, ["xtb 6.7.1"]);
+    expect(!isFailure(read) && read.energy).toBe(-5.0705);
+  });
+
   it("gives back none of what the entry came with that is not so of what the program worked out: how it was made, what its energies were from, its stereo labels", () => {
     // (water made by a conformer search, its energy MMFF94's, optimised by xTB: its energy is now xTB's, and says so only)
     const made = { ...WATER, calc: { readers: [], program: "RDKit", method: "MMFF94" }, keep: { made: { how: [], energies: "MMFF94" } } };
@@ -208,9 +228,9 @@ describe("what a plugin reads back of a job", () => {
     const formed = workedOf("optimise", drawn, { ...out, frames: [[0, 0, 0, 0, 0.76, 0.59, 0, 0.1, 0.9]] }, ["xtb 6.7.1"]);
     expect(!isFailure(formed) && formed.keep?.drawnFrom).toBeFalsy();
     // (its own charge, -1 on the oxygen, the calculation said 0: another species)
-    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: 0 }, ["xtb 6.7.1"]);
+    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], energies: [-5], charge: 0 }, ["xtb 6.7.1"]);
     expect(!isFailure(other) && other.keep?.drawnFrom).toBeFalsy();
-    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: -1 }, ["xtb 6.7.1"]);
+    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], energies: [-5], charge: -1 }, ["xtb 6.7.1"]);
     expect(!isFailure(same) && same.keep).toEqual({ drawnFrom: [11, 12, 13], drawnAs: "drawn" });
     expect(sameCompound(WATER, out.frames[1])).toBe(true);
   });
@@ -342,10 +362,11 @@ describe("a conformer search", () => {
     const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-382.63] : []), ["xtb 6.7.1"]));
     if (done.some(isFailure)) throw new Error("not done");
     const [m] = resultsOf({ ok: true, holds: "conformers", kept: done as Worked[], aside: [], said: "" }, "frequencies").molecules;
-    expect(m.imaginary).toEqual([null, [-382.63]]);
+    // (the first judged none: none, apart from not judged)
+    expect(m.imaginary).toEqual([[], [-382.63]]);
     expect(m.calc?.imaginary).toBeUndefined();
     // (taken on: the second named as no minimum)
-    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([undefined, [-382.63]]);
+    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([[], [-382.63]]);
     expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.calc?.imaginary)).toEqual([undefined, undefined]);
   });
 

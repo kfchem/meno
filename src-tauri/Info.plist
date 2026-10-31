@@ -17,6 +17,10 @@
   structure files by their extensions (CFBundleTypeExtensions), declaring
   no type of Meno's own: where another app declares a type for one, the
   system takes its, and a claim on a type of Meno's would not be found.
+  Each format is a type of its own here, with its own icon (icons/formats,
+  put in the app's Resources by tauri.macos.conf.json): where Meno is made
+  the app that opens it (Settings, Files - src/defaults.rs), the Finder
+  shows the format's icon rather than Meno's own.
 -->
 <plist version="1.0">
 <dict>
@@ -38,7 +42,7 @@
     </dict>
     <dict>
       <key>CFBundleTypeName</key>
-      <string>Chemical structure file</string>
+      <string>MDL Molfile</string>
       <key>CFBundleTypeRole</key>
       <string>Viewer</string>
       <key>LSHandlerRank</key>
@@ -46,13 +50,80 @@
       <key>CFBundleTypeExtensions</key>
       <array>
         <string>mol</string>
+      </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-mol.icns</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>SD file</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
         <string>sdf</string>
+      </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-sdf.icns</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>MDL reaction file</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
         <string>rxn</string>
+      </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-rxn.icns</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>XYZ file</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
         <string>xyz</string>
+      </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-xyz.icns</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>PDB file</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
         <string>pdb</string>
+      </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-pdb.icns</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Gaussian cube file</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
         <string>cube</string>
         <string>cub</string>
       </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-cube.icns</string>
     </dict>
     <dict>
       <key>CFBundleTypeName</key>
@@ -65,6 +136,8 @@
       <array>
         <string>com.adobe.pdf</string>
       </array>
+      <key>CFBundleTypeIconFile</key>
+      <string>meno-pdf.icns</string>
     </dict>
   </array>
   <key>UTExportedTypeDeclarations</key>

@@ -46,7 +46,7 @@ import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
 import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
-import { stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
+import { asCameSaid, stereoOpenSaid, structureFromSmiles, withoutStereoOpen } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
 import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
@@ -132,7 +132,7 @@ import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
-import { cleanUp, fragmentOf } from "./chem/cleanUp";
+import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
 import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
@@ -172,7 +172,7 @@ import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
-import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
+import { FollowCover, PAGE_HTML_LAYER, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
 import { useKeepUnselected } from "./hooks/useKeepUnselected";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
@@ -205,7 +205,7 @@ import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt, clipItems } from "./utils/copyPaste";
-import { putDownSmiles } from "./utils/quickAddSmiles";
+import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
@@ -412,7 +412,8 @@ function WorkspaceContent({
       cleanUp(store, aroundAtom)
         .catch((e: unknown) =>
           setChemError(
-            `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
+            // (what it left as drawn, named - the rest laid out: its own words; anything else, a failure)
+            e instanceof CleanUpRefused ? e.message : `Clean-up failed: ${e instanceof Error ? e.message : String(e)}`,
           ),
         )
         .finally(() => {
@@ -1899,8 +1900,12 @@ function WorkspaceContent({
               // nothing, should this Quick Add have gone while it was read: utils/quickAddSmiles)
               const read = await structureFromSmiles(smiles, style);
               // (and the stereo it leaves open, said as a paste of it says it)
-              const said = stereoOpenSaid(read.stereoOpen);
+              const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
               if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
+            }}
+            onNamed={(label) => {
+              // (a molecule the dictionary has, drawn from it - no plugin asked - and put down as a SMILES read is: chem/resolve)
+              putDownSmiles(store, quickAdd, namedDrawn(label));
             }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;
@@ -2711,7 +2716,7 @@ function WorkspaceContent({
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
-      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={pageHtmlLayerStyle(cover)} />
+      <div ref={setHtmlLayer} data-presenting={talking || undefined} className={`absolute inset-0 pointer-events-none ${PAGE_HTML_LAYER}`} style={pageHtmlLayerStyle(cover)} />
       {/* where a guide's step points at a structure: kept over it (GuideStructure) */}
       <div ref={guideStructure} data-guide="structure" className="absolute left-0 top-0 pointer-events-none" style={{ display: "none" }} />
       {/* what a talk is given on: over everything while it is (docs/PRESENTING.md) */}

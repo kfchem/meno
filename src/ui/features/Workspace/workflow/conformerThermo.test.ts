@@ -164,13 +164,23 @@ describe("Frequencies on a conformer set", () => {
     expect(out.said).toBe("3 entries set; their imaginary frequencies and thermochemistry were dropped (they were for the other species)");
   });
 
-  it("drops what a conformer carries of a calculation where a program works it out anew, or it is no longer at that geometry", () => {
+  it("drops what a conformer carries of a calculation where a program works it out anew at another geometry, or it is no longer at that geometry", () => {
     const { entries } = frequencied();
-    const again = workedOf("energy", entries[0], { schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [[...entries[0].xyz]], energies: [-5.07] }, ["xtb 6.7.1"]);
+    const moved = [...entries[0].xyz];
+    moved[3] += 0.05;
+    const again = workedOf("optimise", entries[0], { schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [moved], energies: [-5.07] }, ["xtb 6.7.1"]);
     if (isFailure(again)) throw new Error(again.why);
     expect(entryOfSet(again, "x").properties["thermo.free-energy"]).toBeUndefined();
     expect(imaginaryOf(again)).toBe("not computed");
     expect(withoutCarried(entries[0]).properties).toBeUndefined();
+  });
+
+  it("keeps what a conformer carries through a single point at its geometry, at the level it was worked out at", () => {
+    const { entries } = frequencied();
+    const sp = workedOf("energy", entries[0], { schema: 1, program: "ORCA", method: "B3LYP", atoms: ["O", "H", "H"], frames: [[...entries[0].xyz]], energies: [-76.4] }, ["cclib 1.9rc1"]);
+    if (isFailure(sp)) throw new Error(sp.why);
+    const g = entryOfSet(sp, "x").properties["thermo.free-energy"];
+    expect([g?.value, g?.by?.method, sp.energy]).toEqual([entries[0].properties?.["thermo.free-energy"]?.value, "GFN2-xTB", -76.4]);
   });
 });
 

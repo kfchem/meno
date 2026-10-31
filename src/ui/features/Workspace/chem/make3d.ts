@@ -15,6 +15,7 @@ import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client"
 import type { OptionValues } from "../../../../lib/options";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
+import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { abbreviationOf } from "../../../../lib/chem/abbreviations";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -58,6 +59,8 @@ export type Block = {
   like?: Like;
   /** Its bonds from a metal to a star at a ring's, chain's or double bond's centre, by atom place in the block as written: the metal and the atoms (`centresIn`). */
   centres?: { metal: number; atoms: number[] }[];
+  /** Its coordination bonds - drawn as a dative arrow or as a coordination bond, a donor's to its metal - by place among its bonds as written, each written from the atom that lends its pair. */
+  coordination?: number[];
 };
 
 /**
@@ -146,8 +149,11 @@ export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Mod
       const index = molIndex(asked);
       const molblock = chemMolblock(asked);
       const centres = centresIn(molblock);
+      // (a dative arrow or a coordination bond between two atoms - not a multi-centre bond's to its star, which is none of the molecule's bonds)
+      const coordination = index.bonds.flatMap((b, i) => ((b.dative || b.coordination) && !b.endpoints?.length ? [i] : []));
       return {
         ...(centres.length ? { centres } : {}),
+        ...(coordination.length ? { coordination } : {}),
         molblock,
         // (the drawing's own atoms: the stars etaBound adds come after them, and are no atoms of the drawing)
         atoms: part.atoms.map((a) => a.id),
@@ -210,7 +216,11 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
         z: first[3 * k + 2],
       };
     }),
-    bonds: bondsKept.map((i) => ({ a1: atomAt.get(c.bonds[i].a1)!, a2: atomAt.get(c.bonds[i].a2)!, order: c.bonds[i].order })),
+    // (a coordination bond as drawn: the CTfile's type, from the atom that lends its pair - the plugin's answer says single)
+    bonds: bondsKept.map((i) => {
+      const [a1, a2] = [atomAt.get(c.bonds[i].a1)!, atomAt.get(c.bonds[i].a2)!];
+      return block.coordination?.includes(i) ? { a1, a2, order: COORDINATION_BOND } : { a1, a2, order: c.bonds[i].order };
+    }),
     // (each multi-centre bond one stick from the metal to its atoms' centre, the star no atom: utils/molecule3d withCentres)
     ...centresOf(block, atomAt),
     ...(c.frames.length > 1 ? { frames: c.frames.slice(1).map(places) } : {}),

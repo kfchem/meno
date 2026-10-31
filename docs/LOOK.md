@@ -171,7 +171,9 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   px-2 text-xs` with a chevron in `gh-gray`, opening a menu as the
   canvas's menus are drawn (`rounded-md border border-gh-line bg-white
   py-1 shadow-lg`, rows `h-8 px-3`, `hover:bg-gh-base`, the chosen one
-  ticked), by keyboard as well as pointer.
+  ticked), by keyboard as well as pointer. The menu shows nine rows whole
+  at most, so a list of nine is never cut by its own padding. A longer
+  one shows half the tenth, so that it can be seen to go on (`LIST_ROWS`).
 - **Segmented choice** (few short choices, all shown): `rounded-md border
   border-gh-line`, segments `h-7 px-2.5 text-xs` parted by `border-l
   border-gh-line`, the chosen one `bg-accel-base text-white`, the others
@@ -198,6 +200,27 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   `accel-accent`.
 
 Each is reachable by keyboard and shows focus with an `accel-base` border.
+
+## Icons
+
+- **Read without their names** (the maintainer, 2026-10-28). Every icon
+  says what it does without a word under it. Where none would, a menu item
+  is words alone ("Reset orientation"), or the icon is the letters
+  themselves, as a chemist writes them ("3D", "R/S").
+- **Each its own.** No two actions share an icon: Energy window and Check
+  structures, Populations and Descriptors, As conformers and Enumerate each
+  have their own; sparkles are Generate's alone, a funnel is Filter's.
+- **Drawn as Quick Add's are**, where Heroicons' outline set has nothing
+  that is the thing itself: a 20-unit square, lines 1.8 wide (as heavy as a
+  Heroicon at 2.1 on its 24), ends and corners round; solid where a solid
+  reads better at 20 px (the balls of a ball-and-stick, a space-filling
+  model). `menuIcons.tsx`, `workflow/icons.tsx`.
+- **What a stock picture already means elsewhere is not borrowed**: no
+  sparkles for Clean-up (a broom), no cube for 3D, no refresh arrows for an
+  orientation, no Wi-Fi bars for frequencies (a spring), no bolt for an
+  energy, no cloud for NCI's surfaces in place of the thing itself.
+- **A file Meno opens** shows Meno's sheet, its folded corner and mark,
+  with the format's short name on a dark band (`src-tauri/icons/formats`).
 
 ## The look check
 

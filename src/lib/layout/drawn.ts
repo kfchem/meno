@@ -97,6 +97,14 @@ const HAIR = 0.2;
 const LONE_PAIR_CENTRES = new Set(["S", "Se", "Te", "P", "As", "Sb"]);
 
 /**
+ * Of those, the ones whose configuration a drawing's wedge states as every
+ * reader reads it - a sulfoxide's or a sulfonium's S, a phosphine's P, an
+ * arsine's As; RDKit reads a selenoxide's Se, a telluride's Te or a
+ * stibine's Sb as no centre from its wedge, so Meno does not either.
+ */
+const READ_LONE_PAIR_CENTRES = new Set(["S", "P", "As"]);
+
+/**
  * How near two bonds' directions are taken to be one line, either way - in
  * line, or on top of each other: 10 degrees. IUPAC 2006 (Brecher, Pure Appl.
  * Chem. 78, 1897), ST-0.1: "linear" is "forming an angle between 170° and
@@ -142,13 +150,18 @@ export function readStereo(
     const found = new Map<number, Tetrahedral>();
     atoms.forEach((atom, c) => {
       const around = neighbours[c];
-      if (atom.hs > 1 || around.length + atom.hs !== 4) return;
+      // (a sulfoxide's S, a phosphine's P, a sulfonium's S: three groups and
+      // a lone pair for the fourth, undrawn, read as a centre with its H
+      // left out is - its configuration the volume of the three, as the
+      // SMILES reader keeps one)
+      const lonePair = atom.hs === 0 && around.length === 3 && READ_LONE_PAIR_CENTRES.has(atom.el ?? "C");
+      if (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4)) return;
       if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
       const wedged = around.some((n) => lift(c, n) !== 0);
       if (!wedged && !atom.centre) return;
       const inSpace = atom.centre && atom.z != null;
       // (drawn flat, its H left out, two of its bonds in line or on top of each other: no configuration stated)
-      if (!inSpace && atom.hs === 1 && twoInLine(atom, around.map((n) => atoms[n]))) return;
+      if (!inSpace && (atom.hs === 1 || lonePair) && twoInLine(atom, around.map((n) => atoms[n]))) return;
       const order = atom.hs ? [...around, -1] : around;
       const volume = inSpace ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
       const v =

@@ -15,4 +15,11 @@ describe("a role's options in a card", () => {
     expect(html).toContain('class="block w-fit min-w-[min(12rem,100%)] max-w-full"');
     expect(html).not.toContain("min-w-[12rem]");
   });
+
+  it("has a box of lines whose focus ring shows whole: room for it all round inside the scroll that holds it", () => {
+    const options: Option[] = [{ id: "lists", label: "R groups", type: "lines", default: "" }];
+    const html = renderToString(<OptionsForm options={options} values={{ lists: "R1: Me" }} onChange={() => {}} />);
+    expect(html).toMatch(/<span class="-m-0\.5 [^"]*overflow-y-auto p-0\.5"/);
+    expect(html).toMatch(/<textarea[^>]*class="[^"]*outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"/);
+  });
 });

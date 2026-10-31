@@ -16,7 +16,7 @@ import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
-import { exitOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
+import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -142,7 +142,8 @@ export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsF
 export function setName(set: Pick<WorkflowSet, "made" | "name">, steps: readonly WorkflowStep[]): string {
   const made = set.made ? steps.find((s) => s.id === set.made!.step) : undefined;
   const exit = made && set.made ? exitOf(made.kind, set.made.exit) : undefined;
-  return made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
+  // (any exit but the first by its own name: a Reaction's Bond changes, as much as what a step set aside)
+  return made && exit ? (exit.id !== exitsOf(made.kind)[0].id ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
 }
 
 /** The programs a plugin runs for a kind of step; none, where it does the step in its worker - or Meno does it. */

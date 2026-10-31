@@ -16,6 +16,7 @@
  * was; a drag on it moves the selection; it is turned, copied, cut and
  * deleted with the rest of the selection (Selection2D, clipboardActions).
  */
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -35,7 +36,7 @@ import { cornersOf } from "../utils/selection";
 import { guideScale } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
 import { setViewGoal } from "./viewGoal";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { spotMoving, spotOn } from "./figureTie";
@@ -323,7 +324,7 @@ const Picture = memo(function Picture({
       s.selectPictures([p.id]);
       setHeld((h) => (h ? { ...h, done: true } : h));
       move();
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     const onMove = (m: PointerEvent) => {
       if (panned || Math.hypot(m.clientX - from.x, m.clientY - from.y) < PAN_PX) return;
       panned = true;

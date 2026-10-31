@@ -81,6 +81,26 @@ export const inputLead = (name: string) => (8 + 6 * name.length + 4) * PX;
 /** A port's diameter. */
 export const PORT = 11 * PX;
 
+/** How large a port is on the screen, in hairlines, where the page is near. */
+const PORT_HAIRS = 9;
+/** The most a port may be, as a share of its set's or its card's height, on the page. */
+export const PORT_SHARE = 1 / 6;
+
+/**
+ * How large a port is, in the page's pixels on its layer: as large on the
+ * screen as `PORT_HAIRS` hairlines while the page is near; zoomed out, never
+ * more than the port's own size on the page (look `PORT`, 11 px) - it
+ * shrinks with the page from there - nor than `PORT_SHARE` of its set's or
+ * card's height (`of`, page px). The same at every zoom otherwise: round, a
+ * ring a hair thick - or a fifth of it across, where it is that small - or
+ * filled, as its state says (the maintainer, 2026-10-28: zoomed out, ports
+ * were far too big for their sets).
+ */
+export function portSize(of?: number): string {
+  const most = Math.min(PORT / PX, of != null && of > 0 ? of * PORT_SHARE : Infinity);
+  return `min(calc(var(--hair, 1px) * ${PORT_HAIRS}), ${most.toFixed(2)}px)`;
+}
+
 /**
  * How far inside a set what it holds stays from its frame - its ink, half a
  * bond (docs/LOOK.md, *Room*: 24 px at 48 px a bond); how far below its top -
@@ -90,6 +110,24 @@ export const SET_PAD = NOMINAL_BOND_LENGTH / 2;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
+/** How many of a table's rows its frame shows (ValueBody `TableBody`; model `tableSetSize`). */
+export const TABLE_SHOWN_ROWS = 6;
+/**
+ * A table's body (ValueBody `TableBody`), in its own pixels, each height set
+ * on it as it is drawn - never left to its text: its heads' line, the gap
+ * under it, each row's line, and the line saying what it is - as tall as
+ * its text, so that the set's frame stands as far below its last letters as
+ * beside its first (`SET_PAD`); and the room
+ * before each column after the first, so that a number column's last digit
+ * and the next column's first letter do not run together.
+ */
+export const TABLE_HEAD_PX = 19;
+export const TABLE_GAP_PX = 6;
+export const TABLE_ROW_PX = 16;
+export const TABLE_FOOT_PX = 12;
+export const TABLE_COLUMN_GAP_PX = 16;
+/** How tall a table's body draws, showing up to `TABLE_SHOWN_ROWS` of `rows`: a table's set is made as tall (model `tableSetSize`), and its frame scales it to that (SetFrame). */
+export const tableBodyPx = (rows: number) => TABLE_HEAD_PX + TABLE_GAP_PX + TABLE_ROW_PX * Math.min(rows, TABLE_SHOWN_ROWS) + TABLE_FOOT_PX;
 /** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
 export const CHART_PX = { w: 360, h: 260 };
 /** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
@@ -186,6 +224,29 @@ export type WireRouted = { pts: Pt[]; way: WireWay; corners?: Pt[] };
  * back (the drawing's; placement goes the one way, as it is now).
  */
 export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = [], was?: WireWay): WireRouted {
+  // (the same wire among the same frames goes the same way: worked out once - a page of sixty steps placed each result set
+  //  routing every wire on it again, each time, the same; and a drag draws each frame the wires it did not move)
+  const key = routeKey(p, q, ends, around, was);
+  const kept = ROUTES.get(key);
+  if (kept) return kept;
+  const routed = routeOf(p, q, ends, around, was);
+  if (ROUTES.size >= ROUTES_MOST) ROUTES.clear();
+  ROUTES.set(key, routed);
+  return routed;
+}
+
+/** Routes worked out (`wireRoute`), by all they depend on; cleared whole once this many are kept. */
+const ROUTES = new Map<string, WireRouted>();
+const ROUTES_MOST = 20_000;
+
+/** All a wire's way depends on, as a key: its ends, the frames it leaves and comes into, its lead, what it goes round, the way it went before. */
+function routeKey(p: Pt, q: Pt, ends: { from?: Side; to?: Side; lead?: number } | undefined, around: readonly Side[], was?: WireWay): string {
+  const side = (f?: Side) => (f ? `${f.x0},${f.x1},${f.y0},${f.y1}` : "-");
+  return `${p.x},${p.y};${q.x},${q.y};${side(ends?.from)};${side(ends?.to)};${ends?.lead ?? "-"};${was ?? "-"};${ends ? "e" : "-"};${around.map(side).join("|")}`;
+}
+
+/** A wire's way, worked out (`wireRoute`, which keeps each). */
+function routeOf(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = [], was?: WireWay): WireRouted {
   // (into an input named beside it: level for as long as its name - under it, never through it - the rest as any wire to where that begins)
   if (ends?.lead) {
     const at = { x: q.x - ends.lead, y: q.y };

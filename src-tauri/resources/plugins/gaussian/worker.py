@@ -232,6 +232,10 @@ WAVEFUNCTION = "wavefunction.wfx"
 WAVEFUNCTION_KIND = "wfx"
 # each kind of step, as its job's keyword says it
 STEP_JOBS = {"optimise": "opt", "energy": "sp", "frequencies": "freq"}
+# the steps whose stopped run's output is read for the geometry it reached (a run again's start; docs/WORKFLOWS.md, *Runs again*)
+PARTIAL_STEPS = {"optimise"}
+# what Gaussian prints at each step of an optimisation: a run that stopped before it computed nothing to start from
+OPTIMISING = "Berny optimization"
 SOLVATIONS = {"none", "PCM", "SMD"}
 # the solvents offered, as Gaussian's SCRF keyword names them
 SOLVENTS = {
@@ -346,7 +350,10 @@ def op_collect(m):
         raise Refused(f"this plugin does no {m.get('step')!r}")
     output = m.get("log") or ""
     if m.get("ended") != "done" or not ended_well(output):
-        return {"why": why_of(output)}
+        # (an optimisation that stopped: what it wrote read too, where it wrote anything - the geometry it reached, for a
+        #  run again to start from - never as a result)
+        partial = [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []] if m.get("step") in PARTIAL_STEPS and OPTIMISING in output else []
+        return {"why": why_of(output), **({"partial": partial} if partial else {})}
     # (its wavefunction, where it wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}

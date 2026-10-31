@@ -145,7 +145,8 @@ export type WrittenAtom = { el: string; x: number; y: number; z: number; charge?
  * its name - whoever writes it.
  */
 /** A molecule a writer is given. `skeleton`: its hydrogens not there (lib/chem/skeleton) - it has no charge or spin to give. */
-export type WrittenMolecule = { name?: string; atoms: WrittenAtom[]; bonds: { a1: number; a2: number; order: number }[]; skeleton?: boolean };
+/** A molecule as it is written: its atoms, its bonds (a coordination bond single and marked, `a1` the atom that lends its pair), and whether it is a skeleton. */
+export type WrittenMolecule = { name?: string; atoms: WrittenAtom[]; bonds: { a1: number; a2: number; order: number; coordination?: true }[]; skeleton?: boolean };
 
 const NUMBERS = new Map(ELEMENTS.map((e) => [e.symbol, e.number]));
 const UNPAIRED: Record<Radical, number> = { singlet: 0, doublet: 1, triplet: 2 };

@@ -196,7 +196,7 @@ describe("a plugin's manifest", () => {
       ["frequencies", ["xtb"], ["method", "solvent"]],
     ]);
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
-    expect(orca.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
+    expect(orca.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies", "path-search", "reaction-path", "saddle-point"]);
     // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
     const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
@@ -212,6 +212,19 @@ describe("a plugin's manifest", () => {
     // (RDKit's conformer search, as a step: the options it takes as a role)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.steps.find((d) => d.kind === "conformers")?.options).toEqual(rdkit.roles.find((r) => r.role === "conformers")?.options);
+  });
+
+  it("may declare another plugin's program its jobs may need - a plugin, a program it runs, a variable to name it in - all as they must be, or none", () => {
+    const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
+    const need = { plugin: "xtb", program: "xtb", env: "XTBEXE" };
+    expect(acceptManifest({ ...steps, needs: [need] })?.needs).toEqual([need]);
+    expect(acceptManifest(steps)?.needs).toBeUndefined();
+    // (its own plugin, a shell, a path, a variable that finds programs, one plugin twice: none taken)
+    for (const bad of [{ ...need, plugin: good.id }, { ...need, program: "sh" }, { ...need, program: "bin/xtb" }, { ...need, env: "PATH" }, { ...need, env: "1X" }])
+      expect(acceptManifest({ ...steps, needs: [bad] })?.needs, JSON.stringify(bad)).toBeUndefined();
+    expect(acceptManifest({ ...steps, needs: [need, { ...need, env: "OTHER" }] })?.needs).toBeUndefined();
+    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.needs).toEqual([need]);
   });
 
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {

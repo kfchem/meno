@@ -58,7 +58,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 }));
 
 import { PX } from "../workflow/look";
-import { boxOf, progressOf, rendersOf, startRender, stopRender, stopRenders, withWords } from "./renders";
+import { boxOf, moveRender, progressOf, rendersOf, startRender, stopRender, stopRenders, withWords } from "./renders";
 import { askOf, renderOptions } from "./renderOptions";
 import type { RenderAsk } from "./renderScene";
 import { valuesOf } from "../../../../lib/options";
@@ -123,7 +123,7 @@ function workspace() {
 const mp4 = (seed: number) => new Uint8Array([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, seed]);
 /** How often a render's job is looked at (renders.ts). */
 const LOOK_MS = 1000;
-const FILM: RenderAsk = { kind: "film", width: 320, shape: "16:9", motion: "turn", seconds: 1, fps: 24 };
+const FILM: RenderAsk = { kind: "film", width: 320, shape: "16:9", motion: "turn", seconds: 3, fps: 8 };
 
 describe("a workspace closing", () => {
   beforeEach(() => {
@@ -201,6 +201,12 @@ describe("a workspace closing", () => {
     // asked for again as it closes: nothing begun, nothing put down
     await startRender(one.store, [one.id], FILM, {});
     expect(asked.started).toHaveLength(1);
+    expect(rendersOf(one.store).getState().list).toEqual([]);
+  });
+  it("refuses a film shorter than its motion can be read in before anything is begun, saying how long it needs", async () => {
+    const one = workspace();
+    await expect(startRender(one.store, [one.id], { ...FILM, seconds: 2 }, {})).rejects.toThrow("This film needs at least 3 s");
+    expect(asked.started).toEqual([]);
     expect(rendersOf(one.store).getState().list).toEqual([]);
   });
   it("says why one failed, and puts it away with its job's folder kept - its log, all Blender said", async () => {
@@ -294,5 +300,22 @@ describe("where a render lands", () => {
     expect(films.map(({ x, y, w, h }) => ({ x, y, w, h }))).toEqual(expect.arrayContaining([r.at, r2.at]));
     // (landed: their frames kept clear no more)
     expect(one.st().renderFrames).toEqual([]);
+  });
+
+  it("moved as anything on the page is, its frame kept clear where it now stands, and what it makes lands there", async () => {
+    const one = workspace();
+    const ran = startRender(one.store, [one.id], FILM, {});
+    await vi.advanceTimersByTimeAsync(0);
+    const [r] = rendersOf(one.store).getState().list;
+    moveRender(one.store, r.key, r.at.x + 12, r.at.y - 5);
+    const moved = rendersOf(one.store).getState().list[0].at;
+    expect(moved).toEqual({ ...r.at, x: r.at.x + 12, y: r.at.y - 5 });
+    expect(one.st().renderFrames).toEqual([withWords(moved)]);
+    Object.assign(jobs.get(r.job!)!, { state: "done", ended: Date.now() });
+    madeFiles.set(`/jobs/${r.job}/film.mp4`, mp4(3));
+    await vi.advanceTimersByTimeAsync(5 * LOOK_MS);
+    await ran;
+    const film = one.st().pictures.find((p) => p.media === "video/mp4")!;
+    expect({ x: film.x, y: film.y, w: film.w, h: film.h }).toEqual(moved);
   });
 });
