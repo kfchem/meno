@@ -950,8 +950,8 @@ The same for every plugin and for Meno's own parts:
     marks the molecule as no minimum;
   - `prepare` may say, in a line of plain words beside its jobs, what
     it chose for the chemist in preparing them (`{"jobs": [...],
-    "note": "frequencies computed numerically"}`: ORCA's own xTB, which
-    has no analytic Hessian, asked for its frequencies by NUMFREQ). It is
+    "note": "frequencies computed numerically"}`: ORCA's own xTB, its
+    frequencies asked for by NUMFREQ). It is
     said on the step's line when the step ends, so that nothing is
     hidden; it changes nothing Meno does;
   - a job `prepare` gives may declare the memory it takes, in MiB

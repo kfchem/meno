@@ -532,8 +532,7 @@ them a saddle point.
   Searches*), at the method and basis set given: the step has no level of
   its own unless set. Its *First Hessian* is computed
   at the start (`Calc_Hess`), "the most straightforward option" (4.3.2.1),
-  or ORCA's model one. At ORCA's own xTB, which has no analytic Hessian,
-  ORCA computes it numerically, and the step's line says so. ORCA's OptTS
+  or ORCA's model one. At ORCA's own xTB, ORCA computes it numerically, and the step's line says so. ORCA's OptTS
   takes no sides: wired, the step is refused.
 
 ### Barrier
