@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extensionOf, kindOf, kinds, probeCandidates, registerKinds, registered } from "./kinds";
 import { acceptManifest, type Manifest } from "../plugins/manifest";
 import { MANIFESTS } from "../plugins/known";
+import { pluginOf, readerFor, type ReaderPlugin } from "../calc/catalog";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../samples/diels-alder.rxn?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
@@ -174,9 +175,9 @@ describe("kinds a plugin registers", () => {
   it("are coloured by the grammar of the plugin whose own program writes them, else by the first's", () => {
     const cclib = MANIFESTS.find((m) => m.id === "cclib")!;
     const grammar = { file: "orca-output.grammar", tones: { Landmark: "landmark" } };
-    const own = (writtenBy?: string) =>
+    const own = (writtenBy?: string, id = "program-own") =>
       acceptManifest({
-        id: "program-own",
+        id,
         name: "The program's plugin",
         version: "1",
         environment: "uv",
@@ -190,6 +191,14 @@ describe("kinds a plugin registers", () => {
     expect(orcaOf([own("orca"), cclib]).grammar?.plugin).toBe("program-own");
     // (no plugin says its program writes it: the first's, as before)
     expect(orcaOf([cclib, own()]).grammar?.plugin).toBe("cclib");
+    // (two say so: the first's, in Meno's order - the plugin that reads it by default)
+    const second = own("orca", "program-other");
+    expect(orcaOf([cclib, own("orca"), second]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([second, own("orca")]).grammar?.plugin).toBe("program-other");
+    const both = new Set(["program-own", "program-other"]);
+    const asReader = (p: Manifest) => pluginOf(p) as ReaderPlugin;
+    expect(readerFor("orca", both, { read: {}, also: {} }, [asReader(own("orca")), asReader(second)])?.id).toBe("program-own");
+    expect(readerFor("orca", both, { read: {}, also: {} }, [asReader(second), asReader(own("orca"))])?.id).toBe("program-other");
   });
 
   it("are Meno's, where a plugin brings a kind of the id of one of Meno's", () => {
