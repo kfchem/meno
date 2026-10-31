@@ -368,11 +368,19 @@ describe("a calculation's results in Meno's own form", () => {
     expect(d.vector![2]).toBeCloseTo(1.0 + (0.05 - 0.1) * 4.803204712570263, 12);
   });
 
-  it("leaves a dipole as given where it does not depend on the point - neutral - or cannot be moved: no masses, no origin", () => {
+  it("takes it, where the program gave no masses, with the elements' standard atomic weights", () => {
+    const d = dipoleOf(hydroxide({ masses: null }));
+    // (NIST's standard atomic weights: O's interval [15.99903,15.99977], its midpoint; H's [1.00784,1.00811], its midpoint)
+    const centre = (0.97 * 1.007975) / (15.9994 + 1.007975);
+    expect([d.label, d.origin![2]]).toEqual([ABOUT_CENTRE, expect.closeTo(centre, 12)]);
+    // (masses not one to each atom: the standard weights too)
+    expect(dipoleOf(hydroxide({ masses: [1] })).origin![2]).toBeCloseTo(centre, 12);
+  });
+
+  it("leaves a dipole as given where it does not depend on the point - neutral - or cannot be moved: no origin, or no weight for an element", () => {
     expect(dipoleOf(hydroxide({ charge: 0 })).value).toBe(1.0);
-    expect(dipoleOf(hydroxide({ masses: null })).label).toBe("Dipole moment");
-    expect(dipoleOf(hydroxide({ masses: [1] })).value).toBe(1.0);
     expect(dipoleOf(hydroxide({}, { origin: undefined })).value).toBe(1.0);
+    expect(dipoleOf(hydroxide({ masses: null, atoms: ["O", "Og"] })).label).toBe("Dipole moment");
   });
 
   it("writes a point group and Mulliken symbols as Meno writes them, for display and comparison", () => {

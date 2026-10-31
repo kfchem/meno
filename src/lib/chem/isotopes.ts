@@ -1,10 +1,15 @@
 /**
  * Each nuclide's relative atomic mass, in daltons: what a program is given
  * of an atom's isotope where its input takes a mass (docs/PLUGINS.md, *The
- * contract*). From NIST's "Atomic Weights and Isotopic Compositions for
- * All Elements" (physics.nist.gov/cgi-bin/Compositions/stand_alone.pl, all
- * isotopes), fetched 2026-10-13, as scripts/chem/isotopes.py writes it;
- * the masses NIST marks estimated ("#") are left out.
+ * contract*) - and each element's standard atomic weight: what a centre
+ * of mass is taken with where a program says none of its own (lib/calc
+ * output). From NIST's "Atomic Weights and Isotopic Compositions for All
+ * Elements" (https://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl,
+ * all isotopes), as scripts/chem/isotopes.py writes it: the nuclides'
+ * masses fetched 2026-10-13, the weights 2026-10-31 - the masses NIST marks
+ * estimated ("#") left out; a weight NIST gives as an interval, [a,b], its
+ * midpoint; as a mass number alone, [A] (no stable nuclide), that
+ * nuclide's mass; none, where it gives none.
  */
 
 /** Each element's nuclides: its symbol, then each mass number and its mass. */
@@ -118,6 +123,107 @@ const NUCLIDES = [
   "Hs 264:264.128357 265:265.129793 266:266.130046",
   "Ds 269:269.144752 270:270.144584",
 ];
+
+/** Each element's standard atomic weight, in daltons, by the rule above. */
+const WEIGHTS: Readonly<Record<string, number>> = {
+  H: 1.007975,
+  He: 4.002602,
+  Li: 6.9675,
+  Be: 9.0121831,
+  B: 10.8135,
+  C: 12.0106,
+  N: 14.006855,
+  O: 15.9994,
+  F: 18.998403163,
+  Ne: 20.1797,
+  Na: 22.98976928,
+  Mg: 24.3055,
+  Al: 26.9815385,
+  Si: 28.085,
+  P: 30.973761998,
+  S: 32.0675,
+  Cl: 35.4515,
+  Ar: 39.948,
+  K: 39.0983,
+  Ca: 40.078,
+  Sc: 44.955908,
+  Ti: 47.867,
+  V: 50.9415,
+  Cr: 51.9961,
+  Mn: 54.938044,
+  Fe: 55.845,
+  Co: 58.933194,
+  Ni: 58.6934,
+  Cu: 63.546,
+  Zn: 65.38,
+  Ga: 69.723,
+  Ge: 72.630,
+  As: 74.921595,
+  Se: 78.971,
+  Br: 79.904,
+  Kr: 83.798,
+  Rb: 85.4678,
+  Sr: 87.62,
+  Y: 88.90584,
+  Zr: 91.224,
+  Nb: 92.90637,
+  Mo: 95.95,
+  Tc: 97.9072124,
+  Ru: 101.07,
+  Rh: 102.90550,
+  Pd: 106.42,
+  Ag: 107.8682,
+  Cd: 112.414,
+  In: 114.818,
+  Sn: 118.710,
+  Sb: 121.760,
+  Te: 127.60,
+  I: 126.90447,
+  Xe: 131.293,
+  Cs: 132.90545196,
+  Ba: 137.327,
+  La: 138.90547,
+  Ce: 140.116,
+  Pr: 140.90766,
+  Nd: 144.242,
+  Pm: 144.9127559,
+  Sm: 150.36,
+  Eu: 151.964,
+  Gd: 157.25,
+  Tb: 158.92535,
+  Dy: 162.500,
+  Ho: 164.93033,
+  Er: 167.259,
+  Tm: 168.93422,
+  Yb: 173.054,
+  Lu: 174.9668,
+  Hf: 178.49,
+  Ta: 180.94788,
+  W: 183.84,
+  Re: 186.207,
+  Os: 190.23,
+  Ir: 192.217,
+  Pt: 195.084,
+  Au: 196.966569,
+  Hg: 200.592,
+  Tl: 204.3835,
+  Pb: 207.2,
+  Bi: 208.98040,
+  Po: 208.9824308,
+  At: 209.9871479,
+  Rn: 222.0175782,
+  Fr: 223.0197360,
+  Ra: 226.0254103,
+  Ac: 227.0277523,
+  Th: 232.0377,
+  Pa: 231.03588,
+  U: 238.02891,
+  Np: 237.0481736,
+  Pu: 244.0642053,
+};
+
+/** `el`'s standard atomic weight, in daltons; none, where NIST gives none. */
+export const standardWeight = (el: string): number | undefined => WEIGHTS[el];
 
 let masses: Map<string, number> | undefined;
 

@@ -756,7 +756,9 @@ Each result says what it belongs to, and Meno puts it there:
   program printed them (`masses`, daltons). Meno takes it again about the
   centre of mass (2026-10-31: Meno's rule, once kept by each reader) - the
   one printed, else the one those masses give at the output's last
-  geometry - and calls it *Dipole moment about the centre of mass*
+  geometry, else the one the elements' standard atomic weights give
+  (NIST's, lib/chem/isotopes: an interval's midpoint, an element with no
+  stable nuclide its listed nuclide's mass) - and calls it *Dipole moment about the centre of mass*
   wherever it is shown, its origin then that centre, so that a workspace
   read again takes it nowhere else. A neutral molecule's is the program's
   own; so is a charged one's where there is no centre to take it about.

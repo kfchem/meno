@@ -448,11 +448,13 @@ export function chipLine(first: readonly string[], results: readonly Result[] | 
 
 /**
  * A point group or a Mulliken symbol as Meno writes it, for display and for every comparison: its first letter upper
- * and the rest lower - C2v, D3h, Td, Bu, B1g, A', E'' - so that one printed "c2v" or "C2V" is the same as "C2v". Meno's
- * form is standard notation (Σ, Π, Δ, Φ for a linear molecule's symbols, ∞ in a point group, primes): a reader writes
- * its program's own spellings in it; this rule only puts the case right.
+ * and the letters after it lower, any number before it and every digit and prime as they are - C2v, D3h, Td, Bu, B1g,
+ * A', E'', an orbital's 1A1 or 2B2 - so that one printed "c2v" or "C2V" is the same as "C2v". Meno's form is standard
+ * notation (Σ, Π, Δ, Φ for a linear molecule's symbols, ∞ in a point group, primes): a reader writes its program's own
+ * spellings in it; this rule only puts the case right.
  */
 export function symmetryText(s: string): string {
   const t = s.trim();
-  return t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : t;
+  const k = t.search(/\p{L}/u);
+  return k < 0 ? t : t.slice(0, k) + t[k].toUpperCase() + t.slice(k + 1).toLowerCase();
 }

@@ -8,6 +8,7 @@
  */
 import { warningsOf, type Warning } from "./warnings";
 import { readResults, symmetryText, type MoleculeResult, type Result } from "./results";
+import { standardWeight } from "../chem/isotopes";
 import { readerIdOfLine } from "./catalog";
 import type { StructureRead } from "../io/structures";
 
@@ -201,10 +202,10 @@ export const ABOUT_CENTRE = "Dipole moment about the centre of mass";
 
 /**
  * A charged molecule's dipole, which depends on the point it is taken about, taken about the centre of mass of the
- * geometry it is of: the centre the program printed with it, else the one its atoms' masses as the program used them
- * give at the output's last geometry (`xyz`) - μ' = μ - q (C - O) - and said to be, its origin now that centre. A
- * neutral one's, or one taken about the centre already, as it was; one that says no vector or origin, or with no
- * centre to take it about, as given.
+ * geometry it is of: the centre the program printed with it; else the one its atoms' masses give at the output's last
+ * geometry (`xyz`) - as the program used them, else the elements' standard atomic weights (lib/chem/isotopes) -
+ * μ' = μ - q (C - O) - and said to be, its origin now that centre. A neutral one's, or one taken about the centre
+ * already, as it was; one that says no vector or origin, or with no centre to take it about, as given.
  */
 function aboutCentre(r: MoleculeResult, xyz: readonly number[] | undefined, masses: readonly number[] | undefined, charge: number | undefined): MoleculeResult {
   if (r.quantity !== "dipole" || !r.vector || !r.origin || !charge) return r;
@@ -230,7 +231,9 @@ function centreOf(xyz: readonly number[] | undefined, masses: readonly number[] 
  */
 export function inMenosForm(results: Result[], out: Pick<ReaderOutput, "atoms" | "frames" | "masses" | "charge">): Result[] {
   const xyz = [...(out.frames ?? [])].reverse().find((f) => Array.isArray(f) && f.length === 3 * out.atoms.length);
-  const masses = massesOf(out);
+  // (the masses the program used, else the elements' standard atomic weights - each element's, or none)
+  const standard = out.atoms.map((el) => standardWeight(el));
+  const masses = massesOf(out) ?? (standard.every((m): m is number => m != null) ? standard : undefined);
   const charge = Number.isInteger(out.charge) ? out.charge! : undefined;
   const sym = (v: unknown) => (typeof v === "string" ? symmetryText(v) : v);
   return results.map((r) => {

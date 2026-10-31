@@ -36,6 +36,10 @@ describe("Add", () => {
       "sum: energy (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction (wB97X-D/6-31G(d), Gaussian, solvation not stated, 298.15 K, 1 atm, quasi-RRHO) + standard state (" + standardStateBy(298.15).treatment + ")",
     );
     expect(out.said).toBe("1 of 1 entry given G-DFT = energy + thermo.g-correction + standard state");
+    // (a number wired in, of no geometry, has no solvation to state - one that says nothing of itself, nothing at all)
+    const bare = add([e], { parts: ["energy", "thermo.g-correction"], given: [{ name: "the number", value: 1, unit: "kcal/mol" }], as: "G-DFT" });
+    if (!bare.ok) throw new Error(bare.said);
+    expect(bare.exits.done[0].properties["G-DFT"].by?.treatment).toMatch(/ \+ the number$/);
   });
 
   it("says the solvent where the parts that say one agree, and none where two differ - each part keeps its own", () => {

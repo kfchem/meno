@@ -258,6 +258,8 @@ describe("results in Meno's own forms", () => {
 
   it("write a point group or a Mulliken symbol with its first letter upper and the rest lower, however it was printed", () => {
     expect(["c2v", "C2V", "C2v", " d3h ", "TD", "bu", "AU", "B1G", "A'", "E''", "C∞v", "Σg"].map(symmetryText)).toEqual(["C2v", "C2v", "C2v", "D3h", "Td", "Bu", "Au", "B1g", "A'", "E''", "C∞v", "Σg"]);
+    // (a number before it - an orbital's, numbered within its symmetry - as it is)
+    expect(["1A1", "2b2", "1a'", "10E''"].map(symmetryText)).toEqual(["1A1", "2B2", "1A'", "10E''"]);
   });
 });
 
