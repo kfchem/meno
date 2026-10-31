@@ -941,9 +941,9 @@ The same for every plugin and for Meno's own parts:
     is, to a later step that takes its kind (a step's `files`);
   - `prepare` may refuse an entry alone, preparing the others' jobs:
     `{"jobs": [...], "refused": [{"entry": 1, "why": "...", "kind":
-    "refused"}]}` - an isotope's frequencies, which xtb would give as of
-    the natural element. The entry is in no job; it goes out of the
-    step's *Failed* exit with its why. A step whose every entry is
+    "refused"}]}` - as the xTB plugin refuses an isotope's frequencies,
+    which it never gives as of the natural element. The entry is in no
+    job; it goes out of the step's *Failed* exit with its why. A step whose every entry is
     refused, or whose options cannot be done, is refused as a whole, as
     before (an error);
   - `collect` may answer that a job as a whole stopped, `{"why": "..."}`,
