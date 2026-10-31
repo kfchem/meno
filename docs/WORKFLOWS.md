@@ -1506,7 +1506,8 @@ Decided while building it, for the maintainer to confirm:
   `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
   is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
   gives. Never more than the cores it may use (its threads, as the system
-  lets Meno have them), and its cores where the system cannot say. A
+  lets Meno have them), and its cores where its physical cores are not
+  known. A
   program of threads (xTB, Gaussian's `%nprocshared`) is told its cores as
   before.
 - **Jobs at once counted for jobs asked for after it was changed** (until
