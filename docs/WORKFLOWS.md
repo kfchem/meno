@@ -1702,8 +1702,8 @@ Decided while building it, for the maintainer to confirm:
 - **A search on a compound set** runs one job for each entry; **on a
   conformer set**, one for each compound, from its first conformer.
   Either way the results are a conformer set: each geometry a search gave
-  a conformer of its entry's compound, numbered lowest energy first, each
-  with its energy; the calculation is kept with the first. The card says
+  a conformer of its entry's compound, numbered in the order the search
+  gave them, each with its energy (a *Rank* step orders them); the calculation is kept with the first. The card says
   how many: *0:45 · 17 conformers* (*... of 2 compounds*).
 - **CREST's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF, or
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised

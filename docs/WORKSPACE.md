@@ -487,9 +487,38 @@ Taken on 2026-10-13:
   what to make: every stereoisomer it gives, one, or none for now. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
   chosen - UFF where MMFF has no parameters for the molecule) and comes
-  onto the page as a molecule in 3D, its frames the conformers, lowest
-  first. Of two enantiomers, one is made as the other's mirror image, so
-  the two have the same conformers and shares.
+  onto the page as a molecule in 3D, its frames the conformers, each once,
+  lowest first (*The page's conformers*, below). Of two enantiomers, one is
+  made as the other's mirror image, so the two have the same conformers and
+  shares.
+- **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
+  gives every conformer it made, as it made them (PLUGINS.md); the page
+  makes them its own (`chem/pageConformers`):
+  - **lowest first**, by their energies - or, where the molecule's are not
+    given, by those of the model they were optimised in (a lighter metal
+    standing in, η rings held), as the line that says how they were made
+    says ("ordered by the model's energies") - else in the order they came;
+  - **each once**, by Meno's one definition (WORKFLOWS.md, *The same
+    conformer*), each against those kept before it, how many set aside and
+    within what said with how they were made (*The same*, *The same
+    within*);
+  - **laid over the first** by their heavy atoms, turned and moved, never
+    reflected;
+  - **equivalent atoms in the first's places** (2026-10-15;
+    `chem/settle`): an embedding does not say which of a CH2's two
+    hydrogens, or of an isopropyl's two methyls, is which, so each
+    equivalent group - neighbours of one atom of the same symmetry class,
+    each the root of a branch joined to the rest through it, and a pendant
+    ring symmetric about its bond - is laid as it is in the first, by whole
+    branches: which way round they go first, then the fit in the parent's
+    frame. Where three bonds lie in a plane (an =CH2's), they go no way
+    round - a triple product under 0.05 Å³, where a tetrahedral centre's
+    are some 0.9 - and the fit alone decides. No heavy atom moves but as a
+    whole equivalent branch, and no whole-molecule symmetry is searched.
+
+  A workflow's entries are never so moved: its *Conformers* step gives
+  every one, as made, and its *Duplicates* and *Rank* steps keep each once
+  and order them, where asked.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
@@ -509,8 +538,8 @@ Taken on 2026-10-13:
   has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
   metal of its group stands in for its shape while its bonds are held at
   their own lengths, and no energies are given: the chip says so, and the
-  conformers are not weighted. They are ordered by the stand-in's energies,
-  as the line that says how they were made says. Before, UFF without terms for a
+  conformers are not weighted. The page orders them by the stand-in's
+  energies, as the line that says how they were made says. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
   asked about as the CTfile's multi-centre bond - a bond from the metal to a
