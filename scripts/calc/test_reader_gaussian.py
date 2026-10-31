@@ -376,11 +376,18 @@ class NotGaussian(unittest.TestCase):
 
 
 class CutShort(unittest.TestCase):
-    def test_a_geometry_with_no_forces_has_no_rms_gradient_the_others_theirs(self):
-        text = "\n".join(head("#p hf/3-21g opt") + orientation(WATER) + scf(-75.5) + forces([(8, 0.0, 0.0, 0.03), (1, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0)])
-                         + orientation(WATER_2) + scf(-75.6))
-        g = results(reader.read("w.log", text))["rms-gradient"]["values"]
-        self.assertEqual((round(g[0], 6), g[1]), (0.01, None))
+    def test_a_scan_cut_after_its_last_scf_its_last_geometry_without_an_rms_gradient_the_others_theirs(self):
+        # (a relaxed scan cut short: its last geometry's SCF printed, its forces not)
+        zero = [(8, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0)]
+        moved = [(z, x, y + 0.1, w) for z, x, y, w in WATER]
+        text = "\n".join(head("#p hf/3-21g opt=modredundant") + orientation(WATER) + scf(-75.5) + forces([(8, 0.0, 0.0, 0.03)] + zero[1:])
+                         + [" Optimization completed.", "    -- Stationary point found."]
+                         + orientation(WATER_2) + scf(-75.6) + forces(zero) + orientation(moved) + scf(-75.7))
+        o = reader.read("w.log", text)
+        self.assertEqual(results(o)["run"]["value"], "did not come to its end")
+        self.assertEqual(o["energies"], [-75.5, -75.6, -75.7])
+        g = results(o)["rms-gradient"]["values"]
+        self.assertEqual((round(g[0], 6), g[1], g[2]), (0.01, 0.0, None))
 
 
 class Energies(unittest.TestCase):
