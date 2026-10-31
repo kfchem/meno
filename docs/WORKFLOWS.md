@@ -1984,8 +1984,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   changes - from where each hangs, and faded out below 75 %, with
   the sets' names and the cards' words (`utils/pageScale`). Each is laid
   out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
-  they are seen at - not drawn at one size and scaled by a transform,
-  which the Mac's WebView magnifies soft up close (2026-10-25; so the
+  they are seen at - not drawn at one size and scaled by a transform
+  (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
   molecule or a figure).
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
