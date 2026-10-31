@@ -2,7 +2,7 @@
 
 Pictures and films of molecules in 3D, rendered by a plugin: Blender, the
 first to fill the role *Render*. Written on 2026-10-11 with the
-maintainer (lane L7); what is decided is under *Decided*.
+maintainer; what is decided is under *Decided*.
 
 ## What it is for
 

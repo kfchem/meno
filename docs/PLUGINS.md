@@ -432,7 +432,7 @@ As the programs stand (the maintainer, 2026-10-12):
 
 ## Room for what comes next
 
-What lane L7 brings fits this spec as it is; the rest comes with it:
+What Blender and NCI bring fits this spec as it is; the rest comes with them:
 
 - **Blender** (real pictures and films of molecules in 3D): built
   (2026-10-11) - the role *Render*, the glTF 2.0 scene Meno writes, the
@@ -1392,7 +1392,7 @@ By the maintainer, 2026-10-06:
    *Revised on 2026-10-10 (9-12 below):* the plugin is named by a
    catalogue, never by the marks of a plugin not added.
 
-By the maintainer, 2026-10-10 (lane L6):
+By the maintainer, 2026-10-10:
 
 9. **One manifest spec**, as proposed (*The manifest*): every kind of file
    in one list; roles and steps as objects, a step's several kinds in one;
