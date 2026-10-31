@@ -1635,6 +1635,10 @@ As step 3 was built:
     the output echoes it) that ORCA says it took as such: the functional
     or composite method it says it recognised, else the method cclib read
     where the input names it (HF, MP2); the orbital basis it says it used.
+    ORCA may name a functional its own way and say more on that line ("The
+    omegaB97X-D3 functional is recognized. Fit by Chai et al." for
+    `wB97X-D3`): a name that begins "omega" is taken as one that begins
+    "w", and the method given is the input's word.
     Otherwise neither is given: never cclib's "DFT", never an auxiliary
     basis ("def2-mTZVPP/J"), and no basis after a composite method, whose
     own it is.

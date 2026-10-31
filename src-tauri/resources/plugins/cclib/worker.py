@@ -655,8 +655,9 @@ ORCA_GEOMETRY = "CARTESIAN COORDINATES (ANGSTROEM)"
 ORCA_FINAL_SAID = "ORCA final single-point energy (includes dispersion and gCP where the method has them)"
 # a nudged elastic band among ORCA's simple keywords: NEB, NEB-CI, NEB-TS, ZOOM-NEB and the like
 ORCA_NEB = re.compile(r"(ZOOM-)?NEB(-[A-Z]+)?", re.I)
-# what ORCA says it took a keyword as: "The B3LYP functional is recognized", "The B97-3c composite method is recognized"
-ORCA_RECOGNISED = re.compile(r"^The (\S+) (?:functional|composite method) is recognized\s*$", re.M)
+# what ORCA says it took a keyword as: "The B3LYP functional is recognized", "The B97-3c composite method is recognized",
+# "The omegaB97X-D3 functional is recognized. Fit by Chai et al." - the line may go on after "recognized"
+ORCA_RECOGNISED = re.compile(r"^The (\S+) (?:functional|composite method) is recognized(?:\s*$|\. )", re.M)
 # the orbital basis it says it used, under that heading - not an auxiliary one, under its own
 ORCA_BASIS = re.compile(r"^----- Orbital basis set information -----\s*\nYour calculation utilizes the basis: (\S+)\s*$", re.M)
 
@@ -743,7 +744,9 @@ def orca_level(text, meta):
     words = orca_keywords(text)
 
     def key(word):
-        return re.sub(r"[^0-9a-z]", "", word.lower())
+        # (ORCA names a range-separated functional "omega..." where its input says "w...": omegaB97X-D3 for wB97X-D3)
+        word = word.lower()
+        return re.sub(r"[^0-9a-z]", "", "w" + word[5:] if word.startswith("omega") else word)
 
     recognised = {key(x) for x in ORCA_RECOGNISED.findall(text)}
     methods = [w for w in words if key(w) in recognised]
