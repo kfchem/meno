@@ -364,7 +364,8 @@ class Read(unittest.TestCase):
     def test_the_manifest_declares_the_kind_it_reads_written_by_its_own_program(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         kind = next(k for k in manifest["kinds"] if k["id"] == "xtb")
-        self.assertEqual(manifest["reads"], ["xtb"])
+        self.assertTrue(all(k["writtenBy"] == "xtb" for k in manifest["kinds"]))
+        self.assertEqual(manifest["reads"], ["xtb", "xtb-g98"])
         self.assertIn(kind["writtenBy"], {p for s in manifest["steps"] for p in s["programs"]})
         self.assertTrue((MANIFEST.parent / kind["grammar"]["file"]).exists())
 

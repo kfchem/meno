@@ -49,7 +49,7 @@ describe("the readers Meno knows of", () => {
       reads: ["orca", "gaussian", "gaussian-fchk", "molden"],
     });
     // (a program's plugin that reads its own program's output, the kind its manifest declares)
-    expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb"], env: "pixi", worker: "resources/plugins/xtb/worker.py" });
+    expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb", "xtb-g98"], env: "pixi", worker: "resources/plugins/xtb/worker.py" });
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
@@ -98,7 +98,7 @@ describe("the readers Meno knows of", () => {
     expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     // (and those that fill kinds of step: xTB, made by pixi, which reads its own program's output too - and RDKit, a 3D structure besides its roles)
     const xtb = PLUGINS.find((p) => p.id === "xtb")!;
-    expect(xtb).toMatchObject({ reads: ["xtb"], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
+    expect(xtb).toMatchObject({ reads: ["xtb", "xtb-g98"], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
     expect(xtb.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     const crest = PLUGINS.find((p) => p.id === "crest")!;
     expect(crest).toMatchObject({ profile: "plugin-crest", env: "pixi", systems: ["macos", "linux"] });

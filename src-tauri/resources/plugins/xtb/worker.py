@@ -344,7 +344,7 @@ def op_read(m):
     """An xtb output opened by hand, read as a job's log is."""
     name = str(m.get("name") or "output").replace("\\", "/").rsplit("/", 1)[-1]
     try:
-        return reader.read_jobs(name, m.get("text"))
+        return reader.read_jobs(name, m.get("text"), m.get("kind"))
     except ValueError as e:
         raise Refused(str(e).rstrip(".")) from e
 
