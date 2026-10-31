@@ -812,7 +812,9 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.
 - *Files* in Settings says who reads each kind: one reader (`readerFor`:
-  the one chosen, else Meno where Meno reads it, else the first added), and
+  the one chosen, else Meno where Meno reads it, else the plugin added whose
+  own program writes it - its manifest's `writtenBy` - else the first
+  added), and
   the readers chosen to read it as well (`alsoReadersFor`), kept as
   `files` in the settings.
 - `lib/calc/workers.ts` starts a reader's worker the first time it is asked

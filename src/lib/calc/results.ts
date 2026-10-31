@@ -15,8 +15,13 @@
  * its own (output.ts) and is no result.
  */
 
-/** The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a spin population in e (signed as a charge is), a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in degrees, a dipole in debye, a number without one. */
-export const QUANTITIES = ["energy", "charge", "spin", "wavenumber", "length", "angle", "dipole", "number"] as const;
+/**
+ * The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a spin population in e
+ * (signed as a charge is), a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in
+ * degrees, a dipole in debye, a number without one; and a symmetry - a point group or a Mulliken symbol, a text in
+ * standard notation (`symmetryText`).
+ */
+export const QUANTITIES = ["energy", "charge", "spin", "wavenumber", "length", "angle", "dipole", "number", "symmetry"] as const;
 export type Quantity = (typeof QUANTITIES)[number];
 
 /** How a value is written: as a quantity Meno knows; or else with the unit given; and to how many decimals, where not as Meno would. */
@@ -33,8 +38,13 @@ type Named = {
   /** The plugin it came from, its name and version: said only where another plugin's results stand beside its own. */
   from?: string;
 };
-/** One value of the whole molecule; `rank`, where it is in the chip's line - lower first - or not there, unset. */
-export type MoleculeResult = Named & Measure & { on: "molecule"; value: Cell; rank?: number };
+/**
+ * One value of the whole molecule; `rank`, where it is in the chip's line - lower first - or not there, unset. A
+ * vector's value - a dipole's - may come with its components (`vector`, in its unit), the point it was taken about
+ * (`origin`) and the molecule's centre of mass (`centre`), each in ångströms in the frame of the output's geometries,
+ * as its program printed them.
+ */
+export type MoleculeResult = Named & Measure & { on: "molecule"; value: Cell; rank?: number; vector?: Vec3; origin?: Vec3; centre?: Vec3 };
 /** A value of each frame, in order. */
 export type FramesResult = Named & Measure & { on: "frames"; values: Cell[] };
 /** A value of each atom, in order. */
@@ -84,14 +94,21 @@ export type Row = {
   surface?: Grid | Ask;
   colour?: SurfaceColour;
 };
-/** A list of rows; `focus`, the row it opens on; `shown`, the row chosen as it comes - the list opened at once. */
+/**
+ * A list of rows; `focus`, the row it opens on; `shown`, the row chosen as it comes - the list opened at once;
+ * `trimmed`, where it keeps only the rows about its focus (`ABOUT_FOCUS`), which of the list's rows those are -
+ * counted from 1, the first and the last kept - and how many it had.
+ */
 export type ListResult = Named & {
   on: "list";
   columns: Column[];
   rows: Row[];
   focus?: number;
   shown?: number;
+  trimmed?: Trimmed;
 };
+/** Which of a list's rows it keeps: the first and the last, counted from 1, of how many in all. */
+export type Trimmed = { from: number; to: number; of: number };
 export type Result = MoleculeResult | FramesResult | AtomsResult | PairsResult | ListResult;
 
 /** How long a name or a text value may be, in characters; a unit; how many columns and rows a list may have. */
@@ -100,6 +117,8 @@ const TEXT_MOST = 120;
 const UNIT_MOST = 24;
 const COLUMNS_MOST = 12;
 const ROWS_MOST = 5000;
+/** How many rows a list that opens on a row keeps up to it, that one among them, and after it. */
+export const ABOUT_FOCUS = 10;
 /** How long a promise's key may be; how many points a grid may have along an axis, and in all. */
 const KEY_MOST = 200;
 const GRID_SIDE_MOST = 400;
@@ -147,6 +166,14 @@ function rowOf(v: unknown, columns: number, atoms: number, frames: number): Row 
   const colour = surface ? colourOf(r.colour) : undefined;
   if (colour) row.colour = colour;
   return row;
+}
+
+/** Which rows a list says it keeps, where that is so of the `rows` it has: as many as from its first to its last, of more in all - a list kept so already; otherwise none, and core's own rule trims it. */
+function trimmedOf(v: unknown, rows: number): Trimmed | undefined {
+  const t = v as Partial<Trimmed> | null | undefined;
+  if (!t || !Number.isInteger(t.from) || !Number.isInteger(t.to) || !Number.isInteger(t.of)) return undefined;
+  const { from, to, of } = t as Trimmed;
+  return from >= 1 && to - from + 1 === rows && to <= of && rows < of && of <= ROWS_MOST * 1000 ? { from, to, of } : undefined;
 }
 
 /** What colours a surface, as given: a grid or a promise, and the values its scale runs between, the first below the second; otherwise none. */
@@ -226,6 +253,9 @@ function resultOf(v: unknown, atoms: number, frames: number, from?: string): Res
         ...measureOf(r),
         value,
         ...(isNum(r.rank) ? { rank: r.rank } : {}),
+        ...(vec3(r.vector) ? { vector: [...r.vector] as Vec3 } : {}),
+        ...(vec3(r.origin) ? { origin: [...r.origin] as Vec3 } : {}),
+        ...(vec3(r.centre) ? { centre: [...r.centre] as Vec3 } : {}),
       };
     }
     case "frames":
@@ -259,15 +289,25 @@ function resultOf(v: unknown, atoms: number, frames: number, from?: string): Res
           : null,
       );
       if (columns.some((c) => !c)) return undefined;
-      const rows = r.rows.slice(0, ROWS_MOST).map((x) => rowOf(x, columns.length, atoms, frames));
-      if (!rows.length || rows.some((x) => !x)) return undefined;
+      const all = r.rows.slice(0, ROWS_MOST).map((x) => rowOf(x, columns.length, atoms, frames));
+      if (!all.length || all.some((x) => !x)) return undefined;
+      // (a list that opens on a row keeps the rows about it: the `ABOUT_FOCUS` up to it and as many after - an orbitals' list,
+      //  opening on its LUMO, the ten virtual orbitals from it and the ten occupied below; one given in full is trimmed so,
+      //  and says which rows it keeps of how many. One kept so already - read again - stays as it was)
+      const given = trimmedOf(r.trimmed, all.length);
+      const focus = isIndex(r.focus, all.length) ? r.focus : undefined;
+      const from = focus != null && !given ? Math.max(0, focus - ABOUT_FOCUS + 1) : 0;
+      const rows = focus != null && !given ? all.slice(from, focus + ABOUT_FOCUS + 1) : all;
+      const trimmed = given ?? (rows.length < all.length ? { from: from + 1, to: from + rows.length, of: all.length } : undefined);
+      const shown = isIndex(r.shown, all.length) && r.shown >= from && r.shown - from < rows.length ? r.shown - from : undefined;
       return {
         ...named,
         on: "list",
         columns: columns as Column[],
         rows: rows as Row[],
-        ...(isIndex(r.focus, rows.length) ? { focus: r.focus } : {}),
-        ...(isIndex(r.shown, rows.length) ? { shown: r.shown } : {}),
+        ...(focus != null ? { focus: focus - from } : {}),
+        ...(shown != null ? { shown } : {}),
+        ...(trimmed ? { trimmed } : {}),
       };
     }
     default:
@@ -318,6 +358,7 @@ const UNITS: Record<Quantity, string> = {
   angle: "°",
   dipole: "D",
   number: "",
+  symmetry: "",
 };
 const DIGITS: Record<Quantity, number> = {
   energy: 6,
@@ -328,6 +369,7 @@ const DIGITS: Record<Quantity, number> = {
   angle: 1,
   dipole: 2,
   number: 4,
+  symmetry: 0,
 };
 /** Decimals at most for a value with a unit of its own, where it does not say. */
 const DIGITS_MOST = 4;
@@ -421,4 +463,17 @@ export function chipLine(first: readonly string[], results: readonly Result[] | 
     length += more;
   }
   return parts.join(" · ");
+}
+
+/**
+ * A point group or a Mulliken symbol as Meno writes it, for display and for every comparison: its first letter upper
+ * and the letters after it lower, any number before it and every digit and prime as they are - C2v, D3h, Td, Bu, B1g,
+ * A', E'', an orbital's 1A1 or 2B2 - so that one printed "c2v" or "C2V" is the same as "C2v". Meno's form is standard
+ * notation (Σ, Π, Δ, Φ for a linear molecule's symbols, ∞ in a point group, primes): a reader writes its program's own
+ * spellings in it; this rule only puts the case right.
+ */
+export function symmetryText(s: string): string {
+  const t = s.trim();
+  const k = t.search(/\p{L}/u);
+  return k < 0 ? t : t.slice(0, k) + t[k].toUpperCase() + t.slice(k + 1).toLowerCase();
 }

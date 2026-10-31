@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "uses": [{"name": "Blender", "version": "5.2.2"}],
   "description": "Renders pictures and films of molecules in 3D with Blender 5.2.2 LTS - its official build, under its own licence, fetched by Meno as the plugin is set up and kept for Meno's own use.",
   "licence": "GPL-3.0-or-later",
@@ -40,15 +40,16 @@
         {"id": "xray", "label": "X-ray: layers that add up", "description": "See-through layers that add up.", "parts": {"sticks": "shown"}, "own": true, "seeThrough": true},
         {"id": "fur", "label": "Fur: long, or short and dense as velvet", "description": "Hair on every ball and stick.", "own": true}
       ],
+      "loopWhen": {"id": "mode", "in": ["loop"]},
       "motions": [
-        {"id": "reveal", "label": "Reveal: out of the dark, or developing on white", "description": "A rim of light traces the molecule, then the key light comes up; on white, a pale form develops into colour."},
-        {"id": "pulse", "label": "Pulse: a wave along the bonds", "description": "A wave of light runs out along the bonds; on white, a cobalt wave throwing blue light onto the paper."},
-        {"id": "assemble", "label": "Assemble: atoms fly in, bonds drawn", "description": "The atoms fly in on curves and land in waves from the middle; each bond is drawn by a bright front."},
-        {"id": "scan", "label": "Scan: a sheet of light, a hologram above it", "description": "A sheet of light passes down the molecule: a hologram above it, the solid below."},
-        {"id": "dissolve", "label": "Dissolve: burning away into embers", "description": "The molecule burns away from one side into embers; on white, amber grains cooling to graphite dust."},
-        {"id": "change-ring", "label": "Change, ring: atoms circle and land as the next", "description": "Two molecules or more, one becoming the next in turn: the atoms rise into one ring, which turns and lets them fall into the next molecule's places."},
-        {"id": "change-scan", "label": "Change, scan: a sheet of light leaves the next", "description": "Two molecules or more, one becoming the next in turn: a sheet of light passes down through the molecule, and leaves the next one above it."},
-        {"id": "change-shatter", "label": "Change, shatter: shards gather into the next", "description": "Two molecules or more, one becoming the next in turn: the molecule shatters, and its shards fly together into the next one."}
+        {"id": "reveal", "label": "Reveal: out of the dark, or developing on white", "description": "A rim of light traces the molecule, then the key light comes up; on white, a pale form develops into colour.", "shortest": {"film": 4, "loop": 6}},
+        {"id": "pulse", "label": "Pulse: a wave along the bonds", "description": "A wave of light runs out along the bonds; on white, a cobalt wave throwing blue light onto the paper.", "shortest": {"film": 3}},
+        {"id": "assemble", "label": "Assemble: atoms fly in, bonds drawn", "description": "The atoms fly in on curves and land in waves from the middle; each bond is drawn by a bright front.", "shortest": {"film": 5, "loop": 7}},
+        {"id": "scan", "label": "Scan: a sheet of light, a hologram above it", "description": "A sheet of light passes down the molecule: a hologram above it, the solid below.", "shortest": {"film": 5}},
+        {"id": "dissolve", "label": "Dissolve: burning away into embers", "description": "The molecule burns away from one side into embers; on white, amber grains cooling to graphite dust.", "shortest": {"film": 4, "loop": 7}},
+        {"id": "change-ring", "label": "Change, ring: atoms circle and land as the next", "description": "Two molecules or more, one becoming the next in turn: the atoms rise into one ring, which turns and lets them fall into the next molecule's places.", "shortest": {"change": 3}},
+        {"id": "change-scan", "label": "Change, scan: a sheet of light leaves the next", "description": "Two molecules or more, one becoming the next in turn: a sheet of light passes down through the molecule, and leaves the next one above it.", "shortest": {"change": 3}},
+        {"id": "change-shatter", "label": "Change, shatter: shards gather into the next", "description": "Two molecules or more, one becoming the next in turn: the molecule shatters, and its shards fly together into the next one.", "shortest": {"change": 3}}
       ],
       "options": [
         {"id": "mode", "when": {"id": "motion", "in": ["reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter"]}, "label": "Once or Loop", "type": "choice", "choices": [{"value": "once", "label": "Once: eases in and comes to rest"}, {"value": "loop", "label": "Loop: seamless, over and over"}], "default": "once"},

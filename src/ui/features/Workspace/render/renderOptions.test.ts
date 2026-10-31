@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
-import type { LookDecl } from "../../../../lib/plugins/manifest";
-import { askOf, finishEntry, looksOffered, motionEntry, partsOf, renderContext, renderOptions } from "./renderOptions";
+import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
+import { askOf, filmLength, finishEntry, lengthNote, tooShort, looksOffered, motionEntry, partsOf, renderContext, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -106,5 +106,68 @@ describe("a render plugin's options", () => {
     expect(ids("picture", "meno")).toEqual(["glow"]);
     expect(ids("film", "meno")).toEqual(["grain", "glow"]);
     expect(ids("film", "cartoon")).toEqual(["grain", "rim", "glow"]);
+  });
+});
+
+describe("a film's shortest length, by its motion and its molecules", () => {
+  // (motions as a renderer declares them: Meno knows none of these names)
+  const DECLARED_MOTIONS: MotionDecl[] = [
+    { id: "glow", label: "Glow", shortest: { film: 4, loop: 6 } },
+    { id: "pour", label: "Pour", shortest: { change: 6 } },
+    { id: "hop", label: "Hop", shortest: { film: 1, change: 2.5 } },
+    { id: "plain", label: "Plain" },
+  ];
+
+  it("is a motion's own, its Loop's where that is longer", () => {
+    expect(shortestFilm("glow", DECLARED_MOTIONS, 1, false)).toBe(4);
+    expect(shortestFilm("glow", DECLARED_MOTIONS, 1, true)).toBe(6);
+    // (Meno's own: turning once round)
+    expect(shortestFilm("turn", DECLARED_MOTIONS, 1, false)).toBe(3);
+    // (one that says none, or none chosen: a second)
+    expect(shortestFilm("plain", DECLARED_MOTIONS, 3, false)).toBe(1);
+    expect(shortestFilm(undefined, undefined, 3, false)).toBe(1);
+  });
+
+  it("is each change's for each change: one fewer than the molecules, or as many where it loops back to the first", () => {
+    expect(shortestFilm("pour", DECLARED_MOTIONS, 3, false)).toBe(12);
+    expect(shortestFilm("pour", DECLARED_MOTIONS, 3, true)).toBe(18);
+    expect(shortestFilm("pour", DECLARED_MOTIONS, 11, false)).toBe(60);
+    // (in whole seconds, up: 1 + 2.5 x 2)
+    expect(shortestFilm("hop", DECLARED_MOTIONS, 3, false)).toBe(6);
+    expect(shortestFilm("hop", DECLARED_MOTIONS, 2, false)).toBe(4);
+  });
+
+  it("bounds the card's Length and says so under it", () => {
+    const seconds = (length: Parameters<typeof renderOptions>[5]) => renderOptions("film", ["turn"], false, [], DECLARED_MOTIONS, length).find((o) => o.id === "seconds") as unknown as { min: number; max: number; default: number; note?: string };
+    expect(seconds({ shortest: 12, molecules: 3 })).toMatchObject({ min: 12, max: 60, default: 12, note: "At least 12 s for 3 molecules" });
+    // (as many molecules as need more than the longest: the longest is theirs)
+    expect(seconds({ shortest: 72, molecules: 13 })).toMatchObject({ min: 72, max: 72 });
+    expect(seconds({ shortest: 1 })).toMatchObject({ min: 1, max: 60, default: 8 });
+    expect(seconds({ shortest: 1 }).note).toBeUndefined();
+    expect(lengthNote({ shortest: 4 })).toBe("At least 4 s");
+    expect(lengthNote({ shortest: 12, molecules: 3, raised: true })).toBe("Raised to 12 s, the shortest for 3 molecules");
+  });
+
+  it("raises a length chosen shorter, counting a Loop as its renderer's option says", () => {
+    const loopWhen = { id: "mode", in: ["loop"] };
+    const once = filmLength("film", { motion: "pour", seconds: 5 }, { mode: "once" }, DECLARED_MOTIONS, loopWhen, 3);
+    expect(once.values.seconds).toBe(12);
+    expect(once.length).toEqual({ shortest: 12, molecules: 3, raised: true });
+    const loop = filmLength("film", { motion: "pour", seconds: 20 }, { mode: "loop" }, DECLARED_MOTIONS, loopWhen, 3);
+    expect(loop.values.seconds).toBe(20);
+    expect(loop.length).toEqual({ shortest: 18, molecules: 3, raised: false });
+    // (a motion that changes nothing counts no molecules; a renderer that says nothing of a Loop, none)
+    expect(filmLength("film", { motion: "glow", seconds: 8 }, { mode: "loop" }, DECLARED_MOTIONS, undefined, 3).length).toEqual({ shortest: 4, raised: false });
+    // (a picture: no length)
+    expect(filmLength("picture", { width: 100 }, {}, DECLARED_MOTIONS, loopWhen, 3)).toEqual({ length: { shortest: 1 }, values: { width: 100 } });
+  });
+
+  it("refuses a film asked for shorter, however it was asked, saying how long it needs - Meno's rule, kept by no renderer", () => {
+    const loopWhen = { id: "mode", in: ["loop"] };
+    expect(tooShort({ kind: "film", motion: "pour", seconds: 5 }, { mode: "once" }, DECLARED_MOTIONS, loopWhen, 3)).toBe("This film needs at least 12 s for 3 molecules");
+    expect(tooShort({ kind: "film", motion: "pour", seconds: 12 }, { mode: "loop" }, DECLARED_MOTIONS, loopWhen, 3)).toBe("This film needs at least 18 s for 3 molecules");
+    expect(tooShort({ kind: "film", motion: "glow", seconds: 3 }, {}, DECLARED_MOTIONS, loopWhen, 1)).toBe("This film needs at least 4 s");
+    expect(tooShort({ kind: "film", motion: "pour", seconds: 12 }, { mode: "once" }, DECLARED_MOTIONS, loopWhen, 3)).toBeUndefined();
+    expect(tooShort({ kind: "picture" }, {}, DECLARED_MOTIONS, loopWhen, 3)).toBeUndefined();
   });
 });

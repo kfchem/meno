@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { geometryKey, type Property } from "../entry";
-import { add, type GivenPart } from "./add";
+import { add, partSaid, type GivenPart } from "./add";
 import { standardStateBy, standardStateTerm } from "./standardState";
 import { entry } from "./testEntries";
 
@@ -33,9 +33,15 @@ describe("Add", () => {
     ]);
     expect(g.by?.method).toBeUndefined();
     expect(g.by?.treatment).toBe(
-      "sum: energy (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction (wB97X-D/6-31G(d), Gaussian, 298.15 K, 1 atm, quasi-RRHO) + standard state (" + standardStateBy(298.15).treatment + ")",
+      "sum: energy (wB97X-D/6-311+G(d,p), Gaussian, SMD(chloroform)) + thermo.g-correction (wB97X-D/6-31G(d), Gaussian, solvation not stated, 298.15 K, 1 atm, quasi-RRHO) + standard state (" + standardStateBy(298.15).treatment + ")",
     );
     expect(out.said).toBe("1 of 1 entry given G-DFT = energy + thermo.g-correction + standard state");
+    // (a number wired in, of no geometry, has no solvation to state - one that says nothing of itself, nothing at all)
+    const bare = add([e], { parts: ["energy", "thermo.g-correction"], given: [{ name: "the number", value: 1, unit: "kcal/mol" }], as: "G-DFT" });
+    if (!bare.ok) throw new Error(bare.said);
+    expect(bare.exits.done[0].properties["G-DFT"].by?.treatment).toMatch(/ \+ the number$/);
+    expect(partSaid({ property: "the number", value: 1.5, unit: "kcal/mol" })).toBe("the number");
+    expect(partSaid({ property: "the number", value: 1.5, unit: "kcal/mol", by: { method: "user" } })).toBe("the number (user)");
   });
 
   it("says the solvent where the parts that say one agree, and none where two differ - each part keeps its own", () => {

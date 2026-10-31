@@ -6,7 +6,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import OptionsForm from "../../../options/OptionsForm";
 import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, remembered, renderContext, renderOptions, type Kind } from "./renderOptions";
+import { askOf, filmLength, remembered, renderContext, renderOptions, type Kind } from "./renderOptions";
 import { useInFront } from "../../../layouts/inFront";
 import { escapeLeft } from "../../../controls/keys";
 
@@ -22,6 +22,7 @@ export default function RenderCard({
   plugin,
   motions,
   surfaces,
+  molecules = 1,
   onRender,
   onCancel,
 }: {
@@ -30,6 +31,8 @@ export default function RenderCard({
   motions: readonly Motion[];
   /** Whether what is rendered shows a surface. */
   surfaces: boolean;
+  /** How many molecules are rendered: a film that changes one into the next is as long as its changes need. */
+  molecules?: number;
   onRender: (ask: RenderAsk, options: OptionValues) => void;
   onCancel: () => void;
 }) {
@@ -37,14 +40,18 @@ export default function RenderCard({
   const rememberOptions = useAppSettings((s) => s.rememberOptions);
   const [kind, setKind] = useState<Kind>(saved.render?.kind === "film" ? "film" : "picture");
   // (the looks this plugin declares, after the canvas's)
-  const own = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, plugin.roleMotions.render);
+  const declared = plugin.roleMotions.render;
+  const plain = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared);
   // (the plugin's own options, each shown `when` it says - of the card's options, or a picture's or a film's, `kind`)
   const theirs = plugin.roleOptions.render ?? [];
   const [chosen, setChosen] = useState<Partial<Record<Kind, OptionValues>>>({});
   const [chosenTheirs, setChosenTheirs] = useState<OptionValues | null>(null);
-  const values = chosen[kind] ?? valuesOf(own, saved[remembered(kind)]);
-  const theirContext = renderContext(values, kind);
+  const picked = chosen[kind] ?? valuesOf(plain, saved[remembered(kind)]);
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
+  // (a film no shorter than its motion can be read in - for a change, its changes' - a length chosen before raised to it)
+  const { length, values } = filmLength(kind, picked, theirValues, declared, plugin.roleLoopWhen?.render, molecules);
+  const own = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared, length);
+  const theirContext = renderContext(values, kind);
 
   const renderRef = useRef<HTMLButtonElement>(null);
   // (the keys given to Render as it opens, once: not again each time the
