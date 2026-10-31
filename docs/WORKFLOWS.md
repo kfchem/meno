@@ -504,7 +504,7 @@ after it. Meno calls none of it a saddle point or a minimum.
 - **ORCA's plugin** runs IRC (the ORCA 6.1 manual, 4.4 *Intrinsic Reaction
   Coordinate*), both ways in one job, the manual's default direction, at
   the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
-  own unless said (the manual's 4.4.2 states none; ORCA 6.1.1 prints 20).
+  own unless said (ORCA 6.1.1 prints 20).
   The first Hessian is ORCA's: computed where none comes with the point.
 
 ### Optimise to a saddle point
