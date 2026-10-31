@@ -21,7 +21,7 @@ function made(m: Made, extra: Partial<SetEntry> = {}): SetEntry {
     ...(m.g != null ? [reading("thermo.free-energy", m.g)] : []),
     reading("thermo.temperature", m.kelvin ?? 298.15, { unit: "K" }),
     reading("thermo.pressure", 1, { unit: "atm" }),
-    reading("thermo.treatment", "quasi-RRHO (Grimme), 100 cm-1"),
+    reading("thermo.treatment", "quasi-RRHO (Grimme), 100 cm⁻¹"),
     ...(m.group ? [reading("thermo.point-group", m.group, {})] : []),
     ...(m.sigma != null ? [reading("thermo.symmetry-number", m.sigma, { unit: "none" })] : []),
   ];
@@ -61,7 +61,7 @@ describe("a Barrier step", () => {
     expect(b).toMatchObject({ unit: "kcal/mol", at: { geometry: geometryKey(saddle().xyz), kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "GFN2-xTB" } });
     // (the sigmas differ - D3h's 6, the minimum read as Cs, 1 - and are kept, both said)
     expect(b.by?.treatment).toBe(
-      "free energy G (thermo.free-energy; quasi-RRHO (Grimme), 100 cm-1): the saddle point's less its start a #1's; point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs, σ 1 (start)",
+      "free energy G (thermo.free-energy; quasi-RRHO (Grimme), 100 cm⁻¹): the saddle point's less its start a #1's; point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs, σ 1 (start)",
     );
     expect(kept(o).said).toBe("ΔG‡ 6.16 kcal/mol (G at GFN2-xTB, 298.15 K)");
   });
@@ -133,7 +133,7 @@ describe("a Barrier step", () => {
       const at = { geometry: geometryKey(e.xyz) };
       const parts = [
         { property: "energy", value: energy, unit: "Eh" as const, at, by: { program: "ORCA", method: "B3LYP", basis: "def2-TZVP" } },
-        { property: "thermo.g-correction", value: correction, unit: "Eh" as const, at: { ...at, kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "GFN2-xTB", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C1", symmetryNumber: 1 } },
+        { property: "thermo.g-correction", value: correction, unit: "Eh" as const, at: { ...at, kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "GFN2-xTB", treatment: "quasi-RRHO (Grimme), 100 cm⁻¹", pointGroup: "C1", symmetryNumber: 1 } },
         ...(standard ? [{ property: "standard state", value: 1.894, unit: "kcal/mol" as const, by: { treatment: "standard state 1 atm to 1 mol/L at 298.15 K" } }] : []),
       ];
       const value = energy + correction + (standard ? 1.894 / 627.5094740630558 : 0);

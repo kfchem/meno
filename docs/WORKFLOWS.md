@@ -590,7 +590,7 @@ on it.
   its start's, the hartree at CODATA 2018's value (627.5094740631 kcal/mol,
   lib/units), at the saddle point's geometry, temperature and pressure;
   its record says which it is ("free energy G (thermo.free-energy;
-  quasi-RRHO (Grimme), 100 cm-1): the saddle point's less its start a #1's;
+  quasi-RRHO (Grimme), 100 cm⁻¹): the saddle point's less its start a #1's;
   point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs,
   σ 1 (start)"). The step's line: "ΔG‡ 6.16 kcal/mol (G at GFN2-xTB,
   298.15 K)".
