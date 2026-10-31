@@ -62,8 +62,9 @@ each is merged, this file describes what is built.
     the chemist choosing which - as *Files* chooses who reads a kind of
     file (FILE-IO.md). ACCeL's second version is under way, outside this
     repository: it may come later as a plugin that fills these steps.
-    RDKit can fill *Duplicates*, if less thoroughly than ACCeL (*Who
-    does a step*).
+    Which conformers are the same is Meno's own judgement (the plugin
+    boundary, 2026-10-31): *Duplicates* is Meno's, and RDKit no longer
+    fills it (RDKit plugin 0.1.16).
 13. **A conformer set is converted to only on purpose**: what the chemist
     gathers into a set is a compound set; a step of its own, *As
     conformers*, makes it a conformer set, on the page for the flow to
@@ -611,10 +612,10 @@ one of the kinds of calculation it does (decided: 16):
   does not see symmetric atoms swapped, so two copies of a structure
   numbered differently can both be kept). Meno's part is there from the
   start, with nothing to add.
-- **A plugin added may do any of them as well**: RDKit does *Duplicates*
-  with its best RMSD over the molecule's symmetries; ACCeL, its second
+- **A plugin added may do any of them as well**: ACCeL, its second
   version, may come as a plugin that does them all as ACCeL does. Each
-  is a step of its own to choose: *RDKit*'s *Duplicates*, or *Meno*'s.
+  is a step of its own to choose. *Duplicates* is Meno's alone since the
+  plugin boundary (2026-10-31): RDKit did it until its plugin 0.1.16.
 - **The chemist chooses** in Quick Add - a plugin, then one of its
   kinds - and may change a step's calculation in it, to another its
   plugin does. Settings, *Calculations*, lists the plugins added and
@@ -1700,15 +1701,11 @@ Decided while building it, for the maintainer to confirm:
   a conformer of its entry's compound, numbered lowest energy first, each
   with its energy; the calculation is kept with the first. The card says
   how many: *0:45 · 17 conformers* (*... of 2 compounds*).
-- **RDKit's *Duplicates*** compares the entries of each compound - a
-  conformer set's, or in a compound set those of the same structure -
-  lowest energy first, and sets aside each that is the same conformer as
-  one kept, on the one definition (*The same conformer*; until 2026-10-22,
-  0.125 Å over the heavy atoms). A mirror image is kept apart, or counted
-  in as Meno's are - only where the two are one stereoisomer, as their
-  geometries have it. It is done at once in RDKit's worker - `run {step,
-  entries, options, holds}`, no job - and says *2 of 3 kept*, and
-  *1 mirror image counted in (degeneracy 2)* where it counted one.
+- **RDKit's *Duplicates*** is gone (RDKit plugin 0.1.16, the plugin
+  boundary, 2026-10-31): which conformers are the same is Meno's own
+  judgement, and Meno's *Duplicates* makes it by the one definition (*The
+  same conformer*). A workspace's step done by RDKit says so as it is
+  run: *RDKit does not do Duplicates*.
 - **CREST's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF, or
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the

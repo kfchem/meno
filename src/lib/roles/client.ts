@@ -9,6 +9,7 @@
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
 import type { OptionValues } from "../options";
+import type { SmilesRead } from "../chem/smilesWhy";
 import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
@@ -17,6 +18,8 @@ export type ChemRequests = {
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
   from_smiles: { args: { smiles: string }; result: { molblock: string } };
+  /** What the toolkit makes of a SMILES, as facts - whether it reads, whether it parses at all, the problems its own check finds (lib/chem/smilesWhy): Meno says why in words. */
+  smiles_read: { args: { smiles: string }; result: SmilesRead };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
   analyse: { args: { molblock: string }; result: Analysis };
   /**

@@ -20,7 +20,8 @@ import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart"
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
 import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { VALUE_KINDS } from "../../../../lib/plugins/steps";
-import { inputsFor, takesBy, takesNothingBy } from "./doers";
+import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
+import { pluginById } from "../../../../lib/calc/catalog";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
@@ -227,6 +228,9 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
+  // (a plugin Meno knows of that fills no such kind - a step a workspace kept from before it stopped doing it: said so, before it is asked anything)
+  const plugin = by !== MENO.id ? pluginById(by) : undefined;
+  if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
   // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
   //  and each wired one taking what comes into it; Merge's second of the kind its first is)
   const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
