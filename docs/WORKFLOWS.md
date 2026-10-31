@@ -567,17 +567,16 @@ on it.
     the program's, in its value's record (`by.symmetryNumber`). One not
     read cannot be told, and is refused. Two that differ are kept, since it
     is so of the two molecules, and both are said, each with its point
-    group: an ammonia inversion's saddle point is D3h, sigma 6, its
-    minimum as ORCA reads it Cs, sigma 1.
+    group and sigma as read (an ammonia inversion's saddle point: D3h,
+    sigma 6).
 - **Rotational symmetry**, for G: *As each program read it* (the default),
   or *Left out (σ = 1 on both sides)* - each side's RT ln sigma taken off
   its G by Meno, at the temperature its G was worked out at, and its
-  record says so. Which point group a program finds depends on its
-  tolerance, not on the structure alone: the same ammonia minimum, from
-  two runs of ORCA 6.1.1 at its GFN2-xTB, was read once C3v, sigma 3, and
-  once Cs, sigma 1, and the barrier moved by RT ln 3 (0.65 kcal/mol at
-  298.15 K) for that alone. Left out, the two give one barrier (5.10
-  kcal/mol). Neither is chosen for the chemist: the default is each
+  record says so. Which point group is found depends on the tolerance it
+  is looked for with, not on the structure alone, and a sigma of 3 rather
+  than 1 moves a barrier by RT ln 3 (0.65 kcal/mol at 298.15 K). Left
+  out, the barrier does not depend on which point group each side was
+  read in. Neither is chosen for the chemist: the default is each
   program's word.
 - **G summed of parts** - *Add*'s: a single point's energy, a thermal
   correction at a lower level, a standard state - is named in *G is* in
