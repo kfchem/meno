@@ -90,7 +90,44 @@ describe("the same conformer", () => {
     expect(s.same(a, shifted)).toBe(false);
     expect(s.same(a, turned(renumbered(a, [2, 3, 4, 5, 6, 7, 0, 1, 10, 11, 12, 13, 14, 15, 8, 9]), 20))).toBe(true);
   });
+
+  it("takes a pyrrole turned half about its nitrogen's bond for the same conformer: its one Kekulé structure maps onto itself", () => {
+    // (six pi electrons in five atoms: the nitrogen has no double bond, so the ring is no Hückel ring by its atoms - and
+    //  needs none, as turning it over takes C2=C3 onto C5=C4)
+    const a = methylpyrrole();
+    const ring = new Set([0, 1, 2, 3, 4, 6, 7, 8, 9]);
+    const b = a.map((v, k) => (ring.has(Math.floor(k / 3)) && k % 3 !== 0 ? -v : v));
+    expect(Math.hypot(b[3] - a[12], b[4] - a[13], b[5] - a[14])).toBeLessThan(1e-9);
+    expect(new Sameness(METHYLPYRROLE.atoms, METHYLPYRROLE.bonds, a).same(a, turned(b, -30))).toBe(true);
+  });
 });
+
+/** 1-Methylpyrrole: N1, C2 to C5 round its ring, the methyl's C, H on C2 to C5, then the methyl's three, none in the ring's plane. */
+function methylpyrrole(): number[] {
+  const out: number[] = [];
+  const at = (r: number, k: number) => [r * Math.cos((2 * k * Math.PI) / 5), r * Math.sin((2 * k * Math.PI) / 5), 0];
+  for (let k = 0; k < 5; k++) out.push(...at(1.174, k));
+  out.push(2.63, 0, 0);
+  for (let k = 1; k < 5; k++) out.push(...at(2.25, k));
+  for (let k = 0; k < 3; k++) {
+    const t = (2 * k * Math.PI) / 3 + 0.4;
+    out.push(2.99, 1.03 * Math.cos(t), 1.03 * Math.sin(t));
+  }
+  return out;
+}
+const METHYLPYRROLE = {
+  atoms: [{ el: "N" }, ...Array.from({ length: 5 }, () => ({ el: "C" })), ...Array.from({ length: 7 }, () => ({ el: "H" }))],
+  bonds: [
+    { a1: 0, a2: 1, order: 1 },
+    { a1: 1, a2: 2, order: 2 },
+    { a1: 2, a2: 3, order: 1 },
+    { a1: 3, a2: 4, order: 2 },
+    { a1: 4, a2: 0, order: 1 },
+    { a1: 0, a2: 5, order: 1 },
+    ...[1, 2, 3, 4].map((c, k) => ({ a1: c, a2: 6 + k, order: 1 })),
+    ...[10, 11, 12].map((h) => ({ a1: 5, a2: h, order: 1 })),
+  ],
+};
 
 /** Cyclooctatetraene, flat here: C1=C2 1.34 Å, C2-C3 1.47 Å and so on round, each corner 135°; then each carbon's H, outwards. */
 function cyclooctatetraene(): number[] {

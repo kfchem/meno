@@ -248,7 +248,10 @@ const RING_STEPS = 100_000;
  * pyridine's, every one of a naphthalene's - by `pairKey`: which of them a
  * Kekulé structure makes double is no part of a molecule's shape. A
  * cyclooctatetraene's ring, of 4n, is none: its double bonds stay where they
- * are, as a pyrrole's do.
+ * are. In such a ring each atom brings one pi electron, so its atoms count
+ * them; a ring with an atom of no double bond - a pyrrole's, a furan's, a
+ * cyclopentadienide's or a tropylium's with its charge on one carbon - has
+ * one Kekulé structure, and a way taking it onto itself keeps its orders.
  */
 function huckelBonds(n: number, bonds: readonly { a: number; b: number; order: number }[]): Set<string> {
   const mate = new Array<number>(n).fill(-1);
