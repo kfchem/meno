@@ -1481,8 +1481,8 @@ All hover-based, as above.
       shrink - written, sized, made a list - rather than growing up and
       down about their middle.
   - While they are written, their box is the system's own text box, which
-    breaks lines as the system does, and may part a number from its unit;
-    kept, they break as above. Words written in place drawn by Meno itself,
+    breaks lines as the system does; kept, they break as above. Words
+    written in place drawn by Meno itself,
     as it will draw a text's typing (docs/PDF.md, step 5), will break as
     they will be kept.
   - With a selection when among it, or over an arrow among it: copied,
