@@ -361,11 +361,11 @@ corpus, exactly and with the departures, every map in its order):
   within 1e-9 of one another, Meno's geometric fit near its threshold. Such
   a call is made afresh.
 
-| | ACCeL 0.3.0 | port, as first written | now |
-|---|---|---|---|
-| SN2 beside four waters | 37 s | 10.5 s | 0.6 s (exactly) · 2 ms (like molecules placed) |
-| the corpus (225 inputs), exactly | 91 s | 23 s | 2.9 s |
-| SN2 beside 6 / 10 / 20 waters | over 5 min each | - | 0.4 s / 35 ms / 0.1 s |
+| | port, as first written | now |
+|---|---|---|
+| SN2 beside four waters | 10.5 s | 0.6 s (exactly) · 2 ms (like molecules placed) |
+| the corpus (225 inputs), exactly | 23 s | 2.9 s |
+| SN2 beside 6 / 10 / 20 waters | - | 0.4 s / 35 ms / 0.1 s |
 
 (One machine, the minimum of three runs, while other work shared it.)
 
