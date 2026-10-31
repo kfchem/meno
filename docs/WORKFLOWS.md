@@ -56,23 +56,18 @@ each is merged, this file describes what is built.
     workspace's editor is built anew: neither the tab nor ReactFlow's
     code is looked at (*Licences*).
 11. **A step on many entries runs a job for each**, by default; a plugin
-    may say that its program takes them all in one job, where it does
-    that better (*Several at once*).
+    may say that its program takes them all in one job (*Several at
+    once*).
 12. **Meno does the simple steps itself, a plugin may do them instead**,
     the chemist choosing which - as *Files* chooses who reads a kind of
-    file (FILE-IO.md). ACCeL's second version is under way, outside this
-    repository: it may come later as a plugin that fills these steps.
-    RDKit can fill *Duplicates*, if less thoroughly than ACCeL (*Who
-    does a step*).
+    file (FILE-IO.md). RDKit can fill *Duplicates* too (*Who does a step*).
 13. **A conformer set is converted to only on purpose**: what the chemist
     gathers into a set is a compound set; a step of its own, *As
     conformers*, makes it a conformer set, on the page for the flow to
     show.
 14. **Meno's own words, and its own design** (the maintainer, 2026-10-08):
-    what holds a workflow's entries is not called a *box* - ACCeL's
-    word for its own class (its second version calls it a *Flow*) - but
-    a **set**; and the implementation and the interface are what suit
-    Meno best, not ACCeL's.
+    what holds a workflow's entries is called a **set**, and the
+    implementation and the interface are Meno's own.
 15. **The figures here are conceptual** (the maintainer, 2026-10-08): they
     show what is where, not how it looks. The look follows Meno's own
     design (*How it looks*); the figures' colours, transparency, line
@@ -312,7 +307,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
-| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
+| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one that does not read as a molecule set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
 | Combine | a link | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
@@ -340,9 +335,8 @@ alone, and no plugin fills them. A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
 molecules in 3D only. A lone atom - the ion of a salt drawn as ions -
-has no conformers to find and nothing to optimise; xtb, CREST, ORCA and
-Gaussian each stop when asked to. Their plugins work out its energy
-where it is instead, and it comes back where it was - in *Conformers*,
+has no conformers to find and nothing to optimise: the xTB, CREST, ORCA
+and Gaussian plugins work out its energy where it is instead, and it comes back where it was - in *Conformers*,
 its only conformer. More kinds come with Meno as they are needed - a
 free energy from an energy and its corrections, a template input written
 out - each specified before it is built. *Enumerate*, Meno's own, is
@@ -442,8 +436,7 @@ are a *Frequencies* step's, wired after it.
   the run took, as ORCA counts them ("NEB 5 · TS optimization 4"). A band
   that did not converge in the iterations ORCA allows is not read: that
   pair goes out of *Failed*, *not converged*, saying so and after how many
-  iterations - never in the words of the error return ORCA ends it by. An
-  image whose SCF did not converge while ORCA carried on with the band is
+  iterations. An image whose SCF did not converge while ORCA carried on with the band is
   a warning on the molecule, in ORCA's words; it moves nothing.
 - **Its highest point not refined.** Where the band converged but
   refining its highest point took the most steps ORCA allows (ORCA: "The
@@ -452,10 +445,7 @@ are a *Frequencies* step's, wired after it.
   no entry: that pair goes out of *Failed*, *not converged*, saying how
   many iterations the band took and how many steps the refining, and to
   raise *Steps for refining its highest point* or give ends nearer the
-  path (2026-10-30). ORCA goes on to its properties after it, and may stop
-  there by an error whose words say nothing of it ("ERROR (SHARK): Failed
-  to read input file", "error termination in PROPERTIES") - on one core or
-  many - or end normally: either way it is said so, never in those words.
+  path (2026-10-30). However ORCA's run ends after it, it is said so.
 - **Frequencies, after it.** A *Frequencies* step wired after it works out
   the point refined's: its `imaginary`, `imaginary.first` and
   `imaginary.second` are then the chemist's to select on with *Filter*
@@ -504,7 +494,7 @@ after it. Meno calls none of it a saddle point or a minimum.
 - **ORCA's plugin** runs IRC (the ORCA 6.1 manual, 4.4 *Intrinsic Reaction
   Coordinate*), both ways in one job, the manual's default direction, at
   the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
-  own unless said (the manual's 4.4.2 states none; ORCA 6.1.1 prints 20).
+  own unless said (ORCA 6.1.1 prints 20).
   The first Hessian is ORCA's: computed where none comes with the point.
 
 ### Optimise to a saddle point
@@ -532,8 +522,7 @@ them a saddle point.
   Searches*), at the method and basis set given: the step has no level of
   its own unless set. Its *First Hessian* is computed
   at the start (`Calc_Hess`), "the most straightforward option" (4.3.2.1),
-  or ORCA's model one. At ORCA's own xTB, which has no analytic Hessian,
-  ORCA computes it numerically, and the step's line says so. ORCA's OptTS
+  or ORCA's model one. At ORCA's own xTB, ORCA computes it numerically, and the step's line says so. ORCA's OptTS
   takes no sides: wired, the step is refused.
 
 ### Barrier
@@ -567,17 +556,16 @@ on it.
     the program's, in its value's record (`by.symmetryNumber`). One not
     read cannot be told, and is refused. Two that differ are kept, since it
     is so of the two molecules, and both are said, each with its point
-    group: an ammonia inversion's saddle point is D3h, sigma 6, its
-    minimum as ORCA reads it Cs, sigma 1.
+    group and sigma as read (an ammonia inversion's saddle point: D3h,
+    sigma 6).
 - **Rotational symmetry**, for G: *As each program read it* (the default),
   or *Left out (σ = 1 on both sides)* - each side's RT ln sigma taken off
   its G by Meno, at the temperature its G was worked out at, and its
-  record says so. Which point group a program finds depends on its
-  tolerance, not on the structure alone: the same ammonia minimum, from
-  two runs of ORCA 6.1.1 at its GFN2-xTB, was read once C3v, sigma 3, and
-  once Cs, sigma 1, and the barrier moved by RT ln 3 (0.65 kcal/mol at
-  298.15 K) for that alone. Left out, the two give one barrier (5.10
-  kcal/mol). Neither is chosen for the chemist: the default is each
+  record says so. Which point group is found depends on the tolerance it
+  is looked for with, not on the structure alone, and a sigma of 3 rather
+  than 1 moves a barrier by RT ln 3 (0.65 kcal/mol at 298.15 K). Left out,
+  the barrier does not depend on which point group each side was read
+  in. Neither is chosen for the chemist: the default is each
   program's word.
 - **G summed of parts** - *Add*'s: a single point's energy, a thermal
   correction at a lower level, a standard state - is named in *G is* in
@@ -950,7 +938,7 @@ beside its edge - being drawn over all of it.
   vibrations' frequencies - as its frame's properties: the molecule keeps
   one calculation, not each frame's. Its imaginary frequencies are kept
   frame by frame, a frame whose vibrations were worked out and has none
-  "none", one never worked out "not computed"; where the program judged
+  "none", one never worked out "not computed"; where the output marks
   none imaginary but its table lists a negative frequency, that one is
   said - a table with one never reads as none. A program step on them
   later reads them again, or drops them, and a step that changes the
@@ -1145,8 +1133,8 @@ states an undo goes back to as well.
   above - each with its own log, a failure its own, several at once
   where Settings allows.
 - **Unless its plugin says otherwise**: a plugin's manifest may say that
-  a kind it fills takes all its entries in one job, where its program
-  does that better - CREST optimising an ensemble in one run
+  a kind it fills takes all its entries in one job, as its program
+  can - CREST optimising an ensemble in one run
   (`crest --mdopt`), ORCA chaining jobs in one input. Then the step runs
   one job, with one log, and the entries that came out of it are told
   apart in the results; a failure is the whole job's.
@@ -1234,17 +1222,12 @@ states an undo goes back to as well.
   xtb 6.7.1, LGPL-3.0-or-later, for macOS (Apple silicon and Intel),
   Windows and Linux. It fills *Optimise*, *Energy* and *Frequencies*, and
   reads its own outputs back. *Frequencies* of an entry with an isotope is
-  refused, naming it (2026-10-13): xtb 6.7.1 says it takes an atom's mass
-  (xcontrol(7), `$hess`) and that it changed it, but its frequencies and
-  thermochemistry came out as the natural element's - D2O's as H2O's, run
-  here. Geometries and energies do not depend on the masses, so
-  *Optimise* and *Energy* run as before. ORCA writes each isotope's mass
-  ("M =" after the atom's coordinates, as its manual has it), and
-  Gaussian its mass number ("(Iso=n)").
+  refused, naming it (2026-10-13). Geometries and energies do not depend
+  on the masses, so *Optimise* and *Energy* take such an entry.
 - **CREST**: *Conformers*, by a plugin made the same way - crest 2.12
   with xtb 6.7.1, LGPL-3.0-or-later, on conda-forge for macOS and Linux
   only. On Windows it cannot be added, and *Conformers* is filled by RDKit
-  alone there. (Not 3.0.2: *As built*, step 5.)
+  alone there.
 - **Programs installed separately** (ORCA, Gaussian; step 6): never fetched by
   Meno - their licences do not allow it. A plugin's manifest says which
   program it needs and how to know it (its name, and the line its version
@@ -1490,7 +1473,8 @@ Decided while building it, for the maintainer to confirm:
   `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
   is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
   gives. Never more than the cores it may use (its threads, as the system
-  lets Meno have them), and its cores where the system cannot say. A
+  lets Meno have them), and its cores where its physical cores are not
+  known. A
   program of threads (xTB, Gaussian's `%nprocshared`) is told its cores as
   before.
 - **Jobs at once counted for jobs asked for after it was changed** (until
@@ -1566,8 +1550,7 @@ Decided while building it, for the maintainer to confirm:
 - **Frequencies**: the vibrations - their wavenumbers, reduced masses and
   IR intensities - and the thermochemistry (Gibbs free energy, zero-point
   energy, the corrections to G and H, T·S). How each mode moves is not
-  yet shown: xtb documents no displacements in a form of its own (its
-  `g98.out` is "GAUSSIAN-format"), so they wait for a documented source.
+  yet shown.
 - **A run under way is kept in the workspace with no step to undo**, the
   workspace unsaved until it is saved; the results coming in are one step
   to undo. Each job's log is kept in the workspace with the molecules it
@@ -1715,16 +1698,10 @@ Decided while building it, for the maintainer to confirm:
   search is (full, or CREST's three quicker ones), and the energy window
   (6 kcal/mol by default). The charge and spin multiplicity are those
   Export reads, as for xTB. Its search samples with the natural masses:
-  CREST is given none (its help lists no way to), which changes how it
-  explores, not the conformers or energies it gives.
-- **CREST 2.12, not 3.0.2.** conda-forge's CREST 3.0.2 for macOS keeps
-  only the lowest conformer, whatever energy window it is given: its
-  CREGEN sorting takes the window as 0 (github.com/crest-lab/crest/issues/431,
-  open; seen here with n-butane, 1 conformer where 2.12 finds 3). 2.12
-  runs xtb as a program, which 3.0 does within itself - slower (n-butane
-  2 min 21 s against 11 s, on 8 cores) - but one version on both
-  systems finds the same conformers. A later build that keeps the window
-  is a change of the plugin's lock alone.
+  the plugin gives CREST none, which changes how it explores, not the
+  conformers or energies it gives.
+- **CREST 2.12.** The plugin's lock holds crest 2.12 with xtb 6.7.1, the
+  same on macOS and Linux; another version is a change of the lock alone.
 - **A plugin for some systems only** says so in its manifest
   (`systems`); elsewhere Settings, *Plugins*, says *For macOS and Linux
   only* in place of *Add*, and it cannot be added.
@@ -1792,12 +1769,14 @@ Decided while building it, for the maintainer to confirm:
   line - the method, basis set, dispersion correction (D3BJ or D4), the run
   (SP, OPT, FREQ) and C-PCM or SMD with one of 22 solvents - `%pal nprocs`
   where a job may use more than one core, `%maxcore` where it is set, and
-  the coordinates. It is run by its full path, its folder first where
+  the coordinates, each isotope's mass after its atom's ("M =", as its
+  manual has it). It is run by its full path, its folder first where
   programs are looked for, as the manual asks; what it prints is its
   output.
 - **Gaussian** is given the input *Export* writes - the job of the step's
   kind (Opt, SP, Freq), PCM or SMD with one of 22 solvents as SCRF says,
-  %NProcShared from the cores a job may use, no checkpoint file - and run
+  %NProcShared from the cores a job may use, no checkpoint file, an
+  isotope by its mass number ("(Iso=n)") - and run
   as `g16 <input.gjf` (`g16 input` until 2026-10-09: *Real runs*, below),
   given `g16root` (the folder above its own) and GAUSS_EXEDIR (its own
   folder), its scratch files where it runs. Why a run failed is read from
@@ -1895,25 +1874,16 @@ Decided while building it, for the maintainer to confirm:
 
 Not put right here:
 
-- **Gaussian's Frequencies fail on this Mac.** Every Freq job - Meno's,
-  and one run by hand from a shell, HF/STO-3G as well as B3LYP - ends with
-  exit code 1 in Link 103, straight after the frequencies are printed,
-  with no error message; Opt and SP run to normal termination. It is
-  Gaussian 16 B.01 under Rosetta on this Mac, not Meno. Meno marks the
-  step failed and says where Gaussian stopped. Gaussian's frequencies
-  need a run elsewhere (a native build, Linux).
-- **ORCA's method on the chip** reads *DFT/def2-SVP*, not B3LYP: cclib
-  1.9rc1 reads no functional from ORCA 6's output. The reader's to put
-  right, not the step's.
+- **A Gaussian job that ends with an error** marks its step failed, and
+  the step says where Gaussian stopped.
 - **ORCA in parallel** still needs OpenMPI (step 6, *Not yet*): with the
   cores left unset, all of a computer's go to a job, so ORCA is given
-  `%pal`, and without OpenMPI it cannot run. Settings, *Calculations*,
-  *Cores for each* set to 1 runs it. Where it cannot, the step's failure
-  says so plainly, with what to do (2026-10-30): *ORCA runs on more than
+  `%pal`, which it runs through OpenMPI. Settings, *Calculations*,
+  *Cores for each* set to 1 runs it. Where this computer has no OpenMPI,
+  the step's failure says so plainly, with what to do (2026-10-30): *ORCA runs on more than
   one core only with Open MPI, whose mpirun this computer does not have
   (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
-  install Open MPI* - ORCA's own words being only that it ended by an error at its
-  start-up. Meno never runs it on fewer cores than asked without a word.
+  install Open MPI*. Meno never runs it on fewer cores than asked without a word.
   Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
   processes with before any job is made - Open MPI's `mpirun` on macOS
   and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
@@ -1996,8 +1966,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   changes - from where each hangs, and faded out below 75 %, with
   the sets' names and the cards' words (`utils/pageScale`). Each is laid
   out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
-  they are seen at - not drawn at one size and scaled by a transform,
-  which the Mac's WebView magnifies soft up close (2026-10-25; so the
+  they are seen at - not drawn at one size and scaled by a transform
+  (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
   molecule or a figure).
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
@@ -2021,8 +1991,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   *Conformers* (2026-10-22), where what is open could go more than one
   way: a stereocentre or a double bond that could have a configuration and
   is drawn without one (the roles' `open_stereo`), giving two or more
-  stereoisomers that can be made in 3D, or an allene's axis, whose
-  stereoisomers RDKit does not count. The canvas's *3D structure* asks
+  stereoisomers that can be made in 3D, or an allene's axis. The canvas's
+  *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
   made, and the step's line names those not made by their places
   (*structure 3 of 4 leaves stereo open: draw it, wedges and all*). Each
@@ -2101,8 +2071,7 @@ Then, of the leftovers the maintainer chose:
   difference), its population threshold and its energy window (kcal/mol),
   each the last value the run printed - are said on the conformer set's
   frames chip, under *Same conformer (CREGEN)*: never as asked, never a
-  default. One it does not print is not said (CREST 2.12 prints no pair
-  energy threshold). A search's results are of its run, so the conformer
+  default. One it does not print is not said. A search's results are of its run, so the conformer
   set keeps them; a job run on each conformer keeps its own with that
   conformer, never with the set.
 - **Each conformer's degeneracy, as CREST finds it** (2026-10-13): the
@@ -2358,8 +2327,7 @@ them again*; the maintainer's rulings of 2026-10-22):
   by its words ("The optimization did not converge but reached the
   maximum number of optimization cycles"), never as a result even where
   ORCA then ended normally, and said *not converged* with how many cycles
-  (2026-10-30; before, in the words of the error ORCA's properties may
-  then stop by). A plugin's reason for a whole job is of the kind it
+  (2026-10-30). A plugin's reason for a whole job is of the kind it
   names, one of core's, else a program's error.
 - **A plugin may refuse one entry alone** as it prepares the others'
   jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
@@ -2738,8 +2706,7 @@ of its own, and Meno never chooses one for it.
     with the H in one place and single with it in another it presumes
     rotatable, with no E/Z (Appendix 5b; its example is an N-methyl
     imidic acid);
-  - one whose N carries a hydrogen, C=NH, which RDKit's enumeration
-    already gives one way only;
+  - one whose N carries a hydrogen, C=NH;
   - an amidinium or guanidinium C=N+, its double bond shared with the
     neutral amino N beside it on the carbon.
 

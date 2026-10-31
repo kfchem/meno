@@ -11,8 +11,8 @@ Meno's canvas draws molecules in 3D for working with them: quickly, in the
 film of a molecule turning or moving in a vibration for a talk - lit as a
 real scene is, with true shadows, the light round the scene reaching into
 every crevice, and materials such as glass and metal. It is made by a
-program that does nothing else so well, apart from Meno, and comes back
-onto the page beside the molecules it shows.
+program apart from Meno, and comes back onto the page beside the
+molecules it shows.
 
 ## How it is asked for
 
@@ -128,8 +128,7 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   large as the molecules are drawn there.
 - **The key light** as the canvas has it: directional
   (`KHR_lights_punctual`), from the same side, as strong. The light all
-  round the canvas has, for which glTF has no word, is said in the scene's
-  `extras` (`meno.ambientLight`), with the picture's size and frames.
+  round the canvas has is said in the scene's `extras` (`meno.ambientLight`), with the picture's size and frames.
 - **A film's motion** as one animation (3.11): a key for each of its
   frames, every one worked out by Meno - the turn of each molecule, or the
   place of each atom and stick - so that the film is what Meno meant, not
@@ -313,8 +312,7 @@ uv, no package), and the script Blender runs, `render.py`.
   Outlines: Freestyle's silhouettes, borders and creases for the thin
   line, one pixel; and for the outer edge, the picture's own silhouette
   grown by the width, in the colour, under the picture - one edge round
-  the molecule however its shapes overlap, which Freestyle's own external
-  contour (each shape's) is not. Meno's looks keep the picture's place
+  the molecule however its shapes overlap. Meno's looks keep the picture's place
   and size.
 - **Looks with materials and light of their own** (`looks.py`, beside
   `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
@@ -429,7 +427,7 @@ uv, no package), and the script Blender runs, `render.py`.
   is kept. The step's line says *Checking which is
   faster...* while it times, and, after, **Rendered on the processor**,
   in small words, where the render was on the processor - by the choice,
-  by the timing, or because Blender has no graphics processor it can use
+  by the timing, or because there is no graphics processor Blender can use
   (nothing is shown where it rendered on the graphics processor). The
   job's log (*Show log* on the step's menu) says which in each case, and
   the two times - it is not in `meno.log`. The old on/off switch's
@@ -444,8 +442,8 @@ uv, no package), and the script Blender runs, `render.py`.
   (`render.py: ...`) or what Python raised, as its traceback ends
   (`TypeError: ...`) - all of it, a message of several lines as one, up
   to what Blender says next (its progress, its own last words); else Blender's last line that says error; else its
-  last. Never Blender's own last words, which say only that a script
-  failed or what memory it did not free as it quit (`worker.py` `why_of`).
+  last. Never Blender's own last words as it quits, "Error: script
+  failed" and "Error: Not freed memory blocks" (`worker.py` `why_of`).
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer
@@ -503,7 +501,7 @@ one starts from its first choice.
 ## Not yet
 - The words the canvas puts on molecules in 3D - atom numbers, R and S,
   E and Z, a measurement's value - are not in the scene yet: they are
-  words, which glTF has no word for, so they would be written as shapes.
+  words, which would be written in the scene as shapes.
 - Films with a transparent background (a video kind that keeps it, which
   every system's web view plays, is wanted first).
 - A render is not picked up again as a workflow's job is: its workspace's

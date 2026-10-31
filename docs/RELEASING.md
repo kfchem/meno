@@ -125,9 +125,7 @@ computer:
   Intel, and 64-bit Windows) - `cargo tree --offline -e normal --target`,
   Meno's normal dependencies and theirs, proc-macros among them, not build
   scripts' or tests', with features unified as a build unifies them - and
-  the systems taken together. (Not `cargo metadata`'s graph: it turns on
-  every feature any user of a crate asks for, build scripts' and tests'
-  among them, and so names crates no build links.)
+  the systems taken together.
 
 For each: its name, version and licence as its manifest gives them, where
 its source is kept, and every licence and notice file at the top of its
@@ -217,9 +215,9 @@ so an Intel build would need only its own runner.
 It is signed **ad hoc** (`signingIdentity: "-"`, in the job's arguments),
 the whole bundle, and not with Apple's Developer ID, which the project has
 not taken up. Without that the bundle would carry only the linker's
-signature on its executable, which macOS takes for a damaged app: a Meno
-downloaded that way cannot be opened at all ("“Meno” is damaged and can't
-be opened"), short of clearing its quarantine in a terminal.
+signature on its executable, and macOS would not open a Meno downloaded
+that way at all ("“Meno” is damaged and can't be opened"), short of
+clearing its quarantine in a terminal.
 
 Signed ad hoc, as seen on macOS 26 (with a local update standing in for
 a release's):

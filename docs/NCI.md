@@ -92,9 +92,9 @@ for either grid. Saved with the workspace as any surface is.
   promolecular NCI, its steps the same - writing `func1.cub` (sign(λ2)ρ)
   and `func2.cub` (the RDG); `Multiwfnpath` is its folder, where its
   settings.ini is. The job reads back what Multiwfn was told (`reads`), so
-  that `collect` says which density each surface is of. Promolecular, it
-  leaves out where the density is above 0.1 a.u. (its settings.ini's
-  `RDGprodens_maxrho`).
+  that `collect` says which density each surface is of. Promolecular, its
+  surface is only where the density is at most 0.1 a.u. (its
+  settings.ini's `RDGprodens_maxrho`).
 
 ## Licences
 
