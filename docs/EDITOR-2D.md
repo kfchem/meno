@@ -1113,8 +1113,9 @@ All hover-based, as above.
     (on their new ids where it is pasted), and drawn in an exported SVG and
     in a copy's pictures, as on the canvas - its line there as the curve it
     is (an SVG path, EMF+'s Bezier curves and GDI's PolyBezier), smooth
-    however far a picture is enlarged (a Windows check found PowerPoint
-    showing corners at 17 times); a MOL, SD or RXN file has no
+    however far a picture is enlarged (a Windows check found the line,
+    once written as short straight pieces, showing corners at 17 times in
+    PowerPoint); a MOL, SD or RXN file has no
     place for it (`lib/chem/pushArrow`, `utils/pushes`, `PushArrows2D`,
     `PushDraw2D`; `PushArrow`, `pushes`).
 - **Colour** (the maintainer, 2026-10-11: colour on parts of a structure;
@@ -1674,19 +1675,17 @@ traced from reference drawings.
   PNG, inside Office's own clip format; an EMF that Meno writes, handed
   over in that clip format, is kept as it is, drawn as vectors, and chosen
   over a PDF or a PNG offered with it - and, stored as an EMF, it is what
-  Windows draws too. Word rewrites an SVG and drops what it carries. The
+  Windows draws too. The
   same trial on Windows (Microsoft 365, 2026-09-29) found the same: the
   EMF in Office's clip format is kept byte for byte and drawn as vectors,
-  and it is only in that clip format that Office hands it back - the EMF
-  it puts on the clipboard itself is drawn afresh, without the comment. With
+  and Meno reads it back from that clip format alone. With
   the clip format there, plain text beside it does not become a text box
-  (on either system); a PDF from a Mac shows coarse on Windows (Office draws
-  the bitmap stored with it). (PR #69: every copy carries these pictures;
-  the double-click on Windows is still to come.) Office on Windows draws
-  an EMF's lines and shapes without anti-aliasing - bonds and wedges come
-  out as stairs on screen - so the EMF draws everything twice: in EMF+
-  records, which Word and PowerPoint draw smooth, and in the EMF records
-  as before, for any reader that knows nothing of EMF+. Both keep it byte
+  (on either system); Office on Windows draws a PDF from a Mac by the
+  bitmap stored with it. (PR #69: every copy carries these pictures;
+  the double-click on Windows is still to come.) Word and PowerPoint on
+  Windows draw an EMF's EMF+ records smooth, so the EMF draws everything
+  twice: in EMF+ records, and in the EMF records as before, for any reader
+  that reads the EMF records alone. Both keep it byte
   for byte, as before (Windows, 2026-09-29; on a Mac, 2026-09-30, drawn
   smooth there too).
 - On Windows, a structure copied from Meno goes into Word and PowerPoint as
