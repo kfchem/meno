@@ -1912,25 +1912,16 @@ Decided while building it, for the maintainer to confirm:
 
 Not put right here:
 
-- **Gaussian's Frequencies fail on this Mac.** Every Freq job - Meno's,
-  and one run by hand from a shell, HF/STO-3G as well as B3LYP - ends with
-  exit code 1 in Link 103, straight after the frequencies are printed,
-  with no error message; Opt and SP run to normal termination. It is
-  Gaussian 16 B.01 under Rosetta on this Mac, not Meno. Meno marks the
-  step failed and says where Gaussian stopped. Gaussian's frequencies
-  need a run elsewhere (a native build, Linux).
-- **ORCA's method on the chip** reads *DFT/def2-SVP*, not B3LYP: cclib
-  1.9rc1 reads no functional from ORCA 6's output. The reader's to put
-  right, not the step's.
+- **A Gaussian job that ends with an error** marks its step failed, and
+  the step says where Gaussian stopped.
 - **ORCA in parallel** still needs OpenMPI (step 6, *Not yet*): with the
   cores left unset, all of a computer's go to a job, so ORCA is given
-  `%pal`, and without OpenMPI it cannot run. Settings, *Calculations*,
-  *Cores for each* set to 1 runs it. Where it cannot, the step's failure
-  says so plainly, with what to do (2026-10-30): *ORCA runs on more than
+  `%pal`, which it runs through OpenMPI. Settings, *Calculations*,
+  *Cores for each* set to 1 runs it. Where this computer has no OpenMPI,
+  the step's failure says so plainly, with what to do (2026-10-30): *ORCA runs on more than
   one core only with Open MPI, whose mpirun this computer does not have
   (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
-  install Open MPI* - ORCA's own words being only that it ended by an error at its
-  start-up. Meno never runs it on fewer cores than asked without a word.
+  install Open MPI*. Meno never runs it on fewer cores than asked without a word.
   Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
   processes with before any job is made - Open MPI's `mpirun` on macOS
   and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
