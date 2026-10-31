@@ -1495,7 +1495,7 @@ slowing it - and in the pictures made of it.
   light from all round is taken by it, and a little of the light from
   above right. Chosen over shading worked out on the screen each frame,
   which would take the whole canvas - the page too - through another
-  pass, flicker as a molecule turns and cost more; atoms of other
+  pass; atoms of other
   molecules, and ribbons, do not shade it.
 - **Shadows.** The light from above right casts them, on the molecule and
   on others beside it, never on the page (the drawings and words on it
@@ -1517,9 +1517,9 @@ slowing it - and in the pictures made of it.
   canvas's resolution, over the molecules alone - their balls, sticks and
   ribbons drawn once more into a pass of their own - and laid over them
   by a sheet multiplying what is under it, one where no molecule is, so
-  the page is drawn exactly as it was. A molecule shaded per atom still
-  hides what is behind it in that pass, its own weight none. It shows a
-  faint grain close up, as screen-space shading does. Going over to it,
+  the page is drawn exactly as it was; close up, this shade is finely
+  grained. A molecule shaded per atom still
+  hides what is behind it in that pass, its own weight none. Going over to it,
   or from it, the one shade gives way to the other.
 - **Very large drawings** (the maintainer's choice, 2026-10-11): past
   twenty thousand atoms on the canvas, drawn lighter - no shadows, and
