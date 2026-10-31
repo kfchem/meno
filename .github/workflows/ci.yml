@@ -33,6 +33,7 @@ jobs:
       # A plugin's worker that needs Python alone is tested here; those that
       # need their packages, in the job "plugins" below.
       - run: python3 -m unittest scripts/calc/test_plugin_gaussian.py
+      - run: python3 -m unittest scripts/calc/test_reader_gaussian.py
       - run: python3 -m unittest scripts/calc/test_plugin_orca.py
       - run: python3 -m unittest scripts/calc/test_plugin_xtb.py
       - run: python3 -m unittest scripts/calc/test_plugin_crest.py

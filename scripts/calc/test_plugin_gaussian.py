@@ -15,11 +15,14 @@ against any other program; no output of a real run is kept.
 import importlib.util
 import json
 import pathlib
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKER = ROOT / "src-tauri/resources/plugins/gaussian/worker.py"
 MANIFEST = ROOT / "src-tauri/resources/plugins/gaussian/manifest.json"
+# (the worker's folder on the path, as Meno runs it there: its reader beside it)
+sys.path.insert(0, str(WORKER.parent))
 spec = importlib.util.spec_from_file_location("plugin_gaussian", WORKER)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)

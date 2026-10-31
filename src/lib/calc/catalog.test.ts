@@ -24,10 +24,10 @@ const none = { read: {}, also: {} };
 
 describe("the readers Meno knows of", () => {
   it("are Meno's own, then each plugin from its manifest in its folder", () => {
-    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "pyscf", "wfx"]);
+    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "pyscf", "wfx"]);
     // (the structure files Meno reads on the page, and the cube, under the readers' contract)
     expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
-    const [cclib, pyscf] = READER_PLUGINS;
+    const [cclib, gaussian, pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
       version: "0.1.6",
@@ -40,6 +40,8 @@ describe("the readers Meno knows of", () => {
     // (every program cclib reads, each a kind it brings itself)
     expect(cclib.reads).toEqual(expect.arrayContaining(["orca", "gaussian", "gaussian-fchk", "xtb", "nwchem", "psi4", "qchem", "gamess", "molpro"]));
     expect(cclib.reads.length).toBeGreaterThan(15);
+    // (a program's own plugin reads its outputs: Gaussian's, the kinds it declares itself)
+    expect(gaussian).toMatchObject({ name: "Gaussian interface", reads: ["gaussian", "gaussian-fchk"], worker: "resources/plugins/gaussian/worker.py" });
     expect(pyscf).toMatchObject({
       name: "PySCF",
       profile: "plugin-pyscf",
@@ -55,7 +57,7 @@ describe("the readers Meno knows of", () => {
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf", "wfx"]);
+    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "pyscf", "wfx"]);
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);
     // (two that read structures from pictures, each standing alone: the chemist chooses, in Settings, Chemistry)
@@ -69,7 +71,7 @@ describe("the readers Meno knows of", () => {
     }
     // (and those that write files: Gaussian's input, its plugin set up as any is)
     expect(WRITER_PLUGINS.map((p) => p.id)).toEqual(["gaussian"]);
-    expect(WRITER_PLUGINS[0]).toMatchObject({ reads: [], roles: [], profile: "plugin-gaussian", worker: "resources/plugins/gaussian/worker.py" });
+    expect(WRITER_PLUGINS[0]).toMatchObject({ reads: ["gaussian", "gaussian-fchk"], roles: [], profile: "plugin-gaussian", worker: "resources/plugins/gaussian/worker.py" });
     // (and those that run a program installed separately: ORCA, and Gaussian besides writing its input - never fetched, found)
     const orca = PLUGINS.find((p) => p.id === "orca")!;
     expect(orca.steps.map((d) => [d.kind, d.programs])).toEqual([

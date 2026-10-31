@@ -1,0 +1,561 @@
+"""Tests for the Gaussian plugin's reader
+(src-tauri/resources/plugins/gaussian/reader.py).
+
+The reader needs Python alone, so these run anywhere; CI runs them:
+
+    python3 -m unittest scripts/calc/test_reader_gaussian.py
+
+No output of a real run is kept here (docs/WORKSPACE.md, stage 3): the
+lines below are written as Gaussian 16 prints them, laid out as its own
+reference (gaussian.com: the keyword pages, "Molecule Specification",
+"About Gaussian 16 Input", "Vibrational Analysis in Gaussian",
+"Thermochemistry in Gaussian") and its outputs have them, with made-up
+numbers. Where a run of Gaussian's own output for one of `INPUTS` is in
+calc-samples/Gaussian-gaussian/ under its name, it is read too; those
+tests are skipped where it is not.
+"""
+
+import json
+import pathlib
+import sys
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+PLUGIN = ROOT / "src-tauri/resources/plugins/gaussian"
+sys.path.insert(0, str(PLUGIN))
+import reader  # noqa: E402
+import worker  # noqa: E402
+
+SAMPLES = ROOT / "calc-samples/Gaussian-gaussian"
+
+RULE = " " + "-" * 69
+
+
+def route(text):
+    """A route section as Gaussian echoes it: between lines of dashes, wrapped at 70 characters - a word cut where a
+    line is full - each line begun by a space."""
+    lines = [text[i : i + 70] for i in range(0, len(text), 70)]
+    return [" " + "-" * 40] + [" " + line for line in lines] + [" " + "-" * 40]
+
+
+def orientation(xyz, title="Standard orientation:"):
+    """A block of coordinates: atomic numbers and x, y, z."""
+    out = [f"                         {title}                         ", RULE,
+           " Center     Atomic      Atomic             Coordinates (Angstroms)",
+           " Number     Number       Type             X           Y           Z", RULE]
+    out += [f"{i + 1:7d}{z:11d}{0:12d}    {x:12.6f}{y:12.6f}{w:12.6f}" for i, (z, x, y, w) in enumerate(xyz)]
+    return out + [RULE]
+
+
+WATER = [(8, 0.0, 0.0, 0.119), (1, 0.0, 0.763, -0.477), (1, 0.0, -0.763, -0.477)]
+WATER_2 = [(8, 0.0, 0.0, 0.121), (1, 0.0, 0.760, -0.480), (1, 0.0, -0.760, -0.480)]
+
+
+def scf(e, method="RB3LYP"):
+    return [f" SCF Done:  E({method}) =  {e:.9f}     A.U. after    9 cycles"]
+
+
+def forces(values):
+    out = [" -------------------------------------------------------------------",
+           " Center     Atomic                   Forces (Hartrees/Bohr)",
+           " Number     Number              X              Y              Z",
+           " -------------------------------------------------------------------"]
+    out += [f"{i + 1:7d}{z:9d}     {x:15.9f}{y:15.9f}{w:15.9f}" for i, (z, x, y, w) in enumerate(values)]
+    return out + [" -------------------------------------------------------------------"]
+
+
+def head(route_text, charge=0, multiplicity=1):
+    return [
+        " Entering Gaussian System, Link 0=g16",
+        " Initial command:",
+        " /g16/l1.exe \"/tmp/Gau-1.inp\" -scrdir=\"/tmp/\"",
+        " ******************************************",
+        " Gaussian 16:  ES64L-G16RevC.01  3-Jul-2019",
+        "                 1-Nov-2026 ",
+        " ******************************************",
+        *route(route_text),
+        " -------",
+        " water",
+        " -------",
+        " Symbolic Z-matrix:",
+        f" Charge = {charge:2d} Multiplicity = {multiplicity}",
+        " O                     0.        0.        0.119 ",
+        " H                     0.        0.763    -0.477 ",
+        " H                     0.        0.763    -0.477 ",
+        " ",
+    ]
+
+
+def population(mulliken=(-0.8, 0.4, 0.4), dipole=(0.0, 0.0, -2.1), density="SCF"):
+    return [
+        f"          Population analysis using the {density} density.",
+        " **********************************************************************",
+        " Orbital symmetries:",
+        "       Occupied  (A1) (A1) (B2) (A1) (B1)",
+        "       Virtual   (A1) (B2)",
+        " The electronic state is 1-A1.",
+        " Alpha  occ. eigenvalues --  -19.13000  -0.99000  -0.52000  -0.36000  -0.29000",
+        " Alpha virt. eigenvalues --    0.06000   0.15000",
+        "          Condensed to atoms (all electrons):",
+        " Mulliken charges:",
+        "               1",
+        f"     1  O   {mulliken[0]:9.6f}",
+        f"     2  H   {mulliken[1]:9.6f}",
+        f"     3  H   {mulliken[2]:9.6f}",
+        " Sum of Mulliken charges =   0.00000",
+        " Dipole moment (field-independent basis, Debye):",
+        f"    X=         {dipole[0]:11.4f}    Y=         {dipole[1]:11.4f}    Z=         {dipole[2]:11.4f}  Tot=         {sum(v * v for v in dipole) ** 0.5:11.4f}",
+    ]
+
+
+def frequencies():
+    """Water's three vibrations, as Freq prints them, three to a block."""
+    return [
+        " Harmonic frequencies (cm**-1), IR intensities (KM/Mole), Raman scattering",
+        " activities (A**4/AMU), depolarization ratios for plane and unpolarized",
+        " incident light, reduced masses (AMU), force constants (mDyne/A),",
+        " and normal coordinates:",
+        "                      1                      2                      3",
+        "                     A1                     A1                     B2",
+        " Frequencies --   1700.1234              3700.5678              3800.9012",
+        " Red. masses --      1.0800                 1.0450                 1.0800",
+        " Frc consts  --      1.8000                 8.4000                 9.2000",
+        " IR Inten    --     70.1000                 4.2000                45.3000",
+        "  Atom  AN      X      Y      Z        X      Y      Z        X      Y      Z",
+        "     1   8     0.00   0.00   0.07     0.00   0.00  -0.05     0.00   0.07   0.00",
+        "     2   1     0.00  -0.43  -0.56     0.00   0.58   0.40     0.00  -0.56   0.43",
+        "     3   1     0.00   0.43  -0.56     0.00  -0.58   0.40     0.00  -0.56  -0.43",
+        "",
+        " -------------------",
+        " - Thermochemistry -",
+        " -------------------",
+        " Temperature   298.150 Kelvin.  Pressure   1.00000 Atm.",
+        " Full point group                 C2V     NOp   4",
+        " Rotational symmetry number  2.",
+        " Zero-point correction=                           0.021000 (Hartree/Particle)",
+        " Thermal correction to Energy=                    0.024000",
+        " Thermal correction to Enthalpy=                  0.025000",
+        " Thermal correction to Gibbs Free Energy=         0.003500",
+        " Sum of electronic and zero-point Energies=            -76.389000",
+        " Sum of electronic and thermal Energies=               -76.386000",
+        " Sum of electronic and thermal Enthalpies=             -76.385000",
+        " Sum of electronic and thermal Free Energies=          -76.406500",
+        "",
+        "                     E (Thermal)             CV                S",
+        "                      KCal/Mol        Cal/Mol-Kelvin    Cal/Mol-Kelvin",
+        " Total                   15.100              6.000             45.100",
+        " Electronic               0.000              0.000              0.000",
+    ]
+
+
+def archive(nimag=0, sep="\\"):
+    """An archive entry, wrapped at 70 characters, each line begun by a space."""
+    body = sep.join(["1", "1", "GINC-HOST", "Freq", "RB3LYP", "6-31G(d)", "H2O1", "USER", "1-Nov-2026", "0", "", "#p b3lyp/6-31G(d) freq",
+                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevC.01", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
+    return [" " + body[i : i + 70] for i in range(0, len(body), 70)]
+
+
+def opt_freq():
+    """A water Opt Freq: two optimisation steps, its converged geometry printed once more, then its Freq step at that
+    geometry, the same SCF energy; all its parts as Gaussian 16 prints them."""
+    return "\n".join(
+        head("#p B3LYP/6-31G(d) Opt Freq")
+        + [" Standard basis: 6-31G(d) (6D, 7F)"]
+        + orientation(WATER) + scf(-76.40) + forces([(8, 0.0, 0.0, 0.03), (1, 0.0, 0.01, -0.015), (1, 0.0, -0.01, -0.015)])
+        + orientation(WATER_2) + scf(-76.41) + forces([(8, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0)])
+        + [" Optimization completed.", "    -- Stationary point found."]
+        + orientation(WATER_2) + population()
+        + [" Normal termination of Gaussian 16 at Sun Nov  1 10:00:00 2026.", " Link1:  Proceeding to internal job step number  2."]
+        + route("#P Geom=AllCheck Guess=TCheck SCRF=Check GenChk RB3LYP/6-31G(d) Freq")
+        + orientation(WATER_2) + scf(-76.41) + forces([(8, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0)])
+        + population(dipole=(0.0, 0.0, -2.0)) + frequencies()
+        + [" Optimization completed.", "    -- Stationary point found."]
+        + archive()
+        + [" Normal termination of Gaussian 16 at Sun Nov  1 10:01:00 2026.", ""]
+    )
+
+
+def results(out):
+    return {r["id"]: r for r in out["results"]}
+
+
+class TheRoute(unittest.TestCase):
+    def test_a_route_wrapped_over_lines_read_whole(self):
+        lines = route("#p b3lyp/6-31G(d) opt=(calcfc,tight) freq=noraman scrf=(smd,solvent=dichloromethane) pop=nbo")
+        (_, text), = reader.routes([""] + lines)
+        self.assertEqual(text, "#p b3lyp/6-31G(d) opt=(calcfc,tight) freq=noraman scrf=(smd,solvent=dichloromethane) pop=nbo")
+        self.assertEqual(reader.keyword(text, "SCRF"), "scrf=(smd,solvent=dichloromethane)")
+        self.assertEqual(reader.options_of(reader.keyword(text, "opt")), ["calcfc", "tight"])
+        self.assertIsNone(reader.keyword(text, "irc"))
+
+    def test_the_method_as_the_scf_names_it_the_basis_as_standard_basis_prints_it(self):
+        lines = head("#p b3lyp/6-31g(d) opt") + [" Standard basis: 6-31G(d) (6D, 7F)"] + scf(-76.4)
+        self.assertEqual(reader.level_of(reader.routes(lines), lines), ("B3LYP", "6-31G(d)"))
+        lines = head("#p wb97xd/6-31G(d)") + scf(-76.4, "RwB97XD")
+        self.assertEqual(reader.level_of(reader.routes(lines), lines), ("wB97XD", "6-31G(d)"))
+
+    def test_a_post_scf_method_as_the_route_names_it_in_capitals(self):
+        lines = head("#p mp2/sto-3g") + [" Standard basis: STO-3G (5D, 7F)"] + scf(-74.96, "RHF")
+        self.assertEqual(reader.level_of(reader.routes(lines), lines), ("MP2", "STO-3G"))
+
+    def test_solvation_as_the_route_says_it(self):
+        gas = head("#p b3lyp/6-31G(d) opt")
+        self.assertEqual(reader.solvation_of(reader.routes(gas), gas), "none")
+        smd = head("#p b3lyp/6-31G(d) scrf=(smd,solvent=water) opt") + [" Solvent              : Water, Eps=  78.355300 Eps(inf)=   1.777849"]
+        self.assertEqual(reader.solvation_of(reader.routes(smd), smd), "SMD(Water)")
+        # (a model named alone takes the manual's default solvent, water; none named, IEFPCM)
+        cpcm = head("#p b3lyp/6-31G(d) scrf=cpcm")
+        self.assertEqual(reader.solvation_of(reader.routes(cpcm), cpcm), "CPCM(Water)")
+        pcm = head("#p b3lyp/6-31G(d) scrf=(solvent=toluene)")
+        self.assertEqual(reader.solvation_of(reader.routes(pcm), pcm), "IEFPCM(toluene)")
+        # (a step that takes its solvation from the checkpoint says what the step before it said)
+        self.assertEqual(reader.read("water.log", opt_freq())["solvation"], "none")
+
+    def test_unsaid_where_no_route_was_read(self):
+        self.assertIsNone(reader.solvation_of([], []))
+
+
+class TheRun(unittest.TestCase):
+    def test_normal_error_and_cut(self):
+        normal = " Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n Normal termination of Gaussian 16 at Tue Oct 13.\n"
+        self.assertEqual(reader.run_of(normal), ("normal", None, [True]))
+        error = (" Entering Gaussian System\n The combination of multiplicity 2 and    10 electrons is impossible.\n"
+                 " Error termination via Lnk1e in /g16/l301.exe at Tue Oct 13.\n")
+        self.assertEqual(reader.run_of(error)[:2], ("error", "The combination of multiplicity 2 and    10 electrons is impossible."))
+        self.assertEqual(reader.run_of(" Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n")[0], "cut")
+
+    def test_an_scf_that_did_not_converge(self):
+        unmet = " >>>>>>>>>> Convergence criterion not met.\n SCF Done:  E(RHF) =  -75.98\n SCF Done:  E(RHF) =  -75.99\n"
+        self.assertEqual(reader.run_of(unmet)[2], [False, True])
+
+    def test_an_opt_freq_cut_in_its_frequencies_did_not_come_to_its_end(self):
+        text = opt_freq()
+        cut = text[: text.index(" Harmonic frequencies")]
+        self.assertEqual(reader.run_of(cut)[0], "cut")
+        out = reader.read("water.log", cut)
+        self.assertEqual(results(out)["run"]["value"], "did not come to its end")
+
+    def test_said_first_in_the_chip_s_line_with_why(self):
+        r = reader.run_results("error", "Convergence failure -- run terminated.", [False])
+        self.assertEqual([(x["id"], x["value"]) for x in r], [("run", "ended with an error"), ("run.why", "Convergence failure -- run terminated.")])
+        self.assertEqual(reader.run_results("normal", None, [True, False])[0]["label"], "SCF")
+        self.assertEqual(reader.run_results("normal", None, [True]), [])
+
+
+class AnOptFreq(unittest.TestCase):
+    def setUp(self):
+        self.out = reader.read("water.log", opt_freq())
+
+    def test_what_the_calculation_was(self):
+        o = self.out
+        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision C.01", "B3LYP", "6-31G(d)"))
+        self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
+        self.assertEqual(o["atoms"], ["O", "H", "H"])
+
+    def test_each_geometry_with_its_energy_the_reprint_not_again(self):
+        o = self.out
+        # (two steps, then the Freq step's: the converged one printed once more, with no SCF of its own, is no geometry)
+        self.assertEqual(len(o["frames"]), 3)
+        self.assertEqual(o["frames"][0][:3], [0.0, 0.0, 0.119])
+        self.assertEqual(o["energies"], [-76.40, -76.41, -76.41])
+
+    def test_the_freq_step_s_point_is_the_one_entry(self):
+        self.assertTrue(self.out["optimised"])
+        self.assertEqual(self.out["converged"], [False, False, True])
+
+    def test_its_rms_gradient_at_each_geometry(self):
+        g = results(self.out)["rms-gradient"]
+        self.assertAlmostEqual(g["values"][0], ((0.03 ** 2 + 2 * 0.01 ** 2 + 2 * 0.015 ** 2) / 9) ** 0.5)
+        self.assertEqual(g["values"][1:], [0.0, 0.0])
+
+    def test_its_thermochemistry_as_printed(self):
+        r = results(self.out)
+        self.assertEqual(r["thermo.free-energy"]["value"], -76.4065)
+        self.assertEqual(r["thermo.free-energy"]["rank"], 1)
+        self.assertEqual(r["thermo.enthalpy"]["value"], -76.385)
+        self.assertEqual(r["thermo.zpve"]["value"], 0.021)
+        self.assertEqual(r["thermo.g-correction"]["value"], 0.0035)
+        self.assertEqual(r["thermo.entropy"]["value"], 45.1)
+        self.assertEqual((r["thermo.temperature"]["value"], r["thermo.pressure"]["value"]), (298.15, 1.0))
+        self.assertEqual((r["thermo.point-group"]["value"], r["thermo.symmetry-number"]["value"]), ("C2V", 2))
+
+    def test_its_vibrations_each_moving_the_molecule(self):
+        v = results(self.out)["vibrations"]
+        self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "Reduced mass", "IR intensity"])
+        self.assertEqual(v["rows"][0]["cells"], [1, "A1", 1700.1234, 1.08, 70.1])
+        self.assertEqual(v["rows"][2]["move"], [0.0, 0.07, 0.0, 0.0, -0.56, 0.43, 0.0, -0.56, -0.43])
+        self.assertEqual(self.out["imaginary"], [])
+
+    def test_the_last_population_analysis_s(self):
+        r = results(self.out)
+        self.assertEqual(r["charges.mulliken"]["values"], [-0.8, 0.4, 0.4])
+        d = r["dipole"]
+        self.assertEqual((d["value"], d["vector"], d["origin"]), (2.0, [0.0, 0.0, -2.0], [0.0, 0.0, 0.0]))
+
+    def test_every_orbital_opening_on_the_frontier(self):
+        r = results(self.out)
+        o = r["orbitals"]
+        self.assertEqual([row["cells"][0] for row in o["rows"]], ["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−2", "HOMO−3", "HOMO−4"])
+        self.assertEqual(o["rows"][1]["cells"][1], "A1")
+        self.assertAlmostEqual(o["rows"][1]["cells"][2], 0.06 * reader.EV_PER_HARTREE)
+        self.assertEqual(o["focus"], 1)
+        self.assertAlmostEqual(r["homo-lumo-gap"]["value"], (0.06 + 0.29) * reader.EV_PER_HARTREE)
+
+
+class Geometries(unittest.TestCase):
+    def test_the_input_orientation_where_no_standard_one_is_printed(self):
+        text = "\n".join(head("#p hf/3-21g opt nosymm") + orientation(WATER, "Input orientation:") + scf(-75.5) + [" Normal termination of Gaussian 16"])
+        self.assertEqual(reader.read("w.log", text)["frames"][0][:3], [0.0, 0.0, 0.119])
+
+    def test_the_standard_one_where_both_are(self):
+        moved = [(z, x + 1.0, y, w) for z, x, y, w in WATER]
+        text = "\n".join(head("#p hf/3-21g") + orientation(moved, "Input orientation:") + orientation(WATER) + scf(-75.5) + [" Normal termination of Gaussian 16"])
+        self.assertEqual(reader.read("w.log", text)["frames"], [[v for _, x, y, w in WATER for v in (x, y, w)]])
+
+    def test_a_run_stopped_after_its_last_energy_keeps_the_geometries_it_has_one_for(self):
+        text = "\n".join(head("#p hf/3-21g opt") + orientation(WATER) + scf(-75.5) + orientation(WATER_2) + [" Error termination via Lnk1e in /g16/l502.exe"])
+        o = reader.read("w.log", text)
+        self.assertEqual((len(o["frames"]), o["energies"]), (1, [-75.5]))
+        self.assertEqual((o["optimised"], o["converged"]), (False, [False]))
+        self.assertEqual(results(o)["run"]["value"], "ended with an error")
+
+    def test_ghost_atoms_left_out(self):
+        lines = head("#p b3lyp/6-31G(d)")
+        k = lines.index(" Symbolic Z-matrix:")
+        lines[k + 4] = " He-Bq                 0.        0.        3.0 "
+        text = "\n".join(lines + orientation(WATER[:2] + [(2, 0.0, 0.0, 3.0)]) + scf(-76.0)
+                         + [" Mulliken charges:", "               1", "     1  O   -0.4", "     2  H    0.4", "     3  He   0.0",
+                            " Sum of Mulliken charges =   0.00000", " Normal termination of Gaussian 16"])
+        o = reader.read("w.log", text)
+        self.assertEqual(o["atoms"], ["O", "H"])
+        self.assertEqual(len(o["frames"][0]), 6)
+        self.assertEqual(results(o)["charges.mulliken"]["values"], [-0.4, 0.4])
+
+
+class Energies(unittest.TestCase):
+    def test_the_most_correlated_each_geometry_has_as_printed(self):
+        text = "\n".join(head("#p mp2/sto-3g") + orientation(WATER) + scf(-74.96, "RHF")
+                         + [" E2 =    -0.3795333610D-01 EUMP2 =    -0.75002282127454D+02"] + [" Normal termination of Gaussian 16"])
+        self.assertEqual(reader.read("w.log", text)["energies"], [-75.002282127454])
+        text = text.replace(" Normal", " CCSD(T)= -0.75012345678D+02\n Normal")
+        self.assertEqual(reader.read("w.log", text)["energies"], [-75.012345678])
+
+    def test_a_field_too_narrow_for_its_number_is_not_known(self):
+        self.assertIsNone(reader.number("**********"))
+        self.assertEqual(reader.numbers("-10.02022-10.02017 *******"), [-10.02022, -10.02017, None])
+
+
+class OpenShell(unittest.TestCase):
+    def test_spin_populations_and_each_spin_s_orbitals(self):
+        text = "\n".join(head("#p ub3lyp/6-31G(d)", 0, 3) + orientation(WATER) + scf(-39.0, "UB3LYP") + [
+            " Alpha  occ. eigenvalues --  -10.20000  -0.70000  -0.30000  -0.20000",
+            " Alpha virt. eigenvalues --    0.05000",
+            "  Beta  occ. eigenvalues --  -10.10000  -0.60000",
+            "  Beta virt. eigenvalues --   -0.10000   0.07000",
+            " Mulliken charges and spin densities:",
+            "               1          2",
+            "     1  O   -0.300000   1.900000",
+            "     2  H    0.150000   0.050000",
+            "     3  H    0.150000   0.050000",
+            " Sum of Mulliken charges =   0.00000   2.00000",
+            " Normal termination of Gaussian 16",
+        ])
+        r = results(reader.read("w.log", text))
+        self.assertEqual(r["spins.mulliken"]["values"], [1.9, 0.05, 0.05])
+        self.assertEqual(r["charges.mulliken"]["values"], [-0.3, 0.15, 0.15])
+        self.assertEqual(len(r["orbitals.a"]["rows"]), 5)
+        self.assertEqual(r["orbitals.b"]["rows"][2]["cells"][0], "HOMO")
+        self.assertNotIn("homo-lumo-gap", r)
+
+
+class OtherCharges(unittest.TestCase):
+    def lines(self, block, pop="nbo"):
+        return "\n".join(head(f"#p b3lyp/6-31G(d) pop={pop}") + orientation(WATER) + scf(-76.4) + block + [" Normal termination of Gaussian 16"])
+
+    def test_hirshfeld_and_cm5(self):
+        text = self.lines([
+            " Hirshfeld charges, spin densities, dipoles, and CM5 charges using IRadAn=      4:",
+            "                Q-H        S-H        Dx         Dy         Dz        Q-CM5",
+            "     1  O   -0.330000   0.000000   0.000000   0.000000  -0.200000  -0.650000",
+            "     2  H    0.165000   0.000000   0.000000   0.100000   0.050000   0.325000",
+            "     3  H    0.165000   0.000000   0.000000  -0.100000   0.050000   0.325000",
+            "       Tot   0.000000   0.000000   0.000000   0.000000  -0.100000   0.000000",
+        ], "hirshfeld")
+        r = results(reader.read("w.log", text))
+        self.assertEqual(r["charges.hirshfeld"]["values"], [-0.33, 0.165, 0.165])
+        self.assertEqual(r["charges.cm5"]["values"], [-0.65, 0.325, 0.325])
+        self.assertNotIn("spins.hirshfeld", r)
+
+    def test_an_electrostatic_fit_named_by_the_route(self):
+        text = self.lines([" ESP charges:", "               1", "     1  O   -0.700000", "     2  H    0.350000", "     3  H    0.350000",
+                           " Sum of ESP charges =   0.00000"], "chelpg")
+        self.assertEqual(results(reader.read("w.log", text))["charges.chelpg"]["values"], [-0.7, 0.35, 0.35])
+
+    def test_natural_charges(self):
+        text = self.lines([
+            " Summary of Natural Population Analysis:",
+            "",
+            "                                       Natural Population",
+            "                Natural  -----------------------------------------------",
+            "    Atom  No    Charge         Core      Valence    Rydberg      Total",
+            " -----------------------------------------------------------------------",
+            "      O    1   -0.91800      1.99986     6.90920    0.00922     8.91800",
+            "      H    2    0.45900      0.00000     0.53921    0.00179     0.54100",
+            "      H    3    0.45900      0.00000     0.53921    0.00179     0.54100",
+            " =======================================================================",
+        ])
+        self.assertEqual(results(reader.read("w.log", text))["charges.natural"]["values"], [-0.918, 0.459, 0.459])
+
+
+class Paths(unittest.TestCase):
+    def test_a_reaction_path_s_points_in_the_order_of_its_coordinate(self):
+        text = "\n".join(["Point Number:  0   Path Number:  1", "Point Number:  2   Path Number:  1", "Point Number:  1   Path Number:  2"])
+        self.assertEqual(reader.irc_order(text, 4), [3, 0, 1, 2])
+        self.assertIsNone(reader.irc_order(text, 5))
+
+    def test_a_rigid_scan_s_points_are_a_path_not_an_optimisation(self):
+        text = "\n".join(head("#p hf/3-21g scan") + orientation(WATER) + scf(-75.5) + orientation(WATER_2) + scf(-75.6)
+                         + [" Normal termination of Gaussian 16"])
+        o = reader.read("w.log", text)
+        self.assertIsNone(o["optimised"])
+        self.assertEqual((o["unmarked"], results(o)["run.path"]["value"]), ("path", "2 points"))
+
+    def test_an_excited_state_s_geometries_have_their_energies_unread(self):
+        text = "\n".join(head("#p b3lyp/6-31G(d) td opt") + orientation(WATER) + scf(-76.4)
+                         + [" Excited State   1:      Singlet-B1     7.1000 eV  174.63 nm  f=0.0100  <S**2>=0.000"]
+                         + orientation(WATER_2) + scf(-76.39) + population(density="CI") + [" Normal termination of Gaussian 16"])
+        o = reader.read("w.log", text)
+        self.assertIsNone(o["energies"])
+        r = results(o)
+        self.assertEqual(r["run.energies"]["value"], "energies not read")
+        # (its charges and dipole of a density the output does not say is the ground state's: left out)
+        self.assertNotIn("charges.mulliken", r)
+        self.assertNotIn("dipole", r)
+        self.assertEqual(r["orbitals"]["label"], "Molecular orbitals")
+
+
+class Archive(unittest.TestCase):
+    def test_nimag_even_where_a_line_break_splits_it(self):
+        lines = archive(1)
+        text = "\n".join(lines)
+        self.assertEqual(reader.nimag_of(text), 1)
+        self.assertEqual(reader.nimag_of("\n".join(archive(2, "|"))), 2)
+        self.assertIsNone(reader.nimag_of(" SCF Done"))
+
+
+class Jobs(unittest.TestCase):
+    def test_link1_jobs_each_after_the_file_s_first_line(self):
+        one = opt_freq()
+        two = "\n".join(head("#p geom=allcheck b3lyp/6-311+G(d,p)")[1:] + orientation(WATER_2) + scf(-76.45) + [" Normal termination of Gaussian 16", ""])
+        texts = reader.jobs(one + "\n" + two)
+        self.assertEqual(len(texts), 2)
+        self.assertTrue(texts[1].startswith(" Entering Gaussian System"))
+        out = reader.read_jobs("water.log", one + "\n" + two)
+        self.assertEqual([j["job"] for j in out["jobs"]], [{"number": 1, "of": 2, "kind": "Optimisation and frequencies"}, {"number": 2, "of": 2, "kind": "Single point"}])
+        self.assertEqual(out["energies"], [-76.45])
+
+    def test_a_file_of_one_job_read_whole(self):
+        self.assertNotIn("jobs", reader.read_jobs("water.log", opt_freq()))
+
+
+FCHK = """water
+SP        RB3LYP                        6-31G(d)
+Number of atoms                            I                3
+Route                                      C   N=           2
+#P B3LYP/6-31G(d) Opt Fr eq
+Charge                                     I                0
+Multiplicity                               I                1
+Number of alpha electrons                  I                5
+Number of beta electrons                   I                5
+Atomic numbers                             I   N=           3
+           8           1           1
+Current cartesian coordinates              R   N=           9
+  0.00000000E+00  0.00000000E+00  2.25000000E-01  0.00000000E+00  1.44000000E+00
+ -9.00000000E-01  0.00000000E+00 -1.44000000E+00 -9.00000000E-01
+Total Energy                               R     -7.64100000000000E+01
+Alpha Orbital Energies                     R   N=           7
+ -1.91300000E+01 -9.90000000E-01 -5.20000000E-01 -3.60000000E-01 -2.90000000E-01
+  6.00000000E-02  1.50000000E-01
+Mulliken Charges                           R   N=           3
+ -8.00000000E-01  4.00000000E-01  4.00000000E-01
+Dipole Moment                              R   N=           3
+  0.00000000E+00  0.00000000E+00 -8.00000000E-01
+Gaussian Version                           C   N=           2
+ES64L-G16RevC.01
+"""
+
+
+class AFormattedCheckpoint(unittest.TestCase):
+    """As "Interfacing to Gaussian 16" lays one out: each item its label (A40), type and value, or "N=" and its values
+    after, so many to a line - a text list's lines read as text, never as an item."""
+
+    def setUp(self):
+        self.out = reader.read_jobs("water.fchk", FCHK)
+
+    def test_told_from_a_log(self):
+        self.assertTrue(reader.is_fchk(FCHK))
+        self.assertFalse(reader.is_fchk(opt_freq()))
+
+    def test_its_molecule_in_angstroms_its_energy_and_level(self):
+        o = self.out
+        self.assertEqual(o["atoms"], ["O", "H", "H"])
+        self.assertAlmostEqual(o["frames"][0][4], 1.44 * reader.BOHR)
+        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision C.01"))
+        self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
+
+    def test_its_charges_dipole_in_debye_and_orbitals(self):
+        r = results(self.out)
+        self.assertEqual(r["charges.mulliken"]["values"], [-0.8, 0.4, 0.4])
+        self.assertAlmostEqual(r["dipole"]["value"], 0.8 * reader.DEBYE_PER_E_BOHR)
+        self.assertEqual(r["dipole"]["origin"], [0.0, 0.0, 0.0])
+        self.assertEqual([row["cells"][0] for row in r["orbitals"]["rows"]][:3], ["LUMO+1", "LUMO", "HOMO"])
+        self.assertAlmostEqual(r["homo-lumo-gap"]["value"], 0.35 * reader.EV_PER_HARTREE)
+
+
+class TheWorker(unittest.TestCase):
+    def test_read_answers_meno_s_form(self):
+        r = worker.answer(json.dumps({"id": 6, "op": "read", "name": "water.log", "text": opt_freq()}))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["result"]["schema"], reader.SCHEMA)
+        self.assertEqual(r["result"]["atoms"], ["O", "H", "H"])
+
+    def test_read_refuses_in_words_what_holds_no_molecule(self):
+        r = worker.answer(json.dumps({"id": 7, "op": "read", "name": "notes.log", "text": " Entering Gaussian System\n"}))
+        self.assertEqual(r, {"id": 7, "ok": False, "error": "The Gaussian output could not be read: it holds no molecule."})
+
+    def test_collect_judges_a_run_as_read_does(self):
+        cut = opt_freq()[: opt_freq().index(" Harmonic frequencies")]
+        self.assertFalse(worker.ended_well(cut))
+        self.assertTrue(worker.ended_well(opt_freq()))
+
+
+# Gaussian 16 inputs whose outputs, run on them, are read whole where they are in calc-samples/Gaussian-gaussian/
+# under the same name with .log (and the two .fchk formchk makes): each runs in seconds.
+INPUTS = {
+    "water_optfreq": "%Chk=water_optfreq.chk\n# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt Freq\n\nwater\n\n0 1\nO 0.0 0.0 0.1173\nH 0.0 0.7572 -0.4692\nH 0.0 -0.7572 -0.4692\n\n",
+    "water_ghost": "# B3LYP/6-31G(d) SP\n\nwater and a ghost helium\n\n0 1\nO 0.0 0.0 0.1173\nH 0.0 0.7572 -0.4692\nH 0.0 -0.7572 -0.4692\nHe-Bq 0.0 0.0 3.0\n\n",
+}
+
+
+class WholeOutputs(unittest.TestCase):
+    def sample(self, name):
+        path = SAMPLES / f"{name}.log"
+        if not path.exists():
+            raise unittest.SkipTest(f"no Gaussian-gaussian/{name}.log in calc-samples/")
+        return reader.read_jobs(path.name, path.read_text(errors="replace"))
+
+    def test_an_opt_freq_its_point_one_entry_and_its_thermochemistry(self):
+        o = self.sample("water_optfreq")
+        self.assertEqual(o["atoms"], ["O", "H", "H"])
+        self.assertTrue(o["optimised"])
+        self.assertEqual(sum(o["converged"]), 1)
+        self.assertTrue(o["converged"][-1])
+        self.assertIn("thermo.free-energy", results(o))
+        self.assertEqual(o["solvation"], "none")
+
+    def test_a_ghost_atom_left_out(self):
+        self.assertEqual(self.sample("water_ghost")["atoms"], ["O", "H", "H"])
+
+
+if __name__ == "__main__":
+    unittest.main()
