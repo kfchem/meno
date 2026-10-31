@@ -94,14 +94,21 @@ export type Row = {
   surface?: Grid | Ask;
   colour?: SurfaceColour;
 };
-/** A list of rows; `focus`, the row it opens on; `shown`, the row chosen as it comes - the list opened at once. */
+/**
+ * A list of rows; `focus`, the row it opens on; `shown`, the row chosen as it comes - the list opened at once;
+ * `trimmed`, where it keeps only the rows about its focus (`ABOUT_FOCUS`), which of the list's rows those are -
+ * counted from 1, the first and the last kept - and how many it had.
+ */
 export type ListResult = Named & {
   on: "list";
   columns: Column[];
   rows: Row[];
   focus?: number;
   shown?: number;
+  trimmed?: Trimmed;
 };
+/** Which of a list's rows it keeps: the first and the last, counted from 1, of how many in all. */
+export type Trimmed = { from: number; to: number; of: number };
 export type Result = MoleculeResult | FramesResult | AtomsResult | PairsResult | ListResult;
 
 /** How long a name or a text value may be, in characters; a unit; how many columns and rows a list may have. */
@@ -159,6 +166,14 @@ function rowOf(v: unknown, columns: number, atoms: number, frames: number): Row 
   const colour = surface ? colourOf(r.colour) : undefined;
   if (colour) row.colour = colour;
   return row;
+}
+
+/** Which rows a list says it keeps, where that is so of the `rows` it has: as many as from its first to its last, of no fewer in all; otherwise none. */
+function trimmedOf(v: unknown, rows: number): Trimmed | undefined {
+  const t = v as Partial<Trimmed> | null | undefined;
+  if (!t || !Number.isInteger(t.from) || !Number.isInteger(t.to) || !Number.isInteger(t.of)) return undefined;
+  const { from, to, of } = t as Trimmed;
+  return from >= 1 && to - from + 1 === rows && to <= of && of <= ROWS_MOST * 1000 ? { from, to, of } : undefined;
 }
 
 /** What colours a surface, as given: a grid or a promise, and the values its scale runs between, the first below the second; otherwise none. */
@@ -277,10 +292,13 @@ function resultOf(v: unknown, atoms: number, frames: number, from?: string): Res
       const all = r.rows.slice(0, ROWS_MOST).map((x) => rowOf(x, columns.length, atoms, frames));
       if (!all.length || all.some((x) => !x)) return undefined;
       // (a list that opens on a row keeps the rows about it: the `ABOUT_FOCUS` up to it and as many after - an orbitals' list,
-      //  opening on its LUMO, the ten virtual orbitals from it and the ten occupied below; one given in full is trimmed so)
+      //  opening on its LUMO, the ten virtual orbitals from it and the ten occupied below; one given in full is trimmed so,
+      //  and says which rows it keeps of how many. One kept so already - read again - stays as it was)
+      const given = trimmedOf(r.trimmed, all.length);
       const focus = isIndex(r.focus, all.length) ? r.focus : undefined;
-      const from = focus != null ? Math.max(0, focus - ABOUT_FOCUS + 1) : 0;
-      const rows = focus != null ? all.slice(from, focus + ABOUT_FOCUS + 1) : all;
+      const from = focus != null && !given ? Math.max(0, focus - ABOUT_FOCUS + 1) : 0;
+      const rows = focus != null && !given ? all.slice(from, focus + ABOUT_FOCUS + 1) : all;
+      const trimmed = given ?? (rows.length < all.length ? { from: from + 1, to: from + rows.length, of: all.length } : undefined);
       const shown = isIndex(r.shown, all.length) && r.shown >= from && r.shown - from < rows.length ? r.shown - from : undefined;
       return {
         ...named,
@@ -289,6 +307,7 @@ function resultOf(v: unknown, atoms: number, frames: number, from?: string): Res
         rows: rows as Row[],
         ...(focus != null ? { focus: focus - from } : {}),
         ...(shown != null ? { shown } : {}),
+        ...(trimmed ? { trimmed } : {}),
       };
     }
     default:

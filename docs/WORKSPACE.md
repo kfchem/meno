@@ -772,7 +772,8 @@ Each result says what it belongs to, and Meno puts it there:
 - **A list that opens on a row keeps the rows about it** (2026-10-31):
   the ten up to that one, it among them, and the ten after - an orbitals'
   list, given in full and opening on the LUMO, keeps the ten virtual
-  orbitals from it and the ten occupied below.
+  orbitals from it and the ten occupied below - and says so where it
+  shows them: "rows 22–41 of 50". Read again, it is kept as it was.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the

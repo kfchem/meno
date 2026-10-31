@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { geometryKey, type Property } from "../entry";
-import { add, type GivenPart } from "./add";
+import { add, partSaid, type GivenPart } from "./add";
 import { standardStateBy, standardStateTerm } from "./standardState";
 import { entry } from "./testEntries";
 
@@ -40,6 +40,8 @@ describe("Add", () => {
     const bare = add([e], { parts: ["energy", "thermo.g-correction"], given: [{ name: "the number", value: 1, unit: "kcal/mol" }], as: "G-DFT" });
     if (!bare.ok) throw new Error(bare.said);
     expect(bare.exits.done[0].properties["G-DFT"].by?.treatment).toMatch(/ \+ the number$/);
+    expect(partSaid({ property: "the number", value: 1.5, unit: "kcal/mol" })).toBe("the number");
+    expect(partSaid({ property: "the number", value: 1.5, unit: "kcal/mol", by: { method: "user" } })).toBe("the number (user)");
   });
 
   it("says the solvent where the parts that say one agree, and none where two differ - each part keeps its own", () => {

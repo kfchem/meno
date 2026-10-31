@@ -249,9 +249,16 @@ describe("results in Meno's own forms", () => {
     const [list] = readResults([{ id: "orbitals", on: "list", group: "Orbitals", label: "Molecular orbitals", columns: [{ label: "Orbital" }, { label: "Energy", unit: "eV" }], rows, focus: 30, shown: 31 }], 3, 1) as ListResult[];
     expect(list.rows.map((r) => r.cells[0])).toEqual(Array.from({ length: 2 * ABOUT_FOCUS }, (_, i) => `orbital ${30 - ABOUT_FOCUS + 1 + i}`));
     expect([list.rows[list.focus!].cells[0], list.rows[list.shown!].cells[0]]).toEqual(["orbital 30", "orbital 31"]);
-    // (one given as Meno keeps it - twenty about its focus - as it was; one that opens on no row, whole)
-    const kept = readResults([{ ...list, focus: 9 }], 3, 1)[0] as ListResult;
-    expect(kept.rows).toHaveLength(20);
+    // (and says which rows it keeps, counted from 1, of how many)
+    expect(list.trimmed).toEqual({ from: 22, to: 41, of: 50 });
+    // (read again - a workspace kept - as it was: neither trimmed again nor its count changed)
+    const again = readResults([list], 3, 1)[0] as ListResult;
+    expect([again.rows, again.focus, again.shown, again.trimmed]).toEqual([list.rows, list.focus, list.shown, list.trimmed]);
+    // (a count that does not fit its rows is not taken)
+    expect((readResults([{ ...list, trimmed: { from: 1, to: 5, of: 50 } }], 3, 1)[0] as ListResult).trimmed).toBeUndefined();
+    // (one given as Meno keeps it - twenty about its focus - as it was, nothing said; one that opens on no row, whole)
+    const kept = readResults([{ ...list, trimmed: undefined, focus: 9 }], 3, 1)[0] as ListResult;
+    expect([kept.rows.length, kept.trimmed]).toEqual([20, undefined]);
     const whole = readResults([{ id: "v", on: "list", group: "V", label: "V", columns: [{ label: "x" }], rows: rows.map((r) => ({ cells: [r.cells[0]] })) }], 3, 1)[0] as ListResult;
     expect(whole.rows).toHaveLength(50);
   });
@@ -259,7 +266,7 @@ describe("results in Meno's own forms", () => {
   it("write a point group or a Mulliken symbol with its first letter upper and the rest lower, however it was printed", () => {
     expect(["c2v", "C2V", "C2v", " d3h ", "TD", "bu", "AU", "B1G", "A'", "E''", "C∞v", "Σg"].map(symmetryText)).toEqual(["C2v", "C2v", "C2v", "D3h", "Td", "Bu", "Au", "B1g", "A'", "E''", "C∞v", "Σg"]);
     // (a number before it - an orbital's, numbered within its symmetry - as it is)
-    expect(["1A1", "2b2", "1a'", "10E''"].map(symmetryText)).toEqual(["1A1", "2B2", "1A'", "10E''"]);
+    expect(["1A1", "2b2", "1a'", "10E''", "3B1", "(A1)", "(a1)", "B1G"].map(symmetryText)).toEqual(["1A1", "2B2", "1A'", "10E''", "3B1", "(A1)", "(A1)", "B1g"]);
   });
 });
 
