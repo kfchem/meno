@@ -77,7 +77,7 @@ export type PythonPlugin = ReaderBase &
     /** What makes its environment: uv from PyPI (unsaid), or pixi - its lock a pixi.lock - where it needs conda-forge. */
     env?: "pixi";
   };
-/** A plugin that runs nothing: what it brings is data - a guide, a catalogue - shown by Meno. Nothing to download, nothing to start; added or taken away at once. */
+/** A plugin that runs nothing: what it brings is data, used by Meno. Nothing to download, nothing to start; added or taken away at once. */
 export type DataPlugin = Described & Brings & { builtin?: undefined; data: true };
 /** A plugin, whether it runs something or not. */
 export type Plugin = PythonPlugin | DataPlugin;

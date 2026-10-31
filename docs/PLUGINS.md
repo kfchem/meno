@@ -1269,10 +1269,11 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 - **Plugins.** A tab of its own that lists every plugin on offer, added or
   not - those that come with Meno and run nothing first:
   - what roles it fills, by name - the kinds of file it reads and writes
-    among them - and the plugins it suggests;
+    among them - the plugins it uses, with the versions of each it works
+    with, and those that use it;
   - its version, licence and home; "Comes with Meno: nothing to download"
     for one that runs nothing;
-  - Add, and Remove; and Show, for one that brings a guide. Removing a
+  - Add, and Remove. Removing a
     plugin while any of its jobs waits or runs asks first, saying how
     many; once the chemist says *Stop and remove*, those jobs are stopped
     and waited for until they have ended, and then the plugin is removed

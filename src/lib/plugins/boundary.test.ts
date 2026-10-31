@@ -106,10 +106,10 @@ function declared(): Map<string, string[]> {
       for (const f of Object.values((x.files as Json) ?? {})) for (const n of str(f)) add(n, `${who}: program file`);
     }
     for (const u of list(m.uses)) for (const n of str((u as Json).name)) add(n, `${who}: uses`);
-    for (const n of list(m.needs)) for (const e of str((n as Json).env)) add(e, `${who}: variable`);
+    for (const d of list(m.depends)) for (const p of list((d as Json).programs)) for (const e of str((p as Json).env)) add(e, `${who}: variable`);
     for (const x of list(m.xyzEnergies)) for (const n of str((x as Json).id)) add(n, `${who}: XYZ energy pattern`);
     for (const x of list(m.xyzSteps)) for (const n of [...str((x as Json).id), ...str((x as Json).file)]) add(n, `${who}: XYZ steps`);
-    for (const k of [...list(m.kinds), ...list(m.files)]) {
+    for (const k of list(m.kinds)) {
       for (const n of str((k as Json).id)) add(n, `${who}: kind of file`);
       for (const e of list((k as Json).extensions)) for (const n of str(e)) add(n, `${who}: extension`);
     }
@@ -147,7 +147,7 @@ function named(): Map<string, string[]> {
     for (const i of list(m.installed)) for (const n of [...str((i as Json).name), ...str((i as Json).label)]) add(n, `${who}: installed program`);
     for (const u of list(m.uses)) for (const n of str((u as Json).name)) add(n, `${who}: uses`);
     for (const d of list(m.downloads)) for (const n of str((d as Json).provides)) add(n, `${who}: provides`);
-    for (const k of [...list(m.kinds), ...list(m.files)]) {
+    for (const k of list(m.kinds)) {
       for (const n of str((k as Json).program)) add(n, `${who}: a kind's program`);
       for (const mk of list((k as Json).marks)) for (const n of str((mk as Json).text)) if (n.trim().length >= 6) add(n, `${who}: a kind's mark`);
     }
@@ -492,6 +492,11 @@ describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
   it("takes out each item a Rust source keeps for its tests, and only those", () => {
     const rs = 'fn core() { "a" }\n#[cfg(test)]\nfn helper() { if x { "b" } }\nfn more() { "c" }\nfn f() {\n  #[cfg(test)]\n  return g("d");\n  "e"\n}\n#[cfg(test)]\nmod tests {\n  fn t() { "}" }\n}\n';
     expect(literalsOf(withoutTests(rs), "rs")).toEqual(["a", "c", "e"]);
+  });
+
+  it("takes each word a plugin declares, those it gives the plugins it uses among them", () => {
+    // (ORCA's, as Meno carries it: the variable a job is told the xTB plugin's xtb in)
+    expect(declared().get("XTBEXE")).toEqual(["orca: variable"]);
   });
 
   it("finds no word a plugin declares as a literal in core's source", () => {
