@@ -1052,9 +1052,10 @@ The same for every plugin and for Meno's own parts:
     reference state among them, as a free energy differs by state (xtb
     6.7.1 run here: the bar-gas state's free energy 1.90 kcal/mol above
     the default's, RT ln 24.5); CREST's `ALPB(water)`, which is all it
-    echoes. `none` where the output says no model was used - xtb's
-    program call, or CREST's echo of its options, holding no option that
-    asks for one, and no model printed. Left out where the output does not
+    echoes. `none` where the output says no model was used - xtb's setup
+    box ("GBSA solvation false"), or, where it prints none (GFN-FF), its
+    program call holding no option that asks for one and no model
+    printed; CREST's echo of its options holding none. Left out where the output does not
     say: never filled in from the step's options. A run whose solvation
     is not what its step asked for is refused, saying both;
   - the method without it: `GFN2-xTB`, never `GFN2-xTB (ALPB, water)` -
