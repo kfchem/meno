@@ -1,7 +1,7 @@
 # How Meno looks
 
-Meno is judged by how it looks as much as by what it does: a control drawn
-by the browser, a colour picked by eye, a highlight that is not the
+Meno is judged by how it looks as much as by what it does: a control not
+Meno's own, a colour picked by eye, a highlight that is not the
 canvas's own, each says the tool was not made with care (the maintainer,
 2026-10-23). This is the standard every screen is held to. Its values are
 taken from what Meno already uses; where two things differed, the one used
@@ -210,8 +210,8 @@ Each is reachable by keyboard and shows focus with an `accel-base` border.
 - **Each its own.** No two actions share an icon: Energy window and Check
   structures, Populations and Descriptors, As conformers and Enumerate each
   have their own; sparkles are Generate's alone, a funnel is Filter's.
-- **Drawn as Quick Add's are**, where Heroicons' outline set has nothing
-  that is the thing itself: a 20-unit square, lines 1.8 wide (as heavy as a
+- **Drawn as Quick Add's are**, where the thing itself has no icon in
+  Heroicons' outline set: a 20-unit square, lines 1.8 wide (as heavy as a
   Heroicon at 2.1 on its 24), ends and corners round; solid where a solid
   reads better at 20 px (the balls of a ball-and-stick, a space-filling
   model). `menuIcons.tsx`, `workflow/icons.tsx`.

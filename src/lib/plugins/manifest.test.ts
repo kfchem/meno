@@ -223,17 +223,34 @@ describe("a plugin's manifest", () => {
     expect(rdkit.steps.find((d) => d.kind === "conformers")?.options).toEqual(rdkit.roles.find((r) => r.role === "conformers")?.options);
   });
 
-  it("may declare another plugin's program its jobs may need - a plugin, a program it runs, a variable to name it in - all as they must be, or none", () => {
+  it("may declare the plugins it uses - each by id, with the versions it works with and the programs of it its jobs may run - all as they must be, or the plugin is none", () => {
     const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
-    const need = { plugin: "xtb", program: "xtb", env: "XTBEXE" };
-    expect(acceptManifest({ ...steps, needs: [need] })?.needs).toEqual([need]);
-    expect(acceptManifest(steps)?.needs).toBeUndefined();
-    // (its own plugin, a shell, a path, a variable that finds programs, one plugin twice: none taken)
-    for (const bad of [{ ...need, plugin: good.id }, { ...need, program: "sh" }, { ...need, program: "bin/xtb" }, { ...need, env: "PATH" }, { ...need, env: "1X" }])
-      expect(acceptManifest({ ...steps, needs: [bad] })?.needs, JSON.stringify(bad)).toBeUndefined();
-    expect(acceptManifest({ ...steps, needs: [need, { ...need, env: "OTHER" }] })?.needs).toBeUndefined();
-    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.needs).toEqual([need]);
+    const uses = { plugin: "xtb", versions: ">=0.1.4 <0.2.0", programs: [{ program: "xtb", env: "XTBEXE" }] };
+    expect(acceptManifest({ ...steps, depends: [uses] })?.depends).toEqual([{ ...uses, range: { from: "0.1.4", before: "0.2.0" } }]);
+    expect(acceptManifest(steps)?.depends).toBeUndefined();
+    // (one used only for some of its work)
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: true }] })?.depends?.[0].optional).toBe(true);
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: false }] })?.depends?.[0].optional).toBeUndefined();
+    // (one used for no program: its presence and version alone)
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0" }] })?.depends?.[0].programs).toEqual([]);
+    // (itself, versions not as they must be, a shell, a path, a variable that finds programs, one plugin twice, one variable twice: no plugin)
+    const program = (p: object) => ({ ...uses, programs: [{ ...uses.programs[0], ...p }] });
+    for (const bad of [
+      [{ ...uses, plugin: good.id }],
+      [{ ...uses, versions: "^0.1.4" }],
+      [{ ...uses, versions: undefined }],
+      [program({ program: "sh" })],
+      [program({ program: "bin/xtb" })],
+      [program({ env: "PATH" })],
+      [program({ env: "1X" })],
+      [uses, { ...uses, programs: [] }],
+      [uses, { plugin: "other", versions: ">=1.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [{ ...uses, optional: "yes" }],
+      "xtb",
+    ])
+      expect(acceptManifest({ ...steps, depends: bad }), JSON.stringify(bad)).toBeNull();
+    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE - for its xTB methods alone)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.depends?.map((d) => [d.plugin, d.versions, d.programs, d.optional])).toEqual([["xtb", ">=0.1.4 <0.2.0", [{ program: "xtb", env: "XTBEXE" }], true]]);
   });
 
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {

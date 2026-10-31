@@ -26,6 +26,7 @@
  * The plugins Meno carries for now (./known) are each read here as one
  * fetched would be.
  */
+import { rangeOf, type DependDecl, type UsedProgram } from "./depends";
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
@@ -316,8 +317,8 @@ export type Manifest = {
   installed: InstalledDecl[];
   /** The files it needs downloaded besides its environment. */
   downloads: DownloadDecl[];
-  /** Programs of other plugins its jobs may need, where it declares any (`NeedDecl`). */
-  needs?: NeedDecl[];
+  /** The other plugins it uses, where it declares any: each by id, with the versions it works with and what of it is used (./depends `DependDecl`). */
+  depends?: DependDecl[];
 };
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -591,21 +592,32 @@ function placeOk(t: unknown): t is string {
 }
 
 /**
- * A program of another plugin a plugin's jobs may need (docs/PLUGINS.md,
- * `needs`): that plugin, by its id; its program, by the name its manifest
- * gives it; and the variable the job is told where it is in. A job needs it
- * only where its plugin's worker says so of that job; Meno finds it as the
- * other plugin's own jobs would, puts it in the job's folder, and names it
- * there - so that a path with a space in it is never given (src-tauri
- * jobs.rs `need_value`). Core names no program: the manifest does.
+ * Another plugin a plugin uses (docs/PLUGINS.md, *Depends*): that plugin, by
+ * its id; the versions of it it works with (`>=0.1.4 <0.2.0`, ./depends
+ * `rangeOf`); whether only some of its work needs it (`optional`: not set
+ * up with it, and missing, only a job that needs it refused); and what of
+ * it is used - a program it declares, by its name,
+ * with the variable a job is told where it is in. A job uses one only where
+ * its plugin's worker says so of that job; Meno finds it as the other
+ * plugin's own jobs would, puts it in the job's folder, and names it there -
+ * so that a path with a space in it is never given (src-tauri jobs.rs
+ * `need_value`). Core names no plugin and no program: the manifest does.
  */
-export type NeedDecl = { plugin: string; program: string; env: string };
-
-function needOf(v: unknown, self: string): NeedDecl | null {
-  const n = v as Record<string, unknown> | null;
-  if (!isId(n?.plugin) || n.plugin === self || typeof n.program !== "string" || !FILE.test(n.program) || !fileRuns(n.program)) return null;
-  if (typeof n.env !== "string" || !ENV_NAME.test(n.env) || ENV_NEVER.some((x) => x.toLowerCase() === (n.env as string).toLowerCase())) return null;
-  return { plugin: n.plugin, program: n.program, env: n.env };
+function dependOf(v: unknown, self: string): DependDecl | null {
+  const d = v as Record<string, unknown> | null;
+  if (!isId(d?.plugin) || d.plugin === self) return null;
+  const range = rangeOf(d.versions);
+  if (!range) return null;
+  if (d.programs !== undefined && !Array.isArray(d.programs)) return null;
+  const programs = list(d.programs).map((v): UsedProgram | null => {
+    const p = v as Record<string, unknown> | null;
+    if (typeof p?.program !== "string" || !FILE.test(p.program) || !fileRuns(p.program)) return null;
+    if (typeof p.env !== "string" || !ENV_NAME.test(p.env) || ENV_NEVER.some((x) => x.toLowerCase() === (p.env as string).toLowerCase())) return null;
+    return { program: p.program, env: p.env };
+  });
+  if (programs.some((p) => p == null) || new Set(programs.map((p) => p!.env)).size !== programs.length) return null;
+  if (d.optional !== undefined && typeof d.optional !== "boolean") return null;
+  return { plugin: d.plugin, versions: (d.versions as string).trim(), range, programs: programs as UsedProgram[], ...(d.optional ? { optional: true as const } : {}) };
 }
 
 /** Places, as a manifest gives them: one, or several; null where any is not one. */
@@ -824,9 +836,13 @@ export function acceptManifest(raw: unknown): Manifest | null {
   if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
   const downloads = environment ? list(m.downloads).map(downloadOf) : [];
   if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
-  // (another plugin's programs its jobs may need: each as it must be, one each, or none is taken - the backend reads the same)
-  const needs = list(m.needs).map((v) => needOf(v, id));
-  const needsOk = needs.every((n) => n != null) && new Set(needs.map((n) => n!.plugin)).size === needs.length;
+  // (the other plugins it uses: each as it must be, each once, or the plugin is none - the backend reads the same)
+  if (m.depends !== undefined && !Array.isArray(m.depends)) return null;
+  const depends = list(m.depends).map((v) => dependOf(v, id));
+  if (depends.some((d) => d == null) || new Set(depends.map((d) => d!.plugin)).size !== depends.length) return null;
+  // (each variable once, whichever plugin's program it names)
+  const envs = depends.flatMap((d) => d!.programs.map((p) => p.env));
+  if (new Set(envs).size !== envs.length) return null;
   return {
     id,
     name,
@@ -848,7 +864,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     systems,
     installed,
     downloads: downloads as DownloadDecl[],
-    ...(needsOk && needs.length ? { needs: needs as NeedDecl[] } : {}),
+    ...(depends.length ? { depends: depends as DependDecl[] } : {}),
   };
 }
 

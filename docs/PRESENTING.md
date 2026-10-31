@@ -246,8 +246,8 @@ words, a width they break into lines at, and how their lines lie.
   other widths, 1.5 and 3 points, are kept whatever the style.
 - **Smoothed as it is written**, so that nothing jumps when the pen is
   lifted; as thick as the pen is pressed where the system says, else even,
-  its ends tapered - a pen that tells no pressure (the same throughout)
-  written as the mouse writes.
+  its ends tapered - a pen without pressure, or one whose pressure reads
+  the same throughout, writes as the mouse does.
 - **A stroke is kept whole**: it ends where the pen was lifted. The page
   takes no pan or zoom gesture of the system's own from a pen or a touch,
   which would take a stroke back as it is written. A pressure read as 0
@@ -310,9 +310,8 @@ words, a width they break into lines at, and how their lines lie.
   view - wry's, the one WKWebView in it - into a borderless window of the
   talk's own (`MenoTalkWindow`, one that can take the keys) over the whole
   screen, and back as the talk ends: the main window's look is never
-  touched, since taking a window's title bar away and giving it back (as
-  macOS's simple full screen does) left the page deaf to the pointer's
-  moves until it had left the window and come back. It tells the talk the
+  touched, so the page follows the pointer from the talk's first moment
+  to its last. It tells the talk the
   screen's top inset (the notch's band), which the slide is laid below
   (`slideFit`). Molecules switched to their other look in a talk are the
   view's (`talkLooks`), let go as it ends.

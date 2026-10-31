@@ -70,6 +70,15 @@ describe("a molecule's species through Meno's own steps", () => {
     expect(out.ok && out.kept.length).toBe(2);
   });
 
+  it("never sets aside one of another charge or spin in the same shape, in a conformer set either; one of the same species it does", () => {
+    for (const holds of ["molecules", "conformers"] as const) {
+      const out = runMeno("duplicates", [water(1, 0, -76.4, { charge: 0, multiplicity: 3 }), water(2, 0, -76.4, { charge: 0, multiplicity: 1 })], holds);
+      expect(out.ok && out.kept.length, holds).toBe(2);
+    }
+    const same = runMeno("duplicates", [water(1, 0, -76.4), water(2, 0, -76.4)], "molecules");
+    expect(same.ok && same.kept.length).toBe(1);
+  });
+
   it("keeps the charge and spin a calculation said, where a step of Meno's own hands the entry on", () => {
     expect(speciesKept(water(1, 0, undefined, { charge: -1, multiplicity: 2 }))).toEqual({ calc: { readers: [], charge: -1, multiplicity: 2 } });
     expect(speciesKept(water(1, 0))).toEqual({});

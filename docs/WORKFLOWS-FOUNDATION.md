@@ -70,7 +70,7 @@ maintainer's own library:
 > 'has this been done' judgement, and where jobs run.
 
 - **Atom mapping is Meno's own**, a basic feature of drawing reaction
-  schemes, used by the *Reaction* node as by the 2D canvas. The nodes ACCeL
+  schemes, used by the *Atom map* node as by the 2D canvas. The nodes ACCeL
   might have filled are each decided (*Atom mapping, and what Meno does
   itself*): all are Meno's, and no ACCeL plugin is part of this plan.
 - **Five mechanisms of ACCeL's second version are adopted, as Meno's own**:
@@ -315,13 +315,17 @@ its entry):
 
 **The numbering is fixed.** An entry's atoms are numbered once, when its
 structure is first made (drawn, read, generated), and no step renumbers
-them.
+them but *Atom map*, which gives an entry in a reference's numbering, and
+says so.
 - **A program that reorders atoms has them mapped back** by its plugin
   before entries are given. The conformer searches already keep the order,
-  and #374 settles equivalent atoms onto one numbering across conformers.
-- **The reaction node gives the products in the reactants' numbering.** From
-  there, "atom 7" means the same atom in every conformer, path,
-  transition state and IRC end of the reaction.
+  and #374 settles equivalent atoms onto one numbering across one search's
+  conformers (onto its first), not onto the structure it was given.
+- **The *Atom map* node gives the products in the reactants' numbering**,
+  and a species' conformers in its numbering, each equivalent atom (a
+  methylene's hydrogens) where the species' own 3D has it. From there,
+  "atom 7" means the same atom, on the same side, in every conformer,
+  path, transition state and IRC end of the reaction.
 - **Per-atom properties are aligned by number**, with no matching.
 - **A measured table keyed by the drawing's atom numbers joins on**, through
   the drawn atom each 3D atom came from (`drawnFrom`).
@@ -361,7 +365,7 @@ SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
 made by `scripts/identity/rdkit.py`, with RDKit's version and the commands
 that made it). The fixture holds each molfile by its SHA-256: the test
 writes the molfiles again and checks them against it. The bond-shift
-isomers, which RDKit keeps apart, are listed by name.
+isomers, which Meno's rule takes as one structure, are listed by name.
 
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
@@ -586,8 +590,8 @@ some kinds of option are Meno's, so that every plugin shows them the same
 way:
 - **solvent**: a name from Meno's list of solvents with their usual aliases
   (*chloroform*, *CHCl3*, *CDCl3*), or none. Each plugin maps the name to
-  its program's model and keyword, and says when its model does not know
-  that solvent;
+  its program's model and keyword, and says when there is none for that
+  solvent;
 - **temperature** and **pressure**, with units.
 
 Charge and multiplicity are each entry's *species*, not options. A *Species*
@@ -645,9 +649,8 @@ of highest weight stands for it, carrying the results.
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
 | **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
 | **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
-| **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
-| **Reaction** | *reactants* (one entry, 3D, every hydrogen present; a complex is made first by *Combine*) and *products* (3D, every hydrogen present) | *mapped products*: each product a complete 3D structure in the reactants' numbering, every atom mapped one to one, hydrogens included (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
+| **Atom map** | *molecules* and a *reference* (3D, every hydrogen present), each input's entries each a side of its own or one side together; matched on a property, or one reference for all; whether bonds may change (a reaction) or stay the same (conformers of the reference) | *mapped*: each side a complete 3D structure in the reference's numbering, every atom mapped one to one, hydrogens included (the first map, or every map) - a reaction's products in its reactants' numbering, or a species' conformers with their equivalent atoms (a methylene's hydrogens) where the species has them; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
 | **Restraints** | molecules | the same, each with its restraints from itself: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
 | **Torsion restraints** | molecules, 3D, and *reference* (molecules) | *restrained*: each torsion trans across the reference's double bonds and not trans here held at 180°, stronger by a step each time; *trans already*: the rest, as they came |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
@@ -664,8 +667,8 @@ of highest weight stands for it, carrying the results.
 | **Energy diagram** | molecules with an energy, and what each connects | a chart |
 | **Chart** | a table | a chart: one column against another |
 
-That is 31 nodes, each doing one thing, and *Enumerate* (below) makes
-32.
+That is 30 nodes, each doing one thing (*Atom map* does what *Number
+like* was to), and *Enumerate* (below) makes 31.
 
 **What happens to today's five**
 - ***Energy window*** becomes *Relative* (to the lowest in its group) then
@@ -896,9 +899,8 @@ known answers are (#507):
 - the test checks that each product is the compound written for it, and
   that Meno's identity splits the products into the same groups as RDKit's
   canonical SMILES do;
-- where the two rules differ by design (bond-shift isomers, which RDKit's
-  aromaticity does not join), the fixture lists the case, and the test
-  holds Meno to its own rule there.
+- where Meno's rule takes two forms as one (bond-shift isomers), the
+  fixture lists the case, and the test holds Meno to its own rule there.
 
 RDKit is in the script and the fixture only, never in core.
 
@@ -1093,12 +1095,12 @@ done, and where jobs run.
 
 **Atom mapping is a basic Meno feature.** Drawing a reaction scheme calls
 for an atom map, so mapping lives in core (`src/lib/chem`), for the 2D
-canvas and for the *Reaction* node alike. Its first version ports the mapper
+canvas and for the *Atom map* node alike. Its first version ports the mapper
 of ACCeL, the maintainer's own library (kfchem/accel, MIT), with the
 maintainer's explicit permission and its notice kept. It is built in its own
 PR, by another lane; this plan only uses it as a core API.
 
-**The *Reaction* node's contract.** A map is only usable for quantum
+**The *Atom map* node's contract.** A map is only usable for quantum
 chemistry if it covers every atom in 3D, one to one, so that a product's
 geometry comes out in the reactants' numbering for a path search, a
 three-structure saddle-point search and matching IRC ends. So:
@@ -1117,16 +1119,16 @@ read for it.
 
 | Node | Why Meno's own |
 |---|---|
-| **Reaction**: the atom map | Mapping is part of drawing reactions, so it belongs in core. A Diels-Alder already defeats the fewest bond changes, so the port of a working mapper is the starting point |
-| **Reaction**: the bond changes | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering |
+| **Atom map**: a reaction | Mapping is part of drawing reactions, so it belongs in core. A Diels-Alder already defeats the fewest bond changes, so the port of a working mapper is the starting point |
+| **Atom map**: the bond changes | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering |
 | **Compare bonding** | Meno already reads bonds and their orders from distances (#230, from Pyykkö's covalent radii) and perceives R or S and E or Z. With the numbering fixed, comparing with a reference is comparing two lists of bonds, and of stereo labels, atom by atom |
 | **Duplicates** with symmetry | Meno's canonical numbering (#319, #350) gives each atom's symmetry class. The RMSD with symmetry is the lowest RMSD over the graph's automorphisms, each laid over by the quaternion fit Meno's *Duplicates* uses today (Horn 1987; Coutsias, Seok and Dill 2004), as described by Meli and Biggin (J. Cheminform. 12, 49 (2020)). A cap on the automorphisms tried (tert-butyl groups multiply them) is said when it is met |
-| **Number like** | The same automorphisms: the one with the lowest RMSD to the reference is applied as the new numbering, so only equivalent atoms swap |
+| **Atom map**: conformers onto their species | The same full map, its bonds to stay the same: ACCeL pairs like atoms as it extends a map - a methylene's hydrogens by their handedness, an =CH2's by E or Z, a methyl's by the torsion - so only equivalent atoms take each other's numbers |
 | **Mode on atoms** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
 
 **Plugins may still fill these.** Decision 16 lets a plugin fill a kind
-Meno fills, so a plugin, ACCeL's among them, may later offer its own
-*Reaction* or its readers beside Meno's. None is needed for F or G.
+Meno fills, so a plugin may offer its own *Atom map* or its readers
+beside Meno's. None is needed for F or G.
 
 ## Changed and kept under the principle
 
@@ -1135,7 +1137,7 @@ abstract*:
 
 | Part | Now | Why |
 |---|---|---|
-| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (Meno's) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
+| Reaction as a value (sides, map, contacts) | **Changed**: an *Atom map* node (Meno's) with *mapped* and *bond changes* out, a side of several structures taken together; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
 | Meno's "fewest bond changes" mapping | **Changed**: Meno's own atom mapping in core, first ported from ACCeL's mapper with the maintainer's permission, used in 2D too | the maintainer: even a Diels-Alder would fail; a reaction scheme calls for a map |
 | Paired entries (*start*, *end*, *guess*) | **Changed**: plain inputs matched on an ID that *Tag* wrote | the maintainer (question A): IDs embedded and matched, no implicit rules; the same works for every node with two inputs |
 | Grouped type | **Changed**: *group* is a property | a type that only marks a property was abstraction |
@@ -1145,7 +1147,7 @@ abstract*:
 | *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
 | *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
 | *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (Meno), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
-| An ACCeL plugin | **Changed**: none in this plan; *Reaction*, *Compare bonding*, *Duplicates* with symmetry, *Number like* and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
+| An ACCeL plugin | **Changed**: none in this plan; *Atom map*, *Compare bonding*, *Duplicates* with symmetry and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
 | *Boltzmann average*, *Scale*, *Spectrum*, *Compare* | **Changed**: *Average*, *Linear*, *Broaden*, *Errors*, *Curve similarity* | general names for single roles; *Linear* with *a* = −1 mirrors a curve |
 | Filter's "relative to its group" | **Changed**: *Relative* before *Filter* | one role a node |
 | Energy window, Choose one, As conformers | **Changed**: cases of *Relative* + *Filter*, *Rank*, *Group*; dropped from saved workspaces | the maintainer asked for a clean set (question 16) |
@@ -1219,13 +1221,14 @@ the showcase's first example. The reactant *a* and two products *b* and *c*
 drawn side by side, in chloroform. Which product forms faster, and by how
 much?
 
-**On the page:** set **R** holds the reactant drawn (two reactants are made
-one complex by *Combine*); set **P** holds the products drawn.
+**On the page:** set **R** holds the reactants drawn (two reactants are one
+side together, on the *Atom map* card); set **P** holds the products drawn.
 
 **F1. The reaction** (step 0)
-1. **Reaction** (Meno): *reactants* R, *products* P, each given its 3D
-   structure first (decision 18), every hydrogen present. It gives *mapped
-   products* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
+1. **Atom map** (Meno): *molecules* P, *reference* R, each given its 3D
+   structure first (decision 18), every hydrogen present; P's entries each
+   their own, R's one side together, bonds that may change. It gives
+   *mapped* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
    *bond changes* BC [ConfoTS's reacting bonds and atoms].
 
 **F2. Conformers of each species** (step 1, first part)
@@ -1236,7 +1239,11 @@ one complex by *Combine*); set **P** holds the products drawn.
    [`lewis_distance_scaling`, `lewis_force_constant`].
 4. **Conformers** (a plugin) on S, with T1 where the plugin takes
    restraints. Each conformer's group is its species [100; ConfoTS uses a
-   force-field search of 10,000 steps].
+   force-field search of 10,000 steps]. Then **Atom map** (Meno): the
+   conformers onto S, matched on *species*, bonds that stay the same, each
+   input's entries each their own: every conformer in its species'
+   numbering, its equivalent atoms where S has them, as ConfoTS's
+   [`map_numbers`] renumbers its conformers after the search.
 5. **Relative** then **Filter** (Meno): within 10 kcal/mol of the lowest in
    each group [`energy_limit_to_empopt`].
 6. **Optimise** (xTB, GFN2), *done* [110].
@@ -1356,7 +1363,7 @@ one complex by *Combine*); set **P** holds the products drawn.
     joins the species it claims.
 
 **The nodes F uses:**
-- **Meno's** (21): Reaction, Merge, Tag, Restraints, Torsion restraints, Relative, Filter, Rank,
+- **Meno's** (21): Atom map, Merge, Tag, Restraints, Torsion restraints, Relative, Filter, Rank,
   Re-bond, Take frames, Measure, Join, Displace, Number, Add, Populations,
   Ensemble energy, Energy diagram, Duplicates, Compare bonding, Mode on atoms.
 - **Program plugins'** (8): Conformers, Optimise, Minimise with restraints,
@@ -1387,7 +1394,7 @@ can be saved and put down again (question C).
   already run to the end.
 
 **F9. Against the ten points asked for, last round:**
-1. **Reactions and their numbering**: the *Reaction* node, the fixed
+1. **Reactions and their numbering**: the *Atom map* node, the fixed
    numbering.
 2. **Pairs**: *Tag* and *Re-bond*, inputs matched on the IDs *Tag* wrote.
 3. **Paths**: entries with frames, and *Take frames*.
@@ -1402,7 +1409,7 @@ can be saved and put down again (question C).
    up again.
 9. **Templates**: the program plugins' options.
 10. **Bond changes and restrained minimisation**:
-    - *Reaction*, with Meno's atom mapping, and *Compare bonding* are
+    - *Atom map*, with Meno's atom mapping, and *Compare bonding* are
       Meno's;
     - *Minimise with restraints* is a force-field plugin's;
     - *Restraints*, *Torsion restraints* and *Re-bond* are Meno's.
@@ -1600,9 +1607,9 @@ open, one plugin to a PR.
     *Chart* and *Energy diagram*.
 11. **Meno's nodes for structures and spectra**: *Species*, *Combine*,
     *Re-bond*, *Restraints*, *Measure*, *Take frames*, *Displace*,
-    *Compare bonding*, *Number like*, *Mode on atoms*, *Equivalent atoms*,
+    *Compare bonding*, *Mode on atoms*, *Equivalent atoms*,
     *Broaden*, *Errors*, *Curve similarity*.
-12. **The *Reaction* node**, on Meno's atom mapping (a core API, built
+12. **The *Atom map* node**, on Meno's atom mapping (a core API, built
     first in its own PR by another lane) and Meno's bond changes.
 13. **The computational-chemistry kinds opened**: *Minimise with restraints*,
     *Path search*, *Optimise to a saddle point*, *Follow the reaction path*,
@@ -1660,12 +1667,12 @@ scheduler or model by name:**
   - the runner seam, and this computer's runner, knowing its resources;
 - **on the page**: summaries, tables, charts, and the words on the page with
   their rule;
-- **Meno's 32 nodes** (*Meno's own nodes*, and *Enumerate*): arithmetic,
+- **Meno's 31 nodes** (*Meno's own nodes*, and *Enumerate*): arithmetic,
   geometry, data handling and structures made by rule, on Meno's own data,
   each written from a published algorithm or Meno's own rule.
 
 **Atom mapping is core's**, in `src/lib/chem`, for the canvas and the
-*Reaction* node. Its first version is a port of ACCeL's mapper, with the
+*Atom map* node. Its first version is a port of ACCeL's mapper, with the
 maintainer's permission and its MIT notice kept; no other ACCeL code is in
 core. What it gives a calculation is a complete map in 3D, every atom one to
 one, hydrogens by geometry; a heavy-atom-only map is for display only.
@@ -1683,7 +1690,9 @@ jobs elsewhere. In their manifests they declare:
 - the model formats they read.
 
 **The guards.** The boundary guard (`src/lib/plugins/boundary.test.ts`)
-keeps program, scheduler and model names out of core. Property and failure
+keeps program, scheduler and model names out of core - its literals, its
+regular expressions and its pages' text (PLUGINS.md, *The boundary, kept by
+a test*). Property and failure
 names given by plugins are data, never literals in core. Core names only the
 quantities its own nodes compute or use: *energy*, *thermal correction*,
 *share*, *degeneracy*, *vibrations*, *group*, *shielding*, *excited
@@ -1742,7 +1751,7 @@ None open. Every question raised in the five rounds is answered below.
   *Adopt* is per job, recorded with when, and the adopted result is marked
   wherever it is shown.
 - **P:** until #319 and #350 are merged, *Duplicates* compares atoms in
-  their own order; symmetry, *Number like* and the automorphisms come with
+  their own order; symmetry and the automorphisms come with
   PR 2.
 - **Q:** a save past 500 MB says the workspace is large; the threshold is a
   setting (Settings, General).
@@ -1753,7 +1762,7 @@ None open. Every question raised in the five rounds is answered below.
 **On the fifth draft, before M to S:**
 - **Atom mapping is a basic Meno feature**, in core, since drawing a
   reaction scheme calls for a map. ACCeL's mapper, the maintainer's own MIT
-  code, may be ported; another lane builds it. The *Reaction* node is
+  code, may be ported; another lane builds it. The *Atom map* node is
   Meno's, and the ACCeL plugin leaves this plan.
 - **R:** the working folder is set in Meno's Settings, Meno's own folder by
   default, and cleaned on its own once the files are in the `.meno`, with a

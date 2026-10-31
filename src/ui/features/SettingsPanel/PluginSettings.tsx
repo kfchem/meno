@@ -3,8 +3,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { FADE } from "../../theme/motion";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
-import { ALL_PLUGINS, manifestOf, PLUGINS, REFUSED, runs, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
-import { addedReaders, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
+import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
+import { rangeSaid } from "../../../lib/plugins/depends";
+import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
@@ -12,6 +13,9 @@ import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+
+/** A list in words: "a", "a and b", "a, b and c". */
+const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
 /** The kinds of a workflow's step a plugin fills, by their names - those Meno defines. */
 const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k) => p.steps.some((d) => d.kind === k.kind)).map((k) => k.name);
@@ -48,23 +52,30 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
   const [busy, setBusy] = useState(false);
   // (whose set-up one waiting waits for: set-ups run one at a time, lib/calc/workers)
   const waiting = useReaders((s) => (state === "waiting" ? waitingSaid(s.state) : ""));
-  // (its jobs that wait or run, as taking it away was asked: stopped only once the chemist says so)
+  // (its jobs that wait or run - and those of the plugins added that use it, taken away with it - as taking it away was asked:
+  //  stopped only once the chemist says so)
   const [live, setLive] = useState<readonly Job[] | null>(null);
+  // (the plugins added that use it, as taking it away was asked: taken away too, only once the chemist says so - never it alone)
+  const [using, setUsing] = useState<readonly AnyPlugin[] | null>(null);
+  // (why it is stopped, added: a plugin it uses not added, or not of a version it works with)
+  const stopped = useReaders((s) => (s.state[p.id] === "added" ? stoppedOf(p, new Set(Object.keys(s.state).filter((id) => s.state[id] === "added"))) : null));
   const run = (job: (p: AnyPlugin) => Promise<void>) => {
     setBusy(true);
     job(p)
       .catch(() => {}) // (said by the plugin's problem)
       .finally(() => setBusy(false));
   };
-  const remove = () => {
+  const remove = (withUsing = false) => {
+    const others = addedUsing(p.id);
+    if (others.length && !withUsing) return setUsing(others);
     setBusy(true);
-    liveJobsOf(p.id)
-      .catch((): Job[] => [])
+    Promise.all([...others, p].map((q) => liveJobsOf(q.id).catch((): Job[] => [])))
+      .then((all) => all.flat())
       .then((jobs) => {
         if (jobs.length) {
           setBusy(false);
           setLive(jobs);
-        } else run(removePlugin);
+        } else run((q) => removePlugin(q, [], true));
       });
   };
   // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
@@ -75,7 +86,9 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
     checking && state !== "adding" && state !== "removing"
       ? "Checking its files…"
       : state === "added"
-        ? "Added"
+        ? stopped
+          ? "Stopped"
+          : "Added"
         : state === "waiting"
           ? waiting
           : state === "adding"
@@ -109,6 +122,16 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
             ))}
           </>
         )}
+        {runs(p) && (p.depends ?? []).length > 0 && (
+          <p className="text-xs text-gh-gray mt-1 max-w-2xl">
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
+          </p>
+        )}
+        {pluginsUsing(p.id).length > 0 && (
+          <p className="text-xs text-gh-gray mt-1 max-w-2xl">
+            Used by {pluginsUsing(p.id).map((q) => q.name).join(", ")}.
+          </p>
+        )}
         <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
           {!runs(p) && " · Comes with Meno: nothing to download."}
@@ -118,6 +141,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
             Not taken: {refused.map((r) => `“${r.mark}”`).join(", ")} - what a file of Meno's own holds too, so it cannot tell {p.name}'s kinds.
           </p>
         )}
+        {stopped && <p className="text-xs text-accel-accent mt-1 meno-fade-in">Stopped: {stopped.charAt(0).toLowerCase() + stopped.slice(1)}.</p>}
         {problem && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem}</p>}
       </div>
       <div className="flex flex-col items-end gap-1.5">
@@ -148,6 +172,21 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         )}
       </div>
       <AnimatePresence>
+        {using && (
+          // (over the whole window, as a question about the app is)
+          <motion.div key="using" {...FADE} className="fixed inset-0 z-[100]">
+            <ConfirmDiscard
+              title={`Remove ${p.name}?`}
+              message={`${listOf(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it. Removing ${p.name} removes ${using.length === 1 ? "it" : "them"} too.`}
+              discardLabel={using.length === 1 ? "Remove both" : `Remove all ${using.length + 1}`}
+              onCancel={() => setUsing(null)}
+              onDiscard={() => {
+                setUsing(null);
+                remove(true);
+              }}
+            />
+          </motion.div>
+        )}
         {live && (
           // (over the whole window, as a question about the app is)
           <motion.div key="remove" {...FADE} className="fixed inset-0 z-[100]">
@@ -159,7 +198,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
               onDiscard={() => {
                 const ids = live.map((j) => j.id);
                 setLive(null);
-                run((q) => removePlugin(q, ids));
+                run((q) => removePlugin(q, ids, true));
               }}
             />
           </motion.div>

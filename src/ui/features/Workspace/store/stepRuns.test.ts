@@ -128,6 +128,17 @@ vi.mock("../../../../lib/calc/read", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/read")>()),
   readOutput: (...args: Parameters<typeof readOutput>) => readOutput(...args),
 }));
+// (a plugin that does a step at once on molecules - Duplicates, the one kind such a step has been - for the tests of how Meno takes
+//  what such a step answers; none of the bundled plugins does it)
+vi.mock("../../../../lib/plugins/known", async (actual) => {
+  const known = await actual<typeof import("../../../../lib/plugins/known")>();
+  const { acceptManifest } = await import("../../../../lib/plugins/manifest");
+  const { readFileSync } = await import("node:fs");
+  const raw = JSON.parse(readFileSync(`${process.cwd()}/src-tauri/resources/plugins/rdkit/manifest.json`, "utf8"));
+  const mirrors = { id: "mirrors", label: "Mirror images", type: "choice", choices: [{ value: "apart", label: "Kept apart" }, { value: "counted", label: "Counted in (degeneracy 2)" }], default: "apart" };
+  const atOnce = acceptManifest({ ...raw, id: "atonce", name: "At once", roles: [], steps: [{ kinds: ["duplicates"], options: [mirrors] }] });
+  return { ...known, MANIFESTS: [...known.MANIFESTS, atOnce!].sort((a, b) => a.id.localeCompare(b.id)) };
+});
 vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
@@ -460,7 +471,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
   });
 
-  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so", async () => {
+  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so - the plugin otherwise running as it does", async () => {
     installedAt.orca = "/Applications/orca_6/orca";
     const needing = async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 Opt\n" }], reads: [], needs: ["xtb"] }] }) as never;
     // (the xTB plugin not added: refused before any job is made)
@@ -471,7 +482,7 @@ describe("a step that runs a plugin's program", () => {
     first.st().connect({ set: first.st().sets[0].id }, step);
     await first.st().runStep(step);
     expect(asked.started).toEqual([]);
-    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "The xTB plugin is needed for this: add it in Settings, Plugins" });
+    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Needs xTB, which is not added." });
     // (added: the job asks for it, by the plugin's id)
     useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     worker.prepare.mockImplementationOnce(needing);
@@ -1720,7 +1731,7 @@ describe("a plugin's conformer search, and its duplicates", () => {
   beforeEach(() => {
     jobs.clear();
     next = 1;
-    useReaders.setState({ state: { rdkit: "added" }, problem: {} });
+    useReaders.setState({ state: { rdkit: "added", atonce: "added" }, problem: {} });
   });
 
   it("brings each compound's conformers in as a conformer set - numbered, with their energies", async () => {
@@ -1747,7 +1758,7 @@ describe("a plugin's conformer search, and its duplicates", () => {
     // (a second water in the set: two entries)
     doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
     const set = st().sets[0].id;
-    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    const step = st().addStep("duplicates", "atonce", 10, 20);
     st().connect({ set }, step);
     await st().runStep(step);
     expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { mirrors: "apart" }, "molecules");
@@ -1760,11 +1771,24 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "2 of 2 kept \u00b7 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed" });
   });
 
+  it("says a plugin does not do a step it fills no more, before it asks it anything (a workspace's step from before)", async () => {
+    const { doc, st } = editor();
+    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
+    const set = st().sets[0].id;
+    // (RDKit's Duplicates, as a workspace saved before RDKit plugin 0.1.16 has it)
+    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    st().connect({ set }, step);
+    worker.run.mockClear();
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "RDKit does not do Duplicates" });
+    expect(worker.run).not.toHaveBeenCalled();
+  });
+
   it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {
     const { doc, st } = editor();
     doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
     const set = st().sets[0].id;
-    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    const step = st().addStep("duplicates", "atonce", 10, 20);
     st().updateStep(step, { options: { mirrors: "counted" } });
     st().connect({ set }, step);
     worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 2, 1] }] }) as never);

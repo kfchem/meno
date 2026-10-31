@@ -190,7 +190,7 @@ export default function SettingsPanel() {
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Jobs</h3>
             <p className="mt-1 mb-3 text-sm text-gh-gray">
               The programs steps run, on this computer. They go on when Meno closes, and those waiting start in turn, as many at once as fit. A job counts the memory its
-              plugin declares - ORCA's %maxcore, Gaussian's %Mem; one that declares none counts by its cores alone.
+              plugin declares for it; one that declares none counts by its cores alone.
             </p>
             <JobSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Procedures</h3>
