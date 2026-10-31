@@ -361,7 +361,7 @@ SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
 made by `scripts/identity/rdkit.py`, with RDKit's version and the commands
 that made it). The fixture holds each molfile by its SHA-256: the test
 writes the molfiles again and checks them against it. The bond-shift
-isomers, which RDKit keeps apart, are listed by name.
+isomers, which Meno's rule takes as one structure, are listed by name.
 
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
@@ -896,9 +896,8 @@ known answers are (#507):
 - the test checks that each product is the compound written for it, and
   that Meno's identity splits the products into the same groups as RDKit's
   canonical SMILES do;
-- where the two rules differ by design (bond-shift isomers, which RDKit's
-  aromaticity does not join), the fixture lists the case, and the test
-  holds Meno to its own rule there.
+- where Meno's rule takes two forms as one (bond-shift isomers), the
+  fixture lists the case, and the test holds Meno to its own rule there.
 
 RDKit is in the script and the fixture only, never in core.
 
