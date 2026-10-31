@@ -1516,7 +1516,7 @@ As step 7 was built - decided with the maintainer on 2026-10-06:
     frame in its water - numbers them over again, or past the columns in
     a count of its own, or with stars. Those atoms' bonds are by distance;
   - HEADER's ID code and TITLE, kept for later;
-  - HELIX and SHEET records (Secondary Structure Section, since lane L5,
+  - HELIX and SHEET records (Secondary Structure Section, since
     2026-10-10), every field kept, and with them each atom's name and
     residue on the molecule in 3D: its chains drawn as ribbons
     (docs/WORKSPACE.md, *Ribbons*).

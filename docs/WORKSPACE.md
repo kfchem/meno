@@ -910,7 +910,7 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   cubes, worked out off the main thread), going over to another as the
   value changes. An orbital's two phases in two colours, a density's in
   one, seen through - a lobe behind another, of either phase, showing
-  through it as it lies (since lane L11, 2026-10-11: before, the positive
+  through it as it lies (since 2026-10-11: before, the positive
   phase was laid over the negative wherever they crossed on the screen).
   A picture made of the molecule - copied or exported - shows the surface
   as the canvas does, and is as large as its lobes reach (before, pictures
@@ -966,9 +966,9 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   styles in 3D*).
 
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
-pull request (`agent/style-one-per-workspace`): L8 the change of style and
-what it converts, hunter C the style's place and its card, hunter A the
-molecules in 3D.
+pull request (`agent/style-one-per-workspace`): the change of style and
+what it converts, the style's place and its card, and the molecules in
+3D.
 
 - **One style to a workspace.** The page's unit is the bond. A bond is 1.8
   units (`NOMINAL_BOND_LENGTH`) in every style, and the style says how long
@@ -1089,7 +1089,7 @@ molecules in 3D.
   after `solidOf` in 3D that never enters the document's units, Å readouts
   or writers. A change of style keeps each object's magnification: the
   conversion moves an object's middle and leaves its factor alone.
-- **The functions.** `restyle.ts` (L8): `bondPtOf(style: StyleChoice)`, and
+- **The functions.** `restyle.ts`: `bondPtOf(style: StyleChoice)`, and
   `restyled(parts, k, about = { x: 0, y: 0 })`, which converts whatever
   page parts it is given - a whole document or a copy's parts, the fields
   of `WorkspaceDocument` that are there - and gives them back unchanged
@@ -1229,7 +1229,7 @@ their own sizes, whichever is chosen.
 
 ## Styles in 3D
 
-Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
+Built on 2026-10-10. The maintainer's ruling: a molecule in 3D
 has two looks, a thin one and a thick one, and goes from one to the other
 in a single step - seeing a molecule as ball and stick and as
 space-filling side by side is better science than either alone.
@@ -1474,7 +1474,7 @@ space-filling side by side is better science than either alone.
 
 ## Depth in 3D
 
-Built in lane L11 on 2026-10-11, the maintainer choosing each way from
+Built on 2026-10-11, the maintainer choosing each way from
 pictures of it beside the others: a molecule's shape should read at a
 glance, in the canvas where chemists look at molecules all day, without
 slowing it - and in the pictures made of it.
@@ -1506,7 +1506,7 @@ slowing it - and in the pictures made of it.
   molecule moves, turns or changes - fitted round every molecule, so
   that panning and zooming leave it, until that would make it coarser
   than the screen's pixels, when it is fitted round what is in view.
-- **Shade worked out on the screen** (lane L11, 2026-10-11, the
+- **Shade worked out on the screen** (2026-10-11, the
   maintainer finding it the prettier of the two): each style's *Shade in
   hollows* is *None*, *Per atom* (the first) or *Screen-space* - *None*
   the one way to have no shade, *How deep* beside it greyed out while it
@@ -1560,7 +1560,7 @@ slowing it - and in the pictures made of it.
 
 ## Editing in 3D
 
-Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+Built on 2026-10-10, as proposed to the maintainer and agreed:
 a molecule in 3D is edited as a quantum-chemistry program's builder edits
 one, by setting a distance, an angle or a torsion angle to a value. Only
 its shape changes; what it is made of stays the drawing's business (draw
@@ -1674,7 +1674,7 @@ as R and S are, cannot be told from its neighbours'.
 
 ## Ribbons
 
-Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+Built on 2026-10-10, as proposed to the maintainer and agreed:
 a protein's or a nucleic acid's chains drawn as ribbons, from what the PDB
 entry itself says - written from the wwPDB's format (v3.3), as every PDB
 reading in Meno is.
@@ -1825,7 +1825,7 @@ same way.
 
 ## Hydrogens and bond orders
 
-Built in lane L5 on 2026-10-11, as the maintainer asked: a file of
+Built on 2026-10-11, as the maintainer asked: a file of
 coordinates - XYZ, PDB, a calculation's output - gives no bond orders, and
 an X-ray entry no hydrogens. A molecule drawn as if they were known
 misleads as one with its hydrogens hidden does, so a molecule says what is
