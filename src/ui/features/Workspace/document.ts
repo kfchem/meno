@@ -35,7 +35,7 @@ import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
-import type { CalcInfo } from "../../../lib/calc/output";
+import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets, membersSettled } from "./workflow/model";
 
@@ -1186,7 +1186,7 @@ export function withReadings(doc: WorkspaceDocument, bySource: Readonly<Record<s
       } else {
         const frames = 1 + (m.frames?.length ?? 0);
         const read = (r.output.frames ?? []).filter((f) => Array.isArray(f) && f.length === 3 * atoms.length).length;
-        const results = readResults(r.output.results, atoms.length, read === frames ? frames : 0, r.from);
+        const results = inMenosForm(readResults(r.output.results, atoms.length, read === frames ? frames : 0, r.from), r.output);
         calc = { ...calc, readers: [...calc.readers, readerLine(r)], results: [...(calc.results ?? []), ...results] };
       }
     }

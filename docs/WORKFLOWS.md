@@ -594,6 +594,12 @@ on it.
   point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs,
   σ 1 (start)"). The step's line: "ΔG‡ 6.16 kcal/mol (G at GFN2-xTB,
   298.15 K)".
+- **Solvation, as each side's output said it** (2026-10-31): the two
+  sides must say the same - a model with its solvent, or "none", the gas
+  phase - and one that says it with one that does not is refused. Two
+  that both leave it unsaid are taken, and the barrier's record says
+  "solvation not stated", so that no match of two unsaid is silent; a sum's
+  record (*Add*) says it of each part that leaves it unsaid.
 - **What it is not.** A barrier from separate reactants - a sum of two
   molecules' G, each at its own standard state - is not this step's: its
   start is one molecule, the complex the path began from, as case F's

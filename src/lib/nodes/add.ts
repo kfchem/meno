@@ -34,7 +34,9 @@ export function partSaid(p: PropertyPart): string {
     return v && v !== "not stated" && v !== "unknown" ? v : "";
   };
   const level = [stated("method"), stated("basis")].filter(Boolean).join("/");
-  const words = [level, stated("program"), stated("solvent"), stated("temperature"), stated("pressure"), stated("thermal treatment")].filter(Boolean);
+  // (its solvent as stated - "none (gas phase)" where the output says it used none - or that it was not stated, so that a sum of parts none states is never read as of one solvent)
+  const solvent = stated("solvent") || "solvation not stated";
+  const words = [level, stated("program"), solvent, stated("temperature"), stated("pressure"), stated("thermal treatment")].filter(Boolean);
   return words.length ? `${p.property} (${words.join(", ")})` : p.property;
 }
 

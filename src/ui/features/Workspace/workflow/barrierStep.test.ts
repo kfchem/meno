@@ -52,6 +52,13 @@ const barrier = (o: ReturnType<typeof run>, k = 0): Property => kept(o).kept[k].
 const why = (o: ReturnType<typeof run>, k = 0) => kept(o).aside[k]?.failed?.why;
 
 describe("a Barrier step", () => {
+  it("says where neither side's free energy states its solvation: a match of not stated is never silent", () => {
+    const unsaid = (e: SetEntry): SetEntry => ({ ...e, calc: { ...e.calc!, solvation: undefined } }) as SetEntry;
+    expect(barrier(run([unsaid(saddle())], [unsaid(minimum())])).by?.treatment).toMatch(/; solvation not stated$/);
+    // (stated, as the output says it - "none", the gas phase - it says nothing more)
+    expect(barrier(run([saddle()], [minimum()])).by?.treatment).not.toMatch(/solvation/);
+  });
+
   it("gives each saddle point its free energy's height above its start, in kcal/mol, the two sigmas as each was worked out - ammonia's inversion", () => {
     const o = run([saddle()], [minimum()]);
     const b = barrier(o);

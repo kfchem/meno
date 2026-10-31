@@ -15,8 +15,13 @@
  * its own (output.ts) and is no result.
  */
 
-/** The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a spin population in e (signed as a charge is), a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in degrees, a dipole in debye, a number without one. */
-export const QUANTITIES = ["energy", "charge", "spin", "wavenumber", "length", "angle", "dipole", "number"] as const;
+/**
+ * The quantities Meno writes itself, each in its unit: an energy in hartrees, a charge in e, a spin population in e
+ * (signed as a charge is), a wavenumber in cm⁻¹ (an imaginary one negative), a length in ångströms, an angle in
+ * degrees, a dipole in debye, a number without one; and a symmetry - a point group or a Mulliken symbol, a text in
+ * standard notation (`symmetryText`).
+ */
+export const QUANTITIES = ["energy", "charge", "spin", "wavenumber", "length", "angle", "dipole", "number", "symmetry"] as const;
 export type Quantity = (typeof QUANTITIES)[number];
 
 /** How a value is written: as a quantity Meno knows; or else with the unit given; and to how many decimals, where not as Meno would. */
@@ -33,8 +38,13 @@ type Named = {
   /** The plugin it came from, its name and version: said only where another plugin's results stand beside its own. */
   from?: string;
 };
-/** One value of the whole molecule; `rank`, where it is in the chip's line - lower first - or not there, unset. */
-export type MoleculeResult = Named & Measure & { on: "molecule"; value: Cell; rank?: number };
+/**
+ * One value of the whole molecule; `rank`, where it is in the chip's line - lower first - or not there, unset. A
+ * vector's value - a dipole's - may come with its components (`vector`, in its unit), the point it was taken about
+ * (`origin`) and the molecule's centre of mass (`centre`), each in ångströms in the frame of the output's geometries,
+ * as its program printed them.
+ */
+export type MoleculeResult = Named & Measure & { on: "molecule"; value: Cell; rank?: number; vector?: Vec3; origin?: Vec3; centre?: Vec3 };
 /** A value of each frame, in order. */
 export type FramesResult = Named & Measure & { on: "frames"; values: Cell[] };
 /** A value of each atom, in order. */
@@ -100,6 +110,8 @@ const TEXT_MOST = 120;
 const UNIT_MOST = 24;
 const COLUMNS_MOST = 12;
 const ROWS_MOST = 5000;
+/** How many rows a list that opens on a row keeps up to it, that one among them, and after it. */
+export const ABOUT_FOCUS = 10;
 /** How long a promise's key may be; how many points a grid may have along an axis, and in all. */
 const KEY_MOST = 200;
 const GRID_SIDE_MOST = 400;
@@ -226,6 +238,9 @@ function resultOf(v: unknown, atoms: number, frames: number, from?: string): Res
         ...measureOf(r),
         value,
         ...(isNum(r.rank) ? { rank: r.rank } : {}),
+        ...(vec3(r.vector) ? { vector: [...r.vector] as Vec3 } : {}),
+        ...(vec3(r.origin) ? { origin: [...r.origin] as Vec3 } : {}),
+        ...(vec3(r.centre) ? { centre: [...r.centre] as Vec3 } : {}),
       };
     }
     case "frames":
@@ -259,15 +274,21 @@ function resultOf(v: unknown, atoms: number, frames: number, from?: string): Res
           : null,
       );
       if (columns.some((c) => !c)) return undefined;
-      const rows = r.rows.slice(0, ROWS_MOST).map((x) => rowOf(x, columns.length, atoms, frames));
-      if (!rows.length || rows.some((x) => !x)) return undefined;
+      const all = r.rows.slice(0, ROWS_MOST).map((x) => rowOf(x, columns.length, atoms, frames));
+      if (!all.length || all.some((x) => !x)) return undefined;
+      // (a list that opens on a row keeps the rows about it: the `ABOUT_FOCUS` up to it and as many after - an orbitals' list,
+      //  opening on its LUMO, the ten virtual orbitals from it and the ten occupied below; one given in full is trimmed so)
+      const focus = isIndex(r.focus, all.length) ? r.focus : undefined;
+      const from = focus != null ? Math.max(0, focus - ABOUT_FOCUS + 1) : 0;
+      const rows = focus != null ? all.slice(from, focus + ABOUT_FOCUS + 1) : all;
+      const shown = isIndex(r.shown, all.length) && r.shown >= from && r.shown - from < rows.length ? r.shown - from : undefined;
       return {
         ...named,
         on: "list",
         columns: columns as Column[],
         rows: rows as Row[],
-        ...(isIndex(r.focus, rows.length) ? { focus: r.focus } : {}),
-        ...(isIndex(r.shown, rows.length) ? { shown: r.shown } : {}),
+        ...(focus != null ? { focus: focus - from } : {}),
+        ...(shown != null ? { shown } : {}),
       };
     }
     default:
@@ -318,6 +339,7 @@ const UNITS: Record<Quantity, string> = {
   angle: "°",
   dipole: "D",
   number: "",
+  symmetry: "",
 };
 const DIGITS: Record<Quantity, number> = {
   energy: 6,
@@ -328,6 +350,7 @@ const DIGITS: Record<Quantity, number> = {
   angle: 1,
   dipole: 2,
   number: 4,
+  symmetry: 0,
 };
 /** Decimals at most for a value with a unit of its own, where it does not say. */
 const DIGITS_MOST = 4;
@@ -421,4 +444,15 @@ export function chipLine(first: readonly string[], results: readonly Result[] | 
     length += more;
   }
   return parts.join(" · ");
+}
+
+/**
+ * A point group or a Mulliken symbol as Meno writes it, for display and for every comparison: its first letter upper
+ * and the rest lower - C2v, D3h, Td, Bu, B1g, A', E'' - so that one printed "c2v" or "C2V" is the same as "C2v". Meno's
+ * form is standard notation (Σ, Π, Δ, Φ for a linear molecule's symbols, ∞ in a point group, primes): a reader writes
+ * its program's own spellings in it; this rule only puts the case right.
+ */
+export function symmetryText(s: string): string {
+  const t = s.trim();
+  return t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : t;
 }
