@@ -947,7 +947,7 @@ beside its edge - being drawn over all of it.
   vibrations' frequencies - as its frame's properties: the molecule keeps
   one calculation, not each frame's. Its imaginary frequencies are kept
   frame by frame, a frame whose vibrations were worked out and has none
-  "none", one never worked out "not computed"; where the program judged
+  "none", one never worked out "not computed"; where the output marks
   none imaginary but its table lists a negative frequency, that one is
   said - a table with one never reads as none. A program step on them
   later reads them again, or drops them, and a step that changes the
