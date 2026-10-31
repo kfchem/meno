@@ -24,7 +24,7 @@ function status(u: UpdateState, offline: boolean, allowed: boolean): string {
   if (offline) return "Meno works offline: it does not look for newer versions.";
   if (u.phase === "current") return `Up to date${u.checked ? ` - looked ${when(u.checked)}` : ""}.`;
   if (u.phase === "failed") return `The last look did not work: ${u.error ?? "no reason given"}.`;
-  return "Meno looks for one shortly after it starts and once a day while it runs.";
+  return "Meno looks for a newer version shortly after it starts and once a day while it runs.";
 }
 
 /**
@@ -49,8 +49,8 @@ export default function UpdateSettings() {
           <div className="text-sm text-gh-black">Keep Meno up to date</div>
           <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
             Meno {u.current}. A newer version is looked for on GitHub and downloaded in the
-            background, and goes in when you quit Meno. {updates.notice ? "Each connection is shown as it is made" : "Each connection is kept in the record below"};
-            nothing goes out while Meno works offline.
+            background, and goes in when you quit Meno. Each check is kept in the record below, and nothing
+            goes out while Meno works offline.
           </p>
         </div>
         <Switch on={allowed} label="Keep Meno up to date" disabled={!usable} onChange={() => void (allowed ? revoke(UPDATE_PURPOSE) : keepUpToDate())} />
