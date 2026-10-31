@@ -981,6 +981,10 @@ def read(name, text, followed=False):
     # (the atoms are those of the first geometry; one of other atoms is no step of this molecule's)
     first = [el for el, _ in geos[0]["atoms"]]
     geos = [g for g in geos if [el for el, _ in g["atoms"]] == first]
+    # (a band's output: the geometry it started from alone - its images and the point it refined are in files of their
+    #  own, and the steps of that refinement written here are no path's points; none read as a result)
+    if any(NEB.fullmatch(w) for w in keywords(text)):
+        geos = geos[:1]
     ghosts = geos[0]["ghosts"]
     keep = [i for i in range(len(first)) if i not in ghosts]
     atoms = [first[i] for i in keep]
