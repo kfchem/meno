@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "./molecule";
 import { dielsAlder, molecule, sn2, trueMap } from "./reactionMap.fixtures";
-import { bondChanges, heavyAtomPairs, mapProducts, mapReaction, toAtoms, withMapNumbers, type ReactionMap } from "./reactionMap";
+import { bondChanges, heavyAtomPairs, mapOnto, mapReaction, toAtoms, withMapNumbers, type ReactionMap } from "./reactionMap";
 
 const DA_REACTANT_NAMES = ["C1", "C2", "C3", "C4", "H2", "H3", "H1a", "H1b", "H4a", "H4b", "C5", "C6", "H5a", "H5b", "H6a", "H6b"];
 
@@ -122,7 +122,7 @@ describe("a complete map", () => {
   });
 });
 
-describe("mapProducts (the Reaction step)", () => {
+describe("mapOnto (the Atom map step)", () => {
   const da = dielsAlder();
   const reactant = da.reactants[0];
   const at = (name: string) => DA_REACTANT_NAMES.indexOf(name);
@@ -133,7 +133,7 @@ describe("mapProducts (the Reaction step)", () => {
   };
 
   it("writes the product in the reactants' numbering, every atom where it stands in the product", () => {
-    const { mapped, notMapped } = mapProducts(reactant, [da.product]);
+    const { mapped, notMapped } = mapOnto([reactant], [[da.product]], { bonds: "change" });
     expect(notMapped).toEqual([]);
     expect(mapped).toHaveLength(1);
     const truth = trueMap(DA_REACTANT_NAMES, da.productOrder);
@@ -142,7 +142,7 @@ describe("mapProducts (the Reaction step)", () => {
   });
 
   it("gives the known bond changes of a Diels-Alder: two bonds formed, the diene's and the ene's orders changed, nothing broken", () => {
-    const rows = mapProducts(reactant, [da.product]).mapped[0].changes;
+    const rows = mapOnto([reactant], [[da.product]], { bonds: "change" }).mapped[0].changes;
     const pair = (p: string, q: string) => [at(p), at(q)].sort((x, y) => x - y);
     expect(rows.map((r) => [r.change, ...[r.a1, r.a2], r.before, r.after])).toEqual([
       ["formed", ...pair("C1", "C5"), 0, 1],
@@ -158,43 +158,43 @@ describe("mapProducts (the Reaction step)", () => {
   it("gives the same answer whatever order the product's atoms come in", () => {
     const n = da.product.atoms.length;
     const order = Array.from({ length: n }, (_, i) => (i * 7 + 3) % n);
-    const a = mapProducts(reactant, [da.product]).mapped[0];
-    const b = mapProducts(reactant, [reordered(da.product, order)]).mapped[0];
+    const a = mapOnto([reactant], [[da.product]], { bonds: "change" }).mapped[0];
+    const b = mapOnto([reactant], [[reordered(da.product, order)]], { bonds: "change" }).mapped[0];
     expect(b.changes).toEqual(a.changes);
     expect(b.molecule.atoms).toEqual(a.molecule.atoms);
   });
 
   it("maps each product on its own, numbered by its place, and can give every map", () => {
     const { reactant: r, product: p } = sn2();
-    const two = mapProducts(r, [p, p]);
+    const two = mapOnto([r], [[p], [p]], { bonds: "change" });
     expect(two.mapped.map((x) => x.product)).toEqual([0, 1]);
     // SN2: the C-Cl bond formed, C-Br broken
     expect(two.mapped[0].changes.map((c) => [c.change, c.element1, c.element2])).toEqual([
       ["formed", "C", "Cl"],
       ["broken", "C", "Br"],
     ]);
-    const every = mapProducts(reactant, [da.product], { every: true });
+    const every = mapOnto([reactant], [[da.product]], { bonds: "change", every: true });
     // the Diels-Alder's maps, each once (see "maps every atom, hydrogens included, one to one")
     expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 64 }, (_, i) => i));
   });
 
   it("says why a product that cannot map atom for atom is not passed on, and passes on nothing of it", () => {
     const short: Molecule = { atoms: da.product.atoms.slice(0, -1), bonds: da.product.bonds.filter((b) => b.a1 < da.product.atoms.length - 1 && b.a2 < da.product.atoms.length - 1) };
-    const { mapped, notMapped } = mapProducts(reactant, [short, da.product]);
+    const { mapped, notMapped } = mapOnto([reactant], [[short], [da.product]], { bonds: "change" });
     expect(mapped.map((x) => x.product)).toEqual([1]);
-    expect(notMapped).toEqual([{ product: 0, reason: expect.stringMatching(/15 atoms and the reactants 16/) }]);
+    expect(notMapped).toEqual([{ product: 0, reason: expect.stringMatching(/It has 15 atoms and the reference 16/) }]);
     const flat: Molecule = { atoms: da.product.atoms.map((a) => ({ ...a, z: 0 })).filter((a) => a.el !== "H"), bonds: [] };
     const flatReactant: Molecule = { atoms: reactant.atoms.map((a) => ({ ...a, z: 0 })).filter((a) => a.el !== "H"), bonds: [] };
-    expect(mapProducts(flatReactant, [flat]).notMapped[0].reason).toMatch(/flat drawings/);
+    expect(mapOnto([flatReactant], [[flat]], { bonds: "change" }).notMapped[0].reason).toMatch(/flat drawings/);
   });
 
   it("refuses a product of other elements, as many atoms or not, and says which", () => {
     // SN2's product with its carbon made a fluorine: six atoms either side, but no carbon for the reactants' to map to
     const { reactant: r, product: p, productOrder } = sn2();
     const fluorine = { ...p, atoms: p.atoms.map((a, i) => (productOrder[i] === "C" ? { ...a, el: "F" } : a)) };
-    expect(mapProducts(r, [fluorine])).toEqual({
+    expect(mapOnto([r], [[fluorine]], { bonds: "change" })).toEqual({
       mapped: [],
-      notMapped: [{ product: 0, reason: "The product has 1 F more and 1 C fewer than the reactants: every atom must map to one of its own element." }],
+      notMapped: [{ product: 0, reason: "It has 1 F more and 1 C fewer than the reference: every atom must map to one of its own element." }],
     });
   });
 
@@ -202,7 +202,7 @@ describe("mapProducts (the Reaction step)", () => {
     const { reactant: r, product: p, productOrder } = sn2();
     const [h, cl] = [productOrder.indexOf("H0"), productOrder.indexOf("Cl")];
     const swapped = { ...p, atoms: p.atoms.map((a, i) => (i === h ? { ...a, el: "Cl" } : i === cl ? { ...a, el: "H" } : a)) };
-    const { mapped, notMapped } = mapProducts(r, [swapped], { every: true });
+    const { mapped, notMapped } = mapOnto([r], [[swapped]], { bonds: "change", every: true });
     expect(notMapped).toEqual([]);
     for (const x of mapped) x.molecule.atoms.forEach((a, i) => expect(a.el).toBe(r.atoms[i].el));
     expect(mapped[0].changes.map((c) => [c.change, c.element1, c.element2])).toEqual([
@@ -269,5 +269,33 @@ describe("bond changes across an aromatic ring", () => {
     const r = mapReaction({ reactants: [ring("12")], products: [ring("23")] });
     if ("error" in r) throw new Error(r.message);
     expect(r.changes).toEqual({ formed: [], broken: [], orderChanged: [] });
+  });
+});
+
+describe("mapOnto, its sides and its bonds", () => {
+  it("takes a side of several structures as one, numbered one after another: the SN2's products, CH3Cl and Br-, together", () => {
+    const { reactant: r, product: p } = sn2();
+    // (the product as two structures: all but its Br, then its Br alone)
+    const of = (m: Molecule, keep: number[]): Molecule => ({
+      atoms: keep.map((i) => m.atoms[i]),
+      bonds: m.bonds.filter((b) => keep.includes(b.a1) && keep.includes(b.a2)).map((b) => ({ ...b, a1: keep.indexOf(b.a1), a2: keep.indexOf(b.a2) })),
+    });
+    const br = p.atoms.findIndex((a) => a.el === "Br");
+    const rest = p.atoms.map((_, i) => i).filter((i) => i !== br);
+    const two = mapOnto([r], [[of(p, rest), of(p, [br])]], { bonds: "change" });
+    const whole = mapOnto([r], [[p]], { bonds: "change" });
+    expect(two.notMapped).toEqual([]);
+    expect(two.mapped[0].changes).toEqual(whole.mapped[0].changes);
+    // (the side's atoms one after another: its Br last)
+    expect(two.mapped[0].order[r.atoms.findIndex((a) => a.el === "Br")]).toBe(p.atoms.length - 1);
+  });
+
+  it("with bonds to stay the same, says a map that changes any, and passes nothing of it on", () => {
+    const { reactant: r, product: p } = sn2();
+    const same = mapOnto([r], [[p]], { bonds: "same" });
+    expect(same.mapped).toEqual([]);
+    expect(same.notMapped[0].reason).toMatch(/^The map has bonds .* formed, .* broken, and its bonds are to stay the same\.$/);
+    // (the reactant onto itself: every bond the same)
+    expect(mapOnto([r], [[r]], { bonds: "same" }).mapped).toHaveLength(1);
   });
 });

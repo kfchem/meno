@@ -591,6 +591,18 @@ class HowManySought(unittest.TestCase):
         self.assertIsNone(self.worker.options_of({"options": {"sought": "needed", "count": 12}})["count"])
         self.assertIsNone(self.worker.options_of({"options": {}})["count"])
 
+    def test_takes_as_many_as_the_manifest_lets_a_chemist_ask_for(self):
+        import json
+        manifest = json.loads((WORKER.parent / "manifest.json").read_text(encoding="utf-8"))
+        [role] = [r for r in manifest["roles"] if r.get("role") == "conformers"]
+        [count] = [o for o in role["options"] if o["id"] == "count"]
+        # (one bound, the same in the field and in the worker)
+        self.assertEqual(count["max"], self.worker.MOST_CONFORMERS)
+        self.assertEqual(self.worker.MOST_CONFORMERS, 5000)
+        # (a chain past the old 500 is given what it asks for: 1000, and the most)
+        for n in (501, 1000, 5000):
+            self.assertEqual(self.worker.options_of({"options": {"sought": "fixed", "count": n}})["count"], n)
+
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class SameConformer(unittest.TestCase):

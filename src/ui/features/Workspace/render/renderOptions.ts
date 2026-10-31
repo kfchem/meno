@@ -9,7 +9,7 @@
  * under it and are the chemist's to change for the one render.
  */
 import type { Option, OptionValues } from "../../../../lib/options";
-import { MENO_MOTIONS, type LookDecl, type MotionDecl } from "../../../../lib/plugins/manifest";
+import { MENO_MOTIONS, type LookDecl, type MotionDecl, type Shortest } from "../../../../lib/plugins/manifest";
 import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, Sticks, SurfaceMaterial } from "./renderScene";
 
 /** What a render is: a picture, or a film. */
@@ -61,6 +61,71 @@ const OUTLINE_COLOURS = [
   { value: "grey", label: "Grey" },
 ];
 
+/** How short a film of each of Meno's own motions can be and still be read, in seconds; those a renderer makes declare theirs. */
+const MENO_SHORTEST: Record<string, Shortest> = { turn: { film: 3 }, frames: { film: 2 }, vibration: { film: 2 } };
+
+/** The longest a film is asked to be, in seconds - unless its shortest is longer, as many molecules' changes can be. */
+const LONGEST = 60;
+
+/**
+ * The shortest a film can be (docs/RENDER.md, *How long a film can be*), in whole seconds: its motion's shortest - its Loop's,
+ * where it loops and that is longer - and, for a motion that changes one molecule into the next, each change's for each change:
+ * one fewer than the `molecules`, or as many, where the film loops back to the first. A motion that says none, 1 s.
+ */
+export function shortestFilm(motion: string | undefined, declared: readonly MotionDecl[] | undefined, molecules: number, loop: boolean): number {
+  const s = (motion && (MENO_SHORTEST[motion] ?? declared?.find((d) => d.id === motion)?.shortest)) || {};
+  const changes = s.change ? Math.max(0, loop ? molecules : molecules - 1) : 0;
+  const film = (loop ? Math.max(s.loop ?? 0, s.film ?? 0) : s.film) ?? 0;
+  return Math.max(1, Math.ceil(film + (s.change ?? 0) * changes - 1e-9));
+}
+
+/** A film's length as the card bounds it: its shortest, how many molecules that is for (where it counts them), and whether a length chosen before was raised to it. */
+export type Length = { shortest: number; molecules?: number; raised?: boolean };
+
+/**
+ * A film's length as the card asks it: the shortest its motion, the renderer's options (Loop, where `loopWhen` says) and the
+ * `molecules` allow - and Render's choices with the length raised to it, where it was chosen shorter. A picture's, unbounded.
+ */
+export function filmLength(
+  kind: Kind,
+  picked: OptionValues,
+  theirs: OptionValues,
+  declared: readonly MotionDecl[] | undefined,
+  loopWhen: { id: string; in: readonly (string | number | boolean)[] } | undefined,
+  molecules: number,
+): { length: Length; values: OptionValues } {
+  if (kind !== "film") return { length: { shortest: 1 }, values: picked };
+  const motion = typeof picked.motion === "string" ? picked.motion : undefined;
+  const loop = !!loopWhen && loopWhen.in.includes(theirs[loopWhen.id]);
+  const shortest = shortestFilm(motion, declared, molecules, loop);
+  const raised = Number(picked.seconds) < shortest;
+  const counted = declared?.find((d) => d.id === motion)?.shortest?.change != null;
+  return { length: { shortest, ...(counted ? { molecules } : {}), raised }, values: raised ? { ...picked, seconds: shortest } : picked };
+}
+
+/**
+ * Why a film is refused before it is begun, however it was asked for - the card, or an ask saved or written: shorter than its
+ * motion can be read in (`filmLength`), said with how long it needs to be. None, where it is long enough or is a picture.
+ */
+export function tooShort(
+  ask: Pick<RenderAsk, "kind" | "motion" | "seconds">,
+  theirs: OptionValues,
+  declared: readonly MotionDecl[] | undefined,
+  loopWhen: { id: string; in: readonly (string | number | boolean)[] } | undefined,
+  molecules: number,
+): string | undefined {
+  if (ask.kind !== "film") return undefined;
+  const { length } = filmLength("film", { motion: ask.motion ?? "", seconds: ask.seconds ?? 0 }, theirs, declared, loopWhen, molecules);
+  return length.raised ? `This film needs at least ${length.shortest} s${length.molecules ? ` for ${length.molecules} molecules` : ""}` : undefined;
+}
+
+/** What the card says under a film's length: its shortest, and what it is for; or that the length was raised to it. */
+export function lengthNote(l: Length): string | undefined {
+  if (l.shortest <= 1) return undefined;
+  const of = l.molecules ? ` for ${l.molecules} molecules` : "";
+  return l.raised ? `Raised to ${l.shortest} s, the shortest${of}` : `At least ${l.shortest} s${of}`;
+}
+
 /** What a look is made of: each of its parts. */
 export type LookParts = { molecules: MoleculeMaterial; surfaces: SurfaceMaterial; shading: Shading; outlines: Outlines; outline: number; outline_colour: "black" | "white" | "grey"; band: number; sticks: Sticks };
 
@@ -105,7 +170,14 @@ function lookChoices(looks: readonly LookDecl[]) {
  * Render's own choices, Meno's whoever renders: a picture's or a film's size and shape, a film's motion, length and rate, its look
  * - and, folded under it, the parts the look is made of. `looks`: those the renderer can make; none given, all.
  */
-export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: boolean, declared?: readonly LookDecl[], declaredMotions?: readonly MotionDecl[]): Option[] {
+export function renderOptions(
+  kind: Kind,
+  motions: readonly Motion[],
+  surfaces: boolean,
+  declared?: readonly LookDecl[],
+  declaredMotions?: readonly MotionDecl[],
+  length: Length = { shortest: 1 },
+): Option[] {
   const film = kind === "film";
   // (Meno's own motions the molecules can make, then those the renderer declares, in its order: Meno keeps no list of them)
   const moving = [...motions.map((m) => ({ value: m, label: MOTIONS[m] ?? m })), ...(declaredMotions ?? []).filter((d) => !motions.includes(d.id)).map((d) => ({ value: d.id, label: d.label }))];
@@ -117,7 +189,17 @@ export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: 
     ...(film && moving.length ? [{ id: "motion", label: "Moving", type: "choice" as const, choices: moving, default: moving[0].value }] : []),
     ...(film
       ? [
-          { id: "seconds", label: "Length", type: "number" as const, default: 8, min: 1, max: 60, step: 1, unit: "s" },
+          {
+            id: "seconds",
+            label: "Length",
+            type: "number" as const,
+            default: Math.max(8, length.shortest),
+            min: length.shortest,
+            max: Math.max(LONGEST, length.shortest),
+            step: 1,
+            unit: "s",
+            ...(lengthNote(length) ? { note: lengthNote(length) } : {}),
+          },
           { id: "fps", label: "Frames a second", type: "choice" as const, choices: ["24", "30", "60"].map((v) => ({ value: v, label: v })), default: "30" },
         ]
       : []),

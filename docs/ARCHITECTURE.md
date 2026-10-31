@@ -611,8 +611,12 @@ not taken from either.
   order, and a part's layer covered the parts on the layers below it.
   Lines are a hair on the screen at any zoom: the layer's `--hair` is set
   each frame from the zoom, and wires are made as wide on the screen for
-  it. Colours, cards and icons are Meno's own (WORKFLOWS.md, *How it
-  looks*): its palette, its cards' hairline borders, Heroicons' outline
+  it. The layer is laid out in its own pixels, which Chromium rounds to
+  before it scales them: ports are laid out in the screen's, the layer's
+  `--scale` undone on them, and the cards' and sets' hairlines are inset
+  shadows, not borders (WORKFLOWS.md, *Laid out in the screen's pixels*).
+  Colours, cards and icons are Meno's own (WORKFLOWS.md, *How it
+  looks*): its palette, its cards' hairlines, Heroicons' outline
   icons (`workflow/icons.tsx`).
 - **Who does a step** (`workflow/doers.ts`): a step is a plugin's - or
   Meno's, which stands among them for the steps on entries alone - and
@@ -812,7 +816,9 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.
 - *Files* in Settings says who reads each kind: one reader (`readerFor`:
-  the one chosen, else Meno where Meno reads it, else the first added), and
+  the one chosen, else Meno where Meno reads it, else the plugin added whose
+  own program writes it - its manifest's `writtenBy` - else the first
+  added), and
   the readers chosen to read it as well (`alsoReadersFor`), kept as
   `files` in the settings.
 - `lib/calc/workers.ts` starts a reader's worker the first time it is asked

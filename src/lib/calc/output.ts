@@ -7,7 +7,8 @@
  * in the one general form (results.ts).
  */
 import { warningsOf, type Warning } from "./warnings";
-import { readResults, type Result } from "./results";
+import { readResults, symmetryText, type MoleculeResult, type Result } from "./results";
+import { standardWeight } from "../chem/isotopes";
 import { readerIdOfLine } from "./catalog";
 import type { StructureRead } from "../io/structures";
 
@@ -43,6 +44,8 @@ export type ReaderOutput = {
   multiplicity?: number | null;
   /** Its atoms' elements, in the file's order. */
   atoms: string[];
+  /** Each atom's mass, in daltons, as the program used it - where it prints them: what a dipole is taken about the centre of mass with (`calcOf`). */
+  masses?: number[] | null;
   /** Each geometry it went through - an optimisation's steps - in ångströms: x, y, z of every atom. */
   frames: number[][];
   /** Each geometry's energy, in hartrees, where every one has one. */
@@ -163,7 +166,7 @@ export function framesOf(out: ReaderOutput): number {
  * unless it says another.
  */
 export function calcOf(out: ReaderOutput, readers: readonly string[], source?: CalcSource, unread?: CalcInfo["unread"]): CalcInfo {
-  const results = readResults(out.results, out.atoms.length, framesOf(out), readers[0] ? readerIdOfLine(readers[0]) : undefined);
+  const results = inMenosForm(readResults(out.results, out.atoms.length, framesOf(out), readers[0] ? readerIdOfLine(readers[0]) : undefined), out);
   const said = (k: "program" | "version" | "method" | "basis" | "solvation") => text(out[k]);
   return {
     readers: [...readers],
@@ -185,6 +188,69 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
     ...(imaginaryOf(out.imaginary) ? { imaginary: imaginaryOf(out.imaginary) } : {}),
   };
 }
+
+/** The masses an output gives its atoms, where it gives one to each, each a mass; otherwise none. */
+function massesOf(out: Pick<ReaderOutput, "atoms" | "masses">): number[] | undefined {
+  const m = out.masses;
+  return Array.isArray(m) && m.length === out.atoms.length && m.every((v) => isNum(v) && v > 0) ? [...m] : undefined;
+}
+
+/** Debye in an elementary charge times an ångström: e = 1.602176634e-19 C (SI 2019, exact), 1 D = 1e-21/c C m (c exact). */
+const DEBYE_PER_E_ANGSTROM = 4.803204712570263;
+/** What a charged molecule's dipole is called once it is taken about its centre of mass (`aboutCentre`). */
+export const ABOUT_CENTRE = "Dipole moment about the centre of mass";
+
+/**
+ * A charged molecule's dipole, which depends on the point it is taken about, taken about the centre of mass of the
+ * geometry it is of: the centre the program printed with it; else the one its atoms' masses give at the output's last
+ * geometry (`xyz`) - as the program used them, else the elements' standard atomic weights (lib/chem/isotopes) -
+ * μ' = μ - q (C - O) - and said to be, its origin now that centre. A neutral one's, or one taken about the centre
+ * already, as it was; one that says no vector or origin, or with no centre to take it about, as given.
+ */
+function aboutCentre(r: MoleculeResult, xyz: readonly number[] | undefined, masses: readonly number[] | undefined, charge: number | undefined): MoleculeResult {
+  if (r.quantity !== "dipole" || !r.vector || !r.origin || !charge) return r;
+  const centre = r.centre ?? centreOf(xyz, masses);
+  if (!centre) return r;
+  const vector = r.vector.map((v, k) => v - charge * (centre[k] - r.origin![k]) * DEBYE_PER_E_ANGSTROM) as [number, number, number];
+  const value = Math.hypot(...vector);
+  return Number.isFinite(value) ? { ...r, label: ABOUT_CENTRE, value, vector, origin: centre } : r;
+}
+
+/** The centre of mass of a geometry, with each atom's mass; none without one to each atom. */
+function centreOf(xyz: readonly number[] | undefined, masses: readonly number[] | undefined): [number, number, number] | undefined {
+  if (!xyz || !masses || xyz.length !== 3 * masses.length) return undefined;
+  const total = masses.reduce((a, b) => a + b, 0);
+  return [0, 1, 2].map((k) => masses.reduce((a, m, i) => a + m * xyz[3 * i + k], 0) / total) as [number, number, number];
+}
+
+/**
+ * An output's results in Meno's own form, each as its reader gave it otherwise: a charged molecule's dipole about the
+ * centre of mass of the output's last geometry (`aboutCentre`); a point group and a Mulliken symbol - a value or a
+ * list's column of them, as a symmetry, or the thermochemistry's point group - written as Meno writes one (results
+ * `symmetryText`), for display and for every comparison.
+ */
+export function inMenosForm(results: Result[], out: Pick<ReaderOutput, "atoms" | "frames" | "masses" | "charge">): Result[] {
+  const xyz = [...(out.frames ?? [])].reverse().find((f) => Array.isArray(f) && f.length === 3 * out.atoms.length);
+  // (the masses the program used, else the elements' standard atomic weights - each element's, or none)
+  const standard = out.atoms.map((el) => standardWeight(el));
+  const masses = massesOf(out) ?? (standard.every((m): m is number => m != null) ? standard : undefined);
+  const charge = Number.isInteger(out.charge) ? out.charge! : undefined;
+  const sym = (v: unknown) => (typeof v === "string" ? symmetryText(v) : v);
+  return results.map((r) => {
+    if (r.on === "molecule") {
+      const moved = aboutCentre(r, xyz, masses, charge);
+      return moved.quantity === "symmetry" || moved.id === POINT_GROUP ? { ...moved, value: sym(moved.value) as MoleculeResult["value"] } : moved;
+    }
+    if (r.on === "list" && r.columns.some((c) => c.quantity === "symmetry")) {
+      const which = r.columns.map((c) => c.quantity === "symmetry");
+      return { ...r, rows: r.rows.map((row) => ({ ...row, cells: row.cells.map((c, k) => (which[k] ? (sym(c) as typeof c) : c)) })) };
+    }
+    return r;
+  });
+}
+
+/** The point group a frequency job's thermochemistry took, as every reader names it (docs/PLUGINS.md, *The contract*). */
+const POINT_GROUP = "thermo.point-group";
 
 /** An output's name, kind, SHA-256 and place as a file carries them; otherwise none. */
 function sourceOf(v: unknown): CalcSource | undefined {

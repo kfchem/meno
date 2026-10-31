@@ -81,24 +81,25 @@ export const inputLead = (name: string) => (8 + 6 * name.length + 4) * PX;
 /** A port's diameter. */
 export const PORT = 11 * PX;
 
-/** How large a port is on the screen, in hairlines, where the page is near. */
-const PORT_HAIRS = 9;
+/** How large a port is on the screen, in its pixels, where the page is near. */
+const PORT_SCREEN_PX = 9;
 /** The most a port may be, as a share of its set's or its card's height, on the page. */
 export const PORT_SHARE = 1 / 6;
 
 /**
- * How large a port is, in the page's pixels on its layer: as large on the
- * screen as `PORT_HAIRS` hairlines while the page is near; zoomed out, never
- * more than the port's own size on the page (look `PORT`, 11 px) - it
- * shrinks with the page from there - nor than `PORT_SHARE` of its set's or
- * card's height (`of`, page px). The same at every zoom otherwise: round, a
- * ring a hair thick - or a fifth of it across, where it is that small - or
+ * How large a port is, in the screen's pixels - it is laid out in them,
+ * the page's layer's scale (`--scale`, Workflow2D) undone on it (Port): as
+ * large as `PORT_SCREEN_PX` while the page is near; zoomed out, never more
+ * than the port's own size on the page (look `PORT`, 11 px) - it shrinks
+ * with the page from there - nor than `PORT_SHARE` of its set's or card's
+ * height (`of`, page px). The same at every zoom otherwise: round, a ring a
+ * pixel thick - or a fifth of it across, where it is that small - or
  * filled, as its state says (the maintainer, 2026-10-28: zoomed out, ports
  * were far too big for their sets).
  */
 export function portSize(of?: number): string {
   const most = Math.min(PORT / PX, of != null && of > 0 ? of * PORT_SHARE : Infinity);
-  return `min(calc(var(--hair, 1px) * ${PORT_HAIRS}), ${most.toFixed(2)}px)`;
+  return `min(${PORT_SCREEN_PX}px, calc(var(--scale, 1) * ${most.toFixed(2)}px))`;
 }
 
 /**
