@@ -1119,9 +1119,10 @@ The same for every plugin and for Meno's own parts:
     reference state among them, as a free energy differs by state (xtb
     6.7.1 run here: the bar-gas state's free energy 1.90 kcal/mol above
     the default's, RT ln 24.5); CREST's `ALPB(water)`, which is all it
-    echoes. `none` where the output says no model was used - xtb's
-    program call, or CREST's echo of its options, holding no option that
-    asks for one, and no model printed. Left out where the output does not
+    echoes. `none` where the output says no model was used - xtb's setup
+    box ("GBSA solvation false"), or, where it prints none (GFN-FF), its
+    program call holding no option that asks for one and no model
+    printed; CREST's echo of its options holding none. Left out where the output does not
     say: never filled in from the step's options. A run whose solvation
     is not what its step asked for is refused, saying both;
   - the method without it: `GFN2-xTB`, never `GFN2-xTB (ALPB, water)` -
@@ -1130,9 +1131,8 @@ The same for every plugin and for Meno's own parts:
   - with a frequency job's thermochemistry, as results of their own: the
     temperature it is at, `thermo.temperature` (K) - of several, the one
     the program used; the pressure, `thermo.pressure` (atm), only where
-    the program prints one (xtb prints none, and its documentation states
-    none); and how it was worked out, `thermo.treatment`, a text in the
-    program's words, its units as Meno writes them (cm⁻¹, 2026-10-31): xtb's `rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹,
+    the program prints one; and how it was worked out, `thermo.treatment`,
+    a text in the program's words, its units as Meno writes them (cm⁻¹, 2026-10-31): xtb's `rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹,
     scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
     ORCA's `quasi-RRHO (Grimme), 100 cm⁻¹`, from where it says its
     vibrational entropy is the QRRHO of S. Grimme and at which reference

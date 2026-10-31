@@ -37,6 +37,7 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_plugin_orca.py
       - run: python3 -m unittest scripts/calc/test_reader_orca.py
       - run: python3 -m unittest scripts/calc/test_plugin_xtb.py
+      - run: python3 -m unittest scripts/calc/test_reader_xtb.py
       - run: python3 -m unittest scripts/calc/test_plugin_crest.py
       - run: python3 -m unittest scripts/calc/test_plugin_blender.py
       - run: python3 -m unittest scripts/calc/test_plugin_nci.py
