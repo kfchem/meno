@@ -64,6 +64,10 @@ def numbers(text):
     return [number(t) for t in NUMBERS.findall(text)]
 
 
+# how Gaussian's output begins, its first line: " Entering Gaussian System, Link 0=g16"
+BANNER = " Entering Gaussian System"
+
+
 # --- a file's jobs, and how a run went -----------------------------------------
 
 
@@ -970,7 +974,8 @@ FORCES = "Forces (Hartrees/Bohr)"
 
 def rms_gradients(lines, frames, ends):
     """Each geometry's RMS gradient, in hartrees per bohr - the root mean square of the forces Gaussian printed at it
-    (a force is the gradient's negative) - where every geometry has them; else none."""
+    (a force is the gradient's negative) - not known for one it printed none at (a run cut short after its last SCF);
+    none where it printed them at none."""
     out = []
     for i, (k, zs, _) in enumerate(frames):
         rms = None
@@ -982,10 +987,8 @@ def rms_gradients(lines, frames, ends):
                     values += [number(v) for v in t[2:5]]
                 if len(values) == 3 * len(zs) and all(v is not None for v in values):
                     rms = (sum(v * v for v in values) / len(values)) ** 0.5
-        if rms is None:
-            return []
         out.append(rms)
-    if not out:
+    if all(v is None for v in out):
         return []
     return [{"id": "rms-gradient", "on": "frames", "group": "Optimisation", "label": "RMS gradient", "unit": "Eh/bohr", "digits": 6, "values": out}]
 
@@ -1268,6 +1271,9 @@ def read(name, text, followed=False):
         raise ValueError("there is nothing to read")
     text = text.replace("\r\n", "\n")
     lines = text.split("\n")
+    # (Gaussian's own output, as its first line says: another program's written in a form like its own is not read here)
+    if not any(line.startswith(BANNER) for line in lines[:5]):
+        raise ValueError("it is no Gaussian output: it does not begin as Gaussian's do")
     frames = geometries(lines)
     if not frames:
         raise ValueError("it holds no molecule")

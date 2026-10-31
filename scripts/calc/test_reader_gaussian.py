@@ -362,6 +362,22 @@ class Geometries(unittest.TestCase):
         self.assertEqual(results(o)["charges.mulliken"]["values"], [-0.4, 0.4])
 
 
+class NotGaussian(unittest.TestCase):
+    def test_another_program_s_output_in_a_form_like_gaussian_s_is_refused(self):
+        # (one that writes its frequencies as Gaussian 98 did, with no banner of Gaussian's: that program's to read)
+        text = "\n".join(orientation(WATER) + frequencies())
+        with self.assertRaisesRegex(ValueError, "no Gaussian output"):
+            reader.read("g98.out", text)
+
+
+class CutShort(unittest.TestCase):
+    def test_a_geometry_with_no_forces_has_no_rms_gradient_the_others_theirs(self):
+        text = "\n".join(head("#p hf/3-21g opt") + orientation(WATER) + scf(-75.5) + forces([(8, 0.0, 0.0, 0.03), (1, 0.0, 0.0, 0.0), (1, 0.0, 0.0, 0.0)])
+                         + orientation(WATER_2) + scf(-75.6))
+        g = results(reader.read("w.log", text))["rms-gradient"]["values"]
+        self.assertEqual((round(g[0], 6), g[1]), (0.01, None))
+
+
 class Energies(unittest.TestCase):
     def test_the_most_correlated_each_geometry_has_as_printed(self):
         text = "\n".join(head("#p mp2/sto-3g") + orientation(WATER) + scf(-74.96, "RHF")
