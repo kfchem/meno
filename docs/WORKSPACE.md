@@ -735,17 +735,35 @@ Each result says what it belongs to, and Meno puts it there:
 - **A value says what quantity it is,** in Meno's unit for it - an energy
   in hartrees, a charge in e, a spin population in e (signed, as a charge
   is), a wavenumber in cm⁻¹ (an imaginary one
-  negative), a length in ångströms, a dipole in debye, a number, a text -
-  and Meno writes it, the same way whichever plugin gave it. Any other
-  gives its unit, and is written with it.
+  negative), a length in ångströms, a dipole in debye, a number, a text,
+  a symmetry - and Meno writes it, the same way whichever plugin gave it.
+  Any other gives its unit, and is written with it.
+- **A symmetry is in standard notation** (2026-10-31): a point group
+  (C2v, D3h, C∞v, D∞h) or a Mulliken symbol (A1, Bu, B1g, A', E'', Σg,
+  Πu) - a value of a symmetry, a list's column of them, and the
+  thermochemistry's point group. A reader writes its program's own
+  spellings in it (a word for a Greek letter, a letter for ∞); Meno puts
+  the case right whatever it was printed in - the first letter upper, the
+  rest lower: "c2v", "C2V" and "C2v" are one - for display and for every
+  comparison, a barrier's of its two sides' point groups among them.
 - **A charged molecule's dipole is taken about its centre of mass**
   (2026-10-14). An ion's dipole depends on the point it is taken about -
   H3O+ moved 6 Å from the origin its program took it about reads 28.9 D
   there, 2.1 D about itself - and programs take it about different points
   (the origin of the coordinates, the centre of nuclear charge, the centre
-  of mass). So the plugin takes it again about the centre of mass of the
-  geometry it is of, and calls it *Dipole moment about the centre of
-  mass* wherever it is shown. A neutral molecule's is the program's own.
+  of mass). Its reader gives it as the program printed it, with its
+  components (`vector`, in debye) and the point it was taken about
+  (`origin`, in ångströms), and the centre of mass where the program
+  printed one (`centre`); and the output gives each atom's mass where the
+  program printed them (`masses`, daltons). Meno takes it again about the
+  centre of mass (2026-10-31: Meno's rule, once kept by each reader) - the
+  one printed, else the one those masses give at the output's last
+  geometry, else the one the elements' standard atomic weights give
+  (NIST's, lib/chem/isotopes: an interval's midpoint, an element with no
+  stable nuclide its listed nuclide's mass) - and calls it *Dipole moment about the centre of mass*
+  wherever it is shown, its origin then that centre, so that a workspace
+  read again takes it nowhere else. A neutral molecule's is the program's
+  own; so is a charged one's where there is no centre to take it about.
 - **A list's row can point at atoms, a frame or a motion.** Pointed at,
   its atoms are marked; chosen, its frame is shown, or the molecule moves
   in it. Vibrations are a list whose rows move the molecule - no arrows
@@ -753,6 +771,11 @@ Each result says what it belongs to, and Meno puts it there:
   masses, IR intensities and Raman activities where it gives them, and
   no empty column where it does not (2026-10-14). These are what Meno can do with a row, and more come
   as Meno learns them: a surface, for an orbital's row.
+- **A list that opens on a row keeps the rows about it** (2026-10-31):
+  the ten up to that one, it among them, and the ten after - an orbitals'
+  list, given in full and opening on the LUMO, keeps the ten virtual
+  orbitals from it and the ten occupied below - and says so where it
+  shows them: "rows 22–41 of 50". Read again, it is kept as it was.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the
