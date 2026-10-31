@@ -24,7 +24,7 @@ const PLUGINS = join(ROOT, "src-tauri/resources/plugins");
  */
 const ALLOWED: { word: string; why: string; files?: string[] }[] = [
   // (the kinds of step are Meno's: workflow/kinds; a plugin's manifest only says which it fills)
-  ...["check-structures", "conformers", "descriptors", "duplicates", "energy", "frequencies", "generate", "nci", "optimise", "path-search", "reaction-path", "render", "saddle-point", "stereoisomers"].map((word) => ({ word, why: "a kind of step: Meno defines it (workflow/kinds), a plugin only names it to say it fills it" })),
+  ...["check-structures", "conformers", "descriptors", "duplicates", "energy", "frequencies", "generate", "minimise", "nci", "optimise", "path-search", "reaction-path", "render", "saddle-point", "stereoisomers"].map((word) => ({ word, why: "a kind of step: Meno defines it (workflow/kinds), a plugin only names it to say it fills it" })),
   // (the materials of Meno's scene file, the vocabulary a look's parts are made of - lib/plugins/manifest `LookParts`)
   ...["clay"].map((word) => ({ word, why: "a material of the scene Meno writes (render/renderScene), which a look's parts name" })),
   { word: "python", why: "the kind of environment Meno runs a plugin's worker in, and a language its text colouring knows" },

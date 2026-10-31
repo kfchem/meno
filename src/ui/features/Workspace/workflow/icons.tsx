@@ -184,6 +184,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M7 8.8 H13 M7 11.7 H13" />
     </>
   ),
+  // (a minimum, held: Optimise's well, its floor hatched as Restraints' wall)
+  heldMinimum: (
+    <>
+      <path d="M2.5 4 C5 16.5, 15 16.5, 17.5 4" />
+      <circle cx="10" cy="11.5" r="1.9" fill="currentColor" stroke="none" />
+      <path d="M6.4 14.6 l-1.6 2.2 M8.9 15.3 l-1.6 2.2 M11.4 15.3 l-1.6 2.2 M13.9 14.6 l-1.6 2.2" />
+    </>
+  ),
   // (two atoms held to a wall: restraints)
   held: (
     <>
@@ -234,6 +242,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M8.5 10 H11.5" strokeWidth={2.2} />
     </>
   ),
+  // (a barrier's height above its start, measured)
+  height: (
+    <>
+      <path d="M6 16.5 H7.5 C10 16.5, 10.3 5, 13 5 C15.4 5, 15.8 12.5, 18 12.5" />
+      <path d="M3 16.5 V5.4 M1.5 7.2 L3 5.2 L4.5 7.2 M1.5 16.5 H4.5" />
+      <path d="M5.2 5 H10.6" strokeDasharray="1.2 1.6" strokeWidth={1.1} />
+    </>
+  ),
   // (two values, summed)
   sum: (
     <>
@@ -264,6 +280,14 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M2.5 17 C5 5, 15 5, 17.5 17" />
       <circle cx="10" cy="6.9" r="1.9" fill="currentColor" />
       <path d="M10 17.2 V10.6 M7.6 12.6 L10 10.2 L12.4 12.6" strokeWidth={2} />
+    </>
+  ),
+  // (levels made one, lower than any: an ensemble's energy)
+  ensemble: (
+    <>
+      <path d="M2.5 4 H6.5 M2.5 7.5 H6.5 M2.5 11 H6.5 M2.5 14.5 H6.5" />
+      <path d="M6.5 4 L12 16 M6.5 7.5 L12 16 M6.5 11 L12 16 M6.5 14.5 L12 16" strokeWidth={0.9} />
+      <path d="M12 16 H17.5" strokeWidth={2.2} />
     </>
   ),
 };

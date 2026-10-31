@@ -27,12 +27,15 @@ from rdkit import rdBase  # noqa: E402
 def main():
     with open(sys.argv[1], encoding="utf-8") as f:
         given = json.load(f)
-    mol = worker.mol_of(given)
+    rows = worker.restraint_rows(given.get("restraints"), len(given.get("atoms") or []))
+    mol = worker.mol_of(given, worker.held_apart(given, rows))
     how = worker.options_of({"options": given.get("options") or {}})
     # (as many as the molecule needs, where the options ask for no number of their own: said here, so that the log has it)
     how["count"] = how["count"] or worker.sought(mol)
     print(f"RDKit {rdBase.rdkitVersion}: up to {how['count']} conformers of {mol.GetNumAtoms()} atoms, {how['field']}", flush=True)
-    made = worker.conformers(mol, **how)
+    if rows:
+        print(f"with {worker.restraints_words(rows)}", flush=True)
+    made = worker.conformers(mol, **how, rows=rows)
     print(f"{len(made['frames'])} kept", flush=True)
     with open(worker.CONFORMERS_OUT, "w", encoding="utf-8") as f:
         json.dump({"version": rdBase.rdkitVersion, **made}, f)

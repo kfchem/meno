@@ -9,6 +9,8 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+# (a question about the network is answered by the person at the computer, never by a run)
+Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1")
 
 Add-Type -TypeDefinition @'
 using System;
@@ -40,6 +42,8 @@ public static class MacGui {
   [DllImport(CF)] static extern IntPtr CFDictionaryGetValue(IntPtr d, IntPtr key);
   [DllImport(CF)] [return: MarshalAs(UnmanagedType.I1)] static extern bool CFNumberGetValue(IntPtr n, long type, out long v);
   [DllImport(CF)] [return: MarshalAs(UnmanagedType.I1)] static extern bool CFNumberGetValue(IntPtr n, long type, out double v);
+  [DllImport(CF)] static extern ulong CFGetTypeID(IntPtr o);
+  [DllImport(CF)] static extern ulong CFStringGetTypeID();
   [DllImport(CF)] static extern IntPtr CFStringCreateWithCString(IntPtr alloc, byte[] s, uint encoding);
   [DllImport(CF)] [return: MarshalAs(UnmanagedType.I1)] static extern bool CFStringGetCString(IntPtr s, byte[] buf, long size, uint encoding);
 
@@ -269,6 +273,102 @@ public static class MacGui {
     } finally { CFRelease(sys); }
   }
 
+  // What Accessibility read of a part, for the guard against answering a
+  // question about the network (MenoConsent.psm1): the part and what it sits
+  // in, "role\tname" each, itself first, a few levels up - or why it could
+  // not be read, which is never taken for a part that is not the yes.
+  public class Lookup { public string[] Chain = new string[0]; public string Error; }
+
+  const int AXNoValue = -25212;   // kAXErrorNoValue: no value there - for the focus, nothing has the keys
+
+  // Why a lookup failed, or null where it did not: for the focus, no value is
+  // nothing focused, which is no failure.
+  public static string LookupError(int err, bool focus, string what) {
+    if (err == 0) return null;
+    if (focus && err == AXNoValue) return null;
+    return "AXError " + err + " " + what;
+  }
+
+  // The part of a window at a point.
+  public static Lookup ChainAt(double x, double y) {
+    var r = new Lookup();
+    IntPtr sys = AXUIElementCreateSystemWide();
+    if (sys == IntPtr.Zero) { r.Error = "no system-wide Accessibility element"; return r; }
+    try {
+      IntPtr el;
+      int err = AXUIElementCopyElementAtPosition(sys, (float)x, (float)y, out el);
+      r.Error = LookupError(err, false, "asking what is at the point");
+      if (r.Error == null && el == IntPtr.Zero) r.Error = "nothing given for the point";
+      if (r.Error != null) return r;
+      try { r.Chain = Chain(el); } finally { CFRelease(el); }
+    } finally { CFRelease(sys); }
+    return r;
+  }
+
+  // The part of an app that has the keys: an empty chain where nothing has.
+  public static Lookup FocusedChain(int pid) {
+    var r = new Lookup();
+    IntPtr app = AXUIElementCreateApplication(pid);
+    if (app == IntPtr.Zero) { r.Error = "no Accessibility element for the app"; return r; }
+    try {
+      IntPtr el;
+      int err = AXUIElementCopyAttributeValue(app, Str("AXFocusedUIElement"), out el);
+      r.Error = LookupError(err, true, "asking what has the keys");
+      if (r.Error != null || err == AXNoValue) return r;
+      if (el == IntPtr.Zero) { r.Error = "nothing given for what has the keys"; return r; }
+      try { r.Chain = Chain(el); } finally { CFRelease(el); }
+    } finally { CFRelease(app); }
+    return r;
+  }
+
+  static string[] Chain(IntPtr el) {
+    var links = new List<string>();
+    IntPtr e = el;
+    for (int i = 0; i < 6 && e != IntPtr.Zero; i++) {
+      string role = AxString(e, "AXRole") ?? "";
+      links.Add(role + "\t" + NameOf(e, role));
+      IntPtr up;
+      if (AXUIElementCopyAttributeValue(e, Str("AXParent"), out up) != 0) up = IntPtr.Zero;
+      if (e != el) CFRelease(e);
+      e = up;
+    }
+    if (e != IntPtr.Zero && e != el) CFRelease(e);
+    return links.ToArray();
+  }
+
+  // What a reader of the window calls a part: its title, its description,
+  // a text's words - or, for a button named by nothing else, the words in it.
+  static string NameOf(IntPtr e, string role) {
+    string name = AxString(e, "AXTitle");
+    if (string.IsNullOrEmpty(name)) name = AxString(e, "AXDescription");
+    if (string.IsNullOrEmpty(name) && role == "AXStaticText") name = AxString(e, "AXValue");
+    if (string.IsNullOrEmpty(name) && role == "AXButton") {
+      IntPtr kids;
+      if (AXUIElementCopyAttributeValue(e, Str("AXChildren"), out kids) == 0 && kids != IntPtr.Zero) {
+        try {
+          var words = new List<string>();
+          long n = CFArrayGetCount(kids);
+          for (long i = 0; i < n && i < 8; i++) {
+            IntPtr k = CFArrayGetValueAtIndex(kids, i);
+            if ((AxString(k, "AXRole") ?? "") == "AXStaticText") { string w = AxString(k, "AXValue"); if (!string.IsNullOrEmpty(w)) words.Add(w); }
+          }
+          name = string.Join(" ", words);
+        } finally { CFRelease(kids); }
+      }
+    }
+    return (name ?? "").Replace("\t", " ");
+  }
+
+  static string AxString(IntPtr e, string attr) {
+    IntPtr v;
+    if (AXUIElementCopyAttributeValue(e, Str(attr), out v) != 0 || v == IntPtr.Zero) return null;
+    try {
+      if (CFGetTypeID(v) != CFStringGetTypeID()) return null;
+      byte[] buf = new byte[4096];
+      return CFStringGetCString(v, buf, buf.Length, Utf8) ? System.Text.Encoding.UTF8.GetString(buf, 0, Array.IndexOf(buf, (byte)0)) : null;
+    } finally { CFRelease(v); }
+  }
+
   // The process a process answers to - a web view's content process, the
   // app it draws for.
   public static int ResponsiblePid(int pid) {
@@ -424,6 +524,8 @@ Assert-MenoAccess
 
 $script:Window = [uint32] 0
 $script:MenoPid = 0
+# (whether the web view has built its page's parts for Accessibility, which it does only once asked: the guard's first lookup in a run waits for them)
+$script:PageRead = $false
 # Pixels of a shot per point of screen: 2 on a Retina display. Measured off a
 # real shot rather than assumed; see Get-ShotScale.
 $script:Scale = 0.0
@@ -478,6 +580,8 @@ function Get-MenoWindow {
         foreach ($p in @(Get-Process -Name $ProcessName -ErrorAction SilentlyContinue)) {
             $w = [MacGui]::MainWindowOf($p.Id)
             if ($w) {
+                # (a new copy of Meno: its page's parts asked for again before the guard trusts a lookup)
+                if ($script:MenoPid -ne $p.Id) { $script:PageRead = $false }
                 $script:MenoPid = $p.Id
                 $script:Window = $w.Id
                 return $script:Window
@@ -635,6 +739,50 @@ function Assert-MenoFront {
     }
 }
 
+function Read-MacPart([scriptblock] $Lookup) {
+    # A lookup of [MacGui]'s, as the guard takes it (Read-Part): its error, or its chain.
+    Read-Part {
+        $l = & $Lookup
+        if ($l.Error) { throw $l.Error }
+        [pscustomobject]@{ Chain = $l.Chain }
+    }
+}
+
+function Wait-PageRead {
+    <#
+      .SYNOPSIS
+      Before the guard's first lookup in a run: the page's parts asked for at
+      the window's middle until the hit test reaches one (some 3 s the first
+      time), or a failed reading where it never does - a lookup that lands
+      on the page itself then says nothing of what is on it.
+    #>
+    if ($script:PageRead) { return $null }
+    $w = Get-WindowInfo
+    $until = (Get-Date).AddSeconds(5)
+    do {
+        $look = Read-MacPart { [MacGui]::ChainAt($w.X + $w.Width / 2, $w.Y + $w.Height / 2) }
+        if (-not $look.Unread -and (Test-PageReached -Chain $look.Chain)) { $script:PageRead = $true; return $null }
+        Start-Sleep -Milliseconds 300
+    } while ((Get-Date) -lt $until)
+    return [pscustomobject]@{ Chain = @(); Unread = "the page's parts were not there to read in 5 s" }
+}
+
+function Assert-NotYesAt {
+    # A press at a point, in global points, that would answer a question about the network yes - or that could not be read - stopped before it is sent (MenoConsent.psm1).
+    param([Parameter(Mandatory)] $At, [string] $What = "a press")
+    $look = Wait-PageRead
+    if (-not $look) { $look = Read-MacPart { [MacGui]::ChainAt($At.X, $At.Y) } }
+    Assert-NotNetworkYes -Look $look -What "$What at ($([int]$At.X), $([int]$At.Y)) pt"
+}
+
+function Assert-NotYesKeys {
+    # Keys sent while a question about the network has its yes in focus - or while what has the keys could not be read - stopped before they are sent (MenoConsent.psm1).
+    param([Parameter(Mandatory)] [string] $What)
+    $look = Wait-PageRead
+    if (-not $look) { $look = Read-MacPart { [MacGui]::FocusedChain($script:MenoPid) } }
+    Assert-NotNetworkYes -Look $look -What $What
+}
+
 function Set-MenoWindow {
     <#
       .SYNOPSIS
@@ -765,6 +913,7 @@ function Invoke-MenoClick {
     )
     $p = ConvertTo-Screen $X $Y
     Assert-MenoFront -At $p
+    Assert-NotYesAt -At $p -What "a click"
     Set-HeldKeys $Hold
     try { Invoke-MacClick $p $Count $Right } finally { Set-HeldKeys $Hold -Up }
 }
@@ -825,6 +974,9 @@ function Invoke-MenoDrag {
     $b = ConvertTo-Screen $ToX $ToY
     $path = Get-DragPath $FromX $FromY $Via $ToX $ToY $Steps
     Assert-MenoFront -At $a
+    # (where the button goes down and where it comes up)
+    Assert-NotYesAt -At $a -What "a drag's press"
+    Assert-NotYesAt -At $b -What "a drag's end"
     Set-HeldKeys $Hold
     try { Invoke-MacDrag $a $b $path $StepMs $PressMs $Count $AtStep $Right } finally { Set-HeldKeys $Hold -Up }
 }
@@ -958,6 +1110,7 @@ function Invoke-MenoWheel {
 function Send-MenoText {
     param([Parameter(Mandatory)] [string] $Text, [int] $CharMs = 8)
     Assert-MenoFront
+    Assert-NotYesKeys -What "typing"
     # A character at a time, but never half of one.
     $e = [System.Globalization.StringInfo]::GetTextElementEnumerator($Text)
     while ($e.MoveNext()) {
@@ -969,6 +1122,8 @@ function Send-MenoText {
 function Send-MenoKey {
     param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
     Assert-MenoFront
+    # (Escape answers a question no: always let through)
+    if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
     # Virtual key codes of the ANSI layout; these are the same on all of them.
     $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51; Up = 126; Down = 125 }[$Key]
     # (with Shift, if asked: Shift+Enter)
@@ -985,6 +1140,7 @@ function Send-MenoShortcut {
     #>
     param([Parameter(Mandatory)] [ValidatePattern("^[A-Za-z0-9]$")] [string] $Key, [switch] $Shift)
     Assert-MenoFront
+    Assert-NotYesKeys -What "a shortcut"
     # Virtual key codes of the ANSI layout, which is where letters and digits
     # sit on the others too.
     $codes = @{

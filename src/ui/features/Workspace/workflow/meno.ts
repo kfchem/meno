@@ -8,15 +8,17 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
-import { workedOutAs } from "../../../../lib/nodes/base";
+import { entries as countEntries, workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
-import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, speciesSet, taggedSet, torsionsSet } from "./structureSteps";
+import { combinedSet, comparedSet, displacedSet, measuredSet, mergedSet, reactionSet, rebondedSet, restrainedSet, SET_ASIDE, speciesSet, taggedSet, torsionsSet, withSaid } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 import { positionIds, substituted } from "./substituents";
-import { rankedSet } from "./valueSteps";
+import { rankedSet, valueKeysOf } from "./valueSteps";
 import { joinedSet } from "./joinStep";
+import { barrierSet } from "./barrierStep";
+import { ensembleSet } from "./ensembleStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
 import { displaceRead, kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -26,6 +28,7 @@ import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
 import { imaginaryWords } from "../../../../lib/calc/output";
+import { numberText } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "./failures";
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
@@ -42,17 +45,17 @@ export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; 
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`). */
-export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string): Outcome3D {
+/** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`), and each molecule's, by id, where it compares them across molecules (`energyLevels`). */
+export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, levels?: ReadonlyMap<number, string>): Outcome3D {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
     case "as-conformers":
       return asConformers(entries);
     case "energy-window":
-      return energyWindow(entries, Number(options.window));
+      return options.within === "each value" ? energyWindowByValue(entries, holds, Number(options.window), String(options.groupBy ?? "")) : energyWindow(entries, Number(options.window), holds);
     case "duplicates":
-      return drain(duplicates(entries, holds, mirrorsOf(options), never));
+      return drain(duplicates(entries, holds, mirrorsOf(options), never, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels));
     case "populations":
       return populations(entries, Number(options.temperature));
     case "choose":
@@ -67,6 +70,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
         within: options.within === "all" ? "all" : options.within === "each value" ? "each value" : "each group",
         groupBy: String(options.groupBy ?? ""),
       });
+    case "ensemble":
+      return ensembleSet(entries, holds, options);
     case "tag":
       return taggedSet(entries, holds, String(options.name ?? ""));
     case "species":
@@ -86,8 +91,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
   }
 }
 
-/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints*, *Join* and *Reaction*. */
-export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join", "reaction"];
+/** The kinds Meno does on two inputs, each a set's entries (workflow/structureSteps, workflow/joinStep): *Merge*, *Re-bond*, *Compare bonding*, *Torsion restraints*, *Join*, *Reaction* and *Barrier*. */
+export const PAIRED: readonly StepKind[] = ["merge", "rebond", "compare-bonding", "torsion-restraints", "join", "reaction", "barrier"];
 
 /** A Meno step of two inputs, `kind`, on what came into each - its first input's, `a`, and its second's, `b` - with its options (over its kind's defaults). */
 export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; holds: Holds3D }, b: { entries: readonly SetEntry[]; holds: Holds3D }, own?: OptionValues): Outcome3D {
@@ -120,6 +125,14 @@ export function runMenoPair(kind: StepKind, a: { entries: readonly SetEntry[]; h
       });
     case "join":
       return joinedSet(a.entries, b.entries, a.holds, String(o.on ?? ""), String(o.carry ?? ""));
+    case "barrier":
+      return barrierSet(a.entries, b.entries, a.holds, {
+        energy: o.energy === "E" ? "E" : "G",
+        free: String(o.free ?? ""),
+        pairs: o.pairs === "each" ? "each" : o.pairs === "property" ? "property" : "order",
+        property: String(o.property ?? ""),
+        symmetry: o.symmetry === "left-out" ? "left-out" : "as-read",
+      });
     case "torsion-restraints":
       return torsionsSet(a.entries, b.entries, a.holds, o);
     case "reaction":
@@ -185,15 +198,15 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
  * stopped: null. The other steps take no time to speak of, and are done
  * at once.
  */
-export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome3D | null> {
-  if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
+export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}, levels?: ReadonlyMap<number, string>): Promise<Outcome3D | null> {
+  if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy, levels);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   const now = how.now ?? (() => performance.now());
   const least = how.slice ?? TURN_MS;
   let slice = least;
   let began = now();
   let told = began;
-  const turns = duplicates(entries, holds, mirrorsOf(options), () => now() - began >= slice);
+  const turns = duplicates(entries, holds, mirrorsOf(options), () => now() - began >= slice, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels);
   for (;;) {
     const turn = turns.next();
     if (turn.done) return turn.value;
@@ -422,7 +435,7 @@ const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(
  * either way: which it was.
  */
 type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
-function basisOf(entries: readonly SetEntry[], kelvin?: number): Basis {
+function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly { said: string; entries: readonly SetEntry[] }[] = byCompound(entries).map((c) => ({ said: `compound ${compoundLetter(c[0].compound)}'s`, entries: c }))): Basis {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
   const electronic = (why?: string): Basis => ({
     energy: (e) => (hasEnergy(e) ? e.energy : undefined),
@@ -433,12 +446,12 @@ function basisOf(entries: readonly SetEntry[], kelvin?: number): Basis {
   if (![...g.values()].some(Boolean)) return electronic();
   const without = entries.find((e) => !g.get(e));
   if (without) return electronic(`${name(without)} has none`);
-  for (const c of byCompound(entries)) {
+  for (const { said, entries: c } of groups) {
     const first = workedOutAs(g.get(c[0])!);
     for (const e of c.slice(1)) {
       const these = workedOutAs(g.get(e)!);
       const k = these.findIndex(([, v], i) => v !== first[i][1]);
-      if (k >= 0) return electronic(`compound ${compoundLetter(c[0].compound)}'s differ in ${first[k][0]}: ${first[k][1]} (${name(c[0])}) and ${these[k][1]} (${name(e)})`);
+      if (k >= 0) return electronic(`${said} differ in ${first[k][0]}: ${first[k][1]} (${name(c[0])}) and ${these[k][1]} (${name(e)})`);
     }
   }
   if (kelvin != null) {
@@ -464,9 +477,11 @@ const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? 
  * aside. A compound split between the two, a part of it in each
  * (`partOf`); one all within, whole as it came.
  */
-function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
+function energyWindow(entries: readonly SetEntry[], kcal: number, holds: Holds3D): Outcome3D {
   // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
-  if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  // (molecules are no compound's conformers: each its own group, as Rank takes them, so none is outside its window - said, that the chemist names a property to take them together)
+  if (holds !== "conformers") return { ok: true, holds, kept: [...entries], aside: [], said: `${entries.length} of ${countEntries(entries.length)} kept: each molecule is its own group` };
   const basis = basisOf(entries);
   if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
   // (one that did not converge is no minimum: its energy is where its optimisation stopped. One its calculation found
@@ -484,6 +499,81 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
     aside.push(...asPart(out));
   }
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept, on ${basis.words}${onesSaid(entries)}` };
+}
+
+const NO_WINDOW: Outcome3D = { ok: false, said: "The window must be 0 kcal/mol or more" };
+
+/** What an entry is, as its frequencies say: a saddle point where it has an imaginary one, a minimum where they were worked out with none, else not known (entries `imaginaryOf`). */
+const kindOf = (e: SetEntry): "minimum" | "saddle point" | "not known" => {
+  const im = imaginaryOf(e);
+  return im === "not computed" ? "not known" : im.length ? "saddle point" : "minimum";
+};
+/** An entry as a step's line names it: its compound's letter and its number ("b #2"). */
+const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+
+/**
+ * Entries within `kcal` of the lowest of those with the same value of
+ * `name` (*Within: Each value of a property* - a path, a product): each
+ * group's lowest and those near it kept, the rest set aside, each saying
+ * how far above it. One without that property, or without an energy, is
+ * set aside saying so - never taken into a group, nor left out unsaid.
+ * Entries that are no result are refused, named, as the window over
+ * compounds refuses them; a saddle point is not - which entries should be
+ * transition states is the chemist's to say (a window over each product's
+ * transition states, say). The energy is chosen as over compounds
+ * (`basisOf`), each group's values alike.
+ */
+function energyWindowByValue(entries: readonly SetEntry[], holds: Holds3D, kcal: number, groupBy: string): Outcome3D {
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  const name = groupBy.trim();
+  if (!name) return { ok: false, said: "Name the property whose values are the groups" };
+  const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
+  if (failed) return { ok: false, said: failed };
+  const keys = valueKeysOf(entries.map((e, i) => entryOfSet(e, String(i))), name);
+  const why = new Map<SetEntry, string>();
+  entries.forEach((e, i) => keys[i] == null && why.set(e, `it has no ${name}`));
+  const valued = entries.filter((_, i) => keys[i] != null);
+  const groups = new Map<string, SetEntry[]>();
+  valued.forEach((e) => pushTo(groups, keys[entries.indexOf(e)]!, e));
+  const basis = basisOf(valued, undefined, [...groups.entries()].map(([key, g]) => ({ said: `the ${name} ${key}'s`, entries: g })));
+  const kept: SetEntry[] = [];
+  // (a window means something within one kind: minima, or saddle points - one of each in a group is refused for that group, and one whose kind is not known beside one whose is; a group none of whose is known is windowed, and the line says so)
+  let unknown = 0;
+  for (const [key, g] of groups) {
+    const kinds = g.map((e) => kindOf(e));
+    const unlike = kinds.includes("minimum") && kinds.includes("saddle point") ? `its ${name} ${key} holds minima and saddle points together: not windowed against each other` : null;
+    const open = kinds.includes("not known") && kinds.some((k) => k !== "not known") ? `in its ${name} ${key}, whether ${named(g[kinds.indexOf("not known")])} is a minimum or a saddle point is not known (no frequencies)` : null;
+    if (unlike ?? open) {
+      for (const e of g) why.set(e, (unlike ?? open)!);
+      continue;
+    }
+    if (kinds.every((k) => k === "not known")) unknown++;
+    const has = g.filter((e) => basis.energy(e) != null);
+    for (const e of g) if (basis.energy(e) == null) why.set(e, "it has no energy");
+    if (!has.length) continue;
+    const lowest = least(has.map((e) => basis.energy(e)!));
+    for (const e of has) {
+      const above = (basis.energy(e)! - lowest) * KCAL_PER_HARTREE;
+      if (above <= kcal + 1e-9) kept.push(e);
+      else why.set(e, `${numberText(above, 2)} kcal/mol above the lowest of its ${name}`);
+    }
+  }
+  // (a compound's conformers split between the two exits: a part of it in each, as over compounds)
+  const outOf = new Set(entries.filter((e) => why.has(e)).map((e) => e.compound));
+  const inOf = new Set(kept.map((e) => e.compound));
+  const part = (e: SetEntry): SetEntry => (holds === "conformers" && outOf.has(e.compound) && inOf.has(e.compound) ? { ...e, partOf: true as const } : e);
+  const keptOut = entries.filter((e) => !why.has(e)).map(part);
+  const aside = entries.filter((e) => why.has(e)).map((e) => withSaid(part(e), SET_ASIDE, why.get(e)!));
+  const counts = new Map<string, number>();
+  for (const w of why.values()) {
+    const k = /kcal\/mol above/.test(w) ? "outside the window" : w;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  // (the reasons counted only where any is more than being outside it - its exit says that much, and each entry its own)
+  const only = counts.size === 1 && counts.has("outside the window");
+  const rest = aside.length ? ` · rest ${aside.length}${only ? "" : ` (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})`}` : "";
+  const kinds = unknown ? ` · ${unknown === groups.size ? "whether minima or saddle points not known" : `${unknown} of ${groups.size} ${name}s: whether minima or saddle points not known`} (no frequencies)` : "";
+  return { ok: true, holds, kept: keptOut, aside, said: `${keptOut.length} of ${countEntries(entries.length)} kept, on ${basis.words}${rest}${kinds}` };
 }
 
 /** How Duplicates takes a conformer's mirror image, in an achiral molecule: kept apart (the default), or counted in its twin. */
@@ -514,17 +604,49 @@ const mirrorsOf = (options: OptionValues): Mirrors => (options.mirrors === "coun
  * conformers (`partOf`); those kept, the compound as it came, its copies
  * merged. In a compound set they are copies of a structure, of no search.
  */
-function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean): Generator<number, Outcome3D> {
+function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean, groupBy?: string, levels?: ReadonlyMap<number, string>): Generator<number, Outcome3D> {
   if (mirrors === "counted") {
     const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
     if (unknown >= 0) return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: a mirror image is counted in only where it is the same stereoisomer` };
   }
-  const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
-  const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
-  const energies = entries.every(hasEnergy);
+  // (in each value of a property - a product, a path - across compounds: each saddle point its own compound, the same one found by two paths is two entries of one value)
+  const by = groupBy?.trim();
+  if (groupBy != null && !by) return { ok: false, said: "Name the property whose values are the groups" };
+  const why = new Map<SetEntry, string>();
+  let unknownKinds = 0;
+  let valued = entries;
+  let valueOf = new Map<SetEntry, string | undefined>();
+  let keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
+  if (by) {
+    const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
+    if (failed) return { ok: false, said: failed };
+    const keys = valueKeysOf(entries.map((e, i) => entryOfSet(e, String(i))), by);
+    valueOf = new Map(entries.map((e, i) => [e, keys[i]]));
+    for (const e of entries) if (valueOf.get(e) == null) why.set(e, `it has no ${by}`);
+    // (a comparison means something within one kind, as a window does: minima and saddle points of one value are set aside together, and one whose kind is not known beside one whose is)
+    const ofValue = new Map<string, SetEntry[]>();
+    for (const e of entries) if (valueOf.get(e) != null) pushTo(ofValue, valueOf.get(e)!, e);
+    for (const [key, g] of ofValue) {
+      const kinds = g.map(kindOf);
+      const unlike = kinds.includes("minimum") && kinds.includes("saddle point") ? `its ${by} ${key} holds minima and saddle points together: not compared with each other` : null;
+      const open = kinds.includes("not known") && kinds.some((k) => k !== "not known") ? `in its ${by} ${key}, whether ${named(g[kinds.indexOf("not known")])} is a minimum or a saddle point is not known (no frequencies)` : null;
+      if (unlike ?? open) for (const e of g) why.set(e, (unlike ?? open)!);
+      else if (kinds.every((k) => k === "not known")) unknownKinds++;
+    }
+    valued = entries.filter((e) => !why.has(e));
+    keyOf = (e: SetEntry) => `${valueOf.get(e)}|${atomsOf(e)}|${bondsOf(e)}|${speciesOf(e)}`;
+  }
+  const energies = valued.every(hasEnergy);
+  const groups = [...valued.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
+  // (across compounds, of those alike - first found so, as they came - the lower is kept only where their energies were
+  //  worked out alike: across paths they need not be. Free energies where each has one, else electronic, as Energy
+  //  window's basis; energies of two levels never decide, those alike set aside saying how they differ - those unlike
+  //  any other kept, whatever their level. Where one of those alike has no energy, the first kept, the line saying so)
+  let asCame = 0;
   // (ranked by energy, which copy is kept is the lowest's: one that is no minimum - not converged, a saddle point, its
-  //  marks not read - would be kept for an energy that is not a minimum's. Refused, naming it, as Populations does)
-  const notMinimum = energies ? notAllMinima(entries) : null;
+  //  marks not read - would be kept for an energy that is not a minimum's. Refused, naming it, as Populations does; in
+  //  each value of a property, saddle points are compared with saddle points, as the kinds above are kept apart)
+  const notMinimum = energies && !by ? notAllMinima(entries) : null;
   if (notMinimum) return { ok: false, said: notMinimum };
   const kept = new Map<SetEntry, { degeneracy: number; mirror?: number[] }>();
   let done = 0;
@@ -535,13 +657,41 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
     const same = new Sameness(g[0].atoms, g[0].bonds, g[0].xyz);
     if (same.capped && g.length > 1) capped++;
     const here: { e: SetEntry; sig: Float64Array }[] = [];
-    for (const e of energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g) {
+    let order: readonly SetEntry[] = energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g;
+    if (by) {
+      const seeds: { e: SetEntry; sig: Float64Array; members: SetEntry[] }[] = [];
+      for (const e of g) {
+        if (done > 0 && due()) yield done;
+        done++;
+        const sig = same.signature(e.xyz);
+        const seed = seeds.find((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9 && same.same(k.e.xyz, e.xyz));
+        if (seed) seed.members.push(e);
+        else seeds.push({ e, sig, members: [e] });
+      }
+      order = seeds.flatMap(({ members }) => {
+        if (members.length === 1) return members;
+        const level = members.every(hasEnergy) ? levelsOf(members, levels) : null;
+        if (level && "unlike" in level) {
+          for (const e of members) why.set(e, `in its ${by} ${valueOf.get(e)}, ${LOWER_UNKNOWN}: ${level.unlike}`);
+          return [];
+        }
+        const first = level ? members.reduce((a, b) => (level.energy(b) < level.energy(a) ? b : a)) : members[0];
+        if (!level) asCame++;
+        for (const e of members) if (e !== first) why.set(e, `the same as ${named(first)}, which was kept`);
+        return [first];
+      });
+    }
+    for (const e of order) {
       if (done > 0 && due()) yield done;
-      done++;
+      if (!by) done++;
       const sig = same.signature(e.xyz);
       // (only those it could be within reach of: a mirror image's atoms lie as far from its centre)
       const near = here.filter((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9);
-      if (near.some((k) => same.same(k.e.xyz, e.xyz))) continue;
+      const twinOf = near.find((k) => same.same(k.e.xyz, e.xyz));
+      if (twinOf) {
+        if (by) why.set(e, `the same as ${named(twinOf.e)}, which was kept`);
+        continue;
+      }
       if (mirrors === "counted") {
         const twin = near.find((k) => !kept.get(k.e)!.mirror && stereoIdentity(k.e.stereo) === stereoIdentity(e.stereo) && same.mirrorOf(k.e.xyz, e.xyz));
         if (twin) {
@@ -564,9 +714,57 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
   // (those alike, the copies taken out - in a conformer set, a part of its compound's conformers; in a compound set, copies of a
   // structure, of no search, as they came)
   const alike = entries.filter((e) => !kept.has(e));
-  const aside = holds === "conformers" ? asPart(alike) : alike;
   const twins = counted ? ` · ${counted} mirror image${counted === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
-  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${onesSaid(entries)}${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}` };
+  const cap = capped ? ` \u00b7 ${cappedSaid(capped)}` : "";
+  if (!by) {
+    const aside = holds === "conformers" ? asPart(alike) : alike;
+    return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${onesSaid(entries)}${twins}${cap}` };
+  }
+  // (each set aside saying why - the one it is the same as, named; a compound's conformers split between the two exits, a part of it in each)
+  const outOf = new Set(alike.map((e) => e.compound));
+  const inOf = new Set(keptOnes.map((e) => e.compound));
+  const part = (e: SetEntry): SetEntry => (holds === "conformers" && outOf.has(e.compound) && inOf.has(e.compound) ? { ...e, partOf: true as const } : e);
+  const aside = alike.map((e) => withSaid(part(e), SET_ASIDE, why.get(e) ?? "the same as one kept"));
+  const counts = new Map<string, number>();
+  for (const e of alike) {
+    const w = why.get(e) ?? "";
+    const k = w.startsWith("the same as ") ? "the same as one kept" : w.includes(LOWER_UNKNOWN) ? "alike, energies at different levels" : w;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  // (the reasons counted only where any is more than being alike: its exit is named *Alike*, and each says which it is the same as)
+  const only = counts.size === 1 && counts.has("the same as one kept");
+  const rest = alike.length ? ` · rest ${alike.length}${only ? "" : ` (${[...counts].map(([w, n]) => `${n}: ${w}`).join("; ")})`}` : "";
+  const kinds = unknownKinds ? ` · whether minima or saddle points not known (no frequencies)` : "";
+  const first = asCame ? ` · where one of those alike has no energy, the first kept` : "";
+  return { ok: true, holds, kept: keptOnes.map(part), aside, said: `${keptOnes.length} of ${countEntries(entries.length)} kept${rest}${first}${twins}${cap}${kinds}` };
+}
+
+/** Why those alike across compounds are set aside, before how their energies differ (`levelsOf`): the line counts them under one reason. */
+const LOWER_UNKNOWN = "alike, but which is lower is not known";
+
+/**
+ * How entries' energies were worked out, where Duplicates keeps the lower
+ * of those alike across compounds: their free energies, where each has one
+ * worked out the same way (`workedOutAs`); else their electronic energies,
+ * where each molecule's calculation (`levels`, by molecule id - its program
+ * and level, `energyLevels`) is the same, or none says one. Else how two
+ * differ - "free energies differ in method, M1 (b #1) and M2 (c #1)".
+ */
+function levelsOf(g: readonly SetEntry[], levels?: ReadonlyMap<number, string>): { energy: (e: SetEntry) => number } | { unlike: string } {
+  const free = g.map(freeEnergyOf);
+  if (free.every(Boolean)) {
+    const first = workedOutAs(free[0]!);
+    for (let i = 1; i < g.length; i++) {
+      const these = workedOutAs(free[i]!);
+      const k = these.findIndex(([, v], j) => v !== first[j][1]);
+      if (k >= 0) return { unlike: `free energies differ in ${first[k][0]}, ${first[k][1]} (${named(g[0])}) and ${these[k][1]} (${named(g[i])})` };
+    }
+    return { energy: (e) => freeEnergyOf(e)!.value as number };
+  }
+  const level = (e: SetEntry) => (e.from != null ? levels?.get(e.from) : undefined) ?? "not stated";
+  const k = g.findIndex((e) => level(e) !== level(g[0]));
+  if (k >= 0) return { unlike: `energies differ in level, ${level(g[0])} (${named(g[0])}) and ${level(g[k])} (${named(g[k])})` };
+  return { energy: (e) => e.energy! };
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");

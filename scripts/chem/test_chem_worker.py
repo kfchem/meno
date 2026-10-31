@@ -249,7 +249,8 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(ask("open_stereo", molblock=flat)["result"], {"atoms": [1], "bonds": [], "isomers": 2, "cumulenes": [], "cumulated": [], "free": False})
 
     def test_makes_conformers_as_its_options_say_and_says_how(self):
-        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
+        # (on Meno's page, where the same conformer twice is kept once and says within what)
+        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7}, onPage=True)["result"]["isomers"][0]
         self.assertEqual(made["field"], "MMFF94s")
         how = {r["label"]: r["text"] for r in made["how"]}
         self.assertEqual(how["Embedded"], "ETKDG v3")
@@ -259,6 +260,12 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(how["The same within"], "0.01 \u00c5, all atoms (H included), over its symmetries")
         self.assertTrue(how["Made by"].startswith("RDKit "))
         self.assertLessEqual(len(made["frames"]), 5)
+        # (a workflow's step: every one RDKit made, and no such row)
+        raw = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
+        rows = {r["label"]: r["text"] for r in raw["how"]}
+        self.assertEqual(rows["Kept"], "5 of 5 embedded (5 sought)")
+        self.assertNotIn("The same within", rows)
+        self.assertEqual(len(raw["frames"]), 5)
         # (what it may not be, kept to what it may: a force field it does not know, the default)
         odd = ask("conformers", molblock=PCPA, options={"count": 2, "field": "GAFF", "iters": 1})["result"]["isomers"][0]
         self.assertEqual(odd["field"], "MMFF94")
@@ -315,12 +322,13 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(drawn["chosen"], {"atoms": {}, "bonds": {}})
 
     def test_makes_an_enantiomer_as_the_mirror_image_of_the_other(self):
-        # 3-aminobutan-2-ol's four isomers: two pairs of enantiomers
+        # 3-aminobutan-2-ol's four isomers: two pairs of enantiomers - on Meno's page, which makes one of each pair the
+        # other's mirror image
         flat = v2000(
             [("C", 0, 0), ("C", 1.3, 0.75), ("C", 2.6, 0), ("C", 3.9, 0.75), ("O", 1.3, 2.25), ("N", 2.6, -1.5)],
             [(0, 1, 1, None), (1, 2, 1, None), (2, 3, 1, None), (1, 4, 1, None), (2, 5, 1, None)],
         )
-        every = ask("conformers", molblock=flat, count=6, isomers="all")["result"]["isomers"]
+        every = ask("conformers", molblock=flat, count=6, isomers="all", onPage=True)["result"]["isomers"]
         flip = {"R": "S", "S": "R"}
         by = {tuple(sorted(i["cip"]["atoms"].items())): i for i in every}
         for labels, iso in by.items():
@@ -330,8 +338,8 @@ class ChemWorkerTest(unittest.TestCase):
             self.assertEqual(twin["frames"][0], mirrored)
         # and the same when each is drawn on its own: PCPA's wedge turned over
         down = PCPA.replace("  8 12  1  1", "  8 12  1  6")
-        up = ask("conformers", molblock=PCPA, count=6)["result"]["isomers"][0]
-        other = ask("conformers", molblock=down, count=6)["result"]["isomers"][0]
+        up = ask("conformers", molblock=PCPA, count=6, onPage=True)["result"]["isomers"][0]
+        other = ask("conformers", molblock=down, count=6, onPage=True)["result"]["isomers"][0]
         self.assertNotEqual(up["cip"], other["cip"])
         self.assertEqual(up["energies"], other["energies"])
 

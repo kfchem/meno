@@ -5,7 +5,7 @@
  * the one it made before, in place of what that held. One edit: an undo
  * takes the run's results away.
  */
-import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
+import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, removePictures, withoutAtoms, type WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Member, Model, Molecule3D, SeriesCore, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
 import { partOf } from "../chem/cleanUp";
@@ -25,10 +25,10 @@ import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./l
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
 export { frameAt, placeFor } from "./place";
-import { takeFrames, type Which } from "./takeFrames";
+import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
 import { measuredSet } from "./structureSteps";
-import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
@@ -70,6 +70,9 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const fail = (said: string) => setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said, input: key, ...as });
   const why = whyNot(doc, step, by);
   if (why) return fail(why);
+  // (a branch that gave nothing this time: ended at once, its exits empty, saying what came in empty)
+  const none = emptyIn(doc, step, by);
+  if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
   // (a chart: a table's columns, one against the other)
   if (step.kind === "chart") return chartRun(doc, step, w, key);
@@ -101,7 +104,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
   if (step.kind === "take-frames") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
-    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either)), key, w);
+    return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either), keptNames(String(o.keep ?? ""))), key, w);
   }
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)
@@ -116,7 +119,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
-      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules));
+      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules), energyLevels(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
 
@@ -132,6 +135,64 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
   return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: outcome.said, input: key, ...as });
+}
+
+/** Names in words: "Molecules", "Molecules and Reference", "First, Second and Third". */
+const namesSaid = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
+/**
+ * Where a step ends at once, nothing done, its exits empty (docs/WORKFLOWS.md,
+ * *An empty set*): an input that holds entries is wired with a set a step
+ * before it gave empty this time, having run ok - a branch that gave
+ * nothing, such as a last round of restraints that held none. What it says:
+ * "Nothing came in"; of a step of several inputs, into which: "Nothing came
+ * into Reference". None - the step runs, or fails, as ever - where no input
+ * is so; where an empty one is a set no step gave, or one whose step has
+ * not run ok; and for Merge with the other input not empty, which takes
+ * that one's entries (`runMenoPair`).
+ */
+export function emptyIn(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
+  const ports = inputsFor(step.kind, by);
+  if (!ports.length) return null;
+  const empty: string[] = [];
+  let full = 0;
+  for (const port of ports) {
+    const at = ports.length > 1 ? port.id : undefined;
+    const wire = wireInto(doc, step.id, at);
+    const input = wire ? inputOf(doc, step.id, at) : null;
+    // (not wired, or a table or a number: no entries of its own to give)
+    if (!wire || !input) continue;
+    if (input.molecules.length || input.structures.length || input.held?.length) {
+      full++;
+      continue;
+    }
+    const made = findSet(doc, wire.from.set)?.made;
+    if (!made || stepOf(doc, made.step)?.ran?.ok !== true) return null;
+    empty.push(port.name);
+  }
+  if (!empty.length || (step.kind === "merge" && full)) return null;
+  return ports.length > 1 ? `Nothing came into ${namesSaid(empty)}` : "Nothing came in";
+}
+
+/**
+ * `doc` with step `id` ended at once on an empty input (`emptyIn`), saying
+ * `said`: done, what it last did kept among its runs, and every one of its
+ * exits' sets emptied of what an earlier run put in it - its molecules in
+ * 3D, the atoms it put on the page, its pictures, and a chart, table,
+ * number or molecules held in it - so that none stands under a step that
+ * says nothing came in.
+ */
+export function ranEmpty(doc: WorkspaceDocument, id: number, said: string, key: string, w: RunWith): WorkspaceDocument {
+  const step = stepOf(doc, id);
+  if (!step) return doc;
+  doc = keepRun(doc, step);
+  for (const exit of exitsOf(step.kind)) {
+    const set = resultOf(doc, id, exit.id);
+    if (!set) continue;
+    doc = removePictures(emptied(doc, set), setMembers(doc, set).pictures);
+    doc = holdNothing(doc, set.id);
+  }
+  return setRan(doc, id, { at: w.now, ok: true, said, input: key, kind: step.kind, ...(step.options ? { options: step.options } : {}) });
 }
 
 /**
@@ -308,6 +369,11 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
   const c = molecules.find((m) => m.energies?.length && (m.calc?.program || m.calc?.method))?.calc;
   if (!c) return undefined;
   return [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ");
+}
+
+/** Each molecule's energies' program and level, by its id, where its calculation said either: how Duplicates tells energies of two levels apart across molecules. */
+export function energyLevels(molecules: readonly Pick<Molecule3D, "id" | "calc">[]): Map<number, string> {
+  return new Map(molecules.flatMap((m) => (m.calc && (m.calc.program || levelOf(m.calc)) ? [[m.id, [m.calc.program, levelOf(m.calc)].filter(Boolean).join(" \u00b7 ")] as const] : [])));
 }
 
 /** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
@@ -510,7 +576,7 @@ export function withResults(
 }
 
 /** The kinds of step whose results are what came in, worked out: each laid over what it was worked out from as it is put down (`laidOver`). */
-export const LAID_OVER: readonly StepKind[] = ["optimise", "energy", "frequencies", "nci"];
+export const LAID_OVER: readonly StepKind[] = ["optimise", "minimise", "energy", "frequencies", "nci"];
 
 /**
  * How each molecule a step gave is first turned, where it is what came in
@@ -969,6 +1035,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
         ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
+        // (where a run ended converged at it: of its own frame alone - a path's frames before and after it, none)
+        ...(e.converged ? { converged: [...(path ?? []).map(() => null), e.converged, ...after.map(() => null)] } : {}),
         ...e.keep,
       };
     });
@@ -1012,6 +1080,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       ...keptKnown(first),
       // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
       ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
+      // (where a run ended converged at each conformer: its own)
+      ...(g.some((e) => e.converged) ? { converged: g.map((e) => e.converged ?? null) } : {}),
       ...(alike ? keptAlike(g) : {}),
     };
   });

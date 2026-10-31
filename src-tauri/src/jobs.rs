@@ -114,9 +114,14 @@ pub struct JobSpec {
     pub stdin: Option<String>,
     /// What it is given beside the environment its runner was started in.
     pub env: BTreeMap<String, String>,
-    /// The cores it takes - its plugin given them, its program told (`THREADS`) - as the queue counts it.
+    /// The cores it takes - its plugin given them, its program told (`THREADS`) - as the queue counts it. A program
+    /// that runs as processes (`processes`) is given them as its processes, each told one thread.
     #[serde(default = "one_core")]
     pub cores: u32,
+    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI: ORCA's `%pal`) - as its
+    /// plugin declares it (`installed[].parallel`): each counted by the queue as a whole core, not one of its threads.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub processes: bool,
     /// The memory it takes, in MiB, where its plugin declared it; none declared, nought: counted by its cores alone.
     #[serde(default)]
     pub memory: u64,
@@ -212,6 +217,10 @@ fn one_core() -> u32 {
     1
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 /// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
 /// *This computer's runner knows its resources*): cores, and memory in MiB.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -220,17 +229,31 @@ pub struct Limits {
     pub memory: u64,
 }
 
-/// What this computer has: its cores, and its memory in MiB (nought where it could not be told).
+/// What this computer has: its cores - each a thread its system runs at once, two to a physical core where it
+/// runs two on each - its physical cores (`physical`), and its memory in MiB (nought where it could not be told).
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Resources {
     pub cores: u32,
+    pub physical: u32,
     pub memory: u64,
 }
 
-/// This computer's cores and memory.
+/// This computer's cores, physical cores and memory: its physical cores never more than its cores, and at least one -
+/// its cores where the system could not say.
 pub fn computer() -> Resources {
     let cores = std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1);
-    Resources { cores, memory: total_memory() / (1024 * 1024) }
+    let physical = physical_cores().filter(|&p| p >= 1).map_or(cores, |p| p.min(cores));
+    Resources { cores, physical, memory: total_memory() / (1024 * 1024) }
+}
+
+/// How many of the queue's cores a job takes: its cores - or, a program running as processes (`JobSpec::processes`),
+/// each process a whole physical core: its processes times the threads the computer runs on each (`here`).
+fn taken(spec: &JobSpec, here: Resources) -> u32 {
+    let cores = spec.cores.max(1);
+    if !spec.processes {
+        return cores;
+    }
+    cores.saturating_mul(here.cores.max(1).div_ceil(here.physical.max(1)))
 }
 
 /// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
@@ -270,7 +293,7 @@ pub fn beyond(here: Resources, cores: u32, memory: u64) -> Option<String> {
 
 /// How many jobs of `spec`'s size run at once within `limits`: what a waiting one's pace is reckoned by.
 fn slots_for(limits: Limits, spec: &JobSpec) -> u32 {
-    (limits.cores / spec.cores.max(1)).max(1)
+    (limits.cores / taken(spec, computer())).max(1)
 }
 
 /// This computer's memory, in bytes: what the system says it has; nought where it could not be asked.
@@ -299,6 +322,60 @@ fn total_memory() -> u64 {
     let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
     status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
     if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 { status.ullTotalPhys } else { 0 }
+}
+
+/// This computer's physical cores, as its system says: none where it could not be asked.
+#[cfg(target_os = "macos")]
+fn physical_cores() -> Option<u32> {
+    let mut n: i32 = 0;
+    let mut size = std::mem::size_of::<i32>();
+    let name = c"hw.physicalcpu";
+    let ok = unsafe { libc::sysctlbyname(name.as_ptr(), (&mut n as *mut i32).cast(), &mut size, std::ptr::null_mut(), 0) };
+    (ok == 0 && n > 0).then_some(n as u32)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn physical_cores() -> Option<u32> {
+    // (each logical CPU's package and core, as the kernel's topology gives them: the distinct pairs are the physical cores)
+    let mut cores = std::collections::BTreeSet::new();
+    for cpu in fs::read_dir("/sys/devices/system/cpu").ok()?.flatten() {
+        let name = cpu.file_name();
+        let name = name.to_string_lossy();
+        if !name.strip_prefix("cpu").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+            continue;
+        }
+        let read = |f: &str| fs::read_to_string(cpu.path().join("topology").join(f)).ok().map(|t| t.trim().to_string());
+        if let (Some(package), Some(core)) = (read("physical_package_id"), read("core_id")) {
+            cores.insert((package, core));
+        }
+    }
+    (!cores.is_empty()).then_some(cores.len() as u32)
+}
+
+#[cfg(windows)]
+fn physical_cores() -> Option<u32> {
+    use windows_sys::Win32::System::SystemInformation::{GetLogicalProcessorInformationEx, RelationProcessorCore};
+    // (a record for each processor core - asked for those alone - each beginning with its kind and its size, in bytes:
+    //  asked once for the size of them all, then for them, and counted by their sizes)
+    let mut len: u32 = 0;
+    unsafe { GetLogicalProcessorInformationEx(RelationProcessorCore, std::ptr::null_mut(), &mut len) };
+    if len == 0 {
+        return None;
+    }
+    let mut buf = vec![0u8; len as usize];
+    if unsafe { GetLogicalProcessorInformationEx(RelationProcessorCore, buf.as_mut_ptr().cast(), &mut len) } == 0 {
+        return None;
+    }
+    let (mut at, mut n) = (0usize, 0u32);
+    while at + 8 <= (len as usize).min(buf.len()) {
+        let size = u32::from_ne_bytes(buf[at + 4..at + 8].try_into().ok()?) as usize;
+        if size == 0 {
+            break;
+        }
+        n += 1;
+        at += size;
+    }
+    (n > 0).then_some(n)
 }
 
 fn read_spec(dir: &Path) -> Option<JobSpec> {
@@ -654,6 +731,8 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     }
     let mut running = 0u32;
     let mut used = (0u32, 0u64);
+    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
+    let here = computer();
     let mut first: Option<(u64, PathBuf)> = None;
     // (those waiting before it: asked for before it, or at once and by name)
     let mine_key = (base.created, dir.to_path_buf());
@@ -673,7 +752,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
             JobState::Running => {
                 running += 1;
                 // (one whose spec cannot be read counted as a core: what any job takes at least)
-                let (cores, memory) = read_spec(&other).map(|s| (s.cores.max(1), s.memory)).unwrap_or((1, 0));
+                let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
                 used = (used.0 + cores, used.1 + memory);
             }
             JobState::Waiting => {
@@ -692,7 +771,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     if !mine {
         return Ok(Turn::Behind(ahead));
     }
-    if !fits(limits_in(root), used, running, spec.cores, spec.memory) {
+    if !fits(limits_in(root), used, running, taken(spec, here), spec.memory) {
         return Ok(Turn::Next);
     }
     write_record(dir, &JobRecord { state: JobState::Running, started: Some(now_ms()), ..base.clone() })?;
@@ -929,6 +1008,8 @@ pub struct Found {
     pub env: Vec<(String, String)>,
     /// Programs installed beside it that a job may run after it, by name: where each would be (`Installed::beside`).
     pub beside: Vec<(String, PathBuf)>,
+    /// Whether it runs in parallel as processes, each a thread (`Installed::processes`).
+    pub processes: bool,
 }
 
 /// The program `name` of plugin `id` (its folder `plugin_dir`), from the
@@ -954,7 +1035,7 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
     }
     // (Meno's own copy, fetched as the plugin was set up)
     if let Some(program) = crate::plugfiles::provided(data, &manifest, id, name)? {
-        return Ok(Found { program, activation: None, env: Vec::new(), beside: Vec::new() });
+        return Ok(Found { program, activation: None, env: Vec::new(), beside: Vec::new(), processes: false });
     }
 
     // its environment: pixi's, activated, or uv's
@@ -987,7 +1068,7 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
         let scripts = plugin_dir.canonicalize().map_err(|e| format!("{id}'s folder: {e}"))?;
         crate::validate_sidecar(&program, args, &root, &[scripts])?;
     }
-    Ok(Found { program, activation, env: Vec::new(), beside: Vec::new() })
+    Ok(Found { program, activation, env: Vec::new(), beside: Vec::new(), processes: false })
 }
 
 // --- a program installed separately ------------------------------------------
@@ -1034,6 +1115,9 @@ pub struct Installed {
     /// (`beside`): each by its name and its file on this system - ORCA's
     /// orca_2mkl.
     pub beside: Vec<(String, String)>,
+    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI, ORCA's `%pal`), each process a core
+    /// and a thread; else, "threads" or unsaid, as threads of one process.
+    pub processes: bool,
 }
 
 /// How a program installed separately says its version (`installed[].version`):
@@ -1349,7 +1433,13 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
             }
         }
     }
-    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version, beside }))
+    let processes = match decl.get("parallel") {
+        None => false,
+        Some(serde_json::Value::String(p)) if p == "threads" => false,
+        Some(serde_json::Value::String(p)) if p == "processes" => true,
+        Some(p) => return Err(format!("not a way {name} runs in parallel: {p}")),
+    };
+    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version, beside, processes }))
 }
 
 /// Whether `file` is a program's file a job may run: a name alone, in its
@@ -1550,7 +1640,7 @@ fn installed_at(decl: &Installed, program: PathBuf, path_var: Option<&std::ffi::
     let env = installed_env(decl, &program, path_var)?;
     let folder = program.parent().map(Path::to_path_buf).unwrap_or_default();
     let beside = decl.beside.iter().map(|(n, f)| (n.clone(), folder.join(f))).collect();
-    Ok(Found { program, activation: None, env, beside })
+    Ok(Found { program, activation: None, env, beside, processes: decl.processes })
 }
 
 // --- a job's folder ----------------------------------------------------------
@@ -1771,7 +1861,8 @@ fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
 /// What a job's program is given: its environment's activation - or,
 /// installed separately, its folders and variables - a network that refuses
 /// it (the proxy on `port`, with no task's: while Meno is open, it says so),
-/// and the cores it may use.
+/// and the cores it may use: as threads, or - a program running as processes
+/// (`Found::processes`), each a core - one thread each.
 fn given_env(found: &Found, port: u16, cores: Option<u32>) -> BTreeMap<String, String> {
     let mut given = Command::new(&found.program);
     if let Some(activation) = &found.activation {
@@ -1780,8 +1871,9 @@ fn given_env(found: &Found, port: u16, cores: Option<u32>) -> BTreeMap<String, S
     given.envs(found.env.iter().map(|(k, v)| (k, v)));
     crate::net::route_nowhere_at(&mut given, port);
     if let Some(cores) = cores {
+        let threads = if found.processes { 1 } else { cores.clamp(1, 1024) };
         for key in THREADS {
-            given.env(key, cores.clamp(1, 1024).to_string());
+            given.env(key, threads.to_string());
         }
     }
     given
@@ -1839,7 +1931,11 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
         return Err(format!("not the programs beside {}", spec.name));
     }
     let port = proxy_port_of(&spec.env).ok_or("not pointed at Meno's network")?;
-    let cores = spec.env.get(THREADS[0]).and_then(|c| c.parse().ok());
+    // (its cores, where it was told any: as threads, they must be what it was told - as processes, it was told one thread)
+    if spec.processes != found.processes {
+        return Err(format!("not how {} runs in parallel", spec.name));
+    }
+    let cores = spec.env.contains_key(THREADS[0]).then_some(spec.cores);
     // (and, where it needs another plugin's program, what Meno gives it for that - worked out again here, from the plugins
     //  themselves: a value taken from the spec would let whatever wrote it choose the program run)
     let (needed_env, needed) = needs_given(data, &manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
@@ -2276,6 +2372,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         stdin: payload.stdin,
         env: given_env(&found, net.proxy_port(), payload.cores).into_iter().chain(needed_env).collect(),
         cores: payload.cores.unwrap_or(1).clamp(1, 1024),
+        processes: found.processes,
         memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
         label: payload.label.map(|l| l.chars().take(200).collect()),
@@ -2665,6 +2762,7 @@ mod tests {
             stdin: None,
             env: BTreeMap::from([("MENO_JOB_SAYS".into(), "hello".into())]),
             cores,
+            processes: false,
             memory,
             created: now_ms(),
             label: None,
@@ -2861,7 +2959,7 @@ mod tests {
     fn runs_after_its_own_only_a_program_declared_beside_it_and_there() {
         let root = temp();
         let (program, _) = shell_program();
-        let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside };
+        let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside, processes: false };
         let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into(), "-molden".into()] };
         let there = found(vec![("orca_2mkl".into(), PathBuf::from(&program))]);
         assert_eq!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap(), vec![Then { name: "orca_2mkl".into(), program: program.clone(), args: vec!["input".into(), "-molden".into()] }]);
@@ -3045,11 +3143,11 @@ mod tests {
         assert!(fits(l, (4, 16_000), 1, 4, 0));
         assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
         // (more than the computer has: refused, in plain words; within it, though over the limits, not)
-        let here = Resources { cores: 10, memory: 32 * 1024 };
+        let here = Resources { cores: 10, physical: 10, memory: 32 * 1024 };
         assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
         assert_eq!(beyond(here, 4, 40 * 1024).as_deref(), Some("it asks for 40.0 GB of memory, and this computer has 32.0 GB"));
         assert_eq!(beyond(here, 10, 32 * 1024), None);
-        assert_eq!(beyond(Resources { cores: 10, memory: 0 }, 4, 40 * 1024), None);
+        assert_eq!(beyond(Resources { cores: 10, physical: 10, memory: 0 }, 4, 40 * 1024), None);
         assert_eq!(slots_for(l, &JobSpec { cores: 3, ..read_spec(&sized(&temp(), "x", 3, 0)).unwrap() }), 2);
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
@@ -3596,7 +3694,8 @@ mod tests {
             args: args.iter().map(|a| a.to_string()).collect(),
             stdin: None,
             env: given_env(found, 4567, Some(2)),
-            cores: 1,
+            cores: 2,
+            processes: found.processes,
             memory: 0,
             created: now_ms(),
             label: None,
@@ -3897,7 +3996,7 @@ mod tests {
     #[test]
     fn finds_a_program_installed_separately_where_it_was_located_or_where_programs_are() {
         let base = temp();
-        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None, beside: vec![] };
+        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None, beside: vec![], processes: false };
         let none = Bases::default();
         let installed = program_file(&base.join("apps").join("orca_6"), "orca");
         let on_path = program_file(&base.join("bin"), "orca");
@@ -3923,7 +4022,7 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_found_only_where_it_can_be_run() {
         let base = temp();
-        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![] };
+        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![], processes: false };
         let p = base.join("g16");
         fs::create_dir_all(&base).unwrap();
         fs::write(&p, "").unwrap();
@@ -3991,7 +4090,7 @@ mod tests {
         let file = if cfg!(windows) { "blender.exe" } else { "blender" };
         let older = program_file(&base.join("Blender Foundation").join("Blender 4.5"), file);
         let newer = program_file(&base.join("Blender Foundation").join("Blender 10.0"), file);
-        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None, beside: vec![] };
+        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None, beside: vec![], processes: false };
         let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()) };
         assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &bases), Some(newer.clone()));
         assert_eq!(installed_where(&place("{home}/Blender Foundation/Blender 4.5"), None, None, &bases), Some(older));
@@ -4006,7 +4105,7 @@ mod tests {
         let base = temp();
         let app = base.join("Blender.app");
         let inside = program_file(&app.join("Contents").join("MacOS"), "Blender");
-        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![] };
+        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![], processes: false };
         assert_eq!(installed_where(&decl, app.to_str(), None, &Bases::default()), Some(inside));
         // an app that holds no such program
         let other = base.join("Other.app");
@@ -4067,6 +4166,7 @@ mod tests {
             label: "Blender".into(),
             version: Some(VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() }),
             beside: vec![],
+            processes: false,
         };
         let bases = Bases { home: None, programs: Some(base.clone()) };
         let everywhere = decl(vec!["{programs}/Blender Foundation/Blender *".into()]);
@@ -4211,6 +4311,7 @@ mod tests {
             stdin: None,
             env: BTreeMap::from([("NEEDED".into(), need_value(&tool, false).unwrap())]),
             cores: 1,
+            processes: false,
             memory: 0,
             created: now_ms(),
             label: None,
@@ -4242,6 +4343,7 @@ mod tests {
             stdin: None,
             env: BTreeMap::new(),
             cores: 1,
+            processes: false,
             memory: 0,
             created: now_ms(),
             label: None,
@@ -4352,6 +4454,92 @@ mod tests {
         assert_ne!(runner(&data, &plugins, &other), 0);
         assert!(!fs::read_to_string(other.join(LOG)).unwrap_or_default().contains("main ran"));
         let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_program_running_as_processes_is_told_one_thread_each_and_taken_by_the_queue_as_whole_cores() {
+        // (a program installed separately, running as processes - as ORCA does. On unix it needs another plugin's program
+        //  too, as ORCA needs xtb, given as job_start gives it; the helper plugin's program is a script made runnable,
+        //  which Windows has no way to be, so there it needs none)
+        #[cfg(unix)]
+        let (base, data, plugins) = needing(true);
+        #[cfg(not(unix))]
+        let (base, data, plugins) = {
+            let base = temp();
+            (base.clone(), base.join("data"), base.join("plugins"))
+        };
+        let needs: Vec<String> = if cfg!(unix) { vec!["helper".into()] } else { vec![] };
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
+        let ranked = plugins.join("ranked");
+        fs::create_dir_all(&ranked).unwrap();
+        let declare = |parallel: &str| {
+            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]) };
+            let manifest = serde_json::json!({
+                "id": "ranked",
+                "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "parallel": parallel}],
+                "needs": needed,
+                "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
+            });
+            fs::write(ranked.join("manifest.json"), manifest.to_string()).unwrap();
+        };
+        let orca = program_file(&base.join("orca_6"), &exe("orca"));
+        let written = vec!["input.inp".to_string()];
+        // (a job of 16 cores, made as job_start makes it: what Meno gives it, and what it gives for the program it needs)
+        let job = |found: &Found| {
+            let (needed, _) = needs_given(&data, &manifest_of(&ranked, "ranked").unwrap(), "ranked", &needs, &|p| Ok(plugins.join(p))).unwrap();
+            let mut spec = JobSpec { env: given_env(found, 4567, Some(16)), cores: 16, ..spec_for("ranked", "orca", found, &["input.inp"]) };
+            spec.needs = needs.clone();
+            spec.env.extend(needed);
+            spec
+        };
+        declare("processes");
+        let found = installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap().unwrap();
+        let spec = job(&found);
+        // (16 processes, each told one thread - and taken by its runner so)
+        assert!(spec.processes);
+        for key in THREADS {
+            assert_eq!(spec.env.get(*key).map(String::as_str), Some("1"), "{key}");
+        }
+        assert_eq!(spec_allowed(&data, &plugins, &spec, &written), Ok(()));
+        // (each process told the 16 as its threads, or the program taken for one of threads: refused)
+        let mut threads = spec.clone();
+        for key in THREADS {
+            threads.env.insert(key.to_string(), "16".into());
+        }
+        assert!(spec_allowed(&data, &plugins, &threads, &written).unwrap_err().contains("given what Meno does not give it"));
+        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: false, ..spec.clone() }, &written), Err("not how orca runs in parallel".into()));
+        // (the queue: each process a whole physical core - two of its cores, where the computer runs two threads on each)
+        assert_eq!(taken(&spec, Resources { cores: 32, physical: 16, memory: 0 }), 32);
+        assert_eq!(taken(&spec, Resources { cores: 10, physical: 10, memory: 0 }), 16);
+        // (one process - ORCA with no MPI to run more, its plugin asking one core: one physical core, ten such side by side)
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 10, physical: 10, memory: 0 }), 1);
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 2);
+        assert_eq!(taken(&JobSpec { processes: false, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 16);
+
+        // the same program declared to run as threads: told its 16 cores, and counted as told
+        declare("threads");
+        let found = installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap().unwrap();
+        let spec = job(&found);
+        assert!(!spec.processes);
+        for key in THREADS {
+            assert_eq!(spec.env.get(*key).map(String::as_str), Some("16"), "{key}");
+        }
+        assert_eq!(spec_allowed(&data, &plugins, &spec, &written), Ok(()));
+        assert!(spec_allowed(&data, &plugins, &JobSpec { cores: 8, ..spec.clone() }, &written).unwrap_err().contains("given what Meno does not give it"));
+        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: true, ..spec.clone() }, &written), Err("not how orca runs in parallel".into()));
+        // (a way of running in parallel Meno does not know: the program not taken)
+        declare("mpi");
+        assert!(installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap_err().contains("not a way orca runs in parallel"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn counts_this_computer_s_physical_cores_never_more_than_its_cores() {
+        let here = computer();
+        assert!(here.physical >= 1 && here.physical <= here.cores, "{here:?}");
+        // (macOS and Linux each say it themselves: asked here as the runner asks)
+        #[cfg(any(target_os = "macos", target_os = "linux", windows))]
+        assert!(physical_cores().is_some_and(|p| p >= 1));
     }
 
     #[test]

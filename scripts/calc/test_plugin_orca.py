@@ -14,6 +14,7 @@ run is kept.
 import importlib.util
 import json
 import pathlib
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -22,6 +23,8 @@ MANIFEST = ROOT / "src-tauri/resources/plugins/orca/manifest.json"
 spec = importlib.util.spec_from_file_location("plugin_orca", WORKER)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
+# (MPI's launcher taken to be there, whatever this computer has: each test that says otherwise says so)
+worker.which = lambda name, path=None: f"/usr/local/bin/{name}"
 
 WATER = {
     "name": "water",
@@ -81,6 +84,104 @@ class Prepare(unittest.TestCase):
         lines = freq["files"][0]["text"].splitlines()
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
+
+    def test_with_no_mpi_to_run_its_processes_each_job_runs_on_one_core_said_once_never_failed_at_its_start(self):
+        from unittest import mock
+        found = mock.patch.object(worker, "which", lambda name, path=None: f"/usr/local/bin/{name}")
+        missing = mock.patch.object(worker, "which", lambda name, path=None: None)
+        opts = {**defaults("energy"), "maxcore": 2000}
+        # (MPI there: its processes, as before - no fewer cores asked, nothing said)
+        with found:
+            there = ask("prepare", step="energy", entries=[WATER, WATER], options=opts, cores=4)
+        self.assertIn("%pal nprocs 4 end", there["jobs"][0]["files"][0]["text"])
+        self.assertNotIn("cores", there["jobs"][0])
+        self.assertNotIn("note", there)
+        self.assertEqual(there["jobs"][0]["memory"], 8000)
+        # (none: one core, each job - no %pal, one core asked for the queue to count, its memory for one - said once, on the step)
+        with missing:
+            alone = ask("prepare", step="energy", entries=[WATER, WATER], options=opts, cores=4)
+        for job in alone["jobs"]:
+            self.assertNotIn("%pal", job["files"][0]["text"])
+            self.assertEqual(job["cores"], 1)
+            self.assertEqual(job["memory"], 2000)
+        self.assertEqual(alone["note"], "run on one core: no MPI on this computer")
+        # (one core given - Settings set so, or a computer of one - nothing to say, nothing changed)
+        with missing:
+            one = ask("prepare", step="energy", entries=[WATER], options=opts, cores=1)
+        self.assertNotIn("note", one)
+        self.assertNotIn("cores", one["jobs"][0])
+        # (said beside what else the step says: frequencies at ORCA's own xTB, computed numerically)
+        with missing:
+            numeric = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": ""}, cores=4)
+        self.assertEqual(numeric["note"], "frequencies computed numerically; run on one core: no MPI on this computer")
+        # (a path search too)
+        with missing:
+            path = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), cores=4)
+        self.assertNotIn("%pal", path["jobs"][0]["files"][0]["text"])
+        self.assertEqual(path["jobs"][0]["cores"], 1)
+
+    @unittest.skipIf(sys.platform == "win32", "a launcher made runnable as macOS and Linux run one")
+    def test_the_launcher_looked_for_on_the_path_its_jobs_are_given_not_this_workers(self):
+        import os
+        import shutil
+        import stat
+        import tempfile
+        from unittest import mock
+        base = tempfile.mkdtemp()
+        try:
+            def program(folder, name):
+                os.makedirs(folder, exist_ok=True)
+                path = os.path.join(folder, name)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n")
+                os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                return path
+            orca = program(os.path.join(base, "orca_6"), "orca")
+            own = os.path.join(base, "env")
+            program(os.path.join(own, "bin"), worker.LAUNCHER)
+            plain = os.path.join(base, "usr", "bin")
+            os.makedirs(plain)
+            with mock.patch.object(worker, "which", shutil.which), mock.patch.object(worker.sys, "prefix", own), \
+                    mock.patch.dict(os.environ, {"PATH": os.pathsep.join([os.path.join(own, "bin"), plain])}):
+                # (in this worker's own environment alone: no job is given it - not found)
+                self.assertFalse(worker.launcher_found(programs={"orca": orca}))
+                # (beside ORCA, where it was found: its jobs' PATH begins there - found)
+                program(os.path.join(base, "orca_6"), worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs={"orca": orca}))
+                # (on the PATH Meno was started with: found, ORCA's folder given or not)
+                os.remove(os.path.join(base, "orca_6", worker.LAUNCHER))
+                program(plain, worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs=None))
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+    def test_the_mpi_launcher_looked_for_is_each_systems(self):
+        import importlib.util
+        from unittest import mock
+        for platform, name in (("darwin", "mpirun"), ("linux", "mpirun"), ("win32", "mpiexec")):
+            with mock.patch.object(sys, "platform", platform):
+                spec = importlib.util.spec_from_file_location(f"orca_worker_{platform}", WORKER)
+                fresh = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(fresh)
+            self.assertEqual(fresh.LAUNCHER, name)
+            asked = []
+            self.assertFalse(fresh.launcher_found(lambda n, path=None: asked.append(n)))
+            self.assertEqual(asked, [name])
+
+    def test_frequencies_treat_low_vibrations_as_orca_does_unless_asked_harmonic(self):
+        # (ORCA's own, its default: nothing written - Grimme's quasi-RRHO, as ORCA 6.1.1 prints "Quasi RRHO ... True")
+        own = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"), cores=1)["jobs"][0]["files"][0]["text"]
+        self.assertNotIn("%freq", own)
+        self.assertEqual(defaults("frequencies")["vibrations"], "none")
+        # (harmonic: the rigid-rotor harmonic oscillator alone, ORCA's %freq QuasiRRHO false - checked against ORCA 6.1.1)
+        rrho = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "rrho", "maxcore": 2000}, cores=1)["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(rrho[0], "! B3LYP def2-SVP D3BJ FREQ")
+        self.assertEqual(rrho[1:3], ["%maxcore 2000", "%freq QuasiRRHO false end"])
+        # (a frequency job's alone: an optimisation has no such option, and writes nothing of it)
+        self.assertNotIn("%freq", ask("prepare", step="optimise", entries=[WATER], options={**defaults("optimise"), "vibrations": "rrho"}, cores=1)["jobs"][0]["files"][0]["text"])
+        # (a treatment it does not know: refused)
+        with self.assertRaises(Exception):
+            ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "mrrho"})
 
     def test_frequencies_at_orcas_own_xtb_are_asked_for_numerically_and_said_to_be(self):
         # (ORCA 6.1.1 has no analytic Hessian for its own xTB, and stops a FREQ run of one: NUMFREQ it runs)
@@ -383,6 +484,18 @@ class PathSearch(unittest.TestCase):
         # (a band that did not converge: said plainly, never in the words of ORCA's error return)
         stopped = ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options={}, files={}, log=NOT_CONVERGED_LOG, ended="failed")
         self.assertEqual(stopped, {"why": 'Its band did not converge in 3 iterations: ORCA stopped before refining a highest point ("NEB not converged")', "kind": "not-converged"})
+        # (its band converged, refining its highest point not, in the steps ORCA allows - ORCA then going on to its
+        #  properties, there ending by an error that says nothing of it, or ending normally: said plainly, nothing read -
+        #  not even the band; no point refined, no entry)
+        refining = PATH_LOG.replace("     TS optimization                   ... 4  44.4%", "     TS optimization                   ... 1001  91.2%")
+        refining = ("       The optimization did not converge but reached the maximum number of\n       optimization cycles.\n" + refining)
+        said = ('Its band converged in 5 iterations, but refining its highest point did not converge in 1001 steps ("The optimization '
+                'did not converge but reached the maximum number of optimization cycles"): raise Steps for refining its highest point, '
+                'or give ends nearer the path')
+        props = refining.replace("****ORCA TERMINATED NORMALLY****", "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\nORCA finished by error termination in PROPERTIES")
+        for log, ended in ((props, "done"), (props, "failed"), (refining, "done")):
+            self.assertEqual(ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options={}, files=PATH_FILES, log=log, ended=ended),
+                             {"why": said, "kind": "not-converged"})
         # (an image's SCF that did not converge, ORCA carrying on: a warning, in its words - the path read all the same)
         warned = ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), files=PATH_FILES, log=SCF_FAILED + PATH_LOG, ended="done")["outputs"][0]
         self.assertEqual(warned["energies"], [-1.17, -1.10, -1.09, -1.12])
@@ -431,6 +544,28 @@ class Collect(unittest.TestCase):
         # (not before it was under way, nor for a single point)
         self.assertNotIn("partial", ask("collect", step="optimise", entries=[WATER], options={}, files={}, log="ORCA finished by error termination in SCF\n", ended="failed"))
         self.assertNotIn("partial", ask("collect", step="energy", entries=[WATER], options={}, files={}, log=cycle, ended="failed"))
+
+    def test_an_optimisation_that_took_the_most_cycles_orca_allows_is_said_not_converged_however_orca_ended_after(self):
+        # (ORCA 6.1.1's words, in their box over two lines - then, going on to its properties, an error that says nothing
+        #  of it, or a normal end)
+        warned = ("GEOMETRY OPTIMIZATION CYCLE  49\n ... \nGEOMETRY OPTIMIZATION CYCLE  50\n ... \n"
+                  "                                  WARNING !!!\n"
+                  "       The optimization did not converge but reached the maximum number of\n"
+                  "       optimization cycles.\n"
+                  "       Please check your results very carefully.\n")
+        props = warned + "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\n\nORCA finished by error termination in PROPERTIES\n  .... aborting the run\n"
+        normal = warned + "FINAL SINGLE POINT ENERGY -76.4\n                             ****ORCA TERMINATED NORMALLY****\n"
+        said = ('The optimisation did not converge in 50 cycles, the most it was allowed ("The optimization did not converge but '
+                'reached the maximum number of optimization cycles"): run it again to go on from the geometry it reached')
+        for log, ended in ((props, "done"), (props, "failed"), (normal, "done")):
+            # (never read as a result: the geometry it reached read for a run again alone, as one that stopped is)
+            self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=log, ended=ended),
+                             {"why": said, "kind": "not-converged", "partial": [{"kind": "orca", "log": True, "name": "water.out"}]})
+            # (a saddle point's, so too)
+            self.assertEqual(ask("collect", step="saddle-point", entries=[WATER], options={}, files={}, log=log, ended=ended),
+                             {"why": said, "kind": "not-converged", "partial": [{"kind": "orca", "log": True, "name": "water.out"}]})
+        # (a single point or frequencies never optimise: the words are no sign of anything there)
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=props, ended="done"), {"why": "ORCA finished by error termination in PROPERTIES"})
 
     def test_a_job_that_exited_0_but_ended_by_error_termination_failed_and_only_one_that_terminated_normally_is_read(self):
         # (as ORCA 6.1.1 ends a parallel run whose MPI is not there: its exit code 0, read as done)

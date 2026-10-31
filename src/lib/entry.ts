@@ -77,7 +77,9 @@ export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number
  * table (one row per vibration or excited state, each column with its
  * unit), a vibration's modes (one row per mode, in its table's row order,
  * x, y and z by atom in turn - as the program gave them, their scale not
- * relied on), or restraints.
+ * relied on), or restraints - and the places they were first held at by a
+ * minimisation (`start`, x, y and z by atom in turn), for a later one to
+ * start from again.
  */
 export type PropertyValue =
   | number
@@ -88,7 +90,7 @@ export type PropertyValue =
   | { vector: number[] }
   | { table: { columns: Column[]; rows: (number | string | null)[][] } }
   | { modes: number[][] }
-  | { restraints: Restraint[] };
+  | { restraints: Restraint[]; start?: number[] };
 
 /**
  * Where a property was worked out: the geometry (its key, `geometryKey`),
@@ -152,10 +154,17 @@ export type Property = {
    * energy, a thermal correction of another level, a standard-state term).
    */
   parts?: PropertyPart[];
+  /**
+   * Where it is a value of a group, not of one geometry - an ensemble's
+   * free energy over its conformers (*Ensemble energy*) - how many members
+   * it is over: its geometry (`at`) is its representative's, and its parts
+   * each member's value.
+   */
+  ensemble?: { of: number };
 };
 
-/** One part of a sum (`Property.parts`): the property it was, as it was. */
-export type PropertyPart = { property: string; value: number; unit: Unit | "none"; at?: At; by?: By };
+/** One part of a sum or an ensemble (`Property.parts`): the property it was, as it was - with its own parts, where it was a sum itself, one level down. */
+export type PropertyPart = { property: string; value: number; unit: Unit | "none"; at?: At; by?: By; parts?: PropertyPart[] };
 
 /**
  * An element of an entry that could be stereogenic: a centre (its atom), a
@@ -278,6 +287,7 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
     const k = value.modes.findIndex((m) => m.length !== 3 * atoms);
     return k < 0 ? null : `Mode ${k + 1} has ${value.modes[k].length} numbers for ${atoms} atoms`;
   }
+  if (value.start && (value.start.length !== 3 * atoms || !value.start.every(Number.isFinite))) return `Where the restraints were first held has ${value.start.length} numbers for ${atoms} atoms`;
   for (const [k, r] of value.restraints.entries()) {
     const n = r.kind === "fixed" ? null : RESTRAINT_ATOMS[r.kind];
     if (n != null ? r.atoms.length !== n : r.atoms.length < 1) return `Restraint ${k + 1}, a ${r.kind}, has ${r.atoms.length} atoms`;
@@ -317,15 +327,18 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
 }
 
 /**
- * Restraints as a file gives them, read back (`Restraint`): each row a
+ * Restraints as a file gives them, read back (`Restraint`) - and where a
+ * minimisation first held them (`start`), each a finite number: each row a
  * distance, a dihedral or atoms fixed, as many atoms as its kind holds,
  * each a whole number from 0, a
  * finite value and a strength above 0 where its kind has them, none where
  * it has not. None where any row does not read - nothing held in part.
  * Whether its atoms are the entry's is `valueFault`'s, as for any value.
  */
-function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
+function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] } | undefined {
   const rows = (v as { restraints?: unknown } | null)?.restraints;
+  const start = (v as { start?: unknown } | null)?.start;
+  if (start != null && (!Array.isArray(start) || !start.every((x) => typeof x === "number" && Number.isFinite(x)))) return undefined;
   if (!Array.isArray(rows)) return undefined;
   const out: Restraint[] = [];
   for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
@@ -341,7 +354,7 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
     if (typeof r.value !== "number" || !Number.isFinite(r.value) || typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
     out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, strength: r.strength });
   }
-  return { restraints: out };
+  return { restraints: out, ...(start != null ? { start: [...(start as number[])] } : {}) };
 }
 
 /**
@@ -352,11 +365,11 @@ function restraintsIn(v: unknown): { restraints: Restraint[] } | undefined {
  * and a pressure numbers), and whether it was. None where any of that does
  * not read, or its value is of another kind - a list, a table of other
  * cells, modes - which a molecule on the page does not keep as a property.
- * (Restraints read back from 2026-10-30: a workspace saved before kept them
- * only until it was opened again.)
+ * (A workspace saved before restraints were read back kept them only until
+ * it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
-  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown } | null;
+  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown; ensemble?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value: PropertyValue | undefined =
     (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean"
@@ -374,22 +387,34 @@ export function propertyIn(v: unknown): Property | undefined {
   const at = atIn(p.at);
   if (by === null || at === null) return undefined;
   if (p.of != null && typeof p.of !== "string") return undefined;
-  // (a sum's parts: each as it was, or none of them - a sum whose parts do not all read is not read as one without them)
-  let parts: PropertyPart[] | undefined;
-  if (p.parts != null) {
-    if (!Array.isArray(p.parts) || !p.parts.length) return undefined;
-    parts = [];
-    for (const raw of p.parts as unknown[]) {
-      const q = raw as { property?: unknown; value?: unknown; unit?: unknown; at?: unknown; by?: unknown } | null;
-      if (!q || typeof q.property !== "string" || !q.property || typeof q.value !== "number" || !Number.isFinite(q.value)) return undefined;
-      if (!(q.unit === "none" || (typeof q.unit === "string" && isUnit(q.unit)))) return undefined;
-      const qBy = byIn(q.by);
-      const qAt = atIn(q.at);
-      if (qBy === null || qAt === null) return undefined;
-      parts.push({ property: q.property, value: q.value, unit: q.unit as Unit | "none", ...(qAt ? { at: qAt } : {}), ...(qBy ? { by: qBy } : {}) });
-    }
+  // (a sum's parts, or an ensemble's: each as it was, or none of them - one whose parts do not all read is not read without them)
+  const parts = p.parts != null ? partsIn(p.parts, 1) : undefined;
+  if (parts === null) return undefined;
+  let ensemble: { of: number } | undefined;
+  if (p.ensemble != null) {
+    const of = (p.ensemble as { of?: unknown }).of;
+    if (typeof of !== "number" || !Number.isInteger(of) || of < 1) return undefined;
+    ensemble = { of };
   }
-  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status, ...(parts ? { parts } : {}) };
+  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status, ...(parts ? { parts } : {}), ...(ensemble ? { ensemble } : {}) };
+}
+
+/** A sum's or an ensemble's parts as a file gives them, read back: each as it was, with its own parts `deeper` levels down at most; null where any does not read, or there are none. */
+function partsIn(v: unknown, deeper: number): PropertyPart[] | null {
+  if (!Array.isArray(v) || !v.length) return null;
+  const parts: PropertyPart[] = [];
+  for (const raw of v as unknown[]) {
+    const q = raw as { property?: unknown; value?: unknown; unit?: unknown; at?: unknown; by?: unknown; parts?: unknown } | null;
+    if (!q || typeof q.property !== "string" || !q.property || typeof q.value !== "number" || !Number.isFinite(q.value)) return null;
+    if (!(q.unit === "none" || (typeof q.unit === "string" && isUnit(q.unit)))) return null;
+    const qBy = byIn(q.by);
+    const qAt = atIn(q.at);
+    if (qBy === null || qAt === null) return null;
+    const inner = q.parts != null ? (deeper > 0 ? partsIn(q.parts, deeper - 1) : null) : undefined;
+    if (inner === null) return null;
+    parts.push({ property: q.property, value: q.value, unit: q.unit as Unit | "none", ...(qAt ? { at: qAt } : {}), ...(qBy ? { by: qBy } : {}), ...(inner ? { parts: inner } : {}) });
+  }
+  return parts;
 }
 
 /** What worked a value out, as a file gives it, read back: each field a text; none where none is given; null where it does not read. */

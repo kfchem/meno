@@ -145,6 +145,25 @@ describe("a table's heads, and its frame", () => {
     expect(tableBodyPx(changes.rows.length)).toBe(TABLE_HEAD_PX + TABLE_GAP_PX + changes.rows.length * TABLE_ROW_PX + TABLE_FOOT_PX);
   });
 
+  it("writes a number column's numbers with one count of decimals, so their points line up: kcal/mol as a chip writes it, any other as the one shown that needs most", () => {
+    const energies: Table = {
+      columns: [
+        { name: "name", kind: "text" },
+        { name: "energy", kind: "number", unit: "kcal/mol" },
+        { name: "atom", kind: "number", unit: "none" },
+        { name: "share", kind: "number", unit: "none" },
+      ],
+      rows: [["a", 0, 1, 0.5], ["b", 0.371842, 12, 0.333], ["c", 1.5, 3, 0.25], ["d", -2, 4, 0.2]],
+      unread: [],
+      left: [],
+    };
+    const cells = [...renderToString(<TableBody table={energies} />).matchAll(/<td[^>]*>([^<]*)<\/td>/g)].map((m) => m[1]);
+    // (a real energy, 0.371842: 0.37, as its chip says it - never 0.3718 beside it)
+    expect(cells.filter((_, i) => i % 4 === 1)).toEqual(["0.00", "0.37", "1.50", "\u22122.00"]);
+    expect(cells.filter((_, i) => i % 4 === 2)).toEqual(["1", "12", "3", "4"]);
+    expect(cells.filter((_, i) => i % 4 === 3)).toEqual(["0.500", "0.333", "0.250", "0.200"]);
+  });
+
   it("keeps a column's label in the file, and reads one that does not read as none, the column kept", () => {
     const lost = () => {};
     expect(tableIn(JSON.parse(JSON.stringify(changes)), lost)).toEqual(changes);

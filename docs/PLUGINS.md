@@ -223,14 +223,14 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `setUpBytes` | number | About how much room its environment takes once set up, in bytes, as measured: asking to set it up says it beside the packages it fetches ("about 1.0 GB once set up"), for a plugin whose environment is large. Unsaid, where none was measured. |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
-| `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
+| `kinds` | list of `{id, name, program?, writtenBy?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `writtenBy` (2026-10-31) says which of the plugin's own programs writes it - one its `steps` or `roles` run, by that name, else it is left out: the kind is that program's output, and the plugin is its own reader, which reads it unless the chemist chooses another (*Several plugins, one role*). Its `grammar` colours the kind's texts, before another plugin's of the same kind. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
 | `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `xyzEnergies` | list of `{id, pattern, unit?}` | How the program writes a frame's energy on an XYZ file's comment line, from its documentation: `pattern` a regular expression (case-insensitive) with one capture group holding the number; `unit` its number's - `hartree` (the default), `eV`, `kcal/mol` or `kJ/mol` - which Meno converts to hartrees. Meno reads a frame's energy only by the patterns of the plugins added (docs/FILE-IO.md); where two find different numbers on a line, none. |
 | `xyzSteps` | list of `{id, file?, comment?}`, one or both | The XYZ files the program writes whose frames are an optimisation's steps, which of them converged not said in the file (its output says it): `file` the file's name as the program's documentation or its own output gives it, `*` any run of characters (`xtbopt.log`, `*_trj.xyz`), matched in any case; `comment` a regular expression every frame's comment line matches, so that the file is known renamed too (xtb's `energy: ... gnorm: ...`, ORCA's `Coordinates from ORCA-job <name> E ...`) - of a file of two frames or more, and never an ensemble's (a conformer search's, a relaxed scan's points). None of such a file's frames is an entry of a set, and the molecule says why (docs/WORKFLOWS.md, *Compound sets and conformer sets*). A file no plugin names is read as before, every frame an entry. |
 | `roles` | list of `{role, programs?, options?, looks?, motions?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true` on *Generate* where it makes from seeds: the step then takes *Seeds*, structures drawn (*Generate*, below). |
-| `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
+| `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?, parallel?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). And how it runs in parallel (`parallel`): `"threads"`, or unsaid - told its job's cores as its threads - or `"processes"`, as under MPI (ORCA's `%pal`): its job's cores, never more than the computer's physical cores, are its processes, each told one thread, and the queue counts each process as a whole physical core (WORKFLOWS.md, *Several at once*). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?, unpackedBytes?, cite?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped: of itself, from where it stopped (a range asked for, taken as the rest only where the server's reply says it begins there; all of it again where the server sends all of it, another range, or says the part is past its file's end), up to four times, after 2, 5, 15 and 30 seconds - each stop written to Meno's log, with how much came - and only then said to have stopped, with how much came of how much and how often it was taken up, the task failed with that reason in the network's record (`fetch_resuming`, 2026-10-24); what came is kept, and *Add* goes on from there. What came is kept under the file's name and its SHA-256's first twelve digits (`model.pth.<digits>.part`), so that what came of a file an older manifest named is never taken up as the new one's: it is thrown away. Once kept, a file is read through for its SHA-256 again once a launch - and again where its size or the time it was last changed is not what it was then - as the plugin is first used in a launch - set up, started, or its worker given its files - never at launch itself, where Meno asks only whether each is there at its size (2026-10-27; `there`): one there that is not its size, or whose SHA-256 is not the manifest's - changed or damaged since - is said plainly ("model.pth is not the file Meno downloaded: its size or fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since.") and asked about again, even where setting the plugin up was allowed, before it is downloaded anew over it; no, and the plugin does not run, saying the same. One that could not be read through - held by another program, not allowed, a share gone - is neither: said, with why, the plugin not run, and read again the next time; never fetched over. While its files are read through, where that takes more than a moment, Settings' *Plugins* and the workspace say so ("Checking its files…"). An archive Meno unpacked is as the stamp it left says: what it unpacked to is not read through again. Meno keeps the files it downloaded as they were: weights of one's own belong in a plugin of one's own, never put in place of these. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. One may be data compressed with gzip (`unpack: "gz"`, never a program), which Meno unpacks itself into `files/<its name without .gz>/`; it must give `unpackedBytes`, said when asking to set the plugin up, and is never unpacked past it. `cite` is how its makers ask to be cited, said there too. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
 | `needs` | list of `{plugin, program, env}` | Another plugin's program its jobs may need (2026-10-27): that plugin, by its id; its program, by the name that plugin's manifest gives it; and the variable the job is told where it is in. ORCA's: the xTB plugin's `xtb`, in `XTBEXE`, for the xTB methods ORCA runs through the xtb program (`XTB2`, `GFN2-XTB`, `GFN-FF` and the rest; ORCA's own `NATIVE-GFN2-XTB` needs none). A job needs it only where its plugin's worker says so of that job (`prepare`, a job's `needs`: the ids). Meno finds the program as that plugin's own jobs would. Where that plugin is not added, the step says so before any job is made ("The xTB plugin is needed for this: add it in Settings, Plugins"). On macOS and Linux it is linked into the job's work folder under its own name, and the variable names it there (`./xtb`): a path with a space in it, as Meno's data folder has, is never given, as ORCA 6.1.1 takes none. On Windows its path is given, and refused where it has a space; it is never quoted. The link is never listed among the job's files: neither kept as a raw output nor saved in a workspace. Its plugin's version is part of each job's key. Never another plugin's own; never a shell; never a variable that finds or loads programs (`ENV_NEVER`), the network's way out, or the threads Meno sets. All as they must be, or none is taken (`src-tauri/src/jobs.rs` `needs_declared`). |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
@@ -452,6 +452,13 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   that is added fills it - the one the chemist added, of MolScribe and
   MolNexTR - else the first in Meno's order, set up when it is first
   needed, asking first.
+- **A program's output is read by that program's own plugin** (the
+  maintainer, 2026-10-31): where none is chosen for a kind and Meno does
+  not read it, the plugin added whose own program writes it (its kind's
+  `writtenBy`) reads it - before a reader of many programs' outputs -
+  else the first added that reads it, in Meno's order. A job's output and
+  a file opened by hand are read alike, by that one reader. Core names no
+  plugin for it: each says it in its manifest.
 - **For reading a file, others may add to it.** The assigned reader reads
   the file. Others the chemist adds for that kind read it as well, and
   their results join under their names, as an NBO plugin's would join
@@ -521,7 +528,10 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   before, the RDKit plugin took shapes within 0.5 Å over their heavy atoms
   as one, and over the molecule's symmetries only where their energies
   agreed, and its raw embeddings, with no energies, atom against atom.
-  (`SAME_CONFORMER`, `Sameness` in its worker.)
+  (`SAME_CONFORMER`, `Sameness` in its worker.) The conformers Meno's own
+  page makes (*3D structure*) are kept once each by it; a workflow's
+  *Conformers* step is given every one RDKit made (below), and its
+  *Duplicates* step keeps one of each by this same measure.
   - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
     the one conformer.** Such a shape leaves every atom of it somewhere
     else, so comparing atom against atom counted it again and again - a
@@ -546,6 +556,47 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     distances from the centre, sorted, is a bound the conformers cannot be
     under, and each way's own atoms laid over alone is another. Only pairs
     and ways under 0.01 Å by both are laid over in full.
+- **Minimise with restraints, and a search that holds them.** The RDKit
+  plugin fills *Minimise with restraints*: each entry minimised in MMFF94
+  (or MMFF94s, or UFF, as the step asks; UFF where MMFF has no
+  parameters; refused, said, where neither has), its restraints held by
+  RDKit's own constraints as the entry record states them:
+  - a distance by RDKit's distance constraint, ½ k d², the record's k as
+    it is (kcal mol⁻¹ Å⁻²);
+  - a dihedral by RDKit's torsion constraint, which is k (the angle off in
+    degrees)², so the record's k times ½ (π/180)² (`TORSION_K`); both go
+    the shorter way round;
+  - atoms fixed as RDKit's fixed points.
+
+  Nothing between the molecule's parts is left out. It takes at most the
+  steps the step gives, 2000 unless set (`STEPS`, the conformer search's
+  own), and an entry that does not converge in them goes out of *Failed*,
+  saying so. Its energy is the force field's own at the places reached,
+  the restraints' not in it. How far it missed what its restraints hold -
+  the largest distance miss, in Å, and the largest torsion miss, in
+  degrees - comes back as results on the molecule (*Restraints*), so a
+  strength set too weak shows rather than passing in silence. Each energy
+  law is tested against energies worked by hand, across ±180° for a
+  dihedral (`scripts/calc/test_plugin_rdkit.py`). Asked to start *where its restraints were
+  first held*, it starts from the entry's `start`, which Meno writes on its
+  result from where the entry stood as it came, the first time (case F's
+  rounds each start from the geometry before the first, WORKFLOWS-FOUNDATION.md
+  F15). Its conformer search holds an entry's restraints too, as each
+  conformer is optimised, where the molecule has no metal (a metal's own
+  holds are not yet combined with them); none fixed, since a search moves
+  every atom. Either refusal is in words, before anything is embedded. Its
+  *Held* row says the largest miss over the conformers it kept. A
+  distance held is embedded at its value too (`held_bounds`): laid where
+  ETKDG lays a molecule's parts, an acid and its base were left apart -
+  pyridine's BH3 17 Å off at any strength - and embedded at it they hold
+  within 0.02 Å at 239 kcal mol⁻¹ Å⁻² and within 0.01 Å at 500, over
+  eight acid–base pairs (`scripts/calc/measure_restraint_strengths.py`
+  measures it again). A coordination bond that a
+  distance restraint holds - case F's acid held at its base at a factor
+  of their van der Waals radii - is held by that restraint alone: the
+  force field has no bond for it, so the acid and the base are each as
+  their own hydrogens make them (H3N→BH3 held at 3.21 Å comes out as NH3
+  and BH3 that far apart). From RDKit plugin 0.1.15.
 - **A coordination bond is RDKit's dative bond, taking no hydrogen.** A
   drawn dative arrow or coordination bond (a MOL block's type 9), or a
   plugin entry's bond marked `coordination`, is read as RDKit's dative
@@ -553,13 +604,33 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   RDKit counts a dative bond in its acceptor's valence, so a plain B drawn
   H3N→BH3 was given two hydrogens, where Meno counts three: the molecule
   in 3D came out H3N→BH2 (RDKit plugin to 0.1.11). Its acceptor, not a
-  metal, is now given the hydrogens Meno counts, the dative bond taking
-  none (`acceptors_as_drawn`). Where RDKit then cannot hold it - a neutral
-  B or Al with its three bonds besides - the structure is refused in
-  words: "RDKit cannot hold the coordination bond from N to B as drawn: B
-  takes no further bond there. Draw the two charged instead, N+ bonded to
-  B-." A metal acceptor keeps its ligands' hydrogens as they are
-  (cisplatin drawn with arrows: six). From RDKit plugin 0.1.12.
+  metal, is given the hydrogens Meno counts, the dative bond taking none
+  (`acceptors_as_drawn`), from 0.1.12. A metal acceptor keeps its ligands'
+  hydrogens as they are (cisplatin drawn with arrows: six).
+- **A group-13 adduct is held in its dipolar form inside RDKit.** RDKit
+  cannot hold a dative bond to a full group-13 acceptor: B, Al, Ga, In or
+  Tl, neutral, with three bonds besides. So such a bond, from a donor that
+  can carry a charge (N, P, As, O, S, Se or a halogen), neutral, is held
+  inside RDKit as a single bond, the donor +1 and the acceptor −1
+  (`dipolar_adducts`). The total charge and the electrons are the same as
+  drawn. Every op reads a drawn adduct so (`read`, `drawing_of_parts`):
+  *Check structures* keeps it as drawn, *Descriptors* works it out, and the
+  analysis of a drawing marks no atom of it as having too many bonds. What
+  the plugin writes of the molecule is of that form, the same molecule
+  written as RDKit holds it: its SMILES and the keys made from it
+  ([NH3+][BH3-] for H3N→BH3), *Stereoisomers*' SMILES, and *Descriptors*'
+  values (its weight the same either way). What it gives back as a
+  structure is as drawn: a conformer's atoms carry the charges drawn
+  (`drawn_charge`), and each drawing *Stereoisomers* makes carries the
+  arrow and the charges drawn (`as_drawn`). The force field's energies are for that form, and *How it was made*
+  says so: "N→B computed as a single bond, N+ and B−" (or, for several,
+  "N→B, O→B computed as single bonds, each donor + and acceptor −").
+  H3N→BH3, Me3N→AlCl3, the BF3 adducts of an ether and a ketone, and
+  Al2Cl6 drawn with its bridges as arrows are each made, with all their
+  atoms. A coordination bond to a main-group acceptor that cannot be held
+  so is refused in words, naming the reason: an acceptor not of group 13,
+  a charged acceptor or donor, a donor that cannot carry the charge, or
+  two such bonds onto one acceptor. From RDKit plugin 0.1.15.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
@@ -624,9 +695,23 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   the root of a branch joined to the rest through it, and a pendant ring
   symmetric about its bond - as it is in the lowest conformer, by whole
   branches (handedness first, then the fit in the parent's frame), before it
-  answers. Only conformers RDKit made are touched: not a calculation's,
-  not another program's, not a single structure; no heavy atom moves but
-  as a whole equivalent branch; and no whole-molecule symmetry is searched.
+  answers Meno's own page. Only conformers RDKit made are touched: not a
+  calculation's, not another program's, not a single structure; no heavy
+  atom moves but as a whole equivalent branch; and no whole-molecule
+  symmetry is searched.
+- **A workflow's *Conformers* step is given RDKit's own** (the maintainer,
+  2026-10-30). Each conformer is embedded and optimised as RDKit makes
+  it, lowest energy first, and none is taken for another, laid over
+  another, has its equivalent atoms settled, or is made as an enantiomer's
+  mirror image. Those four are for Meno's own page, which asks for them
+  (`onPage`); the core sends that with *3D structure* alone, and no option
+  of the step's carries it. So a molecule with one shape can come back as
+  many frames of it: [OsCl6]2-, ten embeddings sought, gives nine, its
+  octahedron and eight relabellings of it (the tenth is dropped below the
+  floor), where the page shows one; a *Duplicates* step after it keeps
+  one. Where it embedded from random coordinates (an η complex, or a
+  crowded cage that would not embed otherwise), its *Embedded* row says
+  so. From RDKit plugin 0.1.14.
 
 ## Versions
 
@@ -878,6 +963,13 @@ The same for every plugin and for Meno's own parts:
     (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
     times its processes, Gaussian's %Mem - counted against what this
     computer's jobs may use; none declared, it is counted by its cores;
+  - `prepare` is told where each program installed separately was
+    found (`programs`, by its name: `{"orca": "/Applications/orca/orca"}`),
+    the folder its jobs' PATH begins with (2026-10-31);
+  - a job `prepare` gives may take fewer cores than it was given
+    (`"cores": 1`): ORCA's, with no MPI to run its processes with. Meno
+    asks for it at that many, never more than Settings gives, and the
+    queue counts it so (2026-10-31);
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job
@@ -988,11 +1080,15 @@ The same for every plugin and for Meno's own parts:
     the program used; the pressure, `thermo.pressure` (atm), only where
     the program prints one (xtb prints none, and its documentation states
     none); and how it was worked out, `thermo.treatment`, a text in the
-    program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
+    program's words, its units as Meno writes them (cm⁻¹, 2026-10-31): xtb's `rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹,
     scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03);
-    ORCA's `quasi-RRHO (Grimme), 100 cm-1`, from where it says its
+    ORCA's `quasi-RRHO (Grimme), 100 cm⁻¹`, from where it says its
     vibrational entropy is the QRRHO of S. Grimme and at which reference
-    frequency. Two values of one treatment are written alike, so that
+    frequency - or `RRHO`, where it says it did not ("Quasi RRHO ...
+    False": the harmonic oscillator alone, ORCA's `%freq QuasiRRHO false`,
+    which the ORCA plugin's Frequencies writes where its *Low-frequency
+    vibrations* option says *Harmonic (RRHO)*; ORCA's own treatment, unless asked,
+    2026-10-31). Two values of one treatment are written alike, so that
     they compare. And the symmetry its thermochemistry took, as the
     program printed it - of several prints, the last, as the other
     thermochemistry is read, so that all are of one: its point group,
@@ -1135,7 +1231,9 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   "bonds": [{"a1", "a2", "order", "coordination"?}],
   "charge": 0,
   "multiplicity": 1,
-  "files": [{"kind", "name", "text"}]  (where the step takes some)
+  "files": [{"kind", "name", "text"}], (where the step takes some)
+  "restraints": [{"kind", "atoms", "value"?, "strength"?}], (where it carries some)
+  "start": [x, y, z, ...]            (where a minimisation first held them)
 }
 ```
 
@@ -1164,7 +1262,14 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   distance by E = k d²/2, k in kcal mol⁻¹ Å⁻²; a dihedral by E = k φ²/2,
   φ in radians the shorter way round, k in kcal mol⁻¹ rad⁻²; atoms fixed
   where they are - converting k into its program's units and saying here,
-  under its name, how; or it refuses them in words. None does yet.
+  under its name, how; or it refuses them in words. An entry gives its
+  restraints as `restraints`, and `start`, the places a minimisation first
+  held them at, where one has. The RDKit plugin holds them (*Minimise with
+  restraints, and a search that holds them*, below). A step that holds
+  none - an *Optimise*, an *Energy* - is given them all the same and leaves
+  them aside: what its program gives back is unheld. It need not refuse
+  them, as case F optimises, unheld, what it minimised with restraints
+  (WORKFLOWS-FOUNDATION.md, F16).
 - A temperature, a pressure and a solvent a plugin gives with a property
   are those its program says it used; a solvent is named with its model
   as the program names them (`ALPB(water)`), or `none` where the

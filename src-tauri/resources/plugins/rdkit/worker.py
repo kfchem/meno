@@ -103,11 +103,123 @@ def acceptors_as_drawn(mol):
     return mol
 
 
+#: Acceptors of group 13, neutral with three bonds besides, whose coordination bond RDKit cannot hold as a dative
+#: bond - it counts it in their valence - and so holds as the bond's dipolar form inside it (`dipolar_adducts`).
+DIPOLAR_ACCEPTORS = {"B", "Al", "Ga", "In", "Tl"}
+#: Donors that can carry a +1 charge with one bond more, as that form needs.
+DIPOLAR_DONORS = {"N", "P", "As", "O", "S", "Se", "F", "Cl", "Br", "I"}
+
+
+def adduct_why(mol, b):
+    """Why a coordination bond to a full main-group acceptor cannot be held
+    in its dipolar form, in words; None where it can."""
+    donor, acceptor = b.GetBeginAtom(), b.GetEndAtom()
+    if acceptor.GetSymbol() not in DIPOLAR_ACCEPTORS:
+        return f"{acceptor.GetSymbol()} is not one of B, Al, Ga, In and Tl"
+    if acceptor.GetFormalCharge():
+        return f"{acceptor.GetSymbol()} is drawn charged"
+    if donor.GetFormalCharge():
+        return f"{donor.GetSymbol()} is drawn charged"
+    if donor.GetSymbol() not in DIPOLAR_DONORS:
+        return f"{donor.GetSymbol()} cannot carry the charge"
+    datives = [x for x in acceptor.GetBonds() if x.GetBondType() == Chem.BondType.DATIVE]
+    if len(datives) > 1:
+        return f"{acceptor.GetSymbol()} takes {len(datives)} of them"
+    besides = acceptor.GetNumExplicitHs() + sum(x.GetBondTypeAsDouble() for x in acceptor.GetBonds() if x.GetBondType() != Chem.BondType.DATIVE)
+    if besides != 3:
+        return f"{acceptor.GetSymbol()} has {besides:g} bonds besides, not three"
+    return None
+
+
+def dipolar_adducts(mol):
+    """Each coordination bond to a group-13 acceptor, neutral with three
+    bonds besides, from a donor that can carry a charge, held as its
+    dipolar form: a single bond, the donor +1 and the acceptor -1. Inside
+    RDKit only, which cannot hold it as a dative bond: the charges as drawn
+    are kept on each atom (`DRAWN_CHARGE`) and are what is reported back, and
+    the donor names its acceptor (`LENDS_TO`). The same charge and electrons
+    as drawn. Changed in place; unsanitised in, unsanitised out. Those it
+    held so, as (donor, acceptor)."""
+    held = []
+    for b in list(mol.GetBonds()):
+        if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()) or adduct_why(mol, b):
+            continue
+        donor, acceptor = b.GetBeginAtom(), b.GetEndAtom()
+        for atom in (donor, acceptor):
+            atom.SetIntProp(DRAWN_CHARGE, atom.GetFormalCharge())
+        b.SetBondType(Chem.BondType.SINGLE)
+        donor.SetFormalCharge(donor.GetFormalCharge() + 1)
+        acceptor.SetFormalCharge(acceptor.GetFormalCharge() - 1)
+        donor.SetIntProp(LENDS_TO, acceptor.GetIdx())
+        held.append((donor.GetIdx(), acceptor.GetIdx()))
+    return held
+
+
+#: An atom's charge as drawn, kept where RDKit holds it otherwise (`dipolar_adducts`), and its acceptor's index on a donor.
+DRAWN_CHARGE = "meno_drawn_charge"
+LENDS_TO = "meno_lends_to"
+
+
+def drawn_charge(atom):
+    """An atom's charge as drawn: kept where RDKit holds a dipolar form."""
+    return atom.GetIntProp(DRAWN_CHARGE) if atom.HasProp(DRAWN_CHARGE) else atom.GetFormalCharge()
+
+
+def dipolar_words(mol):
+    """The coordination bonds held in their dipolar form, as a row of *How it
+    was made* says what was computed - only what differs from the drawing,
+    whose charges the structure shows: "N\u2192B computed as a single bond,
+    N+ and B\u2212". None where there are none."""
+    pairs = sorted({(a.GetSymbol(), mol.GetAtomWithIdx(a.GetIntProp(LENDS_TO)).GetSymbol()) for a in mol.GetAtoms() if a.HasProp(LENDS_TO)})
+    if not pairs:
+        return None
+    if len(pairs) == 1:
+        d, x = pairs[0]
+        return f"{d}\u2192{x} computed as a single bond, {d}+ and {x}\u2212"
+    return ", ".join(f"{d}\u2192{x}" for d, x in pairs) + " computed as single bonds, each donor + and acceptor \u2212"
+
+
+def as_drawn(mol):
+    """A copy of `mol` with each coordination bond held in its dipolar form
+    (`dipolar_adducts`) as drawn again: a dative bond from its donor to its
+    acceptor, and each atom's charge as drawn - for a drawing written back,
+    which shows what the chemist drew, not how RDKit holds it. Where the
+    atom a donor names as its acceptor is no longer that acceptor - not
+    bonded to it, or not a group-13 acceptor held so (its charge as drawn
+    kept, its charge here -1): the molecule renumbered since - why, in
+    words: never a drawing written without its arrow, nor with it on
+    another bond."""
+    out = Chem.RWMol(mol)
+    for a in mol.GetAtoms():
+        if a.HasProp(LENDS_TO):
+            to = a.GetIntProp(LENDS_TO)
+            acceptor = mol.GetAtomWithIdx(to) if 0 <= to < mol.GetNumAtoms() else None
+            bond = out.GetBondBetweenAtoms(a.GetIdx(), to) if acceptor is not None else None
+            if (bond is None or not acceptor.HasProp(DRAWN_CHARGE) or acceptor.GetSymbol() not in DIPOLAR_ACCEPTORS
+                    or acceptor.GetFormalCharge() != -1):
+                raise ValueError(f"its coordination bond from {a.GetSymbol()} could not be written back as drawn")
+            bond.SetBondType(Chem.BondType.DATIVE)
+            if bond.GetBeginAtomIdx() != a.GetIdx():
+                bond.SetBeginAtomIdx(a.GetIdx())
+                bond.SetEndAtomIdx(a.GetIntProp(LENDS_TO))
+        if a.HasProp(DRAWN_CHARGE):
+            out.GetAtomWithIdx(a.GetIdx()).SetFormalCharge(a.GetIntProp(DRAWN_CHARGE))
+    out = out.GetMol()
+    out.UpdatePropertyCache(strict=False)
+    return out
+
+
+def held_dipolar(mol):
+    """Whether `mol` holds a coordination bond in its dipolar form (`dipolar_adducts`)."""
+    return any(a.HasProp(LENDS_TO) for a in mol.GetAtoms())
+
+
 def sanitized(mol):
-    """`mol` sanitised, or why not in words: a coordination bond RDKit cannot
-    hold - its acceptor, not a metal, past what RDKit lets it bond, as a
-    neutral B or Al with three bonds besides - named, with what to draw
-    instead; any other problem as RDKit gives it."""
+    """`mol` sanitised - a coordination bond to a full group-13 acceptor held
+    in its dipolar form first (`dipolar_adducts`) - or why not in words: a
+    coordination bond RDKit cannot hold otherwise, named, with why; any other
+    problem as RDKit gives it."""
+    dipolar_adducts(mol)
     problem = Chem.SanitizeMol(mol, catchErrors=True)
     if problem == Chem.SanitizeFlags.SANITIZE_NONE:
         return mol
@@ -115,20 +227,21 @@ def sanitized(mol):
         if b.GetBondType() != Chem.BondType.DATIVE or is_metal(b.GetEndAtom()):
             continue
         donor, acceptor = b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()
-        raise ValueError(
-            f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {acceptor} takes no further bond there. "
-            f"Draw the two charged instead, {donor}+ bonded to {acceptor}-."
-        )
+        why = adduct_why(mol, b) or f"{acceptor} takes no further bond there"
+        raise ValueError(f"RDKit cannot hold the coordination bond from {donor} to {acceptor} as drawn: {why}.")
     raise ValueError(f"cannot make sense of the structure ({problem})")
 
 
 def read(molblock, sanitize=True):
     """A molecule from a MOL block, kept as drawn: no hydrogens removed, and
-    none taken by a coordination bond (`acceptors_as_drawn`)."""
+    none taken by a coordination bond (`acceptors_as_drawn`); one to a full
+    group-13 acceptor held in its dipolar form (`dipolar_adducts`), whether
+    sanitised or not, so that every op reads an adduct the same way."""
     mol = Chem.MolFromMolBlock(molblock, sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("This structure could not be read.")
     acceptors_as_drawn(mol)
+    dipolar_adducts(mol)
     if sanitize:
         sanitized(mol)
         Chem.AssignChiralTypesFromBondDirs(mol)
@@ -353,19 +466,28 @@ def drawing_block(mol):
     Meno's engine to lay out again), its stereo wedged as the molecule has
     it."""
     lay_out_2d(mol)
-    block = Chem.MolToV3KMolBlock(mol)
+    # (an adduct held in its dipolar form written as drawn: its arrow, and its charges as drawn - `as_drawn`)
+    written = lambda: Chem.MolToV3KMolBlock(as_drawn(mol) if held_dipolar(mol) else mol)
+    block = written()
     # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
     # says (Z): where what is written does not read back as the molecule,
     # RDKit's own depictor lays it out instead (it keeps that one)
     if not reads_as(block, mol):
         rdDepictor.Compute2DCoords(mol, forceRDKit=True)
-        block = Chem.MolToV3KMolBlock(mol)
+        block = written()
     return block
 
 
 def reads_as(molblock, mol):
     """Whether a MOL block reads back as the molecule it was written from,
     stereochemistry and all."""
+    if held_dipolar(mol):
+        # (read as the worker reads a drawing, its adduct held in its dipolar form again: RDKit's own reading refuses it)
+        try:
+            back = read(molblock)
+        except ValueError:
+            return False
+        return Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
     back = Chem.MolFromMolBlock(molblock)
     return back is not None and Chem.MolToSmiles(back) == Chem.MolToSmiles(mol)
 
@@ -1968,12 +2090,19 @@ def rmsd_laid(P, Q):
     return float(np.sqrt(max((p ** 2).sum() + (q ** 2).sum() - 2 * s.sum(), 0.0) / len(P)))
 
 
-def conformers_of(iso, how, made):
-    """A stereoisomer's conformers. Of two enantiomers, the one whose SMILES
-    comes first is made, and the other is its mirror image: the same shapes
-    and energies, whichever is asked for and in whichever request. `made`
-    keeps what has been made, by SMILES, for the rest of the request."""
+def conformers_of(iso, how, made, page=False):
+    """A stereoisomer's conformers. On Meno's own page (`page`), of two
+    enantiomers the one whose SMILES comes first is made, and the other is
+    its mirror image: the same shapes and energies, whichever is asked for
+    and in whichever request. A workflow's step makes each as RDKit makes
+    it. `made` keeps what has been made, by SMILES, for the rest of the
+    request."""
     smiles = smiles_of(iso)
+    if not page:
+        if smiles not in made:
+            made[smiles] = conformers(iso, **how)
+        return made[smiles]
+    how = {**how, "page": True}
     mirror = mirror_of(iso)
     twin = smiles_of(mirror) if mirror is not None else smiles
     if twin >= smiles:
@@ -1991,11 +2120,14 @@ def conformers_of(iso, how, made):
     return entry
 
 
-def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
+def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=(), page=False):
     """A stereoisomer's conformers, embedded (ETKDG) and optimised (MMFF94,
     MMFF94s or UFF, as asked - UFF where MMFF has no parameters), lowest
-    energy first, the same conformer twice kept once (SAME_CONFORMER), and
-    each laid over the first by its heavy atoms; and how they were made,
+    energy first - every one RDKit made, as it made it; and, for Meno's own
+    page alone (`page`: its 3D structure, never a workflow's step), the
+    same conformer twice kept once (SAME_CONFORMER), each laid over the
+    first by its heavy atoms, and their equivalent branches settled
+    (`settle_equivalents`); and how they were made,
     said as rows to show
     (`how`). How many are tried is `count`, or as many as the molecule needs
     where it gives none (`sought`). A metal's bonds are embedded at their
@@ -2019,6 +2151,19 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
     params.pruneRmsThresh = -1.0
     params.numThreads = 0  # (every core)
     bounds = metal_bounds(mol, eta)
+    # (each distance held, embedded at its value: an acid held at its base is a part of its own, placed there, not
+    #  wherever ETKDG lays a part - laid apart, a weak hold never brought them together, pyridine's BH3 17 A off)
+    if rows:
+        # (refused before anything is embedded: none fixed - a search moves every atom - and only where it has no
+        #  metal, whose own holds are not yet combined with them)
+        if any(r["kind"] == "fixed" for r in rows):
+            raise ValueError("A conformer search moves every atom, so it holds no atoms fixed: take them out of its restraints, or minimise with them instead")
+        if eta or any(is_metal(a) and a.GetDegree() for a in mol.GetAtoms()):
+            raise ValueError("A conformer search holds restraints only where the molecule has no metal: search without them, then minimise with them")
+    held = [r for r in rows if r["kind"] == "distance"]
+    if held:
+        bounds = held_bounds(mol, held, bounds)
+        params.embedFragmentsSeparately = False
     if bounds is not None:
         params.SetBoundsMat(bounds)
     if eta:
@@ -2033,12 +2178,27 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count, params=params))
     if not ids:
         raise ValueError("no 3D structure could be made of it")
+    # (from random coordinates, where it was: said on its row)
+    randomly = params.useRandomCoords
     asked = field
     metals = typed_for_uff(mol)
     eta_metals = {mol.GetAtomWithIdx(metal).GetSymbol() for metal, _, _ in eta}
     stood = None
     untyped = sorted({el for el, digit in metals if digit is None})
-    if eta:
+    if rows:
+        # (its restraints held while each conformer is optimised, as Minimise with restraints holds them)
+        field, make = restrained_field(mol, rows, field)
+        stood_in, results = False, []
+        for cid in ids:
+            ff = make(cid, rows)
+            more = ff.Minimize(maxIts=iters)
+            places = list(ff.Positions())
+            conf = mol.GetConformer(cid)
+            for i in range(mol.GetNumAtoms()):
+                conf.SetAtomPosition(i, Point3D(places[3 * i], places[3 * i + 1], places[3 * i + 2]))
+            # (its energy the force field's own: the restraints' not counted in)
+            results.append((more, make(cid, ()).CalcEnergy(places)))
+    elif eta:
         # (the stars and the systems' bonds are not UFF's: held, as uff_stood_in holds them, with no energies)
         field, results = None, None
         stood = uff_stood_in(mol, ids, iters, eta)
@@ -2085,24 +2245,36 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         m, angle = next((m, angle) for _, m, angle in dropped.values())
         raise ValueError(f"every structure made of it came out with two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} "
                          f"closer than the {angle:g}\u00b0 they were held apart")
-    # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
-    sameness = Sameness(mol)
-    places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
-    marks = {cid: sameness.signature(places[cid]) for cid in left}
-    kept = []
-    for cid in sorted(left, key=lambda c: order[c]) if order else left:
-        if not any(sameness.bound(marks[cid], marks[k]) <= SAME_CONFORMER and sameness.same(places[cid], places[k]) for k in kept):
-            kept.append(cid)
-    # (each laid over the lowest by its heavy atoms, for the overlay)
-    heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
-    for cid in kept[1:]:
-        rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
-    # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
-    settle_equivalents(mol, kept)
+    # (lowest first)
+    ranked = sorted(left, key=lambda c: order[c]) if order else left
+    sameness = None
+    if not page:
+        # (a workflow's step: every conformer as RDKit made it - none taken for another, moved or renumbered. Its
+        #  Duplicates step keeps one of each where a workflow asks for that)
+        kept = ranked
+    else:
+        # (the one conformer kept once: SAME_CONFORMER, lowest first - each only against those kept before it)
+        sameness = Sameness(mol)
+        places = {cid: mol.GetConformer(cid).GetPositions() for cid in left}
+        marks = {cid: sameness.signature(places[cid]) for cid in left}
+        kept = []
+        for cid in ranked:
+            if not any(sameness.bound(marks[cid], marks[k]) <= SAME_CONFORMER and sameness.same(places[cid], places[k]) for k in kept):
+                kept.append(cid)
+        # (each laid over the lowest by its heavy atoms, for the overlay)
+        heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
+        for cid in kept[1:]:
+            rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
+        # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
+        settle_equivalents(mol, kept)
+    # (how far the conformers kept missed what their restraints hold, the largest of each kind over them all)
+    misses = [restraints_missed([v for p in mol.GetConformer(cid).GetPositions() for v in p], rows) for cid in kept] if rows else []
+    missed = [max((m[k] for m in misses if m[k] is not None), default=None) for k in (0, 1)]
     shown = Chem.Mol(mol)
     Chem.Kekulize(shown, clearAromaticFlags=True)
     return {
-        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge()} for a in mol.GetAtoms()],
+        # (each charge as drawn, where RDKit held a coordination bond in its dipolar form)
+        "atoms": [{"el": a.GetSymbol(), "charge": drawn_charge(a)} for a in mol.GetAtoms()],
         "bonds": [
             {"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": kekule_order(b)}
             for b in shown.GetBonds()
@@ -2117,7 +2289,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         "method": method,
         # (short rows: the chip says them in a narrow card)
         "how": [
-            {"label": "Embedded", "text": "ETKDG v3"},
+            {"label": "Embedded", "text": "ETKDG v3" + (", from random coordinates" if randomly else "")},
             {"label": "Random seed", "text": f"{seed}"},
             *([{"label": "Optimised", "text": f"{field}, at most {iters} steps"}] if field else [
                 {"label": "Optimised", "text": f"UFF, at most {iters} steps"
@@ -2127,6 +2299,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                  else "none: UFF has no parameters for " + " or ".join(untyped or ["it"])},
             ]),
             *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
+            *([{"label": "Held", "text": "; ".join(w for w in (restraints_words(rows), missed_words(missed)) if w)}] if rows else []),
+            *([{"label": "Coordination bonds", "text": dipolar_words(mol)}] if dipolar_words(mol) else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
@@ -2137,8 +2311,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                 for m, angle in sorted({(m, angle) for _, m, angle in dropped.values()}))}] if dropped else []),
             {"label": "Kept", "text": f"{len(kept)} of {len(ids)} embedded ({count} sought)"
              + (f", {len(left) - len(kept)} the same as one kept" if len(left) > len(kept) else "")},
-            {"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
-             + (", atom against atom: too many ways it maps onto itself to try" if sameness.capped else ", over its symmetries")},
+            *([{"label": "The same within", "text": f"{SAME_CONFORMER:g} \u00c5, all atoms (H included)"
+                + (", atom against atom: too many ways it maps onto itself to try" if sameness.capped else ", over its symmetries")}] if sameness else []),
             {"label": "Made by", "text": f"RDKit {rdBase.rdkitVersion}"},
         ],
     }
@@ -2151,7 +2325,11 @@ def op_conformers(m):
     the CIP label of every stereocentre and double bond (`cip`), and of the
     ones that were left open (`chosen`), atom by atom and bond by bond. Those
     `like` gives a configuration (see `kept`) are made so, and count as
-    chosen."""
+    chosen. `onPage`, which Meno's own page sends and a workflow's step
+    never does, has them made for the page: each conformer once, laid over
+    the first, its equivalent branches settled, and an enantiomer the mirror
+    image of its twin (`conformers`, `conformers_of`); else they are RDKit's
+    own."""
     drawn = read(m["molblock"])
     as_ligand_anions(drawn, eta_systems(drawn))
     atoms, bonds = open_stereo(drawn)
@@ -2162,7 +2340,7 @@ def op_conformers(m):
     made, cache = [], {}
     how = options_of(m)
     for iso in isomers:
-        entry = dict(conformers_of(iso, how, cache))
+        entry = dict(conformers_of(iso, how, cache, bool(m.get("onPage"))))
         rdCIPLabeler.AssignCIPLabels(iso)
         entry["cip"] = {
             "atoms": {str(a.GetIdx()): a.GetProp("_CIPCode") for a in iso.GetAtoms() if a.HasProp("_CIPCode")},
@@ -2288,10 +2466,19 @@ BOND_TYPES = {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE, 3: Chem.BondType
 RADICALS = {"doublet": 1, "triplet": 2, "singlet": 2}
 
 
-def mol_of(entry):
+def held_apart(entry, rows):
+    """The coordination bonds of an entry a distance restraint holds, as
+    pairs of atoms: held by that restraint alone - no bond of the force
+    field's - as case F's protocol holds an acid at a base (docs/PLUGINS.md)."""
+    pairs = {frozenset(r["atoms"]) for r in rows if r["kind"] == "distance"}
+    return {frozenset((int(b["a1"]), int(b["a2"]))) for b in entry.get("bonds") or [] if b.get("coordination") and frozenset((int(b["a1"]), int(b["a2"]))) in pairs}
+
+
+def mol_of(entry, apart=()):
     """A molecule in 3D as Meno gives one: its atoms - element, place in
     angstroms, charge, radical - and its bonds by index with their orders;
-    its stereo read from where its atoms are."""
+    its stereo read from where its atoms are. A coordination bond in
+    `apart` (`held_apart`) is left out: a restraint holds it."""
     atoms = entry.get("atoms") or []
     if not atoms:
         raise ValueError("a molecule has no atoms")
@@ -2304,6 +2491,8 @@ def mol_of(entry):
             atom.SetNoImplicit(True)
         rw.AddAtom(atom)
     for b in entry.get("bonds") or []:
+        if b.get("coordination") and frozenset((int(b["a1"]), int(b["a2"]))) in apart:
+            continue
         # (a coordination bond as RDKit's dative, from the atom that lends its pair - never a covalent single)
         kind = Chem.BondType.DATIVE if b.get("coordination") else BOND_TYPES.get(int(b.get("order", 1)), Chem.BondType.SINGLE)
         rw.AddBond(int(b["a1"]), int(b["a2"]), kind)
@@ -2317,36 +2506,218 @@ def mol_of(entry):
     return mol
 
 
+MINIMISE_JOB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "minimise_job.py")
+#: What a restrained minimisation's job writes, for `collect` to read back.
+MINIMISE_OUT = "minimised.json"
+
+#: RDKit's torsion constraint holds by k (the angle off, in degrees) squared; the entry record's dihedral by
+#: k (the angle off, in radians) squared, halved (src/lib/entry.ts `Restraint`): the record's k, times this, is RDKit's.
+TORSION_K = 0.5 * (math.pi / 180.0) ** 2
+
+
+def restraint_rows(rows, n):
+    """An entry's restraints (the entry record's `Restraint`, docs/PLUGINS.md)
+    as they are held here, each checked - or why one cannot be, in words."""
+    held = []
+    for k, r in enumerate(rows or []):
+        kind, atoms = r.get("kind"), list(r.get("atoms") or [])
+        want = {"distance": 2, "dihedral": 4}.get(kind)
+        if kind not in ("distance", "dihedral", "fixed") or (want and len(atoms) != want) or not atoms:
+            raise ValueError(f"Restraint {k + 1} is no distance, dihedral or atoms fixed that can be held")
+        if any(not isinstance(a, int) or a < 0 or a >= n for a in atoms):
+            raise ValueError(f"Restraint {k + 1} names an atom the molecule does not have")
+        if kind != "fixed":
+            value, strength = r.get("value"), r.get("strength")
+            if not isinstance(value, (int, float)) or not math.isfinite(value) or not isinstance(strength, (int, float)) or not strength > 0:
+                raise ValueError(f"Restraint {k + 1}, a {kind}, has no value or strength to hold it by")
+        held.append({"kind": kind, "atoms": atoms, "value": r.get("value"), "strength": r.get("strength")})
+    return held
+
+
+def minimised(mol, rows, field="MMFF94", iters=STEPS, start=None):
+    """`mol` minimised in a force field with its restraints held (Minimise
+    with restraints): a distance by RDKit's distance constraint, k d^2 / 2 as
+    the record has it (kcal mol-1 A-2, the same k); a dihedral by RDKit's
+    torsion constraint, its k the record's times TORSION_K; atoms fixed as
+    fixed points. MMFF94 or MMFF94s as asked, UFF where MMFF has no
+    parameters; none where UFF has none either - said. From `start`, the
+    places the restraints were first held at, where given; else from where
+    its atoms are. Nothing between its parts is left out. Its energy is the
+    force field's, without the restraints' own. Whether it converged within
+    `iters` steps is said, and how far it missed what its restraints hold
+    (`restraints_missed`)."""
+    conf = mol.GetConformer()
+    if start is not None:
+        if len(start) != 3 * mol.GetNumAtoms():
+            raise ValueError("Where its restraints were first held is not the molecule's atoms")
+        for i in range(mol.GetNumAtoms()):
+            conf.SetAtomPosition(i, Point3D(float(start[3 * i]), float(start[3 * i + 1]), float(start[3 * i + 2])))
+    field, make = restrained_field(mol, rows, field)
+    ff = make(-1, rows)
+    converged = ff.Minimize(maxIts=iters) == 0
+    places = list(ff.Positions())
+    # (its energy the force field's own, at the places reached: the restraints' not counted in)
+    energy = make(-1, ()).CalcEnergy(places)
+    return {"frame": [round(v, 5) for v in places], "energy": energy / KCAL_PER_HARTREE, "field": field, "converged": converged, "iters": iters,
+            "missed": restraints_missed(places, rows)}
+
+
+def held_bounds(mol, held, bounds=None):
+    """A molecule's bounds for embedding (its own, or `bounds`, a metal's
+    already set) with each distance held at its value, upper and lower, and
+    smoothed; or why the distances held cannot all be met together."""
+    from rdkit import DistanceGeometry
+
+    bounds = rdDistGeom.GetMoleculeBoundsMatrix(mol) if bounds is None else bounds.copy()
+    for r in held:
+        i, j = sorted(r["atoms"])
+        bounds[i][j] = bounds[j][i] = float(r["value"])
+    if not DistanceGeometry.DoTriangleSmoothing(bounds):
+        raise ValueError("The distances held cannot all be met together in one structure")
+    return bounds
+
+
+def restraints_words(rows):
+    """What restraints were held, in a row's words: "2 distances, 1 torsion"."""
+    count = lambda kind: sum(1 for r in rows if r["kind"] == kind)
+    said = [f"{n} {word}{'' if n == 1 else 's'}" for n, word in ((count("distance"), "distance"), (count("dihedral"), "torsion")) if n]
+    fixed = sum(len(r["atoms"]) for r in rows if r["kind"] == "fixed")
+    if fixed:
+        said.append(f"{fixed} atom{'' if fixed == 1 else 's'} fixed")
+    return ", ".join(said) + " held, the energies without them"
+
+
+def dihedral_deg(places, a, b, c, d):
+    """The dihedral of four atoms at `places` (x, y and z by atom in turn), in degrees from -180 to 180."""
+    P = [places[3 * i:3 * i + 3] for i in (a, b, c, d)]
+    sub = lambda u, v: [u[0] - v[0], u[1] - v[1], u[2] - v[2]]
+    cross = lambda u, v: [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+    dot = lambda u, v: u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+    b1, b2, b3 = sub(P[1], P[0]), sub(P[2], P[1]), sub(P[3], P[2])
+    n1, n2 = cross(b1, b2), cross(b2, b3)
+    return math.degrees(math.atan2(math.sqrt(dot(b2, b2)) * dot(b1, n2), dot(n1, n2)))
+
+
+def restraints_missed(places, rows):
+    """How far `places` came from what `rows` hold: the largest miss of a
+    distance, in A, and of a dihedral, in degrees the shorter way round -
+    each None where none of its kind is held. Atoms fixed do not move."""
+    at = lambda i: places[3 * i:3 * i + 3]
+    distances = [abs(math.dist(at(r["atoms"][0]), at(r["atoms"][1])) - r["value"]) for r in rows if r["kind"] == "distance"]
+    torsions = [abs((dihedral_deg(places, *r["atoms"]) - r["value"] + 180.0) % 360.0 - 180.0) for r in rows if r["kind"] == "dihedral"]
+    return [max(distances) if distances else None, max(torsions) if torsions else None]
+
+
+def missed_words(missed):
+    """The largest misses, in a row's words: "missed by at most 0.004 Å and 1.2°"; none where nothing was measured."""
+    said = [f"{missed[0]:.3f} \u00c5" if missed[0] is not None else "", f"{missed[1]:.1f}\u00b0" if missed[1] is not None else ""]
+    said = [w for w in said if w]
+    return "missed by at most " + " and ".join(said) if said else ""
+
+
+def restrained_field(mol, rows, field="MMFF94"):
+    """The force field a molecule is minimised in with restraints held - MMFF94
+    or MMFF94s as asked, UFF where MMFF has no parameters, neither said where
+    UFF has none - and how to make it for a conformer with restraints held
+    (`make(cid, rows)`, initialised), each as the entry record states it: a
+    distance by RDKit's distance constraint (k d^2 / 2, the same k), a
+    dihedral by its torsion constraint (the record's k times TORSION_K),
+    atoms fixed as fixed points. Nothing between the molecule's parts is
+    left out."""
+    if field in ("MMFF94", "MMFF94s") and rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
+        props = rdForceFieldHelpers.MMFFGetMoleculeProperties(mol, mmffVariant=field)
+        base = lambda cid: rdForceFieldHelpers.MMFFGetMoleculeForceField(mol, props, confId=cid, ignoreInterfragInteractions=False)
+        distance, torsion = "MMFFAddDistanceConstraint", "MMFFAddTorsionConstraint"
+    elif rdForceFieldHelpers.UFFHasAllMoleculeParams(mol):
+        field = "UFF"
+        base = lambda cid: rdForceFieldHelpers.UFFGetMoleculeForceField(mol, confId=cid, ignoreInterfragInteractions=False)
+        distance, torsion = "UFFAddDistanceConstraint", "UFFAddTorsionConstraint"
+    else:
+        raise ValueError("No force field here has parameters for it: neither MMFF94 nor UFF")
+
+    def make(cid, held):
+        ff = base(cid)
+        for r in held:
+            a = r["atoms"]
+            if r["kind"] == "distance":
+                getattr(ff, distance)(a[0], a[1], False, float(r["value"]), float(r["value"]), float(r["strength"]))
+            elif r["kind"] == "dihedral":
+                getattr(ff, torsion)(a[0], a[1], a[2], a[3], False, float(r["value"]), float(r["value"]), float(r["strength"]) * TORSION_K)
+            else:
+                for i in a:
+                    ff.AddFixedPoint(i)
+        ff.Initialize()
+        return ff
+
+    return field, make
+
+
 def op_prepare(m):
-    """A conformer search's jobs: one for each molecule, its molecule and the
-    options written into its folder, run by this environment's Python."""
-    if m.get("step") != "conformers":
-        raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
+    """A conformer search's jobs, or a restrained minimisation's: one for
+    each molecule, its molecule - its restraints with it, and where they
+    were first held - and the options written into its folder, run by this
+    environment's Python."""
+    step = m.get("step")
+    if step not in ("conformers", "minimise"):
+        raise ValueError(f"There is no step {step!r} to run as a job.")
     options = m.get("options") or {}
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
-        mol_of(entry)  # (one RDKit cannot make sense of, said now - not in its job)
+        rows = restraint_rows(entry.get("restraints"), len(entry.get("atoms") or []))
+        mol_of(entry, held_apart(entry, rows))  # (one RDKit cannot make sense of, said now - not in its job)
         given = {"atoms": entry["atoms"], "bonds": entry.get("bonds") or [], "options": options}
+        if rows:
+            given["restraints"] = rows
+        if step == "minimise" and entry.get("start") is not None:
+            given["start"] = entry["start"]
         jobs.append({
             "entries": [i],
             "program": "python",
-            "args": ["-u", CONFORMERS_JOB, "molecule.json"],
+            "args": ["-u", MINIMISE_JOB if step == "minimise" else CONFORMERS_JOB, "molecule.json"],
             "files": [{"name": "molecule.json", "text": json.dumps(given)}],
-            "reads": [CONFORMERS_OUT],
+            "reads": [MINIMISE_OUT if step == "minimise" else CONFORMERS_OUT],
         })
     if not jobs:
         raise ValueError("nothing came in")
     return {"jobs": jobs}
 
 
+def missed_results(missed):
+    """A restrained minimisation's largest misses, as results on its molecule (the general form, docs/PLUGINS.md)."""
+    d, t = missed or [None, None]
+    return [
+        *([{"id": "restraint-distance-missed", "on": "molecule", "group": "Restraints", "label": "Largest distance miss", "value": round(d, 4), "quantity": "length"}] if d is not None else []),
+        *([{"id": "restraint-torsion-missed", "on": "molecule", "group": "Restraints", "label": "Largest torsion miss", "value": round(t, 2), "quantity": "angle"}] if t is not None else []),
+    ]
+
+
 def op_collect(m):
     """What a conformer search's job wrote, as Meno's output form: each
-    conformer a geometry, lowest energy first, with its energy."""
-    if m.get("step") != "conformers":
+    conformer a geometry, lowest energy first, with its energy. Or a
+    restrained minimisation's: the geometry it reached, its energy, and
+    whether it converged."""
+    if m.get("step") not in ("conformers", "minimise"):
         raise ValueError(f"There is no step {m.get('step')!r} to run as a job.")
     if m.get("ended") != "done":
         lines = [line.strip() for line in (m.get("log") or "").splitlines() if line.strip()]
         return {"why": lines[-1] if lines else "it said nothing"}
+    if m.get("step") == "minimise":
+        text = (m.get("files") or {}).get(MINIMISE_OUT)
+        if not text:
+            raise ValueError("the minimisation wrote nothing")
+        made = json.loads(text)
+        return {"outputs": [{
+            "schema": 1,
+            "program": "RDKit",
+            "version": made.get("version"),
+            "method": f"{made['field']}, restrained",
+            "atoms": [a["el"] for a in made["atoms"]],
+            "frames": [made["frame"]],
+            "energies": [made["energy"]],
+            "optimised": bool(made.get("converged")),
+            # (how far it missed what its restraints hold: a weak strength set by hand shows here, not silently)
+            "results": missed_results(made.get("missed")),
+        } for _ in m.get("entries") or []]}
     text = (m.get("files") or {}).get(CONFORMERS_OUT)
     if not text:
         raise ValueError("the search wrote no conformers")
@@ -2444,13 +2815,18 @@ def op_run(m):
 
 def drawing_of_parts(blocks):
     """A structure drawn, its parts read as one molecule - unsanitised, as
-    drawn - or why it cannot be read at all."""
+    drawn, but read as every op of the worker reads a drawing (`read`): a
+    coordination bond takes no hydrogen (`acceptors_as_drawn`), and one to
+    a full group-13 acceptor is held in its dipolar form (`dipolar_adducts`)
+    - or None where it cannot be read at all."""
     mols = [Chem.MolFromMolBlock(b, sanitize=False, removeHs=False) for b in blocks]
     if not mols or any(x is None for x in mols):
         return None
     mol = mols[0]
     for more in mols[1:]:
         mol = Chem.CombineMols(mol, more)
+    acceptors_as_drawn(mol)
+    dipolar_adducts(mol)
     return mol
 
 
@@ -2561,7 +2937,12 @@ def stereoisomers_one(blocks, aside):
         return {"aside": f"stereo left open: {len(made)} stereoisomers", "kind": "stereo open"}
     # (in a fixed order: by each one's SMILES - and each one's own SMILES given beside it)
     made.sort(key=Chem.MolToSmiles)
-    return {"made": [drawing_block(Chem.Mol(x)) for x in made], "smiles": [Chem.MolToSmiles(x) for x in made], **note}
+    try:
+        drawings = [drawing_block(Chem.Mol(x)) for x in made]
+    except ValueError as e:
+        # (an adduct's drawing that cannot be written back as drawn: set aside, saying so - `as_drawn`)
+        return {"aside": str(e), "kind": "drawing"}
+    return {"made": drawings, "smiles": [Chem.MolToSmiles(x) for x in made], **note}
 
 
 def step_stereoisomers(entries, options):

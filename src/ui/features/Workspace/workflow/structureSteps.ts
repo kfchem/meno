@@ -18,7 +18,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { restraintsOf, torsionsRestrained } from "../../../../lib/steps/restraints";
+import { restraintsOf, TORSION_STEP, torsionsRestrained } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { restraintsTyped, torsionsNeeds } from "./kinds";
 import { bondChangesTable, PRODUCT, renumberedEntry } from "../../../../lib/steps/reaction";
@@ -376,7 +376,7 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
 export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
   const needs = torsionsNeeds(v);
   if (needs) return { ok: false, said: needs };
-  const step = Number(String(v.step).trim());
+  const step = Number(String(v.step ?? TORSION_STEP).trim());
   const byProperty = v.reference === "property";
   if (!byProperty && references.length !== 1) return { ok: false, said: `Against the one reference, but ${references.length} came into Reference: match them on a property` };
   const es = entries.map((e, i) => entryOfSet(e, String(i)));
@@ -400,8 +400,12 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
     kept.push(withRestraints(e, r.property));
   });
   if (problems.length) return { ok: false, said: `${plural(problems.length, "entry", "entries")} could not be set against a reference: ${problems.join("; ")}` };
-  const said = [`${kept.length} restrained`, `${aside.length - noTrans} trans already`];
+  // (a count of none left unsaid: the set it would name shows it empty)
+  const said: string[] = [];
+  if (kept.length) said.push(`${kept.length} restrained`);
+  if (aside.length - noTrans) said.push(`${aside.length - noTrans} trans already`);
   if (noTrans) said.push(`${noTrans} with no trans torsion in ${noTrans === 1 ? "its" : "their"} reference`);
+  if (!said.length) said.push("0 restrained");
   if (added) said.push(`${plural(added, "torsion")} newly held`);
   if (raised) said.push(`${plural(raised, "torsion")} held stronger`);
   return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };

@@ -1,5 +1,8 @@
+import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { askToConnect, useNetwork } from "../../lib/net/network";
+import { UPDATE_CONSENT } from "../../lib/update";
+import { ConsentSmallPrint } from "./ConsentDialog";
 import { questionKey } from "./questionKey";
 
 // Vitest runs in Node, with no page to click on: a click on the dialog as it
@@ -40,5 +43,17 @@ describe("the question before using the network", () => {
     const two = useNetwork.getState().asking!;
     expect(questionKey(two)).not.toBe(questionKey(one));
     two.answer(false);
+  });
+});
+
+describe("what every question says, once", () => {
+  it("says under each question that each connection is shown and recorded, that none is made offline, and that a yes can be withdrawn", () => {
+    const said = renderToString(<ConsentSmallPrint purpose={UPDATE_CONSENT.purpose} />).replace(/<!-- -->/g, "").replace(/\s+/g, " ");
+    expect(said).toContain("Every connection is shown as it happens and kept in the record in Settings › Network, and none is made while Meno works offline.");
+    expect(said).toContain("Meno remembers a yes for “Keeping Meno up to date” until you withdraw it there.");
+  });
+
+  it("leaves those out of a question's own words: said twice, they were read as two things", () => {
+    expect(UPDATE_CONSENT.detail).not.toMatch(/connection|offline|Settings/i);
   });
 });

@@ -6,7 +6,7 @@ import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups, type Fold } from "./PointedCard3D";
 import { EASED } from "../../../theme/motion";
 import { GROW_MS, SHOW_MS, useEasedTo, useOpening } from "../../../theme/opening";
-import { barsAbove } from "../utils/barsAbove";
+import { barsAbove, NO_LOWEST, NOT_FINISHED } from "../utils/barsAbove";
 import { chipShiftOf, chipWidthOf } from "../utils/chipWidth";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
@@ -461,7 +461,7 @@ export function FramesChip({
                   {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
                   {told + 1} / {count}
                   {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
-                  {above && <span className="text-gh-black"> · {above[told] != null ? (fromStart && above[0] != null ? `ΔE ${relative(above[told]! - above[0]!)} from its start` : relative(above[told]!)) : bars?.why ? bars.why : bars?.noBaseline ? "none finished: no lowest to stand above" : "not finished"}</span>}
+                  {above && <span className="text-gh-black"> · {above[told] != null ? (fromStart && above[0] != null ? `ΔE ${relative(above[told]! - above[0]!)} from its start` : relative(above[told]!)) : bars?.why ? bars.why : bars?.noBaseline ? NO_LOWEST : NOT_FINISHED}</span>}
                   {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
                   {marks && <span className="text-accel-accent"> · {marks}</span>}
                 </>

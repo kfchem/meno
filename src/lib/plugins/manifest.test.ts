@@ -93,6 +93,19 @@ describe("a plugin's manifest", () => {
     expect(orca.reads).toEqual([]);
   });
 
+  it("says which of its own programs writes a kind it reads - one its steps run, by name - and no other", () => {
+    const output = { id: "nbo-out", name: "NBO output", program: "NBO", extensions: [".out"], marks: [{ text: "N A T U R A L   A T O M I C" }] };
+    const runs = (writtenBy: unknown, steps: unknown[] = [{ kinds: ["energy"], programs: ["nbo"] }]) =>
+      acceptManifest({ ...good, kinds: [{ ...output, writtenBy }], reads: ["nbo-out"], steps })!.kinds[0].writtenBy;
+    expect(runs("nbo")).toBe("nbo");
+    // (a program it does not run - another plugin's, or none of its steps' - is not its own: unsaid)
+    expect(runs("orca")).toBeUndefined();
+    expect(runs("nbo", [])).toBeUndefined();
+    // (a name, never a path)
+    expect(runs("../bin/nbo", [{ kinds: ["energy"], programs: ["../bin/nbo"] }])).toBeUndefined();
+    expect(runs(3)).toBeUndefined();
+  });
+
   it("may write kinds of its own: each one of its kinds, named and with its files' names as the kind says, its options as data", () => {
     const writer = {
       ...good,
@@ -286,6 +299,17 @@ describe("a plugin's manifest", () => {
     for (const bad of [{ x: { macos: "sh" } }, { x: { windows: "cmd.exe" } }, { x: { linux: "python3" } }]) expect(orca(bad)).toEqual([]);
     // (ORCA's, as Meno carries it)
     expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
+  });
+
+  it("may say how a program installed separately runs in parallel - as threads, or as processes, each a core - as the backend reads it", () => {
+    const orca = (parallel: unknown) =>
+      acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }], installed: [{ name: "orca", label: "ORCA", files: { macos: "orca" }, parallel }] })?.installed;
+    expect(orca("processes")?.[0].parallel).toBe("processes");
+    expect(orca("threads")?.[0].parallel).toBe("threads");
+    expect(orca(undefined)?.[0]).not.toHaveProperty("parallel");
+    for (const bad of ["mpi", "Processes", true, 4, null, ["processes"]]) expect(orca(bad)).toEqual([]);
+    // (ORCA's, as Meno carries it: as processes - its %pal)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].parallel).toBe("processes");
   });
 
   it("may fetch a program it runs, Meno's own copy: an archive for one system, where the program is in it - as the backend takes it", () => {

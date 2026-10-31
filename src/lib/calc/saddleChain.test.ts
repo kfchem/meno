@@ -55,7 +55,7 @@ describe("a program's verdict on imaginary frequencies, from its output to the s
   });
 
   it("is refused by Populations and Duplicates, as a saddle point among conformers is", () => {
-    const said = "a #1 has 1 imaginary frequency, 928.0i cm-1: it is no minimum - take it out first";
+    const said = "a #1 has 1 imaginary frequency, 928.0i cm⁻¹: it is no minimum - take it out first";
     expect(runMeno("populations", [minimum, saddle], "molecules", {})).toEqual({ ok: false, said });
     expect(runMeno("duplicates", [minimum, saddle], "molecules", {})).toEqual({ ok: false, said });
   });

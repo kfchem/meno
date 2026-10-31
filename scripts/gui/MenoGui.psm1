@@ -176,7 +176,15 @@ public static class NativeGui {
 # Before any window is measured or any pixel read.
 [NativeGui]::BeDpiAware()
 
+# (a question about the network is answered by the person at the computer,
+# never by a run: MenoConsent.psm1 decides, from what UI Automation names
+# the part a press lands on, or the part that has the keys)
+Import-Module (Join-Path $PSScriptRoot "MenoConsent.psm1")
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
+
 $script:Window = [IntPtr]::Zero
+# (Meno's process, for the guard's reading of its windows' buttons)
+$script:MenoPid = 0
 
 function Get-MenoBuild {
     # Where `npm run tauri build` leaves the app on this platform.
@@ -285,6 +293,7 @@ function Get-MenoWindow {
             Select-Object -First 1
         if ($p) {
             $script:Window = $p.MainWindowHandle
+            $script:MenoPid = $p.Id
             return $script:Window
         }
         Start-Sleep -Milliseconds 250
@@ -386,8 +395,90 @@ function Invoke-MenoClick {
     try { Invoke-WinClick $X $Y $Count $Right } finally { [NativeGui]::Hold($keys, $true) }
 }
 
+function Get-UiaChain($Element) {
+    # A part as UI Automation names it, and what it sits in: "role<TAB>name" each, itself first, a few levels up.
+    $links = @()
+    $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+    $e = $Element
+    for ($i = 0; $i -lt 6 -and $e; $i++) {
+        $role = $e.Current.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+        $links += "$role`t$($e.Current.Name -replace "`t", ' ')"
+        $e = $walker.GetParent($e)
+    }
+    return , $links
+}
+
+function Read-WinButtons {
+    # Every button of Meno's windows, as UI Automation names them, with where each is, in screen pixels - the guard's reading: the part at a point is Tauri's resize-border pane, over the whole page.
+    $pidIs = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$script:MenoPid)
+    $isButton = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+    $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $pidIs)
+    if (-not $windows -or $windows.Count -eq 0) { throw "UI Automation gave no window of Meno's (pid $script:MenoPid)" }
+    $isDocument = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Document)
+    # (the page itself, with something in it: built for UI Automation, whatever it shows - a talk hides the top bar's buttons)
+    $page = $false
+    foreach ($win in $windows) {
+        $doc = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $isDocument)
+        if ($doc -and [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetFirstChild($doc)) { $page = $true }
+    }
+    $buttons = foreach ($win in $windows) {
+        foreach ($b in $win.FindAll([System.Windows.Automation.TreeScope]::Descendants, $isButton)) {
+            $r = $b.Current.BoundingRectangle
+            # (one with no bounds kept as such: a yes read so stops a press - MenoConsent.psm1)
+            if ($r.IsEmpty) { [pscustomobject]@{ Name = $b.Current.Name; X = 0; Y = 0; Width = 0; Height = 0 }; continue }
+            [pscustomobject]@{ Name = $b.Current.Name; X = $r.X; Y = $r.Y; Width = $r.Width; Height = $r.Height }
+        }
+    }
+    [pscustomobject]@{ Buttons = @($buttons); Page = $page }
+}
+
+$script:MenoFamily = @()
+function Get-MenoFamily {
+    # Meno's own processes under it - its web view's (WebView2) - for a point UI Automation answers with one of theirs; read again where a pid is not among them.
+    # (it holds whatever Meno started too - a calculation's program, a window of its own: a press there counts as on Meno's. No harm to the
+    # guard: the yes it stops is told by Meno's buttons, read apart from this, and only Meno asks a question about the network)
+    param([int] $Root, [switch] $Again)
+    if ($Again -or -not $script:MenoFamily.Count -or $script:MenoFamily[0] -ne $Root) {
+        $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId)
+        $family = [System.Collections.Generic.List[int]]::new(); $family.Add($Root)
+        for ($i = 0; $i -lt $family.Count; $i++) { foreach ($p in $all) { if ($p.ParentProcessId -eq $family[$i] -and -not $family.Contains([int]$p.ProcessId)) { $family.Add([int]$p.ProcessId) } } }
+        $script:MenoFamily = $family.ToArray()
+    }
+    return $script:MenoFamily
+}
+
+function Assert-NotYesAt {
+    # A press at a point, in screen pixels, that would land on the yes of a question about the network - or whose buttons could not be read - stopped before it is sent.
+    param([Parameter(Mandatory)] $At, [string] $What = "a press")
+    $label = "$What at ($($At.X), $($At.Y)) px"
+    # (the window at the point: Meno's, the one whose buttons are read - not another copy's; UI Automation's own answer there, Tauri's pane included, is the window's process)
+    $readAt = {
+        $el = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($At.X, $At.Y))
+        if (-not $el) { throw "UI Automation gave nothing for the point" }
+        [int]$el.Current.ProcessId
+    }
+    $family = Get-MenoFamily -Root $script:MenoPid
+    # (a process of Meno's started since its family was last read: read again once)
+    $atPid = try { & $readAt } catch { $null }
+    if ($atPid -is [int] -and $atPid -ne $script:MenoPid -and $family -notcontains $atPid) { $family = Get-MenoFamily -Root $script:MenoPid -Again }
+    Assert-OnMeno -MenoPid $script:MenoPid -Family $family -What $label -Read $readAt
+    Assert-NotPressingYes -Look (Read-PageButtons -Read { Read-WinButtons }) -At $At -What $label
+}
+
+function Assert-NotYesKeys {
+    # Keys sent while a question about the network has its yes in focus - or while what has the keys could not be read - stopped before they are sent.
+    param([Parameter(Mandatory)] [string] $What)
+    $look = Read-Part {
+        $el = [System.Windows.Automation.AutomationElement]::FocusedElement
+        if (-not $el) { throw "UI Automation gave nothing for what has the keys" }
+        [pscustomobject]@{ Chain = (Get-UiaChain $el) }
+    }
+    Assert-NotNetworkYes -Look $look -What $What
+}
+
 function Invoke-WinClick([int] $X, [int] $Y, [int] $Count, [bool] $Right) {
     $p = ConvertTo-Screen $X $Y
+    Assert-NotYesAt -At $p -What "a click"
     if ($Right) {
         [NativeGui]::RightDown($p.X, $p.Y)
         Start-Sleep -Milliseconds 30
@@ -460,6 +551,9 @@ function Get-DragPath {
 
 function Invoke-WinDrag([int] $FromX, [int] $FromY, [int] $ToX, [int] $ToY, $path, [int] $StepMs, [int] $PressMs, [scriptblock] $AtStep, [bool] $Right) {
     $a = ConvertTo-Screen $FromX $FromY
+    # (where the button goes down and where it comes up)
+    Assert-NotYesAt -At $a -What "a drag's press"
+    Assert-NotYesAt -At (ConvertTo-Screen $ToX $ToY) -What "a drag's end"
     [NativeGui]::MoveTo($a.X, $a.Y)
     Start-Sleep -Milliseconds 80
     if ($Right) { [NativeGui]::RightDown($a.X, $a.Y) } else { [NativeGui]::LeftDown($a.X, $a.Y) }
@@ -543,6 +637,7 @@ function Invoke-MenoWheel {
 
 function Send-MenoText {
     param([Parameter(Mandatory)] [string] $Text, [int] $CharMs = 8)
+    Assert-NotYesKeys -What "typing"
     foreach ($c in $Text.ToCharArray()) {
         [NativeGui]::TypeChar($c)
         Start-Sleep -Milliseconds $CharMs
@@ -551,6 +646,8 @@ function Send-MenoText {
 
 function Send-MenoKey {
     param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
+    # (Escape answers a question no: always let through)
+    if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
     $vk = @{ Enter = 0x0D; Escape = 0x1B; Tab = 0x09; Backspace = 0x08; Up = 0x26; Down = 0x28 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [NativeGui]::Chord([uint16[]] @(0x10), [uint16] $vk) }
@@ -565,6 +662,7 @@ function Send-MenoShortcut {
       or a digit, and Shift if asked: Send-MenoShortcut Z is undo.
     #>
     param([Parameter(Mandatory)] [ValidatePattern("^[A-Za-z0-9]$")] [string] $Key, [switch] $Shift)
+    Assert-NotYesKeys -What "a shortcut"
     $mods = @([uint16] 0x11)                  # VK_CONTROL
     if ($Shift) { $mods += [uint16] 0x10 }    # VK_SHIFT
     # A letter's or digit's virtual key is its upper-case ASCII code.

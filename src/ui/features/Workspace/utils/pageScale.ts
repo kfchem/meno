@@ -37,3 +37,18 @@ export const NOTES_SCALE = { least: 0.75, most: 1.5 } as const;
  * back (App.css `.meno-words`, `--words`).
  */
 export const wordsReadAt = (zoom: number, was: boolean): boolean => switchedAt(was, pageScale(zoom), WORDS_LEAST);
+
+/** How far the zoom goes, as a share, before what the page's HTML is sized by is written again while it moves (`zoomWritten`). */
+export const ZOOM_WRITTEN_STEP = 0.005;
+
+/**
+ * Whether the zoom is written again to what the page's HTML is sized by -
+ * `--page`, which chips are laid out at, and `--hair`, which cards' lines
+ * are as wide as - from the one last written (`written`): each write lays
+ * out every chip and card on the page again (some 80 ms on a page of sixty
+ * steps), so while the zoom moves only once it has gone `ZOOM_WRITTEN_STEP`
+ * from it - half a pixel on a chip a hundred wide, not seen - and, once it
+ * stands still (`still`, as it was the frame before), as it is.
+ */
+export const zoomWritten = (written: number, zoom: number, still: boolean): boolean =>
+  zoom !== written && (still || !(Math.abs(Math.log(zoom / written)) < ZOOM_WRITTEN_STEP));

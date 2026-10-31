@@ -61,7 +61,9 @@ It keeps nothing between requests, and reaches no network.
 
 import json
 import math
+import os
 import re
+import shutil
 import sys
 
 VERSION = "0.2.0"
@@ -84,6 +86,15 @@ HESSIANS = {"computed": "%geom Calc_Hess true end", "model": ""}
 PARTIAL_STEPS = {"optimise"}
 #: What ORCA prints at each step of an optimisation (ORCA 6.1.1): a run that stopped before it computed nothing to start from.
 OPTIMISING = "GEOMETRY OPTIMIZATION CYCLE"
+#: What ORCA prints where an optimisation took the most cycles it allows without converging (ORCA 6.1.1, in a box of
+#: warnings, over two lines): "The optimization did not converge but reached the maximum number of optimization cycles."
+#: It goes on all the same - to what it was asked for after, its properties - and may then stop there by an error in
+#: words that say nothing of it ("ERROR (SHARK): Failed to read input file", "error termination in PROPERTIES"), or end
+#: normally. Either way, the geometry it reached is no converged one: nothing of it is read as a result.
+MAX_CYCLES = re.compile(r"did not converge but reached the maximum number of\s+optimization cycles")
+MAX_CYCLES_SAID = "The optimization did not converge but reached the maximum number of optimization cycles"
+#: The optimisations whose cycles ORCA counts so: an optimisation, a saddle point's.
+OPTIMISATIONS = {"optimise", "saddle-point"}
 # ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
 # one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
 NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
@@ -166,6 +177,13 @@ def mass_of(el, atom):
     return f"  M = {mass:.15g}"
 
 
+#: How a frequency job's thermochemistry treats the low-frequency vibrations (its *Low-frequency vibrations* option):
+#: ORCA's own, nothing asked ("none") - Grimme's quasi-RRHO for their entropy, ORCA 6.1.1's default, "Quasi RRHO ...
+#: True" - or the harmonic oscillator alone, the rigid-rotor harmonic oscillator a program with no low-mode treatment
+#: gives: ORCA's %freq QuasiRRHO false. ("none" is the value a step's line leaves unsaid: its default.)
+LOW_VIBRATIONS = {"none": "", "rrho": "%freq QuasiRRHO false end"}
+
+
 def orca_input(step, entry, options, cores):
     """An entry's input, as ORCA's manual lays it out."""
     run = RUNS.get(step)
@@ -199,6 +217,9 @@ def orca_input(step, entry, options, cores):
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity", 1)
     maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)
+    vibrations = LOW_VIBRATIONS.get(options.get("vibrations", "none")) if step == "frequencies" else ""
+    if vibrations is None:
+        raise Refused(f"no treatment of low vibrations is called {options.get('vibrations')!r}")
 
     keywords = [method, basis, dispersion, run, f"{solvation}({solvent})" if solvation != "none" else "", more]
     lines = ["! " + " ".join(k for k in keywords if k)]
@@ -206,6 +227,8 @@ def orca_input(step, entry, options, cores):
         lines.append(f"%pal nprocs {int(cores)} end")
     if maxcore:
         lines.append(f"%maxcore {maxcore}")
+    if vibrations:
+        lines.append(vibrations)
     # (a reaction path's steps each way, where said: ORCA's own else - the manual's 4.4.2 states none, ORCA 6.1.1 prints 20)
     steps = whole(options.get("maxiter", 0), "The steps each way", 0) if step == "reaction-path" else 0
     if steps:
@@ -416,9 +439,41 @@ def irc_output(entry, files, log, options):
     }
 
 
+#: The program ORCA starts its processes with, where it runs more than one (the ORCA 6.1 manual, 2.5.2.1): Open MPI's
+#: mpirun on macOS and Linux, Microsoft MPI's mpiexec on Windows - looked for where ORCA's jobs look for it, on the PATH.
+LAUNCHER = "mpiexec" if sys.platform == "win32" else "mpirun"
+#: Said once on the step's line where it is not there: each job then runs on one core, whatever the cores each job is
+#: given - they apply to the other programs, which need no launcher - never refused, never failed at ORCA's start-up.
+NO_LAUNCHER_SAID = "run on one core: no MPI on this computer"
+
+
+#: How a program is looked for on a PATH: the standard library's (its tests give their own).
+which = shutil.which
+
+
+def job_path(programs):
+    """The PATH ORCA's job is given (jobs.rs `installed_env`): ORCA's own folder, where it was found, before the PATH Meno
+    was started with - this worker's, less its own environment's folders, which no job is given."""
+    own = os.path.realpath(sys.prefix)
+    rest = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p and not os.path.realpath(p).startswith(own + os.sep)]
+    found = (programs or {}).get(PROGRAM)
+    return os.pathsep.join(([os.path.dirname(found)] if isinstance(found, str) and found else []) + rest)
+
+
+def launcher_found(look=None, programs=None):
+    """Whether the program ORCA starts its processes with is there (`LAUNCHER`), on the PATH its jobs are given."""
+    return (look or which)(LAUNCHER, path=job_path(programs)) is not None
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
+    # (more than one core, and no MPI to run ORCA's processes with: one core each job, said - never a job ORCA ends at its
+    #  start-up, as every one would, "mpirun: command not found")
+    given = whole(m.get("cores"), "The cores", 1) if m.get("cores") else 1
+    alone = given > 1 and not launcher_found(programs=m.get("programs"))
+    if alone:
+        m = {**m, "cores": 1}
     # (a reaction path's step offers no wavefunction kept: none written)
     # (a saddle point's step offers no wavefunction kept: none written)
     keep = keeps_wavefunction(options) and step != "reaction-path" and step != "saddle-point"
@@ -438,7 +493,7 @@ def op_prepare(m):
             })
         if not jobs:
             raise Refused("nothing came in")
-        return {"jobs": jobs}
+        return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": NO_LAUNCHER_SAID} if alone else {})}
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
             "entries": [i],
@@ -453,8 +508,9 @@ def op_prepare(m):
         })
     if not jobs:
         raise Refused("nothing came in")
-    note = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
-    return {"jobs": jobs, **({"note": note} if note else {})}
+    said = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
+    note = "; ".join(n for n in (said, NO_LAUNCHER_SAID if alone else None) if n)
+    return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": note} if note else {})}
 
 
 def output_name(entry):
@@ -607,6 +663,32 @@ def iterations_said(parts):
     return " \u00b7 ".join(f"{name} {n}" for name, n in parts)
 
 
+def cycles_of(log):
+    """How many cycles an optimisation took, as ORCA numbers them ("GEOMETRY OPTIMIZATION CYCLE   12"): the last; none
+    where it numbers none."""
+    found = re.findall(r"GEOMETRY OPTIMIZATION CYCLE\s+(\d+)", log)
+    return int(found[-1]) if found else None
+
+
+def optimisation_not_converged(log):
+    """Why an optimisation is not read, where ORCA took the most cycles it allows: plainly, with how many."""
+    n = cycles_of(log)
+    went = f" in {n} cycles" if n is not None else ""
+    return (f"The optimisation did not converge{went}, the most it was allowed (\"{MAX_CYCLES_SAID}\"): "
+            "run it again to go on from the geometry it reached")
+
+
+def path_refining_not_converged(log):
+    """Why a path search is not read, where its band converged but refining its highest point took the most steps ORCA
+    allows: plainly, with how far each went, and what to change."""
+    parts = dict(path_iterations(log))
+    neb, ts = parts.get("NEB"), parts.get("TS optimization")
+    band = f"Its band converged in {neb} iterations" if neb is not None else "Its band converged"
+    went = f" in {ts} steps" if ts is not None else ""
+    return (f"{band}, but refining its highest point did not converge{went} (\"{MAX_CYCLES_SAID}\"): "
+            "raise Steps for refining its highest point, or give ends nearer the path")
+
+
 def path_not_converged(log):
     """Why a path search's band is not read, where ORCA says it did not converge: plainly, with how far it went."""
     parts = path_iterations(log)
@@ -671,6 +753,10 @@ def op_collect(m):
         # (a band that did not converge: said plainly - ORCA ends it by an error return, whose words say nothing of it)
         if NEB_NOT_CONVERGED in log:
             return {"why": path_not_converged(log), "kind": "not-converged"}
+        # (its band converged, refining its highest point not, in the steps ORCA allows: said plainly - however ORCA ended
+        #  after, by an error in its properties or normally - and nothing of it read: no point refined, no entry)
+        if MAX_CYCLES.search(log):
+            return {"why": path_refining_not_converged(log), "kind": "not-converged"}
         # (read only where ORCA says it ended well, as every step's job is: its exit code is no word on it)
         if m.get("ended") != "done" or not ended_well(log):
             return {"why": not_ended_why(log, m.get("ended"))}
@@ -679,6 +765,12 @@ def op_collect(m):
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
     log = m.get("log") or ""
+    # (an optimisation - a saddle point's too - that took the most cycles ORCA allows without converging: said plainly,
+    #  however ORCA ended after - never read as a result; the geometry it reached read for a run again to start from, out
+    #  of Failed, as one that stopped is)
+    if step in OPTIMISATIONS and MAX_CYCLES.search(log):
+        partial = [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []]
+        return {"why": optimisation_not_converged(log), "kind": "not-converged", "partial": partial}
     if m.get("ended") != "done" or not ended_well(log):
         # (an optimisation that stopped: what it wrote read too, where it wrote anything - the geometry it reached, for a
         #  run again to start from - never as a result)

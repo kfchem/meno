@@ -6,6 +6,7 @@
  * it.
  */
 import { FAILURE_WORDS, type Failure } from "./failures";
+import { convergedOf, type Converged } from "./converged";
 import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
@@ -598,6 +599,8 @@ export type SetEntry = {
   stereo?: EntryStereo;
   /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
   failed?: Failure;
+  /** That a run ended converged at its geometry, and how (workflow/converged): of that geometry alone - a record of another counts for none (`convergedOf`). */
+  converged?: Converged;
   /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
   imaginary?: number[];
   /** Its molecule's marks of which frames failed, or are no minimum, did not read (`Molecule3D.marksUnread`): whether it is a minimum is not known. */
@@ -802,7 +805,17 @@ export const refinedFrame = (m: Pick<Molecule3D, "calc">): number | null => fram
 export const startedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, STARTED_SAID);
 
 /** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, a reaction path's, the point it started from, its path going on past it. */
-const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
+export const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
+
+/**
+ * A molecule's calculation as frame `f` of its `n` carries it alone, where
+ * it is the frame the calculation is of: whole, but what it says of each
+ * frame (a path search's `PATH_FRAME`) that frame's alone - so that a
+ * molecule of that one frame holds it as one of one frame, read back as
+ * such, and its frames still say which it is.
+ */
+const calcOfFrame = (calc: CalcInfo, f: number, n: number): CalcInfo =>
+  n > 1 && calc.results?.some((r) => r.on === "frames") ? { ...calc, results: calc.results.map((r) => (r.on === "frames" ? { ...r, values: [r.values[f] ?? null] } : r)) } : calc;
 
 /** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
@@ -850,8 +863,9 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
-        ...(m.calc ? { calc: f === calcFrame(m, n) ? m.calc : calcBefore } : {}),
+        ...(m.calc ? { calc: f === calcFrame(m, n) ? calcOfFrame(m.calc, f, n) : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
+        ...(m.converged?.length === n && m.converged[f] ? { converged: m.converged[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
         ...(m.marksUnread ? { marksUnread: true as const } : {}),
@@ -1030,7 +1044,7 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
-const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state", "failure"] as const;
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state", "failure", "converged"] as const;
 export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
 
 /** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has and the two largest, its name, its state, and why it failed, where it did. */
@@ -1054,7 +1068,15 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
     state: { value: entryState(e), unit: "none", status: "computed" },
     // (why it failed, where it did, in its program's own words: for a Filter to send each kind of failure its own way - Runs again)
     ...(e.failed ? { failure: { value: e.failed.why, unit: "none" as const, status: "computed" as const } } : {}),
+    // (where a run ended converged at its geometry, how: "optimisation", "saddle point optimisation", "highest point refined" - none where none did)
+    ...convergedProperty(e),
   };
+}
+
+/** That a run ended converged at an entry's geometry, as a property (workflow/converged): how, at that geometry; none where none did. */
+function convergedProperty(e: SetEntry): Partial<Record<"converged", Property>> {
+  const c = convergedOf(e);
+  return c ? { converged: { value: c.how, unit: "none", at: { geometry: c.geometry }, status: "computed" } } : {};
 }
 
 /**
@@ -1132,8 +1154,11 @@ export function entryState(e: Pick<SetEntry, "failed" | "marksUnread">): string 
 export function shadowedIn(e: SetEntry): string[] {
   if (!e.properties) return [];
   const own = menoProperties(e);
-  return Object.keys(e.properties).filter((k) => k in own);
+  return Object.keys(e.properties).filter((k) => k in own || ALWAYS_MENO.includes(k));
 }
+
+/** Meno's names an entry's own property never stands under, where Meno has none to give: that a run converged is a run's record alone (workflow/converged), never a value an entry carries. */
+const ALWAYS_MENO: readonly string[] = ["converged"];
 
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
@@ -1152,7 +1177,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.radical ? { radical: a.radical } : {}),
   }));
   // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own: `shadowedIn` names those it gave under them)
-  const properties: Record<string, Property> = { ...e.properties, ...menoProperties(e) };
+  const properties: Record<string, Property> = { ...Object.fromEntries(Object.entries(e.properties ?? {}).filter(([k]) => !ALWAYS_MENO.includes(k))), ...menoProperties(e) };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [], ...(e.skeleton ? { skeleton: true } : {}) };
   return {
     id,

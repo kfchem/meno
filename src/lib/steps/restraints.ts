@@ -32,6 +32,27 @@ import { AROMATIC_BOND } from "../chem/kekulize";
 import type { Entry, Property, Restraint } from "../entry";
 import { dihedral, distance } from "./measure";
 
+/**
+ * A distance's strength unless the chemist sets another, in kcal mol⁻¹ Å⁻²:
+ * measured, on eight acid–base pairs held at 0.9 of their van der Waals
+ * radii together (H3N…BH3, Me3N…BF3, H2O…BF3, Et2O…BF3, pyridine…BH3,
+ * Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten conformers each, the RDKit
+ * plugin's), to hold within 0.01 Å (docs/STRUCTURE-STEPS.md;
+ * scripts/calc/measure_restraint_strengths.py measures it again).
+ */
+export const DISTANCE_STRENGTH = 500;
+
+/**
+ * What *Torsion restraints* adds to a torsion's strength each time unless
+ * the chemist sets another, in kcal mol⁻¹ rad⁻²: measured, on six Z
+ * isomers held towards their E isomers (but-2-ene, pent-2-ene, stilbene,
+ * methyl crotonate, hexa-2,4-diene E,Z to E,E, crotononitrile; the RDKit
+ * plugin's minimisation), to make each right in one round, held within
+ * 1.5° (docs/STRUCTURE-STEPS.md; scripts/calc/measure_restraint_strengths.py
+ * measures it again).
+ */
+export const TORSION_STEP = 50;
+
 /** What *Restraints* is asked for: coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - each distance held with `strength` (kcal mol⁻¹ Å⁻²). */
 export type RestraintsAsked = {
   /** The factor coordination bonds are kept at, of their atoms' van der Waals radii together; none held where not given. */

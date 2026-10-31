@@ -47,6 +47,15 @@ const keyed = (v: number, unit: string) => `${Number(v.toPrecision(12))}${unit =
  * it left ungrouped, which a step then sets aside saying so.
  */
 function regrouped(es: readonly Entry[], name: string): Entry[] {
+  const keys = valueKeysOf(es, name);
+  return es.map((e, i) => {
+    const { group: _, ...rest } = e.properties;
+    return keys[i] == null ? { ...e, properties: rest } : { ...e, properties: { ...rest, group: { value: keys[i], unit: "none", status: "computed" } } };
+  });
+}
+
+/** Each entry's value of `name` as its group's key, as `regrouped` keys it - none where it has none. */
+export function valueKeysOf(es: readonly Entry[], name: string): (string | undefined)[] {
   const first = es.map((e) => e.properties[name]).find((p) => typeof p?.value === "number");
   const keyOf = (e: Entry, p: Property): string => {
     if (typeof p.value !== "number" || !first) return String(p.value);
@@ -55,8 +64,7 @@ function regrouped(es: readonly Entry[], name: string): Entry[] {
   };
   return es.map((e) => {
     const p = e.properties[name];
-    const { group: _, ...rest } = e.properties;
-    return p == null || p.value == null ? { ...e, properties: rest } : { ...e, properties: { ...rest, group: { value: keyOf(e, p), unit: "none", status: "computed" } } };
+    return p == null || p.value == null ? undefined : keyOf(e, p);
   });
 }
 

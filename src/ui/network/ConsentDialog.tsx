@@ -52,11 +52,7 @@ export default function ConsentDialog() {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-gh-gray">
-              Every connection is shown as it happens and kept in the record in
-              Settings › Network. Meno remembers a yes for “
-              {purposeName(asking.purpose)}” until you withdraw it there.
-            </p>
+            <ConsentSmallPrint purpose={asking.purpose} />
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
@@ -80,5 +76,20 @@ export default function ConsentDialog() {
     </Leaving>
     )}
     </AnimatePresence>
+  );
+}
+
+/**
+ * What every question says under its own words, once for them all: each
+ * connection shown and recorded, none made offline, and a yes kept until it
+ * is withdrawn. A question's own words leave these out.
+ */
+export function ConsentSmallPrint({ purpose }: { purpose: string }) {
+  return (
+    <p className="mt-3 text-xs text-gh-gray">
+      Every connection is shown as it happens and kept in the record in
+      Settings › Network, and none is made while Meno works offline. Meno
+      remembers a yes for “{purposeName(purpose)}” until you withdraw it there.
+    </p>
   );
 }

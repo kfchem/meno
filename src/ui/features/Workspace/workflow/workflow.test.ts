@@ -189,11 +189,11 @@ describe("what a set holds", () => {
 
 describe("wires", () => {
   it("join what a set gives to a step's input that takes it, and nothing else", () => {
-    let doc = addStep(page(), "energy-window", 5, 0);
+    let doc = addStep(page(), "populations", 5, 0);
     const window = lastStep(doc);
     doc = addStep(doc, "as-conformers", 5, 5);
     const convert = lastStep(doc);
-    // (a compound set does not go into an energy window: As conformers goes between)
+    // (a compound set does not go into Populations: As conformers goes between)
     expect(canWire(doc, { set: 1 }, window)).toBe(false);
     expect(connect(doc, { set: 1 }, window)).toBe(doc);
     expect(canWire(doc, { set: 1 }, convert)).toBe(true);
@@ -375,14 +375,14 @@ describe("Meno's own steps", () => {
   it("give no populations where one conformer is no minimum - its calculation judged it has an imaginary frequency - naming it and its frequency", () => {
     // (the correctness lane's methanol saddle point: xtb, -382.63 cm-1, one significant)
     const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) => (i === 1 ? { ...e, imaginary: [-382.63] } : e));
-    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first" });
-    expect(notAllMinima(set)).toBe("a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first");
+    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm⁻¹: it is no minimum - take it out first" });
+    expect(notAllMinima(set)).toBe("a #2 has 1 imaginary frequency, 382.6i cm⁻¹: it is no minimum - take it out first");
     // (taken out, as the chemist would: given)
     const minima = set.filter((e) => !e.imaginary);
     expect(runMeno("populations", minima, "conformers", { temperature: 298.15 }).ok).toBe(true);
     expect(notAllMinima(minima)).toBeNull();
     // (nor a window, on electronic energies as on free ones: kept or set aside, a saddle point would stand as a conformer it is not)
-    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first" });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm⁻¹: it is no minimum - take it out first" });
     expect(runMeno("energy-window", minima, "conformers", { window: 3 }).ok).toBe(true);
   });
 
@@ -413,7 +413,7 @@ describe("Meno's own steps", () => {
     const saddle = base.map((e, i) => (i === 2 ? { ...e, imaginary: [-382.63] } : e));
     for (const [set, said] of [
       [stopped, `Not every entry is a result to stand on: a #3 not converged - take it out first (a Filter on "${STATE_FINISHED}")`],
-      [saddle, "a #3 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first"],
+      [saddle, "a #3 has 1 imaginary frequency, 382.6i cm⁻¹: it is no minimum - take it out first"],
     ] as const) {
       expect(runMeno("choose", set, "conformers")).toEqual({ ok: false, said });
       expect(runMeno("duplicates", set, "conformers")).toEqual({ ok: false, said });
@@ -937,22 +937,22 @@ describe("Quick Add's calculations", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "restraints", "torsion-restraints", "number", "add", "reaction", "displace"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "number", "add", "reaction", "displace", "ensemble"]]]);
     // a compound set's wire: what takes it - a chart of it seen as a table too - and the conversion
-    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "restraints", "torsion-restraints", "add", "reaction", "displace"]]]);
+    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "reaction", "displace", "ensemble"]]]);
     // a conformer set's
-    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "merge", "rebond", "compare-bonding", "join", "restraints", "torsion-restraints", "add", "reaction", "displace"]]]);
+    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "reaction", "displace", "ensemble"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
-      ["RDKit", ["conformers", "duplicates", "check-structures", "stereoisomers", "descriptors"]],
+      ["RDKit", ["conformers", "minimise", "duplicates", "check-structures", "stereoisomers", "descriptors"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "restraints", "torsion-restraints", "number", "add", "reaction", "displace"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "number", "add", "reaction", "displace", "ensemble"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
-      ["RDKit", ["conformers", "duplicates"]],
+      ["RDKit", ["conformers", "minimise", "duplicates"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "restraints", "torsion-restraints", "add", "reaction", "displace"]],
+      ["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "reaction", "displace", "ensemble"]],
     ]);
     // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D - and Filter, on their records, and Chart, of them seen as a table
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });

@@ -1,4 +1,5 @@
 import type { Failure, FailureKind } from "../workflow/failures";
+import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
@@ -435,6 +436,12 @@ export type Molecule3D = {
    * it, its chip saying it in plain words.
    */
   failed?: (Failure | null)[];
+  /**
+   * Where a run ended converged, frame by frame (workflow/converged; null,
+   * a frame none did): an optimisation, a saddle point's, a path's highest
+   * point refined - each of its frame's geometry, by its key.
+   */
+  converged?: (Converged | null)[];
   /**
    * A conformer set's: the imaginary frequencies each conformer's
    * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame

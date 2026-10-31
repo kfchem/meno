@@ -150,8 +150,9 @@ export class ReaderClient implements Reader {
    * the contract*): each one's input files, the program and arguments that
    * run it, the entries it is for, and the files it reads back once done.
    */
-  prepare(step: string, entries: readonly unknown[], options: OptionValues, cores?: number): Promise<unknown> {
-    return this.request({ op: "prepare", step, entries, options, ...(cores ? { cores } : {}) }, `preparing ${step}`);
+  prepare(step: string, entries: readonly unknown[], options: OptionValues, cores?: number, programs?: Readonly<Record<string, string>>): Promise<unknown> {
+    // (where each program installed separately was found, by its name: what its jobs will run, the PATH they get begun with its folder)
+    return this.request({ op: "prepare", step, entries, options, ...(cores ? { cores } : {}), ...(programs && Object.keys(programs).length ? { programs } : {}) }, `preparing ${step}`);
   }
 
   /** What a job for a step gave, read back by its plugin from the files asked for and its log - or why it did not, where it did not end done. */

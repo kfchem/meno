@@ -10,7 +10,7 @@ import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import type { Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
-import { compoundLetter, frameMarks, frameXyz, framesOf, marksOf } from "./entries";
+import { calcFrame, compoundLetter, frameMarks, frameXyz, framesOf, marksOf } from "./entries";
 import { FAILURE_WORDS } from "./failures";
 
 /** One entry of a set, as its table shows it. */
@@ -186,7 +186,7 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.conformerSet ? { conformerSet: true } : {}),
     ...((m.conformerSet && part) || m.partOf ? { partOf: true as const } : {}),
     ...(m.conformerSet && !part && each(m.shares) ? { shares: each(m.shares) } : {}),
-    ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n) } : {}),
+    ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n, calcFrame(m, n)) } : {}),
     ...(m.made ? { made: m.made } : {}),
     ...(m.name ? { name: m.name } : {}),
     ...(m.drawnFrom ? { drawnFrom: m.drawnFrom } : {}),
@@ -195,18 +195,23 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.centres?.length ? { centres: m.centres } : {}),
     // (each frame's marks: why it failed, its imaginary frequencies, and whether its marks did not read)
     ...marksOf(frames.map((f) => frameMarks(m, f, n))),
+    // (where a run ended converged at each frame taken: its own, of its geometry still)
+    ...(each(m.converged)?.some(Boolean) ? { converged: each(m.converged) } : {}),
   };
 }
 
 /**
  * What a molecule's calculation says, of some of its frames taken alone:
- * what each frame has, those frames'; what is of the molecule as it ended -
- * its atoms', its pairs', the whole's - only with its last frame, which it
- * is of; and no lists, whose rows name frames of the molecule it came from.
+ * what each frame has, those frames'; what is of the one geometry it is of
+ * (`at`: its last, a path search's point refined, a reaction path's start;
+ * entries `calcFrame`) - its atoms', its pairs', the whole's, its imaginary
+ * frequencies - only with that frame; and no lists, whose rows name frames
+ * of the molecule it came from.
  */
-function calcOfFrames(calc: CalcInfo, frames: readonly number[], n: number): CalcInfo {
-  if ((n === 1 && frames.length === 1) || !calc.results) return calc;
-  const last = frames.includes(n - 1);
-  const results = calc.results.flatMap((r): Result[] => (r.on === "frames" ? [{ ...r, values: frames.map((f) => r.values[f]) }] : r.on === "list" || !last ? [] : [r]));
-  return { ...calc, results };
+function calcOfFrames(calc: CalcInfo, frames: readonly number[], n: number, at: number): CalcInfo {
+  if (n === 1 && frames.length === 1) return calc;
+  const held = frames.includes(at);
+  const results = calc.results?.flatMap((r): Result[] => (r.on === "frames" ? [{ ...r, values: frames.map((f) => r.values[f]) }] : r.on === "list" || !held ? [] : [r]));
+  const { imaginary: _imaginary, ...without } = calc;
+  return { ...(held ? calc : without), ...(results ? { results } : {}) };
 }

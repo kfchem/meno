@@ -435,7 +435,7 @@ const chem = {
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path" && kind !== "add");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -521,9 +521,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join - by their own tests; Number, given nothing; Add, which needs values of one geometry named, by its own tests, and changes no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join, Barrier - by their own tests; Number, given nothing; Add and Ensemble energy, which need values named, by their own tests, and change no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding", "join", "torsion-restraints", "number", "add", "reaction", "displace"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding", "join", "barrier", "torsion-restraints", "number", "add", "reaction", "displace", "ensemble"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

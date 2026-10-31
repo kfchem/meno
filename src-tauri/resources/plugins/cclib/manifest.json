@@ -1,7 +1,7 @@
 {
   "id": "cclib",
   "name": "cclib",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "uses": [{"name": "cclib", "version": "1.9rc1"}],
   "description": "Reads the output of many calculation programs: ORCA, Gaussian, xTB, NWChem, Psi4, Q-Chem, GAMESS, Molpro and others.",
   "licence": "BSD-3-Clause",

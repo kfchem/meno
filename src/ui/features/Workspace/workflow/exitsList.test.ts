@@ -11,11 +11,12 @@ describe("a kind's exits, as a list", () => {
       generate: [first("Generated", "structures")],
       conformers: [first("Conformers", "conformers"), failed("molecules")],
       optimise: [first("Optimised", "same"), failed()],
+      minimise: [first("Minimised", "same"), failed()],
       energy: [first("Energies", "same"), failed()],
       frequencies: [first("Frequencies", "same"), failed()],
       nci: [first("Non-covalent interactions", "same"), failed()],
       render: [first("Rendered", "pictures")],
-      "energy-window": [first("Within {window} kcal/mol", "conformers"), rest("Outside it", "same")],
+      "energy-window": [first("Within {window} kcal/mol", "same"), rest("Outside it", "same")],
       duplicates: [first("Unlike", "same"), rest("Alike", "same")],
       populations: [first("Populations at {temperature} K", "conformers")],
       filter: [first("Filtered", "same"), rest("The rest", "same")],
@@ -39,6 +40,7 @@ describe("a kind's exits, as a list", () => {
       "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       rank: [first("The first {keep}", "same"), rest("The rest", "same")],
       join: [first("Joined", "same"), rest("Not joined", "same")],
+      barrier: [first("With barriers", "molecules"), failed()],
       restraints: [first("Restrained", "same"), failed()],
       "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
       number: [first("Number", "number")],
@@ -46,6 +48,7 @@ describe("a kind's exits, as a list", () => {
       reaction: [first("Mapped products", "molecules"), rest("Not mapped", "same"), { id: "changes", name: "Bond changes", gives: "table" }],
       "reaction-path": [first("Reaction paths", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       "saddle-point": [first("Optimised structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
+      ensemble: [first("{as}", "same"), rest("The rest", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

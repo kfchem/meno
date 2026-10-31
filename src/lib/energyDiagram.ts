@@ -42,7 +42,7 @@ export type RowCompound = { key: string; elements: readonly string[]; charge: nu
 export const formulaWithCharge = (elements: readonly string[], charge: number) =>
   `${formulaOf(elements.map((el) => ({ el })))}${charge ? `${Math.abs(charge) > 1 ? Math.abs(charge) : ""}${charge > 0 ? "+" : "\u2212"}` : ""}`;
 
-/** A level's imaginary frequencies as it says them, pointed at: "has 1 imaginary frequency, 300.0i cm-1", "no imaginary frequency", or "frequencies not computed". */
+/** A level's imaginary frequencies as it says them, pointed at: "has 1 imaginary frequency, 300.0i cm⁻¹", "no imaginary frequency", or "frequencies not computed". */
 export const frequenciesSaid = (imaginary: number[] | "not computed") =>
   imaginary === "not computed" ? "frequencies not computed" : imaginary.length ? `has ${imaginaryWords(imaginary)}` : "no imaginary frequency";
 

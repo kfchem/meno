@@ -17,7 +17,7 @@ export function imaginaryVibration(frequencies: readonly number[]): { index: num
   const imaginary = frequencies.map((f, i) => [f, i] as const).filter(([f]) => f < 0);
   if (!imaginary.length) return { failed: "It has no imaginary vibration." };
   const [f, index] = imaginary.reduce((p, q) => (q[0] < p[0] ? q : p));
-  return imaginary.length > 1 ? { index, said: `It has ${imaginary.length} imaginary vibrations; the most negative, ${f.toFixed(1)} cm-1, is taken.` } : { index };
+  return imaginary.length > 1 ? { index, said: `It has ${imaginary.length} imaginary vibrations; the most negative, ${f.toFixed(1)} cm⁻¹, is taken.` } : { index };
 }
 
 /**
@@ -44,7 +44,7 @@ export function vibrationsOf(e: Entry): { frequencies: number[]; modes: number[]
   const fault = valueFault(t.value, e) ?? valueFault(m.value, e);
   if (fault) return { failed: `Its vibrations: ${fault}.` };
   const col = t.value.table.columns.findIndex((c) => c.name === FREQUENCY.name && c.unit === FREQUENCY.unit);
-  if (col < 0) return { failed: "Its vibrations have no frequency in cm-1." };
+  if (col < 0) return { failed: "Its vibrations have no frequency in cm⁻¹." };
   const frequencies = t.value.table.rows.map((r) => r[col]);
   if (frequencies.some((f) => typeof f !== "number")) return { failed: "A vibration has no frequency." };
   if (m.value.modes.length !== frequencies.length) return { failed: `It has ${frequencies.length} vibrations and ${m.value.modes.length} modes.` };

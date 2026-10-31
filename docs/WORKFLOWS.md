@@ -294,6 +294,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
+| Minimise with restraints | a well, its floor held (drawn) | molecules in 3D, or conformer sets | each minimised in a force field with its restraints held - Restraints', Torsion restraints' - from where it is, or from where its restraints were first held; one that does not converge out of *Failed* (PLUGINS.md, RDKit) |
 | Energy | a bolt | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
@@ -301,10 +302,10 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
-| Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
+| Energy window | a funnel | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
+| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound - or of its value of a property, across compounds - kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted as one; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
-| Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from; the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
+| Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from - and, of what its molecule holds (on its entry frame), only what *Keep from its molecule* names, one name to a line, as it is: none, unless named, so that a value worked out for the molecule never reaches its frames unasked; a frame that holds one of them itself, of another value, keeps its own, the line saying so once; a name a molecule does not hold, said, with how many ("path not on 2 molecules", "pc not on any molecule") (2026-10-30); the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit, or another of its properties ("its product"); all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
@@ -322,10 +323,12 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
+| Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
 | Reaction | an atom, an arrow, the same atom after it, mapped (drawn) | *Reactants*: one entry, molecules in 3D with every hydrogen (several made one complex first, by *Combine*); *Products*: molecules in 3D with every hydrogen | **molecules in 3D**: each product in the reactants' numbering, atom for atom - by its first map, or by every map - out of *Mapped products*; one that does not map one to one out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Reaction*) |
 | Displace | an atom moved along, where it stood dashed (drawn) | molecules in 3D with vibrations, or a conformer set | **the same kind of set**: each geometry moved along its imaginary vibration - or one by number - the atom moving most by the amplitude (Å) given; one with no such vibration out of *Not displaced*, saying why (STRUCTURE-STEPS.md, *Displace*) |
+| Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
@@ -417,6 +420,14 @@ are a *Frequencies* step's, wired after it.
   puts it (ORCA's PATH SUMMARY order). Each frame has its energy and says
   what it is: "NEB image 3 of 10", or "highest point refined". Its entry
   frame - what a set, and the next step, takes of it - is the point refined.
+- **One frame of it.** The point refined, taken alone, carries the run's
+  calculation, and of what the frames say, its own word alone ("highest
+  point refined"). So a molecule made of it after - by *Duplicates* onwards,
+  or a set's table row put on the page - is one of one frame, its
+  calculation that frame's: a step after that one still has it, and it is
+  saved and opened again with nothing left out. Another frame of the path
+  taken alone (*Take frames*, a table's row) carries its own word and none
+  of the point refined's calculation: no imaginary frequency of its.
 - **Barriers.** On the point refined, Meno works out from the energies
   printed `path.E-barrier` (its energy less the path's start's, its first
   image, of the same run) and `path.E-reverse-barrier` (less its end's, its
@@ -434,6 +445,17 @@ are a *Frequencies* step's, wired after it.
   iterations - never in the words of the error return ORCA ends it by. An
   image whose SCF did not converge while ORCA carried on with the band is
   a warning on the molecule, in ORCA's words; it moves nothing.
+- **Its highest point not refined.** Where the band converged but
+  refining its highest point took the most steps ORCA allows (ORCA: "The
+  optimization did not converge but reached the maximum number of
+  optimization cycles"), nothing of the run is read - no point refined,
+  no entry: that pair goes out of *Failed*, *not converged*, saying how
+  many iterations the band took and how many steps the refining, and to
+  raise *Steps for refining its highest point* or give ends nearer the
+  path (2026-10-30). ORCA goes on to its properties after it, and may stop
+  there by an error whose words say nothing of it ("ERROR (SHARK): Failed
+  to read input file", "error termination in PROPERTIES") - on one core or
+  many - or end normally: either way it is said so, never in those words.
 - **Frequencies, after it.** A *Frequencies* step wired after it works out
   the point refined's: its `imaginary`, `imaginary.first` and
   `imaginary.second` are then the chemist's to select on with *Filter*
@@ -457,6 +479,13 @@ both ways from each point given, as its program does it (the IRC), and
 nothing else: the ends' optimisation and what they are - *Take frames*'
 *first* and *last*, *Optimise*, *Compare bonding* - are steps of their own
 after it. Meno calls none of it a saddle point or a minimum.
+
+- **Its ends keep what the point was named only where asked.** *Take
+  frames*' *Keep from its molecule* names what each end takes from the
+  path's molecule - the names Tag gave the point (*path*, *species*) - so
+  that *Join* can put what the ends are back on the point, matched on
+  them. Nothing else of the point - its frequencies, its free energy -
+  goes with its ends.
 
 - **One molecule for each point.** Its frames are the path, one end to the
   other, in the order its program gives them, each with its energy and
@@ -506,6 +535,76 @@ them a saddle point.
   or ORCA's model one. At ORCA's own xTB, which has no analytic Hessian,
   ORCA computes it numerically, and the step's line says so. ORCA's OptTS
   takes no sides: wired, the step is refused.
+
+### Barrier
+
+*Barrier* (2026-10-30), Meno's own, writes on each saddle point its height
+above its start (case F, steps 31, 45 and 46): the free energy G by
+default, the electronic energy E where *Of* says so. It is one of a
+chain's steps, and does that alone: which start is a saddle point's is
+said by what the chain did before it - a reaction path followed down, its
+ends optimised, each named by *Compare bonding* - and the two are paired
+on it.
+
+- **Two inputs**: *Saddle points* and *Starts*, molecules in 3D or
+  conformer sets - each conformer one - paired as *Path search* pairs its
+  ends (*Pairs*: in order, each with each, or
+  matched on a property, a *Tag*'s ID). Each pair gives the saddle point
+  again, with its barrier.
+- **A pair is worked out only where both stand as results**, else the
+  saddle point goes out of *Failed* saying why:
+  - the saddle point a converged one - an optimisation to a saddle point,
+    or *Path search*'s point refined (`converged`, the entry record) - with
+    one imaginary frequency; the start a converged optimisation, and, for
+    G, with none: a free energy leaves out what is imaginary, so a start
+    with an imaginary frequency gives no G barrier. An E barrier from it is
+    given, and says it ("its start has 1 imaginary frequency");
+  - the two the same atoms in one numbering, of one charge and spin;
+  - their values at one level, temperature, pressure, solvent and
+    treatment of low vibrations, as each says it (lib/nodes `workedOutAs`),
+    the level said;
+  - for G, the rotational symmetry number each was worked out with read -
+    the program's, in its value's record (`by.symmetryNumber`). One not
+    read cannot be told, and is refused. Two that differ are kept, since it
+    is so of the two molecules, and both are said, each with its point
+    group: an ammonia inversion's saddle point is D3h, sigma 6, its
+    minimum as ORCA reads it Cs, sigma 1.
+- **Rotational symmetry**, for G: *As each program read it* (the default),
+  or *Left out (σ = 1 on both sides)* - each side's RT ln sigma taken off
+  its G by Meno, at the temperature its G was worked out at, and its
+  record says so. Which point group a program finds depends on its
+  tolerance, not on the structure alone: the same ammonia minimum, from
+  two runs of ORCA 6.1.1 at its GFN2-xTB, was read once C3v, sigma 3, and
+  once Cs, sigma 1, and the barrier moved by RT ln 3 (0.65 kcal/mol at
+  298.15 K) for that alone. Left out, the two give one barrier (5.10
+  kcal/mol). Neither is chosen for the chemist: the default is each
+  program's word.
+- **G summed of parts** - *Add*'s: a single point's energy, a thermal
+  correction at a lower level, a standard state - is named in *G is* in
+  place of `thermo.free-energy`. The two sides must be sums of the same
+  parts, in order, each worked out alike, and each thermal part with its
+  sigma read: a standard state on one side alone is refused, never
+  mixed. A sum none of whose parts is a calculation's thermochemistry has
+  no sigma to read, and is refused for G - as read or left out.
+- **What it gives**: `barrier`, in kcal/mol, the saddle point's value less
+  its start's, the hartree at CODATA 2018's value (627.5094740631 kcal/mol,
+  lib/units), at the saddle point's geometry, temperature and pressure;
+  its record says which it is ("free energy G (thermo.free-energy;
+  quasi-RRHO (Grimme), 100 cm⁻¹): the saddle point's less its start a #1's;
+  point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs,
+  σ 1 (start)"). The step's line: "ΔG‡ 6.16 kcal/mol (G at GFN2-xTB,
+  298.15 K)".
+- **Solvation, as each side's output said it** (2026-10-31): the two
+  sides must say the same - a model with its solvent, or "none", the gas
+  phase - and one that says it with one that does not is refused. Two
+  that both leave it unsaid are taken, and the barrier's record says
+  "solvation not stated", so that no match of two unsaid is silent; a sum's
+  record (*Add*) says it of each part that leaves it unsaid.
+- **What it is not.** A barrier from separate reactants - a sum of two
+  molecules' G, each at its own standard state - is not this step's: its
+  start is one molecule, the complex the path began from, as case F's
+  example is. Only the forward barrier: the one from a path's other end
+  is a second Barrier step, with the ends as its starts.
 
 ### Who does a step
 
@@ -650,6 +749,13 @@ Conformers go through a workflow as any set does (decided):
     window* and *Populations* refuse it, saying why (2026-10-23; from
     2026-10-22 until then, it was no entry). Over each it says how many of its frames are entries: "4
     of 21 frames are entries (converged points)".
+    A point worked out once more is one entry, not two: a Gaussian *opt
+    freq*'s Freq link gives the converged point again, the same geometry to
+    the last digit and the same SCF energy, marked new and done. Where the
+    file says just that - that link's route optimising nothing - the
+    link's point is the entry, the frequencies its own, and the one before
+    it a frame: "1 of 6 frames is an entry (the converged one)"
+    (2026-10-30). Anything else is left as marked.
     (A step's own optimisation was already one entry, its path: *Results*.)
   - **What is not known to be found is no entry either: never every
     geometry for want of a mark** (the review desk, 2026-10-22). Which
@@ -717,17 +823,33 @@ Conformers go through a workflow as any set does (decided):
 
 | From | What |
 | --- | --- |
-| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run, has changed, failed or stopped, however far back, and every step from that one on |
+| A step's menu (right-click) | *Run* - this step, and first any step before it that has not run, has changed, failed or stopped, however far back, and every step on a way from one of those to this one; a step done on no such way is not run, however near - of a step of two inputs, the side done is left as it is |
 | | *Run from here* - this step and every step after it |
 | | *Stop* - while it is waiting or running |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
 | | *Don't keep raw outputs* - a step a plugin does: its jobs' files kept in the workspace's file are what they were given, what Meno read back and their logs (docs/FILE-IO.md, *A step's jobs*) |
-| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order |
+| The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order; no other |
 | | *Stop all* - while any runs |
 
 No key starts a run (decided: menus, at first). Steps run in the order
 their wires give; steps that do not depend on one another may run at
 once (*Several at once*).
+
+**An empty set** (2026-10-30). A step before it that ran well may give
+nothing this time: a branch that took none, a last round of restraints
+that held none. A step whose input is such a set ends at once, done, and
+says what came in empty - its exits empty, nothing an earlier run put in
+them left there (its molecules, a chart, a table, pictures), that run
+kept among its runs: *Nothing came in*, or, of a
+step of several inputs, which - *Nothing came into Molecules*, *Nothing
+came into First and Second*. No job is started and no plugin asked, and
+every step after it goes on the same way, so a chain of rounds runs to
+its end however many rounds had nothing left to do. A step still fails
+where its empty input is a set no step gave (one drawn by hand), or
+where the step before it failed. A Merge whose other input is not empty
+is not ended so: it takes that one's entries, as a Merge does, and the
+rounds' rests merged with the last round's empty restraints are the
+rests.
 
 ### States
 
@@ -801,6 +923,31 @@ beside its edge - being drawn over all of it.
   method - is said so: "on free energies (G), conditions not stated". On free
   energies a window refuses a saddle point, as Populations does: its G is
   no minimum's;
+- **Energy window, from the lowest in each value of a property**
+  (2026-10-31, for a cap on each product's transition states): *From the
+  lowest in: Each value of a property*, and *The property* named -
+  "product", "path". Each entry is kept where its energy is within the
+  window of the lowest of those with its value; molecules as well as
+  conformer sets. Its card says the window and what it is of ("within 10
+  kcal/mol of each product's lowest"); its line which energy, chosen as
+  above, each group's alike: "3 of 5 entries kept, on electronic
+  energies · rest 2", the reasons counted only where any is more than
+  being outside it. One without the property, or without an energy, goes
+  out of *Outside it* saying so ("it has no product", "it has no
+  energy") - never into a group, never left out unsaid; one outside the
+  window says how far ("12.00 kcal/mol above the lowest of its
+  product"). A saddle point is not refused here - which entries should
+  be transition states is the chemist's to say - but a window means
+  something only within one kind: a group of minima and saddle points
+  together is set aside whole, saying so ("its product b holds minima
+  and saddle points together"), as is one where an entry's kind is not
+  known (no frequencies) beside those whose is; a group none of whose
+  kind is known is windowed, its line saying "whether minima or saddle
+  points not known". An entry that is no result (failed, not converged)
+  is refused, named, as over compounds. Molecules have no compounds: over
+  compounds each is its own group, as *Rank* takes them, so all are kept
+  and the line says so ("2 of 2 entries kept: each molecule is its own
+  group");
 - **A conformer set keeps each conformer's thermochemistry**
   (2026-10-24): *Frequencies* on a conformer set runs a job for each, and
   each conformer keeps what its own job read - its free energy, enthalpy,
@@ -1241,6 +1388,35 @@ Decided while building it, for the maintainer to confirm:
   structure. In a conformer set, within each compound, lowest energy
   first. Alike is the one definition of the same conformer (*The same
   conformer*, below).
+- **Duplicates within each value of a property** (2026-10-31, the same
+  transition state found by two paths): *Compared within: Each value of
+  a property*, and *The property* named - "product", "path". Entries of
+  one value, of the same atoms bonded alike in the same order and the
+  same charge and spin, are compared across compounds - each saddle
+  point a path search gives is its own compound - with the same one
+  definition of alike, no threshold of its own; the lower kept, each
+  other one out of *Alike* naming it ("the same as b #1, which was
+  kept"). Lower only where their energies were worked out alike - across
+  paths they need not be: free energies where each has one, by the same
+  method, basis, temperature and the rest, else electronic energies of
+  the same program and level, or of none said; else those alike set
+  aside, saying how they differ ("alike, but which is lower is not
+  known: energies differ in level, ..."), the line counting them as
+  "alike, energies at different levels" - two levels' numbers never
+  decide; one unlike any other is kept, whatever its level. Where one of
+  those alike has no energy, the first as they came is kept, the line
+  saying so ("where one of those alike has no energy, the first kept").
+  Its card:
+  "compared within each product" - only what is not its default; its
+  line "3 of 4 entries kept · rest 1", the reasons counted only where
+  any is more than being alike. One without the
+  property goes out saying so ("it has no product"), never compared. As
+  *Energy window* in each value: saddle points are compared with saddle
+  points, but minima and saddle points of one value are set aside
+  together, saying so, as is one whose kind is not known (no
+  frequencies) beside those whose is; a value none of whose kind is
+  known is compared, its line saying "whether minima or saddle points
+  not known". An entry that is no result is refused, named.
 - **Deleting a step keeps the set it made**, with what it holds - a set
   like any the chemist made, so a compound set. A large set it made keeps
   the molecules it holds itself (2026-10-22): they are on no page, and
@@ -1303,6 +1479,26 @@ Decided while building it, for the maintainer to confirm:
   once** - all of them while one runs at a time; set, never more than the
   computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
   and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
+- **A program that runs as processes is given one to each physical core,
+  each told one thread** (2026-10-30). Its manifest says so
+  (`installed[].parallel`: `"processes"` - ORCA, its `%pal`, run under
+  MPI). Its job takes the cores Settings gives each, as processes - never
+  more than the computer's physical cores - and each process is told one
+  thread (`OMP_NUM_THREADS`, MKL's and OpenBLAS's, all `1`). Before, each
+  of its processes was told all the job's cores as its threads: on a
+  computer of 16 physical cores running two threads on each, 32 processes
+  of 32 threads each. Where the computer runs two threads on each physical
+  core, the queue counts each process as two of its cores, so that two
+  such jobs never share a physical core. Settings, *Calculations*, says so under its cores,
+  where the computer runs more than one thread on each: they are counted
+  in logical cores, and such a program takes that many for each process. Its physical cores are what its
+  system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
+  `/sys/devices/system/cpu/cpu*/topology` (each core and the package it
+  is on); on Windows the processor cores `GetLogicalProcessorInformationEx`
+  gives. Never more than the cores it may use (its threads, as the system
+  lets Meno have them), and its cores where the system cannot say. A
+  program of threads (xTB, Gaussian's `%nprocshared`) is told its cores as
+  before.
 - **Jobs at once counted for jobs asked for after it was changed** (until
   2026-10-22): one already waiting kept the number it was asked with. What
   jobs may use now counts at once, for every job waiting - Settings tells
@@ -1724,6 +1920,18 @@ Not put right here:
   (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
   install Open MPI* - ORCA's own words being only that it ended by an error at its
   start-up. Meno never runs it on fewer cores than asked without a word.
+  Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
+  processes with before any job is made - Open MPI's `mpirun` on macOS
+  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
+  jobs are given: ORCA's own folder, where it was found, before the PATH
+  Meno was started with - never the plugin's own environment's folders,
+  which no job is given. Not there, each job runs on one core - no
+  `%pal` written, one core asked, so that the queue counts it as one and
+  as many run side by side as there are cores - and the step's line says
+  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
+  applies to every program, and those that need no launcher still take
+  it. The failure above stays for a launcher found that ORCA's job then
+  cannot run.
 - **A conformer set worked out by Gaussian** keeps each conformer in its
   standard orientation: the turn is one for the molecule, not each frame.
 
@@ -1779,21 +1987,33 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   conformer's energy and population); a set made from the selection is
   made round what is drawn, labels included (an OH reaches past its O); a
   result set is as large as its molecules reach, each in any of its
-  frames as it is turned, with room for its frames chip below it, and no
-  larger than its name needs.
+  frames as it is turned, with room for its frames chip below it - as
+  wide as all it says, of every frame: why its energy is not given ("none
+  finished: no lowest to stand above") and what it says after it - why it
+  failed, its imaginary frequencies, its warnings (2026-10-31: a saddle
+  point's chip ran into its neighbours', a failed one's past the frame) -
+  and no larger than its name needs.
 - **Steps' cards**: the icons in a column of their own - what it does,
   and its state's beside its state - and no rule; what it does and how,
   whole, on two lines where it needs them. A step Meno does may say its
   options its own way (*Choose one*: *Lowest in energy*, *Number 3*).
 - **Chips on the page** (*How it looks*): drawn at the page's scale -
-  `--page`, set on the layer the page's HTML is drawn in each time the
-  zoom changes - from where each hangs, and faded out below 75 %, with
+  `--page`, set on the layer the page's HTML is drawn in as the zoom
+  changes - from where each hangs, and faded out below 75 %, with
   the sets' names and the cards' words (`utils/pageScale`). Each is laid
   out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
   they are seen at - not drawn at one size and scaled by a transform,
   which the Mac's WebView magnifies soft up close (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
   molecule or a figure).
+- **Written as the zoom moves, half a per cent at a time** (2026-10-31):
+  `--page`, and `--hair` that the cards' lines are as wide as, lay out
+  every chip and card on the page again each time they are written - some
+  80 ms on a page of sixty steps, every frame of a zoom. While the zoom
+  moves they are written only once it has gone half a per cent from the
+  last written (`zoomWritten`) - half a pixel on a chip a hundred wide,
+  not seen - and, once it stands still, as it is. A wheel's zoom on that
+  page is over half a second sooner; the laying out itself stays.
 - **Quick Add** opens where it will stay as a panel opens below its row -
   its calculations, or the field a SMILES is typed in: its side is chosen
   once, for its largest, and it is held by its top left corner, so that
@@ -1962,7 +2182,9 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   quantum calculations, which keeps OH and NH rotamers apart - at its
   least over the ways the molecule maps onto itself, laid over by turning
   and moving, never by reflecting (`workflow/sameConformer`; the RDKit
-  plugin's conformers use the same). The ways are those of its atoms but
+  plugin's conformers for Meno's own page use the same, while its
+  *Conformers* step gives every one RDKit made and its *Duplicates* step
+  applies it: PLUGINS.md). The ways are those of its atoms but
   the hydrogens hanging on one atom, at most 1,000; those hydrogens are
   matched to the nearest of their kind once the rest are laid over.
   Past 1,000 ways - a centre with seven alike arms has 5,040 - its atoms
@@ -2137,6 +2359,14 @@ them again*; the maintainer's rulings of 2026-10-22):
   2026-10-22 it was passed on as a minimum): its path and the last
   geometry it reached go out of *Failed*, the failure on that geometry,
   so that *Take frames* can take it on.
+  An optimisation - a saddle point's too - that took the most cycles its
+  program allows is so, however its program ended after: ORCA's is read
+  by its words ("The optimization did not converge but reached the
+  maximum number of optimization cycles"), never as a result even where
+  ORCA then ended normally, and said *not converged* with how many cycles
+  (2026-10-30; before, in the words of the error ORCA's properties may
+  then stop by). A plugin's reason for a whole job is of the kind it
+  names, one of core's, else a program's error.
 - **A plugin may refuse one entry alone** as it prepares the others'
   jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
   refused, with why. Kept with the workspace while the others run.
@@ -2150,14 +2380,14 @@ them again*; the maintainer's rulings of 2026-10-22):
 - **A structure that is no minimum is marked so** with the imaginary
   frequencies its program judged it has - xtb's "significant" ones,
   Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
-  on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
+  on its chip: *1 imaginary frequency, 382.6i cm⁻¹*. A conformer set
   keeps each conformer's.
 - **Populations refuses a group with one that is no result or no
   minimum** - one that failed, by any kind (not converged, refused, an
   error...), or whose marks did not read, then one marked with an
   imaginary frequency - naming every one: *Not every entry is a result to
   stand on: a #2: ... ; a #4 refused - take them out first*, *a #2 has 1
-  imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
+  imaginary frequency, 382.6i cm⁻¹: it is no minimum - take it out first*
   (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
   not converged alone before). *Energy window* refuses the same: one that
   failed or whose marks did not read, and a saddle point on electronic
@@ -2181,7 +2411,18 @@ them again*; the maintainer's rulings of 2026-10-22):
   Meno judges nothing by them: which structure is a saddle point is the
   chemist's to say, with *Filter* ("imaginary = 1",
   "imaginary.second < 50 cm-1"). One that failed carries its reason as
-  its status. *Populations* on free
+  its status. And `converged` (2026-10-30), where a run ended converged at
+  its geometry, and how: "optimisation", "saddle point optimisation" (an
+  optimisation to a saddle point), "highest point refined" (Path search's
+  point refined). Only the run that converged sets it, of the geometry it
+  ended at, by that geometry's key (workflow/converged); *Frequencies* and
+  a single point carry it on while the geometry is that one still - its
+  shape as the program gave it back - so a step after Frequencies can
+  tell that it stands on a converged geometry; what moves the atoms
+  leaves none, nor does a failed run, so one started from its geometry
+  stands on none. It is Meno's own: an entry's own property of the name
+  never stands (*Filter* on it is refused where one is there, as on any
+  name Meno gives). *Barrier* takes a saddle point and a start by it. *Populations* on free
   energies (`lib/nodes/populations`) fails a group with one that is no
   minimum, as Meno's does, each entry saying why.
 - **Meno's steps on energies refuse what they cannot use**: an *Energy
@@ -2762,7 +3003,13 @@ doubled quotes); a byte-order mark before it is left out.
   2026-10-30): "Product" over the column named "reaction.product". Its
   name stays its key - what rows are matched on, what a condition names -
   and hovering on the head says both ("Product · reaction.product"). A
-  number column's head stands at the right, over its numbers.
+  number column's head stands at the right, over its numbers, and its
+  numbers are written with one count of decimals, so that their points
+  line up ("0.00" over "0.37"): an energy in kcal/mol with two, as a
+  molecule's chip writes one under ten, so the same value reads the same
+  in both there (at ten and above the chip writes one decimal, the column
+  still two, its points kept in line); any other with as many as the one
+  shown that needs most. The value kept is as it came.
 - **A table's set is as tall as the rows it shows** (`tableSetSize`): its
   heads, up to six rows, and the line saying what it is, with nothing
   under it.
@@ -3065,6 +3312,39 @@ term.
   is set aside saying so; a number wired in of another dimension refuses
   the step.
 
+### Ensemble energy (2026-10-30)
+
+*Ensemble energy*, Meno's own, takes a group's members - a compound's
+conformers - together (lib/nodes `ensemble`; WORKFLOWS-FOUNDATION.md,
+case F, step 44, beside Rank's lowest):
+
+  G = G_min - R T ln Σ g exp(-(G - G_min) / R T)
+
+with each member's degeneracy g (1 where it says none; one that says a
+degeneracy that is no count - 0, below 0, not a number - sets its group
+aside, saying so), R = 8.314462618 J/(mol K), and T the temperature its
+members' values state.
+
+- **Its options**: the value it takes (*Of*, a free energy: Frequencies'
+  or one an Add wrote), the name it is written *As* ("G-ens"), and
+  within what - *Each group*, *Each value of a property*, *All
+  together*. Its card says it in a line ("G-ens = ensemble of G in each
+  group").
+- **One entry stands for each group**: its lowest, with the value written
+  on it. The value is of the group, not of that geometry
+  (`Property.ensemble`, how many it is over); its parts are each member's
+  value as it was - an Add's own parts with it. It is worked out by the
+  members' own level - their program, method and basis, which they share
+  - and its treatment says it is an ensemble, of the members' treatment
+  ("ensemble, -R T ln Σ g exp(-G/R T), of quasi-RRHO"). So two ensembles
+  at one level, of any sizes, are ranked and summed together; two at
+  different levels, or an ensemble and one geometry's G, are not. The
+  others go out of *The rest*, each saying whose ensemble it is in.
+- **No temperature is assumed**: members whose values state none, or
+  differ in it, or were worked out differently in any other way, set
+  their group aside whole, saying how. A member that is no result -
+  failed, not converged - is never counted, and says so.
+
 ### Charts (2026-10-22)
 
 **Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
@@ -3213,7 +3493,7 @@ molecules of one geometry - which a step that works on entries refuses
   lowest (meno `notResults`).
 - **Imaginary frequencies are said, not judged**: which level should be a
   saddle point the step cannot tell, so each level, pointed at, says those
-  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm-1",
+  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm⁻¹",
   "no imaginary frequency", or "frequencies not computed" (lib/
   energyDiagram `frequenciesSaid`, entries `imaginaryOf`).
 - **The lines**: each row of the table into *Connects* - its

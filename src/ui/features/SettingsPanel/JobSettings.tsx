@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
+import { chooseJobsFolder, clearFinishedJobs, computerCores, coresCountedSaid, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
@@ -20,7 +20,7 @@ const MIB_PER_GB = 1024;
 export default function JobSettings() {
   const calculations = useAppSettings((s) => s.calculations);
   const setCalculations = useAppSettings((s) => s.setCalculations);
-  const [computer, setComputer] = useState({ cores: computerCores(), memory: 0 });
+  const [computer, setComputer] = useState<{ cores: number; memory: number; physical?: number }>({ cores: computerCores(), memory: 0 });
   useEffect(() => {
     if (!isTauri()) return;
     computerResources().then(setComputer, () => {});
@@ -92,6 +92,8 @@ export default function JobSettings() {
   return (
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
       <OptionRows options={options} values={values} onChange={change} />
+      {/* (how the cores are counted, where the computer runs more than one thread on each: a program of processes takes more than one) */}
+      {coresCountedSaid(computer) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresCountedSaid(computer)}</p>}
       {folder && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
           <span className="min-w-0 flex-1 text-sm text-gh-black">

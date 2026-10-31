@@ -620,7 +620,7 @@ describe("the shares a conformer set's chip shows", () => {
     expect(sharesWithheld(notConverged)).toBe("#2 is not converged: it is no minimum, so no shares are given");
     const saddle = { ...set, imaginary: [[-382.6], null], numbers: [4, 7] };
     expect(sharesOf(saddle)).toBeUndefined();
-    expect(sharesWithheld(saddle)).toBe("#4 has 1 imaginary frequency, 382.6i cm-1: it is no minimum, so no shares are given");
+    expect(sharesWithheld(saddle)).toBe("#4 has 1 imaginary frequency, 382.6i cm⁻¹: it is no minimum, so no shares are given");
     // (nor those a Populations step worked out before)
     expect(sharesOf({ ...saddle, shares: [0.6, 0.4] })).toBeUndefined();
     // (another failure is no judgement of a minimum: shares as before)

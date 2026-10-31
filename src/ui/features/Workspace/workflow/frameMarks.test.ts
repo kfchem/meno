@@ -72,7 +72,7 @@ describe("a frame's marks", () => {
     // (a window refuses a set holding a saddle point, wherever its energy falls - as one failed, or marks not read: it is no conformer)
     expect(runMeno("energy-window", setEntries([waters([0, 1, 2], { imaginary: [null, null, [-120.5]] })], "conformers"), "conformers", { window: 1.5 })).toEqual({
       ok: false,
-      said: "a #3 has 1 imaginary frequency, 120.5i cm-1: it is no minimum - take it out first",
+      said: "a #3 has 1 imaginary frequency, 120.5i cm⁻¹: it is no minimum - take it out first",
     });
     expect(ran("duplicates", [unranked(unread())]).molecules[0].marksUnread).toBe(true);
     // (Energy window refuses such a set, as Populations does: whether each is a minimum is not known)

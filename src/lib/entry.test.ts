@@ -134,6 +134,10 @@ describe("restraints read back from a file", () => {
     ] };
     const p = propertyIn({ value, unit: "none", status: "computed" });
     expect(p).toEqual({ value, unit: "none", status: "computed" });
+    // (and where a minimisation first held them)
+    const started = { ...value, start: [0, 0, 0, 1.5, 0, 0, 3, 0, 0, 4.5, 0, 0] };
+    expect(propertyIn({ value: started, unit: "none", status: "computed" })?.value).toEqual(started);
+    expect(propertyIn({ value: { ...value, start: [0, "x"] }, unit: "none", status: "computed" })).toBeUndefined();
     // (a row of no kind, a distance with no strength, atoms fixed with a value, an atom not a whole number: none read - nothing held in part)
     for (const bad of [
       { kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 },
@@ -182,6 +186,18 @@ describe("a sum's parts, as a file holds them", () => {
     for (const bad of [{ value: 1, unit: "Eh" }, { property: "x", value: "1", unit: "Eh" }, { property: "x", value: 1, unit: "furlongs" }, { property: "x", value: 1, unit: "Eh", at: { kelvin: 298 } }])
       expect(propertyIn({ ...p, parts: [...p.parts, bad] })).toBeUndefined();
     expect(propertyIn({ ...p, parts: [] })).toBeUndefined();
+  });
+});
+
+describe("an ensemble's value, as a file holds it", () => {
+  it("reads back how many it is over, and its members' values with their own parts one level down - no deeper", () => {
+    const sum = { property: "G", value: -1.2, unit: "Eh", at: { geometry: "g1", kelvin: 298.15 }, parts: [{ property: "energy", value: -1.3, unit: "Eh" }, { property: "thermo.g-correction", value: 0.1, unit: "Eh" }] };
+    const p = { value: -1.21, unit: "Eh", at: { geometry: "g1", kelvin: 298.15 }, by: { treatment: "ensemble over 2" }, status: "computed", parts: [sum, { ...sum, value: -1.19 }], ensemble: { of: 2 } };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    expect(propertyIn({ ...p, ensemble: { of: 0 } })).toBeUndefined();
+    expect(propertyIn({ ...p, ensemble: { of: 1.5 } })).toBeUndefined();
+    // (two levels down: not read)
+    expect(propertyIn({ ...p, parts: [{ ...sum, parts: [{ ...sum.parts[0], parts: [sum.parts[1]] }] }] })).toBeUndefined();
   });
 });
 

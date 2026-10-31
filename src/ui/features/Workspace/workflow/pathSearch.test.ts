@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { CalcInfo, ReaderOutput } from "../../../../lib/calc/output";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
-import { entryOfSet, setEntries, type SetEntry } from "./entries";
+import { entryOfSet, framesOf, setEntries, type SetEntry } from "./entries";
 import { runMeno } from "./meno";
 import { pairEntries, PATH_PAIR } from "./pairs";
 import { isFailure, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
+import { framesMolecule } from "./setTable";
 import { refinedFrame, takeFrames } from "./takeFrames";
+import { createWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import { readWorkspace, workspaceText } from "../utils/workspace";
 
 /** An optimisation's calculation, at `method`, converged. */
 const optimisedAt = (method = "GFN2-xTB", more: Partial<CalcInfo> = {}): CalcInfo => ({ readers: ["cclib 1.9rc1"], program: "ORCA", method, optimised: true, ...more });
@@ -114,7 +118,8 @@ describe("a path search's molecule", () => {
   it("puts its calculation on the point refined - any other molecule's, an opened run's of one entry frame too, on its last", () => {
     const m = molecule([-812.5, 4100.25]);
     const all = () => [0, 1, 2, 3];
-    const at = (x: Molecule3D) => setEntries([x], "molecules", all).map((e) => [e.frame, e.calc === x.calc, e.imaginary ?? null]);
+    // (the calculation's results with the frame it is of alone)
+    const at = (x: Molecule3D) => setEntries([x], "molecules", all).map((e) => [e.frame, !!e.calc?.results, e.imaginary ?? null]);
     expect(at(m)).toEqual([
       [0, false, null],
       [1, false, null],
@@ -177,6 +182,60 @@ describe("a path search's molecule", () => {
     // (where an image stands higher than the point refined - as a program may give one - the point refined all the same)
     const higher = { ...m, energies: [-1.17, -1.0, -1.09, -1.12] };
     expect(takeFrames([higher], "highest")).toMatchObject({ ok: true, kept: [expect.objectContaining({ frame: 2 })] });
+  });
+
+  /** The molecule a Meno step after it makes of the point refined alone - a Filter's, keeping it - as Duplicates onwards do. */
+  const refinedAlone = (m: Molecule3D): Molecule3D => {
+    const o = runMeno("filter", setEntries([m], "molecules"), "molecules", { conditions: "imaginary = 1" });
+    if (!o.ok) throw new Error(o.said);
+    const [one] = resultsOf(o, "filter").molecules;
+    return { ...one, id: 2, at: { x: 0, y: 0 } };
+  };
+
+  it("gives a step after it the point refined alone, with what its frames say of that frame only", () => {
+    const m = molecule([-812.5, 4100.25]);
+    const [entry] = setEntries([m], "molecules");
+    expect(entry.calc?.results?.find((r) => r.id === "path.frame")).toMatchObject({ on: "frames", values: ["highest point refined"] });
+    // (the rest of its calculation as it was: of the point refined)
+    expect(entry.calc?.results?.find((r) => r.id === "vibrations")).toEqual(m.calc?.results?.find((r) => r.id === "vibrations"));
+    expect(entry.imaginary).toEqual([-812.5]);
+    // (the molecule made of it, of one frame: its point refined that frame - so a step after that one still has its calculation)
+    const one = refinedAlone(m);
+    expect(framesOf(one)).toBe(1);
+    expect(refinedFrame(one)).toBe(0);
+    const [again] = setEntries([one], "molecules");
+    expect([again.calc?.results?.length, again.imaginary]).toEqual([2, [-812.5]]);
+    expect(refinedAlone(one).calc?.results?.find((r) => r.id === "path.frame")).toMatchObject({ values: ["highest point refined"] });
+  });
+
+  it("keeps the point refined's calculation whole through a save and opening again: none of its results left out", () => {
+    const one = refinedAlone(molecule([-812.5, 4100.25]));
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...one, at: { x: 0, y: 0 } }] });
+    const ws = readWorkspace(workspaceText(store.getState()));
+    expect(ws!.leftOut).toBeUndefined();
+    const [opened] = ws!.drawn.molecules3d!;
+    expect(opened.calc?.results?.map((r) => r.id)).toEqual(["path.frame", "vibrations"]);
+  });
+
+  it("puts the point refined's calculation with it alone, of its frames a set's table takes out - never on another frame of its path", () => {
+    const path = molecule([-812.5, 4100.25]);
+    // (a result of the molecule as a whole, as a program reads one: of the point refined, the geometry its calculation is of)
+    const dipole = { id: "dipole", on: "molecule" as const, group: "Dipole", label: "Dipole moment", quantity: "dipole" as const, value: 1.5 };
+    const m: Molecule3D = { ...path, calc: { ...path.calc!, results: [...path.calc!.results!, dipole] } };
+    const out = (frames: number[]) => {
+      const x = { ...framesMolecule(m, frames), id: 3, at: { x: 0, y: 0 } };
+      const [entry] = setEntries([x], "molecules", (y) => [framesOf(y) - 1]);
+      return { ids: x.calc?.results?.map((r) => r.id), said: x.calc?.results?.find((r) => r.id === "path.frame"), imaginary: entry.imaginary ?? null };
+    };
+    // (the point refined alone: its own calculation - its dipole, its imaginary frequency - and its frame's word)
+    expect(out([2])).toEqual({ ids: ["path.frame", "dipole"], said: expect.objectContaining({ values: ["highest point refined"] }), imaginary: [-812.5] });
+    // (its path's last image alone: its own word, and none of the point refined's - not its imaginary frequency)
+    expect(out([3])).toEqual({ ids: ["path.frame"], said: expect.objectContaining({ values: ["NEB image 3 of 3"] }), imaginary: null });
+    // (the two together: the point refined's with it, the last image after it its own frame)
+    expect(out([2, 3]).ids).toEqual(["path.frame", "dipole"]);
   });
 
   it("fails a pair whose path is not at its ends' level, or says none - naming both", () => {

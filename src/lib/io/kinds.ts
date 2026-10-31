@@ -107,6 +107,8 @@ export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; ref
   const samples = MENO_SAMPLES.map(headOf);
   const refused: Refused[] = [];
   const brought = new Map<string, Kind>();
+  // (the kinds coloured by their own program's plugin's grammar already: the first such, in Meno's order, as it is the first that reads it)
+  const ownGrammar = new Set<string>();
   const own = new Set(Object.values(MENO_KINDS).map((k) => k.id as string));
   for (const m of manifests) {
     // (the kinds it reads: one it only colours or writes is no file Meno takes in by it)
@@ -127,11 +129,13 @@ export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; ref
               extensions: [...new Set([...was.extensions, ...k.extensions])],
               marks: [...(was.marks ?? []), ...marks.filter((x) => !was.marks?.some((y) => y.text === x.text && y.at === x.at))],
               ...(k.probe || was.probe ? { probe: true as const } : {}),
-              // (coloured by the first's grammar that has one)
-              ...(was.grammar ? { grammar: was.grammar } : k.grammar ? { grammar: { plugin: m.id, decl: k.grammar } } : {}),
+              // (coloured by its own program's plugin's grammar - the first that says its program writes it (`writtenBy`), the
+              //  plugin that reads it by default (lib/calc/catalog `readerFor`) - else by the first's that has one)
+              ...(k.grammar && k.writtenBy && !ownGrammar.has(k.id) ? { grammar: { plugin: m.id, decl: k.grammar } } : was.grammar ? { grammar: was.grammar } : k.grammar ? { grammar: { plugin: m.id, decl: k.grammar } } : {}),
             }
           : kindFrom(k, marks, m.id),
       );
+      if (k.grammar && k.writtenBy) ownGrammar.add(k.id);
     }
   }
   // (the kinds it knows but does not read - those it writes, inputs to its program written by hand - as texts it colours)

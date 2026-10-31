@@ -20,7 +20,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { wordsReadAt } from "../utils/pageScale";
+import { wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
@@ -480,6 +480,8 @@ export default function Workflow2D() {
   const [compact, setCompact] = useState(false);
   const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
+  // (what a hair was last written as, on which layers, and the zoom the frame before)
+  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number }>({ layer: null, ports: null, zoom: NaN, before: NaN });
   const layer = useRef<HTMLDivElement>(null);
   const portsLayer = useRef<HTMLDivElement>(null);
   // the card opened over the rest - or shutting - as tall as it is now, in the page's units: the ports under it are not drawn
@@ -502,10 +504,17 @@ export default function Workflow2D() {
     const small = !read.current;
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
-    layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+    // (written again only as utils/pageScale `zoomWritten` says - each write lays out every card again - and to a layer not yet written to)
+    const still = z === hair.current.before;
+    hair.current.before = z;
+    const h = hair.current;
+    if (h.layer !== layer.current || h.ports !== portsLayer.current || zoomWritten(h.zoom, z, still)) {
+      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z };
+      layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+      portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+    } else if (h.zoom !== z) invalidate();
     layer.current?.style.setProperty("--words", read.current ? "1" : "0");
     layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
-    portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
   });
 
   const worldOf = (cx: number, cy: number): Pt => {

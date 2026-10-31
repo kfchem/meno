@@ -42,7 +42,14 @@ class Symmetry(unittest.TestCase):
         return {r["id"]: r["value"] for r in worker.thermo_said(text, program)}
 
     def test_orca_its_point_group_symmetry_number_and_treatment(self):
-        self.assertEqual(self.said(ORCA, "orca"), {"thermo.point-group": "D3h", "thermo.symmetry-number": 6, "thermo.treatment": "quasi-RRHO (Grimme), 100 cm-1"})
+        self.assertEqual(self.said(ORCA, "orca"), {"thermo.point-group": "D3h", "thermo.symmetry-number": 6, "thermo.treatment": "quasi-RRHO (Grimme), 100 cm⁻¹"})
+
+    def test_orca_without_its_low_mode_treatment_said_rrho(self):
+        # (ORCA 6.1.1 with %freq QuasiRRHO false: its settings say so, and no Grimme line follows - the harmonic oscillator alone)
+        rrho = "Quasi RRHO          ...    False\n" + ORCA.replace("Vibrational entropy computed according to the QRRHO of S. Grimme\nChem.Eur.J. 2012 18 9955 using a reference frequency of 100.0 cm-1\n", "")
+        self.assertEqual(self.said(rrho, "orca"), {"thermo.point-group": "D3h", "thermo.symmetry-number": 6, "thermo.treatment": "RRHO"})
+        # (its own default said True, as it prints it: Grimme's, as before)
+        self.assertEqual(self.said("Quasi RRHO          ...     True\n" + ORCA, "orca")["thermo.treatment"], "quasi-RRHO (Grimme), 100 cm⁻¹")
 
     def test_of_several_jobs_the_last(self):
         two = ORCA.replace("D3h, Symmetry Number:   6", "C3v, Symmetry Number:   3") + ORCA
