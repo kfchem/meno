@@ -248,10 +248,10 @@ from someone else: whatever a text option holds runs, as the plugin
 writes it into its program's input, when Run is pressed on the computer
 it is opened on. So a plugin writes a text option so that it names no
 program and no file, by its program's own reference, and refuses one
-that would (2026-10-13). Gaussian's route section takes no External,
-however shortened, and no `@`, `%`, `#`, `!` or double quotes; ORCA's
-simple input line takes no `%` or `#`, the manual naming a file or a
-program only in a block, in quotes. These input texts are checked by the
+that would (2026-10-13). A text for Gaussian's route section may hold no
+External, however shortened, and no `@`, `%`, `#`, `!` or double quotes;
+one for ORCA's simple input line no `%` or `#`, the manual naming a file
+or a program only in a block, in quotes. These input texts are checked by the
 plugins' workers alone (ARCHITECTURE.md, the known boundary under the
 jobs' rules); what Meno checks itself is which program runs, and that a
 program installed separately is given no file but its job's.
