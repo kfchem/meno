@@ -611,8 +611,12 @@ not taken from either.
   order, and a part's layer covered the parts on the layers below it.
   Lines are a hair on the screen at any zoom: the layer's `--hair` is set
   each frame from the zoom, and wires are made as wide on the screen for
-  it. Colours, cards and icons are Meno's own (WORKFLOWS.md, *How it
-  looks*): its palette, its cards' hairline borders, Heroicons' outline
+  it. The layer is laid out in its own pixels, which Chromium rounds to
+  before it scales them: ports are laid out in the screen's, the layer's
+  `--scale` undone on them, and the cards' and sets' hairlines are inset
+  shadows, not borders (WORKFLOWS.md, *Laid out in the screen's pixels*).
+  Colours, cards and icons are Meno's own (WORKFLOWS.md, *How it
+  looks*): its palette, its cards' hairlines, Heroicons' outline
   icons (`workflow/icons.tsx`).
 - **Who does a step** (`workflow/doers.ts`): a step is a plugin's - or
   Meno's, which stands among them for the steps on entries alone - and
