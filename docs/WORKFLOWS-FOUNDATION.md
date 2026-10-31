@@ -1690,7 +1690,9 @@ jobs elsewhere. In their manifests they declare:
 - the model formats they read.
 
 **The guards.** The boundary guard (`src/lib/plugins/boundary.test.ts`)
-keeps program, scheduler and model names out of core. Property and failure
+keeps program, scheduler and model names out of core - its literals, its
+regular expressions and its pages' text (PLUGINS.md, *The boundary, kept by
+a test*). Property and failure
 names given by plugins are data, never literals in core. Core names only the
 quantities its own nodes compute or use: *energy*, *thermal correction*,
 *share*, *degeneracy*, *vibrations*, *group*, *shielding*, *excited
