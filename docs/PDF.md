@@ -505,10 +505,9 @@ together, in short eased transitions.
 - **In a process of its own**, as calculations' jobs are (`Meno --job`).
   Meno starts itself as a PDF reader, `Meno --pdf`, when a workspace
   first shows a PDF, and talks to it by its standard input and output.
-- **A PDF that breaks PDFium breaks that process only.** The PDF says
+- **A PDF that breaks the reader breaks that process only.** The PDF says
   so on the page and in the column, with *Open again*; Meno, and the
-  work not yet saved, go on. Chrome keeps PDFium apart for the same
-  reason.
+  work not yet saved, go on.
 - **It answers one request at a time**, on one thread, in the order they
   come. Parts to draw wait in the window, nearest first, three at most
   sent at a time; one no longer wanted before it is sent is dropped.
@@ -607,7 +606,7 @@ A PDF is a file from anywhere, and is treated as such.
   web link opens in the system's browser only when it is ⌘-clicked
   (Ctrl+clicked on Windows).
 - **PDFium runs apart** (*Where it runs*, above), so a PDF made to break
-  it takes nothing else with it.
+  the reader takes nothing else with it.
 - **Its text and pictures go no further than the page, the column and
   the clipboard**, as the chemist moves them.
 

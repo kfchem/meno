@@ -1172,7 +1172,7 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   - opens a PDF from the cache when first asked about it, and answers a
   line of JSON at a time on its standard output: a frame of JSON, then
   bytes. Meno starts it when a PDF is first wanted and again if it has
-  gone, so that a PDF that breaks PDFium breaks it alone.
+  gone, so that a PDF that stops the reader stops that process alone.
 - **Parts of pages drawn** (`pdf_render`) come back as PNGs - a page is
   mostly white, so a 512-pixel tile is a quarter of its pixels or less, and
   carrying bytes is what takes the time - and are taken apart off the main
