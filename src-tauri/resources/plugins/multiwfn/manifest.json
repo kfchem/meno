@@ -10,7 +10,7 @@
     {"name": "multiwfn", "label": "Multiwfn", "files": {"macos": "multiwfn", "linux": "Multiwfn", "windows": "Multiwfn.exe"}, "env": {"Multiwfnpath": "{folder}"}}
   ],
   "depends": [
-    {"plugin": "gaussian", "versions": ">=0.4.0", "optional": true, "kinds": ["gaussian-fchk"]}
+    {"plugin": "gaussian", "versions": ">=0.4.0 <1.0.0", "optional": true, "kinds": ["gaussian-fchk"]}
   ],
   "steps": [
     {

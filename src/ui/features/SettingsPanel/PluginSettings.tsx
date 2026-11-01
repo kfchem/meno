@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { FADE } from "../../theme/motion";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
-import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
+import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
@@ -59,6 +59,8 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
   const [using, setUsing] = useState<readonly AnyPlugin[] | null>(null);
   // (why it is stopped, added: a plugin it uses not added, or not of a version it works with)
   const stopped = useReaders((s) => (s.state[p.id] === "added" ? stoppedOf(p, new Set(Object.keys(s.state).filter((id) => s.state[id] === "added"))) : null));
+  // (a kind of file of another plugin's it uses, not taken now - that plugin of another version - each a line: as text, one value to compare)
+  const notTaken = useReaders((s) => (s.state[p.id] === "added" ? kindsNotTaken(p, new Set(Object.keys(s.state).filter((id) => s.state[id] === "added"))).join("\n") : ""));
   const run = (job: (p: AnyPlugin) => Promise<void>) => {
     setBusy(true);
     job(p)
@@ -142,6 +144,14 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
           </p>
         )}
         {stopped && <p className="text-xs text-accel-accent mt-1 meno-fade-in">Stopped: {stopped.charAt(0).toLowerCase() + stopped.slice(1)}.</p>}
+        {notTaken
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => (
+            <p key={line} className="text-xs text-gh-gray mt-1 meno-fade-in">
+              {line}.
+            </p>
+          ))}
         {problem && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem}</p>}
       </div>
       <div className="flex flex-col items-end gap-1.5">

@@ -235,10 +235,10 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: true }] })?.depends?.[0].optional).toBe(true);
     expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: false }] })?.depends?.[0].optional).toBeUndefined();
     // (one whose kinds of file a step takes: each an id, once)
-    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0", kinds: ["xtb-out"] }] })?.depends?.[0].kinds).toEqual(["xtb-out"]);
-    for (const kinds of [["Bad Kind"], ["a", "a"], "a"]) expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0", kinds }] }), JSON.stringify(kinds)).toBeNull();
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0", kinds: ["xtb-out"] }] })?.depends?.[0].kinds).toEqual(["xtb-out"]);
+    for (const kinds of [["Bad Kind"], ["a", "a"], "a"]) expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0", kinds }] }), JSON.stringify(kinds)).toBeNull();
     // (one used for no program: its presence and version alone)
-    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0" }] })?.depends?.[0].programs).toEqual([]);
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0" }] })?.depends?.[0].programs).toEqual([]);
     // (itself, versions not as they must be, a shell, a path, a variable that finds programs, one plugin twice, one variable twice: no plugin)
     const program = (p: object) => ({ ...uses, programs: [{ ...uses.programs[0], ...p }] });
     for (const bad of [
@@ -250,7 +250,8 @@ describe("a plugin's manifest", () => {
       [program({ env: "PATH" })],
       [program({ env: "1X" })],
       [uses, { ...uses, programs: [] }],
-      [uses, { plugin: "other", versions: ">=1.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [uses, { plugin: "other", versions: ">=1.0.0 <2.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [{ ...uses, versions: ">=0.1.4" }],
       [{ ...uses, optional: "yes" }],
       "xtb",
     ])

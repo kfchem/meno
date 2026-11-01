@@ -106,5 +106,7 @@ describe("the kinds of file a plugin's step takes", () => {
     expect(filesTaken(m, m.steps[0].files!, () => undefined, name)).toEqual(["asks-own", "cube"]);
     expect(filesTaken(m, m.steps[0].files!, () => "2.0.0", name)).toEqual(["asks-own", "cube"]);
     expect(stoppedWhy(m, () => undefined, name)).toBeNull();
+    // (of another version, it stops nothing either: its kinds are not taken)
+    expect(stoppedWhy(m, () => "2.0.0", name)).toBeNull();
   });
 });

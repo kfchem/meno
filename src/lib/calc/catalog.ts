@@ -189,6 +189,21 @@ export function stepFiles(p: PythonPlugin, kind: string, added: ReadonlySet<stri
   return m ? filesTaken(m, files, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id) : files;
 }
 
+/**
+ * Why a kind of file of another plugin's that a step of `p` uses (its `depends`' `kinds`) is not taken now, that plugin added
+ * but of a version `p` does not work with - each a line, as Settings says it on `p` ("Gaussian formatted checkpoint is not
+ * taken: Needs Gaussian interface from 0.4.0 to before 1.0.0; 1.2.0 is added"). One not added says nothing here: `p`'s line
+ * of the plugins it uses says it is taken where that one is added.
+ */
+export function kindsNotTaken(p: Plugin, added: ReadonlySet<string>): string[] {
+  const version = (id: string) => (added.has(id) ? anyPluginById(id)?.version : undefined);
+  return (manifestOf(p.id)?.depends ?? []).flatMap((d) => {
+    if (!d.kinds?.length || !added.has(d.plugin)) return [];
+    const why = missingWhy(d, version, (id) => anyPluginById(id)?.name ?? id);
+    return why ? d.kinds.map((k) => `${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k} is not taken: ${why}`) : [];
+  });
+}
+
 /** The plugins that fill a role, in Meno's order. */
 export const pluginsFilling = (role: RoleId): PythonPlugin[] => PLUGINS.filter((p) => p.roles.includes(role));
 

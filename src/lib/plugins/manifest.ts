@@ -616,8 +616,9 @@ function placeOk(t: unknown): t is string {
 function dependOf(v: unknown, self: string): DependDecl | null {
   const d = v as Record<string, unknown> | null;
   if (!isId(d?.plugin) || d.plugin === self) return null;
+  // (versions bounded above, always: a plugin's next major is never taken on trust)
   const range = rangeOf(d.versions);
-  if (!range) return null;
+  if (!range || range.before === undefined) return null;
   if (d.programs !== undefined && !Array.isArray(d.programs)) return null;
   const programs = list(d.programs).map((v): UsedProgram | null => {
     const p = v as Record<string, unknown> | null;

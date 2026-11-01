@@ -16,6 +16,7 @@ import {
   readerIdOfLine,
   readerNameOf,
   readersOf,
+  kindsNotTaken,
   stepFiles,
   type PythonPlugin,
   type ReaderPlugin,
@@ -138,6 +139,11 @@ describe("the readers Meno knows of", () => {
     expect(multiwfn.depends?.map((d) => [d.plugin, d.kinds, d.optional])).toEqual([["gaussian", ["gaussian-fchk"], true]]);
     expect(stepFiles(multiwfn, "nci", new Set(["multiwfn"]))).toEqual(["molden", "wfx"]);
     expect(stepFiles(multiwfn, "nci", new Set(["multiwfn", "gaussian"]))).toEqual(["molden", "gaussian-fchk", "wfx"]);
+    // (Gaussian's of a version it does not work with: not taken, said so - and nothing stopped)
+    expect(kindsNotTaken(multiwfn, new Set(["multiwfn", "gaussian"]))).toEqual([]);
+    const gaussian = PLUGINS.find((p) => p.id === "gaussian")!;
+    expect(multiwfn.depends?.[0].range).toEqual({ from: "0.4.0", before: "1.0.0" });
+    expect(gaussian.version.startsWith("0.")).toBe(true);
     expect(multiwfn.installed[0]).toMatchObject({ name: "multiwfn", env: { Multiwfnpath: ["{folder}"] } });
   });
 

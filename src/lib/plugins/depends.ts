@@ -210,13 +210,17 @@ export function missingWhy(d: DependDecl, added: (id: string) => string | undefi
  * Why a plugin added is stopped, where it is: a plugin it needs not added,
  * or one it uses - optionally or not - added of a version it does not work
  * with (`missingWhy`). One it uses only for some of its work, not added,
- * stops nothing: a job that needs it is refused alone. `added` gives each
+ * stops nothing: a job that needs it is refused alone; used so for no
+ * program, of another version, it stops nothing either - its kinds of file
+ * are not taken (`filesTaken`). `added` gives each
  * plugin added's version, by id; `nameOf`, each one's name. None, where it
  * may run.
  */
 export function stoppedWhy(m: DependingManifest, added: (id: string) => string | undefined, nameOf: (id: string) => string): string | null {
   for (const d of m.depends ?? []) {
     if (d.optional && added(d.plugin) === undefined) continue;
+    // (one used for no program - for its kinds of file alone, optionally - stops nothing, of any version: its kinds are not taken, `filesTaken`)
+    if (d.optional && !d.programs.length) continue;
     const why = missingWhy(d, added, nameOf);
     if (why) return why;
   }
