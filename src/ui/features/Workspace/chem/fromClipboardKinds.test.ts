@@ -51,6 +51,6 @@ describe("a calculation's output pasted in Quick Add, or chosen in a text", () =
 
   it("is said to be what a plugin not added reads, naming it, as Open says it - nothing of it read", async () => {
     registerKinds([], MANIFESTS);
-    await expect(structureInOutput(ORCA, outputKindIn(ORCA)!, "Pasted text")).rejects.toThrow(/ORCA output\): ORCA interface or cclib or PySCF would read it/);
+    await expect(structureInOutput(ORCA, outputKindIn(ORCA)!, "Pasted text")).rejects.toThrow(/^Pasted text \(ORCA output\): ORCA interface or cclib or PySCF would read it/);
   });
 });

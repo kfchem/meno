@@ -208,6 +208,7 @@ import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
 import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
+import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
@@ -813,7 +814,8 @@ function WorkspaceContent({
       const said = leftOutSaid(found.leftOut, "copy");
       if (said) setChemError(said);
     } catch (e) {
-      setChemError(`${source} could not be read: ${e instanceof Error ? e.message : String(e)}`);
+      // (what a plugin not added reads: said as Open says it, which names it already - "Pasted text (ORCA output): ... would read it.")
+      setChemError(e instanceof NotRead ? e.message : `${source} could not be read: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
   // (3D structures, from the menu on a text in the column: shown here, while this workspace is in front)
