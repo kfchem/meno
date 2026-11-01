@@ -30,7 +30,7 @@ import { rangeOf, type DependDecl, type InterfaceDecl, type UsedInterface, type 
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
+import { isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
 export type Mark = {
@@ -232,12 +232,14 @@ export type UnsureDecl = { below: number; basis: string };
  * the file its molecule was read from where it is one of them - another
  * plugin's step's, or one opened - the two joined by the kind's id alone;
  * and, of a kind that takes nothing in (Generate), whether it makes its
- * molecules from seeds wired in (`seeds`: CReM's).
+ * molecules from seeds wired in (`seeds`: CReM's); and, of a kind a lone
+ * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
+ * takes none (`noLoneAtom`).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true };
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -676,6 +678,8 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
     ...(takes.length ? { takes: [...takes] } : {}),
     ...(files.length ? { files: [...files] } : {}),
     ...(s?.seeds === true ? { seeds: true as const } : {}),
+    // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
+    ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
   }));
 }
 

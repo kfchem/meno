@@ -89,6 +89,14 @@ export const MENO_ONLY: readonly StepKind[] = [
   "barrier",
 ];
 
+/**
+ * The kinds of step through which a lone atom - the ion of a salt drawn as
+ * ions - passes as it came, where its plugin says its program takes none
+ * (`StepDecl.noLoneAtom`): it has no conformers to find, and nothing to
+ * optimise. Through any other kind, it goes to the plugin as any entry does.
+ */
+export const LONE_ATOM_PASSES: readonly StepKind[] = ["conformers", "optimise"];
+
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;
 export type SetKind = (typeof SET_KINDS)[number];
