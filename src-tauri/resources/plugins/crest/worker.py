@@ -45,19 +45,13 @@ nothing else:
 The solvation is as the run said it, never taken from the options: CREST
 echoes each option it was given as it starts ("--alpb water : implicit
 solvation"), and says no more of it - "ALPB(water)"; with none of the
-options that ask for a model, "none". A lone atom's, as its xtb printed it
-in its setup: the model, the solvent and the reference state. Where that
-is not what was asked, the job is refused.
+options that ask for a model, "none". Where that is not what was asked,
+the job is refused.
 
 A lone atom - an ion of a salt, say - has no conformers to search for and
-nothing to optimise, and CREST stops with an error when given one. Its
-energy is worked out where it is instead, by the xtb CREST runs, as xtb's
-own documentation has it (xtb-docs.readthedocs.io: "Commandline Usage",
-"Properties"): `--gfn 1`, `--gfn 2` or `--gfnff` - a two-level search's
-finer method - `--chrg`, `--uhf`, `--alpb`, `-P` the cores, and `-I` an
-input file asking for the machine-readable dump (`$write json=true`),
-`xtbout.json`, whose total energy is read. The atom comes back where it
-was: its only conformer, or optimised as it can be.
+nothing to optimise. The manifest says CREST is given none (`noLoneAtom`),
+and Meno sends it none: a lone atom passes through Meno's step as it came
+(docs/PLUGINS.md, `steps`).
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -93,18 +87,6 @@ SEARCHES = {"full": [], "quick": ["--quick"], "squick": ["--squick"], "mquick": 
 # the energy window CREST's conformer search keeps by default (kcal/mol)
 EWIN = 6.0
 STEPS = {"conformers", "optimise"}
-# a lone atom's energy, by the xtb CREST runs (the version its environment's lock pins)
-XTB = "xtb"
-XTB_VERSION = "6.7.1"
-XTB_CONTROL = "xcontrol"
-XTB_CONTROL_TEXT = "$write\n   json=true\n$end\n"
-XTB_DUMP = "xtbout.json"
-XTB_METHODS = {
-    "gfn2": (["--gfn", "2"], "GFN2-xTB"),
-    "gfn1": (["--gfn", "1"], "GFN1-xTB"),
-    "gfnff": (["--gfnff"], "GFN-FF"),
-    "gfn2//gfnff": (["--gfn", "2"], "GFN2-xTB"),
-}
 FLOAT = r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eEdD][-+]?\d+)?"
 
 
@@ -189,30 +171,6 @@ def optimise_args(options, entry, cores):
     return ["--mdopt", ENSEMBLE_IN] + level_args(options, entry) + cores_args(cores)
 
 
-def lone(entry):
-    """Whether an entry is a single atom: no conformers to search for, nothing to optimise."""
-    return len(elements_of(entry)) == 1
-
-
-def lone_job(members, entry, options, cores):
-    """A lone atom's job: its energy where it is, by xtb - the method, the charge and unpaired electrons, the solvent, the cores, and the dump asked for."""
-    level_args(options, entry)
-    args = [INPUT] + XTB_METHODS[options.get("method", "gfn2")][0]
-    args += ["--chrg", str(whole(entry.get("charge", 0), "The charge")), "--uhf", str(whole(entry.get("multiplicity", 1), "The multiplicity") - 1)]
-    solvent = options.get("solvent", "none")
-    if solvent != "none":
-        args += ["--alpb", solvent]
-    if cores:
-        args += ["-P", str(whole(cores, "The cores"))]
-    return {
-        "entries": members,
-        "program": XTB,
-        "args": args + ["-I", XTB_CONTROL],
-        "files": [{"name": INPUT, "text": xyz_of(entry)}, {"name": XTB_CONTROL, "text": XTB_CONTROL_TEXT}],
-        "reads": [XTB_DUMP],
-    }
-
-
 def molecule_key(entry):
     """What an ensemble's structures must share: their atoms, in the same order, and their charge and spin."""
     return (tuple(elements_of(entry)), entry.get("charge", 0), entry.get("multiplicity", 1))
@@ -232,11 +190,7 @@ def op_prepare(m):
         jobs = []
         for members in groups.values():
             first = entries[members[0]]
-            # (what CREST would refuse, refused for a lone atom too)
             args = optimise_args(options, first, m.get("cores"))
-            if lone(first):
-                jobs.append(lone_job(members, first, options, m.get("cores")))
-                continue
             jobs.append({
                 "entries": members,
                 "program": PROGRAM,
@@ -249,11 +203,7 @@ def op_prepare(m):
         return {"jobs": jobs}
     jobs = []
     for i, entry in enumerate(entries):
-        # (what CREST would refuse, refused for a lone atom too)
         args = args_for(options, entry, m.get("cores"))
-        if lone(entry):
-            jobs.append(lone_job([i], entry, options, m.get("cores")))
-            continue
         jobs.append({
             "entries": [i],
             "program": PROGRAM,
@@ -307,23 +257,17 @@ def version_in(log):
     return m.group(1) if m else VERSION
 
 
-# the options that ask CREST, or xtb, for a solvation model ("Command Line Keywords"; xtb's "Commandline Usage")
-SOLVATION_FLAGS = {"--alpb", "--gbsa", "-g", "--cosmo", "--cpcmx"}
+# the options that ask CREST for a solvation model ("Command Line Keywords")
+SOLVATION_FLAGS = {"--alpb", "--gbsa"}
 
 
 def solvation_of(log):
-    """The solvation a run used, as it said it: xtb's setup ("ALPB(water), reference state gsolv [1 M gas/solution]"),
-    else CREST's echo of its options ("ALPB(water)"); "none" where the command it echoes asked for none; otherwise None."""
-    m = re.search(r"^\s*\*\s*Solvation model:\s*(\S.*?)\s*$", log, re.M)
-    if m:
-        block = "\n".join(log[m.end():].splitlines()[1:12])
-        solvent = re.search(r"^\s*Solvent\s+(\S.*?)\s*$", block, re.M)
-        reference = re.search(r"^\s*Reference state\s+(\S.*?)\s*$", block, re.M)
-        return f"{m.group(1)}({solvent.group(1)})" + (f", reference state {reference.group(1)}" if reference else "") if solvent else None
+    """The solvation a run used, as it said it: CREST's echo of its options ("ALPB(water)"); "none" where the command
+    it echoes asked for none; otherwise None."""
     echoed = re.search(r"^\s*--(alpb|gbsa)\s+(\S+)\s*:\s*implicit solvation", log, re.M)
     if echoed:
         return f"{echoed.group(1).upper()}({echoed.group(2)})"
-    call = re.search(r"^\s*Command line input:\s*\n\s*>\s*(.*)$", log, re.M) or re.search(r"program call\s*:\s*(.*)$", log, re.M)
+    call = re.search(r"^\s*Command line input:\s*\n\s*>\s*(.*)$", log, re.M)
     if call and not SOLVATION_FLAGS.intersection(call.group(1).split()):
         return "none"
     return None
@@ -480,33 +424,6 @@ def output_of(entry, options, files, log):
     }
 
 
-def lone_of(step, entry, options, files):
-    """A lone atom, as xtb left it: where it was, with its energy - its only conformer, or itself optimised as it can be."""
-    elements = elements_of(entry)
-    try:
-        dump = json.loads(files.get(XTB_DUMP) or "")
-    except ValueError:
-        dump = None
-    total = dump.get("total energy") if isinstance(dump, dict) else None
-    if isinstance(total, bool) or not isinstance(total, (int, float)) or not math.isfinite(total):
-        raise Refused("xtb wrote no energy")
-    method = XTB_METHODS.get(options.get("method", "gfn2"), (None, None))[1]
-    a = entry["atoms"][0]
-    return {
-        "schema": SCHEMA,
-        "program": "xtb",
-        "version": str(dump.get("xtb version") or XTB_VERSION).split()[0],
-        "method": method,
-        "charge": whole(entry.get("charge", 0), "The charge"),
-        "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
-        "atoms": elements,
-        "frames": [[float(a.get(k, 0.0)) for k in ("x", "y", "z")]],
-        "energies": [float(total)],
-        **({"populations": [1.0]} if step == "conformers" else {}),
-        "results": [],
-    }
-
-
 def op_collect(m):
     step = m.get("step")
     if step not in STEPS:
@@ -514,14 +431,11 @@ def op_collect(m):
     files = m.get("files") or {}
     log = m.get("log") or ""
     entries = m.get("entries") or []
-    alone = bool(entries) and lone(entries[0])
-    wrote = XTB_DUMP if alone else ENSEMBLE_OUT if step == "optimise" else CONFORMERS
+    wrote = ENSEMBLE_OUT if step == "optimise" else CONFORMERS
     if m.get("ended") != "done" or wrote not in files:
         return {"why": why_of(log)}
     options = m.get("options") or {}
-    if alone:
-        outputs = [lone_of(step, e, options, files) for e in entries]
-    elif step == "optimise":
+    if step == "optimise":
         outputs = optimised_of(entries, options, files, log)
     else:
         outputs = [output_of(e, options, files, log) for e in entries]

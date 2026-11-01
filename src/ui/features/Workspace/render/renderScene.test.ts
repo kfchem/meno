@@ -190,30 +190,28 @@ describe("molecules in 3D written as a scene to render", () => {
     expect(parse(r.gltf).animations[0].channels.length).toBeGreaterThan(0);
   });
 
-  it("writes each molecule's atoms and bonds in its extras, where it stands in the scene, for a renderer that makes a motion of its own", () => {
-    const g = parse(renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "a-renderers-own", seconds: 1, fps: 10 }).gltf);
-    const [mol] = g.scenes[0].extras.meno.molecules;
-    expect(mol.atoms.map((a: Json) => a.el)).toEqual(["C", "C", "H", "H", "H", "H"]);
-    // (in ångströms, where it stands on the page: its middle at (10, 20) on it)
-    const mid = mol.atoms.slice(0, 2).reduce((s: number[], a: Json) => [s[0] + a.p[0] / 2, s[1] + a.p[1] / 2], [0, 0]);
-    expect(mid[0]).toBeCloseTo(10 / k, 3);
-    expect(mid[1]).toBeCloseTo(20 / k, 3);
+  it("tags each molecule's node, its atoms' balls and its bonds' sticks, so that a renderer finds the molecule as drawn", () => {
+    const g = parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf);
+    const tags = g.nodes.map((n: Json) => n.extras?.meno ?? null);
+    const [mol] = tags.filter((t: Json) => t && "molecule" in t);
+    expect(mol.molecule).toBe(0);
     expect(mol.bonds).toContainEqual({ a: 0, b: 1, order: 2 });
     expect(mol.bonds).toHaveLength(5);
+    const atoms = tags.filter((t: Json) => t && "atom" in t);
+    expect(atoms.map((t: Json) => t.element)).toEqual(["C", "C", "H", "H", "H", "H"]);
+    expect(atoms.map((t: Json) => t.atom)).toEqual([0, 1, 2, 3, 4, 5]);
+    // (each stick says its bond: the double bond's two lines both bond 0's)
+    const sticks = tags.filter((t: Json) => t && "bond" in t).map((t: Json) => t.bond);
+    expect(new Set(sticks)).toEqual(new Set([0, 1, 2, 3, 4]));
+    expect(sticks.filter((b: number) => mol.bonds[b].order === 2).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("writes a film of a renderer's own motion still: no keyed animation, its frames for its length", () => {
+  it("writes a film of a renderer's own motion still, with no atom list besides: no keyed animation, its frames for its length", () => {
     const r = renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "a-renderers-own", seconds: 2, fps: 30 });
     expect(r.frames).toBe(60);
     const g = parse(r.gltf);
     expect(g.animations ?? []).toHaveLength(0);
-    expect(g.scenes[0].extras.meno.molecules).toHaveLength(1);
-  });
-
-  it("writes no atoms and bonds besides for a picture, or a film of Meno's own motion", () => {
-    expect(parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf).scenes[0].extras.meno.molecules).toBeUndefined();
-    const turned = renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "turn", seconds: 1, fps: 10 });
-    expect(parse(turned.gltf).scenes[0].extras.meno.molecules).toBeUndefined();
+    expect(g.scenes[0].extras.meno.molecules).toBeUndefined();
   });
 
   describe("what the canvas draws besides balls and sticks", () => {

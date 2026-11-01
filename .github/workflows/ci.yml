@@ -40,6 +40,7 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_reader_xtb.py
       - run: python3 -m unittest scripts/calc/test_plugin_crest.py
       - run: python3 -m unittest scripts/calc/test_plugin_blender.py
+      - run: python3 -m unittest scripts/calc/test_plugin_blender_presets.py
       - run: python3 -m unittest scripts/calc/test_plugin_nci.py
       - run: python3 -m unittest scripts/calc/test_plugin_pictures.py
       - run: python3 -m unittest scripts/calc/test_plugin_wfx.py

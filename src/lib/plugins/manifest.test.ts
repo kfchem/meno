@@ -72,7 +72,7 @@ describe("a plugin's manifest", () => {
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "blender-presets", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -219,6 +219,27 @@ describe("a plugin's manifest", () => {
     // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
     const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
+  });
+
+  it("may say its program takes no lone atom - of a kind a lone atom passes through, as it came, alone: of another, it is its to refuse", () => {
+    const read = acceptManifest({
+      ...good,
+      reads: [],
+      kinds: [],
+      steps: [
+        { kinds: ["conformers", "optimise", "energy"], programs: ["crest"], noLoneAtom: true },
+        { kinds: ["frequencies"], programs: ["crest"], noLoneAtom: "yes" },
+      ],
+    })!;
+    expect(read.steps.map((d) => [d.kind, d.noLoneAtom])).toEqual([
+      ["conformers", true],
+      ["optimise", true],
+      ["energy", undefined],
+      ["frequencies", undefined],
+    ]);
+    // (CREST's, as Meno carries it - which stops on one atom - and no other plugin's: the others run theirs on one)
+    expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.noLoneAtom).map((d) => `${m.id} ${d.kind}`))).toEqual(["crest conformers", "crest optimise"]);
+    expect(MANIFESTS.find((m) => m.id === "crest")!.steps.map((d) => d.programs)).toEqual([["crest"], ["crest"]]);
   });
 
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {

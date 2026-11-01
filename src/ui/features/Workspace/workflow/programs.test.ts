@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, passedAsLone, passedSaid, passesAsLone, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
@@ -397,6 +397,39 @@ describe("a conformer search", () => {
     expect(readKept({ kept: [2, 0, 2] }, 3)).toEqual([0, 2]);
     expect(readKept({ kept: [3] }, 3)).toBe("It said nothing Meno can take");
     expect(readKept({}, 3)).toBe("It said nothing Meno can take");
+  });
+});
+
+describe("a lone atom its plugin's program takes none of", () => {
+  const SODIUM: SetEntry = { compound: 2, number: 3, atoms: [{ el: "Na", x: 1, y: 2, z: 3, charge: 1 }], bonds: [], xyz: [1, 2, 3], charge: 1, multiplicity: 1, energy: -0.2, partOf: true, calc: { program: "xtb", method: "GFN2-xTB" } as SetEntry["calc"] };
+
+  it("passes through Conformers and Optimise alone, where the plugin says so - never a molecule of more atoms", () => {
+    expect(passesAsLone("conformers", true, SODIUM)).toBe(true);
+    expect(passesAsLone("optimise", true, SODIUM)).toBe(true);
+    expect(passesAsLone("energy", true, SODIUM)).toBe(false);
+    expect(passesAsLone("optimise", undefined, SODIUM)).toBe(false);
+    expect(passesAsLone("optimise", true, WATER)).toBe(false);
+  });
+
+  it("comes as it was - its charge and spin kept, no energy or calculation, none having been run - said so on it", () => {
+    const optimised = passedAsLone("optimise", SODIUM);
+    expect(optimised).toMatchObject({ compound: 2, number: 3, xyz: [1, 2, 3], charge: 1, multiplicity: 1, partOf: true });
+    expect(optimised.energy).toBeUndefined();
+    expect(optimised.calc).toBeUndefined();
+    expect(optimised.keep?.made?.how).toEqual([{ label: "Optimise", text: "one atom: nothing to optimise, no energy" }]);
+    // (through Conformers: its compound's only conformer, whole)
+    const found = passedAsLone("conformers", SODIUM);
+    expect(found).toMatchObject({ compound: 2, number: 1 });
+    expect(found.partOf).toBeUndefined();
+    expect(found.keep?.made?.how).toEqual([{ label: "Conformers", text: "one atom: its only conformer" }]);
+  });
+
+  it("is said on the step's line in what it is", () => {
+    expect(passedSaid("conformers", 1)).toBe("one atom: its only conformer");
+    expect(passedSaid("conformers", 2)).toBe("2 lone atoms: each its only conformer");
+    expect(passedSaid("optimise", 3)).toBe("3 lone atoms: nothing to optimise, no energy");
+    expect(passedSaid("optimise", 0)).toBeNull();
+    expect(passedSaid("energy", 1)).toBeNull();
   });
 });
 

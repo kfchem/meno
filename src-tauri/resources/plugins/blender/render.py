@@ -48,10 +48,10 @@ The settings (all checked by the worker that wrote them):
     key, ambient   the key light's and the light all round's strengths, as factors of Meno's
     softness    how soft the shadows are: the key light's width, in degrees
     quality     a film's: "high", "medium" or "lossless"
-    look        the look's name; those with materials and light of their own (looks.py) are made by it
-    motion      a film's motion, where it is one of this plugin's (studio.py, motion_<id>.py): made of the molecules
-                the scene's extras hold, in the motion's own studio and finish; `mode`, "once" or "loop"
-    silver_finish, copper_finish, wood, marble, pile, clay_colour, porcelain_finish   the choices that adjust them
+    presets     where a preset plugin's look, studio or motion is chosen (docs/plugins/blender-presets.md): for each such
+                plugin, which (`from`), the chosen ones' files (`look`, `studio`, `motion`) and its own options (`values`); its files
+                are in the job's folder, under presets/<plugin id>/, put there by Meno
+    mode        a film's: "once" or "loop"
     shading     "lit", as a renderer lights it, or "toon": each material a Toon BSDF in the colour it had,
                 lit in one band - `band` its size - which Cycles draws as a band, without noise removal
     outlines    "none", "thin" (Freestyle's lines, one pixel), "outer" (the picture's silhouette grown
@@ -70,7 +70,7 @@ import time
 import bpy
 
 sys.path.insert(0, os.getcwd())
-import looks  # noqa: E402 - beside this script, in the job's folder
+import presets  # noqa: E402 - beside this script, in the job's folder
 
 # What a factor of 1 of Meno's lights is, in Blender's units: Meno's key
 # light, a sun of this many watts a square metre; its light all round, a
@@ -361,19 +361,6 @@ def engine(scene, s):
     scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
 
 
-def own_look(scene, s):
-    """A look with materials and light of its own (looks.py): Cycles, the world and panels it brings, its materials on the molecules; what reflections find is never seen by the camera."""
-    scene.render.engine = "CYCLES"
-    scene.cycles.samples = s["samples"]
-    scene.cycles.use_denoising = s["denoise"] and s["shading"] != "toon"
-    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
-    camera = scene.camera
-    looks.apply(scene, camera, s["look"], {"silver_finish": s["silver_finish"], "copper_finish": s["copper_finish"], "wood": s["wood"], "marble": s["marble"], "pile": s["pile"],
-         "clay-colour": s["clay_colour"], "porcelain-finish": s["porcelain_finish"]}, s["background"])
-    looks.settle_denoising(scene)
-    scene.render.film_transparent = True
-
-
 def output(scene, s):
     """What is rendered: its size, its colours as asked, each frame a PNG with its transparency."""
     scene.render.resolution_x = s["width"]
@@ -603,110 +590,90 @@ def assemble(frames, s, folder):
         bpy.ops.render.render(write_still=True, scene=made.name)
 
 
-# The motions this plugin makes (manifest `motions`), each timed in a length of its own: a film of another length plays it
-# faster or slower. Those that loop of themselves; the others loop as a cycle - played forward, then back - whose ends are
-# held still, so that the seam does not show. Reveal loops of itself only in the dark studio (its rims circling); on white
-# it cycles.
-NOMINAL = {"reveal": 7.0, "pulse": 6.0, "assemble": 8.0, "scan": 7.0, "dissolve": 7.0}
-LOOPS = {"pulse", "scan"}
-# (a cycle plays a motion only until it has settled - not its Once's long last hold - so that it turns back without a pause)
-CYCLE = {"reveal": 5.4, "assemble": 6.0, "dissolve": 5.6}
+# A look, a studio or a motion of a preset plugin (docs/plugins/blender-presets.md): its module, from the files Meno put in the
+# job, run against `ctx` - the request and Meno's molecules as this scene has them - and nothing else.
 
-
-def motion_film(s, meno, folder):
-    """A film of one of this plugin's motions: studio.py builds the studio and the molecule Meno wrote into the scene's
-    extras, the motion's own script (motion_<id>.py) keys it and renders each frame. The frames, in the order the film
-    plays them."""
-    motion = s["motion"]
-    white = s["background"] in ("white", "transparent")
-    loop = s["mode"] == "loop"
-    native = motion in LOOPS or (motion == "reveal" and not white)
-    cycle = loop and not native
-    total = s["frames"]
-    n = total // 2 + 1 if cycle else total
-    cfg = {
-        "molecules": meno.get("molecules") or [],
-        "seconds": n / s["fps"], "nominal": None if (loop and native) else (CYCLE.get(motion, NOMINAL[motion]) if cycle else NOMINAL[motion]),
-        "frames": n, "fps": s["fps"], "mode": "loop" if (loop and native) else "once",
-        "width": s["width"], "height": s["height"], "percent": 100,
-        "samples": s["samples"], "noise": 0.01, "bg": "white" if white else "dark",
-        "pulses": max(1, int(round(n / s["fps"] / 3.0))),
-        "out": os.path.join(folder, "frames"),
-    }
-    space = {"CFG": cfg, "__name__": "motion"}
-    with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
-        exec(compile(f.read(), "studio.py", "exec"), space)
+def built(s, folder, scene_path, gltf, meno):
+    """Meno's scene taken in, lit, its engine set, its look's parts made, a preset's look and studio added where chosen, and
+    its output set: the scene, and the `ctx` a preset is run against."""
+    scene = empty_scene()
+    take_in(scene, scene_path, s["fps"])
     scene = bpy.context.scene
-    # (where it renders, now that the studio has reset Blender: decided as a picture's is - asked for, or, left to choose, the
-    # faster here, as timed once and kept - and said in the log, which the card reads)
-    scene.cycles.device = "GPU" if use_gpu(scene, s) else "CPU"
-    progress = Progress(n)
+    camera_of(scene, gltf)
+    light(scene, s, float(meno.get("ambientLight", 1.0)))
+    engine(scene, s)
+    ctx = presets.Ctx(scene, s, folder, presets.molecules_of(scene.objects), scene.camera, say)
+    look = presets.load(folder, s, "look")
+    if look is not None:
+        dress(ctx, look)
+    if s["shading"] == "toon":
+        toon(scene, s)
+    lines(scene, s)
+    studio = presets.load(folder, s, "studio")
+    if studio is not None:
+        studio.setup(ctx)
+    output(scene, s)
+    return scene, ctx
+
+
+def dress(ctx, look):
+    """A preset look's materials on Meno's balls and sticks, each asked for by what it is: a ball or a stick, its colour as Meno
+    drew it, and its element - a stick's, where it is coloured as one of its atoms is."""
+    if hasattr(look, "setup"):
+        look.setup(ctx)
+    made = {}
+
+    def put(obj, part):
+        k = (part["kind"], part["element"], tuple(round(c, 4) for c in part["colour"]))
+        if k not in made:
+            made[k] = look.material(ctx, part)
+        obj.data.materials.clear()
+        obj.data.materials.append(made[k])
+
+    for m in ctx.molecules:
+        by_index = {a["index"]: a for a in m["atoms"]}
+        for a in m["atoms"]:
+            put(a["object"], {"kind": "ball", "colour": a["colour"], "element": a["element"]})
+        for b in m["bonds"]:
+            ends = [by_index[i] for i in b["atoms"] if i in by_index]
+            for o in b["objects"]:
+                c = presets.colour_of(o)
+                el = next((e["element"] for e in ends if all(abs(x - y) < 1e-3 for x, y in zip(e["colour"], c))), "")
+                put(o, {"kind": "stick", "colour": c, "element": el})
+    if hasattr(look, "after"):
+        look.after(ctx)
+
+
+def keyed_frames(scene, folder, sub, count, progress):
+    """The scene's frames 1 to `count` rendered into `sub`: their files, in order."""
+    scene.frame_start, scene.frame_end = 1, count
+    out = os.path.join(folder, "frames", sub)
+    scene.render.filepath = os.path.join(out, "####")
     bpy.app.handlers.render_pre.append(progress.begin_frame)
     bpy.app.handlers.render_stats.append(progress.stats)
     bpy.app.handlers.render_post.append(lambda *_: progress.frame_done())
-    say("progress 0/100")
-    with open(os.path.join(folder, f"motion_{motion}.py"), encoding="utf-8") as f:
-        exec(compile(f.read(), f"motion_{motion}.py", "exec"), space)
-    progress.end()
-    made = sorted(glob.glob(os.path.join(cfg["out"], "f_*.png")))
-    if len(made) != n:
-        raise SystemExit(f"render.py: Blender rendered {len(made)} of {n} frames")
-    # (a cycle: forward, then back, its turning frames once each)
-    return made + made[-2:0:-1] if cycle else made
-
-
-# The changes of molecules this plugin makes (manifest `motions`, "change-<id>"): a film in pieces, one for each molecule that
-# becomes the next, in the order Meno wrote them - Once to the last, Loop back to the first. Each piece is timed in a
-# length of its own; the film's length is shared out among them, and each played faster or slower to fit.
-CHANGE_NOMINAL = {"change-ring": 5.0, "change-scan": 5.0, "change-shatter": 5.0}
-
-
-def molecules_to_change(s, meno):
-    """The molecules a change is made of, and the changes - (from, to) - in the order the film plays them."""
-    mols = meno.get("molecules") or []
-    if len(mols) < 2:
-        raise SystemExit("render.py: a change of molecules needs two molecules or more, rendered together")
-    loop = s["mode"] == "loop"
-    return mols, [(i, (i + 1) % len(mols)) for i in range(len(mols) if loop else len(mols) - 1)], loop
-
-
-def change_piece(s, folder, cfg, script, progress, first):
-    """One piece of a change, in a Blender of its own: its studio (studio.py), the part changes share (change.py, where it
-    has a molecule to become) and its own script, which renders its frames into cfg's `out`. Those frames, in order."""
-    space = {"CFG": cfg, "__name__": "motion"}
-    with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
-        exec(compile(f.read(), "studio.py", "exec"), space)
-    scene = bpy.context.scene
-    # (where it renders: decided once for the film, as a picture's is - and said in the log, which the card reads. The studio
-    # has reset Blender to its factory settings, its Cycles preferences with it: the graphics processor's devices are
-    # enabled again in every piece, or a later piece would render on the processor, saying it was not)
-    gpu = use_gpu(scene, s)
-    if gpu:
-        gpu_ready()
-    scene.cycles.device = "GPU" if gpu else "CPU"
-    if first:
-        say("progress 0/100")
-    prefs = bpy.context.preferences.addons["cycles"].preferences
-    on = gpu and any(d.use and d.type != "CPU" for d in prefs.devices)
-    say(f"Change {cfg['piece']} of {cfg['pieces']}: on the {'graphics processor' if on else 'processor'}")
-    # (one bar for the whole film: its handlers again on each piece's Blender, made new by the studio)
-    bpy.app.handlers.render_pre.append(progress.begin_frame)
-    bpy.app.handlers.render_stats.append(progress.stats)
-    bpy.app.handlers.render_post.append(lambda *_: progress.frame_done())
-    for name in (["change.py"] if "next" in cfg else []) + [script]:
-        with open(os.path.join(folder, name), encoding="utf-8") as f:
-            exec(compile(f.read(), name, "exec"), space)
-    made = sorted(glob.glob(os.path.join(cfg["out"], "f_*.png")))
-    if len(made) != cfg["frames"]:
-        raise SystemExit(f"render.py: Blender rendered {len(made)} of {cfg['frames']} frames of a change")
+    bpy.ops.render.render(animation=True)
+    made = sorted(glob.glob(os.path.join(out, "*.png")))
+    if len(made) != count:
+        raise SystemExit(f"render.py: Blender rendered {len(made)} of {count} frames")
     return made
 
 
-def piece_settings(s, frames, nominal, out):
-    white = s["background"] in ("white", "transparent")
-    return {"seconds": frames / s["fps"], "nominal": nominal, "frames": frames, "fps": s["fps"], "mode": "once", "stand": True,
-            "width": s["width"], "height": s["height"], "percent": 100, "samples": s["samples"], "noise": 0.01,
-            "bg": "white" if white else "dark", "out": out}
+def motion_film(s, folder, scene_path, gltf, meno, motion):
+    """A film of a preset's motion of one molecule: keyed by the motion (`key`), over as many frames as the film has - or, where
+    its Loop is a cycle (`LOOP`, or `LOOP(ctx)`), half of them and one, played forward and then back. The frames, in order."""
+    scene, ctx = built(s, folder, scene_path, gltf, meno)
+    kind = motion.LOOP(ctx) if callable(getattr(motion, "LOOP", None)) else getattr(motion, "LOOP", "cycle")
+    loop = s["mode"] == "loop"
+    cycle = loop and kind != "seamless"
+    n = s["frames"] // 2 + 1 if cycle else s["frames"]
+    ctx.request.update(frames=n, seconds=n / s["fps"], mode="loop" if loop and not cycle else "once", cycle=cycle)
+    motion.key(ctx)
+    progress = Progress(n)
+    say("progress 0/100")
+    made = keyed_frames(scene, folder, "motion", n, progress)
+    progress.end()
+    return made + made[-2:0:-1] if cycle else made
 
 
 def share(total, parts):
@@ -714,20 +681,28 @@ def share(total, parts):
     return [total // parts + (1 if k < total % parts else 0) for k in range(parts)]
 
 
-def change_film(s, meno, folder):
-    """A change of molecules: each piece, A becoming B, made after the piece before, the camera running on through them all.
-    The frames, in the order the film plays them."""
-    mols, pairs, loop = molecules_to_change(s, meno)
+def change_film(s, folder, scene_path, gltf, meno, motion):
+    """A film of a preset's motion of one molecule becoming the next, in pieces - Once to the last, Loop back to the first -
+    each keyed by the motion (`key_change`) in a scene of its own, its frames a share of the film's. The frames, in order."""
+    loop = s["mode"] == "loop"
+    # (the molecules, as Meno tagged their nodes)
+    mols = sum(1 for n in gltf.get("nodes", []) if "molecule" in ((n.get("extras") or {}).get("meno") or {}))
+    if mols < 2:
+        raise SystemExit("render.py: a change of molecules needs two molecules or more, rendered together")
+    pairs = [(i, (i + 1) % mols) for i in range(mols if loop else mols - 1)]
     total = s["frames"]
     if total < 2 * len(pairs):
         raise SystemExit(f"render.py: {total} frames are too few for {len(pairs)} changes")
     progress = Progress(total)
+    say("progress 0/100")
     made, start = [], 0
     for k, ((i, j), n) in enumerate(zip(pairs, share(total, len(pairs)))):
-        cfg = {**piece_settings(s, n, CHANGE_NOMINAL[s["motion"]], os.path.join(folder, "frames", f"piece-{k + 1:02d}")),
-               "molecules": [mols[i]], "next": mols[j], "loop": loop, "t_offset": start / s["fps"], "t_total": total / s["fps"],
-               "piece": k + 1, "pieces": len(pairs)}
-        made += change_piece(s, folder, cfg, "motion_change_" + s["motion"][len("change-"):] + ".py", progress, k == 0)
+        scene, ctx = built(s, folder, scene_path, gltf, meno)
+        ctx.request.update(frames=n, seconds=n / s["fps"], mode="once", piece=k + 1, pieces=len(pairs),
+                           start=start / s["fps"], whole=total / s["fps"], loop=loop)
+        say(f"Change {k + 1} of {len(pairs)}")
+        motion.key_change(ctx, ctx.molecules[i], ctx.molecules[j])
+        made += keyed_frames(scene, folder, f"piece-{k + 1:02d}", n, progress)
         start += n
     progress.end()
     return made
@@ -740,27 +715,13 @@ def main():
     with open(scene_path, encoding="utf-8") as f:
         gltf = json.load(f)
     meno = (gltf.get("scenes") or [{}])[0].get("extras", {}).get("meno", {})
-    if s.get("motion", "").startswith("change-"):
-        assemble(change_film(s, meno, folder), s, folder)
-        say(f"Rendered {s['out']}")
-        return
-    if s.get("motion"):
-        assemble(motion_film(s, meno, folder), s, folder)
-        say(f"Rendered {s['out']}")
-        return
-    scene = empty_scene()
-    take_in(scene, scene_path, s["fps"])
-    scene = bpy.context.scene
-    camera_of(scene, gltf)
-    light(scene, s, float(meno.get("ambientLight", 1.0)))
-    engine(scene, s)
-    if s["look"] in looks.IDS:
-        own_look(scene, s)
-    if s["shading"] == "toon":
-        toon(scene, s)
-    lines(scene, s)
-    output(scene, s)
-    assemble(render(scene, s, folder), s, folder)
+    motion = presets.load(folder, s, "motion")
+    if motion is not None:
+        film = change_film if hasattr(motion, "key_change") else motion_film
+        assemble(film(s, folder, scene_path, gltf, meno, motion), s, folder)
+    else:
+        scene, _ = built(s, folder, scene_path, gltf, meno)
+        assemble(render(scene, s, folder), s, folder)
     say(f"Rendered {s['out']}")
 
 

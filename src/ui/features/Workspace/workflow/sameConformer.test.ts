@@ -293,6 +293,7 @@ describe("the search for the ways", () => {
     work.steps = 0;
     expect(new Sameness(atoms, bonds).capped).toBe(true);
     expect(work.steps).toBeGreaterThan(ALIKE_WAYS);
+    // (80,130 steps, measured 2026-11-01: a change to the symmetry classes or the search that takes it past this is to be looked at)
     expect(work.steps).toBeLessThan(100_000);
     expect(work.steps).toBeLessThan(2 * WAY_STEPS);
     // (and RhCl(PPh3)3 so too)
@@ -300,6 +301,16 @@ describe("the search for the ways", () => {
     work.steps = 0;
     expect(new Sameness(rh.atoms, rh.bonds).capped).toBe(true);
     expect(work.steps).toBeLessThan(100_000);
+  });
+
+  it("takes an atom only to one of its isotope: a 13C among a centre's three carbons, 2 ways, not 6", () => {
+    // (a carbon bearing an N, two carbons and a 13C: only the two 12C swap)
+    const atoms = [{ el: "C" }, { el: "N" }, { el: "C" }, { el: "C" }, { el: "C", isotope: 13 }];
+    const bonds = [1, 2, 3, 4].map((k) => ({ a1: 0, a2: k, order: 1 }));
+    const xyz = [0, 0, 0, 0, 0, 1.47, 1.45, 0, -0.5, -0.72, 1.25, -0.5, -0.72, -1.25, -0.5];
+    const same = new Sameness(atoms, bonds, xyz) as unknown as { ways: unknown[]; capped: boolean };
+    expect(same.capped).toBe(false);
+    expect(same.ways).toHaveLength(2);
   });
 
   it("finds every way where they are fewer than it tries: a triphenylphosphine's, its phenyls turned over and round", () => {
