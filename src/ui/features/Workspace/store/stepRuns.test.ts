@@ -128,17 +128,6 @@ vi.mock("../../../../lib/calc/read", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/read")>()),
   readOutput: (...args: Parameters<typeof readOutput>) => readOutput(...args),
 }));
-// (a plugin that does a step at once on molecules - Duplicates, the one kind such a step has been - for the tests of how Meno takes
-//  what such a step answers; none of the bundled plugins does it)
-vi.mock("../../../../lib/plugins/known", async (actual) => {
-  const known = await actual<typeof import("../../../../lib/plugins/known")>();
-  const { acceptManifest } = await import("../../../../lib/plugins/manifest");
-  const { readFileSync } = await import("node:fs");
-  const raw = JSON.parse(readFileSync(`${process.cwd()}/src-tauri/resources/plugins/rdkit/manifest.json`, "utf8"));
-  const mirrors = { id: "mirrors", label: "Mirror images", type: "choice", choices: [{ value: "apart", label: "Kept apart" }, { value: "counted", label: "Counted in (degeneracy 2)" }], default: "apart" };
-  const atOnce = acceptManifest({ ...raw, id: "atonce", name: "At once", roles: [], steps: [{ kinds: ["duplicates"], options: [mirrors] }] });
-  return { ...known, MANIFESTS: [...known.MANIFESTS, atOnce!].sort((a, b) => a.id.localeCompare(b.id)) };
-});
 vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
@@ -1731,7 +1720,7 @@ describe("a plugin's conformer search, and its duplicates", () => {
   beforeEach(() => {
     jobs.clear();
     next = 1;
-    useReaders.setState({ state: { rdkit: "added", atonce: "added" }, problem: {} });
+    useReaders.setState({ state: { rdkit: "added" }, problem: {} });
   });
 
   it("brings each compound's conformers in as a conformer set - numbered, with their energies", async () => {
@@ -1753,24 +1742,6 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(m.frames).toHaveLength(1);
   });
 
-  it("sets aside what a plugin's Duplicates says is alike, at once", async () => {
-    const { doc, st } = editor();
-    // (a second water in the set: two entries)
-    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
-    const set = st().sets[0].id;
-    const step = st().addStep("duplicates", "atonce", 10, 20);
-    st().connect({ set }, step);
-    await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { mirrors: "apart" }, "molecules");
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
-    // (the one set aside, in the step's second exit's set)
-    expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
-    // (compounds it took atom against atom, too many ways onto themselves to try: said, a duplicate of one could be missed)
-    worker.run.mockImplementationOnce(async () => ({ kept: [0, 1], capped: 1 }) as never);
-    await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "2 of 2 kept \u00b7 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed" });
-  });
-
   it("says a plugin does not do a step it fills no more, before it asks it anything (a workspace's step from before)", async () => {
     const { doc, st } = editor();
     doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
@@ -1784,23 +1755,6 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(worker.run).not.toHaveBeenCalled();
   });
 
-  it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {
-    const { doc, st } = editor();
-    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
-    const set = st().sets[0].id;
-    const step = st().addStep("duplicates", "atonce", 10, 20);
-    st().updateStep(step, { options: { mirrors: "counted" } });
-    st().connect({ set }, step);
-    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 2, 1] }] }) as never);
-    await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept \u00b7 1 mirror image counted in (degeneracy 2)" });
-    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
-    expect(setEntries(out, "molecules").map((e) => [e.degeneracy, e.mirror])).toEqual([[2, [0, 2, 1]]]);
-    // (one not as said - not a permutation of its atoms: none taken)
-    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 0, 1] }] }) as never);
-    await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "1 of 2 kept" });
-  });
 });
 
 describe("Render as a step", () => {
