@@ -34,25 +34,24 @@ import { dihedral, distance } from "./measure";
 
 /**
  * A distance's strength unless the chemist sets another, in kcal mol⁻¹ Å⁻²:
- * a physical value, whichever program minimises - a spring gives way by the
- * pull on it over its strength, and the pull a molecule puts on a held
- * distance was at most about 5 kcal mol⁻¹ Å⁻¹, as a force field gives it,
- * on eight acid–base pairs held at 0.9 of their van der Waals radii
- * together (H3N…BH3, Me3N…BF3, H2O…BF3, Et2O…BF3, pyridine…BH3,
- * Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten conformers each): so it holds within
- * 0.01 Å (docs/STRUCTURE-STEPS.md; scripts/calc/measure_restraint_strengths.py
- * measures it again).
+ * measured, on eight acid–base pairs held at 0.9 of their van der Waals
+ * radii together (H3N…BH3, Me3N…BF3, H2O…BF3, Et2O…BF3, pyridine…BH3,
+ * Me2O…AlCl3, Me3P…BH3, Me2CO…BF3): minimised by the RDKit plugin (ten
+ * conformers each) it holds within 0.01 Å; by xtb 6.7.1, within 0.01 Å
+ * under GFN-FF and within 0.02 Å under GFN2-xTB, whose pull on Me2O…AlCl3
+ * is the strongest (docs/STRUCTURE-STEPS.md;
+ * scripts/calc/measure_restraint_strengths.py measures it again).
  */
 export const DISTANCE_STRENGTH = 500;
 
 /**
  * What *Torsion restraints* adds to a torsion's strength each time unless
- * the chemist sets another, in kcal mol⁻¹ rad⁻²: a physical value, whichever
- * program minimises - enough to turn each of six Z isomers to its E isomer
- * in one round, as a force field gives them, the torsions held within 1.5°
- * of 180° (but-2-ene, pent-2-ene, stilbene, methyl crotonate, hexa-2,4-diene
- * E,Z to E,E, crotononitrile; docs/STRUCTURE-STEPS.md;
- * scripts/calc/measure_restraint_strengths.py measures it again).
+ * the chemist sets another, in kcal mol⁻¹ rad⁻²: measured, on six Z
+ * isomers held towards their E isomers (but-2-ene, pent-2-ene, stilbene,
+ * methyl crotonate, hexa-2,4-diene E,Z to E,E, crotononitrile; the RDKit
+ * plugin's minimisation), to make each right in one round, held within
+ * 1.5° (docs/STRUCTURE-STEPS.md; scripts/calc/measure_restraint_strengths.py
+ * measures it again).
  */
 export const TORSION_STEP = 50;
 

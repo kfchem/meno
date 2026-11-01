@@ -308,15 +308,20 @@ strength. Restraints are a label: they name no geometry, and ride along.
 - **The factor has no default; the strength has a measured one.** The
   factor is the chemist's: the card says "Set the factor" until it is
   typed, as no source gives one. The strength is 500 kcal mol⁻¹ Å⁻² unless
-  set (`DISTANCE_STRENGTH`), and each can be changed. It is a physical
-  value, whichever program minimises: a spring gives way by the pull on it
-  over its strength. On eight acid–base pairs held at 0.9 of their radii
-  together (H3N…BH3, Me3N…BF3, H2O…BF3, Et2O…BF3, pyridine…BH3,
-  Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten conformers each, minimised in a
-  force field), the distance held came within 0.18 Å of its value at 10,
-  0.04 at 100, 0.02 at 239 and 0.01 at 500 - a pull of at most about
-  5 kcal mol⁻¹ Å⁻¹: the default holds within 0.01 Å
-  (`scripts/calc/measure_restraint_strengths.py` measures it again).
+  set (`DISTANCE_STRENGTH`), and each can be changed. Measured on eight
+  acid–base pairs held at 0.9 of their radii together (H3N…BH3, Me3N…BF3,
+  H2O…BF3, Et2O…BF3, pyridine…BH3, Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten
+  conformers each, the RDKit plugin's search), the distance held came
+  within 0.18 Å of its value at 10, 0.04 at 100, 0.02 at 239 and 0.01 at
+  500: the default holds within 0.01 Å. Minimised by xtb 6.7.1 instead
+  (each pair from its first conformer at 500; xtb's own distance
+  restraint, its force constant the record's strength as xtb takes it),
+  the largest miss at 10, 100, 239 and 500 was 0.39, 0.03, 0.013 and
+  0.007 Å under GFN-FF, and 1.43, 0.096, 0.038 and 0.018 Å under GFN2-xTB -
+  at 10 most of the pairs fall into their dative bond, and at 500 all but
+  Me2O…AlCl3 hold within 0.009 Å: the default holds within 0.01 Å under
+  GFN-FF and within 0.02 Å under GFN2-xTB
+  (`scripts/calc/measure_restraint_strengths.py` measures each again).
   Case F's workflow sets 0.9:
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
@@ -374,11 +379,11 @@ minimisation (docs/WORKFLOWS-FOUNDATION.md), its numbers the chemist's.
   names each such entry with why. Its only other exit is *Trans already*,
   and no entry goes on as trans that was never looked at.
 - **The step's default, measured**: 50 kcal mol⁻¹ rad⁻² unless set
-  (`TORSION_STEP`), a physical value, whichever program minimises. On six
-  Z isomers held towards their E isomers (but-2-ene, pent-2-ene, stilbene,
-  methyl crotonate, hexa-2,4-diene E,Z to E,E, crotononitrile; minimised in
-  a force field, each round from the original start), a step of 10 took up
-  to four rounds and 25 up to two. At 50 each was right in one round and held within 1.5°
+  (`TORSION_STEP`). On six Z isomers held towards their E isomers
+  (but-2-ene, pent-2-ene, stilbene, methyl crotonate, hexa-2,4-diene E,Z
+  to E,E, crotononitrile; the RDKit plugin's minimisation, each round from
+  the original start), a step of 10 took up to four rounds and 25 up to
+  two. At 50 each was right in one round and held within 1.5°
   (`scripts/calc/measure_restraint_strengths.py` measures it again).
 
 Checked: (E)- and (Z)-but-2-ene, with their hydrogens: methyl to methyl and
