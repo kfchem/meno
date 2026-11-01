@@ -1157,7 +1157,10 @@ of odd valence - is for the general steps after it, and for
   none of is `null` - REINVENT 4 writes an NLL that is no number so,
   counting it in `said`, since JSON holds no NaN - and is not kept.
 - `seed`: where a generator makes a structure from one that came in, that
-  one's place among them. None comes into REINVENT 4's. CReM gives its
+  one's place among them. None comes into REINVENT 4's. CReM's *Replace
+  fragments* replaces a fragment of one heavy atom or more, and *Add to
+  it* a hydrogen: a hydrogen replaced is the second's, not the first's
+  (`min_size` 1). CReM gives its
   values as `change` (the change made) and `frequency` (how often the
   fragment put in occurs in its database).
 - `seeds`: where seeds came in, one for each by its place, `{"place",

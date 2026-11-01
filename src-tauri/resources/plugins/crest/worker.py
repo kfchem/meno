@@ -172,8 +172,11 @@ def optimise_args(options, entry, cores):
 
 
 def molecule_key(entry):
-    """What an ensemble's structures must share: their atoms, in the same order, and their charge and spin."""
-    return (tuple(elements_of(entry)), entry.get("charge", 0), entry.get("multiplicity", 1))
+    """What an ensemble's structures must share: their atoms, in the same order, bonded the same way, and their charge
+    and spin - one molecule's, as an ensemble file holds ("Coordinate Files"); two of another constitution, though
+    their atoms come in the same order, each in an ensemble of its own."""
+    bonds = tuple(sorted((min(b["a1"], b["a2"]), max(b["a1"], b["a2"]), b.get("order", 1)) for b in entry.get("bonds") or []))
+    return (tuple(elements_of(entry)), bonds, entry.get("charge", 0), entry.get("multiplicity", 1))
 
 
 def op_prepare(m):
@@ -252,7 +255,8 @@ def energy_in(comment):
 
 
 def version_in(log):
-    """The version CREST says it is, as it starts."""
+    """The version CREST says it is, as it starts; where its log holds none - cut short before it - the one its
+    environment's lock pins, the only CREST there is to have run (pixi.toml, `crest ==2.12`)."""
     m = re.search(r"\bVersion\s+(\d+(?:\.\d+)+)", log)
     return m.group(1) if m else VERSION
 

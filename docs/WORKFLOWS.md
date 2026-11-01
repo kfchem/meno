@@ -1715,7 +1715,8 @@ Decided while building it, for the maintainer to confirm:
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the
   search is (full, or CREST's three quicker ones), and the energy window
-  (6 kcal/mol by default). The charge and spin multiplicity are those
+  (6 kcal/mol by default, CREST's own; any above nought, from 0.1, with no
+  upper bound of Meno's - 2026-11-02, before which it stopped at 100). The charge and spin multiplicity are those
   Export reads, as for xTB. Its search samples with the natural masses:
   the plugin gives CREST none, which changes how it explores, not the
   conformers or energies it gives.
@@ -2086,7 +2087,11 @@ Then, of the leftovers the maintainer chose:
   is comes where a program's documentation says how it says it.
 - **CREST optimises a set of conformers in one run** (*Optimise*, `crest
   --mdopt`, as its documentation's "Ensemble Optimization" has it): the
-  entries of each molecule written into one ensemble file, optimised, and
+  entries of each molecule - the same atoms in the same order, bonded the
+  same way, of the same charge and spin, as one ensemble file holds one
+  molecule's ("Coordinate Files"; bonded the same way since 2026-11-02:
+  two of another constitution whose atoms came in the same order went into
+  one before) - written into one ensemble file, optimised, and
   read back from `crest_ensemble.xyz` in the order they went, each with
   its energy. GFN2-xTB, GFN1-xTB or GFN-FF, and a solvent; one method,
   not the search's two.
