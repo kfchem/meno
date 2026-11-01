@@ -923,43 +923,21 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   app's side is tested with the plain data written by hand. An answer
   never holds a number that is not one (JSON has none).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
-  environment: PySCF from conda-forge, which has it for Windows; cclib
-  from PyPI) is a plugin of its own, sharing no code with another
-  (the maintainer, 2026-10-06). It gives the molecule - read with cclib as
-  a library, or a Molden file with PySCF - and its orbitals and densities;
-  charges, vibrations and the like it leaves to other readers. A Molden
-  file gives no charge or multiplicity, so they are worked out from its
-  own sections (`species_of`, 2026-10-14), each left unsaid where the file
-  does not settle it. The charge is the nuclei's - each atom's atomic
-  number in [Atoms], or the charge its pseudopotential leaves it where
-  [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
-  its [MO] occupations hold; with no [Pseudo], unsaid where an atom past
-  neon is there (its inner orbitals cannot be told from another's 1s), or,
-  from lithium to neon, other than one occupied orbital below -2 hartree
-  for each such atom (its 1s; two where alpha and beta are listed apart);
-  unsaid past 8 either way,
-  where the occupations come to no whole number, or where a restricted
-  file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
-  Gh) adds none. The multiplicity is one more than
-  the alpha occupations' excess over the beta's; with no Spin= said, a
-  singlet or a doublet where every occupation is 0, 1 or 2 and at most one
-  is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
-  and a singlet diradical share; Spin= given for some orbitals only). A
-  file that breaks the format - an occupation that is not a number, [MO]
-  given twice - gives neither, and never fails the read. It is tested alone
-  (`scripts/calc/test_reader_pyscf_species.py`, in CI).
-  Where an output
-  holds the basis set and the orbitals' coefficients, cclib writes them as
-  a Molden file (each p shell's functions put in x, y, z order, as ORCA's
-  are not) for PySCF to read back, and the orbitals are checked
-  orthonormal in their basis before any surface is promised - where they
-  are not, it says to open a Molden file the program wrote. Its lists'
-  rows promise each orbital's surface and the densities' (`orbital:<spin>:
-  <index>`, `density:total`, `density:spin`); asked for, it works the grid
-  out from the file sent again: 4 Å past the atoms, points 0.2 Å apart (at
-  most 90 to a side), the basis functions' values a chunk of points at a
-  time. Its tests (`scripts/calc/test_reader_pyscf.py`) run by hand in an
-  environment made from its lock.
+  environment: PySCF from conda-forge, which has it for Windows) is a
+  plugin of its own, sharing no code with another (the maintainer,
+  2026-10-06). It reads a Molden file with PySCF's own reader
+  (`pyscf.tools.molden.load`) and gives its molecule - its atoms and their
+  places, as PySCF reads them - and its orbitals and densities. The format
+  holds no charge or multiplicity, so it says neither. The orbitals are
+  checked orthonormal in their basis, as PySCF reads them, before any
+  surface is promised - where they are not, it says to open a Molden file
+  the program wrote. Its lists' rows promise each orbital's surface and
+  the densities' (`orbital:<spin>:<index>`, `density:total`,
+  `density:spin`); asked for, it works the grid out from the file sent
+  again: 4 Å past the atoms, points 0.2 Å apart (at most 90 to a side),
+  the basis functions' values a chunk of points at a time. Its tests
+  (`scripts/calc/test_reader_pyscf.py`) run by hand in an environment made
+  from its lock.
 - Meno's own reading under the same contract (`MENO` in the catalog,
   `lib/calc/menoReads.ts`, the one list of what it reads so) is asked as a
   plugin's worker is - the same `Reader`: what it makes of a file, and a
@@ -1642,7 +1620,7 @@ that every kind of these is in this table, by its id, and no other.
 | PDB file | `pdb` | `.pdb` | its records (`RECORD_NAMES`), an atom's coordinates in their columns | Meno, in its worker (`lib/chem/pdb.ts`) | Export: molecules in 3D as HETATM and CONECT records, a MODEL for each frame where asked | a molecule in 3D: every atom, MODELs as frames, bonds from CONECT and distances (FILE-IO.md, *As step 7 was built*) |
 | Cube file | `cube` | `.cube`, `.cub` | its layout (`CUBE_MARK`) | Meno, under the readers' contract, in its worker (`lib/calc/cube.ts`) | never | a molecule in 3D, its grids promises drawn as surfaces |
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |
-| Calculation programs' outputs | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as the manifest of each plugin that reads it brings it | each program's own plugin, where one is added, by default - the ORCA interface for `orca`, the Gaussian interface for `gaussian` and `gaussian-fchk` (plugin, uv), the xTB plugin for `xtb` (plugin, pixi); cclib (plugin, uv) for every kind listed, as a reading of its own where chosen; `orca`, `gaussian` and `gaussian-fchk` also PySCF | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
+| Calculation programs' outputs | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as the manifest of each plugin that reads it brings it | each program's own plugin, where one is added, by default - the ORCA interface for `orca`, the Gaussian interface for `gaussian` and `gaussian-fchk` (plugin, uv), the xTB plugin for `xtb` (plugin, pixi); cclib (plugin, uv) for every kind listed, as a reading of its own where chosen | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
 | xTB's frequencies in Gaussian's form | `xtb-g98` | `.out` (xtb's `g98.out`) | "frequency output generated by the xtb code", as the xTB plugin's manifest brings it | the xTB plugin (pixi) | never | a molecule in 3D, its vibrations and their motions |
 | Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]`, as PySCF's manifest brings it | PySCF (plugin, pixi) | never | a molecule in 3D, its orbitals and densities promises |
 | AIM extended wavefunction | `wfx` | `.wfx` | `<Number of Primitives>` at a line's start, as the WFX reader's manifest brings it | the WFX reader (plugin, uv: Python, with NumPy for the orbitals' values), as the format's specification has it | never | a molecule in 3D, its energy, charge and spin, its virial ratio, its orbitals' energies and occupations, each orbital's surface on asking (its values on a grid, worked out from the file's primitives); given to Multiwfn's NCI as its wavefunction |

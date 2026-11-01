@@ -48,7 +48,7 @@ describe("the readers Meno knows of", () => {
       lock: "resources/plugins/pyscf/pixi.lock",
       worker: "resources/plugins/pyscf/worker.py",
       env: "pixi",
-      reads: ["orca", "gaussian", "gaussian-fchk", "molden"],
+      reads: ["molden"],
     });
     // (a program's plugin that reads its own program's output, the kind its manifest declares)
     expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb", "xtb-g98"], ownKinds: ["xtb", "xtb-g98"], env: "pixi", worker: "resources/plugins/xtb/worker.py" });
@@ -183,7 +183,7 @@ describe("who reads a kind", () => {
   const readers = [...READERS, other];
 
   it("is any reader that reads it, in Meno's order: Meno first, where it reads it", () => {
-    expect(readersOf("orca", readers).map((p) => p.id)).toEqual(["cclib", "orca", "pyscf", "orca-own"]);
+    expect(readersOf("orca", readers).map((p) => p.id)).toEqual(["cclib", "orca", "orca-own"]);
     expect(readersOf("molden", readers).map((p) => p.id)).toEqual(["pyscf"]);
     expect(readersOf("cube", readers).map((p) => p.id)).toEqual(["meno", "orca-own"]);
   });
@@ -226,7 +226,8 @@ describe("who reads a kind", () => {
     const all = new Set(["cclib", "pyscf", "orca-own"]);
     expect(alsoReadersFor("orca", all, none, readers)).toEqual([]);
     const also = { read: {}, also: { orca: ["pyscf", "cclib", "orca-own"], gaussian: ["orca-own"] } };
-    expect(alsoReadersFor("orca", all, also, readers).map((p) => p.id)).toEqual(["pyscf", "orca-own"]);
+    // (PySCF, chosen, does not read ORCA's output; cclib is its reader)
+    expect(alsoReadersFor("orca", all, also, readers).map((p) => p.id)).toEqual(["orca-own"]);
     expect(alsoReadersFor("orca", new Set(["cclib"]), also, readers)).toEqual([]);
     // (orca-own does not read Gaussian's output)
     expect(alsoReadersFor("gaussian", all, also, readers)).toEqual([]);

@@ -40,15 +40,15 @@ describe("an ORCA output's energies, as its reader gives them", () => {
     expect(calcOf(none, ["orca 0.4.1"]).results?.map((r) => r.id)).toEqual(["run.energies"]);
   });
 
-  it("stands, read beside PySCF's reading of the same file - which gives none of an ORCA output's energies, method or basis", () => {
-    // (as the PySCF plugin reads it for its orbitals: its geometries, and nothing of what the cclib plugin's to give)
-    const pyscf: ReaderOutput = { ...hcn, method: null, basis: null, energies: null, results: [] };
+  it("stands, read beside another reader's reading of the same file - which gives none of its energies, method or basis", () => {
+    // (a reader that gives its geometries alone)
+    const other: ReaderOutput = { ...hcn, method: null, basis: null, energies: null, results: [] };
     const none: ReaderOutput = { ...hcn, energies: null, results: [{ id: "run.energies", on: "molecule", group: "Calculation", label: "Energies", value: "not read: a geometry has no final single-point energy of its own", rank: 0 }] };
     for (const order of [
-      ["pyscf", "cclib"],
-      ["cclib", "pyscf"],
+      ["other", "cclib"],
+      ["cclib", "other"],
     ]) {
-      const found = (cclib: ReaderOutput) => order.map((from) => ({ from, version: "1", output: from === "cclib" ? cclib : pyscf }));
+      const found = (cclib: ReaderOutput) => order.map((from) => ({ from, version: "1", output: from === "cclib" ? cclib : other }));
       const read = combine(found(hcn)).output;
       expect([read.energies, read.method, read.basis], order.join()).toEqual([[-93.399651434575], "r2SCAN-3c", undefined]);
       // (none read: none, never another reader's in their place)

@@ -936,9 +936,8 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   download - under the same contract as the plugins, and as easily taken
   out. A cube's molecule comes with its grids as a list of surfaces.
 - **The PySCF plugin** (Apache-2.0), in a pixi environment: orbitals and
-  densities worked out on a grid from a molden file, or from an output
-  that holds the basis set and the orbitals' coefficients - read by cclib,
-  written as molden by cclib, worked out by PySCF - each grid a promise.
+  densities worked out on a grid from a Molden file, read and worked out
+  by PySCF - each grid a promise.
   No GPL library (iodata, gbasis).
 
 ### In order
