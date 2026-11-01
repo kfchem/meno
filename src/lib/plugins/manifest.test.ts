@@ -72,7 +72,7 @@ describe("a plugin's manifest", () => {
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "blender-presets", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
