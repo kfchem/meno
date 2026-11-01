@@ -275,7 +275,7 @@ hold - their workers, manifests, locks and grammars - but for one plugin
 what it brings: the program or package its environment is made with
 (cclib's BSD-3-Clause, xTB's LGPL-3.0-or-later, MolScribe's MIT), or,
 where it brings only its own code - an interface to a program installed
-separately, the WFX reader - that code's. Settings,
+separately - that code's. Settings,
 *Plugins*, shows it.
 
 What a plugin brings is fetched as it is set up - from PyPI, conda-forge
@@ -1092,6 +1092,9 @@ The same for every plugin and for Meno's own parts:
   writes the energies in electronvolts, lists them about the frontier and
   works out the HOMO-LUMO gap (`homo-lumo-gap`); a list a reader gives of
   its own (`orbitals`, `orbitals.a`, `orbitals.b`) is shown as it gave it.
+- **Names a geometry's RMS gradient alike** (`rms-gradient`, of each frame,
+  in Eh/bohr, where the output gives the forces), whichever reader reads it,
+  Meno's own WFX reader among them.
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**

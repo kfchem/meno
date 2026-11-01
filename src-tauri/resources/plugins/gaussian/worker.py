@@ -235,7 +235,7 @@ PROGRAM = "g16"
 INPUT = "input.gjf"
 # what Gaussian's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "gaussian"
-# the wavefunction a step's job keeps, and what kind of file it is (as Multiwfn's step names it)
+# the wavefunction a step's job keeps, and what kind of file it is: Meno's own kind of WFX file
 WAVEFUNCTION = "wavefunction.wfx"
 WAVEFUNCTION_KIND = "wfx"
 # each kind of step, as its job's keyword says it

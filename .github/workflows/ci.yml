@@ -43,7 +43,6 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_plugin_blender_presets.py
       - run: python3 -m unittest scripts/calc/test_plugin_nci.py
       - run: python3 -m unittest scripts/calc/test_plugin_pictures.py
-      - run: python3 -m unittest scripts/calc/test_plugin_wfx.py
       - run: python3 -m unittest scripts/calc/test_plugin_reinvent.py
       - run: python3 -m unittest scripts/calc/test_plugin_crem.py
       - run: python3 -m unittest scripts/calc/test_charge_multiplicity.py

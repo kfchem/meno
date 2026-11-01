@@ -68,7 +68,15 @@ export type PluginGrammar = { plugin: string; decl: GrammarDecl };
  */
 export type TextKind = { id: string; extensions: readonly string[]; marks: readonly Mark[]; grammar: PluginGrammar };
 
-/** The kinds Meno knows: its own. Each but the cube read on the page; the cube, which programs of every kind write, by Meno under the readers' contract. */
+/**
+ * The kinds Meno knows: its own. Each but the cube and the WFX file read on
+ * the page; those two, which programs of every kind write, by Meno under the
+ * readers' contract; and the Molden file, which programs of every kind write
+ * too, told by Meno and read by a plugin that reads it, Meno not reading it
+ * yet. A WFX file is told by its required section of its primitives' count
+ * (the WFX specification, 1.0.4c), a Molden file by its first line (the
+ * Molden format's page): each at a line's start, in any case.
+ */
 export const MENO_KINDS = {
   workspace: { id: "meno-workspace", name: "Meno workspace", extensions: [".meno"] },
   record: { id: "meno-record", name: "Meno structure", extensions: [] },
@@ -78,6 +86,8 @@ export const MENO_KINDS = {
   xyz: { id: "xyz", name: "XYZ file", extensions: [".xyz"] },
   pdb: { id: "pdb", name: "PDB file", extensions: [".pdb"] },
   cube: { id: "cube", name: "Cube file", extensions: [".cube", ".cub"], output: {}, layout: CUBE_MARK },
+  wfx: { id: "wfx", name: "WFX file", extensions: [".wfx"], output: {}, marks: [{ text: "<Number of Primitives>", at: "line-start", anyCase: true }] },
+  molden: { id: "molden", name: "Molden file", extensions: [".molden", ".mld"], output: {}, marks: [{ text: "[Molden Format]", at: "line-start", anyCase: true }] },
 } as const satisfies Record<string, Kind>;
 
 /** The kinds Meno writes itself: the workspace by Save, the rest by Export (Workspace/fileActions). */

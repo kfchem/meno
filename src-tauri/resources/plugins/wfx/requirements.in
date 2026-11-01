@@ -1,6 +1,0 @@
-# The WFX reader's environment: its worker (worker.py) reads a WFX file
-# with Python alone, and works out an orbital's values on a grid with
-# NumPy, as a surface is asked for.
-# Locked, with hashes, by:
-#   uv pip compile --universal --python-version 3.12 --generate-hashes requirements.in -o requirements.lock
-numpy>=2.5,<3
