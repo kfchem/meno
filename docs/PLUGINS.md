@@ -931,7 +931,11 @@ The same for every plugin and for Meno's own parts:
     *not converged*. An output's `warnings` - `[{"kind":
     "hessian-not-stationary", "text": "..."}]`, the text the program's
     own words - are kept with the molecule and said on its chip; a kind
-    core does not know is `other`. A warning never moves an entry. An
+    core does not know is `other`. A kind is what the warning says,
+    whichever program says it (`src/lib/calc/warnings.ts`): for now
+    `hessian-not-stationary` - frequencies worked out at a geometry the
+    program says is not a stationary point - given by any plugin whose
+    program says so, and `other`. A warning never moves an entry. An
     output's `imaginary` - its imaginary frequencies in cm-1, negative,
     as the program itself judged them (xtb's "significant" ones,
     Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -

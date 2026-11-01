@@ -2373,10 +2373,11 @@ them again*; the maintainer's rulings of 2026-10-22):
   jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
   refused, with why. Kept with the workspace while the others run.
 - **A warning never moves an entry.** A calculation's warnings - a kind
-  core knows (*frequencies at a geometry not fully optimised*: xtb's
-  "Hessian on incompletely optimized geometry!"), else *other*, with the
-  program's words - are kept with the molecule, said on its chip, and
-  counted on the step's line: *3 with warnings*.
+  core knows, by what it says whichever program says it (*frequencies at
+  a geometry not fully optimised*, as xtb says with "Hessian on
+  incompletely optimized geometry!"), else *other*, with the program's
+  words - are kept with the molecule, said on its chip, and counted on
+  the step's line: *3 with warnings*.
 - **The chip says it.** A molecule that failed says why on its chip, in
   the attention colour, and its warnings how many; opened, each in full.
 - **A structure that is no minimum is marked so** with the imaginary
