@@ -689,7 +689,8 @@ const PRESET_PART = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 function presetFileOk(f: unknown): f is string {
   if (typeof f !== "string" || f.length > 200) return false;
   const parts = f.split("/");
-  return parts.length <= 4 && parts.every((p) => PRESET_PART.test(p) && p !== "." && p !== "..") && f !== "manifest.json" && f !== WORKER;
+  // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
+  return parts.length <= 4 && parts.every((p) => PRESET_PART.test(p) && p !== "." && p !== "..") && f.toLowerCase() !== "manifest.json" && f.toLowerCase() !== WORKER;
 }
 
 /** The most files a preset plugin may hand over, all told. */

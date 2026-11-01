@@ -307,6 +307,8 @@ describe("a plugin's manifest", () => {
       { looks: [{ ...presets.looks[0], file: "../tool/manifest.json" }] },
       { looks: [{ ...presets.looks[0], file: "/etc/hosts" }] },
       { files: ["manifest.json"] },
+      { files: ["Manifest.JSON"] },
+      { files: ["Worker.py"] },
       { files: ["a/b/c/d/e.py"] },
       { files: ["shared.py", "shared.py"] },
       { studios: [{ id: "asked", label: "As asked", file: "asked.py" }] },

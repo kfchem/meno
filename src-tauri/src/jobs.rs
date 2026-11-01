@@ -2412,6 +2412,18 @@ pub const PRESET_DIR: &str = "presets";
 const PRESET_FILES_MOST: usize = 64;
 const PRESET_BYTES_MOST: u64 = 16 * 1024 * 1024;
 
+/// Whether a job's own files are clear of the folder preset plugins' files go in, where it names any (`presets`): none
+/// of them in `presets/`, whatever is handed - else what it is given there is hidden as theirs (`handed_folders`).
+pub fn clear_of_presets(files: &[JobFile], presets: &[String]) -> Result<(), String> {
+    if presets.is_empty() {
+        return Ok(());
+    }
+    match files.iter().find(|f| Path::new(&f.name).components().next().is_some_and(|c| c.as_os_str() == PRESET_DIR)) {
+        Some(f) => Err(format!("a job's file is in {PRESET_DIR}, where the presets it is handed go: {}", f.name)),
+        None => Ok(()),
+    }
+}
+
 /// Whether `f` is a file a preset may name (docs/PLUGINS.md, *Presets*): a path inside its plugin's folder - at most four
 /// names, each plain - and neither the manifest nor the worker Meno reads (as lib/plugins/manifest `presetFileOk`).
 pub fn preset_file_ok(f: &str) -> bool {
@@ -2420,7 +2432,9 @@ pub fn preset_file_ok(f: &str) -> bool {
         let b = p.as_bytes();
         !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(c))
     };
-    f.len() <= 200 && parts.len() <= 4 && parts.iter().all(plain) && f != "manifest.json" && f != "worker.py"
+    // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
+    let lower = f.to_ascii_lowercase();
+    f.len() <= 200 && parts.len() <= 4 && parts.iter().all(plain) && lower != "manifest.json" && lower != "worker.py"
 }
 
 /// The files a job of plugin `id` (its manifest `manifest`) is handed by the preset plugins `presets`, by their ids
@@ -2537,11 +2551,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     let handed = presets_given(&manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.presets, &|p| {
         crate::resource_path(&app, &Path::new("resources/plugins").join(p))
     })?;
-    if !handed.is_empty() {
-        if let Some(f) = payload.files.iter().find(|f| Path::new(&f.name).components().next().is_some_and(|c| c.as_os_str() == PRESET_DIR)) {
-            return Err(format!("a job's file is in {PRESET_DIR}, where the presets it is handed go: {}", f.name));
-        }
-    }
+    clear_of_presets(&payload.files, &payload.presets)?;
     // (one asking for more than the computer has never starts: refused, saying so)
     if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
         return Err(format!("It cannot run on this computer: {why}"));
@@ -4905,11 +4915,22 @@ mod tests {
     }
 
     #[test]
+    fn keeps_a_job_s_own_files_out_of_the_presets_folder_where_it_names_any_preset_plugin() {
+        let file = |name: &str| JobFile { name: name.into(), text: String::new() };
+        let looks = ["looks".to_string()];
+        assert!(clear_of_presets(&[file("render.json"), file("presetsfile.txt")], &looks).is_ok());
+        assert!(clear_of_presets(&[file("presets/looks/mine.py")], &looks).unwrap_err().contains("presets/looks/mine.py"));
+        assert!(clear_of_presets(&[file("presets/other.py")], &looks).is_err());
+        // (one that names none: its files as they are)
+        assert!(clear_of_presets(&[file("presets/other.py")], &[]).is_ok());
+    }
+
+    #[test]
     fn takes_a_file_a_preset_names_only_as_a_plain_path_inside_its_folder() {
         for good in ["a.py", "looks/gold.py", "a/b/c/d.txt", "Studio_1.blend"] {
             assert!(preset_file_ok(good), "{good}");
         }
-        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "manifest.json", "worker.py", "a b.py", "a\\b.py", &"x".repeat(65)] {
+        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "manifest.json", "worker.py", "Manifest.json", "WORKER.PY", "a b.py", "a\\b.py", &"x".repeat(65)] {
             assert!(!preset_file_ok(bad), "{bad}");
         }
     }
