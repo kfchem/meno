@@ -143,7 +143,7 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub needs: Vec<String>,
     /// Preset plugins whose files it was handed, by id (`presets_given`): copied into its work folder, each in
-    /// `preset/<id>/`, never listed among its files - what each is, its runner works out again from the plugins.
+    /// `presets/<id>/`, never listed among its files - what each is, its runner works out again from the plugins.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub presets: Vec<String>,
     /// The files it was given, by their paths in its work folder (`make_job` writes them): what is kept of it where what
@@ -387,7 +387,7 @@ fn read_spec(dir: &Path) -> Option<JobSpec> {
 }
 
 /// The folders in a job's work folder that hold what preset plugins handed it (`presets_given`), one for each its spec
-/// names (`preset/<id>/`): never its own files - never kept, nor saved in a workspace.
+/// names (`presets/<id>/`): never its own files - never kept, nor saved in a workspace.
 pub fn handed_folders(dir: &Path) -> Vec<String> {
     read_spec(dir).map(|spec| spec.presets.iter().map(|p| format!("{PRESET_DIR}/{p}/")).collect()).unwrap_or_default()
 }
@@ -2406,8 +2406,8 @@ pub fn needs_given(data: &Path, manifest: &serde_json::Value, id: &str, needs: &
     Ok((env, links))
 }
 
-/// The folder in a job's work folder the files preset plugins hand it go in, each plugin's in one of its own (`preset/<id>/`).
-pub const PRESET_DIR: &str = "preset";
+/// The folder in a job's work folder the files preset plugins hand it go in, each plugin's in one of its own (`presets/<id>/`).
+pub const PRESET_DIR: &str = "presets";
 /// The most files preset plugins may hand a job, all told, and the most bytes.
 const PRESET_FILES_MOST: usize = 64;
 const PRESET_BYTES_MOST: u64 = 16 * 1024 * 1024;
@@ -2427,7 +2427,7 @@ pub fn preset_file_ok(f: &str) -> bool {
 /// (docs/PLUGINS.md, *Presets*): each one a plugin that uses `id` through an interface `id` declares, and brings its
 /// presets through it - `id` and that interface of versions it works with, each read from its own folder (`dir_of`),
 /// never from a job's spec; every file its presets name, a file in its folder and by no link, with where it goes in the
-/// job's work folder (`preset/<its id>/<file>`). Worked out the same way as the job is made and as its runner checks it.
+/// job's work folder (`presets/<its id>/<file>`). Worked out the same way as the job is made and as its runner checks it.
 /// One not so, why.
 pub fn presets_given(manifest: &serde_json::Value, id: &str, presets: &[String], dir_of: &dyn Fn(&str) -> Result<PathBuf, String>) -> Result<Vec<(String, PathBuf)>, String> {
     let text = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
@@ -4802,7 +4802,7 @@ mod tests {
         let plugins = presetting(renderer(), preset_plugin());
         let dir_of = |p: &str| Ok(plugins.join(p));
         let handed = presets_given(&renderer(), "render", &["looks".into()], &dir_of).unwrap();
-        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["preset/looks/looks/gold.py", "preset/looks/shared.py", "preset/looks/spin.py"]);
+        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["presets/looks/looks/gold.py", "presets/looks/shared.py", "presets/looks/spin.py"]);
         // (none handed, none asked for)
         assert!(presets_given(&renderer(), "render", &[], &dir_of).unwrap().is_empty());
         // (copied into its work folder, unread; listed nowhere it keeps)
@@ -4826,12 +4826,12 @@ mod tests {
             given: vec![],
         };
         let (_, dir) = make_handed_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }], &[], &handed).unwrap();
-        assert_eq!(fs::read_to_string(dir.join(WORK).join("preset/looks/looks/gold.py")).unwrap(), "# looks/gold.py\n");
+        assert_eq!(fs::read_to_string(dir.join(WORK).join("presets/looks/looks/gold.py")).unwrap(), "# looks/gold.py\n");
         let kept: Vec<String> = crate::keptjobs::kept_files(&dir).into_iter().map(|f| f.name).collect();
         assert_eq!(kept, ["work/input.txt"]);
         // (one that cannot be copied - gone since - leaves no folder)
         let away = temp();
-        let gone = vec![("preset/looks/none.py".to_string(), plugins.join("looks").join("none.py"))];
+        let gone = vec![("presets/looks/none.py".to_string(), plugins.join("looks").join("none.py"))];
         assert!(make_handed_job(&away, &spec, &[], &[], &gone).unwrap_err().contains("could not be given to the job"));
         assert_eq!(fs::read_dir(&away).unwrap().count(), 0);
         for d in [plugins, root, away] {

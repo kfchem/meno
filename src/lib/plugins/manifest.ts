@@ -162,7 +162,7 @@ export type Shortest = { film?: number; loop?: number; change?: number };
  * studios and motions, each declared as a render role declares its own, with the file the plugin that runs them runs for it -
  * a path inside the preset plugin's folder - and the files those share (`files`); and its options, each shown only while one
  * of its looks, studios or motions is chosen, and `when` it says. Meno copies every file named here, unread, into the job of
- * the plugin it is for (`preset/<id>/`), and never runs one.
+ * the plugin it is for (`presets/<id>/`), and never runs one.
  */
 export type PresetLook = LookDecl & { file: string };
 export type PresetStudio = { id: string; label: string; description?: string; file: string };

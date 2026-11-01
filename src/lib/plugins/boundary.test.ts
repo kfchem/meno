@@ -65,10 +65,10 @@ function manifests(): { who: string; m: Json }[] {
 }
 
 /** The ids of the options a manifest's steps, roles and writers declare, each with who declares it. */
-function pluginOptions(): Map<string, string[]> {
+function pluginOptions(from = manifests()): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  for (const { who, m } of manifests()) {
-    for (const s of [...list(m.steps), ...list(m.roles), ...list(m.writes)]) {
+  for (const { who, m } of from) {
+    for (const s of [...list(m.steps), ...list(m.roles), ...list(m.writes), ...(m.presets ? [m.presets] : [])]) {
       for (const o of list((s as Json).options)) {
         for (const id of str((o as Json).id)) {
           const was = out.get(id) ?? [];
@@ -82,7 +82,7 @@ function pluginOptions(): Map<string, string[]> {
 }
 
 /** What the bundled plugins declare, by the word, with who declares it and as what: found where a literal is exactly the word. */
-function declared(): Map<string, string[]> {
+function declared(from = manifests()): Map<string, string[]> {
   const out = new Map<string, string[]>();
   const add = (word: string, from: string) => {
     if (!word || word.length < 2) return;
@@ -90,7 +90,7 @@ function declared(): Map<string, string[]> {
     if (!was.includes(from)) was.push(from);
     out.set(word, was);
   };
-  for (const { who, m } of manifests()) {
+  for (const { who, m } of from) {
     add(who, `${who}: plugin id`);
     for (const d of list(m.downloads)) {
       const x = d as Json;
@@ -126,7 +126,16 @@ function declared(): Map<string, string[]> {
       for (const l of list(role.looks)) for (const n of typeof l === "string" ? [l] : str((l as Json).id)) add(n, `${who}: look`);
       for (const mo of list(role.motions)) for (const n of str((mo as Json).id)) add(n, `${who}: motion`);
     }
-    for (const s of list(m.suggests)) for (const n of str((s as Json).plugin)) add(n, `${who}: suggests`);
+    // (the interfaces it declares and uses, and what it brings through one: its presets' ids and files)
+    for (const i of list(m.interfaces)) for (const n of str((i as Json).id)) add(n, `${who}: interface`);
+    for (const d of list(m.depends)) for (const i of list((d as Json).interfaces)) for (const n of str((i as Json).id)) add(n, `${who}: interface`);
+    const presets = (m.presets ?? {}) as Json;
+    for (const [k, said] of [["looks", "look"], ["studios", "studio"], ["motions", "motion"]] as const)
+      for (const x of list(presets[k])) {
+        for (const n of str((x as Json).id)) add(n, `${who}: ${said}`);
+        for (const n of str((x as Json).file)) add(n, `${who}: a preset's file`);
+      }
+    for (const f of list(presets.files)) for (const n of str(f)) add(n, `${who}: a preset's file`);
   }
   return out;
 }
@@ -497,6 +506,20 @@ describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
   it("takes each word a plugin declares, those it gives the plugins it uses among them", () => {
     // (ORCA's, as Meno carries it: the variable a job is told the xTB plugin's xtb in)
     expect(declared().get("XTBEXE")).toEqual(["orca: variable"]);
+  });
+
+  it("takes the words of what a plugin brings another through its interface: the interface, its presets' ids, files and options", () => {
+    // (a made-up preset plugin, as no plugin Meno carries yet)
+    const m = {
+      id: "tool-looks",
+      interfaces: [{ id: "styling", version: "1.0.0" }],
+      depends: [{ plugin: "tool", versions: ">=1.0.0", interfaces: [{ id: "shading", versions: ">=1.0.0" }] }],
+      presets: { interface: "shading", looks: [{ id: "chalk", file: "looks/chalk.py" }], studios: [{ id: "attic", file: "attic.py" }], motions: [{ id: "wobble", file: "wobble.py" }], files: ["shared.py"], options: [{ id: "grain" }] },
+    };
+    const words = declared([{ who: "tool-looks", m }]);
+    for (const [word, as] of [["styling", "interface"], ["shading", "interface"], ["chalk", "look"], ["attic", "studio"], ["wobble", "motion"], ["looks/chalk.py", "a preset's file"], ["shared.py", "a preset's file"]])
+      expect(words.get(word), word).toEqual([`tool-looks: ${as}`]);
+    expect(pluginOptions([{ who: "tool-looks", m }]).get("grain")).toEqual(["tool-looks"]);
   });
 
   it("finds no word a plugin declares as a literal in core's source", () => {
