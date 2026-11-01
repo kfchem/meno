@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Conformers } from "../../../../lib/roles/client";
 import { shownConformers } from "./shownConformers";
 
+/** What the stand-in worker is to the test: its handlers, and whether it was ended. */
+type StandInWorker = { onmessage: ((e: { data: unknown }) => void) | null; onerror: ((e: { message: string }) => void) | null; ended: boolean };
+
 /** A stand-in for the page's worker: what it answers is the test's, and whether it was ended. */
-function workerAnswering(answer: (w: StandIn) => void) {
-  const made: StandIn[] = [];
-  class StandIn {
+function workerAnswering(answer: (w: StandInWorker) => void) {
+  const made: StandInWorker[] = [];
+  class StandIn implements StandInWorker {
     onmessage: ((e: { data: unknown }) => void) | null = null;
     onerror: ((e: { message: string }) => void) | null = null;
     ended = false;
