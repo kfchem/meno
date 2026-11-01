@@ -661,9 +661,9 @@ def keyed_frames(scene, folder, sub, count, progress):
 
 def motion_film(s, folder, scene_path, gltf, meno, motion):
     """A film of a preset's motion of one molecule: keyed by the motion (`key`), over as many frames as the film has - or, where
-    its Loop is a cycle (`LOOP`, or `LOOP(ctx)`), half of them and one, played forward and then back. The frames, in order."""
+    its Loop is a cycle (`LOOPS`, or `LOOPS(ctx)`), half of them and one, played forward and then back. The frames, in order."""
     scene, ctx = built(s, folder, scene_path, gltf, meno)
-    kind = motion.LOOP(ctx) if callable(getattr(motion, "LOOP", None)) else getattr(motion, "LOOP", "cycle")
+    kind = motion.LOOPS(ctx) if callable(getattr(motion, "LOOPS", None)) else getattr(motion, "LOOPS", "cycle")
     loop = s["mode"] == "loop"
     cycle = loop and kind != "seamless"
     n = s["frames"] // 2 + 1 if cycle else s["frames"]

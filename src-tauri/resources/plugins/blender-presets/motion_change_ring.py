@@ -14,7 +14,7 @@ Keyed with the kit (motionkit.py) and the change module (change.py), on Meno's m
 import motion_kit as kit
 
 NOMINAL = 5.0
-LOOP = "seamless"
+LOOPS = "seamless"
 
 
 def key_change(ctx, a, b):

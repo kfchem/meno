@@ -1,7 +1,7 @@
 {
   "id": "blender-presets",
   "name": "Blender looks and motions",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Looks, studios and film motions made with Blender's own materials, light and keys, for the Blender plugin to render.",
   "licence": "GPL-3.0-or-later",
   "homepage": "https://www.blender.org",

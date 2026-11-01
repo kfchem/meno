@@ -79,7 +79,7 @@ class Manifest(unittest.TestCase):
         for m in PRESETS["motions"]:
             text = (FOLDER / m["file"]).read_text(encoding="utf-8")
             self.assertRegex(text, r"(?m)^NOMINAL = ", m["id"])
-            self.assertRegex(text, r'(?m)^(LOOP = "(cycle|seamless)"|def LOOP\(ctx\):)', m["id"])
+            self.assertRegex(text, r'(?m)^(LOOPS = "(cycle|seamless)"|def LOOPS\(ctx\):)', m["id"])
             # (a change of molecules keys a piece, A becoming B; a motion of one molecule keys it)
             self.assertIn("def key_change(ctx, a, b):" if "change" in m.get("shortest", {}) else "def key(ctx):", text, m["id"])
 
