@@ -173,7 +173,6 @@ describe("kinds a plugin registers", () => {
   });
 
   it("are coloured by the grammar of the plugin whose own program writes them, else by the first's", () => {
-    const cclib = MANIFESTS.find((m) => m.id === "cclib")!;
     const grammar = { file: "orca-output.grammar", tones: { Landmark: "landmark" } };
     const own = (writtenBy?: string, id = "program-own") =>
       acceptManifest({
@@ -185,15 +184,17 @@ describe("kinds a plugin registers", () => {
         kinds: [{ id: "orca", name: "ORCA output", program: "ORCA", extensions: [".out"], marks: [{ text: "* O R C A *" }], grammar, ...(writtenBy ? { writtenBy } : {}) }],
         steps: [{ kinds: ["energy"], programs: ["orca"] }],
       })!;
+    // (a plugin that brings the kind and its grammar, and says nothing of who writes it)
+    const first = own(undefined, "first");
     const orcaOf = (ms: Manifest[]) => registered(ms).kinds.find((x) => x.id === "orca")!;
     // (its own program's plugin's, whichever comes first)
-    expect(orcaOf([cclib, own("orca")]).grammar?.plugin).toBe("program-own");
-    expect(orcaOf([own("orca"), cclib]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([first, own("orca")]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([own("orca"), first]).grammar?.plugin).toBe("program-own");
     // (no plugin says its program writes it: the first's, as before)
-    expect(orcaOf([cclib, own()]).grammar?.plugin).toBe("cclib");
+    expect(orcaOf([first, own()]).grammar?.plugin).toBe("first");
     // (two say so: the first's, in Meno's order - the plugin that reads it by default)
     const second = own("orca", "program-other");
-    expect(orcaOf([cclib, own("orca"), second]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([first, own("orca"), second]).grammar?.plugin).toBe("program-own");
     expect(orcaOf([second, own("orca")]).grammar?.plugin).toBe("program-other");
     const both = new Set(["program-own", "program-other"]);
     const asReader = (p: Manifest) => pluginOf(p) as ReaderPlugin;
