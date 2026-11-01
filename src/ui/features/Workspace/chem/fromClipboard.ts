@@ -73,6 +73,11 @@ async function structureIn(
   return null;
 }
 
+/** A calculation's output in a text (lib/calc/probe `outputKindIn`) - pasted, or a text's in the column - read as a file of its kind opened is, named for where it came from: its reader's, or, where only a plugin not added reads it, failing with what says which. */
+export async function structureInOutput(text: string, kind: Kind, from: string): Promise<Drawn | null> {
+  return asKind(text, kind, from);
+}
+
 /** Text read as the kind it is: Meno's own record or workspace as they are, anything else as a file of that kind named for where it came from. */
 async function asKind(text: string, kind: Kind, from: string): Promise<Drawn | null> {
   if (kind.id === MENO_KINDS.record.id) return readRecord(text);
