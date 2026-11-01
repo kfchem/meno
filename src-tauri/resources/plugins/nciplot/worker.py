@@ -16,9 +16,9 @@ It fills the kind of step NCI, and runs nothing itself: `prepare` writes
 each entry's geometry as an XYZ file - or, asked for interactions between
 molecules alone, each of the entry's fragments (the molecules Meno says
 its bonds make: docs/PLUGINS.md, *The entry a plugin is given*) in a file
-of its own - and NCIPLOT's input; `collect` says which of the cube files NCIPLOT wrote is the surface
-and which colours it, for Meno to read (lib/calc/cube) - or, where the job
-failed, why. One job for each entry.
+of its own - and NCIPLOT's input; `collect` says which of the cube files
+NCIPLOT wrote is the surface and which colours it, for Meno to read
+(lib/calc/cube) - or, where the job failed, why. One job for each entry.
 
 The input is written as NCIPLOT 4's own manual has it (NCIPLOT-4.2,
 NCIPLOT_MANUAL.pdf, "The input" and "The output"), and from nothing else:
