@@ -22,7 +22,7 @@ import { symmetryClasses } from "../layout/canonical";
 import { smallestRings } from "../layout/rings";
 import { readMolfile } from "./ctfile";
 import { huckelBonds } from "./huckel";
-import { mostBonds } from "./molecule";
+import { implicitHydrogens, mostBonds } from "./molecule";
 
 /** An atom as the count reads it. */
 export type SoughtAtom = { el: string; charge?: number };
@@ -132,6 +132,13 @@ function ringBonds(n: number, bonds: readonly SoughtBond[]): Set<number> {
  *   counts as a bond that turns; but not where the lone pair's atom
  *   carries two alike (an N,N-dimethylamide's methyls), whose two forms
  *   are one shape.
+ * And a bond to an end N, O or S that carries hydrogens counts (an OH's,
+ * an NH2's, a thiol's): their turn gives conformers of their own, the same
+ * conformer keeping OH and NH rotamers apart - but not where it is held flat
+ * and they are two (an amide's NH2), its two forms one shape, nor where
+ * they are three (an NH3, a symmetric top). So does a C=N whose N carries a
+ * hydrogen and nothing else (an imine's NH, an amidine's or a guanidine's):
+ * the hydrogen on either side - an E/Z never chosen - is two conformers.
  * A coordination bond is no turning bond; it counts as a neighbour.
  *
  * The rule (above) is by the bonds that turn; which those are is Meno's
@@ -161,9 +168,25 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
     return classes[rest[0][0]] === classes[rest[1][0]];
   };
   const flat = (i: number, j: number) => (acyl(i) && lonePair(j) && twoAlike(j, i)) || (acyl(j) && lonePair(i) && twoAlike(i, j));
+  // (an end N, O or S's hydrogens - those bonded to it as atoms, or those its valence leaves - whose turn gives conformers of
+  //  their own: the same conformer keeps OH and NH rotamers apart (workflow/sameConformer) - but not where the bond is held flat
+  //  and they are two, its two forms one shape: an amide's NH2)
+  const hydrogens = (i: number) => {
+    const sum = around[i].reduce((n, [, o]) => n + (o === 4 ? 1.5 : o <= 3 ? o : 0), 0);
+    return around[i].filter(([j]) => atoms[j].el === "H").length + implicitHydrogens(atoms[i].el, Math.round(sum), atoms[i].charge ?? 0);
+  };
+  //  - and an NH3's three, a symmetric top as a methyl is)
+  const rotamers = (x: number, y: number) =>
+    end(y) && lonePair(y) && heavyAround(x).length >= 2 && !linear(x) && hydrogens(y) > 0 && hydrogens(y) < 3 && !(acyl(x) && hydrogens(y) > 1);
+  // (a C=N whose N carries a hydrogen and nothing else: that hydrogen on either side - its E/Z no configuration of its own, never
+  //  chosen (lib/chem/stereoOpen) - is two conformers)
+  const sides = (b: SoughtBond) =>
+    b.order === 2 && [b.a, b.b].some((n) => atoms[n].el === "N" && end(n) && hydrogens(n) > 0 && atoms[b.a === n ? b.b : b.a].el === "C" && heavyAround(b.a === n ? b.b : b.a).length >= 2);
   const out: number[] = [];
   bonds.forEach((b, k) => {
+    if (sides(b) && !inRing.has(k)) return void out.push(k);
     if (b.order !== 1 || inRing.has(k) || !heavy(atoms[b.a]) || !heavy(atoms[b.b])) return;
+    if (rotamers(b.a, b.b) || rotamers(b.b, b.a)) return void out.push(k);
     if (heavyAround(b.a).length < 2 || heavyAround(b.b).length < 2) return;
     if (linear(b.a) || linear(b.b) || top(b.a, b.b) || top(b.b, b.a) || flat(b.a, b.b)) return;
     out.push(k);

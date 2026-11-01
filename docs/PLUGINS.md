@@ -463,7 +463,13 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     amide's cis and trans, an ester's Z and E - are conformers of their
     own, so it counts; but not where the lone pair's atom carries two
     alike (an N,N-dimethylamide's methyls), whose two forms are one
-    shape.
+    shape;
+  - a bond to an end N, O or S carrying hydrogens counts - an OH's, an
+    amine's NH2, a thiol's - since the same conformer keeps OH and NH
+    rotamers apart, but not an amide's NH2 (its two flat forms one shape)
+    nor an NH3 (a symmetric top); and a C=N whose N carries a hydrogen
+    and nothing else counts too, the hydrogen on either side - an E/Z
+    never chosen - being two conformers.
 
   The rule is by the bonds that turn; which those are is Meno's
   definition, above: a bond whose turn gives conformers of their own.

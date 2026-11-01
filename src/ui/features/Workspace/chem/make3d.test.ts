@@ -7,7 +7,7 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { FEW_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, pageCount, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
@@ -431,8 +431,8 @@ describe("conformers made for the page", () => {
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {
     const [block] = blocksOf(ethanol, [12]);
-    // (ethanol: nothing in it turns - lib/chem/conformersSought)
-    expect(pageCount(block, {})).toBe(FEW_CONFORMERS);
+    // (ethanol: its OH turns, the rule's fifty - lib/chem/conformersSought)
+    expect(pageCount(block, {})).toBe(50);
     expect(pageCount(block, { sought3d: "fixed", count3d: 40 })).toBe(40);
     expect(pageCount(block, { sought3d: "fixed" })).toBe(RING_CONFORMERS);
   });

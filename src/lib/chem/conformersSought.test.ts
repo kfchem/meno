@@ -72,6 +72,17 @@ describe("the bonds that turn", () => {
     expect(turns("CC(=O)N(C)CC")).toBe(2);
   });
 
+  it("count a bond to an end N, O or S with hydrogens - an OH's, an amine's, a C=N's NH - but not an amide's NH2 nor an NH3", () => {
+    // (the same conformer keeps OH and NH rotamers apart: their turns are conformers of their own)
+    expect(turns("CCO")).toBe(1);
+    expect(turns("CCN")).toBe(1);
+    expect(turns("ClC(Cl)(Cl)CO")).toBe(1);
+    expect(turns("CN(C)C(=N)N")).toBe(1); // (1,1-dimethylguanidine: its =NH, on either side)
+    expect(turns("CC(=O)N")).toBe(0); // (acetamide: its NH2's two flat forms one shape)
+    expect(turns("CC[NH3+]")).toBe(0); // (an NH3, a top)
+    expect(turns("CO")).toBe(0); // (methanol: nothing beyond its carbon to turn against)
+  });
+
   it("leave out a symmetric top, whose turn by a third gives the same shape", () => {
     expect(turns("FC(F)(F)C1=CC=CC=C1")).toBe(0);
     expect(turns("CC(C)(C)C1=CC=CC=C1")).toBe(0);
