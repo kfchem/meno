@@ -7,7 +7,7 @@
  */
 import { readClipboard } from "../../../../lib/clipboard";
 import { rgbaOfDib } from "../../../../lib/binary/dib";
-import { withDpi } from "../../../../lib/binary/png";
+import { withDpi, withoutColour } from "../../../../lib/binary/png";
 import { holdPicture, pictureBytes } from "../../../../lib/picture/held";
 import { isFilm, type PictureMedia } from "../../../../lib/picture/image";
 import type { PictureItem, PictureToAdd } from "../store/types";
@@ -55,9 +55,16 @@ export async function picturePng(p: Pick<PictureItem, "sha256" | "media">): Prom
   return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
 }
 
-/** A PNG's pixels as they are - no colour profile applied - laid on white where it is see-through: what a picture's reading is laid on (lib/figure/inkFit). */
+/**
+ * A PNG's pixels as its samples are - no gamma or colour profile applied,
+ * which a window may apply even when asked not to, so its colour chunks
+ * are taken out first - laid on white where it is see-through: what a
+ * picture's reading is laid on (lib/figure/inkFit), as its plugin's model
+ * was given them.
+ */
 export async function pngPixels(png: Uint8Array): Promise<ImageData> {
-  const bitmap = await createImageBitmap(new Blob([png as Uint8Array<ArrayBuffer>], { type: "image/png" }), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+  const plain = withoutColour(png);
+  const bitmap = await createImageBitmap(new Blob([plain as Uint8Array<ArrayBuffer>], { type: "image/png" }), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("no canvas to draw the picture on");
