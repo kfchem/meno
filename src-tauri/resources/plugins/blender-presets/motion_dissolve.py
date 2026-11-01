@@ -9,7 +9,7 @@ Keyed with the kit (motionkit.py) on Meno's molecule: docs/plugins/blender-prese
 import motion_kit as kit
 
 NOMINAL = 7.0
-LOOP = "cycle"
+LOOPS = "cycle"
 # (played as a cycle only until it has settled, so that it turns back without a pause)
 CYCLE = 5.6
 

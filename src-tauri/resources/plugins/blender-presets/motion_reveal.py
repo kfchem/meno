@@ -13,7 +13,7 @@ NOMINAL = 7.0
 CYCLE = 5.4
 
 
-def LOOP(ctx):
+def LOOPS(ctx):
     """Its rims circle of themselves in the dark; on white it cycles."""
     return "cycle" if ctx.request.get("background", "transparent") in ("white", "transparent") else "seamless"
 

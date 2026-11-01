@@ -42,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 PRESETS_SCRIPT = "presets.py"
