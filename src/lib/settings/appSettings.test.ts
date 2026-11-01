@@ -67,6 +67,10 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ chemistry: { valenceWarnings: true, window3d: 45 } }).chemistry).toEqual({ valenceWarnings: true, window3d: 45 });
     for (const window3d of [-1, "30", 1e9, Number.NaN, null])
       expect(acceptAppSettings({ chemistry: { valenceWarnings: true, window3d } }).chemistry).toEqual({ valenceWarnings: true });
+    // how many conformers the page tries: a number of the chemist's own, 1 to 5000 - else as many as the molecule needs (unset)
+    expect(acceptAppSettings({ chemistry: { valenceWarnings: true, sought3d: "fixed", count3d: 40 } }).chemistry).toEqual({ valenceWarnings: true, sought3d: "fixed", count3d: 40 });
+    for (const [sought3d, count3d] of [["needed", 0], ["fixed?", 5001], [true, 2.5], [null, "40"]])
+      expect(acceptAppSettings({ chemistry: { valenceWarnings: true, sought3d, count3d } }).chemistry).toEqual({ valenceWarnings: true });
     // a file from before readers were chosen: none chosen; one from before Files, its readers chosen as they were;
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });

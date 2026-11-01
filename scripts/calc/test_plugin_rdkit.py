@@ -174,9 +174,9 @@ class AWorkflowsSearch(unittest.TestCase):
         reflected, used = self.worker.reflected, []
         self.worker.reflected = lambda entry: used.append(1) or reflected(entry)
         try:
-            self.worker.op_conformers({"molblock": second, "options": {"count": 4}})
+            self.worker.op_conformers({"molblock": second, "count": 4})
             self.assertEqual(used, [])
-            self.worker.op_conformers({"molblock": second, "options": {"count": 4}, "onPage": True})
+            self.worker.op_conformers({"molblock": second, "count": 4, "onPage": True})
             self.assertEqual(used, [1])
         finally:
             self.worker.reflected = reflected
@@ -188,7 +188,7 @@ class AWorkflowsSearch(unittest.TestCase):
         reflected, used = self.worker.reflected, []
         self.worker.reflected = lambda entry: used.append(1) or reflected(entry)
         try:
-            self.worker.op_conformers({"molblock": second, "options": {"count": 4, "onPage": True, "page": True}})
+            self.worker.op_conformers({"molblock": second, "count": 4, "options": {"onPage": True, "page": True}})
         finally:
             self.worker.reflected = reflected
         self.assertEqual(used, [])
@@ -198,7 +198,7 @@ class AWorkflowsSearch(unittest.TestCase):
         rows = lambda e: {r["label"]: r["text"] for r in e["how"]}
         self.assertEqual(rows(self.worker.conformers(Chem.MolFromSmiles("CCCC"), count=4))["Embedded"], "ETKDG v3")
         # (an eta complex is embedded from random coordinates, its star at no fixed place)
-        fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene(), "options": {"count": 4}})["isomers"][0]
+        fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene(), "count": 4})["isomers"][0]
         self.assertEqual(rows(fe)["Embedded"], "ETKDG v3, from random coordinates")
 
 
@@ -306,7 +306,8 @@ class RingChairs(unittest.TestCase):
         with one substituent on it, whatever that substituent is."""
         import numpy as np
         mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
-        entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        # (as many as Meno sends a ring that can flip: lib/chem/conformersSought)
+        entry = self.worker.op_conformers({"molblock": mb, "count": 200})["isomers"][0]
         els = [a["el"] for a in entry["atoms"]]
         nbr, single = {}, {}
         for b in entry["bonds"]:
@@ -368,10 +369,9 @@ class RingChairs(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
-class HowManySought(unittest.TestCase):
-    """How many conformers are tried is the molecule's to say: by the bonds in it that turn (Ebejer, Morris and
-    Deane's rule), with more for a ring that can flip, whose other form an embedding seldom reaches, and few for
-    a molecule that has only the one shape."""
+class HowManyTried(unittest.TestCase):
+    """How many conformers are tried is Meno's to say (lib/chem/conformersSought): the search tries the number it
+    is sent, never one of its own."""
 
     @classmethod
     def setUpClass(cls):
@@ -379,55 +379,52 @@ class HowManySought(unittest.TestCase):
         cls.worker = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.worker)
 
-    def sought(self, smiles):
-        return self.worker.sought(Chem.MolFromSmiles(smiles))
+    def test_tries_the_number_it_is_sent(self):
+        self.assertEqual(self.worker.options_of({"count": 12})["count"], 12)
+        # (a number in the role's options is none of its: Meno sends it beside them)
+        self.assertIsNone(self.worker.options_of({"options": {"count": 12}})["count"])
+        self.assertIsNone(self.worker.options_of({})["count"])
 
-    def test_asks_few_of_a_molecule_that_has_only_the_one_shape(self):
-        few = self.worker.FEW_CONFORMERS
-        for smiles in ("c1ccccc1", "Cn1cnc2c1c(=O)n(C)c(=O)n2C", "C1C2CC3CC1CC(C2)C3", "C1CC2CCC1C2", "CC(C)(C)C"):
-            self.assertEqual(self.sought(smiles), few, smiles)
+    def test_makes_none_where_it_is_sent_no_number(self):
+        with self.assertRaisesRegex(ValueError, "How many conformers to try was not given"):
+            self.worker.op_conformers({"molblock": self.worker.op_from_smiles({"smiles": "CCO"})["molblock"]})
 
-    def test_asks_more_of_a_ring_that_can_flip_than_its_turning_bonds_would(self):
-        # (cyclohexane and a sugar have no turning bond at all between them, and two chairs each)
-        for smiles in ("C1CCCCC1", "c1ccccc1C1CCCCC1", "C1CCNCC1", "C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O"):
-            self.assertGreaterEqual(self.sought(smiles), self.worker.RING_CONFORMERS, smiles)
-
-    def test_counts_a_ring_lying_on_a_bigger_one_as_able_to_flip(self):
-        # (a six-ring sharing two bonds with a thirteen-ring: a cyclodextrin's sugars lie on its macrocycle
-        #  that way, and ten carbons round the back hold a chair in no one shape, as a bridge would)
-        self.assertGreaterEqual(self.sought("C1CCCCCCCCCC2CCCC1C2"), self.worker.RING_CONFORMERS)
-        # (but a bridge of its own size or shorter does: a bicyclo[2.2.2]octane)
-        self.assertEqual(self.sought("C1CC2CCC1CC2"), self.worker.FEW_CONFORMERS)
-
-    def test_asks_by_the_bonds_that_turn_where_no_ring_can_flip(self):
-        self.assertEqual(self.sought("CC(C)CC1=CC=C(C=C1)C(C)C(=O)O"), 50)  # (ibuprofen: four)
-        self.assertEqual(self.sought("CCCCCCCCCCC"), 200)  # (undecane: eight)
-        self.assertEqual(self.sought("CCCCCCCCCCCCCCCC"), 300)  # (hexadecane: thirteen)
-
-    def test_asks_the_same_whether_or_not_the_molecule_carries_its_hydrogens(self):
-        # (a molecule read back from 3D has them, and a pattern counting neighbours would count those too)
-        for smiles in ("c1ccccc1C1CCCCC1", "CCCCCC", "Cn1cnc2c1c(=O)n(C)c(=O)n2C"):
-            mol = Chem.MolFromSmiles(smiles)
-            self.assertEqual(self.worker.sought(Chem.AddHs(mol)), self.worker.sought(mol), smiles)
-
-    def test_leaves_the_number_alone_where_the_request_asks_for_one(self):
-        self.assertEqual(self.worker.options_of({"options": {"sought": "fixed", "count": 12}})["count"], 12)
-        self.assertEqual(self.worker.options_of({"options": {"count": 12}})["count"], 12)
-        # (and asks the molecule where it does not)
-        self.assertIsNone(self.worker.options_of({"options": {"sought": "needed", "count": 12}})["count"])
-        self.assertIsNone(self.worker.options_of({"options": {}})["count"])
-
-    def test_takes_as_many_as_the_manifest_lets_a_chemist_ask_for(self):
+    def test_says_its_search_takes_a_number_of_tries_and_asks_none_itself(self):
         import json
         manifest = json.loads((WORKER.parent / "manifest.json").read_text(encoding="utf-8"))
         [role] = [r for r in manifest["roles"] if r.get("role") == "conformers"]
-        [count] = [o for o in role["options"] if o["id"] == "count"]
-        # (one bound, the same in the field and in the worker)
-        self.assertEqual(count["max"], self.worker.MOST_CONFORMERS)
+        self.assertIs(role["tries"], True)
+        self.assertFalse({"sought", "count"} & {o["id"] for o in role["options"]})
+
+    def test_a_workflows_search_tries_the_number_sent_with_each_molecule(self):
+        # (a Conformers step's job: the count Meno sends with the molecule written beside it, and tried)
+        import json, subprocess, sys, tempfile
+        mol = Chem.AddHs(Chem.MolFromSmiles("CCCO"))
+        rdDistGeom.EmbedMolecule(mol, randomSeed=1)
+        xyz = mol.GetConformer().GetPositions()
+        entry = {
+            "atoms": [{"el": a.GetSymbol(), "x": float(p[0]), "y": float(p[1]), "z": float(p[2])} for a, p in zip(mol.GetAtoms(), xyz)],
+            "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": 1} for b in mol.GetBonds()],
+            "count": 3,
+        }
+        [job] = self.worker.op_prepare({"step": "conformers", "entries": [entry], "options": {"iters": 50}})["jobs"]
+        given = json.loads(job["files"][0]["text"])
+        self.assertEqual((given["count"], given["options"]), (3, {"iters": 50}))
+        with tempfile.TemporaryDirectory() as here:
+            with open(f"{here}/molecule.json", "w", encoding="utf-8") as f:
+                f.write(job["files"][0]["text"])
+            ran = subprocess.run([sys.executable, *job["args"]], cwd=here, capture_output=True, text=True)
+            self.assertEqual(ran.returncode, 0, ran.stderr)
+            self.assertIn("up to 3 conformers", ran.stdout)
+            with open(f"{here}/conformers.json", encoding="utf-8") as f:
+                made = json.load(f)
+        self.assertEqual({r["label"]: r["text"] for r in made["how"]}["Kept"], "3 of 3 embedded (3 sought)")
+
+    def test_takes_as_many_as_meno_lets_a_chemist_ask_for(self):
+        # (Meno's *How many* goes to 5000: lib/chem/conformersSought MOST_CONFORMERS)
         self.assertEqual(self.worker.MOST_CONFORMERS, 5000)
-        # (a chain past the old 500 is given what it asks for: 1000, and the most)
         for n in (501, 1000, 5000):
-            self.assertEqual(self.worker.options_of({"options": {"sought": "fixed", "count": n}})["count"], n)
+            self.assertEqual(self.worker.options_of({"count": n})["count"], n)
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
@@ -447,9 +444,10 @@ class MetalFloor(unittest.TestCase):
         m.UpdatePropertyCache(strict=False)
         return m
 
-    def made(self, smiles, page=False):
+    def made(self, smiles, page=False, count=10):
+        # (as many as Meno sends where nothing turns - lib/chem/conformersSought - or, given, as it sends that molecule)
         mb = Chem.MolToMolBlock(self.mol(smiles), kekulize=False)
-        return self.worker.op_conformers({"molblock": mb, **({"onPage": True} if page else {})})["isomers"][0]
+        return self.worker.op_conformers({"molblock": mb, "count": count, **({"onPage": True} if page else {})})["isomers"][0]
 
     def angles(self, entry, frame, symbol):
         import numpy as np
@@ -494,7 +492,7 @@ class MetalFloor(unittest.TestCase):
 
     def test_gives_the_trans_isomer_of_an_osmium_bisphosphine_the_lowest_energy_of_its_model(self):
         # (trans-OsCl4(PEt3)2, the one known: the lowest by the stand-in's energies, wherever it was embedded)
-        entry = self.made("CCP(CC)(CC)[Os](Cl)(Cl)(Cl)(Cl)P(CC)(CC)CC")
+        entry = self.made("CCP(CC)(CC)[Os](Cl)(Cl)(Cl)(Cl)P(CC)(CC)CC", count=200)
         lowest = min(range(len(entry["frames"])), key=lambda k: entry["modelEnergies"][k])
         _, at, P, m = self.angles(entry, lowest, "Os")
         ps = [i for i, a in enumerate(entry["atoms"]) if a["el"] == "P"]
@@ -538,7 +536,7 @@ class MetalFloor(unittest.TestCase):
         block = EtaBound.zirconocene_dichloride()
         drawn = self.worker.read(block)
         self.assertEqual(self.worker.floor_pairs(drawn), [])
-        entry = self.worker.op_conformers({"molblock": block})["isomers"][0]
+        entry = self.worker.op_conformers({"molblock": block, "count": 10})["isomers"][0]
         for f in range(len(entry["frames"])):
             P = np.array(entry["frames"][f]).reshape(-1, 3)
             u, v = P[3] - P[0], P[4] - P[0]
@@ -559,8 +557,8 @@ class MetalFloor(unittest.TestCase):
 
         self.worker.uff_with_metals = optimise
         try:
-            zr = self.worker.op_conformers({"molblock": EtaBound.zirconocene_dichloride()})["isomers"][0]
-            fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene()})["isomers"][0]
+            zr = self.worker.op_conformers({"molblock": EtaBound.zirconocene_dichloride(), "count": 10})["isomers"][0]
+            fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene(), "count": 10})["isomers"][0]
         finally:
             self.worker.uff_with_metals = optimised
         self.assertTrue(zr["method"].endswith("; modelled: Ti for Zr, the \u03b7 rings held"), zr["method"])
@@ -630,7 +628,8 @@ class EtaBound(unittest.TestCase):
                           "M  V30 END CTAB", "M  END"])
 
     def made(self, block):
-        return self.worker.op_conformers({"molblock": block})["isomers"][0]
+        # (as many as Meno sends a metallocene: nothing in it turns, and its rings are held)
+        return self.worker.op_conformers({"molblock": block, "count": 10})["isomers"][0]
 
     def test_says_how_it_was_made_and_what_was_held(self):
         # (one line, with every structure: embedding, the force field, and what was held that is no term of it)
@@ -639,7 +638,7 @@ class EtaBound(unittest.TestCase):
         self.assertIn("\u03b7 rings: metal\u2013ring atom distances", entry["method"])
         self.assertIn("rings \u2265 2.9 \u00c5 apart", entry["method"])
         # (a molecule of no metal: nothing held)
-        plain = self.worker.op_conformers({"molblock": self.worker.op_from_smiles({"smiles": "CCO"})["molblock"]})["isomers"][0]
+        plain = self.worker.op_conformers({"molblock": self.worker.op_from_smiles({"smiles": "CCO"})["molblock"], "count": 10})["isomers"][0]
         self.assertEqual(plain["method"], "ETKDG v3 + MMFF94")
 
     def test_keeps_a_bent_metallocenes_rings_apart(self):
@@ -882,7 +881,7 @@ class OpenStereo(unittest.TestCase):
         try:
             first = self.worker.op_open_stereo({"molblock": block})
             again = self.worker.op_open_stereo({"molblock": block})
-            made = self.worker.op_conformers({"molblock": block, "isomers": "all", "options": {"count": 1}})
+            made = self.worker.op_conformers({"molblock": block, "isomers": "all", "count": 1})
         finally:
             self.worker.EnumerateStereoisomers = real
         self.assertEqual(len(calls), 1)
@@ -1178,7 +1177,7 @@ class MovingCN(unittest.TestCase):
 
     def test_conformers_of_a_guanidine_choose_nothing_for_its_c_n(self):
         # (one 3D structure of each of its two, its C=N as the embedding places it: never a configuration given it)
-        made = self.worker.op_conformers({"molblock": self.block("CN=C(N)NCC(O)C"), "isomers": "all", "options": {"count": 1}})["isomers"]
+        made = self.worker.op_conformers({"molblock": self.block("CN=C(N)NCC(O)C"), "isomers": "all", "count": 1})["isomers"]
         self.assertEqual(len(made), 2)
 
 
@@ -1245,11 +1244,11 @@ class CoordinationBonds(unittest.TestCase):
         return "\n".join(lines)
 
     def formula(self, molblock):
-        iso = self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
+        iso = self.worker.op_conformers({"molblock": molblock, "count": 2})["isomers"][0]
         return "".join(sorted(a["el"] for a in iso["atoms"]))
 
     def made(self, molblock):
-        return self.worker.op_conformers({"molblock": molblock, "options": {"count": 2}})["isomers"][0]
+        return self.worker.op_conformers({"molblock": molblock, "count": 2})["isomers"][0]
 
     def test_a_group_13_adduct_drawn_with_an_arrow_is_held_in_its_dipolar_form_its_charges_reported_as_drawn(self):
         # (H3N->BH3 as plain atoms: before 0.1.12 RDKit gave the B two hydrogens - H3N->BH2 - and 0.1.12 refused it)

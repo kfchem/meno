@@ -522,6 +522,13 @@ Taken on 2026-10-13:
   A workflow's entries are never so moved: its *Conformers* step gives
   every one, as made, and its *Duplicates* and *Rank* steps keep each once
   and order them, where asked.
+- **Conformers tried.** As many as the molecule needs - by the bonds in
+  it that turn, more where a ring of it can flip, ten where nothing turns
+  (PLUGINS.md, *How many conformers are tried is Meno's to say*) - or a
+  number of the chemist's own, up to 5000: *Conformers sought*, in
+  Settings, *Chemistry*, under *3D*, shown where the plugin chosen there
+  takes a number of tries. A workflow's *Conformers* step says its own,
+  this choice its default.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made

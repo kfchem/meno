@@ -429,41 +429,83 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   (`roles: [{role, options}]`, for a role that takes them); Settings draws
   them under the role, where it is chosen, and the plugin is sent them
   with each request for the role (`options`). RDKit declares its conformer
-  search's (0.1.8): how many sought - as many as the molecule needs, or a
-  number given - the force field (MMFF94, MMFF94s, UFF), the steps an
+  search's: the force field (MMFF94, MMFF94s, UFF), the steps an
   optimisation may take, the random seed - and its *Conformers* step takes
-  the same, said once. When two conformers are the same is no option
-  (below).
-- **How many conformers are sought is the molecule's to say**
-  (2026-10-20): a fixed number is too few for a molecule with much to
-  explore and more than a rigid one has shapes, so the RDKit plugin asks
-  the molecule, unless the chemist sets a number (*Conformers sought*,
-  *This many*). By the bonds in it that turn, it is Ebejer, Morris and
-  Deane's rule - fifty up to seven such bonds, two hundred to twelve,
-  three hundred beyond (*Conformer Generation using RDKit*, 1st RDKit User
-  General Meeting, London 2012; *Freely Available Conformer Generation
-  Methods: How Good Is Good Enough?*, J. Chem. Inf. Model. 2012, 52,
-  1146-1158). Two things are added to it, both measured here:
+  the same, said once. It also says that its search takes a number of
+  tries (`tries: true`, on the conformers role), which Meno sends (below).
+  When two conformers are the same is no option (below).
+- **How many conformers are tried is Meno's to say** (the plugin
+  boundary, 2026-10-31; `lib/chem/conformersSought`). A fixed number is
+  too few for a molecule with much to explore and more than a rigid one
+  has shapes, so Meno works out as many as the molecule needs, unless the
+  chemist sets a number (*Conformers sought*, *This many*): on the page
+  in Settings, Chemistry, 3D; on a *Conformers* step among its own
+  options, Settings' choice its default. These are shown only for a
+  plugin whose conformers role says `tries`; it is sent the number with
+  each request (`count`) and, for a step's job, with each molecule. A
+  search that takes no such number (CREST's) is offered no choice. By the
+  bonds that turn, it is Ebejer, Morris and Deane's rule - fifty up to
+  seven such bonds, two hundred to twelve, three hundred beyond
+  (*Conformer Generation using RDKit*, 1st RDKit User General Meeting,
+  London 2012; *Freely Available Conformer Generation Methods: How Good
+  Are They?*, J. Chem. Inf. Model. 2012, 52, 1146-1158). Which
+  bonds turn is Meno's own count, of the heavy atoms (hydrogens carried
+  or not change nothing): a single bond outside any ring with another
+  heavy atom at each end, but none whose turn gives the same shape:
+  - a straight line - the atoms of triple bonds and the two at its ends -
+    is one turn, and none where an end has nothing beyond it (a nitrile,
+    a methyl alkyne): diphenylacetylene's rings turn against each other
+    once;
+  - an end that is a symmetric top - three alike end atoms on it (CF3,
+    CCl3, a tert-butyl's centre, a trimethylsilyl's) - gives the same
+    shape at each third of a turn;
+  - a bond from a carbon with a double bond to O, N or S, to an N, O or
+    S, is held flat by the lone pair's conjugation (an amide's C-N, an
+    ester's C-O, a thioamide's, an amidine's), and its two flat forms - an
+    amide's cis and trans, an ester's Z and E - are conformers of their
+    own, so it counts; but not where the lone pair's atom carries two
+    alike (an N,N-dimethylamide's methyls), whose two forms are one
+    shape;
+  - a bond to an end N, O or S carrying hydrogens counts - an OH's, an
+    amine's NH2, a thiol's - since the same conformer keeps OH and NH
+    rotamers apart, but not an amide's NH2 (its two flat forms one shape)
+    nor an NH3 (a symmetric top); and a C=N whose N carries a hydrogen
+    and nothing else counts too, the hydrogen on either side - an E/Z
+    never chosen - being two conformers.
+
+  The rule is by the bonds that turn; which those are is Meno's
+  definition, above: a bond whose turn gives conformers of their own.
+
+  Two things are added to the rule, both measured:
   - **a ring that can flip is worth at least two hundred.** A ring's two
     chairs are shapes of its own that no turning bond counts, and an
     embedding falls into the rarer one seldom - 3.8% of embeddings for
     tert-butylcyclohexane, 4.3% for phenylcyclohexane, over 8000
-    embeddings of each of twelve monosubstituted cyclohexanes - so thirty
-    tries missed the axial chair of phenylcyclohexane altogether. At two
-    hundred, both chairs came back for all twelve, at every seed tried. A
-    ring counts if it has five atoms or more, is not aromatic, and is not
-    bridged, a bridge holding its ring in the one shape - bridged meaning
-    that it shares more than one bond with a ring of its own size or
-    smaller, since against a larger ring it is no bridge but the way round
-    it, as each sugar of a cyclodextrin lies on its macrocycle.
-  - **a molecule that cannot change shape is worth ten**, RDKit's own
-    number for an embedding: nothing in it turns and no ring of it can
-    flip, so each try gives the same shape back (benzene, caffeine,
-    adamantane).
+    embeddings of each of twelve monosubstituted cyclohexanes (RDKit's
+    search, 2026-10-20) - so thirty tries missed the axial chair of
+    phenylcyclohexane altogether. At two hundred, both chairs came back
+    for all twelve, at every seed tried. A ring counts if it has five
+    atoms or more, is not held flat, and is not bridged, a bridge holding
+    its ring in the one shape - bridged meaning that it shares more than
+    one bond with a ring of its own size or smaller, since against a
+    larger ring it is no bridge but the way round it, as each sugar of a
+    cyclodextrin lies on its macrocycle. A ring is held flat where every
+    atom of it gives the ring pi electrons, 4n + 2 of them (Hückel's
+    rule): one from a double bond in the ring or a Hückel ring's bond (a
+    fused ring's, however drawn), none from a carbon with a C=O, C=N or
+    C=S out of the ring or a carbocation, two from a lone pair (pyrrole's
+    N, furan's O, a carbanion); a ring every atom of which lies on a
+    Hückel ring is held flat (azulene's), and so is one bound to a metal
+    through all its atoms (a metallocene's). Cyclopentadiene's CH2 and
+    cyclooctatetraene's eight pi electrons leave theirs free to pucker.
+  - **a molecule that cannot change shape is worth ten**, the number
+    RDKit's embedding takes when given none: nothing in it turns and no
+    ring of it can flip, so each try gives the same shape back (benzene,
+    caffeine, adamantane, N,N-dimethylacetamide).
 
-  A number set by hand (*This many*) may be up to 5000 (`MOST_CONFORMERS`,
-  the manifest's `max` for it; from RDKit plugin 0.1.16, up to 500
-  before). The rule's number is a floor for a chain, not enough for one.
+  A number set by hand (*This many*) may be up to 5000
+  (`MOST_CONFORMERS`). The rule's number is a floor for a chain, not
+  enough for one.
   For butyl octanoate (nine turning bonds, so the rule asks 200),
   5000 embeddings found 1523 conformers within 3 kcal/mol of the lowest.
   Each count, run on its own with the same seed, found:
@@ -867,8 +909,9 @@ The same for every plugin and for Meno's own parts:
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers: what is left open, how many stereoisomers of it can
     be made in 3D, which open double bonds are cumulated, and whether none
-    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options,
-    onPage?}` (structures in 3D and their conformers, with the role's
+    holds in 3D, `free`); `conformers {molblock, isomers?, like?, count,
+    options, onPage?}` (structures in 3D and their conformers, `count`
+    tried - Meno's number, where the role says `tries` - with the role's
     options: every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies`; `onPage`, of two enantiomers one made as the other's

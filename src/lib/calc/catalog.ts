@@ -58,6 +58,8 @@ export type PythonPlugin = ReaderBase &
     writes: readonly WriteDecl[];
     /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
+    /** The roles whose search takes how many to try, which Meno sends (the conformers role's: lib/chem/conformersSought). */
+    roleTries: readonly RoleId[];
     /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The motions it makes of a film for a role, by role, where it declares any (Render: docs/RENDER.md). */
@@ -119,6 +121,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     downloads: m.downloads,
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
+    roleTries: m.roles.filter((r) => r.tries).map((r) => r.role),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),

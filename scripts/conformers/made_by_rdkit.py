@@ -117,10 +117,12 @@ SETTLE = [
     ("a pendant phenyl turned over", "c1ccccc1C(C)C", phenyl),
 ]
 
+# (each: its name, SMILES, how many are tried - the osmate's as many as Meno sends where nothing turns, ten - and whether
+#  RDKit sanitises it as read: the osmate it does not, its valence past RDKit's tables)
 MADE = [
-    ("butan-2-ol", "C[C@H](O)CC", 20),
-    ("methylcyclohexane", "C[C@H]1CCCCC1", 20),
-    ("hexachloroosmate", "Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl", None),
+    ("butan-2-ol", "C[C@H](O)CC", 20, True),
+    ("methylcyclohexane", "C[C@H]1CCCCC1", 20, True),
+    ("hexachloroosmate", "Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl", 10, False),
 ]
 
 
@@ -141,13 +143,12 @@ for name, smiles, moves_of in SETTLE:
     settle.append({"name": name, "smiles": smiles, **described(mol), "frame": frame, "moves": {str(a): b for a, b in moves_of(mol).items()}})
 
 made = []
-for name, smiles, count in MADE:
-    mol = Chem.MolFromSmiles(smiles, sanitize=count is not None)
-    if count is None:
+for name, smiles, count, sanitized in MADE:
+    mol = Chem.MolFromSmiles(smiles, sanitize=sanitized)
+    if not sanitized:
         mol.UpdatePropertyCache(strict=False)
     block = Chem.MolToMolBlock(mol, kekulize=False)
-    options = {"count": count} if count else {}
-    entry = worker.op_conformers({"molblock": block, "options": options, "onPage": True})["isomers"][0]
+    entry = worker.op_conformers({"molblock": block, "count": count, "onPage": True})["isomers"][0]
     made.append({"name": name, "smiles": smiles, **{k: entry[k] for k in ("atoms", "bonds", "frames", "energies", "modelEnergies", "field", "method", "how") if k in entry}})
 
 out = root / "src/ui/features/Workspace/chem/testdata/conformers.rdkit.json"

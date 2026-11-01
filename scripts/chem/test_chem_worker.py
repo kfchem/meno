@@ -250,7 +250,7 @@ class ChemWorkerTest(unittest.TestCase):
 
     def test_makes_conformers_as_its_options_say_and_says_how(self):
         # (every one RDKit made, for Meno's page as for a workflow's step: which are the same is Meno's to say)
-        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7}, onPage=True)["result"]["isomers"][0]
+        made = ask("conformers", molblock=PCPA, count=5, options={"field": "MMFF94s", "iters": 300, "seed": 7}, onPage=True)["result"]["isomers"][0]
         self.assertEqual(made["field"], "MMFF94s")
         how = {r["label"]: r["text"] for r in made["how"]}
         self.assertEqual(how["Embedded"], "ETKDG v3")
@@ -259,10 +259,10 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(how["Kept"], "5 of 5 embedded (5 sought)")
         self.assertTrue(how["Made by"].startswith("RDKit "))
         self.assertEqual(len(made["frames"]), 5)
-        raw = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
+        raw = ask("conformers", molblock=PCPA, count=5, options={"field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
         self.assertEqual(raw["frames"], made["frames"])
         # (what it may not be, kept to what it may: a force field it does not know, the default)
-        odd = ask("conformers", molblock=PCPA, options={"count": 2, "field": "GAFF", "iters": 1})["result"]["isomers"][0]
+        odd = ask("conformers", molblock=PCPA, count=2, options={"field": "GAFF", "iters": 1})["result"]["isomers"][0]
         self.assertEqual(odd["field"], "MMFF94")
         self.assertIn("at most 10 steps", {r["label"]: r["text"] for r in odd["how"]}["Optimised"])
 

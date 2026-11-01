@@ -202,6 +202,8 @@ export type RoleDecl = {
   role: RoleId;
   programs: string[];
   options: Option[];
+  /** Its conformer search takes how many to try, which Meno works out or the chemist sets (*Conformers sought*: lib/chem/conformersSought) and sends: the conformers role's alone. */
+  tries?: true;
   /** The looks it makes, each declared in full, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
@@ -1010,6 +1012,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
             role: r.role,
             programs,
             options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
+            ...(r.role === "conformers" && r.tries === true ? { tries: true as const } : {}),
             ...(looks.length ? { looks } : {}),
             ...(motions.length ? { motions } : {}),
             ...(unsure ? { unsure } : {}),

@@ -27,6 +27,7 @@ import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothin
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
+import { conformersSought, conformersSoughtOf, soughtNumber } from "../../../../../lib/chem/conformersSought";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
@@ -648,8 +649,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             continue;
           }
           if (unset && left.free) free.push(place + 1);
-          // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same)
-          made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, CONFORMERS_MS)).isomers[0];
+          // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same - the step's
+          //  own number, or as many as the molecule needs: lib/chem/conformersSought)
+          const tries = soughtNumber(options, () => conformersSoughtOf(block.molblock));
+          made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", ...(tries != null ? { count: tries } : {}), options }, CONFORMERS_MS)).isomers[0];
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
@@ -1033,7 +1036,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let note: string | undefined;
     try {
       const client = await pluginClient(plugin);
-      const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
+      // (a conformer search that takes how many to try: told, for each molecule, the step's own number or as many as it needs - lib/chem/conformersSought)
+      const tries = step.kind === "conformers" && plugin.roleTries.includes("conformers");
+      const triesOf = (e: SetEntry) => soughtNumber(options, () => conformersSought(e.atoms, e.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order }))));
+      const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e) } : {}) }));
       const raw = await client.prepare(step.kind, sent, options, cores, Object.fromEntries(paths));
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
