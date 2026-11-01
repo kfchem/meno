@@ -20,6 +20,7 @@ import { pluginsFilling, presetsFor, type PythonPlugin } from "../../../../lib/c
 import { addedNow, pluginClient, useReaders } from "../../../../lib/calc/workers";
 import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
+import { isoOf } from "../../../../lib/calc/grids";
 import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob, trimJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
 import { CANVAS_LOOK, finishEntry, motionEntry, tooShort } from "./renderOptions";
@@ -181,7 +182,7 @@ export async function shownOf(store: EditorStore, ids: readonly number[]): Promi
       const n = Math.floor(xyz.length / 3) || 1;
       const centre: [number, number, number] = [0, 0, 0];
       for (let k = 0; k + 2 < xyz.length; k += 3) for (let c = 0; c < 3; c++) centre[c] += xyz[k + c] / n;
-      surfaces = await surfaceOf(grid, centre, open?.iso ?? grid.iso ?? 0.05, colour).catch(() => undefined);
+      surfaces = await surfaceOf(grid, centre, open?.iso ?? isoOf(grid), colour).catch(() => undefined);
     }
     out.push({ m, ...(surfaces ? { surfaces } : {}), ...(move ? { move } : {}) });
   }

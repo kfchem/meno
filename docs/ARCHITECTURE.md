@@ -931,11 +931,15 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   holds no charge or multiplicity, so it says neither. The orbitals are
   checked orthonormal in their basis, as PySCF reads them, before any
   surface is promised - where they are not, it says to open a Molden file
-  the program wrote. Its lists' rows promise each orbital's surface and
-  the densities' (`orbital:<spin>:<index>`, `density:total`,
-  `density:spin`); asked for, it works the grid out from the file sent
-  again: 4 Å past the atoms, points 0.2 Å apart (at most 90 to a side),
-  the basis functions' values a chunk of points at a time. Its tests
+  the program wrote. It gives every orbital in Meno's general form (each
+  its spin, energy in hartrees, occupation and symmetry; Meno names and
+  lists them, `lib/calc/orbitals.ts`), each promising its surface, and a
+  list of the densities, each promising its own (`orbital:<spin>:<index>`,
+  `density:total`, `density:spin`); asked for, it works the values out
+  from the file sent again on the grid Meno's request gives (`grid`,
+  `lib/calc/grids.ts`), the basis functions' values a chunk of points at
+  a time, and says whether each grid is an orbital or a density - the
+  value it is drawn at first is Meno's. Its tests
   (`scripts/calc/test_reader_pyscf.py`) run by hand in an environment made
   from its lock.
 - Meno's own reading under the same contract (`MENO` in the catalog,

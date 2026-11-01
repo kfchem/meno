@@ -13,7 +13,7 @@ import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
 import { alsoReadersFor, anyPluginById, READERS, readerFor, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
 import { forThisSystem } from "../plugins/here";
-import { frameReads, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
+import { frameReads, givenResults, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
 import { readResults, type Result } from "./results";
 import { addedReaders, readerClient, useReaders } from "./workers";
 import { publishReading } from "./readings";
@@ -103,7 +103,7 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
   // read, each its own mark: one that does not read left out with its mark, never all marks with it)
   const marking = taken.find((f) => sameFrames(f.output) && marksOf(f.output));
   const marks = marking ? marksOf(marking.output) : null;
-  const results: Result[] = taken.flatMap((f) => readResults(f.output.results, atoms.length, sameFrames(f.output) ? frames.length : 0, f.from));
+  const results: Result[] = taken.flatMap((f) => readResults(givenResults(f.output), atoms.length, sameFrames(f.output) ? frames.length : 0, f.from));
   const perFrame = <K extends "populations" | "degeneracies">(pick: (o: ReaderOutput) => ReaderOutput[K], key: K) => {
     const v = first((o) => {
       const got = pick(o);

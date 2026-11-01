@@ -37,6 +37,7 @@ import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAt
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
+import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
@@ -1958,7 +1959,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         <Surface3D
           grid={props.surface ?? null}
           centre={centre}
-          iso={props.surfaceIso ?? props.surface?.iso ?? 0.05}
+          iso={props.surfaceIso ?? (props.surface ? isoOf(props.surface) : ISO_ORBITAL)}
           plus={style.surfacePlus}
           minus={style.surfaceMinus}
           colour={props.surfaceColour ?? null}

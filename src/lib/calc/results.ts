@@ -66,9 +66,15 @@ type Vec3 = [number, number, number];
  * each point, the last axis running fastest, as little-endian 32-bit floats
  * in base 64. `signed`: its values go both ways - an orbital's two phases -
  * and its surface is drawn at the value and at its negative, in two
- * colours. `iso`: the value it is drawn at, at first.
+ * colours. `quantity`: what its values are, where it is an orbital or an
+ * electron density (a spin density is one, signed), which says the value
+ * Meno draws it at first (./grids `isoOf`). `iso`: that value, where it is
+ * the program's own - an option it was run with (NCIPLOT's RDG) - and not
+ * Meno's to choose.
  */
-export type Grid = { origin: Vec3; axes: [Vec3, Vec3, Vec3]; counts: Vec3; values: string; signed?: boolean; iso?: number };
+export type Grid = { origin: Vec3; axes: [Vec3, Vec3, Vec3]; counts: Vec3; values: string; signed?: boolean; quantity?: GridQuantity; iso?: number };
+/** What a grid's values are, where Meno chooses the value it is drawn at by it. */
+export type GridQuantity = "orbital" | "density";
 /**
  * A surface coloured by a second grid's values where it passes (docs/NCI.md):
  * an RDG isosurface coloured by sign(λ2)ρ, say, or a density's coloured by
@@ -121,8 +127,8 @@ const ROWS_MOST = 5000;
 export const ABOUT_FOCUS = 10;
 /** How long a promise's key may be; how many points a grid may have along an axis, and in all. */
 const KEY_MOST = 200;
-const GRID_SIDE_MOST = 400;
-const GRID_POINTS_MOST = 16_000_000;
+export const GRID_SIDE_MOST = 400;
+export const GRID_POINTS_MOST = 16_000_000;
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isIndex = (v: unknown, below: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < below;
@@ -213,6 +219,7 @@ export function readGrid(v: unknown): Grid | undefined {
     counts: counts as Vec3,
     values: g.values,
     ...(g.signed === true ? { signed: true } : {}),
+    ...(g.quantity === "orbital" || g.quantity === "density" ? { quantity: g.quantity } : {}),
     ...(isNum(g.iso) && g.iso > 0 ? { iso: g.iso } : {}),
   };
 }

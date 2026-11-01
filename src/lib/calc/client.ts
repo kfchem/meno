@@ -8,6 +8,7 @@
  * The transport is handed in, so that the client knows nothing of how the
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
+import type { GridPlace } from "./grids";
 import type { ReaderOutput } from "./output";
 import type { OptionValues } from "../options";
 import type { WrittenMolecule } from "../io/writers";
@@ -22,8 +23,8 @@ export interface Reader {
   /** Its version, once it has said; Meno's own, empty. */
   version: string | null;
   read(kind: string, name: string, text: string): Promise<ReaderOutput>;
-  /** What a promise it gave stands for - by its key - the file's name and text sent again. */
-  ask(kind: string, key: string, name: string, text: string): Promise<unknown>;
+  /** What a promise it gave stands for - by its key - the file's name and text sent again; and the grid Meno lays values about a molecule on, where it has one to give (./grids `gridAbout`). */
+  ask(kind: string, key: string, name: string, text: string, grid?: GridPlace): Promise<unknown>;
   /** Whether a file - by its name and its start - is of `kind`, one the reader tells itself (`probe` in its manifest). */
   probe(kind: string, name: string, head: string): Promise<boolean>;
   /**
@@ -127,9 +128,14 @@ export class ReaderClient implements Reader {
     return this.request({ op: "read", kind, name, text }, `reading ${name}`) as Promise<ReaderOutput>;
   }
 
-  /** What a promise the reader gave stands for, by its key: the file it read sent again. */
-  ask(kind: string, key: string, name: string, text: string): Promise<unknown> {
-    return this.request({ op: "ask", kind, key, name, text }, `working out ${key} of ${name}`);
+  /**
+   * What a promise the reader gave stands for, by its key: the file it read
+   * sent again, and the grid Meno lays values about the molecule on, where
+   * it has one to give (./grids `gridAbout`): a reader that works values out
+   * works them out there.
+   */
+  ask(kind: string, key: string, name: string, text: string, grid?: GridPlace): Promise<unknown> {
+    return this.request({ op: "ask", kind, key, name, text, ...(grid ? { grid } : {}) }, `working out ${key} of ${name}`);
   }
 
   /** Whether a file is of `kind`, by its name and its start: the reader's own answer, yes only where it says so. */

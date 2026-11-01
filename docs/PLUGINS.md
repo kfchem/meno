@@ -846,7 +846,11 @@ The same for every plugin and for Meno's own parts:
   2026-10-10.)
 - **Requests, one a line - `{id, op, ...}` - one answer each - `{id, ok,
   result}`, or `{id, ok: false, error}`, an error an answer:**
-  - `read {kind, name, text}`, `ask {kind, key, name, text}`, `write
+  - `read {kind, name, text}`, `ask {kind, key, name, text, grid}` (a
+    promise, with the grid Meno lays values about the molecule on, where
+    it has one to give - `{origin, axes, counts}` in ångströms, as a
+    grid's are: a reader that works values out works them out there and
+    lays no grid of its own - WORKSPACE.md, *Surfaces*), `write
     {kind, name, molecules, options}` (answered `{text}`) - the file
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
@@ -1082,6 +1086,14 @@ The same for every plugin and for Meno's own parts:
     out itself (2026-10-30). Meno puts them on each thermochemical
     property it makes of the readings, in its `by` (WORKFLOWS-FOUNDATION.md,
     *The entry*).
+- **Gives a calculation's orbitals as data** (`orbitals`, 2026-11-01;
+  WORKSPACE.md, *Orbitals are listed by Meno*): each its spin (`both`,
+  `alpha`, `beta`), its energy in hartrees, its occupation, its symmetry as
+  printed and, where the reader can work it out, its surface as a promise
+  - all of them, in the program's order. Meno names the HOMO and the LUMO,
+  writes the energies in electronvolts, lists them about the frontier and
+  works out the HOMO-LUMO gap (`homo-lumo-gap`); a list a reader gives of
+  its own (`orbitals`, `orbitals.a`, `orbitals.b`) is shown as it gave it.
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**

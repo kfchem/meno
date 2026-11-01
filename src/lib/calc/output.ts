@@ -8,6 +8,7 @@
  */
 import { warningsOf, type Warning } from "./warnings";
 import { readResults, symmetryText, type MoleculeResult, type Result } from "./results";
+import { orbitalResults, orbitalsOf } from "./orbitals";
 import { standardWeight } from "../chem/isotopes";
 import { readerIdOfLine } from "./catalog";
 import type { StructureRead } from "../io/structures";
@@ -68,6 +69,13 @@ export type ReaderOutput = {
   converged?: boolean[] | null;
   /** Why none of its geometries is one the run found, where its reader marks them all not converged for a reason of their own (`Unmarked`). */
   unmarked?: Unmarked | null;
+  /**
+   * Its orbitals, each its spin, energy (hartrees), occupation and symmetry
+   * as the program gives them, in its order, and its surface where the
+   * reader can work it out (./orbitals `Orbital`): what Meno lists itself,
+   * naming the HOMO and the LUMO (`orbitalResults`).
+   */
+  orbitals?: unknown;
   /** Everything else it found, in the general form (results.ts) - read, and those that do not read as results left out. */
   results?: unknown[];
   /** What a structure's file holds - its drawing, and its molecules in 3D - where the reader read one (lib/io/structures); checked as the page takes it. */
@@ -166,7 +174,7 @@ export function framesOf(out: ReaderOutput): number {
  * unless it says another.
  */
 export function calcOf(out: ReaderOutput, readers: readonly string[], source?: CalcSource, unread?: CalcInfo["unread"]): CalcInfo {
-  const results = inMenosForm(readResults(out.results, out.atoms.length, framesOf(out), readers[0] ? readerIdOfLine(readers[0]) : undefined), out);
+  const results = inMenosForm(readResults(givenResults(out), out.atoms.length, framesOf(out), readers[0] ? readerIdOfLine(readers[0]) : undefined), out);
   const said = (k: "program" | "version" | "method" | "basis" | "solvation") => text(out[k]);
   return {
     readers: [...readers],
@@ -187,6 +195,17 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
     ...(warningsOf(out.warnings).length ? { warnings: warningsOf(out.warnings) } : {}),
     ...(imaginaryOf(out.imaginary) ? { imaginary: imaginaryOf(out.imaginary) } : {}),
   };
+}
+
+/**
+ * The results an output gives, as they are to be read (results
+ * `readResults`): what its reader gave, then its orbitals listed as Meno
+ * lists them (./orbitals) - a list the reader gave of its own, under the
+ * same name, first.
+ */
+export function givenResults(out: Pick<ReaderOutput, "results" | "orbitals">): unknown[] {
+  const orbitals = orbitalsOf(out.orbitals);
+  return [...(Array.isArray(out.results) ? out.results : []), ...(orbitals ? orbitalResults(orbitals) : [])];
 }
 
 /** The masses an output gives its atoms, where it gives one to each, each a mass; otherwise none. */
