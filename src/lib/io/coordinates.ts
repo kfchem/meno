@@ -275,7 +275,8 @@ export function readCoordinates(text: string, quoted: QuotedTables = NO_QUOTED):
   const heading = headingIn(quoted);
   const naming = namingBy(heading);
   // (the rows of a table only a plugin not added declares - one no plugin added reads the same: never read, as atoms or
-  // anything else; each run of them said to be that plugin's, below)
+  // anything else; each run of them said to be that plugin's, below. A table an added plugin declares with the same
+  // columns is read as that plugin's, whatever its heading: its rows are the same shape, and read the same)
   const unreadTables = quoted.offered.filter((o) => !quoted.added.some((a) => a.columns.join() === o.columns.join()));
   const claimed = new Map<number, QuotedTable>();
   const all = linesOf(text, quoted.added);
