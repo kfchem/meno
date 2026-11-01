@@ -1034,8 +1034,9 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
-molecule now saying how many conformers are sought; Stop, while a 3D
+they take (`CONFORMERS_MS`, fifteen minutes at most, as many conformers
+being tried as the molecule needs, or the chemist asks - Meno works the
+number out and sends it: `lib/chem/conformersSought`; Stop, while a 3D
 structure is being made, stops the worker and lets the question go at
 once). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out by Meno's rule for which of
