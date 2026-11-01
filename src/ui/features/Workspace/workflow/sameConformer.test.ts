@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SAME_CONFORMER, Sameness } from "./sameConformer";
+import { ALIKE_WAYS, SAME_CONFORMER, Sameness, WAY_STEPS, work } from "./sameConformer";
 import { runMeno } from "./meno";
 import { entryOfSet, setEntries, type SetEntry } from "./entries";
 
@@ -265,5 +265,48 @@ describe("past the ways it tries", () => {
     expect(out.said).toBe("2 of 2 kept · 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed");
     // (one of it alone: nothing to miss, nothing said of the ways - only that it is one)
     expect(runMeno("duplicates", setEntries([{ ...m, frames: [], energies: [0] }], "conformers"), "conformers").said).toBe("1 of 1 kept · the compound has one conformer");
+  });
+});
+
+/** M(PPh3)k with its hydrogens: the metal, any other ligands, then each phosphine's P and its three phenyls, each ring's carbons then their hydrogens. */
+function phosphines(metal: string, k: number, others: string[] = []) {
+  const atoms: { el: string }[] = [{ el: metal }];
+  const bonds: { a1: number; a2: number; order: number }[] = [];
+  for (const el of others) bonds.push({ a1: 0, a2: atoms.push({ el }) - 1, order: 1 });
+  for (let p = 0; p < k; p++) {
+    const P = atoms.push({ el: "P" }) - 1;
+    bonds.push({ a1: 0, a2: P, order: 1 });
+    for (let r = 0; r < 3; r++) {
+      const c = Array.from({ length: 6 }, () => atoms.push({ el: "C" }) - 1);
+      c.forEach((x, i) => bonds.push({ a1: x, a2: c[(i + 1) % 6], order: i % 2 ? 1 : 2 }));
+      bonds.push({ a1: P, a2: c[0], order: 1 });
+      for (const x of c.slice(1)) bonds.push({ a1: x, a2: atoms.push({ el: "H" }) - 1, order: 1 });
+    }
+  }
+  return { atoms, bonds };
+}
+
+describe("the search for the ways", () => {
+  it("stops past the ways it tries: Pd(PPh3)4, its ways millions, in under 100,000 steps for both its searches", () => {
+    // (its four phosphines and twelve phenyls map onto each other every way round: 4! (3! 2^3)^4 ways and more)
+    const { atoms, bonds } = phosphines("Pd", 4);
+    work.steps = 0;
+    expect(new Sameness(atoms, bonds).capped).toBe(true);
+    expect(work.steps).toBeGreaterThan(ALIKE_WAYS);
+    expect(work.steps).toBeLessThan(100_000);
+    expect(work.steps).toBeLessThan(2 * WAY_STEPS);
+    // (and RhCl(PPh3)3 so too)
+    const rh = phosphines("Rh", 3, ["Cl"]);
+    work.steps = 0;
+    expect(new Sameness(rh.atoms, rh.bonds).capped).toBe(true);
+    expect(work.steps).toBeLessThan(100_000);
+  });
+
+  it("finds every way where they are fewer than it tries: a triphenylphosphine's, its phenyls turned over and round", () => {
+    const { atoms, bonds } = phosphines("Au", 1);
+    work.steps = 0;
+    expect(new Sameness(atoms, bonds).capped).toBe(false);
+    expect(work.steps).toBeGreaterThan(0);
+    expect(work.steps).toBeLessThan(ALIKE_WAYS);
   });
 });
