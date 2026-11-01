@@ -5,6 +5,7 @@ import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
 import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
+import { presetsSaid } from "../../../lib/plugins/presets";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
@@ -122,9 +123,10 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
             ))}
           </>
         )}
-        {runs(p) && (p.depends ?? []).length > 0 && (
+        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, anyPluginById(p.presets.for)?.name ?? p.presets.for)}</p>}
+        {(p.depends ?? []).length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
-            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
           </p>
         )}
         {pluginsUsing(p.id).length > 0 && (

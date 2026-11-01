@@ -16,13 +16,14 @@ import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { pluginsFilling, type PythonPlugin } from "../../../../lib/calc/catalog";
-import { pluginClient, useReaders } from "../../../../lib/calc/workers";
+import { pluginsFilling, presetsFor, type PythonPlugin } from "../../../../lib/calc/catalog";
+import { addedNow, pluginClient, useReaders } from "../../../../lib/calc/workers";
 import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
 import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob, trimJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
-import { finishEntry, motionEntry, tooShort } from "./renderOptions";
+import { CANVAS_LOOK, finishEntry, motionEntry, tooShort } from "./renderOptions";
+import { withPresets } from "./presets";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -205,8 +206,10 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const taken = () => !renders.getState().list.some((r) => r.key === key);
   const plugin = renderer();
   if (!plugin) return;
-  // (a film shorter than its motion can be read in is refused here, however it was asked for: Meno's rule, which no renderer keeps)
-  const short = tooShort(ask, plugin.roleMotions?.render, ids.length);
+  // (a film shorter than its motion can be read in is refused here, however it was asked for: Meno's rule, which no renderer keeps -
+  //  of a motion a plugin brings it, as that plugin declares it)
+  const brought = presetsFor(plugin, addedNow()).flatMap((o) => o.presets.motions);
+  const short = tooShort(ask, [...(plugin.roleMotions?.render ?? []), ...brought], ids.length);
   if (short) throw new Error(short);
   const shown = await shownOf(store, ids);
   if (closing.aborted) return;
@@ -237,14 +240,16 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
       paths.set(decl.name, where);
     }
     const client = await pluginClient(plugin);
-    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) };
+    const entry = withPresets({ scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) }, ask.presets, CANVAS_LOOK.id);
     const prepared = readPrepared(await client.prepare("render", [entry], options, cores), 1);
     if (typeof prepared === "string") return fail(prepared);
     const p = prepared[0];
     if (p.files.some((f) => f.name === SCENE)) return fail("It prepared a job Meno cannot run");
     if (gone()) return renders.setState((s) => ({ list: s.list.filter((r) => r.key !== key) }));
     const path = paths.get(p.program);
-    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}), label: ask.kind === "film" ? "Film" : "Picture" });
+    // (the files of the presets chosen handed it: copied into its folder by Meno, unread)
+    const presets = ask.presets?.map((h) => h.from) ?? [];
+    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}), ...(presets.length ? { presets } : {}), label: ask.kind === "film" ? "Film" : "Picture" });
   } catch (e) {
     return fail(message(e));
   }
@@ -294,7 +299,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   };
   try {
     const client = await pluginClient(plugin);
-    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) };
+    const entry = withPresets({ scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) }, ask.presets, CANVAS_LOOK.id);
     const said = (await client.collect("render", [entry], options, {}, log, state)) as { why?: unknown; made?: unknown };
     if (typeof said?.why === "string") return failed(said.why.trim().slice(0, 300) || "It did not say why");
     const made = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;

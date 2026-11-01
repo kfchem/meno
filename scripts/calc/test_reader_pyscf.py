@@ -1,16 +1,15 @@
 """Tests for the PySCF plugin's worker (src-tauri/resources/plugins/pyscf/worker.py).
 
-They need PySCF and cclib, so they run in an environment pixi makes from the
+They need PySCF, so they run in an environment pixi makes from the
 plugin's lock:
 
     cp src-tauri/resources/plugins/pyscf/pixi.* /tmp/pyscf-env/
     pixi install --frozen --manifest-path /tmp/pyscf-env/pixi.toml
     /tmp/pyscf-env/.pixi/envs/default/bin/python -m unittest scripts/calc/test_reader_pyscf.py
 
-The outputs they read are not in the repository (docs/WORKSPACE.md, stage
-3): cclib's samples in calc-samples/ (as for the cclib reader's tests), and
-water.molden in calc-samples/cube/, written by PySCF itself. Those tests are
-skipped where the files are not there.
+The file they read is not in the repository (docs/WORKSPACE.md, stage 3):
+water.molden in calc-samples/cube/, written by PySCF itself. Those tests
+are skipped where it is not there.
 """
 
 import base64
@@ -103,33 +102,19 @@ class Molden(unittest.TestCase):
         self.assertLess(float(numpy.abs(density - squares).max()), 1e-3 * float(density.max()))
 
 
-class Outputs(unittest.TestCase):
-    def test_gaussian_with_its_basis_its_orbitals_drawn(self):
-        path = sample("Gaussian/dvb_sp.out")
-        r = ask("read", path)
-        self.assertEqual(len(r["atoms"]), 20)
-        self.assertEqual(r["program"], "Gaussian")
-        # (what the calculation was, as the program names it)
-        self.assertEqual((r["method"], r["basis"]), ("B3LYP", "STO-3G"))
-        # (only what it is for: no charges or vibrations - the cclib reader's)
-        self.assertEqual({x["id"] for x in r["results"]}, {"orbitals", "densities"})
-        homo = next(row for row in result(r, "orbitals")["rows"] if row["cells"][0] == "HOMO")
-        self.assertAlmostEqual(integral(ask("ask", path, key=homo["surface"]["ask"]), lambda v: v * v), 1.0, delta=0.02)
+class Species(unittest.TestCase):
+    def test_a_molden_file_says_no_charge_or_multiplicity_the_format_holds_neither(self):
+        r = ask("read", sample("cube/water.molden"))
+        self.assertNotIn("charge", r)
+        self.assertNotIn("multiplicity", r)
 
-    def test_orca_its_p_functions_put_in_molden_order_and_drawn(self):
-        path = sample("ORCA/dvb_sp_hf.out")
-        r = ask("read", path)
-        homo = next(row for row in result(r, "orbitals")["rows"] if row["cells"][0] == "HOMO")
-        self.assertAlmostEqual(integral(ask("ask", path, key=homo["surface"]["ask"]), lambda v: v * v), 1.0, delta=0.02)
-        # (the valence's share of the density, away from the nuclei, as the grid has it: some, and no more than every electron)
-        self.assertTrue(0 < integral(ask("ask", path, key="density:total"), lambda v: numpy.minimum(v, 1.0)) < 70.0)
 
-    def test_an_output_without_its_basis_says_to_open_a_molden_file(self):
-        r = ask("read", sample("ORCA/dvb_gopt.out"))
-        self.assertEqual(r["method"], "DFT")
-        self.assertGreater(len(r["frames"]), 1)
-        self.assertIsNone(result(r, "orbitals"))
-        self.assertEqual(result(r, "surfaces")["value"], "open a Molden file the program wrote")
+class OnlyMolden(unittest.TestCase):
+    def test_a_file_that_is_no_molden_file_is_not_read(self):
+        # (a Molden file's sections, but not its first line; and text of no file of its kind)
+        for text in ("[Atoms] AU\nO 1 8 0.0 0.0 0.0\n", "nothing\n"):
+            a = worker.answer(json.dumps({"id": 6, "op": "read", "name": "job.out", "text": text}))
+            self.assertEqual((a["ok"], a["error"]), (False, "not a Molden file"))
 
 
 if __name__ == "__main__":

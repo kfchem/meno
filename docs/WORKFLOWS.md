@@ -733,7 +733,7 @@ Conformers go through a workflow as any set does (decided):
     (2026-10-22). Of a calculation's output that optimised, only the
     geometries the run converged on are entries: an optimisation's last,
     a relaxed scan's each point - as the program marks them, read by its
-    plugin (cclib's `optstatus`). The steps on the way stay frames, to be
+    program's own plugin. The steps on the way stay frames, to be
     looked at, never entries: before, a scan of 3 points opened as 21
     compounds, each with an energy, and a conformer set weighted geometries
     that were no minimum of anything. A point the run never converged on
@@ -1746,11 +1746,12 @@ Meno's readers, as an output opened is. How it works: ARCHITECTURE.md,
 
 Decided by the maintainer (2026-10-08), as it was built:
 
-- **What ORCA and Gaussian write is read by Meno's readers** - every
-  reader of its kind added (cclib, PySCF), put together, as when the
-  output is opened - not by the plugin that ran it. The output is kept
-  with the molecules it gave, by its kind, as an opened one is. Where no
-  reader of it is added, the step says which to add.
+- **What ORCA and Gaussian write is read by their own plugins**
+  (2026-10-31): the plugin that ran the job reads its output, as when the
+  output is opened - unless another reader of its kind is chosen in
+  *Files* - with each chosen to read it as well put together beside it.
+  The output is kept with the molecules it gave, by its kind, as an
+  opened one is.
 - **Gaussian's steps are its input plugin's**: the plugin that writes
   Gaussian's input for *Export* is now the *Gaussian interface*, and runs
   it as well, its input written by the same code. Its id changed with its
@@ -2177,7 +2178,10 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   plugin's conformers for Meno's own page use the same, while its
   *Conformers* step gives every one RDKit made, and Meno's *Duplicates*
   applies it: PLUGINS.md). The ways are those of its atoms but
-  the hydrogens hanging on one atom, at most 1,000, each bond taken onto
+  the hydrogens hanging on one atom, at most 1,000 - searched for atom by
+  atom, each taken only to one of its kind and bonded as it is, the search
+  stopping past them: Pd(PPh3)4's, millions, in some 40,000 steps a
+  search, 12 ms in all (Apple M4, 2026-11-01) - each bond taken onto
   one of its order - a ring of single and double bonds in turn, of 4n + 2
   atoms (Hückel's rule), all of one: which of a benzene ring's bonds a
   Kekulé structure makes double is no part of its shape, so a phenyl

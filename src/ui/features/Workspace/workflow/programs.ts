@@ -12,6 +12,7 @@ import { ENTRY_SCHEMA, geometryKey, type By, type Property, type Restraint } fro
 import { factor } from "../../../../lib/units";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { fragmentsOf } from "../../../../lib/chem/fragments";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
@@ -38,6 +39,8 @@ export type PluginEntry = Omit<WrittenMolecule, "atoms"> & {
   atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[];
   charge: number;
   multiplicity: number;
+  /** The molecules its bonds make of its atoms, each its atoms by number (lib/chem/fragments, Meno's one rule). */
+  fragments: number[][];
   files?: EntryFile[];
   end?: PluginEntry;
   /** Its restraints (the entry record's `Restraint`, each held by the energy the record states), where it carries some - and where a minimisation first held them (`start`: x, y and z by atom in turn). */
@@ -103,6 +106,7 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     atoms,
     charge,
     multiplicity,
+    fragments: fragmentsOf(atoms.length, molecule.bonds),
     // (the end it is paired with, where it is a pair's start: given as it is, beside it - Path search's)
     ...(e.end ? { end: pluginEntry(e.end) } : {}),
     // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)

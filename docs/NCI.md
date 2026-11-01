@@ -32,9 +32,9 @@ molecule in 3D, from its geometry:
   (0.3), and how far the colour scale reaches (± 0.07 a.u.).
 - **The Multiwfn interface** - from a calculation's wavefunction where
   the molecule has one: a Molden file, a Gaussian formatted checkpoint, a
-  WFN or a WFX, the one the molecule was read from - opened (read by cclib
-  or PySCF), or kept by another plugin's step (ORCA's and Gaussian's keep
-  theirs: WORKFLOWS.md, *The wavefunction is kept*); and otherwise from its
+  WFN or a WFX, the one the molecule was read from - opened (read by the
+  reader of its kind), or kept by another plugin's step (ORCA's and
+  Gaussian's keep theirs: WORKFLOWS.md, *The wavefunction is kept*); and otherwise from its
   geometry alone, by the promolecular density Multiwfn builds from its own
   atoms' densities (its manual, 3.23.2) - so that NCI needs no other
   program. Its options: the density (the wavefunction's where there is
@@ -80,8 +80,9 @@ for either grid. Saved with the workspace as any surface is.
   cube reader (lib/calc/cube) from the job's folder; nothing so large goes
   through the plugin's worker.
 - **NCIPLOT** is told, as its manual has it (NCIPLOT-4.2,
-  NCIPLOT_MANUAL.pdf): the number of XYZ files and their names (each
-  molecule's apart for interactions between them), `ONAME NCI`, `OUTPUT
+  NCIPLOT_MANUAL.pdf): the number of XYZ files and their names (each of
+  the entry's fragments apart for interactions between them, as Meno gives
+  them: PLUGINS.md, *The entry a plugin is given*), `ONAME NCI`, `OUTPUT
   2` (the cubes alone), `COARSE` or `FINE`, `INTERMOLECULAR`, and `CUTPLOT
   0.07 r`; it writes `NCI-grad.cube` (the RDG) and `NCI-dens.cube`
   (sign(λ2)ρ × 100, as the scale's label says). `NCIPLOT_HOME` is the

@@ -11,7 +11,7 @@ import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
 import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
-import type { OptionValues } from "../../../../../lib/options";
+import { valuesOf, type OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
 import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
@@ -23,7 +23,7 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
-import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
+import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -42,7 +42,8 @@ import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
 import type { DrawnRecord, EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
-import { askOf, finishEntry } from "../../render/renderOptions";
+import { askOf, CANVAS_LOOK, finishEntry, looksOffered } from "../../render/renderOptions";
+import { handOff, stepRefused, withPresets } from "../../render/presets";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
 import { style3dOf } from "../../style3d";
@@ -1156,7 +1157,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   /** A Render step's options split: Meno's own choices (the picture's size, shape and materials), and the plugin's. */
   const renderChoices = (kind: StepKind, options: OptionValues) => {
-    const own = new Set((kindInfo(kind).own ?? []).map((o) => o.id));
+    // (Meno's own choices - and the studio, where plugins bring the renderer any - are not the plugin's options)
+    const own = new Set([...(kindInfo(kind).own ?? []).map((o) => o.id), "studio"]);
     return { ask: askOf("picture", options), theirs: Object.fromEntries(Object.entries(options).filter(([k]) => !own.has(k))) as OptionValues };
   };
 
@@ -1174,7 +1176,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const entries = input.holds === "structures" ? [] : setEntries(input.molecules, input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
-    const { ask, theirs } = renderChoices(step.kind, options);
+    // (a look or studio set that no plugin added brings now is refused before anything runs: never the first in its place, unsaid)
+    const { offered, offer } = renderPresets(plugin.id);
+    const refused = stepRefused(step.options ?? {}, new Set(looksOffered([...(plugin.roleLooks.render ?? []), ...offer.looks]).map((l) => l.id)), new Set(offer.studios.map((x) => x.id)));
+    if (refused) return void fail(id, refused, at, key);
+    const { ask: plainAsk, theirs } = renderChoices(step.kind, options);
+    // (the presets its look and studio are of handed the renderer, each plugin's options as it declares them)
+    const presets = handOff(offered, offer, { look: String(options.look), studio: String(options.studio) }, Object.fromEntries(offered.map((o) => [o.from.id, valuesOf(o.presets.options)])));
+    const ask = presets.length ? { ...plainAsk, presets } : plainAsk;
     const { cores } = runningOf(useAppSettings.getState().calculations);
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
@@ -1191,13 +1200,22 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (gone(id)) break;
         const source = input.molecules.find((m) => m.id === e.from);
         const rendered = renderScene([{ m: entryCarried(e, source, e.from != null ? turns[e.from] : undefined) }], style, ask);
-        const entry = { scene: SCENE, film: false, width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish) };
+        const entry = withPresets({ scene: SCENE, film: false, width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish) }, ask.presets, CANVAS_LOOK.id);
         const prepared = readPrepared(await client.prepare("render", [entry], theirs, cores), 1);
         if (typeof prepared === "string") throw new Error(prepared);
         const p = prepared[0];
         if (p.files.some((f) => f.name === SCENE)) throw new Error("It prepared a job Meno cannot run");
         const path = paths.get(p.program);
-        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}), label: `${e.name ?? compoundLetter(e.compound)} Render` });
+        const job = await startJob({
+          plugin: plugin.id,
+          program: p.program,
+          args: p.args,
+          files: [...p.files, { name: SCENE, text: rendered.gltf }],
+          cores,
+          ...(path ? { path } : {}),
+          ...(presets.length ? { presets: presets.map((h) => h.from) } : {}),
+          label: `${e.name ?? compoundLetter(e.compound)} Render`,
+        });
         const { page } = rendered;
         jobs.push({ id: job, entries: [i], reads: [], size: [page.maxX - page.minX, page.maxY - page.minY] });
       }

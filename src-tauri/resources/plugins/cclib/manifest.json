@@ -1,7 +1,7 @@
 {
   "id": "cclib",
   "name": "cclib",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "uses": [{"name": "cclib", "version": "1.9rc1"}],
   "description": "Reads the output of many calculation programs: ORCA, Gaussian, xTB, NWChem, Psi4, Q-Chem, GAMESS, Molpro and others.",
   "licence": "BSD-3-Clause",
@@ -13,18 +13,18 @@
     {"id": "dalton", "name": "Dalton output", "program": "Dalton", "extensions": [".out", ".log"], "marks": [{"text": "Dalton - An Electronic Structure Program", "anyCase": true}]},
     {"id": "gamess", "name": "GAMESS output", "program": "GAMESS", "extensions": [".log", ".out"], "marks": [{"text": "GAMESS VERSION", "anyCase": true}, {"text": "Firefly (PC GAMESS)", "anyCase": true}]},
     {"id": "gamess-uk", "name": "GAMESS-UK output", "program": "GAMESS-UK", "extensions": [".out", ".log"], "marks": [{"text": "G A M E S S - U K", "anyCase": true}]},
-    {"id": "gaussian", "name": "Gaussian output", "program": "Gaussian", "extensions": [".log", ".out"], "marks": [{"text": "Entering Gaussian System", "at": "line-start"}], "grammar": {"file": "gaussian-output.grammar", "tones": {"WarningLine": "warning", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}},
+    {"id": "gaussian", "name": "Gaussian output", "program": "Gaussian", "extensions": [".log", ".out"], "marks": [{"text": "Entering Gaussian System, Link 0=", "at": "line-start"}]},
     {"id": "gaussian-fchk", "name": "Gaussian formatted checkpoint", "program": "Gaussian", "extensions": [".fchk", ".fch"], "marks": [{"text": "Number of atoms I", "at": "line-start"}]},
     {"id": "jaguar", "name": "Jaguar output", "program": "Jaguar", "extensions": [".out", ".log"], "marks": [{"text": "Jaguar version", "anyCase": true}]},
     {"id": "molcas", "name": "Molcas output", "program": "Molcas", "extensions": [".log", ".out"], "marks": [{"text": "MOLCAS", "anyCase": true}]},
     {"id": "molpro", "name": "Molpro output", "program": "Molpro", "extensions": [".out", ".log"], "marks": [{"text": "PROGRAM SYSTEM MOLPRO", "anyCase": true}]},
     {"id": "mopac", "name": "MOPAC output", "program": "MOPAC", "extensions": [".out"], "marks": [{"text": "MOPAC20", "anyCase": true}]},
     {"id": "nwchem", "name": "NWChem output", "program": "NWChem", "extensions": [".out", ".log", ".nwo"], "marks": [{"text": "Northwest Computational Chemistry Package", "anyCase": true}]},
-    {"id": "orca", "name": "ORCA output", "program": "ORCA", "extensions": [".out", ".log"], "marks": [{"text": "* O R C A *"}], "grammar": {"file": "orca-output.grammar", "tones": {"ErrorLine": "error", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}},
+    {"id": "orca", "name": "ORCA output", "program": "ORCA", "extensions": [".out", ".log"], "marks": [{"text": "* O R C A *"}]},
     {"id": "psi4", "name": "Psi4 output", "program": "Psi4", "extensions": [".out", ".dat"], "marks": [{"text": "Psi4: An Open-Source Ab Initio Electronic Structure Package", "anyCase": true}]},
     {"id": "qchem", "name": "Q-Chem output", "program": "Q-Chem", "extensions": [".out", ".log", ".qcout"], "marks": [{"text": "A Quantum Leap Into The Future Of Chemistry", "anyCase": true}]},
     {"id": "turbomole", "name": "Turbomole output", "program": "Turbomole", "extensions": [".out", ".log"], "marks": [{"text": "TURBOMOLE", "anyCase": true}]},
-    {"id": "xtb", "name": "xTB output", "program": "xTB", "extensions": [".out", ".log"], "marks": [{"text": "| x T B |"}, {"text": "* xtb version", "at": "line-start"}], "grammar": {"file": "xtb-output.grammar", "tones": {"WarningLine": "warning", "ErrorLine": "error", "Landmark": "landmark", "Success": "success", "Rule": "comment", "Word": "value"}}}
+    {"id": "xtb", "name": "xTB output", "program": "xTB", "extensions": [".out", ".log"], "marks": [{"text": "| x T B |"}, {"text": "* xtb version", "at": "line-start"}]}
   ],
   "reads": ["adf", "cfour", "dalton", "gamess", "gamess-uk", "gaussian", "gaussian-fchk", "jaguar", "molcas", "molpro", "mopac", "nwchem", "orca", "psi4", "qchem", "turbomole", "xtb"]
 }
