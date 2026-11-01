@@ -22,6 +22,8 @@ export type ChemRequests = {
   smiles_read: { args: { smiles: string }; result: SmilesRead };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
   analyse: { args: { molblock: string }; result: Analysis };
+  /** What the toolkit makes of each structure drawn, its parts as MOL blocks, as facts (`StructureFacts`) for Meno's *Check structures* to decide on. */
+  structure_facts: { args: { structures: { molblocks: string[] }[] }; result: { structures: StructureFacts[] } };
   /**
    * The stereocentres and double bonds left open, by index, and how many
    * stereoisomers they make - but for those `like` gives a configuration.
@@ -147,6 +149,17 @@ export type Conformers = {
   chosen: { atoms: Record<string, string>; bonds: Record<string, string> };
   smiles: string;
 };
+
+/**
+ * One atom of a structure drawn as the toolkit makes it: its element, atomic
+ * number and charge; the valence it gives it, and the most it could be where
+ * the toolkit knows (`most`: by the element's valences, or a charged atom's
+ * by those of the element it then has the electrons of); its unpaired
+ * electrons; and which part of the structure it is in, by number.
+ */
+export type FactAtom = { el: string; z: number; charge: number; valence: number; most?: number; radicals: number; part: number };
+/** A structure drawn as the toolkit makes it: each atom (`FactAtom`), and what it could not make sense of, in its words (`problem`) - or not read at all. */
+export type StructureFacts = { read: false } | { read: true; atoms: FactAtom[]; problem?: string };
 
 export type ChemOp = keyof ChemRequests;
 

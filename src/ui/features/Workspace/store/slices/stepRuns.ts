@@ -38,6 +38,7 @@ import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
+import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
@@ -202,6 +203,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
     if (by === "meno" && step.kind === "atom-map") return menoAtomMap(id, at);
     if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
+    if (by === "meno" && step.kind === "check-structures") return checkDrawn(id, at);
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
@@ -215,6 +217,50 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (kindInfo(step.kind).gives === "structures" && inputOf(d, id)?.holds === "structures") return runDrawnAtOnce(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
     return runAtOnce(id, plugin, at);
+  }
+
+  /**
+   * *Check structures*, Meno's: what the plugin that does the checks makes
+   * of each structure drawn (`structure_facts`, all at once), and Meno's
+   * rules on it (workflow/checkStructures) - each kept as drawn or set
+   * aside, saying why, never one changed. With no such plugin at hand
+   * without setting one up, nothing is done, saying so.
+   */
+  async function checkDrawn(id: number, at: number): Promise<void> {
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, "meno");
+    const input = inputOf(d, id)!;
+    if (input.holds !== "structures") return void fail(id, ON_DRAWN, at, key);
+    const entries = inputEntries(d.model, input);
+    if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    const by = rolePlugin("checks");
+    if (!by || !(await chemAtHand("checks"))) return void fail(id, "No plugin does the checks", at, key);
+    const own = optionsOf(kindInfo("check-structures").options ?? [], step.options);
+    const keep = new Set(CHECKS.filter((k) => own[k] === "keep"));
+    const program = by.uses?.[0]?.name ?? by.name;
+    let answers: Checked[];
+    try {
+      const chem = await chemWorker("checks");
+      const blocks = entries.map((e) => drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock));
+      const { structures } = await chem.request("structure_facts", { structures: blocks.map((molblocks) => ({ molblocks })) }, drawnMs(blocks.length));
+      if (structures.length !== entries.length) return void fail(id, `${by.name} answered for ${structures.length} of ${entries.length}`, at, key);
+      answers = structures.map((facts, i) => checked(facts, blocks[i].length, keep, program));
+    } catch (e) {
+      return void fail(id, message(e), at, key);
+    }
+    if (!stepOf(doc.getState(), id)) return;
+    // (a record without the status it came in with: what this step says of it is its own)
+    const carried = (e: DrawnEntry) => {
+      const { status: _status, ...rest } = e.record ?? {};
+      return Object.keys(rest).length ? rest : undefined;
+    };
+    const kept = entries.flatMap((e, i) => ("as" in answers[i] ? [{ ...e, record: carried(e) }] : []));
+    const aside = entries.flatMap((e, i) => {
+      const a = answers[i];
+      return "aside" in a ? [{ ...e, record: { ...carried(e), status: { aside: a.aside } } }] : [];
+    });
+    doc.edit("run", (x) => ranAs(x, id, { ok: true, holds: "structures", kept, aside, said: drawnSaid(answers) }, key, { ...w, byOf, now: at }));
   }
 
   /**

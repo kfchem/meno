@@ -4,6 +4,7 @@
  * options where Meno does it. Plugins fill kinds; they bring none of their
  * own.
  */
+import { CHECK_OPTIONS } from "./checkStructures";
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
@@ -424,16 +425,18 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
   },
-  // (structures drawn looked over as they are, each kept as drawn or set aside saying why: never one changed - a plugin's, its options its own)
+  // (structures drawn looked over as they are, each kept as drawn or set aside saying why: never one changed - Meno's, on what the plugin
+  //  that does the checks makes of each: workflow/checkStructures)
   {
     kind: "check-structures",
     name: "Check structures",
     icon: "check",
     takes: ["structures"],
     gives: "structures",
-    runs: "program",
+    runs: "entries",
     made: "Checked",
     others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
+    options: CHECK_OPTIONS,
   },
   // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside: a plugin's, its options its own)
   {

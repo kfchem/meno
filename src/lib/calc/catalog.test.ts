@@ -117,7 +117,6 @@ describe("the readers Meno knows of", () => {
     expect(rdkit.steps.map((d) => [d.kind, d.programs])).toEqual([
       ["conformers", ["python"]],
       ["minimise", ["python"]],
-      ["check-structures", []],
       ["stereoisomers", []],
       ["descriptors", []],
     ]);
