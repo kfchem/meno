@@ -14,7 +14,7 @@
 import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
-import { dependencyOrder, dependentsOf, dependsRefused, missingWhy, stoppedWhy, type DependDecl } from "../plugins/depends";
+import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
 import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
@@ -125,7 +125,10 @@ export const pluginOf = (m: Manifest): Plugin => {
  * not know, or a program it does not declare, and every one of a circle.
  * Not offered.
  */
-export const DEPENDS_REFUSED: ReadonlyMap<string, string> = dependsRefused(MANIFESTS);
+export const DEPENDS_REFUSED: ReadonlyMap<string, string> = new Map([
+  ...filesRefused(MANIFESTS, new Set(Object.values(MENO_KINDS).map((k) => k.id as string))),
+  ...dependsRefused(MANIFESTS),
+]);
 
 /** Every plugin Meno knows of, in Meno's order: those that run something, and those that bring data alone. */
 export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id)).map(pluginOf);
@@ -174,6 +177,16 @@ export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string
   const d = p.depends?.find((x) => x.plugin === id);
   if (!d || !d.programs.length) return `${p.name} asked for ${id}'s program, which it does not say it uses`;
   return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), (x) => anyPluginById(x)?.name ?? x);
+}
+
+/**
+ * The kinds of file a step of `p` of kind `kind` takes besides what comes in (its `files`), as it may be given them now: of
+ * another plugin's kinds it uses, only while that plugin is added, of a version it works with (`added`: the plugins added).
+ */
+export function stepFiles(p: PythonPlugin, kind: string, added: ReadonlySet<string>): string[] {
+  const files = p.steps.find((s) => s.kind === kind)?.files ?? [];
+  const m = manifestOf(p.id);
+  return m ? filesTaken(m, files, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id) : files;
 }
 
 /** The plugins that fill a role, in Meno's order. */

@@ -127,9 +127,12 @@ class Multiwfn(unittest.TestCase):
         self.assertEqual(files["nci.txt"].splitlines(), ["20", "1", "3", "3", "0", "0", "q"])
         self.assertEqual(job["reads"], ["nci.txt"])
         # (each kind under the extension Multiwfn tells it by)
-        for kind, ext in [("gaussian-fchk", ".fch"), ("wfn", ".wfn"), ("wfx", ".wfx")]:
+        for kind, ext in [("gaussian-fchk", ".fch"), ("wfx", ".wfx")]:
             entry = {**DIMER, "files": [{"kind": kind, "name": "x", "text": "x"}]}
             self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "wavefunction" + ext)
+        # (a kind it does not name - no plugin declares one - is no wavefunction of its: from the geometry alone)
+        entry = {**DIMER, "files": [{"kind": "wfn", "name": "x", "text": "x"}]}
+        self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "molecule.xyz")
 
     def test_works_from_the_geometry_alone_where_there_is_no_wavefunction_or_promolecular_is_asked_for(self):
         orca = {**DIMER, "files": [{"kind": "orca", "name": "x.out", "text": "x"}]}
@@ -168,10 +171,10 @@ class Multiwfn(unittest.TestCase):
         self.assertIn("why", ask(multiwfn, "collect", entries=[self.WFN], options={}, files={}, log=" Error: cannot read\n", ended="failed")["result"])
         self.assertFalse(ask(multiwfn, "collect", entries=[self.WFN], options={"from": 0.01, "to": 0.0}, files={}, log="", ended="done")["ok"])
 
-    @unittest.skipUnless(os.environ.get("MULTIWFN_BIN") and os.environ.get("MULTIWFN_WFN"), "Multiwfn is not named here")
+    @unittest.skipUnless(os.environ.get("MULTIWFN_BIN") and os.environ.get("MULTIWFN_WFX"), "Multiwfn is not named here")
     def test_multiwfn_writes_the_cubes_it_says(self):
-        text = pathlib.Path(os.environ["MULTIWFN_WFN"]).read_text(encoding="utf-8")
-        entry = {**DIMER, "files": [{"kind": "wfn", "name": "x.wfn", "text": text}]}
+        text = pathlib.Path(os.environ["MULTIWFN_WFX"]).read_text(encoding="utf-8")
+        entry = {**DIMER, "files": [{"kind": "wfx", "name": "x.wfx", "text": text}]}
         job = ask(multiwfn, "prepare", entries=[entry], options={"grid": "low"}, cores=2)["result"]["jobs"][0]
         done, files = run(job, os.environ["MULTIWFN_BIN"], {"Multiwfnpath": str(pathlib.Path(os.environ["MULTIWFN_BIN"]).parent)})
         self.assertEqual(done.returncode, 0, done.stdout[-2000:])

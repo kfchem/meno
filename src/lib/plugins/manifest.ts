@@ -606,7 +606,8 @@ function placeOk(t: unknown): t is string {
  * `rangeOf`); whether only some of its work needs it (`optional`: not set
  * up with it, and missing, only a job that needs it refused); and what of
  * it is used - a program it declares, by its name,
- * with the variable a job is told where it is in. A job uses one only where
+ * with the variable a job is told where it is in; a kind of file it
+ * declares, by its id, that a step takes (`kinds`). A job uses one only where
  * its plugin's worker says so of that job; Meno finds it as the other
  * plugin's own jobs would, puts it in the job's folder, and names it there -
  * so that a path with a space in it is never given (src-tauri jobs.rs
@@ -626,7 +627,17 @@ function dependOf(v: unknown, self: string): DependDecl | null {
   });
   if (programs.some((p) => p == null) || new Set(programs.map((p) => p!.env)).size !== programs.length) return null;
   if (d.optional !== undefined && typeof d.optional !== "boolean") return null;
-  return { plugin: d.plugin, versions: (d.versions as string).trim(), range, programs: programs as UsedProgram[], ...(d.optional ? { optional: true as const } : {}) };
+  // (kinds of file of it a step takes: each an id, once)
+  if (d.kinds !== undefined && (!Array.isArray(d.kinds) || d.kinds.length > 16 || !d.kinds.every(isId) || new Set(d.kinds).size !== d.kinds.length)) return null;
+  const kinds = (d.kinds ?? []) as string[];
+  return {
+    plugin: d.plugin,
+    versions: (d.versions as string).trim(),
+    range,
+    programs: programs as UsedProgram[],
+    ...(kinds.length ? { kinds: [...kinds] } : {}),
+    ...(d.optional ? { optional: true as const } : {}),
+  };
 }
 
 /** Places, as a manifest gives them: one, or several; null where any is not one. */

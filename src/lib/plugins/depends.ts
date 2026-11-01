@@ -7,7 +7,10 @@
  * first, never takes one away that another added uses, and stops one whose
  * plugin is missing or of another version, saying why. One used only for
  * some of its work is optional: not set up with it, and missing, only a job
- * that needs it refused. Core names none.
+ * that needs it refused. A plugin may use another's kinds of file besides -
+ * one that plugin declares, by id, that a step of it takes (`kinds`): taken
+ * only while that plugin is added, of a version it works with. Core names
+ * none.
  */
 
 /** Versions a plugin works with, of another: from one, and before another where it says one (`>=0.1.4 <0.2.0`). */
@@ -16,8 +19,8 @@ export type VersionRange = { from: string; before?: string };
 /** A program of the plugin used that a job may run: its name, as that plugin's manifest declares it, and the variable the job is told where it is in. */
 export type UsedProgram = { program: string; env: string };
 
-/** A plugin used: its id, the versions it works with - as written, and read - what of it is used, and whether only some of its work needs it (`optional`). */
-export type DependDecl = { plugin: string; versions: string; range: VersionRange; programs: UsedProgram[]; optional?: true };
+/** A plugin used: its id, the versions it works with - as written, and read - what of it is used (its programs, its kinds of file), and whether only some of its work needs it (`optional`). */
+export type DependDecl = { plugin: string; versions: string; range: VersionRange; programs: UsedProgram[]; kinds?: string[]; optional?: true };
 
 /** A version as numbers - "0.1.4", [0, 1, 4]; none, where it is not one. */
 export function versionParts(v: string): number[] | null {
@@ -63,7 +66,9 @@ export type DependingManifest = {
   name: string;
   version: string;
   depends?: readonly DependDecl[];
-  steps: readonly { programs: readonly string[] }[];
+  /** The kinds of file it declares, by id. */
+  kinds?: readonly { id: string }[];
+  steps: readonly { programs: readonly string[]; files?: readonly string[] }[];
   roles: readonly { programs: readonly string[] }[];
   installed: readonly { name: string }[];
   downloads: readonly { program?: string; provides?: string }[];
@@ -113,8 +118,10 @@ export function dependsRefused<M extends DependingManifest>(manifests: readonly 
     for (const d of m.depends ?? []) {
       const used = byId.get(d.plugin);
       const missing = d.programs.find((p) => used && !declaredPrograms(used).has(p.program));
+      const kind = (d.kinds ?? []).find((k) => used && !(used.kinds ?? []).some((x) => x.id === k));
       if (!used) refused.set(m.id, `it uses ${d.plugin}, a plugin Meno does not know`);
       else if (missing) refused.set(m.id, `it uses ${used.name}'s program ${missing.program}, which ${used.name} does not declare`);
+      else if (kind) refused.set(m.id, `it uses ${used.name}'s kind of file ${kind}, which ${used.name} does not declare`);
       if (refused.has(m.id)) break;
     }
   }
@@ -131,6 +138,29 @@ export function dependsRefused<M extends DependingManifest>(manifests: readonly 
     }
   }
   return refused;
+}
+
+/**
+ * The plugins of `manifests` refused for the files a step of theirs takes, each with why: a kind of file that is none of its
+ * own, none of Meno's (`meno`, by id), and none a plugin it uses says it uses of it (`kinds`) - a kind no one it may name
+ * declares. The others are as they are.
+ */
+export function filesRefused<M extends DependingManifest>(manifests: readonly M[], meno: ReadonlySet<string>): Map<string, string> {
+  const refused = new Map<string, string>();
+  for (const m of manifests) {
+    const may = new Set([...meno, ...(m.kinds ?? []).map((k) => k.id), ...(m.depends ?? []).flatMap((d) => d.kinds ?? [])]);
+    const stray = m.steps.flatMap((s) => s.files ?? []).find((f) => !may.has(f));
+    if (stray) refused.set(m.id, `a step of it takes files of the kind ${stray}, which neither it, Meno nor a plugin it says it uses declares`);
+  }
+  return refused;
+}
+
+/** Of the kinds of file a step of `m` takes (`files`), those it may be given now: each of its own or Meno's, and each it uses of another plugin while that plugin is there for it (`missingWhy`). */
+export function filesTaken(m: DependingManifest, files: readonly string[], added: (id: string) => string | undefined, nameOf: (id: string) => string): string[] {
+  return files.filter((f) => {
+    const of = (m.depends ?? []).find((d) => d.kinds?.includes(f));
+    return !of || !missingWhy(of, added, nameOf);
+  });
 }
 
 /** The plugins `id` needs - those it uses, not those it uses only for some of its work (`optional`) - and those they need in turn, in the order they are to be set up - each before any that uses it - without `id`; each once. None that Meno does not know. */

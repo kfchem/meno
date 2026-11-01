@@ -124,7 +124,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         )}
         {runs(p) && (p.depends ?? []).length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
-            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
           </p>
         )}
         {pluginsUsing(p.id).length > 0 && (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, declaredPrograms, dependencyOrder, dependentsOf, dependsRefused, inRange, missingWhy, rangeOf, rangeSaid, stoppedWhy, type DependDecl, type DependingManifest } from "./depends";
+import { compareVersions, declaredPrograms, dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, inRange, missingWhy, rangeOf, rangeSaid, stoppedWhy, type DependDecl, type DependingManifest } from "./depends";
 
 /** A plugin as the use of plugins sees it: made up, as no plugin Meno carries. A plugin's id ending "?" is used only for some of its work (`optional`). */
 function plugin(id: string, uses: [string, string, string[]?][] = [], programs: string[] = [id]): DependingManifest {
@@ -76,5 +76,35 @@ describe("the plugins one uses", () => {
     expect(stoppedWhy(m, () => undefined, name)).toBe("Needs TOOL, which is not added");
     expect(stoppedWhy(m, () => "2.0.0", name)).toBe("Needs TOOL from 1.0.0 to before 2.0.0; 2.0.0 is added");
     expect(stoppedWhy(plugin("alone"), () => undefined, name)).toBeNull();
+  });
+});
+
+describe("the kinds of file a plugin's step takes", () => {
+  const name = (id: string) => id.toUpperCase();
+  const tool = { ...plugin("tool"), kinds: [{ id: "tool-out" }] };
+  const uses = (kinds: string[], files: string[], optional = true): DependingManifest => ({
+    ...plugin("asks"),
+    kinds: [{ id: "asks-own" }],
+    depends: [{ plugin: "tool", versions: ">=1.0.0 <2.0.0", range: rangeOf(">=1.0.0 <2.0.0")!, programs: [], kinds, ...(optional ? { optional: true as const } : {}) }],
+    steps: [{ programs: ["asks"], files }],
+  });
+  const meno = new Set(["cube"]);
+
+  it("may be only its own, Meno's, or another plugin's it says it uses - else it is refused, saying which", () => {
+    expect(filesRefused([tool, uses(["tool-out"], ["asks-own", "cube", "tool-out"])], meno).size).toBe(0);
+    expect(Object.fromEntries(filesRefused([tool, uses([], ["tool-out"])], meno))).toEqual({ asks: "a step of it takes files of the kind tool-out, which neither it, Meno nor a plugin it says it uses declares" });
+    expect(filesRefused([tool, uses([], ["nowhere"])], meno).has("asks")).toBe(true);
+  });
+
+  it("of another plugin's, is refused where that plugin does not declare it", () => {
+    expect(Object.fromEntries(dependsRefused([tool, uses(["other-out"], [])]))).toEqual({ asks: "it uses TOOL's kind of file other-out, which TOOL does not declare" });
+  });
+
+  it("of another plugin's, are taken only while that plugin is added, of a version it works with - and, used for some of its work, stop nothing", () => {
+    const m = uses(["tool-out"], ["asks-own", "cube", "tool-out"]);
+    expect(filesTaken(m, m.steps[0].files!, () => "1.2.0", name)).toEqual(["asks-own", "cube", "tool-out"]);
+    expect(filesTaken(m, m.steps[0].files!, () => undefined, name)).toEqual(["asks-own", "cube"]);
+    expect(filesTaken(m, m.steps[0].files!, () => "2.0.0", name)).toEqual(["asks-own", "cube"]);
+    expect(stoppedWhy(m, () => undefined, name)).toBeNull();
   });
 });

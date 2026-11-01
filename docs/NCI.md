@@ -70,9 +70,12 @@ for either grid. Saved with the workspace as any surface is.
   its molecule was read from where it is of one of them - and the entry is
   its molecule's last geometry, the one an output ends on - as `{kind,
   name, text}` in `files`. Multiwfn's step names `molden`,
-  `gaussian-fchk`, `wfn` and `wfx`: the kinds the Gaussian
-  interface's, cclib's and PySCF's manifests bring, joined by their ids
-  alone, sharing no code.
+  `gaussian-fchk` and `wfx`: `molden` and `wfx` are Meno's own kinds, and
+  `gaussian-fchk` the Gaussian interface's, which Multiwfn's manifest says
+  it uses (`depends`, `kinds`: PLUGINS.md, *Depends*) - taken only while
+  that plugin is added, of a version it works with. A step names no kind
+  but its own, Meno's, or one it says it uses of another plugin; joined by
+  their ids alone, sharing no code.
 - **Surfaces in files Meno reads itself**: `collect` may answer, for each
   entry, `{"surfaces": [{"name", "rows": [{"label", "file", "iso",
   "colour": {"file", "from", "to", "label"}}]}]}` - which cube files of the
