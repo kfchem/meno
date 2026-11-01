@@ -12,10 +12,13 @@ A plugin of its own, sharing no code with any other (the maintainer,
 2026-10-06): it reads a Molden file with PySCF's own reader
 (`pyscf.tools.molden.load`) and gives its molecule - its atoms and their
 places, as PySCF reads them - and its orbitals and densities. The format
-holds no charge or multiplicity, so it says neither. Its orbitals' list
-carries each orbital's surface, and a list of densities theirs, as
-promises (Meno's `{"ask": key}`): asked for, the grid is worked out from
-the file sent again, nothing kept between. Before any surface is promised,
+holds no charge or multiplicity, so it says neither. Its orbitals, in
+Meno's general form (each its spin, energy in hartrees, occupation and
+symmetry, as PySCF reads them, all of them - Meno lists them), carry each
+orbital's surface, and a list of densities theirs, as promises (Meno's
+`{"ask": key}`): asked for, the values are worked out on the grid Meno's
+request lays out (its `grid`), from the file sent again, nothing kept
+between. Before any surface is promised,
 the orbitals are checked as PySCF reads them - orthonormal in their basis -
 so that none is drawn from a basis read wrong.
 
@@ -37,24 +40,13 @@ logging.disable(logging.CRITICAL)
 import numpy  # noqa: E402
 from pyscf.tools import molden  # noqa: E402
 
-# electronvolts in a hartree; ångströms in a bohr (CODATA 2018)
-EV_PER_HARTREE = 27.211386245988
+# ångströms in a bohr (CODATA 2018)
 ANGSTROM_PER_BOHR = 0.529177210903
 SCHEMA = 1
 # how far orbitals may stray from orthonormal, read back, and still be drawn
 ORTHONORMAL_MOST = 1e-3
-# the grid: how far past the atoms it reaches, how far apart its points are
-# at most, how many it has along a side at most, and how many are worked
-# out at once (ångströms)
-MARGIN = 4.0
-SPACING = 0.2
-SIDE_MOST = 90
+# how many grid points are worked out at once
 CHUNK = 20000
-# the value a surface is drawn at, at first: an orbital's, a density's (atomic units)
-ISO_ORBITAL = 0.05
-ISO_DENSITY = 0.002
-# an orbital's frontier names: how many below the HOMO and above the LUMO the list gives
-ORBITALS_EACH_SIDE = 10
 
 
 def is_molden(text):
@@ -93,10 +85,6 @@ class Orbitals:
         s = self.mol.intor("int1e_ovlp")
         return max(float(numpy.abs(c.T @ s @ c - numpy.eye(c.shape[1])).max()) for c in self.coeff)
 
-    def homo(self, spin):
-        occupied = numpy.nonzero(numpy.asarray(self.occ[spin]) > 0.5)[0]
-        return int(occupied[-1]) if len(occupied) else -1
-
 
 def load(m):
     """A request's Molden file, its orbitals as PySCF reads them."""
@@ -108,45 +96,35 @@ def load(m):
     return Orbitals(_load_molden_text(text))
 
 
-def orbital_name(i, homo):
-    if i <= homo:
-        return "HOMO" if i == homo else f"HOMO−{homo - i}"
-    return "LUMO" if i == homo + 1 else f"LUMO+{i - homo - 1}"
-
-
-def orbital_lists(orbitals, frame):
-    """The orbitals about the frontier, by their energies, each its surface
-    promised; and the densities', where the orbitals' occupations are given."""
-    out = []
+def orbitals_of(orbitals):
+    """The orbitals in Meno's general form, as PySCF read them: each its spin
+    - of both, where the file gives one set, else alpha then beta - its
+    energy (hartrees), its occupation and its symmetry as the file names it,
+    and its surface promised; all of them, in the file's order."""
     spins = len(orbitals.coeff)
-    labels = ["Molecular orbitals"] if spins == 1 else ["α orbitals", "β orbitals"]
+    out = []
     for s in range(spins):
-        e = [float(v) * EV_PER_HARTREE for v in orbitals.energy[s]]
-        homo = orbitals.homo(s)
-        if homo < 0:
-            continue
-        first, last = max(0, homo - ORBITALS_EACH_SIDE + 1), min(len(e) - 1, homo + ORBITALS_EACH_SIDE)
         sym = orbitals.irrep[s]
-        sym = sym if sym is not None and len(sym) == len(e) and any(str(x) not in ("", "A") for x in sym) else None
-        columns = [{"label": "Orbital"}] + ([{"label": "Symmetry"}] if sym is not None else []) + [{"label": "Energy", "unit": "eV", "digits": 3}]
-        rows = []
-        for i in range(last, first - 1, -1):
-            cells = [orbital_name(i, homo)] + ([str(sym[i])] if sym is not None else []) + [e[i]]
-            rows.append({"cells": cells, "frame": frame, "surface": {"ask": f"orbital:{s}:{i}"}})
-        out.append({
-            "id": "orbitals" if spins == 1 else f"orbitals.{'ab'[s]}",
-            "on": "list", "group": "Orbitals", "label": labels[s],
-            "columns": columns, "rows": rows,
-            "focus": max(0, last - homo - 1),
-        })
+        sym = sym if sym is not None and len(sym) == len(orbitals.energy[s]) else None
+        for i, (e, occ) in enumerate(zip(orbitals.energy[s], orbitals.occ[s])):
+            out.append({
+                "spin": "both" if spins == 1 else ("alpha", "beta")[s],
+                "energy": float(e), "occupation": float(occ),
+                **({"symmetry": str(sym[i])} if sym is not None and str(sym[i]).strip() else {}),
+                "surface": {"ask": f"orbital:{s}:{i}"},
+            })
+    return out
+
+
+def densities(orbitals, frame):
+    """The electron density's list - and the spin density's, of an open shell - each its surface promised."""
     rows = [{"cells": ["Total"], "frame": frame, "surface": {"ask": "density:total"}}]
-    if spins == 2:
+    if len(orbitals.coeff) == 2:
         rows.append({"cells": ["Spin"], "frame": frame, "surface": {"ask": "density:spin"}})
-    out.append({
+    return [{
         "id": "densities", "on": "list", "group": "Densities", "label": "Electron density",
         "columns": [{"label": "Density"}], "rows": rows,
-    })
-    return out
+    }]
 
 
 def op_read(m):
@@ -163,7 +141,8 @@ def op_read(m):
         "results": [],
     }
     if orbitals.straying() <= ORTHONORMAL_MOST:
-        result["results"] = orbital_lists(orbitals, 0)
+        result["orbitals"] = orbitals_of(orbitals)
+        result["results"] = densities(orbitals, 0)
     else:
         # (orbitals it could not read back exactly: none drawn wrong - the program's own Molden file reads right)
         result["results"] = [{
@@ -173,18 +152,27 @@ def op_read(m):
     return result
 
 
-def grid_of(mol):
-    """The grid about a molecule: its atoms' reach and `MARGIN` past it,
-    points `SPACING` apart - fewer, past `SIDE_MOST` to a side - in bohr:
-    its origin, the step along each axis, and the number of points."""
-    coords = mol.atom_coords()  # bohr
-    margin = MARGIN / ANGSTROM_PER_BOHR
+def grid_of(mol, asked):
+    """The grid Meno's request lays out (`grid`: how far past the atoms, how
+    far apart, in ångströms; how many points at most, and to a side) about
+    the molecule's atoms, in bohr: its origin, its step - alike each way,
+    farther apart only where so many points would be more than allowed - and
+    its points along each axis."""
+    try:
+        margin, spacing = float(asked["margin"]), float(asked["spacing"])
+        most, side = int(asked["most"]), int(asked["side"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("Meno's request says no grid to work the values out on") from None
+    if not (margin >= 0 and spacing > 0 and most > 7 and side > 1):
+        raise ValueError("Meno's request says no grid to work the values out on")
+    coords = mol.atom_coords() * ANGSTROM_PER_BOHR
     low = coords.min(axis=0) - margin
-    high = coords.max(axis=0) + margin
-    step = SPACING / ANGSTROM_PER_BOHR
-    counts = [int(min(SIDE_MOST, numpy.ceil((h - l) / step) + 1)) for l, h in zip(low, high)]
-    steps = [(h - l) / (n - 1) for l, h, n in zip(low, high, counts)]
-    return low, steps, counts
+    span = coords.max(axis=0) + margin - low
+    step = max(spacing, *(s / (side - 1) for s in span))
+    counts = lambda d: [int(numpy.ceil(s / d - 1e-9)) + 1 for s in span]
+    while max(counts(step)) > side or numpy.prod(counts(step)) > most:
+        step *= 1.01
+    return low / ANGSTROM_PER_BOHR, [step / ANGSTROM_PER_BOHR] * 3, counts(step)
 
 
 def values_on(mol, origin, steps, counts, f):
@@ -206,20 +194,20 @@ def op_ask(m):
     if orbitals.straying() > ORTHONORMAL_MOST:
         raise ValueError("this file's orbitals cannot be read back exactly")
     mol = orbitals.mol
-    origin, steps, counts = grid_of(mol)
+    origin, steps, counts = grid_of(mol, m.get("grid") or {})
     hit = re.fullmatch(r"orbital:(\d+):(\d+)", key)
     if hit:
         s, i = int(hit.group(1)), int(hit.group(2))
         c = orbitals.coeff[s][:, i]
         values = values_on(mol, origin, steps, counts, lambda ao: ao @ c)
-        signed, iso = True, ISO_ORBITAL
+        signed, quantity = True, "orbital"
     elif key in ("density:total", "density:spin"):
         dms = [(c * occ) @ c.T for c, occ in zip(orbitals.coeff, orbitals.occ)]
         if len(dms) == 1 and key == "density:spin":
             raise ValueError("a closed shell has no spin density")
         dm = dms[0] if len(dms) == 1 else (dms[0] + dms[1] if key == "density:total" else dms[0] - dms[1])
         values = values_on(mol, origin, steps, counts, lambda ao: numpy.einsum("pi,pi->p", ao @ dm, ao))
-        signed, iso = key == "density:spin", ISO_DENSITY
+        signed, quantity = key == "density:spin", "density"
     else:
         raise ValueError(f"no such promise: {key}")
     a = ANGSTROM_PER_BOHR
@@ -229,7 +217,7 @@ def op_ask(m):
         "counts": counts,
         "values": base64.b64encode(values.astype("<f4").tobytes()).decode("ascii"),
         **({"signed": True} if signed else {}),
-        "iso": iso,
+        "quantity": quantity,
     }
 
 

@@ -29,6 +29,10 @@ spec.loader.exec_module(worker)
 ANGSTROM_PER_BOHR = 0.529177210903
 
 
+# the grid Meno's request lays out (lib/calc/grids `GRID_ASKED`)
+GRID = {"margin": 4, "spacing": 0.2, "most": 16_000_000, "side": 400}
+
+
 def ask(op, path, **more):
     line = json.dumps({"id": 1, "op": op, "name": path.name, "text": path.read_text(encoding="utf-8"), **more})
     a = worker.answer(line)
@@ -73,30 +77,39 @@ class Molden(unittest.TestCase):
         r = ask("read", sample("cube/water.molden"))
         self.assertEqual(r["atoms"], ["O", "H", "H"])
         self.assertEqual(len(r["frames"]), 1)
-        orbitals = result(r, "orbitals")
-        names = [row["cells"][0] for row in orbitals["rows"]]
-        self.assertEqual(names[orbitals["focus"]], "LUMO")
-        self.assertTrue(all(row["surface"]["ask"].startswith("orbital:0:") for row in orbitals["rows"]))
+        # (every orbital, in Meno's general form - Meno names and lists them)
+        orbitals = r["orbitals"]
+        self.assertIsNone(result(r, "orbitals"))
+        self.assertTrue(all(o["spin"] == "both" for o in orbitals))
+        self.assertEqual([o["occupation"] for o in orbitals[:6]], [2, 2, 2, 2, 2, 0])
+        self.assertLess(orbitals[4]["energy"], orbitals[5]["energy"])
+        self.assertEqual([o["surface"]["ask"] for o in orbitals[:2]], ["orbital:0:0", "orbital:0:1"])
         self.assertEqual(result(r, "densities")["rows"][0]["surface"], {"ask": "density:total"})
 
     def test_an_orbital_asked_for_is_on_a_grid_its_whole_square_one(self):
         r = ask("read", sample("cube/water.molden"))
-        homo = next(row for row in result(r, "orbitals")["rows"] if row["cells"][0] == "HOMO")
-        g = ask("ask", sample("cube/water.molden"), key=homo["surface"]["ask"])
+        homo = r["orbitals"][4]
+        g = ask("ask", sample("cube/water.molden"), key=homo["surface"]["ask"], grid=GRID)
         self.assertTrue(g["signed"])
-        self.assertEqual(g["iso"], 0.05)
-        self.assertTrue(all(c <= worker.SIDE_MOST for c in g["counts"]))
+        self.assertEqual(g["quantity"], "orbital")
+        self.assertNotIn("iso", g)
+        # (on the grid Meno asked for: its points 0.2 Å apart, 4 Å past the atoms)
+        self.assertEqual([round(a[k], 9) for k, a in enumerate(g["axes"])], [0.2, 0.2, 0.2])
         self.assertAlmostEqual(integral(g, lambda v: v * v), 1.0, delta=0.02)
+
+    def test_says_where_meno_asks_for_no_grid(self):
+        a = worker.answer(json.dumps({"id": 2, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8")}))
+        self.assertEqual((a["ok"], a["error"]), (False, "Meno's request says no grid to work the values out on"))
 
     def test_the_density_asked_for_is_its_occupied_orbitals_squared_point_by_point(self):
         path = sample("cube/water.molden")
-        g = ask("ask", path, key="density:total")
+        g = ask("ask", path, key="density:total", grid=GRID)
         self.assertNotIn("signed", g)
-        self.assertEqual(g["iso"], 0.002)
+        self.assertEqual(g["quantity"], "density")
         density = numpy.frombuffer(base64.b64decode(g["values"]), dtype="<f4")
         # (water: five orbitals, two electrons each - on the same grid)
         squares = sum(
-            2 * numpy.frombuffer(base64.b64decode(ask("ask", path, key=f"orbital:0:{i}")["values"]), dtype="<f4").astype(float) ** 2
+            2 * numpy.frombuffer(base64.b64decode(ask("ask", path, key=f"orbital:0:{i}", grid=GRID)["values"]), dtype="<f4").astype(float) ** 2
             for i in range(5)
         )
         self.assertLess(float(numpy.abs(density - squares).max()), 1e-3 * float(density.max()))
