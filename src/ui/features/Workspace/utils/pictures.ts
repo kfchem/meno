@@ -55,6 +55,25 @@ export async function picturePng(p: Pick<PictureItem, "sha256" | "media">): Prom
   return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
 }
 
+/** A PNG's pixels as they are - no colour profile applied - laid on white where it is see-through: what a picture's reading is laid on (lib/figure/inkFit). */
+export async function pngPixels(png: Uint8Array): Promise<ImageData> {
+  const bitmap = await createImageBitmap(new Blob([png as Uint8Array<ArrayBuffer>], { type: "image/png" }), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("no canvas to draw the picture on");
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // (each pixel laid on white as far as it is see-through)
+  const d = pixels.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3] / 255;
+    for (let k = 0; k < 3; k++) d[i + k] = Math.round(d[i + k] * a + 255 * (1 - a));
+    d[i + 3] = 255;
+  }
+  return pixels;
+}
+
 /** A picture on the clipboard: a PNG - a screenshot, say - or a JPEG as a browser copies a photograph, as they are; on Windows, a bitmap (CF_DIB) made a PNG; none, where there is none. */
 export async function pictureOnClipboard(): Promise<Uint8Array | null> {
   const png = await readClipboard(["png"]).catch(() => null);

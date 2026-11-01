@@ -1637,27 +1637,45 @@ pinned by the archive's hash, and its trained model fetched by Meno:
 Each about 1.5 GB to download, about 2.2 GB kept; for macOS and Windows
 (their locks leave out torch's GPU libraries for Linux).
 
-**How a picture is read** (the plugins' workers; `lib/figure/picture.ts`):
+**How a picture is read**: the plugin's model reads it, and Meno lays
+what it read on the picture - the same for any plugin that fills the role
+(`lib/figure/inkFit.ts`, then `lib/figure/picture.ts`):
 - the picture goes to the worker as a PNG or a JPEG - a PDF's box drawn by
   PDFium at 200 dpi, a picture on the page as it is shown - and the model
-  reads its atoms and bonds;
-- **where its atoms lie**: the models give them across the picture as
-  they cropped it, or across the structure itself, each way - they learnt
-  from both - so the worker stretches and moves them, each way, until the
-  bonds lie on the picture's lines and the atoms on what is drawn;
-- **wedges**: the models say only which end of a wedge or a hash lies
-  nearer - a wedge narrow at one end is a hash narrow at the other - so
-  the worker looks at the picture for which end its ink draws narrow;
-  where it cannot tell, Meno draws it narrow at the end that can be a
-  stereocentre. An end with no other bond (a methyl, an H, a group's
+  reads its atoms and bonds. The worker gives them as the model does: each
+  atom's place, its symbol, each bond, and the model's confidence in each;
+- **where its atoms lie** (Meno): the models give them across the picture
+  as they cropped it, or across the structure itself, each way - they
+  learnt from both - so Meno stretches and moves them, each way, until the
+  bonds lie on the picture's lines and the atoms on what is drawn. A
+  pixel is drawn where its red, green and blue come to less than three
+  times 160; how far from the ink each bond's middle (from three tenths of
+  it to seven) and each atom lies is counted up to 20 pixels; the
+  structure's extent is tried over the ink's, and 4 % and 8 % in from its
+  edges, as is the model's crop with its white; then each way's scale and
+  place are stepped by 4 % of the scale, halving, for 80 rounds or until a
+  step is under 0.05 pixel;
+- **wedges** (Meno): the models say only which end of a wedge or a hash
+  lies nearer - a wedge narrow at one end is a hash narrow at the other -
+  so Meno looks at the picture for which end its ink draws narrow: how far
+  the ink (any pixel under three times 210) reaches to each side of the
+  bond, up to 15 % of its length, between a quarter and nearly half of
+  the way in from each end; a wedge under 6 pixels long, or whose wider end is under
+  1.5 pixels wide, or whose ends differ by less than a quarter, is not
+  told. Where it cannot tell, Meno draws it narrow at the end that can be
+  a stereocentre. An end with no other bond (a methyl, an H, a group's
   label) is never a stereocentre, so a wedge seen narrow there, its other
   end bonded on, is taken as one whose narrow end could not be told: a
   label, or a wide end drawn short of it, misleads what is measured;
 - **atoms**: an element as the model reads it, with its charge (its
   notation's hydrogens and stereo marks are not a label); a group's name
-  read as a typed label is; an isotope, seldom drawn, is unsure;
+  read as a typed label is; an atom the model gives no symbol, a carbon;
 - the rest as a figure's lines are: the structure in Meno's units, beside
   the PDF or the picture, selected, as one step.
+
+These numbers were set on pictures made for the purpose, and are kept as
+they were when the workers worked them out; their basis is still to be
+stated.
 
 **Tied to the picture**: an atom read from a PDF's box keeps its place on
 the page, as part A's do; one read from a picture on the page keeps its
@@ -1666,9 +1684,12 @@ as it is in the drawing, and lit from there.
 
 **Marked as unsure** (the same dashed ring as part A's, going once the
 part is changed): an atom or a bond its model reports less confidence in
-than the plugin sets for that model (its worker's `UNSURE_BELOW`), and an
-isotope. What a model reports low confidence in is marked, so that a
-mark is a hint, not a check.
+than its plugin declares for that model (the role's `unsure` in its
+manifest, with what it was set on: PLUGINS.md), an isotope - seldom drawn,
+so likely misread - and an atom the model gives no symbol. Each model's
+confidence is its own, not on one scale with another's, so each plugin
+declares its own. What a model reports low confidence in is marked, so
+that a mark is a hint, not a check.
 
 **How long**: a picture takes well under a second on a Mac's processor
 once its model is loaded, which the first picture waits for - a few

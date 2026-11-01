@@ -165,6 +165,11 @@ describe("a plugin's manifest", () => {
     ];
     const role = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions: timed }] })?.roles[0];
     expect(role?.motions).toEqual([{ id: "melt", label: "Melt", shortest: { film: 2, change: 6 }, fixed: [{ id: "engine", value: "cycles", why: "Light traced" }] }, { id: "spin", label: "Spin" }]);
+    // (the confidence below which a model's reading is unsure, and on what it was set - only where the role takes one, between 0 and 1, its basis said)
+    const unsure = (u: unknown, role = "pictures") => acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role, unsure: u }] })?.roles[0].unsure;
+    expect(unsure({ below: 0.6, basis: " Set on pictures drawn for it. " })).toEqual({ below: 0.6, basis: "Set on pictures drawn for it." });
+    for (const u of [{ below: 0.6 }, { below: 0.6, basis: " " }, { below: 1, basis: "b" }, { below: 0, basis: "b" }, { below: "0.6", basis: "b" }, 0.6]) expect(unsure(u)).toBeUndefined();
+    expect(unsure({ below: 0.6, basis: "b" }, "smiles")).toBeUndefined();
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
