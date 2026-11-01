@@ -58,6 +58,8 @@ export type PythonPlugin = ReaderBase &
     roleMotions: Partial<Record<RoleId, readonly MotionDecl[]>>;
     /** The programs it runs for a role, by role, where it runs one as a job (Render). */
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
+    /** The confidence of its model's below which what it reads for a role is unsure, by role, where it declares one (Structures read from pictures). */
+    roleUnsure: Partial<Record<RoleId, number>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
     steps: readonly StepDecl[];
     /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
@@ -112,6 +114,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
+    roleUnsure: Object.fromEntries(m.roles.filter((r) => r.unsure).map((r) => [r.role, r.unsure!.below])),
     profile: `plugin-${m.id}`,
     lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,
     worker: `${PLUGINS_ROOT}/${m.id}/${WORKER}`,

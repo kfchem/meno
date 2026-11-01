@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PictureRead } from "../roles/client";
+import type { PictureFitted } from "./inkFit";
 import { pictureFigure, scaledFigure, UNCLEAR } from "./picture";
 import { structureOf, type LabelReader } from "./structure";
 
@@ -9,7 +9,7 @@ const reads: LabelReader = (label) => (/^(C|N|O|H)$/.test(label) ? { el: label }
 // Menthol's ring carbon C1 (where its isopropyl is) and the isopropyl's CH,
 // 30 pixels a bond, y down: the ring's three other carbons round C1, the two
 // methyls round the CH.
-const atoms: PictureRead["atoms"] = [
+const atoms: PictureFitted["atoms"] = [
   { x: 100, y: 100, el: "C" }, // 0: C1, in the ring
   { x: 130, y: 100, el: "C" }, // 1: the isopropyl's CH
   { x: 85, y: 74, el: "C" }, // 2
@@ -69,7 +69,7 @@ describe("a picture read by a plugin", () => {
     expect(r.atoms.map((a) => a.x)).toEqual([0, 30]);
     expect(r.bonds).toEqual([{ a: 0, b: 1, order: 1 }]);
     expect(pictureFigure({ atoms: [{ x: 0, y: 0 }], bonds: [] })).toBeNull();
-    expect(pictureFigure({} as PictureRead)).toBeNull();
+    expect(pictureFigure({} as PictureFitted)).toBeNull();
   });
 
   it("says what the plugin was unsure of in words, never as a number", () => {

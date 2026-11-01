@@ -166,7 +166,17 @@ export type RoleDecl = {
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
   motions?: MotionDecl[];
+  /**
+   * Where the role takes one (Structures read from pictures): the confidence
+   * its model reports, from 0 to 1, below which a part of its reading is
+   * said to be unsure, and on what that was set (`basis`, in words); none
+   * declared, nothing said unsure for its confidence.
+   */
+  unsure?: UnsureDecl;
 };
+
+/** A model's confidence below which what it reads is unsure, and on what that was set. */
+export type UnsureDecl = { below: number; basis: string };
 
 /**
  * A kind of step a plugin fills (docs/WORKFLOWS.md, *What changes in the
@@ -518,6 +528,14 @@ function fixedOf(v: unknown): FixedChoice[] {
   return out;
 }
 
+/** A role's `unsure` as declared: a confidence between 0 and 1, and its basis said; otherwise none. */
+function unsureOf(v: unknown): UnsureDecl | undefined {
+  const u = v as { below?: unknown; basis?: unknown } | null | undefined;
+  const below = u?.below;
+  const basis = typeof u?.basis === "string" ? u.basis.trim() : "";
+  return typeof below === "number" && Number.isFinite(below) && below > 0 && below < 1 && basis && basis.length <= 300 ? { below, basis } : undefined;
+}
+
 /** The motions a render role declares, each checked: an id (none of Meno's own), a label, a description - what is not understood is left out. */
 function acceptMotions(v: unknown): MotionDecl[] {
   const seen = new Set<string>();
@@ -816,12 +834,14 @@ export function acceptManifest(raw: unknown): Manifest | null {
           // (options only for a role that takes them)
           const looks = acceptLooks(r.looks);
           const motions = acceptMotions(r.motions);
+          const unsure = "unsure" in ROLES[r.role] ? unsureOf(r.unsure) : undefined;
           return {
             role: r.role,
             programs,
             options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
             ...(looks.length ? { looks } : {}),
             ...(motions.length ? { motions } : {}),
+            ...(unsure ? { unsure } : {}),
           };
         },
         (r) => r.role,

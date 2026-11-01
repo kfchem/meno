@@ -69,6 +69,9 @@ describe("the readers Meno knows of", () => {
     for (const id of ["molnextr", "molscribe"]) {
       const p = PLUGINS.find((q) => q.id === id)!;
       expect(p).toMatchObject({ roles: ["pictures"], systems: ["macos", "windows"], lock: `resources/plugins/${id}/requirements.lock` });
+      // (the confidence its model's reading is unsure below, as it declares it)
+      expect(p.roleUnsure.pictures).toBeGreaterThan(0);
+      expect(p.roleUnsure.pictures).toBeLessThan(1);
       // (its trained model downloaded besides, from where its makers keep it, pinned to a revision, checked by its hash)
       expect(p.downloads).toHaveLength(1);
       expect(p.downloads[0].url).toMatch(/^https:\/\/huggingface\.co\/.+\/resolve\/[0-9a-f]{40}\//);
