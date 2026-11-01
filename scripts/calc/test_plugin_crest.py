@@ -134,9 +134,12 @@ class Prepare(unittest.TestCase):
         self.assertNotEqual(other["bonds"], METHANOL["bonds"])
         jobs = ask("prepare", step="optimise", entries=[METHANOL, other, METHANOL], options={"method": "gfn2"})["jobs"]
         self.assertEqual([j["entries"] for j in jobs], [[0, 2], [1]])
-        # (the bonds of one molecule, written in another order or either way round, are the same molecule's)
+        # (the bonds of one molecule, written in another order or either way round, or with other orders - a ring drawn
+        #  as another Kekule structure - are the same molecule's)
         turned = {**METHANOL, "bonds": [{**b, "a1": b["a2"], "a2": b["a1"]} for b in reversed(METHANOL["bonds"])]}
-        self.assertEqual([j["entries"] for j in ask("prepare", step="optimise", entries=[METHANOL, turned], options={"method": "gfn2"})["jobs"]], [[0, 1]])
+        kekule = {**METHANOL, "bonds": [{**b, "order": 2} if i == 0 else b for i, b in enumerate(METHANOL["bonds"])]}
+        jobs = ask("prepare", step="optimise", entries=[METHANOL, turned, kekule], options={"method": "gfn2"})["jobs"]
+        self.assertEqual([j["entries"] for j in jobs], [[0, 1, 2]])
 
     def test_any_energy_window_above_nought(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))

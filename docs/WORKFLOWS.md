@@ -2087,8 +2087,9 @@ Then, of the leftovers the maintainer chose:
   is comes where a program's documentation says how it says it.
 - **CREST optimises a set of conformers in one run** (*Optimise*, `crest
   --mdopt`, as its documentation's "Ensemble Optimization" has it): the
-  entries of each molecule - the same atoms in the same order, bonded the
-  same way, of the same charge and spin, as one ensemble file holds one
+  entries of each molecule - the same atoms in the same order, the same
+  atoms bonded to each other (whatever the bonds' orders: a ring drawn as
+  another Kekule structure is one molecule), of the same charge and spin, as one ensemble file holds one
   molecule's ("Coordinate Files"; bonded the same way since 2026-11-02:
   two of another constitution whose atoms came in the same order went into
   one before) - written into one ensemble file, optimised, and

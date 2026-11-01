@@ -174,8 +174,9 @@ def optimise_args(options, entry, cores):
 def molecule_key(entry):
     """What an ensemble's structures must share: their atoms, in the same order, bonded the same way, and their charge
     and spin - one molecule's, as an ensemble file holds ("Coordinate Files"); two of another constitution, though
-    their atoms come in the same order, each in an ensemble of its own."""
-    bonds = tuple(sorted((min(b["a1"], b["a2"]), max(b["a1"], b["a2"]), b.get("order", 1)) for b in entry.get("bonds") or []))
+    their atoms come in the same order, each in an ensemble of its own. Which atoms are bonded, not the bonds' orders:
+    one molecule's ring drawn as two Kekule structures is one molecule."""
+    bonds = tuple(sorted((min(b["a1"], b["a2"]), max(b["a1"], b["a2"])) for b in entry.get("bonds") or []))
     return (tuple(elements_of(entry)), bonds, entry.get("charge", 0), entry.get("multiplicity", 1))
 
 
