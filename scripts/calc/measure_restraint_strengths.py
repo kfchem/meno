@@ -3,7 +3,7 @@ restraints (src/lib/steps/restraints.ts `DISTANCE_STRENGTH`, `TORSION_STEP`;
 docs/STRUCTURE-STEPS.md), made with the RDKit plugin's own restrained
 minimisation and conformer search, on synthetic molecules only.
 
-    python measure_restraint_strengths.py [out.json]
+    python measure_restraint_strengths.py [out.json] [--xtb PATH]
 
 Run by the RDKit plugin's Python (its environment has RDKit), from the
 repository's root or anywhere: the worker is found beside this script.
@@ -17,13 +17,20 @@ B: a Z isomer's trans torsions held towards its E isomer, case F's rounds
    180°, the step more each round while it is still not, every round from
    the original start, at most ten: the rounds it took, and how far the
    held torsions end from 180°.
+C: A again, minimised by xtb (given its path, --xtb): each pair from its
+   first conformer at 500, optimised at each strength under GFN2-xTB and
+   GFN-FF with xtb's own distance restraint ($constrain), the record's
+   strength as xtb takes it - its energy is k d^2, in hartree per bohr^2,
+   where the record's is 1/2 k d^2 in kcal/mol/A^2: the largest miss, A.
 """
 
 import importlib.util
 import json
 import math
 import os
+import subprocess
 import sys
+import tempfile
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -116,8 +123,55 @@ def measure_b():
     return out
 
 
+# --- C: A again, minimised by xtb ------------------------------------------------------------------------------
+HARTREE_KCAL = 627.509474
+BOHR_A = 0.529177210903
+XTB_STRENGTHS = [10, 100, 239, 500]
+
+
+def xtb_constant(k):
+    """A record's strength (1/2 k d^2, kcal/mol/A^2) as xtb's force constant (k d^2, hartree/bohr^2)."""
+    return k / 2 / HARTREE_KCAL * BOHR_A**2
+
+
+def measure_c(xtb):
+    print("\nC: A again, minimised by xtb from each pair's first conformer at 500: the largest miss (A)")
+    print("   strength (kcal/mol/A2):", XTB_STRENGTHS)
+    out = {}
+    env = {**os.environ, "OMP_NUM_THREADS": "1", "OMP_STACKSIZE": "1G"}
+    for method, flags in (("GFN2-xTB", ["--gfn", "2"]), ("GFN-FF", ["--gfnff"])):
+        out[method] = {}
+        for name, base, acid in PAIRS:
+            mol = Chem.AddHs(Chem.MolFromSmiles(f"{base}.{acid}"))
+            frags = Chem.GetMolFrags(mol)
+            donor = next(i for i in frags[0] if mol.GetAtomWithIdx(i).GetSymbol() in ("N", "O", "P"))
+            acceptor = next(i for i in frags[1] if mol.GetAtomWithIdx(i).GetSymbol() in ("B", "Al"))
+            value = 0.9 * (VDW[mol.GetAtomWithIdx(donor).GetSymbol()] + VDW[mol.GetAtomWithIdx(acceptor).GetSymbol()])
+            rows = [{"kind": "distance", "atoms": [donor, acceptor], "value": value, "strength": 500.0}]
+            frame = w.conformers(Chem.Mol(mol), count=1, rows=rows)["frames"][0]
+            xyz = f"{mol.GetNumAtoms()}\n\n" + "".join(f"{a.GetSymbol()} {frame[3 * i]:.6f} {frame[3 * i + 1]:.6f} {frame[3 * i + 2]:.6f}\n" for i, a in enumerate(mol.GetAtoms()))
+            row = []
+            for k in XTB_STRENGTHS:
+                with tempfile.TemporaryDirectory() as d:
+                    with open(os.path.join(d, "start.xyz"), "w") as f:
+                        f.write(xyz)
+                    with open(os.path.join(d, "held.inp"), "w") as f:
+                        f.write(f"$constrain\n force constant={xtb_constant(k):.8f}\n distance: {donor + 1}, {acceptor + 1}, {value:.6f}\n$end\n")
+                    subprocess.run([xtb, "start.xyz", "--opt", *flags, "--input", "held.inp"], cwd=d, env=env, capture_output=True, check=True)
+                    with open(os.path.join(d, "xtbopt.xyz")) as f:
+                        lines = f.read().splitlines()[2:]
+                    at = lambda i: [float(v) for v in lines[i].split()[1:4]]
+                    row.append(round(abs(math.dist(at(donor), at(acceptor)) - value), 3))
+            out[method][name] = row
+            print(f"   {method:8s} {name:16s} at {value:.2f} A: {row}")
+    return out
+
+
 if __name__ == "__main__":
-    found = {"A": measure_a(), "B": measure_b()}
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], "w", encoding="utf-8") as f:
+    args = sys.argv[1:]
+    xtb = args[args.index("--xtb") + 1] if "--xtb" in args else None
+    rest = [a for i, a in enumerate(args) if a != "--xtb" and (i == 0 or args[i - 1] != "--xtb")]
+    found = {"A": measure_a(), "B": measure_b(), **({"C": measure_c(xtb)} if xtb else {})}
+    if rest:
+        with open(rest[0], "w", encoding="utf-8") as f:
             json.dump(found, f, indent=1)

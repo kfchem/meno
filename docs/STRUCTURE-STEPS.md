@@ -313,8 +313,17 @@ strength. Restraints are a label: they name no geometry, and ride along.
   H2O…BF3, Et2O…BF3, pyridine…BH3, Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten
   conformers each, the RDKit plugin's search), the distance held came
   within 0.18 Å of its value at 10, 0.04 at 100, 0.02 at 239 and 0.01 at
-  500: the default holds within 0.01 Å
-  (`scripts/calc/measure_restraint_strengths.py` measures it again).
+  500: the default holds within 0.01 Å. Minimised by xtb 6.7.1 instead
+  (each pair from its first conformer at 500; xtb's own distance
+  restraint, whose energy is k d² in hartree per bohr², so its force
+  constant is the record's k halved and converted: k / 2 / 627.509474 ×
+  0.529177², 0.1116 for 500),
+  the largest miss at 10, 100, 239 and 500 was 0.39, 0.03, 0.013 and
+  0.007 Å under GFN-FF, and 1.43, 0.096, 0.038 and 0.018 Å under GFN2-xTB -
+  at 10 most of the pairs fall into their dative bond, and at 500 all but
+  Me2O…AlCl3 hold within 0.009 Å: the default holds within 0.01 Å under
+  GFN-FF and within 0.02 Å under GFN2-xTB
+  (`scripts/calc/measure_restraint_strengths.py` measures each again).
   Case F's workflow sets 0.9:
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
