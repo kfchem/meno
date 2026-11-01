@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
-import { labelWidth } from "./quickAddLabel";
+import { LABEL_MOST, labelWidth } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
 import { registerKinds } from "../../../lib/io/kinds";
 import { MANIFESTS } from "../../../lib/plugins/known";
@@ -106,5 +106,7 @@ describe("the names of who does each row of steps", () => {
     const long = labelWidth(["xTB", "A plugin with a long name"]);
     expect(long).toBeGreaterThan(short);
     expect(labelWidth(["A plugin with a long name", "xTB"])).toBe(long);
+    // (but never wider than the most: a longer name is cut, said whole on hover)
+    expect(labelWidth(["A plugin whose name runs on and on, far past what a row can hold"])).toBe(LABEL_MOST);
   });
 });

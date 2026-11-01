@@ -369,7 +369,7 @@ export default function QuickAdd({
             {steps.length ? (
               steps.map((g) => (
                 <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
+                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }} title={g.name}>
                     {g.name}
                   </span>
                   {g.steps.map((k) => (
