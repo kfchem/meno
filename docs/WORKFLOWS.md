@@ -417,9 +417,11 @@ are a *Frequencies* step's, wired after it.
   until the ends' level can say them.
 - **One molecule for each pair.** Its frames are the path, in the order its
   program gives them: its images, and the highest point it refined where it
-  puts it (ORCA's PATH SUMMARY order). Each frame has its energy and says
-  what it is: "NEB image 3 of 10", or "highest point refined". Its entry
-  frame - what a set, and the next step, takes of it - is the point refined.
+  puts it (ORCA's: its PATH SUMMARY order). Each frame has its energy and
+  says what it is: in its plugin's words ("NEB image 3 of 10"), or, the
+  point refined, in Meno's ("highest point refined": PLUGINS.md, *Path
+  search*). Its entry frame - what a set, and the next step, takes of it -
+  is the point refined.
 - **One frame of it.** The point refined, taken alone, carries the run's
   calculation, and of what the frames say, its own word alone ("highest
   point refined"). So a molecule made of it after - by *Duplicates* onwards,

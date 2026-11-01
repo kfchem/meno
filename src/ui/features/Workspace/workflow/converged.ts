@@ -12,7 +12,7 @@
  */
 import { geometryKey } from "../../../../lib/entry";
 
-/** How a run ended converged, as the property says it: the last is *Path search*'s words for its point refined (entries `REFINED_SAID`). */
+/** How a run ended converged, as the property says it: the last is a path search's words for its point refined (lib/calc/paths `REFINED_SAID`). */
 export const CONVERGED_HOW = ["optimisation", "saddle point optimisation", "highest point refined"] as const;
 export type ConvergedHow = (typeof CONVERGED_HOW)[number];
 
