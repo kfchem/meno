@@ -18,9 +18,16 @@ into the folder given as this script's one argument.
 REINVENT 4 samples as many SMILES as asked from the prior, on the CPU with
 the seed set, so that the same asking gives the same SMILES (its `-s`,
 README *Running*; measured here, the same seed gave the same SMILES twice
-over). What it gives is handed on as it is (docs/PLUGINS.md, *Generate*):
-each SMILES as sampled - never canonicalised, its stereo as written or
-left out, nothing made of it in 3D, nothing refused - with the model's own
+over). The seed is a whole number from 1: REINVENT 4 sets the seed it is
+given where it is not 0 (reinvent/Reinvent.py, at the release pinned:
+`args.seed or` the configuration's), so a seed of 0 would be a run that
+does not sample the same way again. What it gives is handed on as it is
+(docs/PLUGINS.md, *Generate*): each SMILES as REINVENT 4 writes it, its
+stereo as written or left out, nothing made of it in 3D, nothing refused -
+every one it samples, those it marks a duplicate or could not read among
+them (`unique_molecules = false`: REINVENT 4's own filter left off, so
+that which are the same, and which are kept, are Meno's own steps' to
+say, *Duplicates* and *Filter*) - with the model's own
 values beside it, named: its NLL under the prior (the negative natural
 logarithm of the probability the prior gave each token of it, summed:
 reinvent/models/reinvent/models/model.py, `sample`, at the release pinned)
@@ -69,8 +76,8 @@ def sampled(count, seed, folder):
             f"model_file = {json.dumps(os.path.join(FILES or '', PRIOR))}\n"
             f"output_file = {json.dumps(out)}\n"
             f"num_smiles = {int(count)}\n"
+            # (every one sampled, duplicates and those it could not read among them: which are kept is Meno's to say)
             "unique_molecules = false\n"
-            "randomize_smiles = false\n"
         )
     reinvent = os.path.join(os.path.dirname(sys.executable), "reinvent")
     done = subprocess.run(
@@ -87,13 +94,17 @@ def sampled(count, seed, folder):
         return [(row["SMILES"], int(row["SMILES_state"]) if row.get("SMILES_state", "").strip().lstrip("-").isdigit() else None, float(row["NLL"])) for row in csv.DictReader(f)]
 
 
+#: Each number option as the step's card names it (the manifest's labels).
+LABELS = {"count": "How many", "seed": "Random seed"}
+
+
 def number(options, key, default, low, high):
-    """An option as a whole number, kept to what it may be."""
-    try:
-        v = int(options.get(key, default))
-    except (TypeError, ValueError):
-        v = default
-    return min(max(v, low), high)
+    """An option as a whole number, as it was set - or its default, where it was not. Refused, naming it and what it
+    may be, where it is not a whole number from `low` to `high`: never run with another than the one set."""
+    v = options.get(key, default)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != int(v) or not low <= v <= high:
+        raise ValueError(f"{LABELS[key]} is {v}: it takes a whole number from {low} to {high}")
+    return int(v)
 
 
 #: REINVENT 4's SMILES_state, as its sampler names each (reinvent/models/model_factory/sample_batch.py `SmilesState`).
@@ -115,7 +126,7 @@ def op_run(m):
     if not FILES or not os.path.exists(os.path.join(FILES, PRIOR)):
         raise ValueError("REINVENT 4's prior is not here: add the plugin again in Settings, Plugins")
     o = m.get("options") or {}
-    count, seed = number(o, "count", 20, 1, MOST), number(o, "seed", SEED, 0, 2**31 - 1)
+    count, seed = number(o, "count", 20, 1, MOST), number(o, "seed", SEED, 1, 2**31 - 1)
     with tempfile.TemporaryDirectory(prefix="meno-reinvent-") as folder:
         rows = sampled(count, seed, folder)
     # (an NLL that is no number - NaN, infinite - written as none, which JSON can hold, and counted)
