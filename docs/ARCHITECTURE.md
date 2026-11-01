@@ -936,7 +936,7 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   lists them, `lib/calc/orbitals.ts`), each promising its surface, and a
   list of the densities, each promising its own (`orbital:<spin>:<index>`,
   `density:total`, `density:spin`); asked for, it works the values out
-  from the file sent again on the grid Meno's request lays out (`grid`,
+  from the file sent again on the grid Meno's request gives (`grid`,
   `lib/calc/grids.ts`), the basis functions' values a chunk of points at
   a time, and says whether each grid is an orbital or a density - the
   value it is drawn at first is Meno's. Its tests

@@ -29,8 +29,8 @@ spec.loader.exec_module(worker)
 ANGSTROM_PER_BOHR = 0.529177210903
 
 
-# the grid Meno's request lays out (lib/calc/grids `GRID_ASKED`)
-GRID = {"margin": 4, "spacing": 0.2, "most": 16_000_000, "side": 400}
+# a grid as Meno's request gives one (lib/calc/grids `gridAbout`): about water's atoms, 4 Å past them, 0.2 Å apart (ångströms)
+GRID = {"origin": [-4.0, -4.76, -3.88], "axes": [[0.2, 0, 0], [0, 0.2, 0], [0, 0, 0.2]], "counts": [41, 49, 44]}
 
 
 def ask(op, path, **more):
@@ -93,13 +93,18 @@ class Molden(unittest.TestCase):
         self.assertTrue(g["signed"])
         self.assertEqual(g["quantity"], "orbital")
         self.assertNotIn("iso", g)
-        # (on the grid Meno asked for: its points 0.2 Å apart, 4 Å past the atoms)
+        # (on the grid Meno gave, as it gave it)
+        self.assertEqual(g["counts"], GRID["counts"])
+        self.assertEqual([round(v, 9) for v in g["origin"]], GRID["origin"])
         self.assertEqual([round(a[k], 9) for k, a in enumerate(g["axes"])], [0.2, 0.2, 0.2])
         self.assertAlmostEqual(integral(g, lambda v: v * v), 1.0, delta=0.02)
 
-    def test_says_where_meno_asks_for_no_grid(self):
+    def test_says_where_meno_gives_no_grid_it_can_work_on(self):
         a = worker.answer(json.dumps({"id": 2, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8")}))
-        self.assertEqual((a["ok"], a["error"]), (False, "Meno's request says no grid to work the values out on"))
+        self.assertEqual((a["ok"], a["error"]), (False, "Meno's request gives no grid to work the values out on"))
+        skew = {**GRID, "axes": [[0.2, 0.1, 0], [0, 0.2, 0], [0, 0, 0.2]]}
+        b = worker.answer(json.dumps({"id": 3, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8"), "grid": skew}))
+        self.assertEqual((b["ok"], b["error"]), (False, "Meno's request gives a grid whose axes do not run along x, y and z"))
 
     def test_the_density_asked_for_is_its_occupied_orbitals_squared_point_by_point(self):
         path = sample("cube/water.molden")

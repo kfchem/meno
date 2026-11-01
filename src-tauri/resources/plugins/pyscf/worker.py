@@ -17,7 +17,7 @@ Meno's general form (each its spin, energy in hartrees, occupation and
 symmetry, as PySCF reads them, all of them - Meno lists them), carry each
 orbital's surface, and a list of densities theirs, as promises (Meno's
 `{"ask": key}`): asked for, the values are worked out on the grid Meno's
-request lays out (its `grid`), from the file sent again, nothing kept
+request gives (its `grid`), from the file sent again, nothing kept
 between. Before any surface is promised,
 the orbitals are checked as PySCF reads them - orthonormal in their basis -
 so that none is drawn from a basis read wrong.
@@ -152,27 +152,22 @@ def op_read(m):
     return result
 
 
-def grid_of(mol, asked):
-    """The grid Meno's request lays out (`grid`: how far past the atoms, how
-    far apart, in ångströms; how many points at most, and to a side) about
-    the molecule's atoms, in bohr: its origin, its step - alike each way,
-    farther apart only where so many points would be more than allowed - and
-    its points along each axis."""
+def grid_given(asked):
+    """The grid Meno's request gives (`grid`: its origin, its axes - each the
+    step along it - and its points along each, in ångströms), in bohr: its
+    origin, the step along each axis, and its points. Its axes run along x,
+    y and z, as Meno lays a grid."""
     try:
-        margin, spacing = float(asked["margin"]), float(asked["spacing"])
-        most, side = int(asked["most"]), int(asked["side"])
+        origin = [float(v) for v in asked["origin"]]
+        axes = [[float(v) for v in a] for a in asked["axes"]]
+        counts = [int(v) for v in asked["counts"]]
     except (KeyError, TypeError, ValueError):
-        raise ValueError("Meno's request says no grid to work the values out on") from None
-    if not (margin >= 0 and spacing > 0 and most > 7 and side > 1):
-        raise ValueError("Meno's request says no grid to work the values out on")
-    coords = mol.atom_coords() * ANGSTROM_PER_BOHR
-    low = coords.min(axis=0) - margin
-    span = coords.max(axis=0) + margin - low
-    step = max(spacing, *(s / (side - 1) for s in span))
-    counts = lambda d: [int(numpy.ceil(s / d - 1e-9)) + 1 for s in span]
-    while max(counts(step)) > side or numpy.prod(counts(step)) > most:
-        step *= 1.01
-    return low / ANGSTROM_PER_BOHR, [step / ANGSTROM_PER_BOHR] * 3, counts(step)
+        raise ValueError("Meno's request gives no grid to work the values out on") from None
+    if len(origin) != 3 or len(axes) != 3 or any(len(a) != 3 for a in axes) or len(counts) != 3:
+        raise ValueError("Meno's request gives no grid to work the values out on")
+    if any(axes[k][j] != 0 for k in range(3) for j in range(3) if j != k) or any(axes[k][k] <= 0 for k in range(3)) or any(c < 2 for c in counts):
+        raise ValueError("Meno's request gives a grid whose axes do not run along x, y and z")
+    return [v / ANGSTROM_PER_BOHR for v in origin], [axes[k][k] / ANGSTROM_PER_BOHR for k in range(3)], counts
 
 
 def values_on(mol, origin, steps, counts, f):
@@ -194,7 +189,7 @@ def op_ask(m):
     if orbitals.straying() > ORTHONORMAL_MOST:
         raise ValueError("this file's orbitals cannot be read back exactly")
     mol = orbitals.mol
-    origin, steps, counts = grid_of(mol, m.get("grid") or {})
+    origin, steps, counts = grid_given(m.get("grid") or {})
     hit = re.fullmatch(r"orbital:(\d+):(\d+)", key)
     if hit:
         s, i = int(hit.group(1)), int(hit.group(2))
