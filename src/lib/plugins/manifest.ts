@@ -26,7 +26,7 @@
  * The plugins Meno carries for now (./known) are each read here as one
  * fetched would be.
  */
-import { rangeOf, type DependDecl, type UsedProgram } from "./depends";
+import { rangeOf, type DependDecl, type InterfaceDecl, type UsedInterface, type UsedProgram } from "./depends";
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
@@ -156,6 +156,28 @@ export type FixedChoice = { id: string; value: string; why: string };
  * change's (`change`) - Meno counts the changes, one fewer than the molecules, or as many as a Loop that comes back to the first.
  */
 export type Shortest = { film?: number; loop?: number; change?: number };
+
+/**
+ * What a preset plugin brings another plugin through an interface that one declares (docs/PLUGINS.md, *Presets*): looks,
+ * studios and motions, each declared as a render role declares its own, with the file the plugin that runs them runs for it -
+ * a path inside the preset plugin's folder - and the files those share (`files`); and its options, each shown only while one
+ * of its looks, studios or motions is chosen, and `when` it says. Meno copies every file named here, unread, into the job of
+ * the plugin it is for (`preset/<id>/`), and never runs one.
+ */
+export type PresetLook = LookDecl & { file: string };
+export type PresetStudio = { id: string; label: string; description?: string; file: string };
+export type PresetMotion = MotionDecl & { file: string };
+export type PresetsDecl = {
+  /** The interface it brings them through: one its `depends` uses, of the plugin that interface is that one's. */
+  interface: string;
+  /** That plugin, by its id: the one its `depends` uses the interface of. */
+  for: string;
+  looks: PresetLook[];
+  studios: PresetStudio[];
+  motions: PresetMotion[];
+  files: string[];
+  options: Option[];
+};
 
 /** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
 export type RoleDecl = {
@@ -323,6 +345,10 @@ export type Manifest = {
   downloads: DownloadDecl[];
   /** The other plugins it uses, where it declares any: each by id, with the versions it works with and what of it is used (./depends `DependDecl`). */
   depends?: DependDecl[];
+  /** The interfaces it declares, for other plugins to use it through, each by id with its version (docs/PLUGINS.md, *Interfaces*). */
+  interfaces?: InterfaceDecl[];
+  /** What it brings another plugin through that one's interface, where it brings any (`PresetsDecl`). */
+  presets?: PresetsDecl;
 };
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -625,8 +651,90 @@ function dependOf(v: unknown, self: string): DependDecl | null {
     return { program: p.program, env: p.env };
   });
   if (programs.some((p) => p == null) || new Set(programs.map((p) => p!.env)).size !== programs.length) return null;
+  if (d.interfaces !== undefined && (!Array.isArray(d.interfaces) || d.interfaces.length > 8)) return null;
+  const interfaces = list(d.interfaces).map((v): UsedInterface | null => {
+    const i = v as Record<string, unknown> | null;
+    const r = rangeOf(i?.versions);
+    return isId(i?.id) && r ? { id: i.id, versions: (i.versions as string).trim(), range: r } : null;
+  });
+  if (interfaces.some((i) => i == null) || new Set(interfaces.map((i) => i!.id)).size !== interfaces.length) return null;
   if (d.optional !== undefined && typeof d.optional !== "boolean") return null;
-  return { plugin: d.plugin, versions: (d.versions as string).trim(), range, programs: programs as UsedProgram[], ...(d.optional ? { optional: true as const } : {}) };
+  return {
+    plugin: d.plugin,
+    versions: (d.versions as string).trim(),
+    range,
+    programs: programs as UsedProgram[],
+    ...(interfaces.length ? { interfaces: interfaces as UsedInterface[] } : {}),
+    ...(d.optional ? { optional: true as const } : {}),
+  };
+}
+
+const SEMVER = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/;
+
+/** The interfaces a plugin declares, each an id and a version of three numbers, each once; null where any is not so. */
+function interfacesOf(v: unknown): InterfaceDecl[] | null {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > 8) return null;
+  const out: InterfaceDecl[] = [];
+  for (const raw of v) {
+    const i = raw as Record<string, unknown> | null;
+    if (!isId(i?.id) || typeof i.version !== "string" || !SEMVER.test(i.version) || out.some((o) => o.id === i.id)) return null;
+    out.push({ id: i.id, version: i.version });
+  }
+  return out;
+}
+
+/** A file a preset names: a path inside its plugin's folder - a few names, each plain, never `.` or `..`, nor the worker or manifest Meno reads. The backend's rule (`preset_file_ok`). */
+const PRESET_PART = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+function presetFileOk(f: unknown): f is string {
+  if (typeof f !== "string" || f.length > 200) return false;
+  const parts = f.split("/");
+  return parts.length <= 4 && parts.every((p) => PRESET_PART.test(p) && p !== "." && p !== "..") && f !== "manifest.json" && f !== WORKER;
+}
+
+/** The most files a preset plugin may hand over, all told. */
+const PRESET_FILES_MOST = 64;
+/** What a studio may not be called: the card's plain scene, "As asked". */
+export const PLAIN_STUDIO = "asked";
+
+/**
+ * What a plugin brings another through that one's interface (`PresetsDecl`), checked: through an interface one of its
+ * `depends` uses; its looks, studios and motions each as a render role's are, each with a file, and its own files - at most
+ * 64 all told, each a path inside its folder. None, where it brings none; null, where what it says is not as it must be.
+ */
+function presetsOf(v: unknown, depends: readonly DependDecl[]): PresetsDecl | null | undefined {
+  if (v === undefined) return undefined;
+  const r = v as Record<string, unknown> | null;
+  if (!r || typeof r !== "object" || Array.isArray(r) || !isId(r.interface)) return null;
+  const through = depends.filter((d) => d.interfaces?.some((i) => i.id === r.interface));
+  if (through.length !== 1) return null;
+  // (each item as a render role declares its own, and its file: one without a file, or a file not as it must be, makes none)
+  const withFile = <T extends { id: string }>(raw: unknown, accepted: T[]): (T & { file: string })[] | null => {
+    const given = list(raw) as (Record<string, unknown> | null)[];
+    if (raw !== undefined && !Array.isArray(raw)) return null;
+    if (accepted.length !== given.length) return null;
+    const out = accepted.map((a) => ({ ...a, file: given.find((g) => g?.id === a.id)?.file }));
+    return out.every((o) => presetFileOk(o.file)) ? (out as (T & { file: string })[]) : null;
+  };
+  const looks = withFile(r.looks, acceptLooks(r.looks));
+  const motions = withFile(r.motions, acceptMotions(r.motions));
+  const studios = withFile(
+    r.studios,
+    list(r.studios).flatMap((raw): { id: string; label: string; description?: string }[] => {
+      const x = raw as Record<string, unknown> | null;
+      const label = typeof x?.label === "string" ? x.label.trim().slice(0, 80) : "";
+      if (typeof x?.id !== "string" || !LOOK_ID.test(x.id) || x.id === PLAIN_STUDIO || !label) return [];
+      const description = typeof x.description === "string" && x.description.trim() ? x.description.trim().slice(0, 200) : undefined;
+      return [{ id: x.id, label, ...(description ? { description } : {}) }];
+    }),
+  );
+  if (!looks || !motions || !studios || new Set(studios.map((x) => x.id)).size !== studios.length) return null;
+  if (r.files !== undefined && !Array.isArray(r.files)) return null;
+  const files = list(r.files);
+  if (!files.every(presetFileOk) || new Set(files).size !== files.length) return null;
+  const all = new Set([...looks, ...studios, ...motions].map((x) => x.file).concat(files as string[]));
+  if (all.size > PRESET_FILES_MOST || !(looks.length + studios.length + motions.length)) return null;
+  return { interface: r.interface, for: through[0].plugin, looks, studios, motions, files: files as string[], options: acceptOptions(r.options) };
 }
 
 /** Places, as a manifest gives them: one, or several; null where any is not one. */
@@ -834,15 +942,6 @@ export function acceptManifest(raw: unknown): Manifest | null {
   const readable = reads.filter((r) => !own(r) || told(own(r)!));
   // (a text it only colours: by its files' names, with its grammar)
   const colours = kinds.some((k) => !readable.includes(k.id) && !writes.some((w) => w.id === k.id) && k.extensions.length && k.grammar);
-  // (a plugin that does nothing is none)
-  if (!readable.length && !writes.length && !roles.length && !steps.length && !colours) return null;
-  const systems = SYSTEMS.filter((s) => list(m.systems).includes(s));
-  // (each program installed separately once, and only one a step or a role runs)
-  const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => [...steps, ...roles].some((s) => s.programs.includes(d.name)));
-  // (files to download, where it runs something to use them: all as they must be, or the plugin is none - the backend refuses the list whole)
-  if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
-  const downloads = environment ? list(m.downloads).map(downloadOf) : [];
-  if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
   // (the other plugins it uses: each as it must be, each once, or the plugin is none - the backend reads the same)
   if (m.depends !== undefined && !Array.isArray(m.depends)) return null;
   const depends = list(m.depends).map((v) => dependOf(v, id));
@@ -850,6 +949,19 @@ export function acceptManifest(raw: unknown): Manifest | null {
   // (each variable once, whichever plugin's program it names)
   const envs = depends.flatMap((d) => d!.programs.map((p) => p.env));
   if (new Set(envs).size !== envs.length) return null;
+  // (the interfaces it declares, and what it brings through another's: as they must be, or the plugin is none)
+  const interfaces = interfacesOf(m.interfaces);
+  const presets = presetsOf(m.presets, depends as DependDecl[]);
+  if (!interfaces || presets === null) return null;
+  // (a plugin that does nothing is none)
+  if (!readable.length && !writes.length && !roles.length && !steps.length && !colours && !presets) return null;
+  const systems = SYSTEMS.filter((s) => list(m.systems).includes(s));
+  // (each program installed separately once, and only one a step or a role runs)
+  const installed = read(m.installed, installedOf, (d) => d.name).filter((d) => [...steps, ...roles].some((s) => s.programs.includes(d.name)));
+  // (files to download, where it runs something to use them: all as they must be, or the plugin is none - the backend refuses the list whole)
+  if (environment && m.downloads !== undefined && !Array.isArray(m.downloads)) return null;
+  const downloads = environment ? list(m.downloads).map(downloadOf) : [];
+  if (downloads.some((d) => d == null) || new Set(downloads.map((d) => d!.file)).size !== downloads.length) return null;
   return {
     id,
     name,
@@ -872,6 +984,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
     installed,
     downloads: downloads as DownloadDecl[],
     ...(depends.length ? { depends: depends as DependDecl[] } : {}),
+    ...(interfaces.length ? { interfaces } : {}),
+    ...(presets ? { presets } : {}),
   };
 }
 
