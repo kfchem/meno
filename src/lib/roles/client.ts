@@ -76,18 +76,21 @@ export type ChemRequests = {
 
 /**
  * The structure drawn in a picture, as the plugin that reads pictures reads
- * it: its atoms where the picture has them, in its pixels from its top
- * left - each an element, with its charge, or a label as it is drawn (a
- * group's: OTBS); its bonds, by index; and what the plugin is unsure of, by
- * no number. A wedge or a hash says which end lies nearer - `up`, `b`
- * nearer than `a`; `down`, farther - and, where the plugin can tell, which
- * end the picture draws narrow (`narrow`): a picture's reader may know
- * only the first, a wedge narrow at one end being a hash narrow at the
- * other. No structure found: no atoms.
+ * it - its model's reading, as the model gives it: its atoms' places, as
+ * the model gives them, across the picture as it cropped it - `pad`, the
+ * white it keeps round what is drawn, in pixels - or across the structure
+ * itself; each atom an element, with its charge and, where the model gives
+ * one, its isotope's mass number, or a label as it is drawn (a group's:
+ * OTBS) - neither, where the model gives no symbol; its bonds, by index -
+ * a wedge or a hash saying which end lies nearer (`up`, `b` nearer than
+ * `a`; `down`, farther), which is all a model tells; and the model's
+ * confidence in each, from 0 to 1, where it gives one. No structure found:
+ * no atoms. Meno lays it on the picture (lib/figure/inkFit).
  */
 export type PictureRead = {
-  atoms: { x: number; y: number; el?: string; charge?: number; label?: string; unsure?: true }[];
-  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; narrow?: "a" | "b"; unsure?: true }[];
+  atoms: { x: number; y: number; el?: string; charge?: number; isotope?: number; label?: string; confidence?: number }[];
+  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; confidence?: number }[];
+  pad?: number;
 };
 
 /**

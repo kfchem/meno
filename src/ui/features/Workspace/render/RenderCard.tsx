@@ -4,9 +4,12 @@ import { shownOptions, valuesOf, type OptionValues } from "../../../../lib/optio
 import { roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import OptionsForm from "../../../options/OptionsForm";
-import type { PythonPlugin } from "../../../../lib/calc/catalog";
+import { presetsFor, type PythonPlugin } from "../../../../lib/calc/catalog";
+import { useReaders } from "../../../../lib/calc/workers";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, bySection, filmLength, remembered, renderContext, renderOptions, withFixed, type Kind } from "./renderOptions";
+import { askOf, bySection, filmLength, looksOffered, remembered, renderContext, renderOptions, withFixed, type Kind } from "./renderOptions";
+import { handOff, notOfferedSaid, presetOffer, presetOptionsKey, presetOptionsShown } from "./presets";
+import { PLAIN_STUDIO } from "../../../../lib/plugins/manifest";
 import { OPTION_SECTIONS, type OptionSection } from "../../../../lib/options";
 import { useInFront } from "../../../layouts/inFront";
 import { escapeLeft } from "../../../controls/keys";
@@ -43,20 +46,32 @@ export default function RenderCard({
   const saved = useAppSettings((s) => s.options);
   const rememberOptions = useAppSettings((s) => s.rememberOptions);
   const [kind, setKind] = useState<Kind>(saved.render?.kind === "film" ? "film" : "picture");
-  // (the looks this plugin declares, after the canvas's)
-  const declared = plugin.roleMotions.render;
-  const plain = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared);
+  // (what the plugins added bring it through its interface - looks, studios, motions - each offered once, after Meno's and its own)
+  const readers = useReaders((s) => s.state);
+  const added = new Set(Object.keys(readers).filter((id) => readers[id] === "added"));
+  const offered = presetsFor(plugin, added);
+  const ownMotions = plugin.roleMotions.render ?? [];
+  const offer = presetOffer(
+    offered,
+    looksOffered(plugin.roleLooks.render).map((l) => l.id),
+    [...motions, ...ownMotions.map((m) => m.id)],
+  );
+  const looks = [...(plugin.roleLooks.render ?? []), ...offer.looks];
+  // (the motions this plugin declares, and those brought it, after Meno's)
+  const declared = [...ownMotions, ...offer.motions];
+  const plain = renderOptions(kind, motions, surfaces, looks, declared, undefined, offer.studios);
   // (the plugin's own options, each shown `when` it says - of the card's options, or a picture's or a film's, `kind`)
   const theirs = plugin.roleOptions.render ?? [];
   const [chosen, setChosen] = useState<Partial<Record<Kind, OptionValues>>>({});
   const [chosenTheirs, setChosenTheirs] = useState<OptionValues | null>(null);
+  const [chosenPresets, setChosenPresets] = useState<Record<string, OptionValues>>({});
   const picked = chosen[kind] ?? valuesOf(plain, saved[remembered(kind)]);
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
   // (a film no shorter than its motion can be read in - for a change, its changes' - a length chosen before raised to it)
   const { length, values: lengthened } = filmLength(kind, picked, declared, molecules);
   // (what the motion is always made with, shown so and said why, whatever was chosen: Meno's own choices and the renderer's)
   const fixed = kind === "film" ? declared?.find((d) => d.id === lengthened.motion)?.fixed : undefined;
-  const mine = withFixed(renderOptions(kind, motions, surfaces, plugin.roleLooks.render, declared, length), lengthened, fixed);
+  const mine = withFixed(renderOptions(kind, motions, surfaces, looks, declared, length, offer.studios), lengthened, fixed);
   const yours = withFixed(theirs, theirValues, fixed);
   const values = mine.values;
   const own = mine.options;
@@ -65,6 +80,17 @@ export default function RenderCard({
   // (the renderer's options are told the card's choices and what is rendered, `kind`; a part with none of them shown has no heading)
   const theirContext = renderContext(values, kind);
   const its = bySection(shownOptions(yours.options, yours.values, theirContext));
+  // (the options of the plugins whose looks, studio or motion are chosen, each its own values: in the parts each says)
+  const picks = { look: String(values.look), studio: typeof values.studio === "string" ? values.studio : undefined, motion: kind === "film" ? String(values.motion) : undefined };
+  const presetValues = Object.fromEntries(offered.map((o) => [o.from.id, chosenPresets[o.from.id] ?? valuesOf(o.presets.options, saved[presetOptionsKey(o.from.id)])]));
+  const theirsShown = presetOptionsShown(offered, offer, picks, presetValues, theirContext).map((t) => ({ ...t, parts: bySection(t.options) }));
+  // (a choice made last that nothing added brings now: said, in a line each, and the first used for this render)
+  const last = saved[remembered(kind)] ?? {};
+  const unoffered = [
+    notOfferedSaid("look", typeof last.look === "string" ? last.look : undefined, new Set(looksOffered(looks).map((l) => l.id)), plugin.id, added),
+    notOfferedSaid("studio", typeof last.studio === "string" ? last.studio : undefined, new Set([PLAIN_STUDIO, ...offer.studios.map((x) => x.id)]), plugin.id, added),
+    kind === "film" ? notOfferedSaid("motion", typeof last.motion === "string" ? last.motion : undefined, new Set([...motions, ...declared.map((m) => m.id)]), plugin.id, added) : null,
+  ].filter((x): x is string => !!x);
 
   const renderRef = useRef<HTMLButtonElement>(null);
   // (the keys given to Render as it opens, once: not again each time the
@@ -90,7 +116,9 @@ export default function RenderCard({
     rememberOptions("render", { kind });
     rememberOptions(remembered(kind), values);
     rememberOptions(roleOptionsRole("render"), theirValues);
-    onRender(askOf(kind, values), yours.values);
+    for (const o of offered) if (chosenPresets[o.from.id]) rememberOptions(presetOptionsKey(o.from.id), chosenPresets[o.from.id]);
+    const presets = handOff(offered, offer, picks, presetValues);
+    onRender({ ...askOf(kind, values), ...(presets.length ? { presets } : {}) }, yours.values);
   };
 
   return (
@@ -124,11 +152,17 @@ export default function RenderCard({
           </button>
         ))}
       </div>
+      {unoffered.map((line) => (
+        <p key={line} className="mb-2 text-xs text-gh-gray">
+          {line}
+        </p>
+      ))}
       <motion.div key={kind} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }}>
         {/* (one card, in its parts - what the molecules look like, how it is rendered, the scene, a film's motion - Meno's own
             choices and the renderer's in each, where the renderer says they belong; those it does not place, last, under its name) */}
         {[...OPTION_SECTIONS.filter((p) => kind === "film" || p !== "motion"), "own" as const].map((part, i) => {
-          if (!ours[part].length && !its[part].length) return null;
+          const brought = part === "own" ? [] : theirsShown.filter((t) => t.parts[part].length);
+          if (!ours[part].length && !its[part].length && !brought.length) return null;
           return (
             <section key={part} className={`mb-3 ${i > 0 ? "border-t border-gh-line pt-3" : ""}`}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gh-gray">{part === "own" ? plugin.name : PART_NAMES[part]}</h3>
@@ -136,11 +170,23 @@ export default function RenderCard({
               <div className="space-y-3">
                 {ours[part].some((o) => !o.group) && <OptionsForm options={ours[part].filter((o) => !o.group)} values={values} onChange={setMine} context={yours.values} />}
                 {its[part].length > 0 && <OptionsForm options={its[part]} values={yours.values} onChange={setChosenTheirs} context={theirContext} />}
+                {brought.map((t) => (
+                  <OptionsForm key={t.from.id} options={t.parts[part as Exclude<typeof part, "own">]} values={presetValues[t.from.id]} onChange={(v) => setChosenPresets((c) => ({ ...c, [t.from.id]: v }))} context={theirContext} />
+                ))}
                 {ours[part].some((o) => o.group) && <OptionsForm options={ours[part].filter((o) => o.group)} values={values} onChange={setMine} context={yours.values} />}
               </div>
             </section>
           );
         })}
+        {/* (the options of a plugin whose presets are chosen that say no part: under its name, last) */}
+        {theirsShown
+          .filter((t) => t.parts.own.length)
+          .map((t) => (
+            <section key={t.from.id} className="mb-3 border-t border-gh-line pt-3">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gh-gray">{t.from.name}</h3>
+              <OptionsForm options={t.parts.own} values={presetValues[t.from.id]} onChange={(v) => setChosenPresets((c) => ({ ...c, [t.from.id]: v }))} context={theirContext} />
+            </section>
+          ))}
       </motion.div>
       {/* (kept in view at the card's foot, however many options there are above: on its own ground, parted from them by a line, so that none shows through it) */}
       <div className="sticky -bottom-3 -mx-3 -mb-3 flex justify-end gap-2 border-t border-gh-line bg-white px-3 pb-3 pt-3">

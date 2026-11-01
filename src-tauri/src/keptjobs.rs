@@ -137,8 +137,11 @@ fn hex(bytes: &[u8]) -> String {
 /// folder's, then its logs - each with what it is to the job.
 pub fn kept_files(dir: &Path) -> Vec<KeptJobFile> {
     let roles = read_roles(dir);
+    let handed = jobs::handed_folders(dir);
     let mut names: Vec<(String, Role)> = jobs::work_files(dir)
         .into_iter()
+        // (never a file a preset plugin handed it: that plugin's, not the job's)
+        .filter(|rel| !handed.iter().any(|h| rel.starts_with(h.as_str())))
         .map(|rel| {
             let role = match &roles {
                 Some(r) if r.inputs.contains(&rel) => Role::Input,

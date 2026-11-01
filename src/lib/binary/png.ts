@@ -69,3 +69,30 @@ export function textOf(png: Uint8Array, keyword: string): string | null {
   }
   return null;
 }
+
+/** The chunks that say how a PNG's samples are to be taken as colours: its gamma, chromaticities, ICC profile, sRGB intent and coding-independent code points (PNG 3rd edition). */
+const COLOUR_CHUNKS = new Set(["gAMA", "cHRM", "iCCP", "sRGB", "cICP", "mDCV", "cLLI"]);
+
+/**
+ * `png` without what says how its samples are to be taken as colours, so
+ * that a window decodes its samples as they are, whatever it does with a
+ * colour profile; as it is where it holds none, or is no PNG.
+ */
+export function withoutColour(png: Uint8Array): Uint8Array {
+  if (!isPng(png)) return png;
+  const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  const decoder = new TextDecoder();
+  const kept: Uint8Array[] = [png.subarray(0, 8)];
+  let dropped = false;
+  for (let at = 8; at + 12 <= png.length; ) {
+    const length = view.getUint32(at);
+    const end = at + 12 + length;
+    if (end > png.length) return png;
+    const type = decoder.decode(png.subarray(at + 4, at + 8));
+    if (COLOUR_CHUNKS.has(type)) dropped = true;
+    else kept.push(png.subarray(at, end));
+    at = end;
+    if (type === "IEND") break;
+  }
+  return dropped ? concat(kept) : png;
+}

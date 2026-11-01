@@ -9,7 +9,8 @@ import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
-import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import type { CoordinateStructure } from "../../../lib/io/coordinates";
+import { pastedAs } from "./quickAddPaste";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -170,6 +171,7 @@ export default function QuickAdd({
   onSmiles,
   onNamed,
   onCoordinates,
+  onOutput,
   onStep,
   onProcedure,
   onClose,
@@ -196,6 +198,8 @@ export default function QuickAdd({
   onNamed?: (label: string) => void;
   /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
   onCoordinates?: (structures: CoordinateStructure[]) => void;
+  /** A calculation's output pasted whole in the SMILES field (lib/calc/probe `outputKindIn`): read as one opened is, put down where Quick Add was opened. */
+  onOutput?: (text: string) => void;
   onStep: (kind: StepKind, by: string) => void;
   onProcedure?: (id: string) => void;
   onClose: () => void;
@@ -331,7 +335,7 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
           <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} />
+            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
@@ -429,12 +433,14 @@ function SmilesField({
   onSmiles,
   onNamed,
   onCoordinates,
+  onOutput,
 }: {
   width: number;
   open: boolean;
   onSmiles: (smiles: string) => Promise<void>;
   onNamed?: (label: string) => void;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
+  onOutput?: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -489,12 +495,11 @@ function SmilesField({
           setChoice((at + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
         }}
         onPaste={(e) => {
-          const pasted = e.clipboardData.getData("text/plain");
-          // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
-          const structures = onCoordinates ? readCoordinates(pasted) : [];
-          if (!structures.length) return;
+          const as = pastedAs(e.clipboardData.getData("text/plain"), { output: !!onOutput, coordinates: !!onCoordinates });
+          if (!as) return;
           e.preventDefault();
-          onCoordinates!(structures);
+          if ("output" in as) onOutput!(as.output);
+          else onCoordinates!(as.structures);
         }}
         placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
         aria-label="SMILES"

@@ -7,10 +7,13 @@
  * first, never takes one away that another added uses, and stops one whose
  * plugin is missing or of another version, saying why. One used only for
  * some of its work is optional: not set up with it, and missing, only a job
- * that needs it refused. A plugin may use another's kinds of file besides -
- * one that plugin declares, by id, that a step of it takes (`kinds`): taken
- * only while that plugin is added, of a version it works with. Core names
- * none.
+ * that needs it refused. A plugin may use another's interface besides, or
+ * instead of, its programs: one that plugin declares, by id, with the
+ * versions of it it works with (`interfaces`) - a preset plugin's files,
+ * handed to the plugin that runs them (docs/PLUGINS.md, *Interfaces*). And
+ * it may use another's kinds of file - one that plugin declares, by id,
+ * that a step of it takes (`kinds`): taken only while that plugin is added,
+ * of a version it works with. Core names none.
  */
 
 /** Versions a plugin works with, of another: from one, and before another where it says one (`>=0.1.4 <0.2.0`). */
@@ -19,8 +22,14 @@ export type VersionRange = { from: string; before?: string };
 /** A program of the plugin used that a job may run: its name, as that plugin's manifest declares it, and the variable the job is told where it is in. */
 export type UsedProgram = { program: string; env: string };
 
-/** A plugin used: its id, the versions it works with - as written, and read - what of it is used (its programs, its kinds of file), and whether only some of its work needs it (`optional`). */
-export type DependDecl = { plugin: string; versions: string; range: VersionRange; programs: UsedProgram[]; kinds?: string[]; optional?: true };
+/** An interface of the plugin used that it is used through: its id, as that plugin's manifest declares it, and the versions of it it works with - as written, and read. */
+export type UsedInterface = { id: string; versions: string; range: VersionRange };
+
+/** An interface a plugin declares, for others to use it through: its id, and its version - semver, a new field a minor, a change of meaning a major. */
+export type InterfaceDecl = { id: string; version: string };
+
+/** A plugin used: its id, the versions it works with - as written, and read - what of it is used (its programs, its interfaces, its kinds of file), and whether only some of its work needs it (`optional`). */
+export type DependDecl = { plugin: string; versions: string; range: VersionRange; programs: UsedProgram[]; interfaces?: UsedInterface[]; kinds?: string[]; optional?: true };
 
 /** A version as numbers - "0.1.4", [0, 1, 4]; none, where it is not one. */
 export function versionParts(v: string): number[] | null {
@@ -60,12 +69,13 @@ export function rangeSaid(range: VersionRange): string {
   return range.before === undefined ? `${range.from} or later` : `from ${range.from} to before ${range.before}`;
 }
 
-/** What of a manifest the use of plugins is checked against: its id, name and version, what it uses, and the programs it declares. */
+/** What of a manifest the use of plugins is checked against: its id, name and version, what it uses, and the programs and interfaces it declares. */
 export type DependingManifest = {
   id: string;
   name: string;
   version: string;
   depends?: readonly DependDecl[];
+  interfaces?: readonly InterfaceDecl[];
   /** The kinds of file it declares, by id. */
   kinds?: readonly { id: string }[];
   steps: readonly { programs: readonly string[]; files?: readonly string[] }[];
@@ -118,9 +128,11 @@ export function dependsRefused<M extends DependingManifest>(manifests: readonly 
     for (const d of m.depends ?? []) {
       const used = byId.get(d.plugin);
       const missing = d.programs.find((p) => used && !declaredPrograms(used).has(p.program));
+      const without = (d.interfaces ?? []).find((i) => used && !(used.interfaces ?? []).some((x) => x.id === i.id));
       const kind = (d.kinds ?? []).find((k) => used && !(used.kinds ?? []).some((x) => x.id === k));
       if (!used) refused.set(m.id, `it uses ${d.plugin}, a plugin Meno does not know`);
       else if (missing) refused.set(m.id, `it uses ${used.name}'s program ${missing.program}, which ${used.name} does not declare`);
+      else if (without) refused.set(m.id, `it uses ${used.name}'s ${without.id} interface, which ${used.name} does not declare`);
       else if (kind) refused.set(m.id, `it uses ${used.name}'s kind of file ${kind}, which ${used.name} does not declare`);
       if (refused.has(m.id)) break;
     }
@@ -198,30 +210,49 @@ export function dependentsOf<M extends DependingManifest>(id: string, manifests:
   return out;
 }
 
-/** Why a plugin used is not there for a plugin that uses it: not added ("Needs xTB, which is not added"), or added of a version it does not work with ("Needs xTB from 0.1.4 to before 0.2.0; 0.3.0 is added"); none, where it is. */
-export function missingWhy(d: DependDecl, added: (id: string) => string | undefined, nameOf: (id: string) => string): string | null {
+/**
+ * Why a plugin used is not there for a plugin that uses it: not added ("Needs xTB, which is not added"), added of a version it
+ * does not work with ("Needs xTB from 0.1.4 to before 0.2.0; 0.3.0 is added"), or with an interface it uses of a version it does
+ * not work with, or none ("Needs Tool's preset interface from 1.0.0 to before 2.0.0; 2.0.0 is added"); none, where it is.
+ * `interfaceOf`: the version of a plugin's interface, by the plugin's id and the interface's - as that plugin declares it.
+ */
+export function missingWhy(
+  d: DependDecl,
+  added: (id: string) => string | undefined,
+  nameOf: (id: string) => string,
+  interfaceOf: (plugin: string, id: string) => string | undefined = () => undefined,
+): string | null {
   const version = added(d.plugin);
   if (version === undefined) return `Needs ${nameOf(d.plugin)}, which is not added`;
   if (!inRange(version, d.range)) return `Needs ${nameOf(d.plugin)} ${rangeSaid(d.range)}; ${version} is added`;
+  for (const i of d.interfaces ?? []) {
+    const has = interfaceOf(d.plugin, i.id);
+    if (has === undefined || !inRange(has, i.range)) return `Needs ${nameOf(d.plugin)}'s ${i.id} interface ${rangeSaid(i.range)}; ${has === undefined ? "the one added has none" : `${has} is added`}`;
+  }
   return null;
 }
 
 /**
  * Why a plugin added is stopped, where it is: a plugin it needs not added,
  * or one it uses - optionally or not - added of a version it does not work
- * with (`missingWhy`). One it uses only for some of its work, not added,
+ * with, or of an interface it uses of another version (`missingWhy`). One it uses only for some of its work, not added,
  * stops nothing: a job that needs it is refused alone; used so for no
- * program, of another version, it stops nothing either - its kinds of file
- * are not taken (`filesTaken`). `added` gives each
+ * program and no interface, of another version, it stops nothing either -
+ * its kinds of file are not taken (`filesTaken`). `added` gives each
  * plugin added's version, by id; `nameOf`, each one's name. None, where it
  * may run.
  */
-export function stoppedWhy(m: DependingManifest, added: (id: string) => string | undefined, nameOf: (id: string) => string): string | null {
+export function stoppedWhy(
+  m: DependingManifest,
+  added: (id: string) => string | undefined,
+  nameOf: (id: string) => string,
+  interfaceOf?: (plugin: string, id: string) => string | undefined,
+): string | null {
   for (const d of m.depends ?? []) {
     if (d.optional && added(d.plugin) === undefined) continue;
-    // (one used for no program - for its kinds of file alone, optionally - stops nothing, of any version: its kinds are not taken, `filesTaken`)
-    if (d.optional && !d.programs.length) continue;
-    const why = missingWhy(d, added, nameOf);
+    // (one used for no program and no interface - for its kinds of file alone, optionally - stops nothing, of any version: its kinds are not taken, `filesTaken`)
+    if (d.optional && !d.programs.length && !d.interfaces?.length) continue;
+    const why = missingWhy(d, added, nameOf, interfaceOf);
     if (why) return why;
   }
   return null;

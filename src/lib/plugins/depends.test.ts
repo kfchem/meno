@@ -110,3 +110,33 @@ describe("the kinds of file a plugin's step takes", () => {
     expect(stoppedWhy(m, () => "2.0.0", name)).toBeNull();
   });
 });
+
+describe("a plugin used through its interface", () => {
+  const name = (id: string) => id.toUpperCase();
+  const tool = { ...plugin("tool"), interfaces: [{ id: "styling", version: "1.4.0" }] };
+  const looks = (versions = ">=1.0.0 <2.0.0", id = "styling"): DependingManifest => ({
+    ...plugin("looks", [], []),
+    depends: [{ plugin: "tool", versions: ">=1.0.0 <2.0.0", range: rangeOf(">=1.0.0 <2.0.0")!, programs: [], interfaces: [{ id, versions, range: rangeOf(versions)! }] }],
+  });
+
+  it("is refused where that plugin declares no such interface - and, in turn, any plugin that uses the refused one", () => {
+    expect(dependsRefused([tool, looks()]).size).toBe(0);
+    const refused = dependsRefused([tool, looks(">=1.0.0 <2.0.0", "other"), plugin("after", [["looks", ">=1.0.0"]])]);
+    expect(Object.fromEntries(refused)).toEqual({ looks: "it uses TOOL's other interface, which TOOL does not declare", after: "it uses LOOKS, which is refused" });
+  });
+
+  it("is stopped where that plugin's interface is of a version it does not work with, or the one added declares none - saying so", () => {
+    const of = (v: string | undefined) => (plugin: string, id: string) => (plugin === "tool" && id === "styling" ? v : undefined);
+    expect(stoppedWhy(looks(), () => "1.0.0", name, of("1.4.0"))).toBeNull();
+    expect(stoppedWhy(looks(), () => "1.0.0", name, of("2.0.0"))).toBe("Needs TOOL's styling interface from 1.0.0 to before 2.0.0; 2.0.0 is added");
+    expect(stoppedWhy(looks(), () => "1.0.0", name, of(undefined))).toBe("Needs TOOL's styling interface from 1.0.0 to before 2.0.0; the one added has none");
+    // (that plugin not added, or of a version it does not work with: said first, as of any plugin used)
+    expect(stoppedWhy(looks(), () => undefined, name, of("1.4.0"))).toBe("Needs TOOL, which is not added");
+    expect(missingWhy(looks().depends![0], () => "0.9.0", name, of("1.4.0"))).toBe("Needs TOOL from 1.0.0 to before 2.0.0; 0.9.0 is added");
+  });
+
+  it("is set up before the plugin that uses it, and takes it away with it - though it runs nothing itself", () => {
+    expect(dependencyOrder("looks", [tool, looks()]).map((m) => m.id)).toEqual(["tool"]);
+    expect(dependentsOf("tool", [tool, looks()]).map((m) => m.id)).toEqual(["looks"]);
+  });
+});

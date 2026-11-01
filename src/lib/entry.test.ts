@@ -5,8 +5,8 @@ import { speciesOf } from "./io/writers";
 const water = (dx = 0) => [0 + dx, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
 
 describe("the entry record", () => {
-  it("is of version 1", () => {
-    expect(ENTRY_SCHEMA).toBe(1);
+  it("is of version 2", () => {
+    expect(ENTRY_SCHEMA).toBe(2);
   });
 
   it("keys a geometry by its places: the same places the same key, another's another", () => {

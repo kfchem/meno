@@ -11,10 +11,10 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type PresetsDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
-import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl } from "../plugins/depends";
+import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl, type InterfaceDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
 import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
@@ -37,10 +37,16 @@ type ReaderBase = Described & {
   /** Of those, the kinds one of its own programs writes (its manifest's `writtenBy`): its own program's output, which it reads unless another is chosen. */
   ownKinds?: readonly string[];
 };
-/** What any plugin says besides what it runs: the systems it can be added on. */
+/** What any plugin says besides what it runs: the systems it can be added on, the plugins it uses, the interfaces it declares and what it brings through another's. */
 type Brings = {
   /** The systems it can be added on; none, every one. */
   systems: readonly System[];
+  /** The other plugins it uses, where it declares any: each by id, with the versions it works with and the programs and interfaces of it it uses (lib/plugins/depends). */
+  depends?: readonly DependDecl[];
+  /** The interfaces it declares, for other plugins to use it through. */
+  interfaces?: readonly InterfaceDecl[];
+  /** What it brings another plugin through that one's interface (lib/plugins/manifest `PresetsDecl`). */
+  presets?: PresetsDecl;
 };
 /** A plugin that runs something: what it reads and writes, the roles it fills besides, and what it runs - a worker in a Python environment of its own. */
 export type PythonPlugin = ReaderBase &
@@ -58,6 +64,8 @@ export type PythonPlugin = ReaderBase &
     roleMotions: Partial<Record<RoleId, readonly MotionDecl[]>>;
     /** The programs it runs for a role, by role, where it runs one as a job (Render). */
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
+    /** The confidence of its model's below which what it reads for a role is unsure, by role, where it declares one (Structures read from pictures). */
+    roleUnsure: Partial<Record<RoleId, number>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
     steps: readonly StepDecl[];
     /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
@@ -66,8 +74,6 @@ export type PythonPlugin = ReaderBase &
     downloads: readonly DownloadDecl[];
     /** About how much room its environment takes once set up, in bytes, as measured (its manifest's `setUpBytes`). */
     setUpBytes?: number;
-    /** The other plugins it uses, where it declares any: each by id, with the versions it works with and the programs of it its jobs may run (lib/plugins/depends). */
-    depends?: readonly DependDecl[];
     /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
     profile: `plugin-${string}`;
     lock: string;
@@ -88,7 +94,12 @@ export const runs = (p: Plugin): p is PythonPlugin => !("data" in p);
 
 const MENO_IDS: ReadonlySet<string> = new Set(Object.values(MENO_KINDS).map((k) => k.id));
 
-const brings = (m: Manifest): Brings => ({ systems: m.systems });
+const brings = (m: Manifest): Brings => ({
+  systems: m.systems,
+  ...(m.depends ? { depends: m.depends } : {}),
+  ...(m.interfaces ? { interfaces: m.interfaces } : {}),
+  ...(m.presets ? { presets: m.presets } : {}),
+});
 
 /** A plugin, from its manifest. */
 export const pluginOf = (m: Manifest): Plugin => {
@@ -107,11 +118,11 @@ export const pluginOf = (m: Manifest): Plugin => {
     installed: m.installed,
     downloads: m.downloads,
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
-    ...(m.depends ? { depends: m.depends } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
+    roleUnsure: Object.fromEntries(m.roles.filter((r) => r.unsure).map((r) => [r.role, r.unsure!.below])),
     profile: `plugin-${m.id}`,
     lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,
     worker: `${PLUGINS_ROOT}/${m.id}/${WORKER}`,
@@ -152,10 +163,13 @@ export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find
 const OFFERED = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id));
 
 /** The plugins a plugin uses, and those they use in turn, in the order they are set up - each before any that uses it. */
-export const pluginsUsedBy = (id: string): PythonPlugin[] => dependencyOrder(id, OFFERED).flatMap((m) => pluginById(m.id) ?? []);
+export const pluginsUsedBy = (id: string): Plugin[] => dependencyOrder(id, OFFERED).flatMap((m) => anyPluginById(m.id) ?? []);
 
 /** The plugins that use a plugin, and those that use them in turn, in the order they are taken away - each before the one it uses. */
-export const pluginsUsing = (id: string): PythonPlugin[] => dependentsOf(id, OFFERED).flatMap((m) => pluginById(m.id) ?? []);
+export const pluginsUsing = (id: string): Plugin[] => dependentsOf(id, OFFERED).flatMap((m) => anyPluginById(m.id) ?? []);
+
+/** The version of a plugin's interface, by the plugin's id and the interface's, as that plugin declares it; none, where it declares none. */
+const interfaceVersion = (plugin: string, id: string) => anyPluginById(plugin)?.interfaces?.find((i) => i.id === id)?.version;
 
 /**
  * Why a plugin added is stopped - a plugin it uses not added, or added of a
@@ -165,7 +179,24 @@ export const pluginsUsing = (id: string): PythonPlugin[] => dependentsOf(id, OFF
 export function stoppedOf(p: Plugin, added: ReadonlySet<string>): string | null {
   const m = manifestOf(p.id);
   if (!m) return null;
-  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id);
+  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id, interfaceVersion);
+}
+
+/** What an added plugin brings another through its interface: by whom, and what. */
+export type Offered = { from: Plugin; presets: PresetsDecl };
+
+/**
+ * What the plugins added bring plugin `p` through its interfaces (docs/PLUGINS.md, *Presets*): each one's presets - only of a
+ * plugin added, not stopped, whose presets are for `p`, through an interface `p` declares - in Meno's order. `added`: the
+ * plugins added, by id.
+ */
+export function presetsFor(p: Plugin, added: ReadonlySet<string>): Offered[] {
+  if (!added.has(p.id) || stoppedOf(p, added)) return [];
+  return ALL_PLUGINS.flatMap((q) => {
+    const pre = q.presets;
+    if (!pre || pre.for !== p.id || !added.has(q.id) || !p.interfaces?.some((i) => i.id === pre.interface) || stoppedOf(q, added)) return [];
+    return [{ from: q, presets: pre }];
+  });
 }
 
 /**

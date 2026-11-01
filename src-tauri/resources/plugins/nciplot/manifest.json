@@ -1,7 +1,7 @@
 {
   "id": "nciplot",
   "name": "NCIPLOT interface",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shows non-covalent interactions - hydrogen bonds, van der Waals contacts, steric clashes - as surfaces coloured by their strength, worked out by NCIPLOT 4 from a molecule's geometry alone. NCIPLOT is installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://github.com/juliacontrerasgarcia/NCIPLOT-4.2",
