@@ -10,7 +10,7 @@ import type { LayoutInput } from "../layout/perceive";
 
 /** The order a Hückel ring's bonds are all given (`huckelForm`): as lib/chem/identity's aromatic bonds. */
 const AROMATIC = 4;
-/** The most steps the search for one bond's Hückel ring takes; past it, the bond keeps its order. */
+/** The most steps the search for one bond's Hückel ring takes; past it, the bond keeps its order: two alike can then be told apart, never two unlike made one. */
 const RING_STEPS = 100_000;
 
 const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);

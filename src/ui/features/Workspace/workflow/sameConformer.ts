@@ -19,6 +19,7 @@
  * them: the ways of all its atoms are tried instead.
  */
 import { symmetryClasses } from "../../../../lib/layout/canonical";
+import { huckelBonds } from "../../../../lib/chem/huckel";
 import { rmsd } from "./rmsd";
 
 /** The most two geometries of one conformer lie apart, in ångströms: all atoms, hydrogens included (the maintainer, 2026-10-21: keeps OH and NH rotamers apart). */
@@ -226,6 +227,8 @@ export const work = { steps: 0 };
  * kind - element, charge, isotope, the hydrogens hanging on it, its symmetry
  * class - whose bonds to those already taken are those its own are, of the
  * same orders; the search stops at `ALIKE_WAYS` + 1 ways, or `WAY_STEPS`.
+ * The class only spares the search tries: the bonds checked both ways make
+ * each way taken one of the molecule's own without it.
  */
 function waysOf(atoms: readonly Atom[], bonds: readonly Bond[], hangs: ReadonlySet<number>): { core: number[]; ways: number[][]; complete: boolean } {
   const core = atoms.flatMap((_, i) => (hangs.has(i) ? [] : [i]));
@@ -311,75 +314,6 @@ const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
 const IN_TURN = 1.5;
 /** A bond's order where it is aromatic, as the symmetry classes take it (lib/chem/identity `aromaticForm`'s). */
 const AROMATIC = 4;
-/** The most steps the search for one bond's Hückel ring takes; past it, the bond keeps its order: a duplicate can then be missed, never two made one. */
-const RING_STEPS = 100_000;
-
-/**
- * The bonds of a ring of single and double bonds in turn, each atom with one
- * double bond, of 4n + 2 atoms (Hückel's rule) - a benzene ring's, a
- * pyridine's, every one of a naphthalene's - by `pairKey`: which of them a
- * Kekulé structure makes double is no part of a molecule's shape. A
- * cyclooctatetraene's ring, of 4n, is none: its double bonds stay where they
- * are. In such a ring each atom brings one pi electron, so its atoms count
- * them; a ring with an atom of no double bond - a pyrrole's, a furan's, a
- * cyclopentadienide's or a tropylium's with its charge on one carbon - has
- * one Kekulé structure, and a way taking it onto itself keeps its orders.
- */
-function huckelBonds(n: number, bonds: readonly { a: number; b: number; order: number }[]): Set<string> {
-  const mate = new Array<number>(n).fill(-1);
-  const doubles = new Array<number>(n).fill(0);
-  const triple = new Array<boolean>(n).fill(false);
-  for (const b of bonds) {
-    if (b.order === 2) {
-      doubles[b.a]++;
-      doubles[b.b]++;
-      mate[b.a] = b.b;
-      mate[b.b] = b.a;
-    } else if (b.order === 3) triple[b.a] = triple[b.b] = true;
-  }
-  const paired = (i: number) => doubles[i] === 1 && !triple[i];
-  const singles: number[][] = Array.from({ length: n }, () => []);
-  for (const b of bonds) {
-    if (b.order === 1 && paired(b.a) && paired(b.b)) {
-      singles[b.a].push(b.b);
-      singles[b.b].push(b.a);
-    }
-  }
-  const found = new Set<string>();
-  for (const b of bonds) {
-    if (b.order !== 1 || !paired(b.a) || !paired(b.b) || found.has(pairKey(b.a, b.b))) continue;
-    // (u - v = v' - y = z - ... - u' = u: from v', a single bond and a double in turn, m times, then a single bond
-    //  into u' - a ring of 2m + 4 atoms, 4n + 2 where m is odd)
-    const [u, v] = [b.a, b.b];
-    const goal = mate[u];
-    const on = new Set([u, v, mate[v]]);
-    const ring = [u, v, mate[v]];
-    let steps = 0;
-    const walk = (x: number, m: number): boolean => {
-      for (const y of singles[x]) {
-        if (++steps > RING_STEPS) return false;
-        if (y === goal) {
-          if (m % 2 === 1) return true;
-          continue;
-        }
-        const z = mate[y];
-        if (on.has(y) || on.has(z)) continue;
-        on.add(y).add(z);
-        ring.push(y, z);
-        if (walk(z, m + 1)) return true;
-        ring.length -= 2;
-        on.delete(y);
-        on.delete(z);
-      }
-      return false;
-    };
-    if (!walk(mate[v], 0)) continue;
-    ring.push(goal);
-    ring.forEach((x, k) => found.add(pairKey(x, ring[(k + 1) % ring.length])));
-  }
-  return found;
-}
-
 /** Whether `atoms` of a geometry lie other than in a line: else they could be turned about that line and lay over all the same. */
 function spread(xyz: readonly number[], atoms: readonly number[]): boolean {
   const c = centreOf(xyz, xyz.length / 3, atoms);

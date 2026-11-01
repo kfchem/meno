@@ -2168,14 +2168,14 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   RMSD of each other - the maintainer's standard for structures fed to
   quantum calculations, which keeps OH and NH rotamers apart - at its
   least over the ways the molecule maps onto itself, laid over by turning
-  and moving, never by reflecting (`workflow/sameConformer`; the RDKit
-  plugin's conformers for Meno's own page use the same, while its
-  *Conformers* step gives every one RDKit made, and Meno's *Duplicates*
-  applies it: PLUGINS.md). The ways are those of its atoms but
-  the hydrogens hanging on one atom, at most 1,000 - searched for atom by
-  atom, each taken only to one of its kind and bonded as it is, the search
-  stopping past them: Pd(PPh3)4's, millions, in some 40,000 steps a
-  search, 12 ms in all (Apple M4, 2026-11-01) - each bond taken onto
+  and moving, never by reflecting (`workflow/sameConformer`; Meno's own
+  page keeps each conformer once by it - WORKSPACE.md, *The page's
+  conformers* - and Meno's *Duplicates* applies it, while a plugin's
+  *Conformers* step gives every one its program made: PLUGINS.md). The
+  ways are those of its atoms but the hydrogens hanging on one atom, at
+  most 1,000 - searched for atom by atom, each taken only to one of its
+  kind and bonded as it is, the search stopping past them, or past
+  200,000 steps - each bond taken onto
   one of its order - a ring of single and double bonds in turn, of 4n + 2
   atoms (Hückel's rule), all of one: which of a benzene ring's bonds a
   Kekulé structure makes double is no part of its shape, so a phenyl
@@ -2186,7 +2186,9 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   are taken against their own alone: a duplicate can then be missed,
   never two different conformers made one, and *Duplicates* says so on
   its line: *1 compound has more than 1,000 symmetric ways: duplicates of
-  it could be missed*.
+  it could be missed* (the page, on its *The same within* row). (The
+  search for the ways is quick: Pd(PPh3)4's, millions, pass 1,000 in some
+  40,000 steps a search, 12 ms in all - Apple M4, 2026-11-01.)
   Meno's *Duplicates* has no threshold of its own any more (it was 0.125
   Å, its atoms in their own order).
 - **A conformer's mirror image**, in an achiral molecule, is kept apart by
