@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
-import { anyPluginById, manifestOf, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { ALL_PLUGINS, anyPluginById, manifestOf, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { askToConnectAll, type ConsentRequest } from "../net/network";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
@@ -36,13 +36,15 @@ const setState = (id: string, state: ReaderState, problem?: string) => {
     state: { ...s.state, [id]: state },
     problem: problem ? { ...s.problem, [id]: problem } : Object.fromEntries(Object.entries(s.problem).filter(([k]) => k !== id)),
   }));
-  // (the kinds of the plugins added - until one is taken away - registered with Meno's own)
+  // (the kinds of the plugins added - until one is taken away - registered with Meno's own; and those only plugins not added read,
+  //  to name them for a file nothing added reads)
   const now = useReaders.getState().state;
   registerKinds(
     Object.keys(now)
       .filter((p) => now[p] === "added" || now[p] === "removing")
       .map(manifestOf)
       .filter((m): m is Manifest => m != null),
+    ALL_PLUGINS.map((p) => manifestOf(p.id)).filter((m): m is Manifest => m != null),
   );
 };
 

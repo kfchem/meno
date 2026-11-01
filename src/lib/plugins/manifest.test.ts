@@ -21,16 +21,13 @@ const good = {
   systems: [],
   installed: [],
   downloads: [],
-  guide: [],
-  suggests: [],
-  files: [],
 };
 
 describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
     const declared = acceptManifest({
@@ -73,7 +70,7 @@ describe("a plugin's manifest", () => {
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -420,7 +417,8 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest({ ...good, downloads: weights })).toBeNull();
     // (a plugin that runs nothing uses none)
     const { environment: _e, reads: _r, kinds: _k, ...data } = good;
-    expect(acceptManifest({ ...data, guide: [{ title: "Hello", text: "Hello." }], downloads: [weights] })?.downloads).toEqual([]);
+    const coloured = [{ id: "nbo-in", name: "NBO input", extensions: [".nbo"], grammar: { file: "nbo.grammar", tones: { Word: "keyword" } } }];
+    expect(acceptManifest({ ...data, kinds: coloured, downloads: [weights] })?.downloads).toEqual([]);
   });
 
   it("may say how a program installed separately says its version, and the least Meno takes - as the backend reads it", () => {
@@ -434,11 +432,11 @@ describe("a plugin's manifest", () => {
       expect(blender(bad)).toEqual([]);
   });
 
-  it("runs nothing where it says no environment: then it brings data alone - and a plugin that does nothing is none", () => {
+  it("runs nothing where it says no environment: then it brings texts it colours alone - and a plugin that does nothing is none", () => {
     const data = { ...good, environment: undefined };
     expect(acceptManifest(data)).toBeNull();
-    const guide = [{ title: "Welcome", text: "Double-click on empty space." }];
-    expect(acceptManifest({ ...data, guide })).toMatchObject({ reads: [], writes: [], roles: [], steps: [], guide });
+    const coloured = [{ id: "nbo-in", name: "NBO input", extensions: [".nbo"], grammar: { file: "nbo.grammar", tones: { Word: "keyword" } } }];
+    expect(acceptManifest({ ...data, kinds: coloured })).toMatchObject({ reads: [], writes: [], roles: [], steps: [] });
     expect(acceptManifest({ ...data, roles: [{ role: "smiles" }], steps: [{ kinds: ["energy"], programs: ["x"] }] })).toBeNull();
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [], writes: [] })).toBeNull();
   });
@@ -467,32 +465,13 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest({ ...good, kinds: [anyProgram] })?.kinds).toEqual([anyProgram]);
   });
 
-  it("may bring a guide: steps of plain text, each pointing at a part Meno names and waiting for what Meno names", () => {
-    const steps = [
-      { title: "Welcome", text: "Double-click on empty space.", at: "page", until: "quick-add" },
-      { title: "Odd", text: "Points at what Meno does not name.", at: "#save-button", until: "clicked" },
-      { title: "Plugins", text: "These are a good start.", suggest: ["rdkit", "Not An Id", "cclib"] },
-      { title: "", text: "No title." },
-      { title: "Long", text: "x".repeat(301) },
-    ];
-    expect(acceptManifest({ ...good, guide: steps })?.guide).toEqual([
-      { title: "Welcome", text: "Double-click on empty space.", at: "page", until: "quick-add" },
-      { title: "Odd", text: "Points at what Meno does not name." },
-      { title: "Plugins", text: "These are a good start.", suggest: ["rdkit", "cclib"] },
-    ]);
-    expect(acceptManifest({ ...good, guide: Array.from({ length: 20 }, (_, i) => ({ title: `Step ${i}`, text: "Go on." })) })?.guide).toHaveLength(12);
-  });
-
-  it("may bring a catalogue: the plugins it suggests, and kinds of file told by its own marks with the plugins it suggests for each", () => {
-    const suggests = [{ plugin: "cclib", for: "Reads outputs" }, { plugin: "cclib", for: "Again" }, { plugin: "nbo", for: "Itself" }, { plugin: "pyscf" }];
-    const files = [
-      { id: "orca", name: "ORCA output", extensions: [".out"], marks: [{ text: "O   R   C   A", anyCase: true }], suggest: ["cclib", "pyscf"] },
-      { id: "short", name: "Short", extensions: [".s"], marks: [{ text: "S" }], suggest: ["cclib"] },
-      { id: "nobody", name: "Nobody", extensions: [".n"], marks: [{ text: "N O B O D Y" }], suggest: [] },
-    ];
-    const read = acceptManifest({ ...good, suggests, files })!;
-    expect(read.suggests).toEqual([{ plugin: "cclib", for: "Reads outputs" }]);
-    expect(read.files).toEqual([{ id: "orca", name: "ORCA output", extensions: [".out"], marks: [{ text: "O   R   C   A", anyCase: true }], suggest: ["cclib", "pyscf"] }]);
+  it("brings no guide and names no other plugin: a guide, plugins suggested and a catalogue of files are not read - and are no plugin alone", () => {
+    const extra = { guide: [{ title: "Welcome", text: "Hi." }], suggests: [{ plugin: "cclib", for: "Reads outputs" }], files: [{ id: "orca", name: "ORCA output", extensions: [".out"], marks: [{ text: "O   R   C   A" }], suggest: ["cclib"] }] };
+    const read = acceptManifest({ ...good, ...extra })!;
+    expect(Object.keys(read)).not.toContain("guide");
+    expect(Object.keys(read)).not.toContain("suggests");
+    expect(Object.keys(read)).not.toContain("files");
+    expect(acceptManifest({ id: "only-words", name: "Only words", version: "1", ...extra })).toBeNull();
   });
 });
 

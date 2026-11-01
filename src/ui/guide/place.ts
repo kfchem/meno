@@ -6,7 +6,7 @@
  * the page, out of the way of where the chemist is to work.
  */
 
-import type { GuidePlace } from "../../lib/plugins/guide";
+import type { GuidePlace } from "../../lib/guide/steps";
 
 export type Box = { left: number; top: number; width: number; height: number };
 export type CardPlace = {

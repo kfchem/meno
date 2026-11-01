@@ -181,7 +181,7 @@ import { ChargeHolds2D } from "./components/MarkHold2D";
 import Workflow2D from "./components/Workflow2D";
 import PageScale from "./components/PageScale";
 import GuideStructure from "./components/GuideStructure";
-import { guideNotice } from "../../../lib/plugins/guides";
+import { guideNotice } from "../../../lib/guide/guide";
 import { selectionFrame } from "./workflow/selectionSet";
 import { offeredSteps } from "./workflow/offered";
 import { GAP, PORT_DOWN } from "./workflow/look";
@@ -2703,7 +2703,7 @@ function WorkspaceContent({
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />
-        {/* where a guide's step points at a structure (lib/plugins/guide) */}
+        {/* where a guide's step points at a structure (lib/guide) */}
         <GuideStructure place={guideStructure} />
         {/* Molecules in 3D standing on the page (before PanZoom2D: a press on one is theirs) */}
         <Molecules3D style={style3d} />

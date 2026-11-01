@@ -5,7 +5,6 @@ import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
 import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
-import { showGuide } from "../../../lib/plugins/guides";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
@@ -24,7 +23,7 @@ const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k
 /**
  * Plugins in Settings: every plugin on offer, added or not - what it
  * is, the kinds of file it reads, its version, licence and home - each added
- * or taken away here; one that brings a guide shows it again here. Meno
+ * or taken away here. Meno
  * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
@@ -133,9 +132,6 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
             Used by {pluginsUsing(p.id).map((q) => q.name).join(", ")}.
           </p>
         )}
-        {p.suggests.length > 0 && (
-          <p className="text-xs text-gh-gray mt-1 max-w-2xl">Suggests {p.suggests.map((s) => anyPluginById(s.plugin)?.name ?? s.plugin).join(", ")}.</p>
-        )}
         <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
           {!runs(p) && " · Comes with Meno: nothing to download."}
@@ -165,14 +161,6 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
           <span className="max-w-[10rem] text-right text-xs text-gh-gray">For {p.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only</span>
         ) : (state === "added" || state === "absent") && (
           <div className="flex gap-1.5">
-            {state === "added" && p.guide.length > 0 && (
-              <button
-                onClick={() => showGuide(p.id)}
-                className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base"
-              >
-                Show
-              </button>
-            )}
             <button
               disabled={busy}
               onClick={() => (state === "added" ? remove() : run(addPlugin))}
