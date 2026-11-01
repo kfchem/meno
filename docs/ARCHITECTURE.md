@@ -898,44 +898,30 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   chosen waits for the one moving to come to rest. The atom that moves most
   goes 0.3 Å, once every 1.2 s, whatever the frequency. No arrows and no
   spectrum (the maintainer).
-- The first reader is cclib's (`resources/plugins/cclib/worker.py`), cclib
-  used as a library, its version pinned in its folder's
-  `requirements.lock` (1.9rc1: 1.8.1 does not read ORCA 6). Its manifest
-  brings every program cclib reads, each told by its own banner as cclib
-  tells it. Its tests read sample outputs from `calc-samples/`, which
-  git ignores - no program's output is committed - and run by hand
-  (`scripts/calc/test_reader_cclib.py`); the app's side is tested with the
-  plain data written by hand.
-- It reads an output as the program left it (2026-10-13). Gaussian's,
-  ORCA's and xtb's say how the run went, in their own words. One that
-  stopped on an error is read as far as it went, with "Run: ended with an
-  error" first in the chip's line and the program's reason among the
-  results. One with no end written is read the same way, with "Run: did
-  not come to its end" - cut short, or still running. An SCF that did not
-  converge gives no energy ("SCF: not converged"), and where the run
-  stopped, the geometries after the last it worked out an energy for are
-  left out. Where cclib cannot read an output as it is, it is read again
-  with a number that overflowed its field (asterisks) taken as not known,
-  and then as far as it reads - its last lines left off, more each time;
-  where the run itself came to its end, the chip says "Read: only in
-  part".
-  Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
-  not atoms of the molecule and are left out; ORCA's point charges ("Q")
-  are taken out before cclib reads it, and so is the dipole moment ORCA
-  prints as its total alone after an xTB run through the xtb program,
-  which cclib cannot read: that total is given as printed, with its
-  magnitude as printed, and the run's energies are ORCA's final
-  single-point ones, one to each geometry, as for any ORCA output. Where
-  ORCA wrote no geometry at all - as for frequencies such a run works out
-  - its input's one "* xyz" block is taken as the geometry it worked at,
-  in Angstrom or Bohrs as its simple keywords say, and only where the run
-  is surely one of a single geometry; otherwise nothing is taken, and the
-  output is not read. A tight-binding method an ORCA input names is
-  given as the xtb program names it (XTB2 and NATIVE-XTB2 alike are
-  GFN2-xTB), saying which ran it, the xtb program or ORCA itself
-  (`scripts/calc/test_reader_cclib_orca_xtb.py`). An
-  answer never holds a number that is not one (JSON has none). Tested,
-  with cclib, by hand (`scripts/calc/test_reader_cclib_runs.py`).
+- A program's output is read by that program's own plugin, where it is
+  added (PLUGINS.md, *Several plugins, one role*): ORCA's by the ORCA
+  plugin, Gaussian's by the Gaussian plugin and xtb's by the xTB plugin
+  (each its `reader.py`; FILE-IO.md) - each written from its program's
+  manual and its own outputs - and a job's output and a file opened by
+  hand alike.
+- The cclib plugin (`resources/plugins/cclib/worker.py`) gives cclib's
+  reading of many programs' outputs, as a reading of its own: chosen in
+  Settings, *Files*, never the default where the program's own plugin is
+  added. cclib is used as a library, its version pinned in its folder's
+  `requirements.lock`, its manifest bringing every program cclib reads,
+  each told by its own banner. It is an adapter, and no more
+  (2026-10-31): the output is given to cclib as it
+  is, and what cclib returns is mapped into Meno's form - the atoms, each
+  geometry, each one's energy, what the calculation was, each atom's mass,
+  and its results in the general form - with nothing read from the text
+  besides, and nothing cclib returns changed but the vibrations: the
+  translations and rotations an output lists among them, at a frequency
+  of naught (under 1 cm-1), are left out and the rest numbered from one,
+  as the ORCA and xTB plugins' readers do. Its tests read sample outputs
+  from `calc-samples/`, which git ignores - no program's output is
+  committed - and run by hand (`scripts/calc/test_reader_cclib.py`); the
+  app's side is tested with the plain data written by hand. An answer
+  never holds a number that is not one (JSON has none).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows) is a
   plugin of its own, sharing no code with another (the maintainer,
@@ -1633,7 +1619,7 @@ that every kind of these is in this table, by its id, and no other.
 | PDB file | `pdb` | `.pdb` | its records (`RECORD_NAMES`), an atom's coordinates in their columns | Meno, in its worker (`lib/chem/pdb.ts`) | Export: molecules in 3D as HETATM and CONECT records, a MODEL for each frame where asked | a molecule in 3D: every atom, MODELs as frames, bonds from CONECT and distances (FILE-IO.md, *As step 7 was built*) |
 | Cube file | `cube` | `.cube`, `.cub` | its layout (`CUBE_MARK`) | Meno, under the readers' contract, in its worker (`lib/calc/cube.ts`) | never | a molecule in 3D, its grids promises drawn as surfaces |
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |
-| Calculation programs' outputs (cclib's) | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as cclib's manifest brings it | cclib (plugin, uv); `gaussian` and `gaussian-fchk` also the Gaussian interface, written by its program (plugin, uv); `xtb` also the xTB plugin, written by its program (plugin, pixi) | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
+| Calculation programs' outputs | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as the manifest of each plugin that reads it brings it | each program's own plugin, where one is added, by default - the ORCA interface for `orca`, the Gaussian interface for `gaussian` and `gaussian-fchk` (plugin, uv), the xTB plugin for `xtb` (plugin, pixi); cclib (plugin, uv) for every kind listed, as a reading of its own where chosen | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
 | xTB's frequencies in Gaussian's form | `xtb-g98` | `.out` (xtb's `g98.out`) | "frequency output generated by the xtb code", as the xTB plugin's manifest brings it | the xTB plugin (pixi) | never | a molecule in 3D, its vibrations and their motions |
 | Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]`, as PySCF's manifest brings it | PySCF (plugin, pixi) | never | a molecule in 3D, its orbitals and densities promises |
 | AIM extended wavefunction | `wfx` | `.wfx` | `<Number of Primitives>` at a line's start, as the WFX reader's manifest brings it | the WFX reader (plugin, uv: Python, with NumPy for the orbitals' values), as the format's specification has it | never | a molecule in 3D, its energy, charge and spin, its virial ratio, its orbitals' energies and occupations, each orbital's surface on asking (its values on a grid, worked out from the file's primitives); given to Multiwfn's NCI as its wavefunction |

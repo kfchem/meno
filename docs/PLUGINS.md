@@ -13,7 +13,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
   running calculations, connecting to structure search, and more. Meno
   itself is not a plugin; it comes with its own parts.
 - **The chemist chooses the program.** Which program reads a kind of file
-  - Meno's own parser or cclib for XYZ - and which parses SMILES, assigns
+  - a calculation's output by its program's own plugin, or cclib's reading
+  beside it - and which parses SMILES, assigns
   R/S, or searches conformers.
 - **RDKit is a plugin of its own**, independent like the others.
 - **Nothing is kept running ahead of need.** Every plugin starts when it
@@ -54,7 +55,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 
 | Group | Role | Filled today by |
 | --- | --- | --- |
-| Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG), cclib, PySCF - see FILE-IO.md |
+| Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG); each program's own plugin, for its program's outputs; cclib, as a reading of its own; PySCF - see FILE-IO.md |
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
@@ -400,8 +401,8 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   plugin for it: each says it in its manifest.
 - **For reading a file, others may add to it.** The assigned reader reads
   the file. Others the chemist adds for that kind read it as well, and
-  their results join under their names, as an NBO plugin's would join
-  cclib's. See FILE-IO.md.
+  their results join under their names, as cclib's reading joins the
+  program's own plugin's. See FILE-IO.md.
 - **A role's options** - a conformer search's method and its settings, a
   calculation input's method and basis - are declared by the plugin in a
   general form: a choice, a number, a text or a switch, each with a label
