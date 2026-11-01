@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { kindOfFile } from "./probe";
+import { kindOfFile, outputKindIn } from "./probe";
 import { NotRead, whoReads } from "./read";
 import { kindById, registerKinds } from "../io/kinds";
 import { MANIFESTS } from "../plugins/known";
@@ -47,5 +47,20 @@ describe("what a file opened or dropped is", () => {
   it("is Meno's own, or text, where no plugin reads it either", async () => {
     expect((await kindOfFile("ethane.mol", MOL))?.id).toBe("mol");
     expect(await kindOfFile("build.log", "compiled in 3 s\n")).toBeNull();
+  });
+});
+
+describe("a calculation's output in a text pasted or chosen", () => {
+  afterEach(() => registerKinds([]));
+
+  it("is told by its program's banner, its plugin added or only offered - and nothing else is one", () => {
+    for (const [added, offered] of [[MANIFESTS, []], [[], MANIFESTS]] as const) {
+      registerKinds(added, offered);
+      expect(outputKindIn(ORCA)?.id).toBe("orca");
+    }
+    // (Meno's own kinds are no calculation's output: a MOL file's text, coordinates in a text)
+    expect(outputKindIn(MOL)).toBeNull();
+    expect(outputKindIn("3\nwater\nO 0 0 0.1173\nH 0 0.7572 -0.4692\nH 0 -0.7572 -0.4692\n")).toBeNull();
+    expect(outputKindIn("Water\nO 0.000000 0.000000 0.117300\n")).toBeNull();
   });
 });

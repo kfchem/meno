@@ -105,6 +105,16 @@ that differ, it is given none, and says why.
   in the menu of a text in the column, on what is selected or the whole
   text, and of a text's sheet. A text file opened or dropped opens as a
   text, as ever (the maintainer, 2026-10-15).
+- **A calculation's output is no text of coordinates.** Where what is
+  pasted, in Quick Add or on the page, or the text or part of it chosen
+  for *3D structures*, begins as a program's output does - its program's
+  banner, told as a file's is (*Open, drop, paste*) - it is read as that
+  output opened is, by its reader, and put down there: its molecule, its
+  energies and its calculation, as Open gives them. Where only a plugin
+  not added reads it, Meno says so and names the plugin, as Open does;
+  nothing of it is read as coordinates (2026-11-01; `lib/calc/probe`
+  `outputKindIn`). A part of an output chosen without its banner - a
+  geometry copied out of it - is coordinates in a text, as any.
 - **An atom** is an element - its symbol as it is written, or its atomic
   number - and three numbers with a decimal point or an exponent, read from
   the words in turn rather than the lines, so a line broken anywhere reads

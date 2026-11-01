@@ -36,8 +36,10 @@ import { dihedral, distance } from "./measure";
  * A distance's strength unless the chemist sets another, in kcal mol⁻¹ Å⁻²:
  * measured, on eight acid–base pairs held at 0.9 of their van der Waals
  * radii together (H3N…BH3, Me3N…BF3, H2O…BF3, Et2O…BF3, pyridine…BH3,
- * Me2O…AlCl3, Me3P…BH3, Me2CO…BF3; ten conformers each, the RDKit
- * plugin's), to hold within 0.01 Å (docs/STRUCTURE-STEPS.md;
+ * Me2O…AlCl3, Me3P…BH3, Me2CO…BF3): minimised by the RDKit plugin (ten
+ * conformers each) it holds within 0.01 Å; by xtb 6.7.1, within 0.01 Å
+ * under GFN-FF and within 0.02 Å under GFN2-xTB, whose pull on Me2O…AlCl3
+ * is the strongest (docs/STRUCTURE-STEPS.md;
  * scripts/calc/measure_restraint_strengths.py measures it again).
  */
 export const DISTANCE_STRENGTH = 500;
