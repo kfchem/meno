@@ -9,8 +9,8 @@ import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
-import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
-import { outputKindIn } from "../../../lib/calc/probe";
+import type { CoordinateStructure } from "../../../lib/io/coordinates";
+import { pastedAs } from "./quickAddPaste";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -495,18 +495,11 @@ function SmilesField({
           setChoice((at + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
         }}
         onPaste={(e) => {
-          const pasted = e.clipboardData.getData("text/plain");
-          // (a calculation's output, whole: read as one opened is - by its reader, never in part as coordinates)
-          if (onOutput && outputKindIn(pasted)) {
-            e.preventDefault();
-            onOutput(pasted);
-            return;
-          }
-          // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
-          const structures = onCoordinates ? readCoordinates(pasted) : [];
-          if (!structures.length) return;
+          const as = pastedAs(e.clipboardData.getData("text/plain"), { output: !!onOutput, coordinates: !!onCoordinates });
+          if (!as) return;
           e.preventDefault();
-          onCoordinates!(structures);
+          if ("output" in as) onOutput!(as.output);
+          else onCoordinates!(as.structures);
         }}
         placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
         aria-label="SMILES"
