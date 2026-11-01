@@ -14,6 +14,19 @@ import { cataloguedKinds, headOf, kindById, kindOf, kinds, probeCandidates, type
 import { readersOf } from "./catalog";
 import { addedReaders, readerClient } from "./workers";
 
+/**
+ * A calculation's output in a text pasted or chosen - told by its program's
+ * banner, as a file's is (`kindOf`), among the kinds of the plugins added and
+ * those only plugins not added read - so that it is read as one opened is,
+ * by its reader, or said to be what a plugin not added reads: never read in
+ * part as coordinates in a text (lib/io/coordinates). None where it is no
+ * calculation's output, or nothing in it tells.
+ */
+export function outputKindIn(text: string): Kind | null {
+  const kind = kindOf("", text, [...kinds(), ...cataloguedKinds().filter((k) => !kindById(k.id))]);
+  return kind?.output ? kind : null;
+}
+
 /** What a file is: told by what it holds, or by a plugin added, asked; or what a plugin not added reads it as. None, where nothing says. */
 export async function kindOfFile(name: string, text: string): Promise<Kind | null> {
   // (the plugins added, looked at afresh: their kinds registered)

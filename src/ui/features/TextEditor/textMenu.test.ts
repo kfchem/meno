@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { WordsEditor } from "../Workspace/utils/wordsEditor";
-import { fieldTarget, runTextMenu, structuresIn, textMenuItems, type TextMenuTarget } from "./textMenu";
+import { fieldTarget, outputIn, runTextMenu, structuresIn, textMenuItems, type TextMenuTarget } from "./textMenu";
+import { registerKinds } from "../../../lib/io/kinds";
+import { MANIFESTS } from "../../../lib/plugins/known";
 
 // (the maintainer, 2026-10-13: where the system's menu is kept shut - the
 // column's text, words on the page - a right-click opens Meno's own: Cut,
@@ -77,5 +79,23 @@ describe("3D structures, on a text in the column", () => {
 
   it("reads nothing of words that are no column's text - a label, words on the page", () => {
     expect(structuresIn(target("", false))).toEqual([]);
+    expect(outputIn(target("", false))).toBeNull();
+  });
+
+  it("reads a calculation's output by its reader, as one opened - told by its program's banner, its plugin added or not - never in part as coordinates", () => {
+    // (made up: an output's banner, then a geometry as a text of coordinates would have it)
+    const output = ["", "                                 * O   R   C   A *", "", text].join("\n");
+    const of = (selected: string): TextMenuTarget => ({ selected: () => selected, hasText: () => true, selectAll: () => {}, text: { whole: () => output, name: "job.out" } });
+    for (const added of [MANIFESTS, []]) {
+      registerKinds(added, MANIFESTS);
+      expect(structuresIn(of(""))).toEqual([]);
+      expect(outputIn(of(""))).toBe(output);
+    }
+    // (a part of it chosen, with no banner: coordinates in a text, as any)
+    expect(outputIn(of(text))).toBeNull();
+    expect(structuresIn(of(text)).map((s) => s.name)).toEqual(["Water"]);
+    // (a text of no program's, though a kind's - an XYZ file's - read as coordinates, as before)
+    expect(outputIn(target(""))).toBeNull();
+    registerKinds([]);
   });
 });
