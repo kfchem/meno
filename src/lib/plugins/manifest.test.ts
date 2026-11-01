@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { acceptManifest, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
 import { MANIFESTS } from "./known";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const good = {
   id: "nbo",
@@ -553,5 +555,22 @@ describe("a mark", () => {
     expect(markAt(head, { text: "* O R C A *" })).toBe(head.indexOf("*"));
     expect(markAt(head, { text: "[Molden Format]", at: "line-start" })).toBe(head.indexOf(" [Molden"));
     expect(markAt(head, { text: "NWChem" })).toBe(-1);
+  });
+});
+
+// (a bundled plugin whose manifest does not read is none: never left to vanish unsaid)
+describe("the plugins Meno carries", () => {
+  const root = join(__dirname, "../../../src-tauri/resources/plugins");
+  const folders = readdirSync(root).filter((f) => statSync(join(root, f)).isDirectory());
+
+  it("each read, by its folder's name - none of them refused", () => {
+    expect(MANIFESTS.map((m) => m.id)).toEqual([...folders].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it("each with every file its presets name there, in its folder itself - what Meno carries of it", () => {
+    for (const m of MANIFESTS.filter((x) => x.presets)) {
+      const p = m.presets!;
+      for (const f of [...p.looks, ...p.studios, ...p.motions].map((x) => x.file).concat(p.files)) expect(existsSync(join(root, m.id, f)), `${m.id}: ${f}`).toBe(true);
+    }
   });
 });
