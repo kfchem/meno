@@ -48,10 +48,10 @@ solvation"), and says no more of it - "ALPB(water)"; with none of the
 options that ask for a model, "none". Where that is not what was asked,
 the job is refused.
 
-CREST stops with an error when given a lone atom - an ion of a salt, say -
-so its manifest says it takes none (`noLoneAtom`), and Meno sends it none:
-a lone atom passes through Meno's step as it came (docs/PLUGINS.md,
-`steps`).
+A lone atom - an ion of a salt, say - has no conformers to search for and
+nothing to optimise. The manifest says CREST is given none (`noLoneAtom`),
+and Meno sends it none: a lone atom passes through Meno's step as it came
+(docs/PLUGINS.md, `steps`).
 
 It keeps nothing between requests, and reaches no network.
 """

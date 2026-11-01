@@ -409,8 +409,8 @@ describe("a lone atom its plugin's program takes none of", () => {
 
   it("is said on the step's line in what it is", () => {
     expect(passedSaid("conformers", 1)).toBe("one atom: its only conformer");
-    expect(passedSaid("conformers", 2)).toBe("2 of one atom: each its only conformer");
-    expect(passedSaid("optimise", 3)).toBe("3 of one atom: nothing to optimise, no energy");
+    expect(passedSaid("conformers", 2)).toBe("2 lone atoms: each its only conformer");
+    expect(passedSaid("optimise", 3)).toBe("3 lone atoms: nothing to optimise, no energy");
     expect(passedSaid("optimise", 0)).toBeNull();
     expect(passedSaid("energy", 1)).toBeNull();
   });

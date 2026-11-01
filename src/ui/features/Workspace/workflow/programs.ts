@@ -671,11 +671,11 @@ export function passedAsLone(kind: StepKind, entry: SetEntry): Worked {
   };
 }
 
-/** The lone atoms a step passed through as they came, said on its line: "one atom: its only conformer", "2 of one atom: each its only conformer" - none, nothing. */
+/** The lone atoms a step passed through as they came, said on its line: "one atom: its only conformer", "2 lone atoms: each its only conformer" - none, nothing. */
 export function passedSaid(kind: StepKind, count: number): string | null {
   const is = LONE_ATOM_IS[kind];
   if (!is || count < 1) return null;
-  return count === 1 ? is : `${count} of ${is.replace("one atom: its", "one atom: each its")}`;
+  return count === 1 ? is : is.replace("one atom: its", "one atom: each its").replace("one atom:", `${count} lone atoms:`);
 }
 
 /**

@@ -1439,7 +1439,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const r of run.refused ?? []) fails([entries[r.entry]], r.kind, r.why);
       // (none where it ran no job: lone atoms alone, passed through)
       const client = plugin && run.jobs.length ? await pluginClient(plugin).catch(() => null) : null;
-      // (the lone atoms it passed through as they came, each where it came among the others - those before a job's, before its results)
+      // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
+      //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
       const passing = [...(run.passed ?? [])].sort((a, b) => a - b);
       let passed = 0;
       const passOn = (before: number) => {
