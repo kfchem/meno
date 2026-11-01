@@ -2424,17 +2424,15 @@ pub fn clear_of_presets(files: &[JobFile], presets: &[String]) -> Result<(), Str
     }
 }
 
-/// Whether `f` is a file a preset may name (docs/PLUGINS.md, *Presets*): a path inside its plugin's folder - at most four
-/// names, each plain - and neither the manifest nor the worker Meno reads (as lib/plugins/manifest `presetFileOk`).
+/// Whether `f` is a file a preset may name (docs/PLUGINS.md, *Presets*): a file's name in its plugin's folder - plain, no
+/// folder, as Meno carries only the files of a plugin's folder itself - and neither the manifest nor the worker Meno reads
+/// (as lib/plugins/manifest `presetFileOk`).
 pub fn preset_file_ok(f: &str) -> bool {
-    let parts: Vec<&str> = f.split('/').collect();
-    let plain = |p: &&str| {
-        let b = p.as_bytes();
-        !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(c))
-    };
+    let b = f.as_bytes();
+    let plain = !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(c));
     // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
     let lower = f.to_ascii_lowercase();
-    f.len() <= 200 && parts.len() <= 4 && parts.iter().all(plain) && lower != "manifest.json" && lower != "worker.py"
+    plain && lower != "manifest.json" && lower != "worker.py"
 }
 
 /// The files a job of plugin `id` (its manifest `manifest`) is handed by the preset plugins `presets`, by their ids
@@ -4788,8 +4786,7 @@ mod tests {
             fs::create_dir_all(plugins.join(id)).unwrap();
             fs::write(plugins.join(id).join("manifest.json"), m.to_string()).unwrap();
         }
-        fs::create_dir_all(plugins.join("looks").join("looks")).unwrap();
-        for f in ["looks/gold.py", "spin.py", "shared.py"] {
+        for f in ["gold.py", "spin.py", "shared.py"] {
             fs::write(plugins.join("looks").join(f), format!("# {f}\n")).unwrap();
         }
         plugins
@@ -4803,7 +4800,7 @@ mod tests {
         serde_json::json!({
             "id": "looks", "name": "Looks", "version": "1.0.0",
             "depends": [{"plugin": "render", "versions": ">=0.7.0 <0.8.0", "interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]}],
-            "presets": {"interface": "preset", "looks": [{"id": "gold", "label": "Gold", "file": "looks/gold.py"}], "motions": [{"id": "spin", "label": "Spin", "file": "spin.py"}], "files": ["shared.py"]}
+            "presets": {"interface": "preset", "looks": [{"id": "gold", "label": "Gold", "file": "gold.py"}], "motions": [{"id": "spin", "label": "Spin", "file": "spin.py"}], "files": ["shared.py"]}
         })
     }
 
@@ -4812,7 +4809,7 @@ mod tests {
         let plugins = presetting(renderer(), preset_plugin());
         let dir_of = |p: &str| Ok(plugins.join(p));
         let handed = presets_given(&renderer(), "render", &["looks".into()], &dir_of).unwrap();
-        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["presets/looks/looks/gold.py", "presets/looks/shared.py", "presets/looks/spin.py"]);
+        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["presets/looks/gold.py", "presets/looks/shared.py", "presets/looks/spin.py"]);
         // (none handed, none asked for)
         assert!(presets_given(&renderer(), "render", &[], &dir_of).unwrap().is_empty());
         // (copied into its work folder, unread; listed nowhere it keeps)
@@ -4836,7 +4833,7 @@ mod tests {
             given: vec![],
         };
         let (_, dir) = make_handed_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }], &[], &handed).unwrap();
-        assert_eq!(fs::read_to_string(dir.join(WORK).join("presets/looks/looks/gold.py")).unwrap(), "# looks/gold.py\n");
+        assert_eq!(fs::read_to_string(dir.join(WORK).join("presets/looks/gold.py")).unwrap(), "# gold.py\n");
         let kept: Vec<String> = crate::keptjobs::kept_files(&dir).into_iter().map(|f| f.name).collect();
         assert_eq!(kept, ["work/input.txt"]);
         // (one that cannot be copied - gone since - leaves no folder)
@@ -4881,10 +4878,16 @@ mod tests {
         refused(renderer(), presets("files", serde_json::json!(["manifest.json"])), &["looks"], "names a file it cannot hand over");
         refused(renderer(), presets("files", serde_json::json!(["/etc/hosts"])), &["looks"], "names a file it cannot hand over");
         refused(renderer(), presets("files", serde_json::json!(["none.py"])), &["looks"], "none.py of Looks is not there");
-        refused(renderer(), presets("files", serde_json::json!(["looks"])), &["looks"], "looks of Looks is not a file");
+        refused(renderer(), presets("files", serde_json::json!(["sub/shared.py"])), &["looks"], "names a file it cannot hand over");
         refused(renderer(), preset_plugin(), &["looks", "looks"], "not a plugin that brings render presets");
         refused(renderer(), preset_plugin(), &["render"], "not a plugin that brings render presets");
         refused(renderer(), preset_plugin(), &["../looks"], "not a plugin that brings render presets");
+        // (a folder by a file's name)
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(["folder.py"])));
+        fs::create_dir(plugins.join("looks").join("folder.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("folder.py of Looks is not a file"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
         // (too many files, all told)
         let many: Vec<String> = (0..70).map(|i| format!("f{i}.py")).collect();
         let plugins = presetting(renderer(), presets("files", serde_json::json!(many)));
@@ -4904,13 +4907,6 @@ mod tests {
         std::os::unix::fs::symlink("/etc/hosts", plugins.join("looks").join("shared.py")).unwrap();
         let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
         assert!(err.contains("is a link"), "{err}");
-        // (nor a file in a folder that is one)
-        fs::remove_file(plugins.join("looks").join("shared.py")).unwrap();
-        fs::write(plugins.join("looks").join("shared.py"), "").unwrap();
-        fs::remove_dir_all(plugins.join("looks").join("looks")).unwrap();
-        std::os::unix::fs::symlink(plugins.join("render"), plugins.join("looks").join("looks")).unwrap();
-        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
-        assert!(err.contains("is a link"), "{err}");
         let _ = fs::remove_dir_all(plugins);
     }
 
@@ -4927,10 +4923,10 @@ mod tests {
 
     #[test]
     fn takes_a_file_a_preset_names_only_as_a_plain_path_inside_its_folder() {
-        for good in ["a.py", "looks/gold.py", "a/b/c/d.txt", "Studio_1.blend"] {
+        for good in ["a.py", "look_gold.py", "Studio_1.blend"] {
             assert!(preset_file_ok(good), "{good}");
         }
-        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "manifest.json", "worker.py", "Manifest.json", "WORKER.PY", "a b.py", "a\\b.py", &"x".repeat(65)] {
+        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "looks/gold.py", "manifest.json", "worker.py", "Manifest.json", "WORKER.PY", "a b.py", "a\\b.py", &"x".repeat(65)] {
             assert!(!preset_file_ok(bad), "{bad}");
         }
     }

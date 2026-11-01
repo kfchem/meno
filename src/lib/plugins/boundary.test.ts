@@ -514,10 +514,10 @@ describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
       id: "tool-looks",
       interfaces: [{ id: "styling", version: "1.0.0" }],
       depends: [{ plugin: "tool", versions: ">=1.0.0", interfaces: [{ id: "shading", versions: ">=1.0.0" }] }],
-      presets: { interface: "shading", looks: [{ id: "chalk", file: "looks/chalk.py" }], studios: [{ id: "attic", file: "attic.py" }], motions: [{ id: "wobble", file: "wobble.py" }], files: ["shared.py"], options: [{ id: "grain" }] },
+      presets: { interface: "shading", looks: [{ id: "chalk", file: "look_chalk.py" }], studios: [{ id: "attic", file: "attic.py" }], motions: [{ id: "wobble", file: "wobble.py" }], files: ["shared.py"], options: [{ id: "grain" }] },
     };
     const words = declared([{ who: "tool-looks", m }]);
-    for (const [word, as] of [["styling", "interface"], ["shading", "interface"], ["chalk", "look"], ["attic", "studio"], ["wobble", "motion"], ["looks/chalk.py", "a preset's file"], ["shared.py", "a preset's file"]])
+    for (const [word, as] of [["styling", "interface"], ["shading", "interface"], ["chalk", "look"], ["attic", "studio"], ["wobble", "motion"], ["look_chalk.py", "a preset's file"], ["shared.py", "a preset's file"]])
       expect(words.get(word), word).toEqual([`tool-looks: ${as}`]);
     expect(pluginOptions([{ who: "tool-looks", m }]).get("grain")).toEqual(["tool-looks"]);
   });

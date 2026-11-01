@@ -15,7 +15,7 @@ vi.mock("../../../../lib/plugins/known", async (importOriginal) => {
       brings("more-looks", "More looks", { looks: [{ id: "chalk", label: "Chalk", file: "chalk.py" }, { id: "felt", label: "Felt", file: "felt.py" }] }),
       brings("test-looks", "Test looks", {
         looks: [
-          { id: "chalk", label: "Chalk again", file: "looks/chalk.py" },
+          { id: "chalk", label: "Chalk again", file: "look_chalk.py" },
           { id: "glossy", label: "Glossy again", file: "glossy.py" },
         ],
         studios: [{ id: "attic", label: "Attic", file: "attic.py" }],

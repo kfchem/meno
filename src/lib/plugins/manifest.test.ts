@@ -277,7 +277,7 @@ describe("a plugin's manifest", () => {
   it("may bring another plugin presets through that one's interface - running nothing itself - each as a render role declares its own, with a file in its folder", () => {
     const presets = {
       interface: "styling",
-      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "looks/chalk.py" }],
+      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "look_chalk.py" }],
       studios: [{ id: "attic", label: "Attic", file: "attic.py" }],
       motions: [{ id: "wobble", label: "Wobble", shortest: { film: 3 }, file: "wobble.py" }],
       files: ["shared.py"],
@@ -289,7 +289,7 @@ describe("a plugin's manifest", () => {
     expect(read?.presets).toEqual({
       interface: "styling",
       for: "tool",
-      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "looks/chalk.py" }],
+      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "look_chalk.py" }],
       studios: [{ id: "attic", label: "Attic", file: "attic.py" }],
       motions: [{ id: "wobble", label: "Wobble", shortest: { film: 3 }, file: "wobble.py" }],
       files: ["shared.py"],
@@ -309,7 +309,7 @@ describe("a plugin's manifest", () => {
       { files: ["manifest.json"] },
       { files: ["Manifest.JSON"] },
       { files: ["Worker.py"] },
-      { files: ["a/b/c/d/e.py"] },
+      { files: ["looks/chalk.py"] },
       { files: ["shared.py", "shared.py"] },
       { studios: [{ id: "asked", label: "As asked", file: "asked.py" }] },
       { looks: [], studios: [], motions: [] },

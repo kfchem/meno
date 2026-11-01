@@ -684,13 +684,11 @@ function interfacesOf(v: unknown): InterfaceDecl[] | null {
   return out;
 }
 
-/** A file a preset names: a path inside its plugin's folder - a few names, each plain, never `.` or `..`, nor the worker or manifest Meno reads. The backend's rule (`preset_file_ok`). */
-const PRESET_PART = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** A file a preset names: a file's name in its plugin's folder - plain, no folder, as Meno carries only the files of a plugin's folder itself - never the worker or manifest Meno reads. The backend's rule (`preset_file_ok`). */
+const PRESET_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 function presetFileOk(f: unknown): f is string {
-  if (typeof f !== "string" || f.length > 200) return false;
-  const parts = f.split("/");
   // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
-  return parts.length <= 4 && parts.every((p) => PRESET_PART.test(p) && p !== "." && p !== "..") && f.toLowerCase() !== "manifest.json" && f.toLowerCase() !== WORKER;
+  return typeof f === "string" && PRESET_FILE.test(f) && f.toLowerCase() !== "manifest.json" && f.toLowerCase() !== WORKER;
 }
 
 /** The most files a preset plugin may hand over, all told. */
