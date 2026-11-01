@@ -4,6 +4,7 @@ import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
 import { structureInOutput, structureOnClipboard } from "./fromClipboard";
 import { outputKindIn } from "../../../../lib/calc/probe";
+import { NotRead } from "../../../../lib/calc/read";
 
 // (no plugin's worker in tests: Meno's own reader alone added - or, where a test says, the ORCA interface too, its reading a stand-in)
 const added = vi.hoisted(() => ({ ids: new Set(["meno"]) }));
@@ -51,6 +52,13 @@ describe("a calculation's output pasted in Quick Add, or chosen in a text", () =
 
   it("is said to be what a plugin not added reads, naming it, as Open says it - nothing of it read", async () => {
     registerKinds([], MANIFESTS);
-    await expect(structureInOutput(ORCA, outputKindIn(ORCA)!, "Pasted text")).rejects.toThrow(/^Pasted text \(ORCA output\): ORCA interface or cclib or PySCF would read it/);
+    const said = await structureInOutput(ORCA, outputKindIn(ORCA)!, "Pasted text").then(
+      () => null,
+      (e: unknown) => e,
+    );
+    // (named once, as given; the plugins that would read it each one Meno carries that says it reads ORCA's output)
+    expect(said).toBeInstanceOf(NotRead);
+    expect((said as NotRead).message).toMatch(/^Pasted text \(ORCA output\): .+ would read it\.$/);
+    expect([...(said as NotRead).suggest].sort()).toEqual(MANIFESTS.filter((m) => m.reads.includes("orca")).map((m) => m.id).sort());
   });
 });
