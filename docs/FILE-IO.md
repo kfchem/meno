@@ -189,7 +189,7 @@ that differ, it is given none, and says why.
 
 | Kind | Told by | Read by |
 | --- | --- | --- |
-| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | the ORCA interface (plugin, uv; ORCA's output), the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint) and the xTB plugin (plugin, pixi; xtb's output, a job's log read the same way, and its frequencies in Gaussian's form), each for what its program writes; cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
+| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | the ORCA interface (plugin, uv; ORCA's output), the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint) and the xTB plugin (plugin, pixi; xtb's output, a job's log read the same way, and its frequencies in Gaussian's form), each for what its program writes; cclib (plugin, uv) |
 | Molden file | `[Molden Format]`, as PySCF's manifest brings it | PySCF |
 | Cube file | its layout: two comment lines, four lines of a count and three numbers (`CUBE_MARK`) | cube (built in, web worker) |
 
@@ -437,7 +437,7 @@ Meno knows of:
 - **Also read by:** none at first. The chemist may add any plugin that
   reads the kind; each then reads the file as well, and its results join
   under its name, as #147 keeps them. Example: a Gaussian output read by
-  cclib, with PySCF added to draw its orbitals.
+  the Gaussian interface, with cclib added to read it as well.
 - **Written by:** one, where anything writes the kind.
 
 How these behave:
@@ -1607,8 +1607,7 @@ As step 3 was built:
   (Firefly too), GAMESS-UK, Gaussian and its formatted checkpoint,
   Jaguar, Molcas, Molpro, MOPAC, NWChem, ORCA, Psi4, Q-Chem, Turbomole,
   xTB - each told by its banner as cclib tells it; PySCF's brings the
-  four it reads, Molden among them. With no plugin added, *Files* lists
-  Meno's own kinds only.
+  Molden file. With no plugin added, *Files* lists Meno's own kinds only.
   - Each program's banner is checked on a real output of it, one per
     program from cclib's regression data (`scripts/calc/samples.json`;
     kept out of the repository in `calc-samples/`), and cclib's worker

@@ -46,7 +46,6 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_plugin_reinvent.py
       - run: python3 -m unittest scripts/calc/test_plugin_crem.py
       - run: python3 -m unittest scripts/calc/test_charge_multiplicity.py
-      - run: python3 -m unittest scripts/calc/test_reader_pyscf_species.py
 
   frontend-windows:
     name: Frontend tests on Windows

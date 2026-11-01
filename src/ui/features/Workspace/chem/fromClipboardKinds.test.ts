@@ -19,6 +19,6 @@ describe("text pasted that is a calculation's output", () => {
   it("is told as Open tells it: one a plugin not added reads names that plugin, to be added", async () => {
     registerKinds([], MANIFESTS);
     await writeClipboard([{ flavor: "text", text: ORCA }]);
-    await expect(structureOnClipboard()).rejects.toThrow(/ORCA output\): ORCA interface or cclib or PySCF would read it/);
+    await expect(structureOnClipboard()).rejects.toThrow(/ORCA output\): ORCA interface or cclib would read it/);
   });
 });
