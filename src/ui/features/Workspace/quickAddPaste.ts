@@ -1,5 +1,6 @@
 import { outputKindIn } from "../../../lib/calc/probe";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 
 /**
  * What a text pasted in the SMILES field is, of what Quick Add takes there
@@ -11,6 +12,6 @@ import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coord
  */
 export function pastedAs(text: string, takes: { output: boolean; coordinates: boolean }): { output: string } | { structures: CoordinateStructure[] } | null {
   if (takes.output && outputKindIn(text)) return { output: text };
-  const structures = takes.coordinates ? readCoordinates(text) : [];
+  const structures = takes.coordinates ? readCoordinates(text, quotedTables()) : [];
   return structures.length ? { structures } : null;
 }

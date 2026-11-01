@@ -27,7 +27,8 @@
 import { create } from "zustand";
 import { CUBE_MARK } from "../calc/cube";
 import { recordName, RECORD_NAMES } from "../chem/pdb";
-import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type XyzEnergyDecl, type XyzStepsDecl } from "../plugins/manifest";
+import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type QuotedEnergyDecl, type XyzEnergyDecl, type XyzStepsDecl } from "../plugins/manifest";
+import type { QuotedTables } from "./coordinates";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
 import sampleRxn from "../../samples/diels-alder.rxn?raw";
@@ -191,12 +192,22 @@ export function headOf(text: string): string {
  * and those only plugins not added read, each with those plugins
  * (`offeredKinds`).
  */
-export const useKinds = create<{ kinds: readonly Kind[]; texts: readonly TextKind[]; catalogued: readonly Kind[]; xyzEnergies: readonly XyzEnergyDecl[]; xyzSteps: readonly XyzStepsDecl[] }>(() => ({
+export const useKinds = create<{
+  kinds: readonly Kind[];
+  texts: readonly TextKind[];
+  catalogued: readonly Kind[];
+  xyzEnergies: readonly XyzEnergyDecl[];
+  xyzSteps: readonly XyzStepsDecl[];
+  quotedEnergies: readonly QuotedEnergyDecl[];
+  quotedTables: QuotedTables;
+}>(() => ({
   kinds: registered([]).kinds,
   texts: [],
   catalogued: [],
   xyzEnergies: [],
   xyzSteps: [],
+  quotedEnergies: [],
+  quotedTables: { added: [], offered: [] },
 }));
 
 /** Registers the kinds `manifests` - the plugins added - bring, with Meno's own, in place of those registered before; and those only the plugins `offered` but not added read (`offeredKinds`). */
@@ -205,7 +216,21 @@ export function registerKinds(manifests: readonly Manifest[], offered: readonly 
   const catalogued = offeredKinds(offered, manifests);
   // (and how the programs of the plugins added write an XYZ frame's energy, in the order the plugins are - and
   // which of their XYZ files are an optimisation's steps)
-  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []), xyzSteps: manifests.flatMap((m) => m.xyzSteps ?? []) });
+  // (and their programs' lines and tables of atoms as papers quote them - and those of the plugins only offered, to say whose
+  // a table is that none added reads)
+  const tablesOf = (ms: readonly Manifest[]) => ms.flatMap((m) => (m.quotedTables ?? []).map((t) => ({ ...t, plugin: m.name })));
+  const quotedTables = { added: tablesOf(manifests), offered: tablesOf(offered.filter((o) => !manifests.some((m) => m.id === o.id))) };
+  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []), xyzSteps: manifests.flatMap((m) => m.xyzSteps ?? []), quotedEnergies: manifests.flatMap((m) => m.quotedEnergies ?? []), quotedTables });
+}
+
+/** The energy lines the programs of the plugins added print, as papers quote them: none, where none is added. */
+export function quotedEnergies(): readonly QuotedEnergyDecl[] {
+  return useKinds.getState().quotedEnergies;
+}
+
+/** The tables of atoms the programs of the plugins added print, as papers quote them - and those only plugins not added declare, each with its plugin's name. */
+export function quotedTables(): QuotedTables {
+  return useKinds.getState().quotedTables;
 }
 
 /** The XYZ files the programs of the plugins added write whose frames are an optimisation's steps: none, where none is added. */
