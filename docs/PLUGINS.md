@@ -738,7 +738,7 @@ Core knows no program and no plugin by name: what a plugin makes, reads or does 
 
 The words core legitimately owns are in the test's `ALLOWED` list, each with why (the kinds of step Meno defines, the materials of its scene file, an element's name); a new entry is a decision, made in a review.
 
-Not yet within its reach, and so kept by review alone: text of a program's output that no plugin declares (headings, energy lines a pasted text is read for), and numbers or defaults core took from one plugin's program (a time limit, a sameness threshold, a restraint's strength, a limit sized by one program's run time). Each is to become the plugin's declaration, or core's own value stated as such.
+Not yet within its reach, and so kept by review alone: text of a program's output that no plugin declares (headings, energy lines a pasted text is read for), and numbers or defaults core took from one plugin's program (a time limit, a sameness threshold). Each is to become the plugin's declaration, or core's own value stated as such - as a restraint's strength is, a physical value whichever program minimises, and the most pairs a path search makes, a guard sized by no program (STRUCTURE-STEPS.md, WORKFLOWS.md).
 
 ## When plugins run
 

@@ -375,12 +375,10 @@ are a *Frequencies* step's, wired after it.
   either is its conformers, each one start or end (2026-10-30): a
   reactant's conformers, each paired with the product made from it,
   matched on a *Tag*'s ID. *Each with each* makes at most as many pairs as
-  *At most* says - 10 unless changed, so that one option does not start a
-  job for every pair of two large sets (two of 29 conformers make 841). A
-  Diels-Alder pair's NEB-TS at ORCA's own GFN2-xTB, on one core
-  (2026-10-30), took 8 to 10 min for ends about 3 Å apart, and 29 to 132
-  min (median about 55) for ends 3.5 to 7.8 Å apart, as optimised starts
-  are: so 10 pairs are about a night of one core (1.5 to 22 hours). Past
+  *At most* says - 10 unless changed: a guard of Meno's own, sized by no
+  program, so that one option never starts a job for every pair of two
+  large sets (two of 29 conformers make 841), each a search for a path
+  that may take hours; the chemist raises it, knowing how many. Past
   it, nothing is run, and the step says how many it would make; pairs
   matched on a property are as many as the starts, and not limited. Each
   path keeps how its start and end were paired (`path.paired`: "in order,
