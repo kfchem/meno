@@ -8,12 +8,12 @@
  * anywhere is read as if it were whole.
  *
  * An atom is an element - its symbol, or its atomic number - and three
- * numbers written with a decimal point (or an exponent), as Gaussian's
- * manual has a molecule specification's line: `C 1.2 3.4 5.6`, a label of
- * up to four letters and digits (`C1`), a freeze code between (`C 0 x y z`,
- * `C -1 x y z`), its items set apart by spaces, tabs or commas. Besides:
- * `1 C x y z`, numbered; and Gaussian's table of an orientation, a row of
- * the atom's number, its atomic number, its type and x, y, z.
+ * numbers written with a decimal point (or an exponent): `C 1.2 3.4 5.6`;
+ * its element written as a label of up to four letters and digits (`C1`,
+ * `H1A`); a whole number between, read as nothing (`C 0 x y z`); its items
+ * set apart by spaces, tabs or commas; or `1 C x y z`, numbered. A table of
+ * atoms a program prints in a form of its own is read as its plugin declares
+ * it (`QuotedTables`), only where that plugin is added.
  *
  * A structure's atoms run on until something other than an atom comes -
  * words, a name - and that begins the next; a page's number, set among
@@ -25,6 +25,7 @@
  * ångströms).
  */
 import { ELEMENTS } from "../chem/elements";
+import type { QuotedColumn, QuotedTableDecl } from "../plugins/manifest";
 import { bondsByDistance } from "../../utils/structureParsers";
 import { BOHR_ANGSTROM } from "../units";
 
@@ -54,7 +55,15 @@ export type CoordinateStructure = {
   skipped?: string[];
   /** The page's numbers it runs on over: one structure across a page's end. */
   continues?: string[];
+  /** A table of atoms a program prints in a form only a plugin not added reads, said so (`QuotedTables`): none of it read, not to be placed. */
+  unread?: true;
 };
+
+/** A table of atoms a program prints, as its plugin declares it (lib/plugins/manifest `quotedTables`), with the plugin's name. */
+export type QuotedTable = QuotedTableDecl & { plugin: string };
+/** The tables of the plugins added - read - and of those only offered - told, and said to be theirs, never read. */
+export type QuotedTables = { added: readonly QuotedTable[]; offered: readonly QuotedTable[] };
+export const NO_QUOTED: QuotedTables = { added: [], offered: [] };
 
 const SYMBOL = new Map(ELEMENTS.map((e) => [e.symbol.toLowerCase(), e.symbol]));
 const BY_NUMBER = new Map(ELEMENTS.map((e) => [e.number, e.symbol]));
@@ -66,7 +75,8 @@ const INTEGER = /^[+-]?\d+$/;
 /**
  * An element's symbol from a label: the symbol, as it is written (C, Cl - a
  * TS1 names a structure), with a number and up to two letters or digits more
- * after it (C1, C12, H1A): Gaussian's labels are four long at most.
+ * after it (C1, C12, H1A): a label of four at most, as tables of atoms label
+ * them - a longer one is a name.
  */
 function elementOfLabel(t: string): string | null {
   const m = /^([A-Z][a-z]?)(?:\d[0-9A-Za-z']{0,2})?$/.exec(t);
@@ -81,8 +91,34 @@ type Token = { t: string; line: number };
 /** An atom as written: where it begins and ends among the words, the line it begins on, its number where it is numbered. */
 type Rec = CoordinateAtom & { from: number; to: number; line: number; end: number; index?: number; slot: number };
 
-/** The atom written from word `i`, or none. */
-function recordAt(ts: readonly Token[], i: number): Omit<Rec, "slot"> | null {
+/** The atom a row of a declared table (`QuotedTable`) is, from word `i`: each column in turn, all on one line; or none. */
+function tableRowAt(ts: readonly Token[], i: number, columns: readonly QuotedColumn[]): Omit<Rec, "slot"> | null {
+  const line = ts[i].line;
+  if (ts[i + columns.length - 1]?.line !== line) return null;
+  let el: string | null = null;
+  let index: number | undefined;
+  const at: Record<"x" | "y" | "z", number> = { x: NaN, y: NaN, z: NaN };
+  for (const [k, c] of columns.entries()) {
+    const t = ts[i + k].t;
+    if (c === "x" || c === "y" || c === "z") {
+      if (!DECIMAL.test(t)) return null;
+      at[c] = num(t);
+    } else if (c === "element") el = elementOfLabel(t);
+    else if (!INTEGER.test(t)) return null;
+    else if (c === "atomic-number") el = BY_NUMBER.get(Number(t)) ?? null;
+    else if (c === "centre") index = Number(t);
+  }
+  return el ? { el, ...at, from: i, to: i + columns.length, line, end: line, ...(index != null ? { index } : {}) } : null;
+}
+
+/** Whether a line is a row of a declared table, whole: its words those of the columns, in turn. */
+function rowOf(line: string, columns: readonly QuotedColumn[]): boolean {
+  const ts = wordsOf([line]);
+  return ts.length === columns.length && tableRowAt(ts, 0, columns) != null;
+}
+
+/** The atom written from word `i`, or none: a row of a declared table first (`tables`), then as tables of atoms are written. */
+function recordAt(ts: readonly Token[], i: number, tables: readonly QuotedTable[] = []): Omit<Rec, "slot"> | null {
   const t = (k: number) => ts[i + k]?.t ?? "";
   const dec = (k: number) => DECIMAL.test(t(k));
   const int = (k: number) => INTEGER.test(t(k));
@@ -90,10 +126,9 @@ function recordAt(ts: readonly Token[], i: number): Omit<Rec, "slot"> | null {
   const at = (el: string, k: number, index?: number) => ({ el, x: num(t(k)), y: num(t(k + 1)), z: num(t(k + 2)), from: i, to: i + k + 3, line: ts[i].line, end: ts[i + k + 2].line, ...(index != null ? { index } : {}) });
   // (a number before the element, on its line: the atom's own - a "0 1" on the line before is the charge's)
   const sameLine = ts[i + 1]?.line === ts[i].line;
-  // (a table of an orientation: centre, atomic number, type, x y z)
-  if (sameLine && int(0) && int(1) && int(2) && three(3)) {
-    const el = BY_NUMBER.get(Number(t(1)));
-    return el ? at(el, 3, Number(t(0))) : null;
+  for (const table of tables) {
+    const row = tableRowAt(ts, i, table.columns);
+    if (row) return row;
   }
   // (numbered: 1 C x y z)
   if (sameLine && int(0) && three(2)) {
@@ -113,9 +148,18 @@ const PAGE_MARK = /^(?:S-?\d+|page\s+\d+(?:\s+of\s+\d+)?|\d+\s*\/\s*\d+|[-\u2013
 /** A note of a structure's: an energy, a frequency, a correction, its method. */
 const NOTE =
   /energ|hartree|kcal|kj\s*\/?\s*mol|\bscf\b|\bzpe\b|zero[- ]point|enthalp|gibbs|frequenc|imaginary|\be\s*\(|\b[eGH]\s*=|\bdelta\b|thermal|correction|b3lyp|m06|wb97|pbe|def2|6-31|6-311|cc-pv|\btzvp|\bsvp\b|level of theory/i;
-/** A line saying what follows, not naming it: a table's heads, "Cartesian coordinates", rules. */
+/** A line saying what follows, not naming it: a table's heads, "Cartesian coordinates", rules - and the headings and heads of the tables declared (`headingIn`). */
 const HEADING_ONLY =
-  /^(?:cartesian\s+coordinates?|coordinates?|xyz\s+coordinates?|optimi[sz]ed\s+(?:geometry|coordinates|structure)|standard orientation|input orientation|z-matrix orientation|center\s+atomic|number\s+number|atom\b|symbol\b|element\b|x\s+y\s+z|[-=_\s]+$|\(?(?:å|angstroms?|a\.?u\.?|bohr)\)?:?$)/i;
+  /^(?:cartesian\s+coordinates?|coordinates?|xyz\s+coordinates?|optimi[sz]ed\s+(?:geometry|coordinates|structure)|atom\b|symbol\b|element\b|x\s+y\s+z|[-=_\s]+$|\(?(?:å|angstroms?|a\.?u\.?|bohr)\)?:?$)/i;
+/** A line as its start is compared with a declared heading's: without regard to case, its spaces one. */
+const plainStart = (l: string) => l.trim().toLowerCase().replace(/\s+/g, " ");
+/** Whether a line begins as one of `starts` does (`plainStart`). */
+const beginsAs = (l: string, starts: readonly string[]) => starts.some((h) => plainStart(l).startsWith(plainStart(h)));
+/** Whether a line says what follows: as `HEADING_ONLY` has it, or as a declared table's heading or heads begin. */
+function headingIn(quoted: QuotedTables): (l: string) => boolean {
+  const starts = [...quoted.added, ...quoted.offered].flatMap((t) => [...t.headings, ...t.heads]);
+  return (l) => HEADING_ONLY.test(l) || beginsAs(l, starts);
+}
 /** A note within a longer line: an energy ("E = -1234.5678 Hartree", "E(RB3LYP) = -1234.5 A.U."), a count of imaginary frequencies. */
 const FRAGMENT = /\b(?:E|G|H|ZPE)(?:\s*\([^)]*\))?\s*=\s*[-+]?\d+\.\d+(?:\s*(?:hartrees?|a\.u\.|au|eh|kcal\s*\/?\s*mol))?|imaginary frequenc(?:y|ies)\s*:?\s*\d+/i;
 const STATED = /(\d+)\s*atoms\b|\batoms?\s*[:=]\s*(\d+)|number of atoms\s*[:=]?\s*(\d+)/i;
@@ -169,14 +213,14 @@ function rawLinesOf(text: string): string[] {
 }
 
 /** The text's lines, a minus however printed made one, page marks and running heads and feet - lines set again and again, words only - left out. */
-function linesOf(text: string): string[] {
+function linesOf(text: string, tables: readonly QuotedTable[] = []): string[] {
   const lines = rawLinesOf(text);
   const count = new Map<string, number>();
   for (const l of lines) count.set(l, (count.get(l) ?? 0) + 1);
   return lines.map((l) => {
     if (PAGE_MARK.test(l)) return "";
     // (a line set twice or more that is words, no atom nor a number alone - a journal's foot, a running head - is the page's; a table's heads are said once each structure and left out anyway)
-    if ((count.get(l) ?? 0) >= 2 && l.length >= 6 && /[A-Za-z]{3}/.test(l) && !NOTE.test(l) && !STATED.test(l) && !SAYS_BOHR.test(l) && !SAYS_ANGSTROM.test(l) && !wordsOf([l]).some((_, i, ts) => recordAt(ts, i)))
+    if ((count.get(l) ?? 0) >= 2 && l.length >= 6 && /[A-Za-z]{3}/.test(l) && !NOTE.test(l) && !STATED.test(l) && !SAYS_BOHR.test(l) && !SAYS_ANGSTROM.test(l) && !wordsOf([l]).some((_, i, ts) => recordAt(ts, i, tables)))
       return "";
     return l;
   });
@@ -208,8 +252,8 @@ type Run = { recs: Rec[]; before: string[]; after: string[] };
 
 /** A line of numbers alone: a charge and a multiplicity, or a count. */
 const NUMBERS_ONLY = /^[+-]?\d+(?:[\s,]+[+-]?\d+)?$/;
-/** A line that may name a structure: no note, no table's head, no numbers alone, no count. */
-const naming = (l: string) => !NOTE.test(l) && !HEADING_ONLY.test(l) && !NUMBERS_ONLY.test(l) && !SAYS_SPECIES.test(l) && /[A-Za-z0-9]/.test(nameOf(l)) && l.length <= 80;
+/** Whether a line may name a structure: no note, no table's head (`heading`), no numbers alone, no count. */
+const namingBy = (heading: (l: string) => boolean) => (l: string) => !NOTE.test(l) && !heading(l) && !NUMBERS_ONLY.test(l) && !SAYS_SPECIES.test(l) && /[A-Za-z0-9]/.test(nameOf(l)) && l.length <= 80;
 /** A line as a name: its count of atoms, where it says one ("TS1 (52 atoms)"), and the units its lengths are in ("coordinates in bohr"), left out. */
 const nameOf = (l: string) =>
   l
@@ -221,11 +265,25 @@ const nameOf = (l: string) =>
 /**
  * The structures written in a text, in the order they come: each with its
  * name, its notes, its charge and multiplicity and the count of its atoms
- * where the text gives them, and what looks wrong.
+ * where the text gives them, and what looks wrong. A table of atoms a
+ * program prints in a form of its own is read as the plugin added declares
+ * it (`quoted.added`); one only a plugin not added declares is none of it
+ * read, and said to be that plugin's (`quoted.offered`).
  */
-export function readCoordinates(text: string): CoordinateStructure[] {
+export function readCoordinates(text: string, quoted: QuotedTables = NO_QUOTED): CoordinateStructure[] {
   const raw = rawLinesOf(text);
-  const lines = linesOf(text);
+  const heading = headingIn(quoted);
+  const naming = namingBy(heading);
+  // (the rows of a table only a plugin not added declares - one no plugin added reads the same: never read, as atoms or
+  // anything else; each run of them said to be that plugin's, below)
+  const unreadTables = quoted.offered.filter((o) => !quoted.added.some((a) => a.columns.join() === o.columns.join()));
+  const claimed = new Map<number, QuotedTable>();
+  const all = linesOf(text, quoted.added);
+  all.forEach((l, k) => {
+    const t = l && unreadTables.find((u) => rowOf(l, u.columns));
+    if (t) claimed.set(k, t);
+  });
+  const lines = all.map((l, k) => (claimed.has(k) ? "" : l));
   const ts = wordsOf(lines);
   const bohrAll = lines.some(saysBohr) && !SAYS_ANGSTROM.test(text);
   // every atom written, in turn - but a crystal's, its place a fraction of its cell's edges: on a line with a value's
@@ -233,7 +291,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
   // tables print them
   const recs: Rec[] = [];
   for (let i = 0; i < ts.length; ) {
-    const r = recordAt(ts, i);
+    const r = recordAt(ts, i, quoted.added);
     if (r && (CRYSTAL.test(lines[r.line] ?? "") || CRYSTAL.test(lines[r.end] ?? ""))) i = r.to;
     else if (r) {
       const slot = recs.filter((q) => q.line === r.line).length;
@@ -286,7 +344,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
   // (a run of one atom is a structure only where what comes before it says it is one - its energy, its charge and
   // multiplicity, its count, a table's heads - not one met among some other table's numbers or a text's words, a crystal's
   // atom with its uncertainties, a peak list's page number; nor one written by its atomic number alone)
-  const geometry = (r: Run) => r.before.some((l) => NOTE.test(l) || HEADING_ONLY.test(l) || STATED.test(l) || /^[+-]?\d+[\s,]+\d+$/.test(l));
+  const geometry = (r: Run) => r.before.some((l) => NOTE.test(l) || heading(l) || STATED.test(l) || /^[+-]?\d+[\s,]+\d+$/.test(l));
   // (nor a run of atoms written by atomic numbers that count up one by one - 1, 2, 3 - a table's positions with values beside
   // them, an NMR table's shifts: no molecule's elements run so)
   const counting = (r: Run) => {
@@ -319,7 +377,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     const skipped = among.filter((l) => !broken.includes(l));
     // (where it runs on over a page's end: said, by the page's number there, so the chemist sees where it was joined)
     const breaks = skipped.filter((l) => PAGE_MARK.test(l));
-    out.push(...structureOf(run, own, bohrAll, n + 1).map((s) => ({ ...s, ...(broken.length ? { broken } : {}), ...(skipped.length ? { skipped } : {}), ...(breaks.length ? { continues: breaks } : {}) })));
+    out.push(...structureOf(run, own, bohrAll, n + 1, naming).map((s) => ({ ...s, ...(broken.length ? { broken } : {}), ...(skipped.length ? { skipped } : {}), ...(breaks.length ? { continues: breaks } : {}) })));
   });
   // (a lone atom left out by a structure - set apart from it by something - named on the card, never dropped unsaid)
   const near = (r: Run) => kept.some((k) => k.recs.some((q) => Math.abs(q.line - r.recs[0].line) <= 3));
@@ -329,7 +387,18 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     out.push({ name: "An atom on its own", notes: [], bohr: false, atoms: atomsOfRecs(r.recs, 1), warnings: [], broken: [line] });
   }
   if (out.length) out[out.length - 1].notes.push(...kept[kept.length - 1].after.filter((l) => NOTE.test(l)));
-  return out.map(checked);
+  // (each run of a table's rows only a plugin not added reads: named by its heading, where one is just above it, and said
+  // to be that plugin's - none of it read, nothing placed)
+  const unread: CoordinateStructure[] = [];
+  for (const [k, t] of claimed) {
+    if (claimed.get(k - 1) === t) continue;
+    let n = k;
+    while (claimed.get(n + 1) === t) n++;
+    const above = raw.slice(Math.max(0, k - 6), k).reverse().find((l) => beginsAs(l, t.headings));
+    unread.push({ name: above ?? "A table of atoms", notes: [], bohr: false, atoms: [], warnings: [`A table as its program prints it: the ${t.plugin} plugin reads it, once added in Settings, Plugins.`], unread: true });
+  }
+  // (after those read)
+  return [...out.map(checked), ...unread];
 }
 
 const atomsOfRecs = (recs: readonly Rec[], scale: number): CoordinateAtom[] => recs.map((r) => ({ el: r.el, x: r.x * scale, y: r.y * scale, z: r.z * scale }));
@@ -340,7 +409,7 @@ function crowds(a: readonly CoordinateAtom[], b: readonly CoordinateAtom[]): boo
 }
 
 /** The structure, or structures, a run of atoms is - two read across two columns, told apart where they can be - with what was said before it. */
-function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: number): CoordinateStructure[] {
+function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: number, naming: (l: string) => boolean): CoordinateStructure[] {
   // (named by the line nearest its atoms that may name it - or, its lines' ends made spaces, by what comes before its first note
   // on the line before its atoms, where that may name it: "TS-1 E = -76.4 Hartree 0 1")
   const last = said[said.length - 1] ?? "";

@@ -85,7 +85,7 @@ import sys
 
 import reader
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 # The elements by atomic number, from 1: what an atom's element may be.
 SYMBOLS = (

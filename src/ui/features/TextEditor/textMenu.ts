@@ -14,6 +14,7 @@ import { IS_MAC } from "../../../lib/doc/shortcuts";
 import { readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { plainLines } from "../../../lib/text/editing";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 import type { FieldHost, TypingField } from "./typingField";
 
 /** What the menu works on: words that can be changed - a field's - or only read. */
@@ -93,7 +94,7 @@ export function fieldTarget(ed: FieldHost, field: () => TypingField | null): Tex
 /** The structures the coordinates in a column's text hold - what is selected, or the whole of it - none where there are none or no text's. */
 export function structuresIn(t: TextMenuTarget): CoordinateStructure[] {
   if (!t.text) return [];
-  return readCoordinates(t.selected() || t.text.whole());
+  return readCoordinates(t.selected() || t.text.whole(), quotedTables());
 }
 
 /** The menu, open where it was asked for, on what; or none. And what 3D Structures does with what it found, where the workspace takes them (`structures`). */

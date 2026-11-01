@@ -10,6 +10,7 @@ import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -491,7 +492,7 @@ function SmilesField({
         onPaste={(e) => {
           const pasted = e.clipboardData.getData("text/plain");
           // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
-          const structures = onCoordinates ? readCoordinates(pasted) : [];
+          const structures = onCoordinates ? readCoordinates(pasted, quotedTables()) : [];
           if (!structures.length) return;
           e.preventDefault();
           onCoordinates!(structures);

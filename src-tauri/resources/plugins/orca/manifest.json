@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
@@ -16,6 +16,7 @@
   ],
   "depends": [{"plugin": "xtb", "versions": ">=0.1.4 <0.2.0", "optional": true, "programs": [{"program": "xtb", "env": "XTBEXE"}]}],
   "xyzEnergies": [{"id": "orca", "pattern": "(?:^|\\s)E\\s*[:=]?\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)", "unit": "hartree"}],
+  "quotedEnergies": [{"id": "final-single-point", "pattern": "^\\s*FINAL SINGLE POINT ENERGY\\s+(?<value>[-+]?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)\\s*$", "name": "Final single point energy", "unit": "hartree"}],
   "xyzSteps": [{"id": "orca-opt", "file": "*_trj.xyz", "comment": "^Coordinates from ORCA-job \\S+ E\\s+-?\\d"}],
   "steps": [
     {

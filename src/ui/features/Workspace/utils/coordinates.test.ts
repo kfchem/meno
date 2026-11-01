@@ -9,6 +9,10 @@ import { entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/en
 import { placeAsSet } from "../workflow/run";
 import { coordinateMolecules, energyNoted, energyOf } from "./coordinates";
 import { energiesFrom } from "../workflow/setTable";
+import { MANIFESTS } from "../../../../lib/plugins/known";
+
+/** The energy lines the plugins Meno carries declare (lib/plugins/manifest `quotedEnergies`): read where those plugins are added. */
+const QUOTED = MANIFESTS.flatMap((m) => m.quotedEnergies ?? []);
 
 // (made up for the test: a water and a methane, each under its name)
 const TEXT = [
@@ -183,7 +187,7 @@ describe("the energy a note names, among the ways notes write it", () => {
 
   it("is taken from each that names one, and from none that names another quantity - a correction, a part of one, a sum", () => {
     const wrong = NOTES.filter(([note, taken]) => {
-      const r = energyNoted([note]);
+      const r = energyNoted([note], QUOTED);
       return (!!r && "energy" in r) !== taken;
     }).map(([note]) => note);
     expect(wrong).toEqual([]);
@@ -193,11 +197,20 @@ describe("the energy a note names, among the ways notes write it", () => {
     expect(energyNoted(["E(MP2) = -155.123 Eh and E(HF) = -154.98 Eh"])).toEqual({ why: "its notes give E(MP2) = -155.123 and E(HF) = -154.98, which differ" });
   });
 
-  it("is read as written - a power of ten, ORCA's line with no \"=\", a colon - and named as it is", () => {
+  it("is read as written - a power of ten, a colon - and named as it is", () => {
     expect(energyNoted(["E = -1.5498765E+02 Eh"])).toEqual({ energy: -154.98765, name: "E" });
-    expect(energyNoted(["FINAL SINGLE POINT ENERGY -154.987654321"])).toEqual({ energy: -154.987654321, name: "Final single point energy" });
     expect(energyNoted(["Total energy: -154.98 Eh"])).toEqual({ energy: -154.98, name: "Total energy" });
+    // (a method's energy, its name and value as any note gives them, though the line is a program's)
     expect(energyNoted(["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles"])).toEqual({ energy: -154.98765432, name: "E(RB3LYP)" });
+  });
+
+  it("is read from a program's own line - with no \"=\" - only as the plugin added declares it, and named as it says", () => {
+    const orca = "FINAL SINGLE POINT ENERGY      -154.987654321";
+    expect(energyNoted([orca])).toBeNull();
+    expect(energyNoted([orca], QUOTED)).toEqual({ energy: -154.987654321, name: "Final single point energy" });
+    expect(energyNoted(["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles"], QUOTED)).toEqual({ energy: -154.98765432, name: "E(RB3LYP)" });
+    // (the declarations of the plugins Meno carries, each from its program's printout)
+    expect(QUOTED.map((q) => q.id).sort()).toEqual(["final-single-point", "scf-done"]);
   });
 
   it("is none of a bracket naming a part of an energy, a correction or a counterpoise, though it reads like a method", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extensionOf, kindOf, kinds, offeredKinds, probeCandidates, registerKinds, registered } from "./kinds";
+import { extensionOf, kindOf, kinds, offeredKinds, probeCandidates, quotedEnergies, quotedTables, registerKinds, registered } from "./kinds";
 import { acceptManifest, type Manifest } from "../plugins/manifest";
 import { MANIFESTS } from "../plugins/known";
 import { pluginOf, readerFor, type ReaderPlugin } from "../calc/catalog";
@@ -270,5 +270,22 @@ describe("kinds only plugins not added read", () => {
     expect(orca?.suggest?.length).toBeGreaterThan(0);
     for (const id of orca!.suggest!) expect(MANIFESTS.find((m) => m.id === id)?.reads).toContain("orca");
     registerKinds([]);
+  });
+});
+
+describe("a program's lines and tables of atoms, as papers quote them", () => {
+  it("are those of the plugins added, read; and of those only offered, each with its plugin's name - to say whose a table is", () => {
+    const gaussian = MANIFESTS.find((m) => m.id === "gaussian")!;
+    const orca = MANIFESTS.find((m) => m.id === "orca")!;
+    registerKinds([orca], [gaussian, orca]);
+    expect(quotedEnergies().map((q) => q.id)).toEqual(["final-single-point"]);
+    expect(quotedTables().added).toEqual([]);
+    expect(quotedTables().offered.map((t) => [t.id, t.plugin])).toEqual([["orientation", gaussian.name]]);
+    registerKinds([gaussian, orca], [gaussian, orca]);
+    expect(quotedEnergies().map((q) => q.id)).toEqual(["scf-done", "final-single-point"]);
+    expect(quotedTables().added.map((t) => t.plugin)).toEqual([gaussian.name]);
+    expect(quotedTables().offered).toEqual([]);
+    registerKinds([]);
+    expect([quotedEnergies(), quotedTables()]).toEqual([[], { added: [], offered: [] }]);
   });
 });

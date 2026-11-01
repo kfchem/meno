@@ -214,6 +214,21 @@ describe("a plugin's manifest", () => {
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
   });
 
+  it("may declare its program's energy lines and tables of atoms as papers quote them - each as it must be, or left out", () => {
+    const energy = { id: "scf", pattern: "^\\s*SCF Done:\\s*E\\((?<method>[^)]+)\\)\\s*=\\s*(?<value>-?\\d+\\.\\d+)", name: "E", unit: "hartree" };
+    const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
+    const read = acceptManifest({ ...good, quotedEnergies: [energy, { ...energy, id: "no-value", pattern: "E = (-?\\d+\\.\\d+)" }, { ...energy, id: "unnamed", name: " " }, { ...energy, id: "broken", pattern: "(?<value>" }], quotedTables: [table, { ...table, id: "no-z", columns: ["element", "x", "y"] }, { ...table, id: "twice", columns: ["element", "x", "x", "y", "z"] }, { ...table, id: "both", columns: ["element", "atomic-number", "x", "y", "z"] }, { ...table, id: "unheaded", headings: [] }, { ...table, id: "odd", columns: ["element", "x", "y", "z", "mass"] }] })!;
+    expect(read.quotedEnergies).toEqual([energy]);
+    expect(read.quotedTables).toEqual([table]);
+    // (none said: none, as a plugin that quotes no line of its program's)
+    expect(acceptManifest(good)!.quotedEnergies).toBeUndefined();
+    // (Gaussian's and ORCA's, as Meno carries them)
+    expect(MANIFESTS.filter((m) => m.quotedEnergies || m.quotedTables).map((m) => [m.id, (m.quotedEnergies ?? []).map((q) => q.id), (m.quotedTables ?? []).map((t) => t.id)])).toEqual([
+      ["gaussian", ["scf-done"], ["orientation"]],
+      ["orca", ["final-single-point"], []],
+    ]);
+  });
+
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {
     const opts = [{ id: "count", label: "Conformers sought", type: "number", default: 30 }];
     const read = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", options: opts }], steps: [{ kinds: ["conformers"], programs: ["python"] }, { kinds: ["optimise"], options: [] }] })!;
