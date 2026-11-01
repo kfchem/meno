@@ -1213,10 +1213,11 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 
 ```
 {
-  "schema": 1,
+  "schema": 2,
   "name": "...",                      (where it has one)
   "atoms": [{"el", "x", "y", "z", "charge"?, "radical"?, "isotope"?, "mass"?}],
   "bonds": [{"a1", "a2", "order", "coordination"?}],
+  "fragments": [[0, 1, 2], [3, 4, 5]],
   "charge": 0,
   "multiplicity": 1,
   "files": [{"kind", "name", "text"}], (where the step takes some)
@@ -1226,8 +1227,18 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 ```
 
 - `schema` is the entry's version (`src/lib/entry.ts`, `ENTRY_SCHEMA`),
-  1 for the entry as described here. A change to what an entry holds
-  comes with the next number, so that a plugin can tell which it is given.
+  2 for the entry as described here (2026-11-01: its `fragments`). A
+  change to what an entry holds comes with the next number, so that a
+  plugin can tell which it is given.
+- `fragments` are the molecules the entry's bonds make of its atoms, each
+  its atoms by number, in order, and the fragments in the order of their
+  first atom (`src/lib/chem/fragments.ts`, Meno's one rule): two atoms are
+  in one fragment where a path of bonds joins them, a coordination bond as
+  any other - a metal and its ligands are one; two waters, or a salt's
+  ions with no bond between them, are two. One fragment where all are
+  joined. A plugin whose program takes molecules apart writes the
+  fragments it is given and works out none (the NCIPLOT interface's
+  interactions between molecules).
 - The atoms are in the entry's fixed numbering: a plugin answers with
   them in the same order (WORKFLOWS-FOUNDATION.md, *The numbering is
   fixed*), mapping back any its program reorders.

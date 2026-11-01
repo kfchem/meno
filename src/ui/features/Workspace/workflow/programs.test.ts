@@ -59,6 +59,23 @@ describe("what a plugin is given of an entry", () => {
     expect(heavy.atoms[2].mass).toBeUndefined();
     expect(heavy.atoms[0].mass).toBeUndefined();
   });
+
+  it("gives the molecules its bonds make of its atoms, its fragments - one where all are joined - with the entry's version", () => {
+    expect(pluginEntry(WATER).fragments).toEqual([[0, 1, 2]]);
+    expect(pluginEntry(WATER).schema).toBe(2);
+    // (two waters in one entry, the second's oxygen bonded last)
+    const plain = WATER.atoms.map(({ el, x, y, z }) => ({ el, x, y, z }));
+    const dimer = {
+      ...WATER,
+      atoms: [...plain, ...plain],
+      bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 3, a2: 4, order: 1 }, { a1: 0, a2: 2, order: 1 }, { a1: 3, a2: 5, order: 1 }],
+      xyz: [...WATER.xyz, ...WATER.xyz.map((v, i) => (i % 3 === 0 ? v + 3 : v))],
+    } as SetEntry;
+    expect(pluginEntry(dimer).fragments).toEqual([
+      [0, 1, 2],
+      [3, 4, 5],
+    ]);
+  });
 });
 
 describe("the jobs a plugin prepares", () => {

@@ -14,8 +14,8 @@ import type { Radical } from "./chem/molecule";
 import type { Species } from "./io/writers";
 import { isUnit, type Unit } from "./units";
 
-/** The entry's version, as a plugin is given it and a workspace keeps it: a reader refuses a version it does not know. */
-export const ENTRY_SCHEMA = 1;
+/** The entry's version, as a plugin is given it (docs/PLUGINS.md, *The entry a plugin is given*): so that a plugin can tell which form of the entry it is given. */
+export const ENTRY_SCHEMA = 2;
 
 /** An atom in the entry's fixed numbering: its element, isotope, formal charge and radical. */
 export type EntryAtom = { el: string; isotope?: number; charge?: number; radical?: Radical };
