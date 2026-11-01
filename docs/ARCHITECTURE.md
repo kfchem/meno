@@ -935,8 +935,9 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   the densities' (`orbital:<spin>:<index>`, `density:total`,
   `density:spin`); asked for, it works the grid out from the file sent
   again: 4 Å past the atoms, points 0.2 Å apart (at most 90 to a side),
-  the basis functions' values a chunk of points at a time. Its tests (`scripts/calc/test_reader_pyscf.py`) run by hand in an
-  environment made from its lock.
+  the basis functions' values a chunk of points at a time. Its tests
+  (`scripts/calc/test_reader_pyscf.py`) run by hand in an environment made
+  from its lock.
 - Meno's own reading under the same contract (`MENO` in the catalog,
   `lib/calc/menoReads.ts`, the one list of what it reads so) is asked as a
   plugin's worker is - the same `Reader`: what it makes of a file, and a
