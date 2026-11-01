@@ -98,7 +98,7 @@ describe("the readers Meno knows of", () => {
         path: ["{folder}"],
         env: {},
         places: {},
-        beside: { orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } },
+        beside: { orca_2aim: { macos: "orca_2aim", linux: "orca_2aim", windows: "orca_2aim.exe" } },
         parallel: "processes",
       },
     ]);

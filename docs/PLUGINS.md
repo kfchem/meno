@@ -942,7 +942,7 @@ The same for every plugin and for Meno's own parts:
     (`stdin`: Gaussian's), and the programs installed beside its own to
     run after it, in turn, where it ended well (`then: [{program, args}]`,
     each declared in the manifest's `installed[].beside`: ORCA's
-    orca_2mkl) - and what one gave, read back: a job may be
+    orca_2aim) - and what one gave, read back: a job may be
     for several entries (CREST optimising an ensemble), each read back
     in Meno's output form, with each geometry's `populations` where its
     program works them out (CREST's, its rotamers counted in);

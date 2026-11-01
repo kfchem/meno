@@ -427,7 +427,7 @@ describe("a plugin's manifest", () => {
     // (never a shell or Python beside it, as the backend refuses one)
     for (const bad of [{ x: { macos: "sh" } }, { x: { windows: "cmd.exe" } }, { x: { linux: "python3" } }]) expect(orca(bad)).toEqual([]);
     // (ORCA's, as Meno carries it)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
+    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2aim: { macos: "orca_2aim", linux: "orca_2aim", windows: "orca_2aim.exe" } });
   });
 
   it("may say how a program installed separately runs in parallel - as threads, or as processes, each a core - as the backend reads it", () => {
