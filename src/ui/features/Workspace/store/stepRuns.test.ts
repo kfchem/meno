@@ -273,6 +273,76 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.running).toBeUndefined();
   });
 
+  it("passes a lone atom through as it came where its plugin's program takes none - never sent, said on its line and on it - and sends one where it takes one", async () => {
+    useReaders.setState({ state: { xtb: "added", crest: "added" }, problem: {} });
+    // (water and a sodium ion, the ion of a salt drawn as ions, in one set)
+    const page = (kind: "optimise" | "conformers", by: string, water = true) => {
+      const made = editor();
+      if (!water) made.doc.edit("ion", (d) => ({ ...d, molecules3d: [] }));
+      made.doc.edit("ion", (d) => addMolecule3d(d, { atoms: [{ el: "Na", x: 0.5, y: 0.5, z: 0, charge: 1 }], bonds: [], at: { x: 1, y: 1 } }));
+      const step = made.st().addStep(kind, by, 20, 0);
+      made.st().connect({ set: made.st().sets[0].id }, step);
+      return { ...made, step };
+    };
+    const ion = (st: () => ReturnType<ReturnType<typeof editor>["st"]>, step: number) =>
+      setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!)
+        .molecules.map((id) => st().molecules3d.find((m) => m.id === id)!)
+        .find((m) => m.atoms.length === 1)!;
+
+    // CREST's Optimise: the water sent, the ion not - where it was, no energy, no calculation, said so
+    {
+      const { st, step } = page("optimise", "crest");
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ atoms: [expect.objectContaining({ el: "O" }), expect.anything(), expect.anything()] })], expect.anything(), expect.any(Number), {});
+      const running = st().steps.find((s) => s.id === step)!.running!;
+      expect(running.passed).toHaveLength(1);
+      // (kept with the workspace: opened again, the ion still comes in when the job ends)
+      expect(readWorkflow({ sets: st().sets, steps: st().steps, wires: st().wires })?.steps.find((s) => s.id === step)!.running).toEqual(running);
+      end(1);
+      await st().lookAtJobs();
+      await ran;
+      const after = st().steps.find((s) => s.id === step)!;
+      expect(after.ran).toMatchObject({ ok: true, said: expect.stringContaining("one atom: nothing to optimise, no energy") });
+      const na = ion(st, step);
+      expect(na.atoms[0]).toMatchObject({ el: "Na", x: 0.5, y: 0.5, z: 0 });
+      expect(na.energies).toBeUndefined();
+      expect(na.calc).toBeUndefined();
+      expect(na.made?.how).toEqual([{ label: "Optimise", text: "one atom: nothing to optimise, no energy" }]);
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    asked.started = [];
+    next = 1;
+
+    // the ion alone: nothing asked of its plugin, no job - its only conformer, at once
+    {
+      const { st, step } = page("conformers", "crest", false);
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(asked.started).toEqual([]);
+      const after = st().steps.find((s) => s.id === step)!;
+      expect(after.running).toBeUndefined();
+      expect(after.ran).toMatchObject({ ok: true, said: expect.stringContaining("one atom: its only conformer") });
+      expect(ion(st, step).made?.how).toEqual([{ label: "Conformers", text: "one atom: its only conformer" }]);
+    }
+
+    // xTB's Optimise, whose program takes one: the ion sent with the water, as before
+    {
+      const { st, step } = page("optimise", "xtb");
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const sent = worker.prepare.mock.lastCall![1] as { atoms: { el: string }[] }[];
+      expect(sent.map((e) => e.atoms.length).sort()).toEqual([1, 3]);
+      expect(st().steps.find((s) => s.id === step)!.running!.passed).toBeUndefined();
+      for (const j of [...jobs.keys()]) Object.assign(jobs.get(j)!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+      await st().lookAtJobs();
+      await ran;
+    }
+  });
+
   it("ends on what came in when it started - its wire undone while it runs - and is changed once its results are in", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);

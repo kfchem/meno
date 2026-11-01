@@ -106,10 +106,10 @@ describe("the readers Meno knows of", () => {
     expect(xtb.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     const crest = PLUGINS.find((p) => p.id === "crest")!;
     expect(crest).toMatchObject({ profile: "plugin-crest", env: "pixi", systems: ["macos", "linux"] });
-    // (and xtb, beside it in its environment: a lone atom's energy)
-    expect(crest.steps.map((d) => [d.kind, d.programs, d.takes])).toEqual([
-      ["conformers", ["crest", "xtb"], ["molecules", "conformers"]],
-      ["optimise", ["crest", "xtb"], undefined],
+    // (CREST alone - the xtb beside it in its environment is CREST's - and no lone atom: its program stops on one)
+    expect(crest.steps.map((d) => [d.kind, d.programs, d.takes, d.noLoneAtom])).toEqual([
+      ["conformers", ["crest"], ["molecules", "conformers"], true],
+      ["optimise", ["crest"], undefined, true],
     ]);
     expect(rdkit.steps.map((d) => [d.kind, d.programs])).toEqual([
       ["conformers", ["python"]],

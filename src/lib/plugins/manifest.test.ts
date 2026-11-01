@@ -214,6 +214,27 @@ describe("a plugin's manifest", () => {
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
   });
 
+  it("may say its program takes no lone atom - of a kind a lone atom passes through, as it came, alone: of another, it is its to refuse", () => {
+    const read = acceptManifest({
+      ...good,
+      reads: [],
+      kinds: [],
+      steps: [
+        { kinds: ["conformers", "optimise", "energy"], programs: ["crest"], noLoneAtom: true },
+        { kinds: ["frequencies"], programs: ["crest"], noLoneAtom: "yes" },
+      ],
+    })!;
+    expect(read.steps.map((d) => [d.kind, d.noLoneAtom])).toEqual([
+      ["conformers", true],
+      ["optimise", true],
+      ["energy", undefined],
+      ["frequencies", undefined],
+    ]);
+    // (CREST's, as Meno carries it - which stops on one atom - and no other plugin's: the others run theirs on one)
+    expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.noLoneAtom).map((d) => `${m.id} ${d.kind}`))).toEqual(["crest conformers", "crest optimise"]);
+    expect(MANIFESTS.find((m) => m.id === "crest")!.steps.map((d) => d.programs)).toEqual([["crest"], ["crest"]]);
+  });
+
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {
     const opts = [{ id: "count", label: "Conformers sought", type: "number", default: 30 }];
     const read = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", options: opts }], steps: [{ kinds: ["conformers"], programs: ["python"] }, { kinds: ["optimise"], options: [] }] })!;

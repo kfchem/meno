@@ -335,9 +335,15 @@ alone, and no plugin fills them. A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
 molecules in 3D only. A lone atom - the ion of a salt drawn as ions -
-has no conformers to find and nothing to optimise: the xTB, CREST, ORCA
-and Gaussian plugins work out its energy where it is instead, and it comes back where it was - in *Conformers*,
-its only conformer. More kinds come with Meno as they are needed - a
+has no conformers to find and nothing to optimise: the xTB, ORCA and
+Gaussian plugins work out its energy where it is instead, and it comes
+back where it was. A plugin whose program is given no lone atom says so
+in its manifest (PLUGINS.md, `noLoneAtom`: CREST's), and then Meno does
+not send it one: through *Conformers* or *Optimise* the atom
+passes as it came, with no energy and no calculation, none having been run,
+and says so on it and on the step's line - *one atom: its only conformer*;
+*one atom: nothing to optimise, no energy*. Its energy is an *Energy*
+step's (2026-11-01). More kinds come with Meno as they are needed - a
 free energy from an energy and its corrections, a template input written
 out - each specified before it is built. *Enumerate*, Meno's own, is
 specified and not yet built: structures made from one drawing by rule,
