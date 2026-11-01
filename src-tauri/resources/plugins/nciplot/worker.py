@@ -14,8 +14,9 @@ per line each way, as every plugin's:
 
 It fills the kind of step NCI, and runs nothing itself: `prepare` writes
 each entry's geometry as an XYZ file - or, asked for interactions between
-molecules alone, each molecule's in a file of its own - and NCIPLOT's
-input; `collect` says which of the cube files NCIPLOT wrote is the surface
+molecules alone, each of the entry's fragments (the molecules Meno says
+its bonds make: docs/PLUGINS.md, *The entry a plugin is given*) in a file
+of its own - and NCIPLOT's input; `collect` says which of the cube files NCIPLOT wrote is the surface
 and which colours it, for Meno to read (lib/calc/cube) - or, where the job
 failed, why. One job for each entry.
 
@@ -46,7 +47,7 @@ import math
 import re
 import sys
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 PROGRAM = "nciplot"
 INPUT = "input.nci"
 NAME = "NCI"
@@ -85,24 +86,15 @@ def atoms_of(entry):
     return out
 
 
-def pieces_of(entry, n):
-    """The entry's molecules: its atoms, joined by its bonds, each piece's atoms in order."""
-    parent = list(range(n))
-
-    def root(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    for b in entry.get("bonds") or []:
-        a1, a2 = b.get("a1"), b.get("a2")
-        if isinstance(a1, int) and isinstance(a2, int) and 0 <= a1 < n and 0 <= a2 < n:
-            parent[root(a1)] = root(a2)
-    groups = {}
-    for i in range(n):
-        groups.setdefault(root(i), []).append(i)
-    return sorted(groups.values(), key=lambda g: g[0])
+def fragments_of(entry, n):
+    """The entry's fragments, as Meno gives them: each atom in one, once."""
+    given = entry.get("fragments")
+    if not isinstance(given, list) or not all(isinstance(f, list) and f for f in given):
+        raise Refused("the entry gives no fragments")
+    seen = [i for f in given for i in f]
+    if not all(isinstance(i, int) and not isinstance(i, bool) for i in seen) or sorted(seen) != list(range(n)):
+        raise Refused("the fragments do not hold each atom once")
+    return given
 
 
 def xyz_text(atoms, which, title):
@@ -114,7 +106,7 @@ def xyz_text(atoms, which, title):
 
 
 def files_of(entry, options):
-    """An entry's job's files: its geometry - each molecule's apart, where only interactions between them are wanted - and NCIPLOT's input."""
+    """An entry's job's files: its geometry - each of its fragments apart, where only interactions between them are wanted - and NCIPLOT's input."""
     atoms = atoms_of(entry)
     grid = options.get("grid", "standard")
     if grid not in GRIDS:
@@ -123,13 +115,13 @@ def files_of(entry, options):
     between = options.get("between", False)
     if not isinstance(between, bool):
         raise Refused("Whether only between molecules is neither on nor off")
-    pieces = pieces_of(entry, len(atoms)) if between else [list(range(len(atoms)))]
-    if between and len(pieces) < 2:
+    parts = fragments_of(entry, len(atoms)) if between else [list(range(len(atoms)))]
+    if between and len(parts) < 2:
         raise Refused("only between molecules was asked for, but it is one molecule")
-    if len(pieces) > 100:
+    if len(parts) > 100:
         raise Refused("NCIPLOT reads up to 100 files")
-    names = ["molecule.xyz"] if len(pieces) == 1 else [f"molecule{k + 1}.xyz" for k in range(len(pieces))]
-    files = [{"name": nm, "text": xyz_text(atoms, p, str(entry.get("name") or "molecule").replace("\n", " ")[:80])} for nm, p in zip(names, pieces)]
+    names = ["molecule.xyz"] if len(parts) == 1 else [f"molecule{k + 1}.xyz" for k in range(len(parts))]
+    files = [{"name": nm, "text": xyz_text(atoms, p, str(entry.get("name") or "molecule").replace("\n", " ")[:80])} for nm, p in zip(names, parts)]
     lines = [str(len(names)), *names, f"ONAME {NAME}", "OUTPUT 2"]
     if GRIDS[grid]:
         lines.append(GRIDS[grid])

@@ -47,6 +47,7 @@ DIMER = {
         {"el": "H", "x": 1.680398, "y": -0.373741, "z": 0.758561},
     ],
     "bonds": [{"a1": 0, "a2": 1, "order": 1}, {"a1": 0, "a2": 2, "order": 1}, {"a1": 3, "a2": 4, "order": 1}, {"a1": 3, "a2": 5, "order": 1}],
+    "fragments": [[0, 1, 2], [3, 4, 5]],
     "charge": 0,
     "multiplicity": 1,
 }
@@ -84,8 +85,23 @@ class Nciplot(unittest.TestCase):
         self.assertEqual(files["input.nci"].splitlines(), ["2", "molecule1.xyz", "molecule2.xyz", "ONAME NCI", "OUTPUT 2", "FINE", "INTERMOLECULAR", "CUTPLOT 0.07 0.4"])
         self.assertEqual(files["molecule1.xyz"].splitlines()[0], "3")
         # (one molecule has none to be between)
-        one = {**DIMER, "atoms": DIMER["atoms"][:3], "bonds": DIMER["bonds"][:2]}
+        one = {**DIMER, "atoms": DIMER["atoms"][:3], "bonds": DIMER["bonds"][:2], "fragments": [[0, 1, 2]]}
         self.assertFalse(ask(nciplot, "prepare", entries=[one], options={"between": True})["ok"])
+
+    def test_writes_the_fragments_it_is_given_and_works_out_none(self):
+        # (its fragments as given, not as its bonds would make them: each fragment's atoms, in its file, in order)
+        given = {**DIMER, "fragments": [[0, 2], [1, 3, 4, 5]]}
+        files = {f["name"]: f["text"] for f in ask(nciplot, "prepare", entries=[given], options={"between": True})["result"]["jobs"][0]["files"]}
+        self.assertEqual([files[n].splitlines()[0] for n in ("molecule1.xyz", "molecule2.xyz")], ["2", "4"])
+        self.assertEqual([line.split()[0] for line in files["molecule1.xyz"].splitlines()[2:]], ["O", "H"])
+        # (none given, or not each atom once: refused in words)
+        for fragments in [None, [], [[0, 1, 2]], [[0, 1, 2], [2, 3, 4, 5]], [[0, 1, 2], [3, 4, 5, 6]], [[0, 1, 2], []], [[0, 1, 2], [3, 4, True]]]:
+            entry = {k: v for k, v in DIMER.items() if k != "fragments"} if fragments is None else {**DIMER, "fragments": fragments}
+            said = ask(nciplot, "prepare", entries=[entry], options={"between": True})
+            self.assertFalse(said["ok"], fragments)
+            self.assertTrue(said["error"].startswith("NCIPLOT: "), said)
+        # (not asked for between: one file, the fragments not looked at)
+        self.assertTrue(ask(nciplot, "prepare", entries=[{**DIMER, "fragments": None}], options={})["ok"])
 
     def test_says_which_cube_is_the_surface_and_which_colours_it(self):
         said = ask(nciplot, "collect", entries=[DIMER], options={"range": 0.05}, files={}, log="", ended="done")
