@@ -27,15 +27,15 @@ with the random seed given, so that the same asking gives the same ones.
 
 Each goes back as CReM gives it, and nothing more is made of it here
 (docs/PLUGINS.md, *Generate*): its SMILES; its values, named - the change
-made (`change`, a reaction SMARTS as CReM writes it), how many times the
-fragment put in occurs in the database (`frequency`), and the seed as CReM
-read it (`seed_smiles`); and which seed it was made from, by its
-place among those given (`seed` beside them); and, for each seed by its
-place, how many it made or why it was not read (`seeds`), from which
-Meno names them. An option outside what it may be is refused, never
-run as another. Nothing is made 3D, no
-stereo is enumerated, nothing is refused: the general steps after it do
-that. A seed RDKit cannot read is counted, with why.
+made (`change`, a reaction SMARTS as CReM writes it) and how many times the
+fragment put in occurs in the database (`frequency`); which seed it was
+made from, by its place among those given (`seed` beside them); and, for
+each seed by its place, how many it made or why it was not read (`seeds`),
+from which Meno names them. An option outside what it may be is refused,
+never run as another. Nothing is made 3D, no stereo is enumerated, nothing
+is refused or cut: the general steps after it do that, and Meno takes no
+more from one run than it takes of any (docs/PLUGINS.md, *Generate*). A
+seed RDKit cannot read is counted, with why.
 """
 
 import importlib.metadata
@@ -55,10 +55,8 @@ FILES = sys.argv[1] if len(sys.argv) > 1 else None
 #: it is, as its record says.
 DB = "chembl33_sa2_f5.db"
 DB_SAID = "chembl33_sa2_f5 (CReM fragment databases, Zenodo 10.5281/zenodo.16909329; from ChEMBL 33, fragments of at most 15 heavy atoms)"
-#: The most structures one seed gives in one run, and one run in all - a number of structures, never a time: the
-#: most Meno takes of a Generate (workflow/programs `GENERATED_MOST`).
+#: The most structures one seed gives in one run - a number of structures, never a time.
 MOST_EACH = 100
-MOST = 1000
 #: The random seed where none is asked for.
 SEED = 1
 #: The surroundings a fragment is matched in, in bonds out from it, where none is asked for: CReM's own default.
@@ -129,8 +127,6 @@ def op_run(m):
     radius = number(o, "radius", RADIUS, 1, 5)
     adds = number(o, "adds", ADDS, 1, 10)
     seed = number(o, "seed", SEED, 0, 2**31 - 1)
-    if count * len(entries) > MOST:
-        raise ValueError(f"At most {MOST} in one run: {len(entries)} seeds of {count} each are more - fewer seeds, or fewer from each")
     how = f"{OPERATIONS[operation]}, radius {radius}, at most {adds} heavy atoms added, seed {seed}"
     # (each seed's own tally - how many it made, or why it was not read - by its place: Meno names each from it)
     outputs, seeds = [], []
@@ -144,7 +140,6 @@ def op_run(m):
         if isinstance(mol, str):
             seeds.append({"place": place, "why": mol})
             continue
-        read_as = Chem.MolToSmiles(mol)
         made = changed(mol, db, operation, radius, adds, count, seed)
         seeds.append({"place": place, "made": len(made)})
         for smiles, change, frequency in made:
@@ -153,14 +148,13 @@ def op_run(m):
                 "properties": {
                     "change": {"value": change, "unit": "none"},
                     "frequency": {"value": frequency, "unit": "none"},
-                    "seed_smiles": {"value": read_as, "unit": "none"},
                 },
                 "seed": place,
             })
     taken = sum(1 for s in seeds if "made" in s)
     # (none read: nothing made, each seed's why in the tally - Meno names each from it)
     said = "No seed could be read" if not taken else f"{len(outputs)} made from {taken} seed{'' if taken == 1 else 's'} ({OPERATIONS[operation]}, radius {radius}, seed {seed})"
-    return {"outputs": outputs[:MOST], "seeds": seeds, "said": said, "by": {"program": "CReM", "version": VERSION, "model": DB_SAID, "method": how}}
+    return {"outputs": outputs, "seeds": seeds, "said": said, "by": {"program": "CReM", "version": VERSION, "model": DB_SAID, "method": how}}
 
 
 OPS = {"run": op_run}

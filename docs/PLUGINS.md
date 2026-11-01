@@ -1167,9 +1167,8 @@ of odd valence - is for the general steps after it, and for
   counting it in `said`, since JSON holds no NaN - and is not kept.
 - `seed`: where a generator makes a structure from one that came in, that
   one's place among them. None comes into REINVENT 4's. CReM gives its
-  values as `change` (the change made), `frequency` (how often the
-  fragment put in occurs in its database) and `seed_smiles` (the seed's SMILES
-  as it read it).
+  values as `change` (the change made) and `frequency` (how often the
+  fragment put in occurs in its database).
 - `seeds`: where seeds came in, one for each by its place, `{"place",
   "made"}` or `{"place", "why"}` (not read). Meno names on the step's
   line each seed that made none and each not read, with why, from this
