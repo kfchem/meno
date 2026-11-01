@@ -26,9 +26,9 @@ import { selectionScheme } from "../utils/selectionScheme";
 import { setMembers } from "../workflow/entries";
 import CalcList3D from "./CalcList3D";
 import { isAsk, readGrid, resultKey, resultsOn, type Ask, type ListResult } from "../../../../lib/calc/results";
-import { SURFACE_ISO } from "../utils/surfaceMesh";
 import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "../../../../lib/calc/asks";
 import { titled } from "../../../../lib/calc/sources";
+import { isoOf } from "../../../../lib/calc/grids";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import Molecule3DView, { type Split3D } from "./Molecule3DView";
 import { stereoShownOf } from "../document";
@@ -857,8 +857,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
                       ? { name: m.calc.source.name, find: () => void findOutput(m.calc!.source!).catch(() => {}) }
                       : undefined
                   }
-                  iso={surface?.value ? (open.iso ?? surface.value.iso ?? DEFAULT_ISO) : undefined}
-                  isoStart={surface?.value?.iso}
+                  iso={surface?.value ? (open.iso ?? isoOf(surface.value)) : undefined}
+                  isoStart={surface?.value ? isoOf(surface.value) : undefined}
                   onIso={(iso) => store.getState().setIso3d(m.id, iso)}
                   scale={colourBy?.value && row?.colour ? { from: row.colour.from, to: row.colour.to, ...(row.colour.label ? { label: row.colour.label } : {}) } : undefined}
                   onClose={() => store.getState().closeList3d(m.id)}
@@ -943,8 +943,6 @@ const NONE: number[] = [];
 /** How much a measurement's value changes for each pixel a drag across it goes: in ångströms, and in degrees. */
 const SCRUB_ANGSTROM = 0.01;
 const SCRUB_DEGREES = 0.5;
-/** The value a surface is drawn at where its grid says none. */
-const DEFAULT_ISO = SURFACE_ISO;
 
 /**
  * A row's motion or surface (`v`), as it can be shown: given in the row,

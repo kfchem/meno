@@ -8,6 +8,7 @@
  * The transport is handed in, so that the client knows nothing of how the
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
+import { GRID_ASKED } from "./grids";
 import type { ReaderOutput } from "./output";
 import type { OptionValues } from "../options";
 import type { WrittenMolecule } from "../io/writers";
@@ -127,9 +128,13 @@ export class ReaderClient implements Reader {
     return this.request({ op: "read", kind, name, text }, `reading ${name}`) as Promise<ReaderOutput>;
   }
 
-  /** What a promise the reader gave stands for, by its key: the file it read sent again. */
+  /**
+   * What a promise the reader gave stands for, by its key: the file it read
+   * sent again, and the grid Meno lays values about a molecule on, where the
+   * promise is one (./grids `GRID_ASKED`).
+   */
   ask(kind: string, key: string, name: string, text: string): Promise<unknown> {
-    return this.request({ op: "ask", kind, key, name, text }, `working out ${key} of ${name}`);
+    return this.request({ op: "ask", kind, key, name, text, grid: GRID_ASKED }, `working out ${key} of ${name}`);
   }
 
   /** Whether a file is of `kind`, by its name and its start: the reader's own answer, yes only where it says so. */
