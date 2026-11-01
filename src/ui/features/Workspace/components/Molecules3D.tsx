@@ -28,7 +28,7 @@ import CalcList3D from "./CalcList3D";
 import { isAsk, readGrid, resultKey, resultsOn, type Ask, type ListResult } from "../../../../lib/calc/results";
 import { askFor, askKey, findOutput, givenValue, useAsks, type AskError } from "../../../../lib/calc/asks";
 import { titled } from "../../../../lib/calc/sources";
-import { isoOf } from "../../../../lib/calc/grids";
+import { gridAbout, isoOf, type GridPlace } from "../../../../lib/calc/grids";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import Molecule3DView, { type Split3D } from "./Molecule3DView";
 import { stereoShownOf } from "../document";
@@ -786,9 +786,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
                 Array.isArray(v) && v.length === 3 * m.atoms.length && v.every(Number.isFinite) ? (v as number[]) : undefined,
               )
             : undefined;
-        const surface = list && row?.surface ? held(m.calc, list, row.surface, asks, wantAsked.current, readGrid) : undefined;
+        // (a surface's grid, where its reader works one out: about the atoms of the row's frame, laid as Meno lays one)
+        const place = () => gridAbout(row?.frame ? (m.frames?.[row.frame - 1] ?? []) : m.atoms.flatMap((a) => [a.x, a.y, a.z]));
+        const surface = list && row?.surface ? held(m.calc, list, row.surface, asks, wantAsked.current, readGrid, place) : undefined;
         // (and what colours it, where another grid does)
-        const colourBy = list && row?.colour ? held(m.calc, list, row.colour.by, asks, wantAsked.current, readGrid) : undefined;
+        const colourBy = list && row?.colour ? held(m.calc, list, row.colour.by, asks, wantAsked.current, readGrid, place) : undefined;
         const asking = [motion, surface, colourBy].find((h) => h?.state && h.state !== "given")?.state;
         return (
           <Molecule3DView
@@ -957,6 +959,8 @@ function held<T>(
   asks: ReturnType<typeof useAsks.getState>["state"],
   toAsk: (() => void)[],
   read: (v: unknown) => T | undefined,
+  /** The grid its values are laid on, where it is a surface's (./grids `gridAbout`). */
+  grid?: () => GridPlace,
 ): { value?: T; state?: "asking" | "given" | AskError } {
   if (!isAsk(v)) return { value: read(v) };
   if (!calc) return {};
@@ -967,7 +971,7 @@ function held<T>(
     return value === undefined ? { state: { error: "The reader gave nothing that can be shown." } } : { value, state };
   }
   // (asked for once: an answer, or a failure, stands)
-  if (state === undefined) toAsk.push(() => void askFor(calc, list.from, v.ask).catch(() => {}));
+  if (state === undefined) toAsk.push(() => void askFor(calc, list.from, v.ask, undefined, undefined, grid?.()).catch(() => {}));
   return { state: state ?? "asking" };
 }
 /** What a list opened under a molecule is kept clear of the canvas's edges by, and the molecule too, in pixels. */

@@ -79,6 +79,25 @@ describe("orbitals as Meno lists them", () => {
     expect(list.rows).toEqual([{ cells: [2, 0, 0.02] }, { cells: [1, 0, 1.98], surface: { ask: "orbital:0" } }]);
   });
 
+  it("are listed by energy where a program gives them otherwise - a Molden file by symmetry block - each keeping its surface", () => {
+    const blocks: Orbital[] = [
+      { spin: "both", energy: -1.0, occupation: 2, symmetry: "A1", surface: { ask: "orbital:0" } },
+      { spin: "both", energy: -0.4, occupation: 2, symmetry: "A1", surface: { ask: "orbital:1" } },
+      { spin: "both", energy: 0.3, occupation: 0, symmetry: "A1", surface: { ask: "orbital:2" } },
+      { spin: "both", energy: -0.6, occupation: 2, symmetry: "B2", surface: { ask: "orbital:3" } },
+      { spin: "both", energy: 0.1, occupation: 0, symmetry: "B2", surface: { ask: "orbital:4" } },
+    ];
+    const [list, gap] = orbitalResults(blocks) as [{ rows: { cells: unknown[]; surface: { ask: string } }[] }, { value: number }];
+    expect(list.rows.map((r) => [r.cells[0], r.surface.ask])).toEqual([
+      ["LUMO+1", "orbital:2"],
+      ["LUMO", "orbital:4"],
+      ["HOMO", "orbital:1"],
+      ["HOMO\u22121", "orbital:3"],
+      ["HOMO\u22122", "orbital:0"],
+    ]);
+    expect(gap.value).toBeCloseTo(0.5 * EV, 9);
+  });
+
   it("open on the HOMO where no LUMO is given (a file of the occupied orbitals alone)", () => {
     const [list] = orbitalResults(closed(3, 0)) as Record<string, unknown>[];
     expect(list.focus).toBe(0);

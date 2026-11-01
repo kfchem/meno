@@ -888,10 +888,10 @@ The same for every plugin and for Meno's own parts:
 - **Requests, one a line - `{id, op, ...}` - one answer each - `{id, ok,
   result}`, or `{id, ok: false, error}`, an error an answer:**
   - `read {kind, name, text}`, `ask {kind, key, name, text, grid}` (a
-    promise, with the grid Meno lays values about a molecule on -
-    `{margin, spacing, most, side}`: how far past the atoms and how far
-    apart in ångströms, how many points at most, and to a side; a reader
-    that works a grid out lays it so - WORKSPACE.md, *Surfaces*), `write
+    promise, with the grid Meno lays values about the molecule on, where
+    it has one to give - `{origin, axes, counts}` in ångströms, as a
+    grid's are: a reader that works values out works them out there and
+    lays no grid of its own - WORKSPACE.md, *Surfaces*), `write
     {kind, name, molecules, options}` (answered `{text}`) - the file
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);

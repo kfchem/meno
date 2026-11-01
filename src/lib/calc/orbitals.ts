@@ -46,21 +46,33 @@ export function orbitalsOf(v: unknown): Orbital[] | undefined {
 }
 
 /**
- * The HOMO of one spin's orbitals, in their order: the last whose
- * occupation is at least half full - one electron of a restricted
- * calculation's two, half of one spin's one - where every occupation is a
- * whole number and every energy is given. None otherwise: natural orbitals,
- * fractional and with no energies, have no frontier by name.
+ * The HOMO of one spin's orbitals, in the order given: the last with an
+ * electron in it - one or two of a restricted calculation's, one of a
+ * spin's - where every occupation is a whole number and every energy is
+ * given. None otherwise: natural orbitals, fractional and with no
+ * energies, have no frontier by name.
  */
 export function homoOf(orbitals: readonly Orbital[]): number | undefined {
   if (!orbitals.length || !orbitals.every((o) => o.energy != null && o.occupation != null && Math.abs(o.occupation - Math.round(o.occupation)) <= WHOLE_WITHIN))
     return undefined;
-  const half = orbitals[0].spin === "both" ? 1 : 0.5;
   let homo: number | undefined;
   orbitals.forEach((o, i) => {
-    if (o.occupation! >= half) homo = i;
+    if (o.occupation! >= 1 - WHOLE_WITHIN) homo = i;
   });
   return homo;
+}
+
+/**
+ * One spin's orbitals in the order Meno lists them: by their energies,
+ * where every one is given - a program may write them otherwise (a Molden
+ * file by symmetry block) - alike ones in the order given; else as given.
+ */
+function inOrder(orbitals: readonly Orbital[]): Orbital[] {
+  if (!orbitals.every((o) => o.energy != null)) return [...orbitals];
+  return orbitals
+    .map((o, i) => ({ o, i }))
+    .sort((a, b) => a.o.energy! - b.o.energy! || a.i - b.i)
+    .map(({ o }) => o);
 }
 
 /** An orbital's name from its place and the HOMO's: "HOMO", "HOMO−2", "LUMO", "LUMO+1". */
@@ -71,7 +83,7 @@ export function orbitalName(i: number, homo: number): string {
 
 /**
  * Orbitals as Meno lists them: a list for each spin - one, of a restricted
- * calculation's - from the highest down, each named from the HOMO and
+ * calculation's - from the highest down, by energy (`inOrder`), each named from the HOMO and
  * opening on the LUMO (the HOMO where none is given); its energies in
  * electronvolts, and its symmetries where any is given; and, of a
  * restricted calculation with a LUMO, the HOMO-LUMO gap. Where no HOMO can
@@ -79,7 +91,7 @@ export function orbitalName(i: number, homo: number): string {
  * the general form, read as any reader's are (results `readResults`).
  */
 export function orbitalResults(orbitals: readonly Orbital[]): unknown[] {
-  const spins = (["both", "alpha", "beta"] as const).map((s) => orbitals.filter((o) => o.spin === s)).filter((l) => l.length);
+  const spins = (["both", "alpha", "beta"] as const).map((s) => inOrder(orbitals.filter((o) => o.spin === s))).filter((l) => l.length);
   const out: unknown[] = [];
   for (const list of spins) {
     const homo = homoOf(list);

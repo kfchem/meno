@@ -784,10 +784,11 @@ Each result says what it belongs to, and Meno puts it there:
   its occupation, its symmetry as printed, and where it can, its surface
   as a promise - all of them, in the program's order. Meno makes the
   lists:
-  - one for each spin, from the highest down, its energies in
-    electronvolts and its symmetries where any is given;
-  - the HOMO the highest orbital at least half full - one electron of a
-    restricted orbital's two, half of one spin's one - named only where
+  - one for each spin, from the highest down - by energy, where every
+    energy is given, as a program may write them otherwise (a Molden file
+    by symmetry block) - its energies in electronvolts and its symmetries
+    where any is given;
+  - the HOMO the highest orbital with an electron in it, named only where
     every occupation is whole and every energy is given; the others named
     from it ("HOMO−1", "LUMO+2"), the list opening on the LUMO, or on the
     HOMO where no virtual orbital is given;
@@ -799,15 +800,19 @@ Each result says what it belongs to, and Meno puts it there:
 - **Surfaces: one place for their grids and values** (2026-11-01;
   `lib/calc/grids.ts`). A grid Meno has a reader work out lies 4 Å past
   the atoms each way, its points 0.2 Å apart - farther apart, alike each
-  way, only where so many would be more than a grid may have (16 million
-  points, 400 to a side). Meno tells the reader so as it asks for the
-  promise (`grid` in `ask`). A surface is drawn first at 0.05 a.u. for an
+  way, only where it would have more than 729,000 points, as many as the
+  readers' own grids had before at 90 to a side, so that a surface takes
+  no longer to work out and send (`GRID_LAID_MOST`).
+  Meno lays it about the atoms of the row's frame and gives it to the
+  reader as it asks for the promise (`grid` in `ask`); the reader works
+  its values out there. A surface is drawn first at 0.05 a.u. for an
   orbital - chosen, so that its lobes show apart - and at 0.002 a.u. for an
-  electron density, one of the contours Bader and co-workers took as a
-  molecule's outer surface (J. Am. Chem. Soc. 1987, 109, 7968); the
-  chemist moves it on each. A grid says which it is (`quantity`), else
-  its signs do. A value a program was run with (NCIPLOT's RDG) is the
-  program's, and kept.
+  electron density - a value in common use for the contour taken as a
+  molecule's outer surface (such contours: Bader, Carroll, Cheeseman and
+  Chang, "Properties of atoms in molecules: atomic volumes", J. Am. Chem.
+  Soc. 1987, 109, 7968-7979); the chemist moves it on each. A grid says
+  which it is (`quantity`), else its signs do. A value a program was run
+  with (NCIPLOT's RDG) is the program's, and kept.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the
