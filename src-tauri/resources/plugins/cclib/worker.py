@@ -19,8 +19,12 @@ cclib returns is mapped into Meno's own plain data, whatever the program
 hartrees, what the calculation was, each atom's mass; and the rest as
 results in Meno's general form (src/lib/calc/results.ts), in Meno's units.
 Nothing is read from the output's text but by cclib, and nothing cclib
-returns is changed: what Meno does with it - a dipole taken about a centre,
-a list kept about its frontier - is Meno's (docs/PLUGINS.md, *The
+returns is changed but in one way, as the ORCA and xTB plugins' readers do
+it for their programs' outputs: the translations and rotations an output
+lists among its vibrations, at a frequency of naught (under 1 cm-1 either
+way), are no vibrations in Meno's form, so they are left out and the rest
+numbered from one. What Meno does with the rest - a dipole taken about a
+centre, a list kept about its frontier - is Meno's (docs/PLUGINS.md, *The
 contract*). A program's own plugin reads its outputs where it is added;
 this plugin reads them where it is chosen to. cclib is used as a library;
 none of its code is Meno's.
@@ -94,9 +98,7 @@ def frame_energies(data, frames):
 
 def hartrees(ev):
     """An energy cclib gives in electronvolts, in hartrees again - by cclib's
-    own factor, so that it is the output's value as printed: another factor
-    (CODATA's newer one differs in the eighth digit) moves an energy of a
-    hundred hartrees by some 10^-6."""
+    own factor, so that it is the output's value as printed."""
     return convertor(ev, "eV", "hartree")
 
 
@@ -164,7 +166,8 @@ def vibrations(data, n):
     """The vibrations, as a list: each one's frequency (an imaginary one negative), its
     symmetry, reduced mass, IR intensity and Raman activity where the output gives them;
     chosen, the molecule moves along its displacements.
-    The translations and rotations an output lists with them, at a frequency of naught, are left out."""
+    The translations and rotations an output lists with them, at a frequency of naught (under 1 cm-1 either
+    way), are no vibrations in Meno's form: left out, and the rest numbered from one."""
     if not has(data, "vibfreqs"):
         return []
     freqs = [float(f) for f in data.vibfreqs]
@@ -299,7 +302,8 @@ def converged_of(data, frames):
 
 
 def scan_said(data, frames):
-    """What a run's geometries are, where cclib gives a scan's energies: a relaxed scan's points or a rigid one's."""
+    """What a run's geometries are, where cclib gives a scan's energies: a relaxed scan's points where there are
+    more geometries than points (each point's optimisation steps among them), else a rigid one's."""
     if not has(data, "scanenergies") or len(data.scanenergies) < 2:
         return []
     points = len(data.scanenergies)

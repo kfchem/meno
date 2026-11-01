@@ -914,7 +914,10 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   is, and what cclib returns is mapped into Meno's form - the atoms, each
   geometry, each one's energy, what the calculation was, each atom's mass,
   and its results in the general form - with nothing read from the text
-  besides and nothing cclib returns changed. Its tests read sample outputs
+  besides, and nothing cclib returns changed but the vibrations: the
+  translations and rotations an output lists among them, at a frequency
+  of naught (under 1 cm-1), are left out and the rest numbered from one,
+  as the ORCA and xTB plugins' readers do. Its tests read sample outputs
   from `calc-samples/`, which git ignores - no program's output is
   committed - and run by hand (`scripts/calc/test_reader_cclib.py`); the
   app's side is tested with the plain data written by hand. An answer
