@@ -18,12 +18,12 @@ One JSON object per line each way, as every plugin's:
     {"id": 5, "ok": true, "result": {"made": [{"entry": 0, "file": "picture.png", "media": "image/png"}]}}
 
 It fills the role Render, and runs nothing itself: `prepare` writes each
-job's settings and its script, render.py, which Blender runs in its own
-Python - beside the scene Meno writes into the job's folder (each entry's
-`scene`), and, for a film of one of its motions (the entry's `motion`),
-the studio they share (studio.py) and the motion's own script
-(motion_<id>.py) - and says the command Meno runs, apart from Meno, in the
-job's folder; `collect` says what the job made - a picture, a PNG, or a film,
+job's settings and its scripts, render.py and the interface's side of it
+(presets.py), which Blender runs in its own Python - beside the scene Meno
+writes into the job's folder (each entry's `scene`), and the files of a
+preset plugin's look, studio or motion chosen (the entry's `presets`), which
+Meno puts there (docs/plugins/blender-presets.md) - and says the command
+Meno runs, apart from Meno, in the job's folder; `collect` says what the job made - a picture, a PNG, or a film,
 an MP4 - or, where it failed, why. One job for each entry.
 
 Blender is run as its manual says (docs.blender.org, Blender 5.2,
@@ -42,10 +42,10 @@ import os
 import re
 import sys
 
-VERSION = "0.6.6"
+VERSION = "0.7.0"
 PROGRAM = "blender"
 SCRIPT = "render.py"
-LOOKS_SCRIPT = "looks.py"
+PRESETS_SCRIPT = "presets.py"
 SETTINGS = "render.json"
 PICTURE = "picture.png"
 # the line render.py logs where the graphics processor was asked for and none was found
@@ -61,22 +61,13 @@ QUALITIES = {"high", "medium", "lossless"}
 SHADINGS = {"lit", "toon"}
 OUTLINES = {"none", "thin", "outer", "mixed"}
 OUTLINE_COLOURS = {"black", "white", "grey"}
-# a scene's file's name: a plain name in the job's folder
-# the looks render.py (looks.py) makes with materials of its own
-OWN_LOOKS = {"gold", "silver", "copper", "bubble", "wood", "marble", "fur", "porcelain", "neon", "slime", "xray", "clay"}
-LOOKS = {"meno"} | OWN_LOOKS
-FINISHES = {"silver-finish": {"mirror", "satin"}, "copper-finish": {"brushed", "tarnished"}}
-WOODS = {"oak", "walnut", "cherry", "maple", "ebony", "element"}
-MARBLES = {"carrara", "swirl"}
-PILES = {"long", "short"}
-CLAYS = {"terracotta", "elements"}
-PORCELAINS = {"porcelain", "pearl"}
-# the film motions this plugin makes (the manifest's `motions`), each a script of its own beside the studio they share
-MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve", "change-ring", "change-scan", "change-shatter"}
-# (its changes of molecules: one molecule becoming the next, piece by piece - each with the part they share beside it)
-CHANGE_SCRIPT = "change.py"
+# a preset's choices (docs/plugins/blender-presets.md): the interface it is handed under, the kinds it may be chosen of, a plugin's
+# id and a file's path inside its folder - Meno puts the files there; this says only what render.py is to run of them
+INTERFACE = "preset"
+KINDS = ("look", "studio", "motion")
+PLUGIN_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+PRESET_FILE = re.compile(r"^(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_/.-]{0,127}\.py$")
 MODES = {"once", "loop"}
-STUDIO_SCRIPT = "studio.py"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
 
 
@@ -110,6 +101,42 @@ def switch(v, what):
     if not isinstance(v, bool):
         raise Refused(f"{what} is neither on nor off")
     return v
+
+
+def preset_of(p):
+    """A preset's choices as Meno hands them (`preset`): the plugin they are of, each chosen look's, studio's and motion's id
+    and file, and its own options - each checked for its shape alone; what the files do is the preset's."""
+    if not isinstance(p, dict) or p.get("interface") != INTERFACE:
+        raise Refused("a preset is not handed under the interface preset")
+    if not isinstance(p.get("from"), str) or not PLUGIN_ID.match(p["from"]):
+        raise Refused("a preset names no plugin")
+    out = {"interface": INTERFACE, "from": p["from"]}
+    for kind in KINDS:
+        item = p.get(kind)
+        if item is None:
+            continue
+        if not isinstance(item, dict) or not isinstance(item.get("file"), str) or not PRESET_FILE.match(item["file"]):
+            raise Refused(f"a preset's {kind} has no file of its folder")
+        out[kind] = {"id": str(item.get("id", "")), "file": item["file"]}
+    values = p.get("values") or {}
+    if not isinstance(values, dict) or any(not isinstance(v, (str, int, float, bool)) for v in values.values()):
+        raise Refused("a preset's options are not plain values")
+    out["values"] = dict(values)
+    return out
+
+
+def presets_of(items):
+    """The preset plugins' choices as Meno hands them (`presets`): one for each plugin whose looks, studios or motions are
+    chosen, each checked (`preset_of`); a look, a studio and a motion chosen once at most among them."""
+    if not isinstance(items, list) or not items:
+        raise Refused("presets are not a list of them")
+    out = [preset_of(p) for p in items]
+    for kind in KINDS:
+        if sum(1 for p in out if kind in p) > 1:
+            raise Refused(f"more than one preset {kind} is chosen")
+    if len({p["from"] for p in out}) != len(out):
+        raise Refused("a preset plugin is handed twice")
+    return out
 
 
 def plugin_home():
@@ -154,29 +181,16 @@ def settings_of(entry, options):
         "outlines": one_of(entry.get("outlines", "none"), "outlines", OUTLINES),
         "outline": number(entry.get("outline", 3), "The outline's width", 0.5, 20),
         "outline_colour": one_of(entry.get("outline_colour", "black"), "outline colour", OUTLINE_COLOURS),
-        # (the look's name, and the choices that adjust it)
-        "look": one_of(entry.get("look", "meno"), "look", LOOKS),
-        "silver_finish": one_of(options.get("silver-finish", "mirror"), "silver finish", FINISHES["silver-finish"]),
-        "copper_finish": one_of(options.get("copper-finish", "brushed"), "copper finish", FINISHES["copper-finish"]),
-        "wood": one_of(options.get("wood", "oak"), "wood", WOODS),
-        "marble": one_of(options.get("marble", "carrara"), "marble pattern", MARBLES),
-        "pile": one_of(options.get("pile", "long"), "pile", PILES),
-        "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
-        "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
-        # (a film's motion, where it is one of this plugin's: none for Meno's own, keyed into the scene; Once or Loop)
-        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(entry.get("mode", "once"), "mode", MODES)} if film and entry.get("motion") is not None else {}),
+        # (a film's Once or Loop, and a preset's look, studio or motion, where one is chosen)
+        **({"mode": one_of(entry.get("mode", "once"), "mode", MODES)} if film else {}),
+        **({"presets": presets_of(entry["presets"])} if entry.get("presets") is not None else {}),
     }
 
 
 def script_text(name=SCRIPT):
-    """A script, as this plugin carries it (render.py, looks.py): copied into the job's folder, so that the job holds all it runs."""
+    """A script, as this plugin carries it (render.py, presets.py): copied into the job's folder, so that the job holds all it runs."""
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name), encoding="utf-8") as f:
         return f.read()
-
-
-def motion_script(motion):
-    """A motion's own script: motion_<id>.py, a change's dash an underscore (motion_change_ring.py)."""
-    return f"motion_{motion.replace('-', '_')}.py"
 
 
 def op_prepare(m):
@@ -198,10 +212,7 @@ def op_prepare(m):
             "args": args,
             "files": [
                 {"name": SCRIPT, "text": script_text()},
-                {"name": LOOKS_SCRIPT, "text": script_text(LOOKS_SCRIPT)},
-                # (a motion's script and the studio it is made in, where the film is one of this plugin's motions)
-                *([{"name": STUDIO_SCRIPT, "text": script_text(STUDIO_SCRIPT)}, {"name": motion_script(settings["motion"]), "text": script_text(motion_script(settings["motion"]))}] if "motion" in settings else []),
-                *([{"name": CHANGE_SCRIPT, "text": script_text(CHANGE_SCRIPT)}] if settings.get("motion", "").startswith("change-") else []),
+                {"name": PRESETS_SCRIPT, "text": script_text(PRESETS_SCRIPT)},
                 {"name": SETTINGS, "text": json.dumps(settings, indent=1) + "\n"},
             ],
             "reads": [],
