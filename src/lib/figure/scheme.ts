@@ -159,7 +159,7 @@ function headAt(e: Point, u: Point, w: number, shapes: readonly HeadShape[], bar
     const i = ts.indexOf(Math.max(...ts));
     const tip = h.pts[i];
     const length = ts[i] - Math.min(...ts);
-    // (a head may be small beside the bonds - RDKit's reaction drawing sets a head a twelfth of a bond long - but not under two of its lines' widths)
+    // (a head may be small beside the bonds - a twelfth of a bond long, in some reaction drawings - but not under two of its lines' widths)
     if (length < Math.min(0.08 * bond, 2 * w) || length > 1.1 * bond) continue;
     // (its point ahead of the end, or at it, on the line; its back by the end)
     if (ts[i] < -tol || Math.min(...ts) > 0.35 * length + tol || ts[i] > 1.4 * length + tol) continue;
@@ -589,7 +589,7 @@ export function plusesOf(shapes: Shapes, bond: number, used: ReadonlySet<object>
       const qm = { x: (q.a.x + q.b.x) / 2, y: (q.a.y + q.b.y) / 2 };
       if (dist(pm, qm) > 0.15 * len(p)) continue;
       // (nothing else ends by it - at its arms' ends, as bonds crossing at their middles have other bonds there; a molecule may stand
-      // a little past them, as RDKit's reaction drawing sets a "+")
+      // a little past them, as a reaction drawing may set a "+")
       const own = [p.a, p.b, q.a, q.b];
       const r = 0.65 * Math.max(len(p), len(q));
       if (ends.some((e) => !own.includes(e) && dist(e, pm) < r)) continue;
