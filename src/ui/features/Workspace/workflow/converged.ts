@@ -11,9 +11,10 @@
  * saddle point only where each says so.
  */
 import { geometryKey } from "../../../../lib/entry";
+import { REFINED_SAID } from "../../../../lib/calc/paths";
 
 /** How a run ended converged, as the property says it: the last is a path search's words for its point refined (lib/calc/paths `REFINED_SAID`). */
-export const CONVERGED_HOW = ["optimisation", "saddle point optimisation", "highest point refined"] as const;
+export const CONVERGED_HOW = ["optimisation", "saddle point optimisation", REFINED_SAID] as const;
 export type ConvergedHow = (typeof CONVERGED_HOW)[number];
 
 /** That a run ended converged, and the geometry it ended at, by its key (lib/entry `geometryKey`). */
