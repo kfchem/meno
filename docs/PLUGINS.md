@@ -390,15 +390,23 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
 ## Several plugins, one role
 
 - **One plugin fills a role at a time**: the one assigned. The others that
-  could are offered in the same place. Where none is assigned, the first
+  could are offered in the same place. Where none is assigned, the one
   that is added fills it - the one the chemist added, of MolScribe and
-  MolNexTR - else the first in Meno's order, set up when it is first
-  needed, asking first.
+  MolNexTR - else the one that could, set up when it is first needed,
+  asking first. Where several are added, or none is and several could be,
+  and none is assigned, none fills it: the chemist chooses, in Settings
+  ("Choose which"), and asked for, the role says so ("MolNexTR and
+  MolScribe each do this: Read pictures - choose which in Settings.") -
+  never the first by its name (the maintainer, 2026-11-02).
 - **A program's output is read by that program's own plugin** (the
   maintainer, 2026-10-31): where none is chosen for a kind and Meno does
   not read it, the plugin added whose own program writes it (its kind's
   `writtenBy`) reads it - before a reader of many programs' outputs -
-  else the first added that reads it, in Meno's order. A job's output and
+  else the one added that reads it. Where several added read it and
+  nothing says which, none reads it until the chemist chooses, in
+  Settings, Files ("Choose which"); the file says so ("a.out (ORCA
+  output): cclib and PySCF each read it - choose which in Settings,
+  Files.") - never the first by its name. A job's output and
   a file opened by hand are read alike, by that one reader. Core names no
   plugin for it: each says it in its manifest.
 - **For reading a file, others may add to it.** The assigned reader reads

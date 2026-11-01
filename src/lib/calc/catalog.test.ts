@@ -16,6 +16,7 @@ import {
   readerIdOfLine,
   readerNameOf,
   readersOf,
+  readersUndecided,
   type PythonPlugin,
   type ReaderPlugin,
 } from "./catalog";
@@ -191,13 +192,15 @@ describe("who reads a kind", () => {
     expect(readersOf("cube", readers).map((p) => p.id)).toEqual(["meno", "orca-own"]);
   });
 
-  it("is the one chosen, where it is added; else Meno, where it reads it; else the first added", () => {
+  it("is the one chosen, where it is added; else Meno, where it reads it; else the one added - and, of several, none: the chemist chooses, never the first by its name", () => {
     const both = new Set(["cclib", "orca-own"]);
-    expect(readerFor("orca", both, none, readers)?.id).toBe("cclib");
+    expect(readerFor("orca", both, none, readers)).toBeNull();
+    expect(readersUndecided("orca", both, none, readers).map((p) => p.id)).toEqual(["cclib", "orca-own"]);
     expect(readerFor("orca", both, { read: { orca: "orca-own" }, also: {} }, readers)?.id).toBe("orca-own");
-    // (chosen, but taken out again: the first added reads it)
+    expect(readersUndecided("orca", both, { read: { orca: "orca-own" }, also: {} }, readers)).toEqual([]);
+    // (chosen, but taken out again: the one added reads it)
     expect(readerFor("orca", new Set(["cclib"]), { read: { orca: "orca-own" }, also: {} }, readers)?.id).toBe("cclib");
-    // (a choice for one kind is no choice for another)
+    // (a choice for one kind is no choice for another: Gaussian's output, read by cclib alone of the two)
     expect(readerFor("gaussian", both, { read: { orca: "orca-own" }, also: {} }, readers)?.id).toBe("cclib");
     // (Meno keeps its kinds, a plugin that reads it too added - unless the plugin is chosen)
     expect(readerFor("cube", both, none, readers)?.id).toBe("meno");
@@ -212,7 +215,7 @@ describe("who reads a kind", () => {
     expect(readerFor("orca", all, none, withOwn)?.id).toBe("program-own");
     // (chosen, another reads it: the chemist's choice stands)
     expect(readerFor("orca", all, { read: { orca: "cclib" }, also: {} }, withOwn)?.id).toBe("cclib");
-    // (not added: the first added reads it, as before)
+    // (not added: the one added that reads it)
     expect(readerFor("orca", new Set(["cclib", "pyscf"]), none, withOwn)?.id).toBe("cclib");
     // (a kind it does not write is read as before)
     expect(readerFor("gaussian", all, none, withOwn)?.id).toBe("cclib");
@@ -228,7 +231,7 @@ describe("who reads a kind", () => {
   it("reads it alone, unless others are chosen to read it as well - each added, each reading it, the reader not twice", () => {
     const all = new Set(["cclib", "pyscf", "orca-own"]);
     expect(alsoReadersFor("orca", all, none, readers)).toEqual([]);
-    const also = { read: {}, also: { orca: ["pyscf", "cclib", "orca-own"], gaussian: ["orca-own"] } };
+    const also = { read: { orca: "cclib" }, also: { orca: ["pyscf", "cclib", "orca-own"], gaussian: ["orca-own"] } };
     // (PySCF, chosen, does not read ORCA's output; cclib is its reader)
     expect(alsoReadersFor("orca", all, also, readers).map((p) => p.id)).toEqual(["orca-own"]);
     expect(alsoReadersFor("orca", new Set(["cclib"]), also, readers)).toEqual([]);

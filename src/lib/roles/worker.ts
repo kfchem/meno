@@ -29,17 +29,30 @@ export const useChem = create<ChemState>(() => ({ state: "idle" }));
 /**
  * The plugin that fills a role: the one chosen, where it fills it - unless
  * the chemist took it away and another that fills it is added (the
- * maintainer, 2026-10-12); else the first added that does - the one the
- * chemist added, of two that read pictures; else the first that does.
+ * maintainer, 2026-10-12); else the one added that does - the one the
+ * chemist added, of two that read pictures; else the one that does. None,
+ * where several are added, or none is and several could be, and nothing says
+ * which (`roleUndecided`): the chemist chooses, in Settings, never the first
+ * by its name (the maintainer, 2026-11-02).
  */
 export function rolePlugin(role: RoleId): PythonPlugin | undefined {
   const can = pluginsFilling(role);
   const { roles, removed } = useAppSettings.getState().plugins;
   const state = useReaders.getState().state;
   const picked = can.find((p) => p.id === roles[role]);
-  const added = can.find((p) => state[p.id] === "added" && !removed.includes(p.id));
-  if (picked && removed.includes(picked.id) && added) return added;
-  return picked ?? added ?? can[0];
+  const added = can.filter((p) => state[p.id] === "added" && !removed.includes(p.id));
+  if (picked && removed.includes(picked.id) && added.length === 1) return added[0];
+  return picked ?? (added.length ? (added.length === 1 ? added[0] : undefined) : can.length === 1 ? can[0] : undefined);
+}
+
+/** The plugins that could fill a role where nothing says which does (`rolePlugin` none): those added, or, none added, all that fill it. None, where it is decided or nothing fills it. */
+export function roleUndecided(role: RoleId): PythonPlugin[] {
+  if (rolePlugin(role)) return [];
+  const can = pluginsFilling(role);
+  const { removed } = useAppSettings.getState().plugins;
+  const state = useReaders.getState().state;
+  const added = can.filter((p) => state[p.id] === "added" && !removed.includes(p.id));
+  return added.length > 1 ? added : can.length > 1 ? can : [];
 }
 
 /** A role asked of a plugin the chemist took away: not a failure of it - it says to add it. */
@@ -61,6 +74,8 @@ onWorkerStopped((id) => {
 /** The worker of the plugin that fills `role`, started the first time it is asked for. */
 export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
   const plugin = rolePlugin(role);
+  const undecided = plugin ? [] : roleUndecided(role);
+  if (undecided.length) return Promise.reject(new Error(`${undecided.map((p) => p.name).join(" and ")} each do this: ${ROLES[role].name} - choose which in Settings.`));
   if (!plugin) return Promise.reject(new Error(`No plugin Meno knows of does this: ${ROLES[role].name}.`));
   return pluginWorker(plugin);
 }
