@@ -23,8 +23,8 @@ beyond files - SMILES, R/S, conformers, what comes later - are in
   and cube files. **Calculation input** - what a program is given to run
   one.
 - **Reader, writer** - what reads or writes one kind for Meno, under one
-  contract. Each is part of a plugin (cclib, PySCF) or one of Meno's own
-  parts.
+  contract. Each is part of a plugin (the ORCA interface, the Gaussian
+  interface, the xTB plugin, cclib, PySCF) or one of Meno's own parts.
 - **Plugin**, **Meno's own parts** - as in PLUGINS.md. A plugin is
   independent and added or removed; Meno's own parts come with Meno.
 - **Meno's own formats** - `.meno` and the record (on the clipboard, in a
@@ -189,13 +189,15 @@ that differ, it is given none, and says why.
 
 | Kind | Told by | Read by |
 | --- | --- | --- |
-| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | the ORCA interface (plugin, uv; ORCA's output), the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint) and the xTB plugin (plugin, pixi; xtb's output, a job's log read the same way, and its frequencies in Gaussian's form), each for what its program writes; cclib (plugin, uv); PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
+| ORCA, Gaussian, xTB output; Gaussian formatted checkpoint; since step 3, every program cclib reads | each program's banner, as the plugins added that read it bring it in their manifests | each program's own plugin, for what its program writes, by default: the ORCA interface (plugin, uv; ORCA's output), the Gaussian interface (plugin, uv; Gaussian's output and its checkpoint) and the xTB plugin (plugin, pixi; xtb's output, a job's log read the same way, and its frequencies in Gaussian's form); cclib (plugin, uv), a reading of its own where chosen in *Files*; PySCF (plugin, pixi; ORCA, Gaussian and the checkpoint only) |
 | Molden file | `[Molden Format]`, as PySCF's manifest brings it | PySCF |
 | Cube file | its layout: two comment lines, four lines of a count and three numbers (`CUBE_MARK`) | cube (built in, web worker) |
 
 A reader is a process of its own - a Python sidecar for a plugin, a web
 worker for a built-in - spoken to in JSON lines (`lib/calc/client.ts`,
-`builtin.ts`). Every reader added that reads a kind reads it, and what each
+`builtin.ts`). A kind's reader reads it - the one chosen in *Files*, else
+Meno's own, else the plugin of the program that writes it, else the first
+added (`readerFor`) - and each chosen to read it as well does; what each
 finds is kept as its own (`combine`); Meno checks every answer (`checked`,
 `readResults`) - the same checks a saved workspace's results go through.
 
@@ -437,7 +439,8 @@ Meno knows of:
 - **Also read by:** none at first. The chemist may add any plugin that
   reads the kind; each then reads the file as well, and its results join
   under its name, as #147 keeps them. Example: a Gaussian output read by
-  cclib, with PySCF added to draw its orbitals.
+  the Gaussian interface, with PySCF added to draw its orbitals, and
+  cclib's reading beside them where it is chosen.
 - **Written by:** one, where anything writes the kind.
 
 How these behave:
@@ -478,7 +481,7 @@ How these behave:
     - one of Meno's own kinds by its id;
     - a kind it brings, with its id, name, extensions and marks. A plugin
       knows of no other: two that read the same kind each bring it, by
-      the same id. cclib brings every program it reads.
+      the same id: the ORCA interface and cclib each bring ORCA's output.
   - **The manifest is read when the plugin is added**, never asked of the
     running plugin, so nothing is started to learn what a plugin reads.
     Its kinds join the table then, and leave it when the plugin is taken
@@ -1602,18 +1605,21 @@ As step 3 was built:
   meet; no code of Meno's names a plugin. Plugins fetched over the
   internet later will be folders of the same kind. The backend allows a
   lock and a worker in such a folder only (`src-tauri/src/lib.rs`).
-- **Meno knows no program.** cclib's manifest brings every program cclib
-  reads and has outputs of to test with - ADF, CFOUR, Dalton, GAMESS
-  (Firefly too), GAMESS-UK, Gaussian and its formatted checkpoint,
-  Jaguar, Molcas, Molpro, MOPAC, NWChem, ORCA, Psi4, Q-Chem, Turbomole,
-  xTB - each told by its banner as cclib tells it; PySCF's brings the
-  four it reads, Molden among them. With no plugin added, *Files* lists
-  Meno's own kinds only.
+- **Meno knows no program.** Each plugin's manifest brings the kinds it
+  reads: a program's own plugin its program's outputs (the ORCA
+  interface ORCA's; the Gaussian interface Gaussian's and its formatted
+  checkpoint; the xTB plugin xtb's and its frequencies in Gaussian's
+  form); cclib's every program cclib reads and has outputs of to
+  test with - ADF, CFOUR, Dalton, GAMESS (Firefly too), GAMESS-UK,
+  Gaussian and its formatted checkpoint, Jaguar, Molcas, Molpro, MOPAC,
+  NWChem, ORCA, Psi4, Q-Chem, Turbomole, xTB - each told by its banner as
+  cclib tells it; PySCF's the four it reads, Molden among them. With no
+  plugin added, *Files* lists Meno's own kinds only.
   - Each program's banner is checked on a real output of it, one per
     program from cclib's regression data (`scripts/calc/samples.json`;
     kept out of the repository in `calc-samples/`), and cclib's worker
     gives each one's molecule. The tests skip a file that is not there.
-  - Psi3 is left out: cclib has no output of it to test with.
+  - Psi3 is left out, with no output of it to test with.
   - `probe` is in place, and tested with made-up plugins.
 - **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
   *Several plugins, one role*): its manifest declares ORCA's output as its

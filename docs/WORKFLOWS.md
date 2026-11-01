@@ -727,7 +727,7 @@ Conformers go through a workflow as any set does (decided):
     (2026-10-22). Of a calculation's output that optimised, only the
     geometries the run converged on are entries: an optimisation's last,
     a relaxed scan's each point - as the program marks them, read by its
-    plugin (cclib's `optstatus`). The steps on the way stay frames, to be
+    program's own plugin. The steps on the way stay frames, to be
     looked at, never entries: before, a scan of 3 points opened as 21
     compounds, each with an energy, and a conformer set weighted geometries
     that were no minimum of anything. A point the run never converged on
@@ -1740,11 +1740,12 @@ Meno's readers, as an output opened is. How it works: ARCHITECTURE.md,
 
 Decided by the maintainer (2026-10-08), as it was built:
 
-- **What ORCA and Gaussian write is read by Meno's readers** - every
-  reader of its kind added (cclib, PySCF), put together, as when the
-  output is opened - not by the plugin that ran it. The output is kept
-  with the molecules it gave, by its kind, as an opened one is. Where no
-  reader of it is added, the step says which to add.
+- **What ORCA and Gaussian write is read by their own plugins**
+  (2026-10-31): the plugin that ran the job reads its output, as when the
+  output is opened - unless another reader of its kind is chosen in
+  *Files* - with each chosen to read it as well put together beside it.
+  The output is kept with the molecules it gave, by its kind, as an
+  opened one is.
 - **Gaussian's steps are its input plugin's**: the plugin that writes
   Gaussian's input for *Export* is now the *Gaussian interface*, and runs
   it as well, its input written by the same code. Its id changed with its

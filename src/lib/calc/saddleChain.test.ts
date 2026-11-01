@@ -10,8 +10,8 @@ import pyramid from "./fixtures/nh3-pyramid-read.json";
 
 /**
  * A program's verdict on imaginary frequencies, from its output to a step
- * after it - read (the cclib plugin's answers, as it gave them for ORCA
- * 6.1.1's outputs), put together (`combine`), worked (`workedOf`), the
+ * after it - read (a reader's answers for ORCA 6.1.1's outputs, in Meno's
+ * form), put together (`combine`), worked (`workedOf`), the
  * molecule a step's entry becomes, and the entries the next step reads of
  * it (`setEntries`). Ammonia at GFN2-xTB, ORCA's own (NATIVE-XTB2 NumFreq):
  * planar - "* xyz 0 1", N at the origin, three H 1.0 Å from it in its plane
