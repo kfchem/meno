@@ -9,7 +9,7 @@ import { useNotices } from "../../../notices";
 import type { EditorState, Model } from "../store/types";
 import { linkOf, signatureOf } from "../utils/drawnLink";
 import { keptMap, reactionOf, type Side3D } from "./atomMap";
-import { bareAtomsOf, blocksOf, conformersOf, moleculeOf } from "./make3d";
+import { bareAtomsOf, blocksOf, conformersOf, moleculeOf, pageCount } from "./make3d";
 import { mapAtoms, MappingStopped } from "./mapAtoms";
 
 type Store = { getState: () => EditorState };
@@ -56,7 +56,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       chem ??= await chemWorker("conformers");
       const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
       const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
-      const [c] = await conformersOf(chem, block, "one", options);
+      const [c] = await conformersOf(chem, block, "one", options, pageCount(block, useAppSettings.getState().chemistry));
       if (!c) throw new Error("A structure of the reaction has no 3D structure.");
       const m = moleculeOf(c, block);
       out.push({ molecule: { atoms: m.atoms, bonds: m.bonds }, drawnFrom: m.drawnFrom ?? [] });

@@ -425,24 +425,8 @@ MOST_ISOMERS = 32
 #: How long *Stereoisomers* looks at one structure before it sets it aside, alone (seconds): its stereoisomers each
 #: tried in 3D, a camphor's in some 10 s.
 EXAMINE_S = 30
-#: How many conformers are tried of a molecule in which nothing turns and no ring can flip - RDKit's own
-#: number for an embedding, which is as many shapes as such a molecule has.
-FEW_CONFORMERS = 10
-#: How many are tried of a molecule with a ring that can flip: a ring's two forms are shapes of its own that
-#: no rotatable bond counts, and an embedding reaches the rarer one about once in twenty-five tries (measured
-#: over twelve monosubstituted cyclohexanes: 3.8% of embeddings for tert-butyl, 4.3% for phenyl), so a
-#: molecule with one is tried enough times that both forms are made.
-RING_CONFORMERS = 200
-#: How many are tried otherwise, by how many bonds in it turn: Ebejer, Morris and Deane's rule (Conformer
-#: Generation using RDKit, 1st RDKit User General Meeting, London 2012; Freely Available Conformer Generation
-#: Methods: How Good Is Good Enough?, J. Chem. Inf. Model. 2012, 52, 1146-1158), fifty up to seven turning
-#: bonds, two hundred to twelve, three hundred beyond.
-BY_TURNS = ((7, 50), (12, 200), (None, 300))
-#: The most conformers a search may be asked for (*Conformers sought*, *This many*; the manifest's `max` for
-#: it says the same). A chain needs more than the rule above gives it: of the 1523 conformers within 3 kcal/mol
-#: of the lowest that 5000 embeddings of butyl octanoate (nine turning bonds, the rule's 200) found, 200 found
-#: 110, 500 found 266, 1000 found 487, and the lowest came only at 2000. 5000 of it is a job of about a minute
-#: on ten cores, 111 MB at most, its file 4.9 MB.
+#: The most conformers a search may be asked to try: the most Meno's *How many* gives (lib/chem/conformersSought
+#: `MOST_CONFORMERS`, where its basis is stated).
 MOST_CONFORMERS = 5000
 # conformers' random seed, and how many steps an optimisation may take, unless asked
 SEED = 0x4D45
@@ -452,12 +436,11 @@ FIELDS = ("MMFF94", "MMFF94s", "UFF")
 
 
 def options_of(m):
-    """How conformers are to be made, as the request's options say - those
-    the manifest declares for the role (roleOptions), each kept to what it
-    may be - else as before: `count` alone, as older requests give it. How
-    many are sought is the `count` asked for where the options ask for a
-    number of their own (`sought`: "fixed"), and none where the molecule is
-    to say how many it needs, which `sought` below works out."""
+    """How conformers are to be made: how many to try, as Meno sends it
+    (`count`: the chemist's number, or as many as the molecule needs, which
+    Meno works out - lib/chem/conformersSought), kept to 1 to
+    MOST_CONFORMERS; and the options the manifest declares for the role
+    (roleOptions), each kept to what it may be."""
     o = m.get("options") or {}
 
     def number(key, default, low, high, kind=int):
@@ -467,10 +450,12 @@ def options_of(m):
             v = default
         return min(max(v, low), high)
 
-    # (a number, where the chemist asked for one - or where the request gives a count and no choice at all)
-    asked = o.get("sought") == "fixed" or (o.get("sought") is None and ("count" in o or "count" in m))
+    try:
+        count = min(max(int(m["count"]), 1), MOST_CONFORMERS) if m.get("count") is not None else None
+    except (TypeError, ValueError):
+        count = None
     return {
-        "count": number("count", int(m.get("count", RING_CONFORMERS)), 1, MOST_CONFORMERS) if asked else None,
+        "count": count,
         "seed": number("seed", SEED, 0, 2**31 - 1),
         "field": o.get("field") if o.get("field") in FIELDS else "MMFF94",
         "iters": number("iters", STEPS, 10, 100000),
@@ -1473,54 +1458,6 @@ def method_of(mol, ids, field, stood_in, metals, eta):
     return made + ("; restrained: " + ", ".join(held) if held else "")
 
 
-def turning_bonds(mol):
-    """Its bonds that can turn and move the rest of it: a single bond outside a ring whose atoms each have
-    another heavy atom on them. Counted here rather than asked of RDKit (`CalcNumRotatableBonds` with
-    `NonStrict`) because the molecule may carry its hydrogens, which that pattern counts as neighbours."""
-
-    def heavy(atom):
-        return sum(1 for x in atom.GetNeighbors() if x.GetAtomicNum() > 1)
-
-    turns = 0
-    for b in mol.GetBonds():
-        if b.GetBondType() == Chem.BondType.SINGLE and not b.IsInRing():
-            if heavy(b.GetBeginAtom()) > 1 and heavy(b.GetEndAtom()) > 1:
-                turns += 1
-    return turns
-
-
-def can_flip(mol):
-    """Whether it has a ring with more than one shape of its own: a ring of five atoms or more that is not
-    aromatic and is not bridged - a chair and its flipped chair, a sugar's two chairs, a five-ring's puckers.
-    A bridged ring (adamantane, a norbornane) is held in the one shape by its bridge, which is why a ring
-    sharing more than one bond with another ring of its own size or smaller does not count - against a larger
-    ring it is no bridge but the way round it, as each sugar of a cyclodextrin lies on its macrocycle."""
-    by_atoms = mol.GetRingInfo().AtomRings()
-    by_bonds = [set(b) for b in mol.GetRingInfo().BondRings()]
-    for i, ring in enumerate(by_atoms):
-        if len(ring) < 5 or all(mol.GetAtomWithIdx(a).GetIsAromatic() for a in ring):
-            continue
-        # (bridged: more than the one bond it would be fused by is shared with a ring no bigger than it)
-        if any(len(by_bonds[i] & by_bonds[j]) > 1 and len(by_atoms[j]) <= len(ring) for j in range(len(by_bonds)) if j != i):
-            continue
-        return True
-    return False
-
-
-def sought(mol):
-    """How many conformers are tried of `mol` where the request asks for no number of its own: as many as its
-    shape needs. By how many of its bonds turn, as Ebejer, Morris and Deane's rule has it (BY_TURNS, RDKit's
-    own count of them); at least RING_CONFORMERS where a ring of it can flip, that being a shape no turning
-    bond counts and one an embedding reaches rarely; and FEW_CONFORMERS where nothing in it turns at all."""
-    turns = rdMolDescriptors.CalcNumRotatableBonds(mol)
-    many = next(n for most, n in BY_TURNS if most is None or turns <= most)
-    if can_flip(mol):
-        return max(many, RING_CONFORMERS)
-    if not turning_bonds(mol):
-        return FEW_CONFORMERS
-    return many
-
-
 def conformers_of(iso, how, made, page=False):
     """A stereoisomer's conformers. On Meno's own page (`page`), of two
     enantiomers the one whose SMILES comes first is made, and the other is
@@ -1555,18 +1492,17 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
     MMFF94s or UFF, as asked - UFF where MMFF has no parameters) - every one
     RDKit made, as it made it, in the order it embedded them, with their
     energies; and how they were made, said as rows to show (`how`). How many
-    are tried is `count`, or as many as the molecule needs where it gives
-    none (`sought`). A metal's bonds are embedded at their covalent lengths,
-    its ligands at least a floor's angle apart where one holds (FLOORS), and
-    a conformer that comes out narrower is dropped and counted. Where no
-    force field has parameters for a metal, a lighter one of its group
-    stands in (STAND_IN): its energies are given as the model's
+    are tried is `count`, as Meno sends it. A metal's bonds are embedded at
+    their covalent lengths, its ligands at least a floor's angle apart where
+    one holds (FLOORS), and a conformer that comes out narrower is dropped
+    and counted. Where no force field has parameters for a metal, a lighter
+    one of its group stands in (STAND_IN): its energies are given as the model's
     (`modelEnergies`), none as the molecule's; where none may, the embedded
     shapes are kept as they are, with no energies, and the rows say why. An
     eta system is held over its metal (eta_systems), its star set at its
     centre, which `stars` names; it gives the model's energies alone."""
-    # (before its hydrogens are put on: how many turning bonds and flipping rings it has are of the molecule)
-    count = count or sought(mol)
+    if not count:
+        raise ValueError("How many conformers to try was not given.")
     eta = eta_systems(mol)
     mol = Chem.AddHs(mol)
     params = rdDistGeom.ETKDGv3()
@@ -2069,7 +2005,7 @@ def op_prepare(m):
     for i, entry in enumerate(m.get("entries") or []):
         rows = restraint_rows(entry.get("restraints"), len(entry.get("atoms") or []))
         mol_of(entry, held_apart(entry, rows))  # (one RDKit cannot make sense of, said now - not in its job)
-        given = {"atoms": entry["atoms"], "bonds": entry.get("bonds") or [], "options": options}
+        given = {"atoms": entry["atoms"], "bonds": entry.get("bonds") or [], "options": options, "count": entry.get("count")}
         if rows:
             given["restraints"] = rows
         if step == "minimise" and entry.get("start") is not None:

@@ -11,6 +11,7 @@ import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem
 import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
 import { acceptColours, DEFAULT_COLOURS, type ColourSettings } from "../chem/palette";
+import { MOST_CONFORMERS } from "../chem/conformersSought";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
 import type { OptionValues } from "../options";
 import { isRole } from "../plugins/roles";
@@ -165,6 +166,10 @@ export type ChemistrySettings = {
   valenceWarnings: boolean;
   /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol - unset, `WINDOW_3D`. A workflow's conformer step keeps every one. */
   window3d?: number;
+  /** How many conformers the page's 3D structure tries (*Conformers sought*, lib/chem/conformersSought): a number of the chemist's own ("fixed"), else - unset - as many as the molecule needs. */
+  sought3d?: "fixed";
+  /** The number tried where `sought3d` is "fixed": 1 to `MOST_CONFORMERS` - unset, `RING_CONFORMERS`. */
+  count3d?: number;
 };
 
 export type NetworkSettings = {
@@ -369,11 +374,13 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings, window3d } = raw as Record<string, unknown>;
+  const { valenceWarnings, window3d, sought3d, count3d } = raw as Record<string, unknown>;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
     ...(typeof window3d === "number" && Number.isFinite(window3d) && window3d >= 0 && window3d <= WINDOW_3D_MOST ? { window3d } : {}),
+    ...(sought3d === "fixed" ? { sought3d } : {}),
+    ...(typeof count3d === "number" && Number.isInteger(count3d) && count3d >= 1 && count3d <= MOST_CONFORMERS ? { count3d } : {}),
   };
 }
 

@@ -13,6 +13,8 @@ import type { Style3D } from "../../../../lib/chem/style3d";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import type { OptionValues } from "../../../../lib/options";
+import { conformersSoughtOf, RING_CONFORMERS, soughtNumber } from "../../../../lib/chem/conformersSought";
+import type { ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -513,17 +515,28 @@ export function rowFrom(items: Turned[], at: { x: number; y: number }): { x: num
 }
 
 /**
- * Each stereoisomer asked for, its conformers made for the page - with the
- * options the plugin takes for the role, as chosen in Settings - as the page
- * shows them: lowest first, each once, laid over the first, alike atoms in
- * like places (`asThePageShows`, in a worker of its own: `shownConformers`).
- * `onPage` asks the plugin to make one of two enantiomers as the other's
- * mirror image (docs/PLUGINS.md); a workflow's *Conformers* step never sends
- * it, and is given the program's own.
+ * How many conformers the page tries of a block, as Settings has it
+ * (*Conformers sought*): the chemist's number, or as many as the molecule
+ * needs (lib/chem/conformersSought) - null where the block cannot be read.
  */
-export async function conformersOf(chem: ChemClient, block: Block, isomers: "one" | "all", options: OptionValues = {}): Promise<Conformers[]> {
+export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<ChemistrySettings, "sought3d" | "count3d">): number | null {
+  return soughtNumber({ sought: chosen.sought3d ?? "needed", count: chosen.count3d ?? RING_CONFORMERS }, () => conformersSoughtOf(block.molblock));
+}
+
+/**
+ * Each stereoisomer asked for, its conformers made for the page - `count`
+ * tried (`pageCount`), with the options the plugin takes for the role, as
+ * chosen in Settings - as the page shows them: lowest first, each once,
+ * laid over the first, alike atoms in like places (`asThePageShows`, in a
+ * worker of its own: `shownConformers`). `onPage` asks the plugin to make
+ * one of two enantiomers as the other's mirror image (docs/PLUGINS.md); a
+ * workflow's *Conformers* step never sends it, and is given the program's
+ * own.
+ */
+export async function conformersOf(chem: ChemClient, block: Block, isomers: "one" | "all", options: OptionValues = {}, count: number | null = null): Promise<Conformers[]> {
   const like = block.like ? { like: block.like } : {};
-  return shownConformers((await chem.request("conformers", { molblock: block.molblock, isomers, ...like, options, onPage: true }, CONFORMERS_MS)).isomers);
+  const tries = count != null ? { count } : {};
+  return shownConformers((await chem.request("conformers", { molblock: block.molblock, isomers, ...like, ...tries, options, onPage: true }, CONFORMERS_MS)).isomers);
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

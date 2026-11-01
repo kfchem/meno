@@ -143,6 +143,13 @@ describe("a plugin's manifest", () => {
       { role: "conformers", programs: [], options: [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }] },
       { role: "smiles", programs: [], options: [] },
     ]);
+    // (a conformer search that takes how many to try: said on the conformers role alone, as true - Meno sends the number)
+    const tries = [{ role: "conformers", tries: true }, { role: "smiles", tries: true }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: tries })?.roles).toEqual([
+      { role: "conformers", programs: [], options: [], tries: true },
+      { role: "smiles", programs: [], options: [] },
+    ]);
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", tries: "yes" }] })?.roles).toEqual([{ role: "conformers", programs: [], options: [] }]);
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
@@ -175,9 +182,9 @@ describe("a plugin's manifest", () => {
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
-    // (how many are sought is the molecule's to say unless a number is asked for: the number is shown only then)
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.find((o) => o.id === "count")?.when).toEqual({ id: "sought", in: ["fixed"] });
+    // (how many to try is Meno's - the role says its search takes a number, and Meno sends it - the rest the plugin's)
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["field", "iters", "seed"]);
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.tries).toBe(true);
   });
 
   it("fills kinds of step: several in one with what they share, each Meno's and once, its programs by name - never a path - its options as data", () => {
