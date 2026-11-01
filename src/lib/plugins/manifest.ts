@@ -234,7 +234,7 @@ export type UnsureDecl = { below: number; basis: string };
  * the file its molecule was read from where it is one of them - another
  * plugin's step's, or one opened - the two joined by the kind's id alone;
  * and, of a kind that takes nothing in (Generate), whether it makes its
- * molecules from seeds wired in (`seeds`: CReM's); and, of a kind a lone
+ * molecules from seeds wired in (`seeds`); and, of a kind a lone
  * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
  * takes none (`noLoneAtom`).
  * A manifest may say several kinds in one, with the same programs and
