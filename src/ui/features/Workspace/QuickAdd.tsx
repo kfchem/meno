@@ -4,6 +4,7 @@ import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
+import { labelWidth } from "./quickAddLabel";
 import { guideNotice } from "../../../lib/guide/guide";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
@@ -24,8 +25,6 @@ const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
 const GAP = 2;
-/** How wide the name of who does a row of steps stands, beside its kinds: "Gaussian 16" and "Procedures" whole. */
-const LABEL_W = 84;
 /** How tall the SMILES field stands below the row, its rule above it and room for its focus ring below, in px; and the row of shapes. */
 const SMILES_H = 32 + 9 + 2;
 const SHAPES_H = 36 + 9;
@@ -237,7 +236,8 @@ export default function QuickAdd({
   // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
   const offered = wired ? [] : procedures;
   const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
-  const calcWidth = LABEL_W + most * SIZE + 8;
+  const labelW = useMemo(() => labelWidth([...steps.map((g) => g.name), ...(offered.length ? ["Procedures"] : [])]), [steps, offered.length]);
+  const calcWidth = labelW + most * SIZE + 8;
   // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
@@ -369,7 +369,7 @@ export default function QuickAdd({
             {steps.length ? (
               steps.map((g) => (
                 <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: LABEL_W }}>
+                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
                     {g.name}
                   </span>
                   {g.steps.map((k) => (
@@ -391,7 +391,7 @@ export default function QuickAdd({
             )}
             {offered.length > 0 && (
               <div role="group" aria-label="Procedures" className="flex items-center">
-                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: LABEL_W }}>
+                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
                   Procedures
                 </span>
                 {offered.map((p) => (
