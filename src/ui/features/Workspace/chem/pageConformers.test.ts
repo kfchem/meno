@@ -32,6 +32,10 @@ describe("a structure's conformers, as the page shows them", () => {
       // (the search's own rows as they were, before them)
       expect(shown.how!.slice(0, given.how!.length)).toEqual(given.how);
     }
+    // (none set aside: no row saying so - only what the same is, after the search's own, its Kept among them)
+    const one = made("butan-2-ol");
+    const alone = asThePageShows({ ...one, frames: one.frames.slice(0, 1), energies: one.energies!.slice(0, 1) });
+    expect(alone.how!.map((r) => r.label)).toEqual([...one.how!.map((r) => r.label), "The same within"]);
   });
 
   it("lays each over the first by its heavy atoms, and keeps every CH2's hydrogens on the side they have in the first", () => {

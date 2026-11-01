@@ -52,4 +52,16 @@ describe("equivalent atoms settled", () => {
       expect(farthest(second, flat)).toBeLessThan(1e-3);
     }
   });
+
+  it("lets the fit decide where three bonds lie nearly in a plane: a triple product under 0.05 \u00c5\u00b3 says no way round, whatever its sign", () => {
+    // (an =CH2 tilted 0.03 \u00c5 out of its plane in the first - a triple product of some 0.037 \u00c5\u00b3 - and the other way in the
+    //  second, its hydrogens swapped: taken as a way round, the sign would put them back crossed, as ethyl acrylate's were)
+    const atoms = [{ el: "C" }, { el: "C" }, { el: "H" }, { el: "H" }, { el: "H" }, { el: "H" }];
+    const bonds = [{ a1: 0, a2: 1, order: 2 }, ...[2, 3].map((h) => ({ a1: 0, a2: h, order: 1 })), ...[4, 5].map((h) => ({ a1: 1, a2: h, order: 1 }))];
+    const first = [0, 0, 0, 1.33, 0, 0, -0.56, 0.92, 0.03, -0.56, -0.92, 0, 1.89, 0.92, 0, 1.89, -0.92, 0];
+    // (atom 3 now where atom 2 was, tilted the other way; atom 2 where atom 3 was)
+    const second = moved(first, { 2: 3, 3: 2 }).map((v, i) => (i === 3 * 3 + 2 ? -0.03 : v));
+    const [, settled] = settleEquivalents(atoms, bonds, [first, second]);
+    expect(farthest(settled, first)).toBeLessThan(0.1);
+  });
 });
