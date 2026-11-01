@@ -249,23 +249,18 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(ask("open_stereo", molblock=flat)["result"], {"atoms": [1], "bonds": [], "isomers": 2, "cumulenes": [], "cumulated": [], "free": False})
 
     def test_makes_conformers_as_its_options_say_and_says_how(self):
-        # (on Meno's page, where the same conformer twice is kept once and says within what)
+        # (every one RDKit made, for Meno's page as for a workflow's step: which are the same is Meno's to say)
         made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7}, onPage=True)["result"]["isomers"][0]
         self.assertEqual(made["field"], "MMFF94s")
         how = {r["label"]: r["text"] for r in made["how"]}
         self.assertEqual(how["Embedded"], "ETKDG v3")
         self.assertEqual(how["Random seed"], "7")
         self.assertEqual(how["Optimised"], "MMFF94s, at most 300 steps")
-        self.assertRegex(how["Kept"], r"^\d+ of 5 embedded \(5 sought\)")
-        self.assertEqual(how["The same within"], "0.01 \u00c5, all atoms (H included), over its symmetries")
+        self.assertEqual(how["Kept"], "5 of 5 embedded (5 sought)")
         self.assertTrue(how["Made by"].startswith("RDKit "))
-        self.assertLessEqual(len(made["frames"]), 5)
-        # (a workflow's step: every one RDKit made, and no such row)
+        self.assertEqual(len(made["frames"]), 5)
         raw = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
-        rows = {r["label"]: r["text"] for r in raw["how"]}
-        self.assertEqual(rows["Kept"], "5 of 5 embedded (5 sought)")
-        self.assertNotIn("The same within", rows)
-        self.assertEqual(len(raw["frames"]), 5)
+        self.assertEqual(raw["frames"], made["frames"])
         # (what it may not be, kept to what it may: a force field it does not know, the default)
         odd = ask("conformers", molblock=PCPA, options={"count": 2, "field": "GAFF", "iters": 1})["result"]["isomers"][0]
         self.assertEqual(odd["field"], "MMFF94")
@@ -279,8 +274,7 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual([a["el"] for a in mol["atoms"][:13]], ["C"] * 9 + ["O", "O", "N", "Cl"])
         self.assertTrue(all(a["el"] == "H" for a in mol["atoms"][13:]))
         self.assertEqual(len(mol["atoms"]), 13 + 10)
-        # lowest energy first, every frame with every atom
-        self.assertEqual(mol["energies"], sorted(mol["energies"]))
+        # every frame with every atom, each its energy
         self.assertTrue(all(len(f) == 3 * len(mol["atoms"]) for f in mol["frames"]))
         self.assertEqual(len(mol["frames"]), len(mol["energies"]))
         # the wedge's configuration, read back from the 3D structure

@@ -304,7 +304,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit, or another of its properties ("its product"); all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
-| Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
+| Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number, in the order the step before gave them (a conformer search's, as its program made them; a *Rank* step's, as it ranked them); the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
 | Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
@@ -1708,8 +1708,8 @@ Decided while building it, for the maintainer to confirm:
 - **A search on a compound set** runs one job for each entry; **on a
   conformer set**, one for each compound, from its first conformer.
   Either way the results are a conformer set: each geometry a search gave
-  a conformer of its entry's compound, numbered lowest energy first, each
-  with its energy; the calculation is kept with the first. The card says
+  a conformer of its entry's compound, numbered in the order the search
+  gave them, each with its energy (a *Rank* step orders them); the calculation is kept with the first. The card says
   how many: *0:45 · 17 conformers* (*... of 2 compounds*).
 - **CREST's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF, or
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised
@@ -2063,8 +2063,8 @@ Decided while building it, for the maintainer to confirm:
 - **What *Choose one* ranked by** is said in its card: the conformer
   chosen, of how many, and the program and method that worked out the
   energies, as the molecule's calculation says them (*#1 of 9, lowest ·
-  RDKit · MMFF94*). Chosen by its number, the energies are not used and
-  not said.
+  RDKit · MMFF94*). Chosen by its number - in the order the step before
+  gave them - the energies are not used and not said.
 - **A conformer search from a drawing runs in the plugin's worker**, as
   on the canvas, not as a job: it does not go on when Meno closes. A
   search on molecules in 3D is still a job.
@@ -2174,14 +2174,14 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   RMSD of each other - the maintainer's standard for structures fed to
   quantum calculations, which keeps OH and NH rotamers apart - at its
   least over the ways the molecule maps onto itself, laid over by turning
-  and moving, never by reflecting (`workflow/sameConformer`; the RDKit
-  plugin's conformers for Meno's own page use the same, while its
-  *Conformers* step gives every one RDKit made, and Meno's *Duplicates*
-  applies it: PLUGINS.md). The ways are those of its atoms but
-  the hydrogens hanging on one atom, at most 1,000 - searched for atom by
-  atom, each taken only to one of its kind and bonded as it is, the search
-  stopping past them: Pd(PPh3)4's, millions, in some 40,000 steps a
-  search, 12 ms in all (Apple M4, 2026-11-01) - each bond taken onto
+  and moving, never by reflecting (`workflow/sameConformer`; Meno's own
+  page keeps each conformer once by it - WORKSPACE.md, *The page's
+  conformers* - and Meno's *Duplicates* applies it, while a plugin's
+  *Conformers* step gives every one its program made: PLUGINS.md). The
+  ways are those of its atoms but the hydrogens hanging on one atom, at
+  most 1,000 - searched for atom by atom, each taken only to one of its
+  kind and bonded as it is, the search stopping past them, or past
+  200,000 steps - each bond taken onto
   one of its order - a ring of single and double bonds in turn, of 4n + 2
   atoms (Hückel's rule), all of one: which of a benzene ring's bonds a
   Kekulé structure makes double is no part of its shape, so a phenyl
@@ -2192,7 +2192,9 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   are taken against their own alone: a duplicate can then be missed,
   never two different conformers made one, and *Duplicates* says so on
   its line: *1 compound has more than 1,000 symmetric ways: duplicates of
-  it could be missed*.
+  it could be missed* (the page, on its *The same within* row). (The
+  search for the ways is quick: Pd(PPh3)4's, millions, pass 1,000 in some
+  40,000 steps a search, 12 ms in all - Apple M4, 2026-11-01.)
   Meno's *Duplicates* has no threshold of its own any more (it was 0.125
   Å, its atoms in their own order).
 - **A conformer's mirror image**, in an achiral molecule, is kept apart by

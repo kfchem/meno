@@ -327,9 +327,10 @@ structure is first made (drawn, read, generated), and no step renumbers
 them but *Atom map*, which gives an entry in a reference's numbering, and
 says so.
 - **A program that reorders atoms has them mapped back** by its plugin
-  before entries are given. The conformer searches already keep the order,
-  and #374 settles equivalent atoms onto one numbering across one search's
-  conformers (onto its first), not onto the structure it was given.
+  before entries are given. The conformer searches keep the order. Meno's
+  own page lays a structure's equivalent atoms across its conformers as its
+  first has them (WORKSPACE.md, *The page's conformers*); a workflow's
+  entries are never so moved.
 - **The *Atom map* node gives the products in the reactants' numbering**,
   and a species' conformers in its numbering, each equivalent atom (a
   methylene's hydrogens) where the species' own 3D has it. From there,

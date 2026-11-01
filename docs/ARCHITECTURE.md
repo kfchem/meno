@@ -1012,13 +1012,16 @@ docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in, ordering them, and
-no energies given; a ring bound through all its atoms, written as a
-multi-centre bond by `chem/etaBound.ts`, held over its metal; the same
-conformer twice kept once (PLUGINS.md, *The same conformer*);
-lowest first, each laid over the first, with every centre's CIP label; of
-two enantiomers, the one whose SMILES comes first is made and the other is
-its mirror image). Both take `like`, a molecule in 3D made before from the
+type for it, a lighter metal of its group standing in, its energies given
+as the model's and none as the molecule's; a ring bound through all its
+atoms, written as a multi-centre bond by `chem/etaBound.ts`, held over its
+metal; every conformer as made, in the order made, with every centre's CIP
+label; of two enantiomers, the one whose SMILES comes first is made and the
+other is its mirror image), and the page keeps each once, lowest first,
+laid over the first, equivalent atoms in the first's places
+(`chem/pageConformers`, in a worker of its own: `chem/shownConformers`;
+WORKSPACE.md, *The page's conformers*). Both take
+`like`, a molecule in 3D made before from the
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
 keeps which drawing atom each of its atoms is and what the drawing was (`drawnFrom`, `drawnAs`;
@@ -1035,13 +1038,17 @@ they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
 molecule now saying how many conformers are sought; Stop, while a 3D
 structure is being made, stops the worker and lets the question go at
 once). What the worker lays out
-in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
-structure with a ring of 34 atoms or more, or 25 rings or more, which
-RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
-CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
-double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
-lays both drawings out again with its own engine; only their
+in 2D (`from_smiles`, `drawing_of`) it lays out by Meno's rule for which of
+RDKit's two depictors runs (`lay_out_2d` in the worker): CoordGen, except
+for a structure with a ring of 34 atoms or more, or 25 rings or more, which
+RDKit's own depictor lays out. The rule is by how long CoordGen takes:
+measured on 2026-11-01 (RDKit 2026.03.6, Apple M4), its time grows unevenly
+past some 25 rings or a ring of some 30 atoms - 9.0 s for a chain of 35
+para-linked benzene rings, 18.9 s for a ring of 37 carbons - where RDKit's
+own took 0.01 s at most; the bounds are those set on 2026-10-11. A SMILES
+whose CoordGen layout does not read back as the SMILES - (E)-cyclooctene's,
+its double bond drawn cis - is laid out by RDKit's own depictor instead.
+Meno lays both drawings out again with its own engine; only their
 stereochemistry and scale come from these coordinates.
 
 The venv lives under the local app data dir at `uv/<profile>/venv`; a stamp

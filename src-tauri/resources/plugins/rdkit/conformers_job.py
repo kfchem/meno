@@ -9,9 +9,9 @@ search's options from the file named, makes its conformers as the worker
 beside it does for a structure drawn (ETKDG v3, then MMFF94, MMFF94s or
 UFF), its stereo kept as its 3D structure has it, and writes them to
 conformers.json for the plugin's `collect` to read back: its atoms, each
-conformer's coordinates lowest energy first, their energies in hartrees,
-the force field used and how they were made. What it does it says as it
-goes, into the job's log.
+conformer's coordinates in the order RDKit embedded them, their energies in
+hartrees, the force field used and how they were made. What it does it says
+as it goes, into the job's log.
 """
 
 import json

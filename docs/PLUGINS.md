@@ -474,52 +474,17 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   | 2000 | 819 | the lowest |
   | 5000 | 1523 | the lowest |
 
-  Conformers here are told apart by the measure below. On ten cores
+  Conformers here are told apart by Meno's measure (WORKFLOWS.md, *The
+  same conformer*). On ten cores
   (Apple M4), the job for 5000 of it took about a minute and 111 MB at
   most, and wrote 4.9 MB.
   The set they make holds them itself, off the page, as any set of more
   than 50 does.
-- **The same conformer** (the maintainer, 2026-10-21): two conformers are
-  one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
-  each other, laid over at their best - turned and moved, never reflected
-  - over the ways the molecule maps onto itself. It is the maintainer's
-  standard for structures fed to quantum calculations, one definition for
-  the whole app: it keeps an OH or NH turned the other way as a conformer
-  of its own, and a conformer's mirror image too, whose atoms an average
-  over the conformers needs (a ring's two enantiotopic carbons swap
-  between them). Nothing is made one on any looser measure, nor by energy:
-  before, the RDKit plugin took shapes within 0.5 Å over their heavy atoms
-  as one, and over the molecule's symmetries only where their energies
-  agreed, and its raw embeddings, with no energies, atom against atom.
-  (`SAME_CONFORMER`, `Sameness` in its worker.) The conformers Meno's own
-  page makes (*3D structure*) are kept once each by it; a workflow's
-  *Conformers* step is given every one RDKit made (below), and a
-  *Duplicates* step after it - Meno's own (`workflow/sameConformer`) -
-  keeps one of each by this same measure.
-  - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
-    the one conformer.** Such a shape leaves every atom of it somewhere
-    else, so comparing atom against atom counted it again and again - a
-    tert-butylcyclohexane came back as 26 conformers that were 5. The ways
-    the molecule maps onto itself are tried, at most a thousand of them
-    (`ALIKE_WAYS`): a tetrakis(triphenylphosphine)palladium maps onto
-    itself millions of ways, and trying them took 2.1 s for a single pair
-    of conformers.
-  - **Hydrogens are matched, not tried.** The hydrogens on one atom are
-    each matched to the nearest of those on the atom it is taken to, once
-    the rest are laid over; past a thousand ways, so are atoms at the end
-    of a chain alike on one atom (the four chlorides of
-    OsCl4(PEt3)2, whose ways are 1728, then 72). Past a thousand still,
-    conformers are compared atom against atom. Matching to the nearest, or
-    atom against atom, can only fail to find that two conformers are the
-    same, never make two different ones one: whatever matching is tried,
-    two conformers it lays within 0.01 Å of each other are the same. So the
-    worst it does is keep a conformer twice.
-  - **Most pairs are told apart before they are laid over.** Laid over at
-    their best, two conformers share their centre, so each atom's distance
-    from it moves no more than the atom does: the RMSD of each element's
-    distances from the centre, sorted, is a bound the conformers cannot be
-    under, and each way's own atoms laid over alone is another. Only pairs
-    and ways under 0.01 Å by both are laid over in full.
+- **Which conformers are the same is Meno's** (the plugin boundary,
+  2026-10-31; WORKFLOWS.md, *The same conformer*). RDKit's conformers come
+  back every one, as RDKit made them (below): Meno's own page keeps each
+  once (WORKSPACE.md, *The page's conformers*), and in a workflow a
+  *Duplicates* step does.
 - **Minimise with restraints, and a search that holds them.** The RDKit
   plugin fills *Minimise with restraints*: each entry minimised in MMFF94
   (or MMFF94s, or UFF, as the step asks; UFF where MMFF has no
@@ -638,44 +603,36 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   cis dihydride's hydrides, though there the force field's own angles
   stayed above it (77° and 88° here, as now).
 - **Where a lighter metal stands in, or eta rings are held, that model's
-  energies order the conformers.** Where UFF has no type for a metal and a
-  lighter one of its group stands in, or a ring bound through its atoms is
-  held over its metal, UFF's energies of that model are not the
-  molecule's, so none are given and no populations come of them; but they
-  are what the shapes were optimised in, and they order them, lowest
-  first, said once in the line that says how they were made ("ordered by
-  the stand-in field, Fe for Os"; "ordered by the stand-in field, Ti for
-  Zr, the η rings held"; "ordered by UFF's energies, the η rings held").
-  Before, the embedding order stood, and [OsCl6]2-'s first conformer was
-  its distorted one.
+  energies are given as the model's.** Where UFF has no type for a metal
+  and a lighter one of its group stands in, or a ring bound through its
+  atoms is held over its metal, UFF's energies of that model are not the
+  molecule's, so none are given as its energies and no populations come of
+  them. They are what the shapes were optimised in, and come back as the
+  model's (`modelEnergies`), the model said once in the line that says how
+  they were made ("modelled: Fe for Os"; "modelled: Ti for Zr, the η rings
+  held"; "modelled: the η rings held"). Meno's own page orders the
+  conformers by them, lowest first, and says so on that line ("ordered by
+  the model's energies"): [OsCl6]2-'s first is then its octahedron.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
   when its chip is opened (the maintainer, 2026-10-07).
-- **Equivalent atoms keep their places across RDKit's conformers**
-  (2026-10-15): an embedding does not say which of a CH2's two hydrogens,
-  or of an isopropyl's two methyls, is which, so the plugin lays each
-  equivalent group - neighbours of one atom of the same graph rank, each
-  the root of a branch joined to the rest through it, and a pendant ring
-  symmetric about its bond - as it is in the lowest conformer, by whole
-  branches (handedness first, then the fit in the parent's frame), before it
-  answers Meno's own page. Only conformers RDKit made are touched: not a
-  calculation's, not another program's, not a single structure; no heavy
-  atom moves but as a whole equivalent branch; and no whole-molecule
-  symmetry is searched.
-- **A workflow's *Conformers* step is given RDKit's own** (the maintainer,
-  2026-10-30). Each conformer is embedded and optimised as RDKit makes
-  it, lowest energy first, and none is taken for another, laid over
-  another, has its equivalent atoms settled, or is made as an enantiomer's
-  mirror image. Those four are for Meno's own page, which asks for them
-  (`onPage`); the core sends that with *3D structure* alone, and no option
-  of the step's carries it. So a molecule with one shape can come back as
-  many frames of it: [OsCl6]2-, ten embeddings sought, gives nine, its
-  octahedron and eight relabellings of it (the tenth is dropped below the
-  floor), where the page shows one; a *Duplicates* step after it keeps
-  one. Where it embedded from random coordinates (an η complex, or a
-  crowded cage that would not embed otherwise), its *Embedded* row says
-  so. From RDKit plugin 0.1.14.
+- **RDKit's conformers come back as RDKit made them** (the maintainer,
+  2026-10-30; the plugin boundary, 2026-10-31): every one embedded and
+  optimised, in the order RDKit embedded them, each with its energy - none
+  taken for another, laid over another, renumbered or ranked - for Meno's
+  own page and for a workflow's *Conformers* step alike. Which are the
+  same, which comes first and how they lie over each other are Meno's
+  (WORKSPACE.md, *The page's conformers*; a workflow's *Duplicates* and
+  *Rank*). Of two enantiomers, one is made as the other's mirror image for
+  Meno's own page alone, which asks for that (`onPage`): the core sends it
+  with *3D structure* alone, and no option of the step's carries it. So a
+  molecule with one shape can come back as many frames of it: [OsCl6]2-,
+  ten embeddings sought, gives nine, its octahedron and eight relabellings
+  of it (the tenth is dropped below the floor); the page keeps one, and a
+  *Duplicates* step after a workflow's *Conformers* keeps one. Where it
+  embedded from random coordinates (an η complex, or a crowded cage that
+  would not embed otherwise), its *Embedded* row says so.
 
 ## Versions
 
@@ -904,8 +861,12 @@ The same for every plugin and for Meno's own parts:
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers: what is left open, how many stereoisomers of it can
     be made in 3D, which open double bonds are cumulated, and whether none
-    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options}`
-    (structures in 3D and their conformers, with the role's options);
+    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options,
+    onPage?}` (structures in 3D and their conformers, with the role's
+    options: every one made, in the order made, each its energy - or,
+    where the molecule's are none, those of the model it was optimised in,
+    `modelEnergies`; `onPage`, of two enantiomers one made as the other's
+    mirror image);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
