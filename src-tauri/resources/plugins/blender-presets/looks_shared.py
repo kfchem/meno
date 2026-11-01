@@ -690,3 +690,60 @@ def settle_denoising(scene):
         c.denoiser = "OPENIMAGEDENOISE"
         c.denoising_input_passes = "RGB_ALBEDO_NORMAL"
         c.denoising_prefilter = "ACCURATE"
+
+
+# --- the interface `preset` (docs/plugins/blender-presets.md): each look's module (look_<id>.py) names its look and hands
+# these its ctx ---------------------------------------------------------------------------------------------------------
+
+# (the look's options as the manifest names them, as the builders above read them)
+OPTION_NAMES = {"silver-finish": "silver_finish", "copper-finish": "copper_finish"}
+
+
+def options_of(ctx):
+    return {OPTION_NAMES.get(k, k): v for k, v in ctx.request.get("values", {}).items()}
+
+
+def molecules_in(ctx):
+    return [a["object"] for m in ctx.molecules for a in m["atoms"]] + [o for m in ctx.molecules for b in m["bonds"] for o in b["objects"]]
+
+
+def setup(ctx, look):
+    """The look's world and panels round Meno's molecules, and the render settings its materials need: Cycles, with what its
+    light bounces through - said in the log, the look being made so."""
+    scene = ctx.scene
+    ctx.look_size = studio(scene, ctx.camera, look, molecules_in(ctx), ctx.request.get("background") in ("black", "grey"))
+    if scene.render.engine != "CYCLES":
+        ctx.say("This look is made with light traced")
+    scene.render.engine = "CYCLES"
+    c = scene.cycles
+    c.max_bounces, c.glossy_bounces, c.diffuse_bounces, c.transmission_bounces, c.transparent_max_bounces = 6, 4, 2, 4, 8
+    c.volume_bounces = 0
+    c.use_adaptive_sampling = True
+    c.adaptive_threshold = 0.02
+    c.adaptive_min_samples = 8
+    c.sample_clamp_indirect = 5.0
+    settle_denoising(scene)
+    scene.render.film_transparent = True
+
+
+def material(ctx, look, part):
+    """The look's material for one of Meno's balls or sticks, in the colour Meno drew it."""
+    o = options_of(ctx)
+    o["_size"] = getattr(ctx, "look_size", 1.0)
+    build = xray_of(ctx.request.get("background") == "white") if look == "xray" else BUILD[look]
+    m = bpy.data.materials.new(f"Meno {look}")
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    build(nt, out, (*part["colour"], 1.0), part["kind"], o)
+    return m
+
+
+def after(ctx, look):
+    """What the look adds once its materials are on: fur's hair, on every ball and stick."""
+    if look != "fur":
+        return
+    objects = molecules_in(ctx)
+    colours = {o.name: (*ctx.colour_of(o), 1.0) for o in objects}
+    fur_on(objects, colours, options_of(ctx).get("pile", "long"))

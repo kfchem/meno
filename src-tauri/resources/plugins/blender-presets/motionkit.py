@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The Blender plugin's studio for its film motions: the molecule, its finish, the studios (dark, and white), the camera and
-# the finishing compositor, shared by every motion (motion_*.py).
+# What the film motions of this plugin share (motion_*.py): Meno's molecule staged for a motion, the easing curves, the
+# node helpers, the motions' finish, their light rig, the camera and the finishing compositor.
 #
 # Copyright (C) 2026 Meno contributors
 #
@@ -12,20 +12,19 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
 # Public License, in this folder's LICENSE, for more details.
-"""The studio a film motion is made in (docs/RENDER.md, *Motions a renderer makes*).
+"""The kit a film motion is keyed with (docs/plugins/blender-presets.md, *A motion*).
 
-Run by Blender, in its own Python, by render.py: executed in a namespace holding `CFG`, the motion's settings, before the
-motion's own script (motion_<id>.py) is executed in the same namespace, which uses what this defines - the molecule's
-objects (ATOMS, BONDS, ATOM_OBJ, BOND_OBJ), the easing functions, studio(), camera_at(), finish() and render().
+A motion's `key(ctx)` calls `run(ctx, module, nominal)`, which executes this kit in a namespace holding `CFG` - the motion's
+settings, from `ctx.request` - and `CTX`, and hands the names it defines to the motion's module, whose `keyed()` then keys
+Meno's molecule: ATOMS and BONDS (each atom's element, place and radius, each bond's atoms and order), ATOM_OBJ and
+BOND_OBJ (Meno's own balls and sticks), the easing curves, studio(), camera_at() and finish().
 
-The molecule is the one Meno wrote into the scene's extras (`meno.molecules`: each atom's element and place in ångströms,
-the bonds between them), built here at 4 cm an ångström - the size of a product on a table - as the canvas shows it: the
-scene's up is the studio's up, and what faces the canvas's viewer faces the camera at its start. Its finish is the motions'
-own: each element's colour under a clear coat.
+The molecule is Meno's, as the renderer took it in: its balls and sticks, their elements, places, radii and colours. It is
+staged here at 4 cm an ångström - the size of a product on a table - its middle at the origin, and the scene's other objects
+with it: the canvas's up is the stage's up, and what faces the canvas's viewer faces the camera at its start.
 
-CFG: molecules, seconds (the film's), nominal (the motion's own length: its moments are timed in it, and played over the
-film's length), frames, fps, mode ("once" or "loop"), width, height, samples, noise, bg ("dark" or "white"), out,
-and the motion's own keys.
+CFG: seconds (the film's), nominal (the motion's own length: its moments are timed in it, and played over the film's
+length), frames, fps, mode ("once" or "loop"), bg ("dark" or "white"), and a change's piece's own keys.
 """
 import math
 import os
@@ -43,6 +42,8 @@ LOOP = CFG.get("mode", "once") == "loop"
 # motion plays it faster or slower, all of it - a loop is timed in the film's own length)
 SCALE = (CFG["nominal"] / CFG["seconds"]) if CFG.get("nominal") and not LOOP else 1.0
 CFG["seconds"] = CFG["seconds"] * SCALE
+CTX = CFG["ctx"]
+sc = CTX.scene
 
 # --- easing ------------------------------------------------------------------
 
@@ -85,38 +86,118 @@ def tsec(f):
     """A frame's moment in the motion's own time, in seconds."""
     return (f - 1) / FPS * SCALE
 
-# --- molecule ------------------------------------------------------------------
+# --- Meno's molecule, staged -------------------------------------------------------
 
-# each element's colour (linear) and radius (in ångströms) in the motions' finish: carbon near black, so its coat draws it
-EL = {"C": ((0.010, 0.011, 0.013), 0.34), "H": ((0.62, 0.62, 0.64), 0.23), "N": ((0.012, 0.05, 0.62), 0.33),
-      "O": ((0.62, 0.010, 0.006), 0.32), "S": ((0.85, 0.65, 0.05), 0.38), "Cl": ((0.05, 0.65, 0.05), 0.37),
-      "F": ((0.25, 0.72, 0.10), 0.31), "Br": ((0.30, 0.03, 0.01), 0.39), "I": ((0.22, 0.01, 0.32), 0.42),
-      "P": ((0.95, 0.30, 0.01), 0.37), "B": ((0.90, 0.45, 0.38), 0.33), "Si": ((0.55, 0.45, 0.35), 0.38)}
-BOND_R = 0.105
+# (Meno's lights go: the motion lights the stage with its own rig, studio())
+for o_ in [o for o in sc.objects if o.type == "LIGHT"]:
+    bpy.data.objects.remove(o_)
+bpy.context.view_layer.update()
+# (a change's piece is one molecule becoming the next: the stage is that molecule's - `molecule` - the others hidden, the next
+# given as its atoms and bonds alone - NEXT_ATOMS, NEXT_BONDS - for the change to draw)
+ONE = CFG.get("molecule")
+SHOWN = [m for m in CTX.molecules if ONE is None or m["index"] == ONE]
 
-# the molecules Meno wrote: the scene's up (+Y) is the studio's up (+Z), and the canvas's viewer (+Z) is where the camera
-# starts (-Y): one set of atoms, the bonds of each kept to its own
-ATOMS_IN, BONDS_IN = [], []
-for mol_ in CFG["molecules"]:
-    base_ = len(ATOMS_IN)
-    for a in mol_["atoms"]:
-        x, y, z = a["p"]
-        ATOMS_IN.append({"el": a["el"], "p": Vector((x, -z, y))})
-    for b in mol_["bonds"]:
-        o_ = b.get("order", 1)
-        # (a bond of an order the sticks have no drawing for - aromatic, say - is drawn single)
-        BONDS_IN.append({"a": base_ + int(b["a"]), "b": base_ + int(b["b"]), "order": o_ if o_ in (1, 2, 3) else 1})
-if not ATOMS_IN:
-    raise SystemExit("studio.py: the scene holds no atoms to move")
-heavy_ = [a["p"] for a in ATOMS_IN if a["el"] != "H"] or [a["p"] for a in ATOMS_IN]
+def hide(o):
+    # (out of the render alone: hidden from the viewport too, it would be left out of the scene's evaluation, and the next
+    # molecule's places, read from it, would stay where Meno put them, unstaged)
+    o.hide_render = True
+    for c in o.children: hide(c)
+
+for m_ in CTX.molecules:
+    if m_ not in SHOWN: hide(m_["object"])
+balls_ = [(m, a) for m in SHOWN for a in m["atoms"]]
+if not balls_:
+    raise SystemExit("motionkit.py: the scene holds no atoms to move")
+heavy_ = [a["object"].matrix_world.translation.copy() for _, a in balls_ if a["element"] != "H"] or [a["object"].matrix_world.translation.copy() for _, a in balls_]
 centre = sum(heavy_, Vector()) / len(heavy_)
-ATOMS = [{"el": a["el"], "p": (a["p"] - centre) * K} for a in ATOMS_IN]
+# (the stage: everything Meno sent - its molecules, a studio's backdrop - at 4 cm an ångström, its molecules' middle at the
+# origin; the camera apart, which the motion places)
+STAGE = bpy.data.objects.new("stage", None); sc.collection.objects.link(STAGE)
+STAGE.scale = (K, K, K); STAGE.location = -centre * K
+for o_ in [o for o in sc.objects if o.parent is None and o is not STAGE and o is not CTX.camera]:
+    o_.parent = STAGE
+bpy.context.view_layer.update()
+# (Meno's balls and sticks themselves on the motion's root, where it stands, each where Meno put it: their places in metres)
+COL = bpy.data.collections.new("molecule"); sc.collection.children.link(COL)
+ROOT = bpy.data.objects.new("root", None); COL.objects.link(ROOT)
+ROOT.rotation_mode = "XYZ"
+
+def onto_root(ob):
+    mw = ob.matrix_world.copy()
+    ob.parent = ROOT
+    ob.rotation_mode = "QUATERNION"
+    ob.matrix_world = mw
+    if ob.name not in COL.objects: COL.objects.link(ob)
+
+ATOMS, ATOM_OBJ, at_ = [], [], {}
+for m_, a_ in balls_:
+    ob = a_["object"]
+    onto_root(ob)
+    r = ob.scale.x
+    at_[(m_["index"], a_["index"])] = len(ATOMS)
+    ob["col"] = a_["colour"]; ob["colB"] = a_["colour"]; ob["stick"] = 0.0
+    ob["rnd"] = random.random(); ob["idx"] = len(ATOMS); ob["r"] = r
+    ATOMS.append({"el": a_["element"], "p": ob.location.copy(), "r": r, "col": tuple(a_["colour"])})
+    ATOM_OBJ.append(ob)
+
+BONDS, BOND_OBJ, half_ = [], [], {}
+
+def half_of(me):
+    """How far a stick's mesh reaches along its length (Z) from its middle."""
+    if me.name not in half_:
+        half_[me.name] = max((abs(v.co.z) for v in me.vertices), default=1.0) or 1.0
+    return half_[me.name]
+
+for m_ in SHOWN:
+    for b_ in m_["bonds"]:
+        a, c = at_.get((m_["index"], b_["atoms"][0])), at_.get((m_["index"], b_["atoms"][1]))
+        # (a stick to a ring's centre, or to an atom not drawn, stays where Meno put it)
+        if a is None or c is None or b_["centre"]:
+            continue
+        bi = len(BONDS)
+        o_ = b_["order"]
+        BONDS.append({"a": a, "b": c, "order": o_ if o_ in (1, 2, 3) else 1})
+        pa, pb = ATOMS[a]["p"], ATOMS[c]["p"]
+        d = pb - pa
+        for ob in b_["objects"]:
+            onto_root(ob)
+            h = half_of(ob.data)
+            axis = ob.rotation_quaternion @ Vector((0, 0, 1)) * (h * ob.scale.z)
+            e0, e1 = ob.location - axis, ob.location + axis
+            t0, t1 = sorted(((e0 - pa).dot(d) / max(d.length_squared, 1e-12), (e1 - pa).dot(d) / max(d.length_squared, 1e-12)))
+            off = ob.location - (pa + d * ((t0 + t1) / 2))
+            ob["col"] = CTX.colour_of(ob); ob["colB"] = ob["col"]; ob["stick"] = 1.0
+            ob["rnd"] = random.random(); ob["bond"] = bi; ob["rad"] = ob.scale.x; ob["t0"] = t0; ob["t1"] = t1; ob["half"] = h
+            BOND_OBJ.append((ob, bi, off))
+
 if CFG.get("stand"):
     # (stood on the floor, where asked: its lowest atom just above z = 0 - so that every molecule of a change of molecules
     # stands on the same floor, and one piece's last frame is the next one's first)
-    zlow_ = min(a["p"].z - EL.get(a["el"], (None, 0.34))[1] * K for a in ATOMS)
-    for a in ATOMS: a["p"] = a["p"] - Vector((0, 0, zlow_ - CFG.get("float", 0.004)))
-BONDS = BONDS_IN
+    zlow_ = min(a["p"].z - a["r"] for a in ATOMS) - CFG.get("float", 0.004)
+    for ob in ATOM_OBJ + [b[0] for b in BOND_OBJ]: ob.location.z -= zlow_
+    for a in ATOMS: a["p"] = a["p"] - Vector((0, 0, zlow_))
+NEXT_ATOMS, NEXT_BONDS = [], []
+if CFG.get("next") is not None:
+    nx_ = next(m for m in CTX.molecules if m["index"] == CFG["next"])
+    bpy.context.view_layer.update()
+    pts_ = [(a, a["object"].matrix_world.translation.copy(), a["object"].matrix_world.to_scale().x) for a in nx_["atoms"]]
+    hv_ = [p for a, p, _ in pts_ if a["element"] != "H"] or [p for _, p, _ in pts_]
+    c_ = sum(hv_, Vector()) / len(hv_)
+    at2_ = {}
+    for a, p, r in pts_:
+        at2_[a["index"]] = len(NEXT_ATOMS)
+        NEXT_ATOMS.append({"el": a["element"], "p": p - c_, "r": r, "col": tuple(a["colour"])})
+    # (stood on the same floor as the stage's molecule)
+    low_ = min(a["p"].z - a["r"] for a in NEXT_ATOMS) - CFG.get("float", 0.004)
+    for a in NEXT_ATOMS: a["p"] = a["p"] - Vector((0, 0, low_))
+    for b_ in nx_["bonds"]:
+        a, c = at2_.get(b_["atoms"][0]), at2_.get(b_["atoms"][1])
+        if a is None or c is None or b_["centre"]:
+            continue
+        o_ = b_["order"]
+        NEXT_BONDS.append({"a": a, "b": c, "order": o_ if o_ in (1, 2, 3) else 1})
+# (a stick's radius as Meno draws one, for the sticks a change draws of its own)
+STICK_R = sorted(b[0]["rad"] for b in BOND_OBJ)[len(BOND_OBJ) // 2] if BOND_OBJ else 0.105 * K
 NB = [[] for _ in ATOMS]
 for i, b in enumerate(BONDS):
     NB[b["a"]].append(b["b"]); NB[b["b"]].append(b["a"])
@@ -139,32 +220,20 @@ RADIUS = max((a["p"] - MID).length for a in ATOMS) + 0.35 * K
 
 # --- scene ------------------------------------------------------------------------
 
-bpy.ops.wm.read_factory_settings(use_empty=True)
-sc = bpy.context.scene
 sc.render.fps = FPS; sc.render.fps_base = 1
 sc.frame_start, sc.frame_end = 1, N
-sc.render.resolution_x, sc.render.resolution_y = CFG.get("width", 1920), CFG.get("height", 1080)
-sc.render.resolution_percentage = CFG.get("percent", 100)
 sc.render.engine = "CYCLES"
 cy = sc.cycles
-cy.samples = CFG.get("samples", 256)
 cy.use_adaptive_sampling = True; cy.adaptive_threshold = CFG.get("noise", 0.008)
-cy.use_denoising = True; cy.denoiser = "OPENIMAGEDENOISE"
-cy.denoising_input_passes = "RGB_ALBEDO_NORMAL"; cy.denoising_prefilter = "ACCURATE"
 cy.max_bounces = 8; cy.diffuse_bounces = 3; cy.glossy_bounces = 4; cy.transmission_bounces = 8; cy.transparent_max_bounces = 16
 cy.caustics_reflective = False; cy.caustics_refractive = False
 cy.blur_glossy = 1.0
 sc.render.use_motion_blur = CFG.get("blur", True)
 sc.render.motion_blur_shutter = CFG.get("shutter", 0.5)
-sc.render.motion_blur_position = "CENTER" if hasattr(sc.render, "motion_blur_position") else None
-sc.view_settings.view_transform = CFG.get("view", "Khronos PBR Neutral" if CFG.get("bg") == "white" else "AgX")
-sc.view_settings.look = CFG.get("grade", "AgX - Medium High Contrast") if sc.view_settings.view_transform == "AgX" else "None"
-sc.view_settings.exposure = CFG.get("exposure", -2.2 if CFG.get("bg") == "white" else -0.7)
-sc.render.film_transparent = False
+# (the colours are the renderer's, as asked; the light's level is the motion's own, its rig drawn for it - brought down so
+# that Meno's molecule at rest reads as bright as Meno lights it with no studio)
+sc.view_settings.exposure = CFG.get("exposure", -2.4 if CFG.get("bg") == "white" else -3.2)
 sc.render.use_persistent_data = True
-
-# (where it renders is render.py's to say, after this has reset Blender to its factory settings: the processor until then)
-cy.device = "CPU"
 
 # --- node helpers -----------------------------------------------------------------
 
@@ -191,6 +260,13 @@ def math_(nt, op, a, b=None, c=None, clamp_=False):
 def attr(nt, name, kind="OBJECT"):
     return nnew(nt, "ShaderNodeAttribute", attribute_type=kind, attribute_name=name)
 
+def along(nt, z):
+    """Where along its bond a point of a stick is - 0 at its first atom, 1 at its second - from its object's Z: one of Meno's
+    sticks may be a stretch of its bond (a half in its atom's colour)."""
+    u0 = attr(nt, "t0").outputs["Fac"]; u1 = attr(nt, "t1").outputs["Fac"]; h = attr(nt, "half").outputs["Fac"]
+    s = math_(nt, "MULTIPLY_ADD", math_(nt, "DIVIDE", z, h), 0.5, 0.5)
+    return math_(nt, "MULTIPLY_ADD", s, math_(nt, "SUBTRACT", u1, u0), u0)
+
 def time_value(nt):
     """Seconds since the film's start, as a node output (a driver on frame)."""
     v = nnew(nt, "ShaderNodeValue")
@@ -211,12 +287,10 @@ def hero_bsdf(nt, colour_socket):
     nt.links.new(colour_socket, pr.inputs["Base Color"])
     return pr
 
+
 # --- the molecule's objects ------------------------------------------------------
 
-COL = bpy.data.collections.new("molecule"); sc.collection.children.link(COL)
-ROOT = bpy.data.objects.new("root", None); COL.objects.link(ROOT)
-ROOT.rotation_mode = "XYZ"
-
+# (meshes for what a motion adds of its own - sparks, shards, a ring's balls)
 def sphere_mesh(name, seg=96, rings=48):
     import bmesh
     me = bpy.data.meshes.new(name); bm = bmesh.new()
@@ -235,56 +309,18 @@ def cylinder_mesh(name, seg=48):
 
 SPHERE = sphere_mesh("sphere"); CYL = cylinder_mesh("cyl")
 
-def colour(el):
-    return EL.get(el, ((0.6, 0.3, 0.6), 0.34))[0]
-
-ATOM_OBJ = []
-for i, a in enumerate(ATOMS):
-    ob = bpy.data.objects.new(f"atom{i:03d}", SPHERE); COL.objects.link(ob)
-    r = EL.get(a["el"], (None, 0.34))[1] * K
-    ob.location = a["p"]; ob.scale = (r, r, r); ob.parent = ROOT
-    ob["col"] = colour(a["el"]); ob["rnd"] = random.random(); ob["idx"] = i; ob["r"] = r
-    a["r"] = r
-    ATOM_OBJ.append(ob)
-
 def bond_frame(pa, pb):
     d = pb - pa
     q = Vector((0, 0, 1)).rotation_difference(d.normalized())
     return (pa + pb) / 2, q, d.length
 
-def side_vector(b):
-    """A direction across a double bond, in the plane of a neighbour."""
-    a, c = b["a"], b["b"]
-    pa, pc = ATOMS[a]["p"], ATOMS[c]["p"]; d = (pc - pa).normalized()
-    for n in NB[a] + NB[c]:
-        if n not in (a, c):
-            v = ATOMS[n]["p"] - pa
-            s = v - d * v.dot(d)
-            if s.length > 1e-6: return s.normalized()
-    s = d.cross(Vector((0, 0, 1)))
-    return s.normalized() if s.length > 1e-6 else d.cross(Vector((1, 0, 0))).normalized()
-
-BOND_OBJ = []      # one or two sticks per bond: (object, bond index, offset vector)
-for bi, b in enumerate(BONDS):
-    order = int(round(b["order"]))
-    offs = [Vector()] if order == 1 else ([side_vector(b) * 0.13 * K, -side_vector(b) * 0.13 * K] if order == 2 else
-                                         [Vector(), side_vector(b) * 0.2 * K, -side_vector(b) * 0.2 * K])
-    rad = BOND_R * K * (1.0 if order == 1 else 0.62 if order == 2 else 0.5)
-    for k, off in enumerate(offs):
-        ob = bpy.data.objects.new(f"bond{bi:03d}-{k}", CYL); COL.objects.link(ob)
-        ob.rotation_mode = "QUATERNION"; ob.parent = ROOT
-        m, q, ln = bond_frame(ATOMS[b["a"]]["p"] + off, ATOMS[b["b"]]["p"] + off)
-        ob.location = m; ob.rotation_quaternion = q; ob.scale = (rad, rad, ln / 2)
-        ob["col"] = colour(ATOMS[b["a"]]["el"]); ob["colB"] = colour(ATOMS[b["b"]]["el"])
-        ob["rnd"] = random.random(); ob["bond"] = bi; ob["rad"] = rad; ob["stick"] = 1.0
-        BOND_OBJ.append((ob, bi, off))
-
 def place_bond(ob, bi, off, pa, pb, f=None, grow=None):
-    """Put a stick between two atom positions (and key it on frame f)."""
-    b = BONDS[bi]
-    m, q, ln = bond_frame(pa + off, pb + off)
+    """Put one of a bond's sticks between two atom positions - its own stretch of the bond, beside it as Meno drew it - and key
+    it on frame f."""
+    d = pb - pa
+    m, q, ln = bond_frame(pa + d * ob["t0"] + off, pa + d * ob["t1"] + off)
     ob.location = m; ob.rotation_quaternion = q
-    ob.scale = (ob["rad"], ob["rad"], max(ln / 2, 1e-5))
+    ob.scale = (ob["rad"], ob["rad"], max(ln / 2 / ob["half"], 1e-5))
     if f is not None:
         ob.keyframe_insert("location", frame=f); ob.keyframe_insert("rotation_quaternion", frame=f); ob.keyframe_insert("scale", frame=f)
 
@@ -306,15 +342,23 @@ def hero_material(name="hero", extra=None):
     nt.links.new(sh, out.inputs["Surface"])
     return m
 
+# (each stick laid from its bond's first atom to its second, as the motions key it: its Z running along the bond)
+for ob_, bi_, off_ in BOND_OBJ:
+    place_bond(ob_, bi_, off_, ATOMS[BONDS[bi_]["a"]]["p"], ATOMS[BONDS[bi_]["b"]]["p"])
+
+MOL_OBJ = ATOM_OBJ + [b[0] for b in BOND_OBJ]
+
 def assign(m, objs=None):
-    """A material on the shared meshes, or on given objects alone (linked to the object)."""
-    for me in (SPHERE, CYL):
-        if not me.materials: me.materials.append(m)
-    if objs is None:
-        for me in (SPHERE, CYL): me.materials[0] = m
-        return
-    for ob in objs:
-        ob.material_slots[0].link = "OBJECT"; ob.material_slots[0].material = m
+    """A material on Meno's balls and sticks, or on given objects alone (linked to the object)."""
+    for ob in (MOL_OBJ if objs is None else objs):
+        if not ob.material_slots:
+            ob.data.materials.append(m)
+        if objs is None:
+            ob.material_slots[0].link = "OBJECT"
+        ob.material_slots[0].material = m
+
+
+# --- the motion's light rig ---------------------------------------------------------
 
 # --- studio ------------------------------------------------------------------------
 
@@ -329,114 +373,70 @@ def area(name, size, power, colour, loc, target=Vector(), shape="RECTANGLE", siz
     ob.visible_camera = False
     return ob
 
+
 WHITE = CFG.get("bg") == "white"
-# white: a paper sweep the camera sees ("visible"), or one that only catches shadows, for a background put under it or none
-SWEEP = CFG.get("sweep", "catcher" if CFG.get("paper") == "transparent" else "visible")
+# (a studio's backdrop, where one was chosen - the studio plugin's own, staged with the rest: the paper sweep, or the dark
+# wall; none where the scene is as asked, its background put under it by the renderer)
+BACKDROP = next((o for o in sc.objects if o.type == "MESH" and o.name.split(".")[0] in ("paper", "wall")), None)
+SWEEP = "visible" if BACKDROP is not None else "catcher"
+sc.render.film_transparent = BACKDROP is None
 
 def studio(dark=True, key=1.0, rim=1.0):
-    if WHITE:
-        return studio_white(key, rim)
+    """The motion's lights - a key, a fill, a top light and two rims - and the backdrop, where a studio was chosen: (lights,
+    backdrop or None)."""
+    for o in [o for o in sc.objects if o.type == "LIGHT"]:
+        bpy.data.objects.remove(o)
     w = bpy.data.worlds.new("w"); sc.world = w; w.use_nodes = True
     bg = w.node_tree.nodes["Background"]
+    if WHITE:
+        bg.inputs["Color"].default_value = (0.55, 0.57, 0.6, 1); bg.inputs["Strength"].default_value = CFG.get("ambient", 0.12)
+        lights = {
+            "key": area("key", 1.4, 700 * key, (1.0, 0.97, 0.94), Vector((-1.3, -1.4, 1.7)), size_y=0.9),
+            "fill": area("fill", 2.0, 110 * key, (0.94, 0.97, 1.0), Vector((1.8, -1.2, -0.1)), size_y=1.2),
+            "top": area("top", 2.4, 240 * key, (1, 1, 1), Vector((0.0, -0.3, 1.9)), size_y=0.18),
+            "rimR": area("rimR", 0.14, 500 * rim, (0.85, 0.92, 1.0), Vector((1.3, 1.2, 0.5)), size_y=1.4),
+            "rimL": area("rimL", 0.14, 350 * rim, (1.0, 0.9, 0.8), Vector((-1.3, 1.1, 0.3)), size_y=1.4),
+        }
+        if BACKDROP is not None:
+            # (a soft source overhead pools light on the paper round the molecule, lighting the paper alone - Blender's light
+            # linking - and the molecule's lights the molecule alone: the shadow under it is the sky's)
+            zf = min(a["p"].z - a["r"] for a in ATOMS) - CFG.get("float", 0.004)
+            sky = area("sky", CFG.get("sky_size", 0.8), CFG.get("sky", 330.0), (0.985, 1.0, 0.99), Vector((0.0, 0.15, zf + 1.6)), target=Vector((0.0, 0.35, zf)), size_y=1.4)
+            sky.visible_glossy = False
+            paper = bpy.data.collections.new("paper"); paper.objects.link(BACKDROP)
+            sky.light_linking.receiver_collection = paper
+            if CFG.get("subject_only", True):
+                for ob in lights.values(): ob.light_linking.receiver_collection = COL
+            lights["sky"] = sky
+        return lights, BACKDROP
     bg.inputs["Color"].default_value = (0.0035, 0.0042, 0.006, 1) if dark else (0.6, 0.62, 0.66, 1)
     bg.inputs["Strength"].default_value = 1.0
-    S = RADIUS
     lights = {
-        "key": area("key", 1.4, 700 * key, (1.0, 0.95, 0.9), Vector((-1.4, -1.6, 1.3)) * (S / 0.25) ** 0.0, size_y=0.9),
+        "key": area("key", 1.4, 700 * key, (1.0, 0.95, 0.9), Vector((-1.4, -1.6, 1.3)), size_y=0.9),
         "fill": area("fill", 2.0, 120 * key, (0.85, 0.92, 1.0), Vector((1.8, -1.2, -0.3)), size_y=1.2),
         "top": area("top", 2.4, 260 * key, (1, 1, 1), Vector((0.0, -0.3, 1.9)), size_y=0.18),
         "rimR": area("rimR", 0.14, 1400 * rim, (0.45, 0.75, 1.0), Vector((1.3, 1.5, 0.5)), size_y=1.6),
         "rimL": area("rimL", 0.14, 1000 * rim, (1.0, 0.62, 0.35), Vector((-1.4, 1.4, 0.2)), size_y=1.6),
     }
-    # the backdrop: a dark wall far behind, lit as a soft pool by its own emission (no light spill on the molecule)
-    import bmesh
-    me = bpy.data.meshes.new("backdrop"); bm = bmesh.new()
-    bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=6.0); bm.to_mesh(me); bm.free()
-    bd = bpy.data.objects.new("backdrop", me); sc.collection.objects.link(bd)
-    bd.location = (0, 3.2, 0); bd.rotation_euler = (math.radians(90), 0, 0)
-    m, nt, out = new_material("backdrop")
-    tc = nnew(nt, "ShaderNodeTexCoord"); gr = nnew(nt, "ShaderNodeTexGradient", gradient_type="SPHERICAL")
-    mp = nnew(nt, "ShaderNodeMapping"); mp.inputs["Scale"].default_value = (0.42, 0.62, 1)
-    mp.inputs["Location"].default_value = (0.0, 0.25, 0)
-    nt.links.new(tc.outputs["Object"], mp.inputs[0]); nt.links.new(mp.outputs[0], gr.inputs[0])
-    ramp = nnew(nt, "ShaderNodeValToRGB"); e = ramp.color_ramp.elements
-    e[0].color = (0.0, 0.0, 0.0, 1); e[1].position = 1.0; e[1].color = CFG.get("pool", (0.045, 0.06, 0.085, 1))
-    ramp.color_ramp.interpolation = "EASE"
-    nt.links.new(gr.outputs["Fac"], ramp.inputs[0])
-    em = nnew(nt, "ShaderNodeEmission", Strength=1.0); nt.links.new(ramp.outputs[0], em.inputs[0])
-    # seen by the camera only: not in reflections, no light cast
-    nt.links.new(em.outputs[0], out.inputs["Surface"])
-    bd.data.materials.append(m)
-    bd.visible_glossy = False; bd.visible_diffuse = False; bd.visible_transmission = False; bd.visible_shadow = False
-    if CFG.get("haze", 0):
-        import bmesh
-        me = bpy.data.meshes.new("haze"); bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0); bm.to_mesh(me); bm.free()
-        hz = bpy.data.objects.new("haze", me); sc.collection.objects.link(hz); hz.scale = (5, 6, 4); hz.location = (0, 0.4, 0)
-        m, nt, out = new_material("haze")
-        vs = nnew(nt, "ShaderNodeVolumeScatter", Density=CFG["haze"], Anisotropy=0.35)
-        nt.links.new(vs.outputs[0], out.inputs["Volume"]); me.materials.append(m)
-        cy.volume_step_rate = 4.0 if hasattr(cy, "volume_step_rate") else None
-    return lights, bd
+    return lights, BACKDROP
 
-def studio_white(key=1.0, rim=1.0):
-    """A high-key studio: a seamless white sweep (floor curving up into a wall behind), big soft lights, contact shadows."""
-    import bmesh
-    w = bpy.data.worlds.new("w"); sc.world = w; w.use_nodes = True
-    bg = w.node_tree.nodes["Background"]
-    bg.inputs["Color"].default_value = (0.55, 0.57, 0.6, 1); bg.inputs["Strength"].default_value = CFG.get("ambient", 0.12)
-    zmin = min(a["p"].z - a["r"] for a in ATOMS)
-    zf = zmin - CFG.get("float", 0.004)            # the floor, a little below the molecule
-    yw, R = CFG.get("wall", 0.75), 0.45           # the wall behind, and the sweep's radius
-    prof = [(-9.0, zf), (yw - R, zf)]
-    for k in range(1, 24):
-        a = math.pi / 2 * k / 24
-        prof.append((yw - R + R * math.sin(a), zf + R - R * math.cos(a)))
-    prof += [(yw, zf + R), (yw, zf + 9.0)]
-    me = bpy.data.meshes.new("cyc"); bm = bmesh.new()
-    left = [bm.verts.new((-9.0, y, z)) for y, z in prof]
-    right = [bm.verts.new((9.0, y, z)) for y, z in prof]
-    for i in range(len(prof) - 1):
-        bm.faces.new((left[i], right[i], right[i + 1], left[i + 1]))
-    bm.to_mesh(me); bm.free()
-    for p in me.polygons: p.use_smooth = True
-    cyc = bpy.data.objects.new("cyc", me); sc.collection.objects.link(cyc)
-    m, nt, out = new_material("cyc")
-    pr = nnew(nt, "ShaderNodeBsdfPrincipled", Roughness=0.85); pr.inputs["Base Color"].default_value = CFG.get("paper", (0.8, 0.8, 0.81, 1))
-    nt.links.new(pr.outputs[0], out.inputs["Surface"]); me.materials.append(m)
-    lights = {
-        "key": area("key", 1.4, 700 * key, (1.0, 0.97, 0.94), Vector((-1.3, -1.4, 1.7)), size_y=0.9),
-        "fill": area("fill", 2.0, 110 * key, (0.94, 0.97, 1.0), Vector((1.8, -1.2, -0.1)), size_y=1.2),
-        "top": area("top", 2.4, 240 * key, (1, 1, 1), Vector((0.0, -0.3, 1.9)), size_y=0.18),
-        "rimR": area("rimR", 0.14, 500 * rim, (0.85, 0.92, 1.0), Vector((1.3, 1.2, 0.5)), size_y=1.4),
-        "rimL": area("rimL", 0.14, 350 * rim, (1.0, 0.9, 0.8), Vector((-1.3, 1.1, 0.3)), size_y=1.4),
-    }
-    if SWEEP == "catcher":
-        # the sweep only catches shadows: the background itself is put under the render (finish), its colour a choice
-        cyc.is_shadow_catcher = True
-    else:
-        # a real paper sweep, seen by the camera: a big soft source overhead pools light on the floor round the molecule and
-        # falls off up the wall, the classic product-shot gradient; what the molecule casts - shadow, coloured light - lands on it
-        sky = area("sky", CFG.get("sky_size", 0.8), CFG.get("sky", 330.0), (0.985, 1.0, 0.99), Vector((0.0, 0.15, zf + 1.6)), target=Vector((0.0, 0.35, zf)), size_y=1.4)
-        sky.visible_glossy = False
-        # (it lights the paper alone - Blender's light linking - so the molecule keeps its own key and fill, and still shadows the paper)
-        paper = bpy.data.collections.new("paper"); paper.objects.link(cyc)
-        sky.light_linking.receiver_collection = paper
-        # (and the subject's lights light the subject alone: the paper's only light is the sky, so the shadow under the molecule
-        # is the sky's, as dense as the molecule makes it, never filled in by the key)
-        if CFG.get("subject_only", True):
-            for ob in lights.values(): ob.light_linking.receiver_collection = COL
-        lights["sky"] = sky
-    return lights, cyc
+def pool_of(bd):
+    """A dark backdrop's own light - the strength its pool glows with - to key; none where there is none."""
+    if bd is None:
+        return None
+    e = next((n for m in bd.data.materials for n in m.node_tree.nodes if n.type == "EMISSION"), None)
+    return e.inputs["Strength"] if e is not None else None
 
 # --- camera ----------------------------------------------------------------------------
 
-CAM = bpy.data.cameras.new("cam"); CAM.lens = CFG.get("lens", 85); CAM.sensor_width = 36
-# (the sensor across the frame's width, whatever its shape: the framing here takes the width's field as the lens and the
-# sensor give it, the height's as the frame's shape makes it - Blender's own Auto puts the sensor across the longer side,
-# the height of a portrait film, which would cut a tall molecule's ends; a landscape film is as it was)
+# (Meno's camera, made the motion's: a lens, the sensor across the frame's width whatever its shape - Blender's own Auto
+# puts it across the longer side, the height of a portrait film, which would cut a tall molecule's ends)
+CAMOB = CTX.camera; CAM = CAMOB.data
+CAM.type = "PERSP"; CAM.lens = CFG.get("lens", 85); CAM.sensor_width = 36
 CAM.sensor_fit = "HORIZONTAL"
 CAM.clip_start = 0.05; CAM.clip_end = 50
-CAMOB = bpy.data.objects.new("cam", CAM); sc.collection.objects.link(CAMOB); sc.camera = CAMOB
+CAMOB.animation_data_clear()
+sc.camera = CAMOB
 FOCUS = bpy.data.objects.new("focus", None); sc.collection.objects.link(FOCUS)
 CAM.dof.use_dof = CFG.get("dof", True); CAM.dof.focus_object = FOCUS; CAM.dof.aperture_fstop = CFG.get("fstop", 4.0)
 CAM.dof.aperture_blades = 7; CAM.dof.aperture_rotation = math.radians(12)
@@ -493,12 +493,6 @@ def finish(bloom=0.12, streaks=0.0, dispersion=0.012, vignette=0.35, grain=0.012
     n, l = g.nodes, g.links
     rl = n.new("CompositorNodeRLayers")
     img = rl.outputs["Image"]
-    if WHITE and SWEEP == "catcher":
-        sc.render.film_transparent = True
-        if CFG.get("paper") != "transparent":
-            ov = n.new("CompositorNodeAlphaOver")
-            ov.inputs["Background"].default_value = tuple(CFG.get("paper_rgb", (9.5, 9.5, 9.5))) + (1.0,)
-            l.new(img, ov.inputs["Foreground"]); img = ov.outputs["Image"]
     if bloom:
         gl = n.new("CompositorNodeGlare")
         gl.inputs["Type"].default_value = "Bloom"; gl.inputs["Quality"].default_value = "High"
@@ -534,17 +528,9 @@ def finish(bloom=0.12, streaks=0.0, dispersion=0.012, vignette=0.35, grain=0.012
     sc.compositing_node_group = g; sc.render.use_compositing = True
     return g
 
+
 # --- render --------------------------------------------------------------------------
 
 def render():
-    """Every frame, a 16-bit PNG in CFG's `out`, as f_0001.png on: the frames' paths, in order."""
-    out = CFG["out"]; os.makedirs(out, exist_ok=True)
-    sc.render.image_settings.file_format = "PNG"; sc.render.image_settings.color_depth = "16"
-    made = []
-    for f in range(1, N + 1):
-        p = os.path.join(out, f"f_{f:04d}.png")
-        sc.frame_set(f)
-        sc.render.filepath = p
-        bpy.ops.render.render(write_still=True)
-        made.append(p)
-    return made
+    """The renderer renders the frames the motion keyed (docs/plugins/blender-presets.md): nothing here."""
+    return None

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The Blender plugin's part shared by its changes of molecules: the molecule a piece ends as, who goes where, and the
+# The part Blender looks and motions' changes of molecules share: the molecule a piece ends as, who goes where, and the
 # camera that runs on through every piece of the film.
 #
 # Copyright (C) 2026 Meno contributors
@@ -12,33 +12,19 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
 # Public License, in this folder's LICENSE, for more details.
-"""A change of molecules (docs/RENDER.md, the Blender plugin, *Its changes of molecules*): a film in pieces, one for each
-molecule that becomes the next - A, the piece's molecule, built by studio.py, into B. Run by Blender, in its own Python,
-by render.py: executed in the namespace studio.py has filled, before the change's own script (motion_change_<id>.py).
+"""A change of molecules (docs/plugins/blender-presets.md, *A motion*): a film in pieces, one for each molecule that becomes
+the next - A, the piece's molecule, staged by the kit (motionkit.py), into B, the next. Executed after the kit, in its
+namespace, by motion_kit.py `change`, before the change's own `keyed()`.
 
-CFG adds: next (B, as Meno wrote it: its atoms' elements and places in ångströms, its bonds), t_offset (where the piece
+CFG adds: next (B's index among Meno's molecules: the kit gives it as NEXT_ATOMS and NEXT_BONDS), t_offset (where the piece
 starts in the film, in seconds), t_total (the film's length) and loop (whether the film comes back to its first molecule).
-Every molecule stands on the same floor (studio.py's `stand`), turned as the canvas shows it.
+Every molecule stands on the same floor (the kit's `stand`), turned as the canvas shows it. Who goes where in a change
+(`hungarian`) is the change's choreography: which grain flies to which place, never a mapping of the molecules.
 """
 
 # --- B, built as studio.py builds A: the scene's up the studio's up, its heavy atoms' middle on the vertical, on the floor
-def posed(mol):
-    pts = []
-    for a in mol["atoms"]:
-        x, y, z = a["p"]
-        pts.append({"el": a["el"], "p": Vector((x, -z, y))})
-    heavy = [a["p"] for a in pts if a["el"] != "H"] or [a["p"] for a in pts]
-    c = sum(heavy, Vector()) / len(heavy)
-    atoms = [{"el": a["el"], "p": (a["p"] - c) * K, "r": EL.get(a["el"], (None, 0.34))[1] * K} for a in pts]
-    low = min(a["p"].z - a["r"] for a in atoms)
-    for a in atoms: a["p"] = a["p"] - Vector((0, 0, low - CFG.get("float", 0.004)))
-    bonds = []
-    for b in mol["bonds"]:
-        o = b.get("order", 1)
-        bonds.append({"a": int(b["a"]), "b": int(b["b"]), "order": o if o in (1, 2, 3) else 1})
-    return atoms, bonds
-
-BA, BB = posed(CFG["next"])
+# (B: Meno's next molecule, as the kit gives it - its atoms' elements, places, radii and colours, stood on the floor)
+BA, BB = NEXT_ATOMS, NEXT_BONDS
 
 def middle(atoms):
     """The middle of a molecule's height, where the camera looks."""
@@ -93,13 +79,13 @@ def b_sticks():
         order = b["order"]
         sv = b_side(b) if order > 1 else Vector()
         offs = [Vector()] if order == 1 else ([sv * 0.13 * K, -sv * 0.13 * K] if order == 2 else [Vector(), sv * 0.2 * K, -sv * 0.2 * K])
-        rad = BOND_R * K * (1.0 if order == 1 else 0.62 if order == 2 else 0.5)
+        rad = STICK_R * (1.0 if order == 1 else 0.62 if order == 2 else 0.5)
         for k_, off in enumerate(offs):
             pa, pb = BA[b["a"]]["p"] + off, BA[b["b"]]["p"] + off
             ob = bpy.data.objects.new(f"Bbond{bi:03d}-{k_}", CYL); COL.objects.link(ob); ob.rotation_mode = "QUATERNION"
             mm, q, ln = bond_frame(pa, pb)
             ob.location = mm; ob.rotation_quaternion = q; ob.scale = (rad, rad, ln / 2)
-            ob["col"] = colour(BA[b["a"]]["el"]); ob["colB"] = colour(BA[b["b"]]["el"]); ob["stick"] = 1.0; ob["rad"] = rad
+            ob["col"] = BA[b["a"]]["col"]; ob["colB"] = BA[b["b"]]["col"]; ob["stick"] = 1.0; ob["rad"] = rad; ob["t0"] = 0.0; ob["t1"] = 1.0; ob["half"] = 1.0
             out.append((ob, b, pa, pb, rad))
     return out
 
