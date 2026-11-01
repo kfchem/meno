@@ -10,12 +10,12 @@ describe("a pixi lock", () => {
     expect(pixiPlatform("linux", "x86_64")).toBe("linux-64");
   });
 
-  it("says what an environment downloads on each platform: its packages, their size, and whether PyPI is among them", () => {
+  it("says what an environment downloads on each platform: its packages, their size, and whether PyPI is among them (here, not)", () => {
     for (const platform of ["osx-arm64", "win-64", "linux-64"]) {
       const d = pixiDownload(lock, platform);
       expect(d.packages).toBeGreaterThan(30);
       expect(d.bytes).toBeGreaterThan(50e6);
-      expect(d.pypi).toBe(true);
+      expect(d.pypi).toBe(false);
     }
     expect(pixiDownload(lock, "win-arm64").packages).toBe(0);
   });

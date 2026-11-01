@@ -23,6 +23,7 @@ import { withCentres, bondLines, bondsAt, frameBondsOf, frameOf, heightOf, lines
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "../utils/measure3d";
 import { COLORS } from "../../../theme/colors";
+import type { PresetHandOff } from "./presets";
 import { MENO_MOTIONS } from "../../../../lib/plugins/manifest";
 import type { Carried3D, Molecule3D } from "../store/types";
 
@@ -55,6 +56,10 @@ export type RenderAsk = {
   surfaces?: SurfaceMaterial;
   /** How it is lit and outlined, where the renderer is asked to (the look's shading and outlines): for it to make, not for the scene's file. */
   finish?: Finish;
+  /** The studio it is made in, where a plugin brings the renderer one and it is chosen (./presets): none, the scene as it is asked. */
+  studio?: string;
+  /** What it hands the renderer of the presets chosen - their files, their options' values (./presets `handOff`): none, none chosen. */
+  presets?: PresetHandOff[];
 };
 
 /** How a picture is shaded - lit as the renderer lights it, or in one band of toon shading - and its outlines. */

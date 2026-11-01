@@ -8,9 +8,8 @@
  * two. Its mirror image is asked for apart (`mirrorOf`).
  *
  * The ways are those of its atoms but the hydrogens that hang on one atom,
- * at most `ALIKE_WAYS` of them (lib/chem/identity `symmetryOrbits`, its
- * automorphisms, and `automorphismGroup`, the group they make), each bond
- * taken onto one of its order - a Hückel ring's all of one (`huckelBonds`:
+ * at most `ALIKE_WAYS` of them, searched for atom by atom (`waysOf`), each
+ * bond taken onto one of its order - a Hückel ring's all of one (`huckelBonds`:
  * which of a benzene ring's bonds a Kekulé structure makes double is no part
  * of its shape); those hydrogens are matched each to the nearest of their
  * kind on the atom it is taken to, once the rest are laid over. Past
@@ -19,12 +18,16 @@
  * other atoms not in a line - water, ethyne - has nothing to lay over by
  * them: the ways of all its atoms are tried instead.
  */
-import { automorphismGroup, symmetryOrbits } from "../../../../lib/chem/identity";
+import { symmetryClasses } from "../../../../lib/layout/canonical";
 import { rmsd } from "./rmsd";
 
 /** The most two geometries of one conformer lie apart, in ångströms: all atoms, hydrogens included (the maintainer, 2026-10-21: keeps OH and NH rotamers apart). */
 export const SAME_CONFORMER = 0.01;
-/** The most ways of mapping a molecule onto itself tried; past it, fewer atoms are mapped, or none. */
+/**
+ * The most ways of mapping a molecule onto itself tried; past it, fewer atoms are mapped, or none. Each way tried
+ * costs some 6 µs a pair of conformers laid every way (tetraphenylmethane, 384 ways, 2.5 ms a pair; Apple M4,
+ * 2026-11-01), so a pair costs some 6 ms at most here, and most pairs are told apart by the bound before any.
+ */
 export const ALIKE_WAYS = 1000;
 
 /** What a step says where `n` compounds' ways passed `ALIKE_WAYS`: their atoms were taken atom against atom, so a duplicate could be missed - never two made one. */
@@ -204,41 +207,110 @@ export class Sameness {
   }
 }
 
-/** The ways a molecule without `hangs` maps onto itself, as automorphisms of the rest (each a way's k-th entry: where the k-th of `core` goes, by its place there) - complete where there are at most `ALIKE_WAYS`. */
+/**
+ * The most steps the search for a molecule's ways takes - an atom tried as
+ * the image of another - before it gives up, its ways then taken as too many
+ * to try, as past `ALIKE_WAYS`. Pd(PPh3)4, whose ways are millions, passes
+ * `ALIKE_WAYS` in some 40,000 (`work`), its two searches 12 ms in all (Apple
+ * M4, 2026-11-01).
+ */
+export const WAY_STEPS = 200_000;
+/** The steps the searches for ways have taken - counted so that a test can tell work bounded by `ALIKE_WAYS` from work that is not, which time on a busy machine cannot. */
+export const work = { steps: 0 };
+
+/**
+ * The ways a molecule without `hangs` maps onto itself (each a way's k-th
+ * entry: where the k-th of `core` goes, by its place there) - complete where
+ * there are at most `ALIKE_WAYS`. They are searched for atom by atom, each
+ * after one bonded to it where it has one, each taken only to an atom of its
+ * kind - element, charge, isotope, the hydrogens hanging on it, its symmetry
+ * class - whose bonds to those already taken are those its own are, of the
+ * same orders; the search stops at `ALIKE_WAYS` + 1 ways, or `WAY_STEPS`.
+ */
 function waysOf(atoms: readonly Atom[], bonds: readonly Bond[], hangs: ReadonlySet<number>): { core: number[]; ways: number[][]; complete: boolean } {
   const core = atoms.flatMap((_, i) => (hangs.has(i) ? [] : [i]));
   const place = new Map(core.map((i, k) => [i, k]));
+  const n = core.length;
   const hs = core.map(() => 0);
   for (const b of bonds) {
     if (hangs.has(b.a1) && place.has(b.a2)) hs[place.get(b.a2)!]++;
     if (hangs.has(b.a2) && place.has(b.a1)) hs[place.get(b.a1)!]++;
   }
-  const kept = bonds.filter((b) => place.has(b.a1) && place.has(b.a2));
-  const input = {
+  const kept = bonds.filter((b) => place.has(b.a1) && place.has(b.a2)).map((b) => ({ a: place.get(b.a1)!, b: place.get(b.a2)!, order: b.order }));
+  // (a way takes a bond only to one of its order - a Hückel ring's bonds all of one: a phenyl turned half about its
+  //  bond is the same conformer)
+  const huckel = huckelBonds(n, kept);
+  const orders = kept.map((b) => ({ ...b, order: huckel.has(pairKey(b.a, b.b)) ? IN_TURN : b.order }));
+  const near: Map<number, number>[] = core.map(() => new Map());
+  for (const b of orders) {
+    near[b.a].set(b.b, b.order);
+    near[b.b].set(b.a, b.order);
+  }
+  const classes = symmetryClasses({
     atoms: core.map((i, k) => ({ el: atoms[i].el, ...(atoms[i].charge ? { charge: atoms[i].charge } : {}), hs: hs[k] })),
-    bonds: kept.map((b) => ({ a: place.get(b.a1)!, b: place.get(b.a2)!, order: b.order })),
+    bonds: orders.map((b) => ({ ...b, order: b.order === IN_TURN ? AROMATIC : b.order })),
+  });
+  const kind = core.map((i, k) => `${atoms[i].el}|${atoms[i].charge ?? 0}|${atoms[i].isotope ?? 0}|${hs[k]}|${classes[k]}|${near[k].size}`);
+  // (atoms in turn: each after one bonded to it, a part at a time)
+  const sequence: number[] = [];
+  const from = new Array<number>(n).fill(-1);
+  const seen = new Array<boolean>(n).fill(false);
+  for (let s = 0; s < n; s++) {
+    if (seen[s]) continue;
+    seen[s] = true;
+    sequence.push(s);
+    for (let q = sequence.length - 1; q < sequence.length; q++)
+      for (const t of near[sequence[q]].keys())
+        if (!seen[t]) {
+          seen[t] = true;
+          from[t] = sequence[q];
+          sequence.push(t);
+        }
+  }
+  const image = new Array<number>(n).fill(-1);
+  const taken = new Array<number>(n).fill(-1);
+  const ways: number[][] = [];
+  let steps = 0;
+  let cut = false;
+  const fits = (a: number, t: number) => {
+    if (kind[a] !== kind[t]) return false;
+    for (const [b, o] of near[a]) if (image[b] >= 0 && near[t].get(image[b]) !== o) return false;
+    for (const u of near[t].keys()) if (taken[u] >= 0 && !near[a].has(taken[u])) return false;
+    return true;
   };
-  const { automorphisms, complete } = symmetryOrbits(input);
-  const group = automorphismGroup(automorphisms, core.length, ALIKE_WAYS + 1);
-  // (a way that takes an atom to one of another isotope or charge, or a bond to one of another order, is none - a
-  //  Hückel ring's bonds all of one order: a phenyl turned half about its bond is the same conformer)
-  const huckel = huckelBonds(core.length, input.bonds);
-  const order = new Map(input.bonds.map((b) => [pairKey(b.a, b.b), huckel.has(pairKey(b.a, b.b)) ? IN_TURN : b.order]));
-  const ways = group.members.filter(
-    (w) =>
-      w.every((j, k) => (atoms[core[j]].isotope ?? 0) === (atoms[core[k]].isotope ?? 0) && (atoms[core[j]].charge ?? 0) === (atoms[core[k]].charge ?? 0)) &&
-      [...order].every(([key, o]) => {
-        const [x, y] = key.split(",").map(Number);
-        return order.get(pairKey(w[x], w[y])) === o;
-      }),
-  );
-  return { core, ways, complete: complete && group.complete && group.members.length <= ALIKE_WAYS };
+  const extend = (k: number) => {
+    if (k === n) {
+      ways.push([...image]);
+      return;
+    }
+    const a = sequence[k];
+    const among = from[a] >= 0 ? near[image[from[a]]].keys() : kind.keys();
+    for (const t of among) {
+      if (cut || ways.length > ALIKE_WAYS) return;
+      if (taken[t] >= 0) continue;
+      if (++steps > WAY_STEPS) {
+        cut = true;
+        return;
+      }
+      if (!fits(a, t)) continue;
+      image[a] = t;
+      taken[t] = a;
+      extend(k + 1);
+      image[a] = -1;
+      taken[t] = -1;
+    }
+  };
+  extend(0);
+  work.steps += steps;
+  return { core, ways, complete: !cut && ways.length <= ALIKE_WAYS };
 }
 
 const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
 
 /** The order a Hückel ring's bonds are all taken as (`huckelBonds`): none a bond is given. */
 const IN_TURN = 1.5;
+/** A bond's order where it is aromatic, as the symmetry classes take it (lib/chem/identity `aromaticForm`'s). */
+const AROMATIC = 4;
 /** The most steps the search for one bond's Hückel ring takes; past it, the bond keeps its order: a duplicate can then be missed, never two made one. */
 const RING_STEPS = 100_000;
 

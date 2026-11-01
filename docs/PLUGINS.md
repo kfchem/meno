@@ -13,7 +13,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
   running calculations, connecting to structure search, and more. Meno
   itself is not a plugin; it comes with its own parts.
 - **The chemist chooses the program.** Which program reads a kind of file
-  - Meno's own parser or cclib for XYZ - and which parses SMILES, assigns
+  - a calculation's output by its program's own plugin, or cclib's reading
+  beside it - and which parses SMILES, assigns
   R/S, or searches conformers.
 - **RDKit is a plugin of its own**, independent like the others.
 - **Nothing is kept running ahead of need.** Every plugin starts when it
@@ -54,7 +55,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 
 | Group | Role | Filled today by |
 | --- | --- | --- |
-| Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG), cclib, PySCF - see FILE-IO.md |
+| Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG); each program's own plugin, for its program's outputs; cclib, as a reading of its own; PySCF - see FILE-IO.md |
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
@@ -227,11 +228,13 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `quotedEnergies` | list of `{id, pattern, name, unit?}` | A line of the program's printout giving an electronic energy, as a paper's supporting information quotes it, from its documentation and its printout: `pattern` a regular expression (case-insensitive) with a named group `value` holding the number and, where the line names a method, one named `method`; `name` what the energy is called, given `name(method)` where the method is named; `unit` as `xyzEnergies`'. Meno reads such a line only by the patterns of the plugins added, before its own reading of notes (FILE-IO.md, *Coordinates in a text*; 2026-11-01). |
 | `quotedTables` | list of `{id, headings, heads?, columns}` | A table of atoms the program prints in a form of its own, as papers quote it: `headings` the lines that head it and `heads` the lines of its columns' heads (each the start of its line, without regard to case or how many spaces), and `columns` its columns in turn, from `centre`, `atomic-number` or `element` (one of the two), `type` (a number of the program's own, read as nothing) and `x`, `y`, `z`. Read only where the plugin is added; where only a plugin not added declares it, none of such a table is read, and Meno names the plugin (FILE-IO.md, *Coordinates in a text*; 2026-11-01). |
 | `xyzSteps` | list of `{id, file?, comment?}`, one or both | The XYZ files the program writes whose frames are an optimisation's steps, which of them converged not said in the file (its output says it): `file` the file's name as the program's documentation or its own output gives it, `*` any run of characters (`xtbopt.log`, `*_trj.xyz`), matched in any case; `comment` a regular expression every frame's comment line matches, so that the file is known renamed too (xtb's `energy: ... gnorm: ...`, ORCA's `Coordinates from ORCA-job <name> E ...`) - of a file of two frames or more, and never an ensemble's (a conformer search's, a relaxed scan's points). None of such a file's frames is an entry of a set, and the molecule says why (docs/WORKFLOWS.md, *Compound sets and conformer sets*). A file no plugin names is read as before, every frame an entry. |
-| `roles` | list of `{role, programs?, options?, looks?, motions?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below). |
+| `roles` | list of `{role, programs?, options?, looks?, motions?, unsure?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below); and, for *Structures read from pictures*, the confidence its model reports below which Meno says a part of its reading is unsure, and on what that was set (`unsure: {below, basis}`: a number between 0 and 1, and its basis in words). Each model's confidence is its own, not on one scale with another's, so each plugin says its own; none, and nothing is said unsure for its confidence (PDF.md, *A picture read*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. Only kinds that run a program (*Conformers*, *Optimise*, *Energy*, *Frequencies*, *Render* and the like): one of Meno's own - its judgements, which are the same, which kept, how many, how weighted (*Duplicates*, *Energy window*, *Filter*, *Rank*, *Choose*, *Populations*, *Ensemble*, *Barrier*, *Add*...), and its rules that run no program (`MENO_ONLY`) - is left out, as a kind Meno does not define is (the plugin boundary, 2026-10-31). *Check structures* is a plugin's still, until what it sets aside is Meno's to decide too. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true` on *Generate* where it makes from seeds: the step then takes *Seeds*, structures drawn (*Generate*, below). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?, parallel?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). And how it runs in parallel (`parallel`): `"threads"`, or unsaid - told its job's cores as its threads - or `"processes"`, as under MPI (ORCA's `%pal`): its job's cores, never more than the computer's physical cores, are its processes, each told one thread, and the queue counts each process as a whole physical core (WORKFLOWS.md, *Several at once*). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?, unpackedBytes?, cite?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped: of itself, from where it stopped (a range asked for, taken as the rest only where the server's reply says it begins there; all of it again where the server sends all of it, another range, or says the part is past its file's end), up to four times, after 2, 5, 15 and 30 seconds - each stop written to Meno's log, with how much came - and only then said to have stopped, with how much came of how much and how often it was taken up, the task failed with that reason in the network's record (`fetch_resuming`, 2026-10-24); what came is kept, and *Add* goes on from there. What came is kept under the file's name and its SHA-256's first twelve digits (`model.pth.<digits>.part`), so that what came of a file an older manifest named is never taken up as the new one's: it is thrown away. Once kept, a file is read through for its SHA-256 again once a launch - and again where its size or the time it was last changed is not what it was then - as the plugin is first used in a launch - set up, started, or its worker given its files - never at launch itself, where Meno asks only whether each is there at its size (2026-10-27; `there`): one there that is not its size, or whose SHA-256 is not the manifest's - changed or damaged since - is said plainly ("model.pth is not the file Meno downloaded: its size or fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since.") and asked about again, even where setting the plugin up was allowed, before it is downloaded anew over it; no, and the plugin does not run, saying the same. One that could not be read through - held by another program, not allowed, a share gone - is neither: said, with why, the plugin not run, and read again the next time; never fetched over. While its files are read through, where that takes more than a moment, Settings' *Plugins* and the workspace say so ("Checking its files…"). An archive Meno unpacked is as the stamp it left says: what it unpacked to is not read through again. Meno keeps the files it downloaded as they were: weights of one's own belong in a plugin of one's own, never put in place of these. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. One may be data compressed with gzip (`unpack: "gz"`, never a program), which Meno unpacks itself into `files/<its name without .gz>/`; it must give `unpackedBytes`, said when asking to set the plugin up, and is never unpacked past it. `cite` is how its makers ask to be cited, said there too. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
-| `depends` | list of `{plugin, versions, optional?, programs?}` | The other plugins it uses (2026-10-31; *Depends*, below): each by its id, with the versions of it it works with (`">=0.1.4 <0.2.0"`, or `">=0.1.4"`), whether only some of its work needs it (`optional: true`), and the programs of it its jobs may run, each `{program, env}` - a program that plugin's manifest declares, by the name it gives it, and the variable a job is told where it is in. ORCA's: the xTB plugin, `>=0.1.4 <0.2.0`, optional, its `xtb` in `XTBEXE`, for the xTB methods ORCA runs through the xtb program (`XTB2`, `GFN2-XTB`, `GFN-FF` and the rest; ORCA's own `NATIVE-GFN2-XTB` needs none). A job uses a program of one only where its plugin's worker says so of that job (`prepare`, a job's `needs`: the ids). Meno finds the program as that plugin's own jobs would. On macOS and Linux it is linked into the job's work folder under its own name, and the variable names it there (`./xtb`): a path with a space in it, as Meno's data folder has, is never given, as a program may take one as two words. On Windows its path is given, and refused where it has a space; it is never quoted. The link is never listed among the job's files: neither kept as a raw output nor saved in a workspace. That plugin's version is part of each job's key. Never the plugin itself; never one twice, nor a variable twice; never a shell; never a variable that finds or loads programs (`ENV_NEVER`), the network's way out, or the threads Meno sets. All as they must be, or the plugin is none (`src-tauri/src/jobs.rs` `needs_declared`, `lib/plugins/manifest`). |
+| `depends` | list of `{plugin, versions, optional?, programs?, interfaces?}` | The other plugins it uses (2026-10-31; *Depends*, below): each by its id, with the versions of it it works with (`">=0.1.4 <0.2.0"`, or `">=0.1.4"`), whether only some of its work needs it (`optional: true`), the interfaces of it it uses, each `{id, versions}` (*Interfaces*, below), and the programs of it its jobs may run, each `{program, env}` - a program that plugin's manifest declares, by the name it gives it, and the variable a job is told where it is in. ORCA's: the xTB plugin, `>=0.1.4 <0.2.0`, optional, its `xtb` in `XTBEXE`, for the xTB methods ORCA runs through the xtb program (`XTB2`, `GFN2-XTB`, `GFN-FF` and the rest; ORCA's own `NATIVE-GFN2-XTB` needs none). A job uses a program of one only where its plugin's worker says so of that job (`prepare`, a job's `needs`: the ids). Meno finds the program as that plugin's own jobs would. On macOS and Linux it is linked into the job's work folder under its own name, and the variable names it there (`./xtb`): a path with a space in it, as Meno's data folder has, is never given, as a program may take one as two words. On Windows its path is given, and refused where it has a space; it is never quoted. The link is never listed among the job's files: neither kept as a raw output nor saved in a workspace. That plugin's version is part of each job's key. Never the plugin itself; never one twice, nor a variable twice; never a shell; never a variable that finds or loads programs (`ENV_NEVER`), the network's way out, or the threads Meno sets. All as they must be, or the plugin is none (`src-tauri/src/jobs.rs` `needs_declared`, `lib/plugins/manifest`). |
+| `interfaces` | list of `{id, version}`, at most 8 | The interfaces it declares, for other plugins to use it through (*Interfaces*, below): each by an id, with its version - three numbers. |
+| `presets` | `{interface, looks?, studios?, motions?, files?, options?}` | What it brings another plugin through that one's interface (*Presets*, below): a plugin that brings presets runs nothing, and needs no `environment`. |
 
 A plugin that does nothing - reads, writes, fills, colours, guides and
 suggests nothing - is none. Options are in the general form (`lib/options`:
@@ -262,7 +265,7 @@ worked out from its geometry.
 
 A plugin brings no guide, suggests no plugin and names no other plugin's kinds of file: it runs its program and converts what it wrote, and nothing else (the maintainer, 2026-10-31). The Getting started plugin, which brought Meno's first steps and a catalogue of plugins to suggest, is gone: the first steps are Meno's own (WORKSPACE.md, *First steps*), shown from Settings, *General*.
 
-Which plugins to suggest for a file no plugin added reads is worked out from what each plugin Meno carries says it reads - its kinds, each told by its own marks, as a kind of a plugin added is (`lib/io/kinds` `offeredKinds`). Such a file is told as that kind, and Meno says which plugins would read it ("water.out (ORCA output): ORCA interface or cclib or PySCF would read it."), each with Add, the file read again once one is added. The plugin whose program writes the kind (its `writtenBy`) is named first, the others in Meno's order. None of them is started or asked: only what its manifest says is looked at.
+Which plugins to suggest for a file no plugin added reads is worked out from what each plugin Meno carries says it reads - its kinds, each told by its own marks, as a kind of a plugin added is (`lib/io/kinds` `offeredKinds`). Such a file is told as that kind, and Meno says which plugins would read it ("water.out (ORCA output): ORCA interface or cclib would read it."), each with Add, the file read again once one is added. The plugin whose program writes the kind (its `writtenBy`) is named first, the others in Meno's order. None of them is started or asked: only what its manifest says is looked at.
 
 The plugins Meno carries come in its own folder, as trusted as Meno itself, so their manifests are read whether added or not (the maintainer, 2026-10-31); this replaces the rule of 2026-10-10 that only the catalogues of the plugins added were looked at. A plugin from anywhere else, once there is such a thing, is looked at only as it is added.
 
@@ -402,8 +405,8 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   plugin for it: each says it in its manifest.
 - **For reading a file, others may add to it.** The assigned reader reads
   the file. Others the chemist adds for that kind read it as well, and
-  their results join under their names, as an NBO plugin's would join
-  cclib's. See FILE-IO.md.
+  their results join under their names, as cclib's reading joins the
+  program's own plugin's. See FILE-IO.md.
 - **A role's options** - a conformer search's method and its settings, a
   calculation input's method and basis - are declared by the plugin in a
   general form: a choice, a number, a text or a switch, each with a label
@@ -686,16 +689,41 @@ On update: nothing keys on `version`. An environment is set up again only by its
 
 ## Depends
 
-A plugin may use other plugins, as a library uses libraries (the maintainer, 2026-10-31): its manifest's `depends` says which, each by its id, with the versions of it it works with, and what of it is used - only what that plugin declares in its own manifest (its programs, now), never its files. Meno keeps each one's presence and version, and never what it does: core names no plugin and no program (`lib/plugins/depends`).
+A plugin may use other plugins, as a library uses libraries (the maintainer, 2026-10-31): its manifest's `depends` says which, each by its id, with the versions of it it works with, and what of it is used - only what that plugin declares in its own manifest (its programs, and its interfaces), never its files. Meno keeps each one's presence and version, and never what it does: core names no plugin and no program (`lib/plugins/depends`).
 
 - **Versions** are written `>=A`, or `>=A <B`, each of three numbers, B after A; nothing else is taken - no caret, no "or" - so that what a 0.x version takes is never misread. A plugin's version is compared by its numbers (0.1.10 after 0.1.9).
-- **Refused** - not offered at all - is a plugin that uses one Meno does not know, or a program that one does not declare; and every plugin of a circle (a uses b, b uses a), named, which could be set up in no order. One that uses a plugin refused is refused in turn.
+- **Refused** - not offered at all - is a plugin that uses one Meno does not know, or a program or an interface that one does not declare; and every plugin of a circle (a uses b, b uses a), named, which could be set up in no order. One that uses a plugin refused is refused in turn.
 - **Optional** is one only some of its work needs (`optional: true`): the ORCA interface's xTB, for its xTB methods alone. It is not set up with it, and missing it stops nothing: a job that needs its program is refused, saying so ("Needs xTB, which is not added."), and the plugin's other steps run as ever. There, it is kept as one it needs is: never taken away unasked while it is used, and of a version it does not work with, the plugin is stopped.
 - **Adding** a plugin sets up first those it needs - not those it uses only for some of its work - that are not added, each before any that uses it, all asked of the network in one question - each one's own words under its name ("Set up the ORCA interface, with xTB?"); a yes allows each of them, a no sets none up. Where one it uses cannot be set up, neither is it, saying which.
 - **Taking away** a plugin another added uses is never done alone: Settings asks ("Remove xTB?" - "ORCA interface uses it. Removing xTB removes it too." - *Remove both*), and those that use it go first, their jobs asked about as its own are; asked to take it away alone otherwise, Meno takes none away, saying why ("xTB was not removed: ORCA interface uses it.").
-- **Stopped** is a plugin added that a plugin it needs is not added for, or one it uses - optionally or not - added of a version it does not work with: Settings says so on it ("Stopped: needs xTB, which is not added."), and its steps run nothing, saying the same ("ORCA interface is stopped. Needs xTB from 0.1.4 to before 0.2.0; 0.2.0 is added."); a job of it that would run that plugin's program is refused by the backend too, reading that plugin's version from its own folder, never from what the job's spec says ("orca needs xTB >=0.1.4 <0.2.0; 0.2.0 is here").
-- **Settings** shows, on each plugin, the plugins it uses with their versions ("Uses the plugin xTB, from 0.1.4 to before 0.2.0, for some steps, where it is added.") and those that use it ("Used by ORCA interface.").
+- **Stopped** is a plugin added that a plugin it needs is not added for, or one it uses - optionally or not - added of a version it does not work with, or with an interface it uses of a version it does not work with ("Needs Blender's preset interface from 1.0.0 to before 2.0.0; 2.0.0 is added"): Settings says so on it ("Stopped: needs xTB, which is not added."), and its steps run nothing, saying the same ("ORCA interface is stopped. Needs xTB from 0.1.4 to before 0.2.0; 0.2.0 is added."); a job of it that would run that plugin's program is refused by the backend too, reading that plugin's version from its own folder, never from what the job's spec says ("orca needs xTB >=0.1.4 <0.2.0; 0.2.0 is here").
+- **Settings** shows, on each plugin, the plugins it uses with their versions and the interfaces of each it uses ("Uses the plugin xTB, from 0.1.4 to before 0.2.0, for some steps, where it is added.") and those that use it ("Used by ORCA interface."); on a plugin that brings presets, what it brings, and to which ("For Blender: 12 looks, 2 studios and 8 motions.").
+- **One that runs nothing** - a plugin that brings presets - uses another as any plugin does: that one is set up first as it is added, asked of the network in one question ("Add Blender looks and motions, with Blender?"), and it is taken away with that one.
 - **Asked once** for several, a set-up is not asked again for what it fetches having grown; but where Meno went offline since, or that leave was withdrawn, it is asked - or refused - as anything that uses the network is; and a question it did not ask then (a file found changed since) is asked as ever.
+
+## Interfaces
+
+A plugin may declare interfaces (2026-11-01), for other plugins to use it through: its manifest's `interfaces`, each an id and a version (`{"id": "preset", "version": "1.0.0"}`) - semver, a field added a minor, a meaning changed a major. Another uses one in the `depends` entry of that plugin, with the versions of it it works with (`"interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]`), as it says the versions of the plugin itself; an entry may use interfaces alone, and no program. What an interface is - what is handed through it, and how the plugin that declares it takes it - is that plugin's, written down beside it (Blender's: docs/plugins/blender-presets.md); Meno checks only that both say the same id, and that the versions meet (*Depends*: refused, stopped), and hands over what is to be handed, unread. Core names no interface.
+
+## Presets
+
+A plugin may bring another plugin presets through that one's interface (2026-11-01; the Blender plugin split in two, the maintainer, 2026-10-31): its manifest's `presets` - looks, studios and motions, each with the file the plugin it is for runs for it - and nothing else. It runs nothing: no environment, no worker, no step, no role. Meno reads its manifest alone, never its files.
+
+| Field | Meaning |
+|---|---|
+| `interface` | The interface it brings them through: one its `depends` uses, of exactly one plugin - the one they are for. |
+| `looks` | Each as a render role declares a look (*Looks*, below), with its `file`. |
+| `studios` | Each `{id, label, description?, file}`: a scene a render is made in. `asked` is the card's plain scene, and no studio's id. |
+| `motions` | Each as a render role declares a motion (*Motions*, below), with its `file`. |
+| `files` | The files those share, each a path in its folder. |
+| `options` | Its options, in the general form (`lib/options`), each `when` it says - of its own options, or the card's `look`, `studio` or `motion`. |
+
+A `file` is a file's name in the plugin's folder - letters, digits, dots, hyphens and underscores, beginning with a letter or a digit; no folder, as Meno carries only the files of a plugin's folder itself; never its manifest or its worker, in any case; at most 64 files, all told. Any item not as it must be, and the plugin is none.
+
+- **Offered** on the Render card (docs/RENDER.md, *Presets*) only while the plugin is added, not stopped, and the plugin chosen to render is the one they are for: its looks after Meno's and the renderer's own, its motions after Meno's and the renderer's, its studios as a choice of the Scene, *Studio* ("As asked" first). An id offered already - Meno's, the renderer's, or an earlier plugin's - is not offered again. Its options are shown only while one of its looks, studios or motions is chosen, each `when` it says, in the part of the card it says.
+- **Handed** to the renderer as a render's entry's `presets`: one item for each plugin whose presets are chosen, `{interface, from, look?, studio?, motion?, values}` - each chosen one's id and file, and its options' values, only those it declares. Where the look or the motion is one of them, the entry says the canvas's look (`meno`) and no `motion` in its place; `mode` stays.
+- **Copied** by the backend, unread, into the job's work folder: every file the plugin's `presets` names, in `presets/<its id>/` - the job's ask names the plugins (`presets`), and the backend works out again, from the plugins' own folders, that each uses the job's plugin through an interface that plugin declares, both of versions it works with, and that each file is a file in its folder, by no link (`src-tauri/src/jobs.rs` `presets_given`); its runner checks the same. A job's own file is never in `presets/`. What is copied is never listed among the job's files: neither kept as a raw output nor saved in a workspace. In a workflow, the version of each plugin a Render step's look and studio are of is part of its key.
+- **Not offered any more** - a choice remembered from a render before, of a plugin taken away or stopped since - is said on the card in a line, by name, with the plugin and why ("Chalk is a look of Tool looks, which is not added: the first look is used."), and the first is used for that render. A Render step set to one is refused before it runs ("This look is not offered by any added plugin"); never the first used in its place, unsaid. A Render step's preset options are each plugin's defaults.
 
 ## Looks
 
@@ -733,14 +761,14 @@ The card offers Meno's own motions the molecules can make, then those the added 
 
 Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it there. `src/lib/plugins/boundary.test.ts` keeps this. It reads the manifest and the worker of every bundled plugin, and looks through core's source (`src/` and `src-tauri/src`, the whole of each Rust file but the items it keeps for its tests) - its string literals, its regular expressions and the text of its pages (JSX); comments may say anything. It fails on:
 
-- a word a plugin declares, where a literal is exactly that word: plugin ids, programs and what they provide, the files beside them and the variables they are given, looks, motions, kinds of step, kinds of file read and written and their extensions, the files a step takes, a download's file;
+- a word a plugin declares, where a literal is exactly that word: plugin ids, programs and what they provide, the files beside them and the variables they are given, looks, studios, motions, interfaces and the files a preset names, kinds of step, kinds of file read and written and their extensions, the files a step takes, a download's file;
 - a name a plugin gives, as a word anywhere in a literal, whatever its case: its own name, its programs' as shown, what it uses, the program a kind of file is of and the marks it is told by ("ORCA's %maxcore" is found by "ORCA");
 - an option a plugin declares, where core asks for an option of its id (`o.id === "grain"`, `options.grain`) that is none of Meno's own - a plugin's option says itself when it is shown (`when`);
 - a key a plugin's worker says - dotted or hyphenated, `thermo.zpve`, `not-converged` - unless this document or WORKFLOWS-FOUNDATION.md defines it, as Meno's general form.
 
 The words core legitimately owns are in the test's `ALLOWED` list, each with why (the kinds of step Meno defines, the materials of its scene file, an element's name); a new entry is a decision, made in a review.
 
-Not yet within its reach, and so kept by review alone: text of a program's output that no plugin declares (headings, energy lines a pasted text is read for), and numbers or defaults core took from one plugin's program (a time limit, a sameness threshold, a restraint's strength, a limit sized by one program's run time). Each is to become the plugin's declaration, or core's own value stated as such.
+Not yet within its reach, and so kept by review alone: text of a program's output that no plugin declares (headings, energy lines a pasted text is read for), and numbers or defaults core took from one plugin's program (a time limit, a sameness threshold). Each is to become the plugin's declaration, or core's own value stated as such - as a restraint's strength is, said by what each program measured holds with it (STRUCTURE-STEPS.md).
 
 ## When plugins run
 
@@ -888,11 +916,14 @@ The same for every plugin and for Meno's own parts:
     given, its valence not checked: whether a bond to a metal is in place
     of a hydrogen is the chemist's to say);
     `read_picture {picture}` (structures read from pictures: a PNG or a
-    JPEG in base64, answered with the structure's atoms where the picture
-    has them, in its pixels - each an element with its charge, or a label
-    as drawn - its bonds by index, a wedge's or a hash's nearer end and,
-    where the plugin can tell, which end is drawn narrow, and what it is
-    unsure of, by no number: PDF.md, *A picture read*).
+    JPEG in base64, answered with its model's reading as the model gives
+    it - the structure's atoms where the model places them, across the
+    picture as it cropped it, with `pad` pixels of white round what is
+    drawn, or across the structure itself; each an element with its
+    charge and isotope, or a label as drawn; its bonds by index, a
+    wedge's or a hash's nearer end; and the model's confidence in each.
+    Meno lays it on the picture and says what is unsure: PDF.md, *A
+    picture read*).
     (A general `run {role, input, options}`, planned at first, was never
     needed: a new role comes with Meno, and with it its requests);
   - `prepare {step, entries, options, cores}` and `collect {step,
@@ -1168,9 +1199,8 @@ of odd valence - is for the general steps after it, and for
   counting it in `said`, since JSON holds no NaN - and is not kept.
 - `seed`: where a generator makes a structure from one that came in, that
   one's place among them. None comes into REINVENT 4's. CReM gives its
-  values as `change` (the change made), `frequency` (how often the
-  fragment put in occurs in its database) and `seed_smiles` (the seed's SMILES
-  as it read it).
+  values as `change` (the change made) and `frequency` (how often the
+  fragment put in occurs in its database).
 - `seeds`: where seeds came in, one for each by its place, `{"place",
   "made"}` or `{"place", "why"}` (not read). Meno names on the step's
   line each seed that made none and each not read, with why, from this
@@ -1215,10 +1245,11 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 
 ```
 {
-  "schema": 1,
+  "schema": 2,
   "name": "...",                      (where it has one)
   "atoms": [{"el", "x", "y", "z", "charge"?, "radical"?, "isotope"?, "mass"?}],
   "bonds": [{"a1", "a2", "order", "coordination"?}],
+  "fragments": [[0, 1, 2], [3, 4, 5]],
   "charge": 0,
   "multiplicity": 1,
   "files": [{"kind", "name", "text"}], (where the step takes some)
@@ -1228,8 +1259,18 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 ```
 
 - `schema` is the entry's version (`src/lib/entry.ts`, `ENTRY_SCHEMA`),
-  1 for the entry as described here. A change to what an entry holds
-  comes with the next number, so that a plugin can tell which it is given.
+  2 for the entry as described here (2026-11-01: its `fragments`). A
+  change to what an entry holds comes with the next number, so that a
+  plugin can tell which it is given.
+- `fragments` are the molecules the entry's bonds make of its atoms, each
+  its atoms by number, in order, and the fragments in the order of their
+  first atom (`src/lib/chem/fragments.ts`, Meno's one rule): two atoms are
+  in one fragment where a path of bonds joins them, a coordination bond as
+  any other - a metal and its ligands are one; two waters, or a salt's
+  ions with no bond between them, are two. One fragment where all are
+  joined. A plugin whose program takes molecules apart writes the
+  fragments it is given and works out none (the NCIPLOT interface's
+  interactions between molecules).
 - The atoms are in the entry's fixed numbering: a plugin answers with
   them in the same order (WORKFLOWS-FOUNDATION.md, *The numbering is
   fixed*), mapping back any its program reorders.

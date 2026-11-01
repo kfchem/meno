@@ -9,7 +9,7 @@ import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recor
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, optionsOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
-import { byOf, doerStamp, inputsFor, optionsFor, takesBy, takesNothingBy } from "./doers";
+import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, takesBy, takesNothingBy } from "./doers";
 
 export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -221,7 +221,9 @@ function keyTexts(m: Molecule3D): readonly string[] {
 
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
-  const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
+  const values = optionsOf(optionsFor(step.kind, by), step.options);
+  // (and, a Render's, the plugins its look and studio are of, by version)
+  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values);
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);

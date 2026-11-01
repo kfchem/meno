@@ -668,16 +668,19 @@ read and attached to its molecule. Agreed with the maintainer on
   no reader added reads says which would. Which readers there are is
   Meno's own list for now. A list fetched online needs a way to trust it
   (signing), and comes later.
-- **The first reader is cclib** (BSD-3), which reads ORCA, Gaussian, xTB
-  and others. It is installed into its plugin's environment as a
-  library. Meno does not copy its code, and a reader Meno writes itself is
-  written from the programs' outputs and documentation, not from cclib's
-  parsers.
-- **Readers are alike, and several can read one output.** Every reader
-  installed that reads a kind of output reads it, and what they find is
-  put together: an NBO plugin, say, adds NBO's analysis to what cclib read
-  from the same Gaussian output. No reader is set above another (the
-  maintainer, 2026-10-05).
+- **Each program's output is read by that program's own plugin**
+  (2026-10-31): the ORCA interface ORCA's, the Gaussian interface
+  Gaussian's, the xTB plugin xtb's, each written from its program's
+  outputs and documentation.
+  cclib (BSD-3) is a plugin of its own, installed into its environment as
+  a library, giving its reading of an output where the chemist chooses
+  it; Meno copies none of its code.
+- **Readers are alike, and several can read one output.** The reader of
+  a kind and each chosen to read it as well read it, and what they find is
+  put together: cclib's reading, say, beside what the Gaussian interface
+  read from the same output. No reader's results are set above another's
+  (the maintainer, 2026-10-05); the program's own plugin is the one
+  chosen, by default, to give the geometries and what the calculation was.
 - **Each reader's results are its own.** A result belongs to the reader
   that gave it, and its name is that reader's own: names are never
   matched across readers, and two readers' results of the same name are
@@ -839,13 +842,15 @@ with that data written by hand.
 Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
 2026-10-05.
 
-- **Readers.** cclib (1.9rc1) is the first. Settings, *Calculation
-  readers* (now *Plugins*, the choice where readers overlap in *Files*),
-  adds it - asking first for the network - and takes it away again, its
-  environment and its record with it. A kind of output is told by what its
-  file starts with. Where readers overlap, every one added reads the
-  output and each one's results are kept, its own; the one chosen for that
-  kind gives the geometries and what the calculation was.
+- **Readers.** A program's output is read by that program's own plugin;
+  cclib (1.9rc1) gives a reading of its own where it is chosen. Settings,
+  *Plugins*, adds a reader - asking first for the network - and takes it
+  away again, its environment and its record with it; *Files* holds the
+  choice where readers overlap. A kind of output is told by what its file
+  starts with. The one chosen for that kind - the program's own plugin, by
+  default - reads the output and gives the geometries and what the
+  calculation was; each chosen to read it as well does, and each one's
+  results are kept, its own.
 - **Opening an output.** It opens on a canvas tab of its own, its last
   geometry shown, an optimisation's steps as its frames. With no reader
   added that reads it, Meno says which to add; an output with no geometry
@@ -854,7 +859,7 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
   geometries, each one's energy, what the calculation was - has a form of
   its own; everything else is a result belonging to the molecule, each
   frame, each atom, pairs of atoms or a list, its values quantities Meno
-  writes or values with their own unit. cclib gives partial charges and
+  writes or values with their own unit. A reader gives partial charges and
   spin populations, thermochemistry, the dipole moment, the HOMO-LUMO gap,
   each step's RMS gradient, the vibrations and the orbitals about the
   frontier.
@@ -931,9 +936,8 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   download - under the same contract as the plugins, and as easily taken
   out. A cube's molecule comes with its grids as a list of surfaces.
 - **The PySCF plugin** (Apache-2.0), in a pixi environment: orbitals and
-  densities worked out on a grid from a molden file, or from an output
-  that holds the basis set and the orbitals' coefficients - read by cclib,
-  written as molden by cclib, worked out by PySCF - each grid a promise.
+  densities worked out on a grid from a Molden file, read and worked out
+  by PySCF - each grid a promise.
   No GPL library (iodata, gbasis).
 
 ### In order

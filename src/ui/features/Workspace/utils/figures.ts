@@ -16,9 +16,10 @@ import { cornerAt } from "../../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
+import { fitToPicture } from "../../../../lib/figure/inkFit";
 import { boxPicture } from "../../../../lib/pdf/reader";
 import { setAtomLabel } from "../../../../lib/pdf/figures";
-import { chemWorker } from "../../../../lib/roles/worker";
+import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { drawnBond, readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
@@ -33,7 +34,7 @@ import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
-import { picturePng } from "./pictures";
+import { picturePng, pngPixels } from "./pictures";
 import { labelBoxes, labelledPart } from "./freePlace";
 import { captionBox } from "./extent";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -152,13 +153,14 @@ export const READ_MS = 90_000;
 /** The workers that have read a picture: their model loaded. One started afresh is another, and loads its model again. */
 const loaded = new WeakSet<ChemClient>();
 
-/** A picture read by the plugin that reads structures from pictures: what it read, in the picture's pixels; or why nothing came of it. */
+/** A picture read by the plugin that reads structures from pictures, laid on the picture: what it read, in the picture's pixels; or why nothing came of it. */
 async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
   const worker = await chemWorker("pictures");
   try {
     const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, loaded.has(worker) ? READ_MS : FIRST_READ_MS);
     loaded.add(worker);
-    return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+    const fitted = fitToPicture(answer, await pngPixels(bytes), rolePlugin("pictures")?.roleUnsure.pictures);
+    return pictureFigure(fitted) ?? { none: "No structure was found in the picture." };
   } catch (e) {
     if (e instanceof ChemTimeout) return { none: "Reading the picture took too long, so nothing was read from it." };
     throw e;

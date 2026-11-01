@@ -104,7 +104,8 @@ const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join(""
  */
 export async function addPlugin(p: Plugin): Promise<void> {
   if (!forThisSystem(p)) throw new Error(`${p.name} is not made for this system.`);
-  const first = runs(p) ? pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added") : [];
+  // (one that runs nothing uses others too: a preset plugin, the plugin that runs its files)
+  const first = pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added");
   if (!first.length) return addOne(p);
   const missing = first.find((q) => !forThisSystem(q));
   if (missing) {
@@ -113,7 +114,8 @@ export async function addPlugin(p: Plugin): Promise<void> {
     throw new Error(why);
   }
   // (one question for all of them: each one's own words under its name)
-  const all = [...first, p as PythonPlugin];
+  // (only those that run something are set up, and asked of: one that runs nothing is added at once)
+  const all = [...first, p].filter(runs);
   let asks: { name: string; request: Awaited<ReturnType<typeof setUpQuestions>>[number] }[];
   try {
     asks = (await Promise.all(all.map(async (q) => (await setUpQuestions(q.profile)).map((request) => ({ name: q.name, request }))))).flat();
@@ -123,13 +125,14 @@ export async function addPlugin(p: Plugin): Promise<void> {
     throw e;
   }
   // (an interface to a program installed separately is set up, never that program downloaded: "the ORCA interface", as its own question says it)
-  const named = (q: PythonPlugin) => (q.installed.length ? `the ${q.name}` : q.name);
+  const named = (q: Plugin) => (runs(q) && q.installed.length ? `the ${q.name}` : q.name);
   const them = listSaid(first.map(named));
-  const allowed = await askToConnectAll(
-    `${(p as PythonPlugin).installed.length ? "Set up" : "Download"} ${named(p as PythonPlugin)}, with ${them}?`,
+  // (none to ask of where none of them fetches anything)
+  const allowed = !asks.length || (await askToConnectAll(
+    `${!runs(p) ? "Add" : p.installed.length ? "Set up" : "Download"} ${named(p)}, with ${them}?`,
     `It uses ${them}, which ${first.length === 1 ? "is" : "are"} set up first.`,
     asks,
-  );
+  ));
   if (!allowed) {
     const why = `${p.name} was not added: it needs the network, and was not allowed it (Meno is offline, or the download was declined).`;
     setState(p.id, "absent", why);
@@ -227,7 +230,7 @@ export function waitingSaid(now: Record<string, ReaderState>): string {
 }
 
 /** The plugins added that use a plugin, and those that use them in turn, in the order they are taken away: what taking it away takes away too. */
-export function addedUsing(id: string): PythonPlugin[] {
+export function addedUsing(id: string): Plugin[] {
   const added = addedNow();
   return pluginsUsing(id).filter((q) => added.has(q.id));
 }

@@ -142,6 +142,10 @@ pub struct JobSpec {
     /// runner works out again from the plugins themselves (`needs_given`), never from here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub needs: Vec<String>,
+    /// Preset plugins whose files it was handed, by id (`presets_given`): copied into its work folder, each in
+    /// `presets/<id>/`, never listed among its files - what each is, its runner works out again from the plugins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub presets: Vec<String>,
     /// The files it was given, by their paths in its work folder (`make_job` writes them): what is kept of it where what
     /// its program made is taken out (`trim_made`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -380,6 +384,12 @@ fn physical_cores() -> Option<u32> {
 
 fn read_spec(dir: &Path) -> Option<JobSpec> {
     serde_json::from_str(&fs::read_to_string(dir.join(SPEC)).ok()?).ok()
+}
+
+/// The folders in a job's work folder that hold what preset plugins handed it (`presets_given`), one for each its spec
+/// names (`presets/<id>/`): never its own files - never kept, nor saved in a workspace.
+pub fn handed_folders(dir: &Path) -> Vec<String> {
+    read_spec(dir).map(|spec| spec.presets.iter().map(|p| format!("{PRESET_DIR}/{p}/")).collect()).unwrap_or_default()
 }
 
 /// Whether a job's runner is there: it holds its lock for as long as it is,
@@ -1700,16 +1710,31 @@ pub fn link_needed(dir: &Path, needed: &[(String, PathBuf)]) -> Result<(), Strin
     Ok(())
 }
 
-/// A job made (`make_job`) and given each program it needs (`link_needed`) -
-/// or, where one cannot be given it, no job at all: its folder taken away
-/// again, never left as one to run without what it needs.
-pub fn make_needing_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
+/// A job made (`make_job`), given each program it needs (`link_needed`)
+/// and each file a preset plugin hands it, copied into its work folder where
+/// it goes (`presets_given`) - or, where one cannot be given it, no job at
+/// all: its folder taken away again, never left as one to run without what
+/// it needs.
+pub fn make_handed_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)], handed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
     let (id, dir) = make_job(root, spec, files)?;
-    if let Err(e) = link_needed(&dir, needed) {
+    let given = link_needed(&dir, needed).and_then(|()| copy_handed(&dir, handed));
+    if let Err(e) = given {
         let _ = fs::remove_dir_all(&dir);
         return Err(e);
     }
     Ok((id, dir))
+}
+
+/// Each file a preset plugin hands a job (`presets_given`) copied into its work folder, where it goes.
+fn copy_handed(dir: &Path, handed: &[(String, PathBuf)]) -> Result<(), String> {
+    for (rel, from) in handed {
+        let to = dir.join(WORK).join(rel);
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("{rel}: {e}"))?;
+        }
+        fs::copy(from, &to).map_err(|e| format!("{rel} could not be given to the job: {e}"))?;
+    }
+    Ok(())
 }
 
 /// What a job's log says from byte `from` on - at most `most` bytes, never
@@ -1943,6 +1968,8 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
         return Err(format!("{} given what Meno does not give it", spec.name));
     }
     let _ = needed;
+    // (and, where preset plugins handed it files, those plugins as they must be - worked out again here, from the plugins)
+    presets_given(&manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.presets, &|p| Ok(plugins.join(p)))?;
     Ok(())
 }
 
@@ -2232,6 +2259,9 @@ pub struct JobAsk {
     /// Other plugins whose programs it needs, by id: each one its plugin's manifest declares (`needs`).
     #[serde(default)]
     pub needs: Vec<String>,
+    /// Preset plugins whose files it is handed, by id (`JobSpec::presets`).
+    #[serde(default)]
+    pub presets: Vec<String>,
 }
 
 /// A program of another plugin a plugin's jobs may need, as its manifest
@@ -2376,6 +2406,99 @@ pub fn needs_given(data: &Path, manifest: &serde_json::Value, id: &str, needs: &
     Ok((env, links))
 }
 
+/// The folder in a job's work folder the files preset plugins hand it go in, each plugin's in one of its own (`presets/<id>/`).
+pub const PRESET_DIR: &str = "presets";
+/// The most files preset plugins may hand a job, all told, and the most bytes.
+const PRESET_FILES_MOST: usize = 64;
+const PRESET_BYTES_MOST: u64 = 16 * 1024 * 1024;
+
+/// Whether a job's own files are clear of the folder preset plugins' files go in, where it names any (`presets`): none
+/// of them in `presets/`, whatever is handed - else what it is given there is hidden as theirs (`handed_folders`).
+pub fn clear_of_presets(files: &[JobFile], presets: &[String]) -> Result<(), String> {
+    if presets.is_empty() {
+        return Ok(());
+    }
+    match files.iter().find(|f| Path::new(&f.name).components().next().is_some_and(|c| c.as_os_str() == PRESET_DIR)) {
+        Some(f) => Err(format!("a job's file is in {PRESET_DIR}, where the presets it is handed go: {}", f.name)),
+        None => Ok(()),
+    }
+}
+
+/// Whether `f` is a file a preset may name (docs/PLUGINS.md, *Presets*): a file's name in its plugin's folder - plain, no
+/// folder, as Meno carries only the files of a plugin's folder itself - and neither the manifest nor the worker Meno reads
+/// (as lib/plugins/manifest `presetFileOk`).
+pub fn preset_file_ok(f: &str) -> bool {
+    let b = f.as_bytes();
+    let plain = !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(c));
+    // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
+    let lower = f.to_ascii_lowercase();
+    plain && lower != "manifest.json" && lower != "worker.py"
+}
+
+/// The files a job of plugin `id` (its manifest `manifest`) is handed by the preset plugins `presets`, by their ids
+/// (docs/PLUGINS.md, *Presets*): each one a plugin that uses `id` through an interface `id` declares, and brings its
+/// presets through it - `id` and that interface of versions it works with, each read from its own folder (`dir_of`),
+/// never from a job's spec; every file its presets name, a file in its folder and by no link, with where it goes in the
+/// job's work folder (`presets/<its id>/<file>`). Worked out the same way as the job is made and as its runner checks it.
+/// One not so, why.
+pub fn presets_given(manifest: &serde_json::Value, id: &str, presets: &[String], dir_of: &dyn Fn(&str) -> Result<PathBuf, String>) -> Result<Vec<(String, PathBuf)>, String> {
+    let text = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+    let listed = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_array()).cloned().unwrap_or_default();
+    let version = text(manifest, "version");
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    let mut bytes = 0u64;
+    for (i, from) in presets.iter().enumerate() {
+        if !plugin_id(from) || from == id || presets[..i].contains(from) {
+            return Err(format!("not a plugin that brings {id} presets: {from}"));
+        }
+        let dir = dir_of(from)?;
+        let theirs = manifest_of(&dir, from)?;
+        let name = theirs.get("name").and_then(|v| v.as_str()).unwrap_or(from).to_string();
+        let presets_decl = theirs.get("presets").filter(|p| p.is_object()).ok_or_else(|| format!("{name} brings no presets"))?;
+        let interface = text(presets_decl, "interface");
+        // (of `id`, through an interface it declares - each of a version the preset plugin works with)
+        let uses = listed(&theirs, "depends").into_iter().find(|d| text(d, "plugin") == id).ok_or_else(|| format!("{name} does not use {id}"))?;
+        if !in_versions(&version, &text(&uses, "versions")) {
+            return Err(format!("{name} works with {id} {}; {} is here", text(&uses, "versions"), if version.is_empty() { "no version of it" } else { &version }));
+        }
+        let wanted = listed(&uses, "interfaces").into_iter().find(|x| text(x, "id") == interface).ok_or_else(|| format!("{name} does not use {id}'s {interface} interface"))?;
+        let has = listed(manifest, "interfaces").into_iter().find(|x| text(x, "id") == interface).map(|x| text(&x, "version"));
+        match has {
+            Some(v) if in_versions(&v, &text(&wanted, "versions")) => {}
+            Some(v) => return Err(format!("{name} works with {id}'s {interface} interface {}; {v} is here", text(&wanted, "versions"))),
+            None => return Err(format!("{id} declares no {interface} interface")),
+        }
+        // (every file its presets name, once: each a path inside its folder, by no link, a file)
+        let mut files: Vec<String> = ["looks", "studios", "motions"].iter().flat_map(|k| listed(presets_decl, k)).map(|x| text(&x, "file")).collect();
+        files.extend(listed(presets_decl, "files").iter().map(|f| f.as_str().unwrap_or_default().to_string()));
+        files.sort();
+        files.dedup();
+        for f in files {
+            if !preset_file_ok(&f) {
+                return Err(format!("{name} names a file it cannot hand over: {f}"));
+            }
+            let mut at = dir.clone();
+            for part in f.split('/') {
+                at.push(part);
+                let meta = fs::symlink_metadata(&at).map_err(|_| format!("{f} of {name} is not there"))?;
+                if meta.file_type().is_symlink() {
+                    return Err(format!("{f} of {name} is a link, which it cannot hand over"));
+                }
+            }
+            let meta = fs::metadata(&at).map_err(|e| format!("{f} of {name}: {e}"))?;
+            if !meta.is_file() {
+                return Err(format!("{f} of {name} is not a file"));
+            }
+            bytes += meta.len();
+            out.push((format!("{PRESET_DIR}/{from}/{f}"), at));
+        }
+    }
+    if out.len() > PRESET_FILES_MOST || bytes > PRESET_BYTES_MOST {
+        return Err(format!("the presets hand over more than a job takes: {} files, {} MB", out.len(), bytes.div_ceil(1 << 20)));
+    }
+    Ok(out)
+}
+
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
 #[derive(Deserialize, Clone, Debug)]
 pub struct ThenAsk {
@@ -2421,6 +2544,12 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     if let Some((name, _)) = needed.iter().find(|(name, _)| payload.files.iter().any(|f| &f.name == name)) {
         return Err(format!("a job's file is named {name}, as the program it needs is"));
     }
+    // (the files preset plugins hand it: each of a plugin that uses it through an interface it declares, copied into its
+    //  work folder unread - in a folder of their own, which none of its own files may be in)
+    let handed = presets_given(&manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.presets, &|p| {
+        crate::resource_path(&app, &Path::new("resources/plugins").join(p))
+    })?;
+    clear_of_presets(&payload.files, &payload.presets)?;
     // (one asking for more than the computer has never starts: refused, saying so)
     if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
         return Err(format!("It cannot run on this computer: {why}"));
@@ -2441,10 +2570,11 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
         needs: payload.needs.clone(),
+        presets: payload.presets.clone(),
         given: vec![],
     };
     // (each program it needs, linked in its work folder: a link there is never listed, kept or saved - keptjobs `kept_files`)
-    let (id, dir) = make_needing_job(&jobs_root(&app)?, &spec, &payload.files, &needed)?;
+    let (id, dir) = make_handed_job(&jobs_root(&app)?, &spec, &payload.files, &needed, &handed)?;
     // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
     let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
     let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
@@ -2831,6 +2961,7 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
@@ -3764,6 +3895,7 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         }
     }
@@ -4403,6 +4535,7 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         let (_, dir) = make_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap();
@@ -4435,14 +4568,15 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         // (a file of its own under the needed program's name: the link cannot be made)
-        let err = make_needing_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())]).unwrap_err();
+        let err = make_handed_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())], &[]).unwrap_err();
         assert!(err.contains("tool could not be given to the job"), "{err}");
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
         // (where it can be, a job, with its link)
-        let (_, dir) = make_needing_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())]).unwrap();
+        let (_, dir) = make_handed_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())], &[]).unwrap();
         assert!(fs::symlink_metadata(dir.join(WORK).join("tool")).unwrap().file_type().is_symlink());
         let _ = fs::remove_dir_all(&root);
     }
@@ -4644,4 +4778,156 @@ mod tests {
         assert_eq!(need_value(Path::new(r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library/bin\xtb.exe"), true).unwrap(), r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library\bin\xtb.exe");
     }
 
+    /// A renderer, `render` 0.7.0, declaring its `preset` interface 1.0.0, and a preset plugin, `looks`, that uses it through
+    /// that interface and brings a look, a motion and a file they share - each a file in its folder: in a plugins' folder.
+    fn presetting(render: serde_json::Value, looks: serde_json::Value) -> PathBuf {
+        let plugins = temp();
+        for (id, m) in [("render", render), ("looks", looks)] {
+            fs::create_dir_all(plugins.join(id)).unwrap();
+            fs::write(plugins.join(id).join("manifest.json"), m.to_string()).unwrap();
+        }
+        for f in ["gold.py", "spin.py", "shared.py"] {
+            fs::write(plugins.join("looks").join(f), format!("# {f}\n")).unwrap();
+        }
+        plugins
+    }
+
+    fn renderer() -> serde_json::Value {
+        serde_json::json!({"id": "render", "name": "Render", "version": "0.7.0", "interfaces": [{"id": "preset", "version": "1.0.0"}]})
+    }
+
+    fn preset_plugin() -> serde_json::Value {
+        serde_json::json!({
+            "id": "looks", "name": "Looks", "version": "1.0.0",
+            "depends": [{"plugin": "render", "versions": ">=0.7.0 <0.8.0", "interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]}],
+            "presets": {"interface": "preset", "looks": [{"id": "gold", "label": "Gold", "file": "gold.py"}], "motions": [{"id": "spin", "label": "Spin", "file": "spin.py"}], "files": ["shared.py"]}
+        })
+    }
+
+    #[test]
+    fn hands_a_job_every_file_a_preset_plugin_names_copied_into_a_folder_of_its_own_and_never_keeps_one() {
+        let plugins = presetting(renderer(), preset_plugin());
+        let dir_of = |p: &str| Ok(plugins.join(p));
+        let handed = presets_given(&renderer(), "render", &["looks".into()], &dir_of).unwrap();
+        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["presets/looks/gold.py", "presets/looks/shared.py", "presets/looks/spin.py"]);
+        // (none handed, none asked for)
+        assert!(presets_given(&renderer(), "render", &[], &dir_of).unwrap().is_empty());
+        // (copied into its work folder, unread; listed nowhere it keeps)
+        let root = temp();
+        let spec = JobSpec {
+            plugin: "render".into(),
+            name: "shell".into(),
+            program: "/bin/sh".into(),
+            args: vec![],
+            stdin: None,
+            env: BTreeMap::new(),
+            cores: 1,
+            processes: false,
+            memory: 0,
+            created: now_ms(),
+            label: None,
+            key: None,
+            then: vec![],
+            needs: vec![],
+            presets: vec!["looks".into()],
+            given: vec![],
+        };
+        let (_, dir) = make_handed_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }], &[], &handed).unwrap();
+        assert_eq!(fs::read_to_string(dir.join(WORK).join("presets/looks/gold.py")).unwrap(), "# gold.py\n");
+        let kept: Vec<String> = crate::keptjobs::kept_files(&dir).into_iter().map(|f| f.name).collect();
+        assert_eq!(kept, ["work/input.txt"]);
+        // (one that cannot be copied - gone since - leaves no folder)
+        let away = temp();
+        let gone = vec![("presets/looks/none.py".to_string(), plugins.join("looks").join("none.py"))];
+        assert!(make_handed_job(&away, &spec, &[], &[], &gone).unwrap_err().contains("could not be given to the job"));
+        assert_eq!(fs::read_dir(&away).unwrap().count(), 0);
+        for d in [plugins, root, away] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn hands_over_nothing_of_a_plugin_that_is_not_a_preset_plugin_of_the_job_s_as_it_must_be() {
+        let refused = |render: serde_json::Value, looks: serde_json::Value, asked: &[&str], why: &str| {
+            let plugins = presetting(render.clone(), looks);
+            let asked: Vec<String> = asked.iter().map(|a| a.to_string()).collect();
+            let err = presets_given(&render, "render", &asked, &|p: &str| Ok(plugins.join(p))).unwrap_err();
+            assert!(err.contains(why), "{err} - {why}");
+            let _ = fs::remove_dir_all(plugins);
+        };
+        let with = |k: &str, v: serde_json::Value| {
+            let mut m = preset_plugin();
+            m[k] = v;
+            m
+        };
+        let presets = |k: &str, v: serde_json::Value| {
+            let mut m = preset_plugin();
+            m["presets"][k] = v;
+            m
+        };
+        // (the renderer of a version it does not work with, its interface of another, or none)
+        refused(serde_json::json!({"id": "render", "version": "0.8.0", "interfaces": [{"id": "preset", "version": "1.0.0"}]}), preset_plugin(), &["looks"], "works with render >=0.7.0 <0.8.0; 0.8.0 is here");
+        refused(serde_json::json!({"id": "render", "version": "0.7.1", "interfaces": [{"id": "preset", "version": "2.0.0"}]}), preset_plugin(), &["looks"], "preset interface >=1.0.0 <2.0.0; 2.0.0 is here");
+        refused(serde_json::json!({"id": "render", "version": "0.7.0"}), preset_plugin(), &["looks"], "render declares no preset interface");
+        // (one that does not use it, or not through that interface, or brings none)
+        refused(renderer(), with("depends", serde_json::json!([])), &["looks"], "Looks does not use render");
+        refused(renderer(), presets("interface", serde_json::json!("other")), &["looks"], "does not use render's other interface");
+        refused(renderer(), with("presets", serde_json::json!(null)), &["looks"], "Looks brings no presets");
+        // (a file not inside its folder, the manifest, one not there, a folder - asked for twice, or itself, or no plugin)
+        refused(renderer(), presets("files", serde_json::json!(["../render/manifest.json"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["manifest.json"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["/etc/hosts"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["none.py"])), &["looks"], "none.py of Looks is not there");
+        refused(renderer(), presets("files", serde_json::json!(["sub/shared.py"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), preset_plugin(), &["looks", "looks"], "not a plugin that brings render presets");
+        refused(renderer(), preset_plugin(), &["render"], "not a plugin that brings render presets");
+        refused(renderer(), preset_plugin(), &["../looks"], "not a plugin that brings render presets");
+        // (a folder by a file's name)
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(["folder.py"])));
+        fs::create_dir(plugins.join("looks").join("folder.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("folder.py of Looks is not a file"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+        // (too many files, all told)
+        let many: Vec<String> = (0..70).map(|i| format!("f{i}.py")).collect();
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(many)));
+        for f in &many {
+            fs::write(plugins.join("looks").join(f), "").unwrap();
+        }
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("more than a job takes"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hands_over_no_file_a_preset_plugin_names_by_a_link() {
+        let plugins = presetting(renderer(), preset_plugin());
+        fs::remove_file(plugins.join("looks").join("shared.py")).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", plugins.join("looks").join("shared.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("is a link"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+    }
+
+    #[test]
+    fn keeps_a_job_s_own_files_out_of_the_presets_folder_where_it_names_any_preset_plugin() {
+        let file = |name: &str| JobFile { name: name.into(), text: String::new() };
+        let looks = ["looks".to_string()];
+        assert!(clear_of_presets(&[file("render.json"), file("presetsfile.txt")], &looks).is_ok());
+        assert!(clear_of_presets(&[file("presets/looks/mine.py")], &looks).unwrap_err().contains("presets/looks/mine.py"));
+        assert!(clear_of_presets(&[file("presets/other.py")], &looks).is_err());
+        // (one that names none: its files as they are)
+        assert!(clear_of_presets(&[file("presets/other.py")], &[]).is_ok());
+    }
+
+    #[test]
+    fn takes_a_file_a_preset_names_only_as_a_plain_path_inside_its_folder() {
+        for good in ["a.py", "look_gold.py", "Studio_1.blend"] {
+            assert!(preset_file_ok(good), "{good}");
+        }
+        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "looks/gold.py", "manifest.json", "worker.py", "Manifest.json", "WORKER.PY", "a b.py", "a\\b.py", &"x".repeat(65)] {
+            assert!(!preset_file_ok(bad), "{bad}");
+        }
+    }
 }

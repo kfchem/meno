@@ -15,6 +15,7 @@ import { readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { plainLines } from "../../../lib/text/editing";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { quotedTables } from "../../../lib/io/kinds";
+import { outputKindIn } from "../../../lib/calc/probe";
 import type { FieldHost, TypingField } from "./typingField";
 
 /** What the menu works on: words that can be changed - a field's - or only read. */
@@ -91,10 +92,18 @@ export function fieldTarget(ed: FieldHost, field: () => TypingField | null): Tex
   };
 }
 
-/** The structures the coordinates in a column's text hold - what is selected, or the whole of it - none where there are none or no text's. */
+/** The structures the coordinates in a column's text hold - what is selected, or the whole of it - none where there are none or no text's, or where it is a calculation's output (`outputIn`), read by its reader instead. */
 export function structuresIn(t: TextMenuTarget): CoordinateStructure[] {
   if (!t.text) return [];
-  return readCoordinates(t.selected() || t.text.whole(), quotedTables());
+  const text = t.selected() || t.text.whole();
+  return outputKindIn(text) ? [] : readCoordinates(text, quotedTables());
+}
+
+/** A calculation's output in a column's text - what is selected, or the whole of it - told by its program's banner (lib/calc/probe `outputKindIn`): read as one opened is. None where it is none, or no text's. */
+export function outputIn(t: TextMenuTarget): string | null {
+  if (!t.text) return null;
+  const text = t.selected() || t.text.whole();
+  return outputKindIn(text) ? text : null;
 }
 
 /** The menu, open where it was asked for, on what; or none. And what 3D Structures does with what it found, where the workspace takes them (`structures`). */
@@ -104,10 +113,15 @@ export const useTextMenu = create<{
   close: () => void;
   structures: ((found: CoordinateStructure[], name: string) => void) | null;
   takeStructures: (take: ((found: CoordinateStructure[], name: string) => void) | null) => void;
+  /** What 3D Structures does with a calculation's output in the text (`outputIn`), where the workspace takes it. */
+  output: ((text: string, name: string) => void) | null;
+  takeOutput: (take: ((text: string, name: string) => void) | null) => void;
 }>((set) => ({
   at: null,
   open: (x, y, target) => set({ at: { x, y, target } }),
   close: () => set({ at: null }),
   structures: null,
   takeStructures: (take) => set({ structures: take }),
+  output: null,
+  takeOutput: (take) => set({ output: take }),
 }));

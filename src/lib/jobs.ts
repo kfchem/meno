@@ -59,6 +59,8 @@ export type JobAsk = {
   reads?: string[];
   /** Other plugins whose programs it needs, by id - each its plugin's manifest declares (`needs`): found as their own jobs would find them, and named in its folder. */
   needs?: string[];
+  /** Preset plugins whose files it is handed, by id - each a plugin that uses its plugin through an interface that one declares (docs/PLUGINS.md, *Presets*): copied unread into its folder, `presets/<id>/`, never kept. */
+  presets?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */

@@ -1,7 +1,7 @@
 {
   "id": "crem",
   "name": "CReM",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "uses": [{"name": "CReM", "version": "0.3.2"}, {"name": "RDKit", "version": "2026.03.6"}],
   "description": "Makes new structures from seeds with CReM: fragments of each seed, or its hydrogens, replaced by fragments found in the same surroundings in a database of them built from ChEMBL 33, each given as the SMILES it made, with the change and how often the fragment put in occurs.",
   "licence": "BSD-3-Clause",

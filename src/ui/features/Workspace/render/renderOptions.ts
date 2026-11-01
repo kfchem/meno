@@ -9,7 +9,8 @@
  * under it and are the chemist's to change for the one render.
  */
 import type { Option, OptionSection, OptionValues } from "../../../../lib/options";
-import { MENO_MOTIONS, type FixedChoice, type LookDecl, type MotionDecl, type Shortest } from "../../../../lib/plugins/manifest";
+import { MENO_MOTIONS, PLAIN_STUDIO, type FixedChoice, type LookDecl, type MotionDecl, type PresetStudio, type Shortest } from "../../../../lib/plugins/manifest";
+import { studioOption } from "./presets";
 import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, Sticks, SurfaceMaterial } from "./renderScene";
 
 /** What a render is: a picture, or a film. */
@@ -206,7 +207,8 @@ function lookChoices(looks: readonly LookDecl[]) {
 
 /**
  * Render's own choices, Meno's whoever renders: a picture's or a film's size and shape, a film's motion, length and rate, its look
- * - and, folded under it, the parts the look is made of. `looks`: those the renderer can make; none given, all.
+ * - and, folded under it, the parts the look is made of - and, where plugins bring the renderer studios, the studio. `looks`:
+ * those the renderer can make, and those plugins bring it (./presets); none given, all.
  */
 export function renderOptions(
   kind: Kind,
@@ -215,6 +217,7 @@ export function renderOptions(
   declared?: readonly LookDecl[],
   declaredMotions?: readonly MotionDecl[],
   length: Length = { shortest: 1 },
+  studios: readonly PresetStudio[] = [],
 ): Option[] {
   const film = kind === "film";
   // (Meno's own motions the molecules can make, then those the renderer declares, in its order: Meno keeps no list of them)
@@ -248,6 +251,7 @@ export function renderOptions(
       : []),
     { id: "width", label: "Width", type: "number", default: film ? 1920 : 2400, min: 16, max: film ? 3840 : 8192, step: film ? 16 : 100, unit: "px", section: "render" },
     { id: "shape", label: "Shape", type: "choice", choices: SHAPES, default: film ? "16:9" : "fit", section: "render" },
+    ...studioOption(studios),
     { id: "look", label: "Look", type: "choice", choices, default: choices[0]?.value ?? "meno", section: "look" },
     { id: "molecules", label: "Molecules made of", type: "choice", choices: MOLECULES, default: "meno", group: adjust, section: "look" },
     ...(surfaces ? [{ id: "surfaces", label: "Surfaces made of", type: "choice" as const, choices: SURFACES, default: "meno", group: adjust, section: "look" as const }] : []),
@@ -305,5 +309,6 @@ export function askOf(kind: Kind, v: OptionValues): RenderAsk {
     molecules: (v.molecules as MoleculeMaterial) ?? "meno",
     surfaces: (v.surfaces as SurfaceMaterial) ?? "meno",
     finish: finishOf(v),
+    ...(typeof v.studio === "string" && v.studio !== PLAIN_STUDIO ? { studio: v.studio } : {}),
   };
 }
