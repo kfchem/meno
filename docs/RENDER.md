@@ -193,6 +193,34 @@ before anything is rendered, saying how long it needs to be ("This film
 needs at least 6 s for 3 molecules"): the rule is Meno's, and no renderer
 keeps a copy of it (the boundary, 2026-10-31).
 
+## Presets
+
+A renderer may take looks, studios and motions from plugins of their own
+(2026-11-01; docs/PLUGINS.md, *Presets*): each such plugin uses the
+renderer through an interface the renderer declares, runs nothing, and
+says in its manifest what it brings, each with the file the renderer runs
+for it. While it is added, not stopped, and the renderer chosen is the one
+it brings them to, the card offers its looks after Meno's and the
+renderer's own, its motions after Meno's and the renderer's, and its
+studios as a choice of the Scene part, *Studio* - "As asked", the scene as
+the render asks it, first. An id offered already is not offered again. Its
+options are shown only while one of its looks, studios or motions is
+chosen, each in the part it says, each `when` it says. A preset motion's
+shortest length counts as a renderer's does.
+
+Chosen, the render's entry hands the renderer, for each plugin whose
+presets are chosen, its interface, its id, each chosen one's id and file,
+and its options' values (`presets`); a preset look or motion is said there
+alone, the entry's own look the canvas's and no motion of its own, *Once
+or Loop* still the entry's. Meno copies every file the plugin names into
+the job, unread, in `presets/<its id>/`; never keeps one; and never runs
+one: the renderer does, as its interface says.
+
+A look, studio or motion chosen last that nothing added brings now is said
+on the card in a line - its name, its plugin, and that the plugin is not
+added, or is stopped and why - and the first is used for that render. A
+Render step set to one is refused before it runs.
+
 ## Render as a step
 
 **Render** is a kind of a workflow's step too (WORKFLOWS.md, *Kinds of

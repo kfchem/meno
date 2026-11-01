@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { acceptManifest, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
 import { MANIFESTS } from "./known";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const good = {
   id: "nbo",
@@ -261,6 +263,69 @@ describe("a plugin's manifest", () => {
     expect(MANIFESTS.find((m) => m.id === "orca")?.depends?.map((d) => [d.plugin, d.versions, d.programs, d.optional])).toEqual([["xtb", ">=0.1.4 <0.2.0", [{ program: "xtb", env: "XTBEXE" }], true]]);
   });
 
+  it("may declare interfaces for other plugins to use it through, and use another's - each by id with its version or versions - all as they must be, or the plugin is none", () => {
+    const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
+    expect(acceptManifest({ ...steps, interfaces: [{ id: "styling", version: "1.2.0" }] })?.interfaces).toEqual([{ id: "styling", version: "1.2.0" }]);
+    expect(acceptManifest(steps)?.interfaces).toBeUndefined();
+    const through = { plugin: "tool", versions: ">=1.0.0", interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] };
+    expect(acceptManifest({ ...steps, depends: [through] })?.depends?.[0].interfaces).toEqual([{ id: "styling", versions: ">=1.0.0 <2.0.0", range: { from: "1.0.0", before: "2.0.0" } }]);
+    for (const bad of [
+      { interfaces: [{ id: "styling", version: "1.2" }] },
+      { interfaces: [{ id: "Styling", version: "1.2.0" }] },
+      { interfaces: [{ id: "styling", version: "1.0.0" }, { id: "styling", version: "2.0.0" }] },
+      { interfaces: { id: "styling", version: "1.0.0" } },
+      { depends: [{ ...through, interfaces: [{ id: "styling", versions: "^1.0.0" }] }] },
+      { depends: [{ ...through, interfaces: [through.interfaces[0], through.interfaces[0]] }] },
+      { depends: [{ ...through, interfaces: "styling" }] },
+    ])
+      expect(acceptManifest({ ...steps, ...bad }), JSON.stringify(bad)).toBeNull();
+  });
+
+  it("may bring another plugin presets through that one's interface - running nothing itself - each as a render role declares its own, with a file in its folder", () => {
+    const presets = {
+      interface: "styling",
+      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "look_chalk.py" }],
+      studios: [{ id: "attic", label: "Attic", file: "attic.py" }],
+      motions: [{ id: "wobble", label: "Wobble", shortest: { film: 3 }, file: "wobble.py" }],
+      files: ["shared.py"],
+      options: [{ id: "grain", label: "Grain", type: "choice", choices: [{ value: "fine", label: "Fine" }], default: "fine", section: "look", when: { id: "look", in: ["chalk"] } }],
+    };
+    const preset = { id: "tool-looks", name: "Tool looks", version: "1.0.0", depends: [{ plugin: "tool", versions: ">=1.0.0 <2.0.0", interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }], presets };
+    const read = acceptManifest(preset);
+    expect(read?.environment).toBeUndefined();
+    expect(read?.presets).toEqual({
+      interface: "styling",
+      for: "tool",
+      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "look_chalk.py" }],
+      studios: [{ id: "attic", label: "Attic", file: "attic.py" }],
+      motions: [{ id: "wobble", label: "Wobble", shortest: { film: 3 }, file: "wobble.py" }],
+      files: ["shared.py"],
+      options: [expect.objectContaining({ id: "grain", section: "look", when: { id: "look", in: ["chalk"] } })],
+    });
+    // (one with its looks alone; and a plugin that brings nothing and does nothing is none)
+    expect(acceptManifest({ ...preset, presets: { interface: "styling", looks: presets.looks } })?.presets?.studios).toEqual([]);
+    expect(acceptManifest({ ...preset, presets: undefined })).toBeNull();
+    // (through an interface it does not use, an item without a file or one not as it must be, a file outside its folder, the plain studio's id, nothing at all, too many files: none)
+    const many = Array.from({ length: 64 }, (_, i) => `f${i}.py`);
+    for (const bad of [
+      { interface: "other" },
+      { looks: [{ id: "chalk", label: "Chalk" }] },
+      { looks: [...presets.looks, { id: "Bad Id", label: "Bad", file: "bad.py" }] },
+      { looks: [{ ...presets.looks[0], file: "../tool/manifest.json" }] },
+      { looks: [{ ...presets.looks[0], file: "/etc/hosts" }] },
+      { files: ["manifest.json"] },
+      { files: ["Manifest.JSON"] },
+      { files: ["Worker.py"] },
+      { files: ["looks/chalk.py"] },
+      { files: ["shared.py", "shared.py"] },
+      { studios: [{ id: "asked", label: "As asked", file: "asked.py" }] },
+      { looks: [], studios: [], motions: [] },
+      { files: many },
+    ])
+      expect(acceptManifest({ ...preset, presets: { ...presets, ...bad } }), JSON.stringify(bad).slice(0, 80)).toBeNull();
+    expect(acceptManifest({ ...preset, depends: [{ plugin: "tool", versions: ">=1.0.0" }] })).toBeNull();
+  });
+
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {
     const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["conformers"], programs: ["crest"] }] };
     expect(acceptManifest({ ...steps, systems: ["macos", "linux", "beos"] })?.systems).toEqual(["macos", "linux"]);
@@ -495,5 +560,22 @@ describe("a mark", () => {
     expect(markAt(head, { text: "* O R C A *" })).toBe(head.indexOf("*"));
     expect(markAt(head, { text: "[Molden Format]", at: "line-start" })).toBe(head.indexOf(" [Molden"));
     expect(markAt(head, { text: "NWChem" })).toBe(-1);
+  });
+});
+
+// (a bundled plugin whose manifest does not read is none: never left to vanish unsaid)
+describe("the plugins Meno carries", () => {
+  const root = join(__dirname, "../../../src-tauri/resources/plugins");
+  const folders = readdirSync(root).filter((f) => statSync(join(root, f)).isDirectory());
+
+  it("each read, by its folder's name - none of them refused", () => {
+    expect(MANIFESTS.map((m) => m.id)).toEqual([...folders].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it("each with every file its presets name there, in its folder itself - what Meno carries of it", () => {
+    for (const m of MANIFESTS.filter((x) => x.presets)) {
+      const p = m.presets!;
+      for (const f of [...p.looks, ...p.studios, ...p.motions].map((x) => x.file).concat(p.files)) expect(existsSync(join(root, m.id, f)), `${m.id}: ${f}`).toBe(true);
+    }
   });
 });
