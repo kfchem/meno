@@ -19,9 +19,10 @@ REINVENT 4 samples as many SMILES as asked from the prior, on the CPU with
 the seed set, so that the same asking gives the same SMILES (its `-s`,
 README *Running*; measured here, the same seed gave the same SMILES twice
 over). The seed is a whole number from 1: REINVENT 4 sets the seed it is
-given where it is not 0 (reinvent/Reinvent.py, at the release pinned:
-`args.seed or` the configuration's), so a seed of 0 would be a run that
-does not sample the same way again. What it gives is handed on as it is
+given where it is not 0 (reinvent/Reinvent.py line 120 at 4.8.24+80a8d21,
+the release the lock pins: `seed = args.seed or getattr(val_config,
+"seed", None)`), so a seed of 0 would be a run that does not sample the
+same way again. What it gives is handed on as it is
 (docs/PLUGINS.md, *Generate*): each SMILES as REINVENT 4 writes it, its
 stereo as written or left out, nothing made of it in 3D, nothing refused -
 every one it samples, those it marks a duplicate or could not read among
