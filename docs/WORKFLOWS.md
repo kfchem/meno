@@ -550,8 +550,8 @@ on it.
     given, and says it ("its start has 1 imaginary frequency");
   - the two the same atoms in one numbering, of one charge and spin;
   - their values at one level, temperature, pressure, solvent and
-    treatment of low vibrations, as each says it (lib/nodes `workedOutAs`),
-    the level said;
+    treatment of low vibrations, as each says it (lib/nodes `workedOutAs`;
+    a method or basis whatever its case, `alikeIn`), the level said;
   - for G, the rotational symmetry number each was worked out with read -
     the program's, in its value's record (`by.symmetryNumber`). One not
     read cannot be told, and is refused. Two that differ are kept, since it

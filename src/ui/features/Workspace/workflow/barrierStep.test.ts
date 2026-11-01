@@ -130,6 +130,13 @@ describe("a Barrier step", () => {
     expect(why(run([saddle()], [minimum({ g: undefined })]))).toBe("its start a #1 has no thermo.free-energy");
   });
 
+  it("takes a method named in another case as the same - B3LYP and b3lyp - each shown as read; another method still refused", () => {
+    const b = barrier(run([saddle({ method: "B3LYP" })], [minimum({ method: "b3lyp" })]));
+    expect(b.value as number).toBeCloseTo((AMMONIA.saddle.g - AMMONIA.minimum.g) * 627.5094740630558, 9);
+    expect(b.by?.method).toBe("B3LYP");
+    expect(why(run([saddle({ method: "B3LYP" })], [minimum({ method: "pbe0" })]))).toBe("a #1: their thermo.free-energy were not worked out alike - method: B3LYP and pbe0");
+  });
+
   it("refuses two that are not one molecule in one numbering, of one charge and spin", () => {
     expect(why(run([saddle()], [minimum({ atoms: ["P", "H", "H", "H"] })]))).toBe("a #1 and its start a #1 are not the same atoms in one numbering");
     expect(why(run([saddle()], [minimum({ charge: 1 })]))).toBe("a #1 and its start a #1 are not of one charge and spin");
@@ -156,6 +163,9 @@ describe("a Barrier step", () => {
     );
     const otherLevel = { ...start, properties: { G: { ...start.properties!.G, parts: start.properties!.G.parts!.map((p, i) => (i === 0 ? { ...p, by: { ...p.by, basis: "def2-SVP" } } : p)) } } };
     expect(why(run([ts], [otherLevel], { free: "G" }))).toBe("a #1: their energy in G were not worked out alike - basis: def2-TZVP and def2-SVP");
+    // (a part's method and basis in another case are the same: the sums are set one against the other)
+    const otherCase = { ...start, properties: { G: { ...start.properties!.G, parts: start.properties!.G.parts!.map((p, i) => (i === 0 ? { ...p, by: { ...p.by, method: "b3lyp", basis: "DEF2-TZVP" } } : p)) } } };
+    expect(barrier(run([ts], [otherCase], { free: "G" })).value as number).toBeCloseTo((-56.5 + 0.02 - (-56.52 + 0.025)) * 627.5094740630558, 9);
     const noSigma = { ...start, properties: { G: { ...start.properties!.G, parts: start.properties!.G.parts!.map((p, i) => (i === 1 ? { ...p, by: { ...p.by, symmetryNumber: undefined } } : p)) } } };
     expect(why(run([ts], [noSigma], { free: "G" }))).toBe(
       "a #1: the rotational symmetry number thermo.g-correction in G was worked out with was not read of its start a #1: its rotational entropy cannot be told",

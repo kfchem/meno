@@ -96,6 +96,11 @@ describe("Duplicates, within each value of a property", () => {
     // (free energies alike: the lower free energy kept, whatever the electronic energies say)
     const alike = runStep(compared([at(water(0.001, -80.0, "P"), "M1", -76.0), at(water(0, -76.0, "P"), "M1", -76.01)], BY), 2, W);
     expect(asides(alike)).toEqual(["the same as b #1, which was kept"]);
+    // (a method named in another case is the same: the lower kept, by electronic energy and by free energy)
+    const cased = runStep(compared([at(water(0.001, -76.0, "P"), "B3LYP"), at(water(0, -80.0, "P"), "b3lyp")], BY), 2, W);
+    expect(asides(cased)).toEqual(["the same as b #1, which was kept"]);
+    const casedFree = runStep(compared([at(water(0.001, -80.0, "P"), "B3LYP", -76.0), at(water(0, -76.0, "P"), "b3lyp", -76.01)], BY), 2, W);
+    expect(asides(casedFree)).toEqual(["the same as b #1, which was kept"]);
     // (levels decide only between those alike: two saddle points unlike each other, at two levels, both kept)
     const unlike = runStep(compared([at(water(0.4, -76.0, "P"), "M1"), at(water(0, -80.0, "P"), "M2")], BY), 2, W);
     expect(ran(unlike)?.said).toBe("2 of 2 entries kept");
