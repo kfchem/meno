@@ -252,7 +252,8 @@ def optimised_of(text):
     return failed is None or (ok is not None and ok.start() > failed.start())
 
 
-# (xtb's own words, as it warns of frequencies at a geometry whose gradient is not near zero)
+# (xtb's own words, as it warns of frequencies at a geometry whose gradient is not near zero: Meno's warning kind
+#  hessian-not-stationary, as docs/PLUGINS.md states it, its words beside it)
 HESSIAN_NOT_STATIONARY = "Hessian on incompletely optimized geometry"
 
 
