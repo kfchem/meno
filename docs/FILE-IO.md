@@ -81,10 +81,14 @@ orders unknown, as an XYZ file's; its chip says its name always, with its
 energy where a note gives one in hartrees, and a click on it opens what
 the text says of it - its charge and multiplicity and its notes (*In the
 text*). Its energy is an electronic energy a note names as one - E (or
-E_SCF, Etot, E_tot, E_el, E_elec), "SCF Done: E(...)", Energy, or the
-electronic, total, SCF, final or final single-point energy, after "=" or ":",
-and ORCA's "FINAL SINGLE POINT ENERGY" line - in hartrees, said after
-it or in its bracket, or not said where the bracket names a method. A
+E_SCF, Etot, E_tot, E_el, E_elec), Energy, or the electronic, total, SCF,
+final or final single-point energy, after "=" or ":" - in hartrees, said
+after it or in its bracket, or not said where the bracket names a method;
+or a line of a program's printout as the program's plugin added declares
+it (`quotedEnergies`, PLUGINS.md; 2026-11-01), named as it says - the
+Gaussian interface's "SCF Done: E(...) = ..." as "E(...)", the ORCA
+interface's "FINAL SINGLE POINT ENERGY" line with no "=" as the final
+single point energy. A
 bracket after the name says a method (its basis after a "/":
 RB3LYP/6-31G(d), CCSD(T), B3LYP-D3(BJ)/def2-TZVP) or a unit, nothing
 else: one with a space or a "+", a word of another quantity or a part
@@ -118,13 +122,21 @@ that differ, it is given none, and says why.
 - **An atom** is an element - its symbol as it is written, or its atomic
   number - and three numbers with a decimal point or an exponent, read from
   the words in turn rather than the lines, so a line broken anywhere reads
-  whole: `C 1.2 3.4 5.6`; a label of up to four letters and digits
-  (`C1`), a freeze code between (`C 0 x y z`, `C -1 x y z`), its items
-  apart by spaces, tabs or commas, as Gaussian's manual has a molecule
-  specification's line (*Molecule Specification*); `1 C x y z`, numbered;
-  and a row of Gaussian's table of an orientation - centre, atomic number,
-  type, x, y, z. A minus printed as a typographic minus or a dash reads as
-  one.
+  whole: `C 1.2 3.4 5.6`; its element as a label of up to four letters and
+  digits (`C1`, `H1A`); one whole number between, read as nothing - no
+  meaning is given it (`C 0 x y z`, `C -1 x y z`); its items apart by
+  spaces, tabs or commas; `1 C x y z`, numbered. A minus printed as a
+  typographic minus or a dash reads as one.
+- **A table of atoms a program prints in a form of its own** is read as
+  that program's plugin declares it (`quotedTables`, PLUGINS.md;
+  2026-11-01): its headings and the heads of its columns, never a
+  structure's name, and its columns in turn - the Gaussian interface's
+  orientation tables, a row of centre, atomic number, type, x, y, z. Only
+  where that plugin is added: where only a plugin not added declares it,
+  none of the table is read - its rows read as nothing else either - and
+  the card says so, naming the plugin (*A table as its program prints it:
+  the Gaussian interface plugin reads it, once added in Settings,
+  Plugins*), not to be placed.
 - **Left out**: a page's number set alone ("S12", "Page 3 of 40", "- 4 -")
   and a line of words set again and again (a running head, a journal's
   foot); from a PDF, besides, a line near a page's top or foot set there on

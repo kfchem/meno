@@ -7,7 +7,8 @@ import {
   WINDOW_3D_MOST,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
-import type { Option, OptionValues } from "../../../lib/options";
+import { shownOptions, type Option, type OptionValues } from "../../../lib/options";
+import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
 
@@ -102,8 +103,32 @@ export default function ChemistrySettings() {
       {/* (who makes molecules in 3D: done on a structure drawn, at once, as the rest here) */}
       <div className="mt-6">
         <RoleChoices where="molecules3d" heading="3D" />
+        <Sought3D chemistry={chemistry} setChemistry={setChemistry} />
         <Window3D chemistry={chemistry} setChemistry={setChemistry} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * How many conformers a structure's 3D structure tries on the page - Meno's
+ * choice, the same for any plugin whose search takes a number of tries
+ * (lib/chem/conformersSought): shown only where the one chosen does.
+ */
+function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemistry: (c: Settings) => void }) {
+  if (!rolePlugin("conformers")?.roleTries.includes("conformers")) return null;
+  const values: OptionValues = { sought: chemistry.sought3d ?? "needed", count: chemistry.count3d ?? RING_CONFORMERS };
+  const change = (v: OptionValues) => {
+    const { sought3d: _s, count3d: _c, ...rest } = chemistry;
+    const n = typeof v.count === "number" && Number.isFinite(v.count) ? Math.min(Math.max(1, Math.round(v.count)), MOST_CONFORMERS) : RING_CONFORMERS;
+    setChemistry({ ...rest, ...(v.sought === "fixed" ? { sought3d: "fixed" as const } : {}), ...(n !== RING_CONFORMERS ? { count3d: n } : {}) });
+  };
+  return (
+    <div className="mt-2 rounded-lg border border-gh-line bg-white">
+      <OptionRows options={shownOptions(soughtOptions(), values)} values={values} onChange={change} />
+      <p className="px-3 pb-2.5 text-xs leading-snug text-gh-gray max-w-2xl">
+        How many conformers are tried of a structure made in 3D here. A workflow's Conformers step says its own, starting from this.
+      </p>
     </div>
   );
 }

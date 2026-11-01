@@ -225,6 +225,8 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `xyzEnergies` | list of `{id, pattern, unit?}` | How the program writes a frame's energy on an XYZ file's comment line, from its documentation: `pattern` a regular expression (case-insensitive) with one capture group holding the number; `unit` its number's - `hartree` (the default), `eV`, `kcal/mol` or `kJ/mol` - which Meno converts to hartrees. Meno reads a frame's energy only by the patterns of the plugins added (docs/FILE-IO.md); where two find different numbers on a line, none. |
+| `quotedEnergies` | list of `{id, pattern, name, unit?}` | A line of the program's printout giving an electronic energy, as a paper's supporting information quotes it, from its documentation and its printout: `pattern` a regular expression (case-insensitive) with a named group `value` holding the number and, where the line names a method, one named `method`; `name` what the energy is called, given `name(method)` where the method is named; `unit` as `xyzEnergies`'. Meno reads such a line only by the patterns of the plugins added, before its own reading of notes (FILE-IO.md, *Coordinates in a text*; 2026-11-01). |
+| `quotedTables` | list of `{id, headings, heads?, columns}` | A table of atoms the program prints in a form of its own, as papers quote it: `headings` the lines that head it and `heads` the lines of its columns' heads (each the start of its line, without regard to case or how many spaces), and `columns` its columns in turn, from `centre`, `atomic-number` or `element` (one of the two), `type` (a number of the program's own, read as nothing) and `x`, `y`, `z`. Read only where the plugin is added; where only a plugin not added declares it, none of such a table is read, and Meno names the plugin (FILE-IO.md, *Coordinates in a text*; 2026-11-01). |
 | `xyzSteps` | list of `{id, file?, comment?}`, one or both | The XYZ files the program writes whose frames are an optimisation's steps, which of them converged not said in the file (its output says it): `file` the file's name as the program's documentation or its own output gives it, `*` any run of characters (`xtbopt.log`, `*_trj.xyz`), matched in any case; `comment` a regular expression every frame's comment line matches, so that the file is known renamed too (xtb's `energy: ... gnorm: ...`, ORCA's `Coordinates from ORCA-job <name> E ...`) - of a file of two frames or more, and never an ensemble's (a conformer search's, a relaxed scan's points). None of such a file's frames is an entry of a set, and the molecule says why (docs/WORKFLOWS.md, *Compound sets and conformer sets*). A file no plugin names is read as before, every frame an entry. |
 | `roles` | list of `{role, programs?, options?, looks?, motions?, unsure?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below); and, for *Structures read from pictures*, the confidence its model reports below which Meno says a part of its reading is unsure, and on what that was set (`unsure: {below, basis}`: a number between 0 and 1, and its basis in words). Each model's confidence is its own, not on one scale with another's, so each plugin says its own; none, and nothing is said unsure for its confidence (PDF.md, *A picture read*). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?, noLoneAtom?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. Only kinds that run a program (*Conformers*, *Optimise*, *Energy*, *Frequencies*, *Render* and the like): one of Meno's own - its judgements, which are the same, which kept, how many, how weighted (*Duplicates*, *Energy window*, *Filter*, *Rank*, *Choose*, *Populations*, *Ensemble*, *Barrier*, *Add*...), and its rules that run no program (`MENO_ONLY`) - is left out, as a kind Meno does not define is (the plugin boundary, 2026-10-31). *Check structures* is a plugin's still, until what it sets aside is Meno's to decide too. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true` on *Generate* where it makes from seeds: the step then takes *Seeds*, structures drawn (*Generate*, below). `noLoneAtom`: `true` on *Conformers* or *Optimise* where its program is given no lone atom (CREST's): such an entry is never sent, and passes through Meno's step as it came, with no energy and no calculation, said so on it and on the step's line (WORKFLOWS.md, *Kinds of step*; 2026-11-01). Said of another kind, it is left out: an entry it does not run is the plugin's to refuse, entry by entry (`refused`). |
@@ -427,41 +429,83 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   (`roles: [{role, options}]`, for a role that takes them); Settings draws
   them under the role, where it is chosen, and the plugin is sent them
   with each request for the role (`options`). RDKit declares its conformer
-  search's (0.1.8): how many sought - as many as the molecule needs, or a
-  number given - the force field (MMFF94, MMFF94s, UFF), the steps an
+  search's: the force field (MMFF94, MMFF94s, UFF), the steps an
   optimisation may take, the random seed - and its *Conformers* step takes
-  the same, said once. When two conformers are the same is no option
-  (below).
-- **How many conformers are sought is the molecule's to say**
-  (2026-10-20): a fixed number is too few for a molecule with much to
-  explore and more than a rigid one has shapes, so the RDKit plugin asks
-  the molecule, unless the chemist sets a number (*Conformers sought*,
-  *This many*). By the bonds in it that turn, it is Ebejer, Morris and
-  Deane's rule - fifty up to seven such bonds, two hundred to twelve,
-  three hundred beyond (*Conformer Generation using RDKit*, 1st RDKit User
-  General Meeting, London 2012; *Freely Available Conformer Generation
-  Methods: How Good Is Good Enough?*, J. Chem. Inf. Model. 2012, 52,
-  1146-1158). Two things are added to it, both measured here:
+  the same, said once. It also says that its search takes a number of
+  tries (`tries: true`, on the conformers role), which Meno sends (below).
+  When two conformers are the same is no option (below).
+- **How many conformers are tried is Meno's to say** (the plugin
+  boundary, 2026-10-31; `lib/chem/conformersSought`). A fixed number is
+  too few for a molecule with much to explore and more than a rigid one
+  has shapes, so Meno works out as many as the molecule needs, unless the
+  chemist sets a number (*Conformers sought*, *This many*): on the page
+  in Settings, Chemistry, 3D; on a *Conformers* step among its own
+  options, Settings' choice its default. These are shown only for a
+  plugin whose conformers role says `tries`; it is sent the number with
+  each request (`count`) and, for a step's job, with each molecule. A
+  search that takes no such number (CREST's) is offered no choice. By the
+  bonds that turn, it is Ebejer, Morris and Deane's rule - fifty up to
+  seven such bonds, two hundred to twelve, three hundred beyond
+  (*Conformer Generation using RDKit*, 1st RDKit User General Meeting,
+  London 2012; *Freely Available Conformer Generation Methods: How Good
+  Are They?*, J. Chem. Inf. Model. 2012, 52, 1146-1158). Which
+  bonds turn is Meno's own count, of the heavy atoms (hydrogens carried
+  or not change nothing): a single bond outside any ring with another
+  heavy atom at each end, but none whose turn gives the same shape:
+  - a straight line - the atoms of triple bonds and the two at its ends -
+    is one turn, and none where an end has nothing beyond it (a nitrile,
+    a methyl alkyne): diphenylacetylene's rings turn against each other
+    once;
+  - an end that is a symmetric top - three alike end atoms on it (CF3,
+    CCl3, a tert-butyl's centre, a trimethylsilyl's) - gives the same
+    shape at each third of a turn;
+  - a bond from a carbon with a double bond to O, N or S, to an N, O or
+    S, is held flat by the lone pair's conjugation (an amide's C-N, an
+    ester's C-O, a thioamide's, an amidine's), and its two flat forms - an
+    amide's cis and trans, an ester's Z and E - are conformers of their
+    own, so it counts; but not where the lone pair's atom carries two
+    alike (an N,N-dimethylamide's methyls), whose two forms are one
+    shape;
+  - a bond to an end N, O or S carrying hydrogens counts - an OH's, an
+    amine's NH2, a thiol's - since the same conformer keeps OH and NH
+    rotamers apart, but not an amide's NH2 (its two flat forms one shape)
+    nor an NH3 (a symmetric top); and a C=N whose N carries a hydrogen
+    and nothing else counts too, the hydrogen on either side - an E/Z
+    never chosen - being two conformers.
+
+  The rule is by the bonds that turn; which those are is Meno's
+  definition, above: a bond whose turn gives conformers of their own.
+
+  Two things are added to the rule, both measured:
   - **a ring that can flip is worth at least two hundred.** A ring's two
     chairs are shapes of its own that no turning bond counts, and an
     embedding falls into the rarer one seldom - 3.8% of embeddings for
     tert-butylcyclohexane, 4.3% for phenylcyclohexane, over 8000
-    embeddings of each of twelve monosubstituted cyclohexanes - so thirty
-    tries missed the axial chair of phenylcyclohexane altogether. At two
-    hundred, both chairs came back for all twelve, at every seed tried. A
-    ring counts if it has five atoms or more, is not aromatic, and is not
-    bridged, a bridge holding its ring in the one shape - bridged meaning
-    that it shares more than one bond with a ring of its own size or
-    smaller, since against a larger ring it is no bridge but the way round
-    it, as each sugar of a cyclodextrin lies on its macrocycle.
-  - **a molecule that cannot change shape is worth ten**, RDKit's own
-    number for an embedding: nothing in it turns and no ring of it can
-    flip, so each try gives the same shape back (benzene, caffeine,
-    adamantane).
+    embeddings of each of twelve monosubstituted cyclohexanes (RDKit's
+    search, 2026-10-20) - so thirty tries missed the axial chair of
+    phenylcyclohexane altogether. At two hundred, both chairs came back
+    for all twelve, at every seed tried. A ring counts if it has five
+    atoms or more, is not held flat, and is not bridged, a bridge holding
+    its ring in the one shape - bridged meaning that it shares more than
+    one bond with a ring of its own size or smaller, since against a
+    larger ring it is no bridge but the way round it, as each sugar of a
+    cyclodextrin lies on its macrocycle. A ring is held flat where every
+    atom of it gives the ring pi electrons, 4n + 2 of them (Hückel's
+    rule): one from a double bond in the ring or a Hückel ring's bond (a
+    fused ring's, however drawn), none from a carbon with a C=O, C=N or
+    C=S out of the ring or a carbocation, two from a lone pair (pyrrole's
+    N, furan's O, a carbanion); a ring every atom of which lies on a
+    Hückel ring is held flat (azulene's), and so is one bound to a metal
+    through all its atoms (a metallocene's). Cyclopentadiene's CH2 and
+    cyclooctatetraene's eight pi electrons leave theirs free to pucker.
+  - **a molecule that cannot change shape is worth ten**, the number
+    RDKit's embedding takes when given none: nothing in it turns and no
+    ring of it can flip, so each try gives the same shape back (benzene,
+    caffeine, adamantane, N,N-dimethylacetamide).
 
-  A number set by hand (*This many*) may be up to 5000 (`MOST_CONFORMERS`,
-  the manifest's `max` for it; from RDKit plugin 0.1.16, up to 500
-  before). The rule's number is a floor for a chain, not enough for one.
+  A number set by hand (*This many*) may be up to 5000
+  (`MOST_CONFORMERS`). The rule's number is a floor for a chain, not
+  enough for one.
   For butyl octanoate (nine turning bonds, so the rule asks 200),
   5000 embeddings found 1523 conformers within 3 kcal/mol of the lowest.
   Each count, run on its own with the same seed, found:
@@ -865,8 +909,9 @@ The same for every plugin and for Meno's own parts:
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers: what is left open, how many stereoisomers of it can
     be made in 3D, which open double bonds are cumulated, and whether none
-    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options,
-    onPage?}` (structures in 3D and their conformers, with the role's
+    holds in 3D, `free`); `conformers {molblock, isomers?, like?, count,
+    options, onPage?}` (structures in 3D and their conformers, `count`
+    tried - Meno's number, where the role says `tries` - with the role's
     options: every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies`; `onPage`, of two enantiomers one made as the other's

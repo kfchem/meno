@@ -143,6 +143,13 @@ describe("a plugin's manifest", () => {
       { role: "conformers", programs: [], options: [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }] },
       { role: "smiles", programs: [], options: [] },
     ]);
+    // (a conformer search that takes how many to try: said on the conformers role alone, as true - Meno sends the number)
+    const tries = [{ role: "conformers", tries: true }, { role: "smiles", tries: true }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: tries })?.roles).toEqual([
+      { role: "conformers", programs: [], options: [], tries: true },
+      { role: "smiles", programs: [], options: [] },
+    ]);
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", tries: "yes" }] })?.roles).toEqual([{ role: "conformers", programs: [], options: [] }]);
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
@@ -175,9 +182,9 @@ describe("a plugin's manifest", () => {
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
-    // (how many are sought is the molecule's to say unless a number is asked for: the number is shown only then)
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.find((o) => o.id === "count")?.when).toEqual({ id: "sought", in: ["fixed"] });
+    // (how many to try is Meno's - the role says its search takes a number, and Meno sends it - the rest the plugin's)
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["field", "iters", "seed"]);
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.tries).toBe(true);
   });
 
   it("fills kinds of step: several in one with what they share, each Meno's and once, its programs by name - never a path - its options as data", () => {
@@ -219,6 +226,21 @@ describe("a plugin's manifest", () => {
     // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
     const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
+  });
+
+  it("may declare its program's energy lines and tables of atoms as papers quote them - each as it must be, or left out", () => {
+    const energy = { id: "scf", pattern: "^\\s*SCF Done:\\s*E\\((?<method>[^)]+)\\)\\s*=\\s*(?<value>-?\\d+\\.\\d+)", name: "E", unit: "hartree" };
+    const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
+    const read = acceptManifest({ ...good, quotedEnergies: [energy, { ...energy, id: "no-value", pattern: "E = (-?\\d+\\.\\d+)" }, { ...energy, id: "unnamed", name: " " }, { ...energy, id: "broken", pattern: "(?<value>" }], quotedTables: [table, { ...table, id: "no-z", columns: ["element", "x", "y"] }, { ...table, id: "twice", columns: ["element", "x", "x", "y", "z"] }, { ...table, id: "both", columns: ["element", "atomic-number", "x", "y", "z"] }, { ...table, id: "unheaded", headings: [] }, { ...table, id: "odd", columns: ["element", "x", "y", "z", "mass"] }] })!;
+    expect(read.quotedEnergies).toEqual([energy]);
+    expect(read.quotedTables).toEqual([table]);
+    // (none said: none, as a plugin that quotes no line of its program's)
+    expect(acceptManifest(good)!.quotedEnergies).toBeUndefined();
+    // (Gaussian's and ORCA's, as Meno carries them)
+    expect(MANIFESTS.filter((m) => m.quotedEnergies || m.quotedTables).map((m) => [m.id, (m.quotedEnergies ?? []).map((q) => q.id), (m.quotedTables ?? []).map((t) => t.id)])).toEqual([
+      ["gaussian", ["scf-done"], ["orientation"]],
+      ["orca", ["final-single-point"], []],
+    ]);
   });
 
   it("may say its program takes no lone atom - of a kind a lone atom passes through, as it came, alone: of another, it is its to refuse", () => {

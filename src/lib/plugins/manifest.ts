@@ -109,6 +109,24 @@ export type WriteDecl = {
 export const ENERGY_UNITS = ["hartree", "eV", "kcal/mol", "kJ/mol"] as const;
 export type XyzEnergyDecl = { id: string; pattern: string; unit: (typeof ENERGY_UNITS)[number] };
 /**
+ * A line of its program's printout, giving an electronic energy, as a paper's supporting information quotes it
+ * (`quotedEnergies`, docs/FILE-IO.md, *Coordinates in a text*): `pattern`, a regular expression (matched without regard to
+ * case) with a named group `value` holding the number and, where the line names a method, one named `method`; `name`, what
+ * the energy is called - "E", given "E(method)" where the method is named; `unit`, the number's, converted to hartrees.
+ * Read only by the patterns of the plugins added: Meno knows no program's line.
+ */
+export type QuotedEnergyDecl = { id: string; pattern: string; name: string; unit: (typeof ENERGY_UNITS)[number] };
+/** The columns of a table of atoms a program prints: its row's number, the atom's atomic number or its symbol, a number of the program's own (read as none), and where it stands. */
+export const QUOTED_COLUMNS = ["centre", "atomic-number", "element", "type", "x", "y", "z"] as const;
+export type QuotedColumn = (typeof QUOTED_COLUMNS)[number];
+/**
+ * A table of atoms its program prints, as a paper quotes it (`quotedTables`, docs/FILE-IO.md, *Coordinates in a text*): the
+ * lines that head it (`headings`, each the start of its line, without regard to case), the lines of its columns' heads
+ * (`heads`, the same), and its columns, in order. A row of it is read as an atom only where the plugin is added; where only a
+ * plugin not added declares it, a table of such rows is said to be that plugin's to read, and none of it is read.
+ */
+export type QuotedTableDecl = { id: string; headings: string[]; heads: string[]; columns: QuotedColumn[] };
+/**
  * An XYZ file a plugin's program writes whose frames are an optimisation's
  * steps, which of them converged not said in it (docs/FILE-IO.md): its id;
  * its file's name - `*` any run of characters - as the program's
@@ -184,6 +202,8 @@ export type RoleDecl = {
   role: RoleId;
   programs: string[];
   options: Option[];
+  /** Its conformer search takes how many to try, which Meno works out or the chemist sets (*Conformers sought*: lib/chem/conformersSought) and sends: the conformers role's alone. */
+  tries?: true;
   /** The looks it makes, each declared in full, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
@@ -345,6 +365,10 @@ export type Manifest = {
   xyzEnergies: XyzEnergyDecl[];
   /** The XYZ files its program writes whose frames are an optimisation's steps, none of them said to be converged: none of them an entry. */
   xyzSteps: XyzStepsDecl[];
+  /** Its program's energy lines, as papers quote them: from that program's documentation and its printout. */
+  quotedEnergies?: QuotedEnergyDecl[];
+  /** Its program's tables of atoms, as papers quote them: from that program's documentation and its printout. */
+  quotedTables?: QuotedTableDecl[];
   /** The roles it fills besides reading and writing files. */
   roles: RoleDecl[];
   /** The kinds of step it fills, each once. */
@@ -478,6 +502,44 @@ function acceptXyzEnergies(v: unknown): XyzEnergyDecl[] {
     }
     out.push({ id: r.id, pattern: r.pattern, unit });
     if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/** A plugin's energy lines, as papers quote its program's, each checked: an id, a pattern that compiles with a named group `value`, a name; what is not understood left out. */
+function acceptQuotedEnergies(v: unknown): QuotedEnergyDecl[] {
+  const out: QuotedEnergyDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || typeof r.pattern !== "string" || r.pattern.length > 200) continue;
+    const name = typeof r.name === "string" ? r.name.trim().slice(0, 40) : "";
+    if (!name) continue;
+    const unit = (ENERGY_UNITS as readonly string[]).includes(r.unit as string) ? (r.unit as QuotedEnergyDecl["unit"]) : "hartree";
+    try {
+      if (!/\(\?<value>/.test(r.pattern)) continue;
+      new RegExp(r.pattern, "i");
+    } catch {
+      continue;
+    }
+    out.push({ id: r.id, pattern: r.pattern, name, unit });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/** A plugin's tables of atoms, as papers quote its program's, each checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; what is not understood left out. */
+function acceptQuotedTables(v: unknown): QuotedTableDecl[] {
+  const out: QuotedTableDecl[] = [];
+  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, 8);
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
+    const headings = lines(r.headings);
+    const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
+    if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) continue;
+    if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) continue;
+    out.push({ id: r.id, headings, heads: lines(r.heads), columns });
+    if (out.length >= 4) break;
   }
   return out;
 }
@@ -950,6 +1012,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
             role: r.role,
             programs,
             options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
+            ...(r.role === "conformers" && r.tries === true ? { tries: true as const } : {}),
             ...(looks.length ? { looks } : {}),
             ...(motions.length ? { motions } : {}),
             ...(unsure ? { unsure } : {}),
@@ -1001,6 +1064,11 @@ export function acceptManifest(raw: unknown): Manifest | null {
     writes,
     xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
     xyzSteps: acceptXyzSteps(m.xyzSteps),
+    ...(() => {
+      const energies = acceptQuotedEnergies(m.quotedEnergies);
+      const tables = acceptQuotedTables(m.quotedTables);
+      return { ...(energies.length ? { quotedEnergies: energies } : {}), ...(tables.length ? { quotedTables: tables } : {}) };
+    })(),
     roles,
     steps,
     systems,

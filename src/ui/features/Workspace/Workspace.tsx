@@ -197,13 +197,14 @@ import StructureFlight from "./components/StructureFlight";
 import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 import { useTextMenu } from "../TextEditor/textMenu";
 import { coordinateMolecules } from "./utils/coordinates";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageCount, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
 import { leftOutSaid } from "./utils/readNotes";
@@ -526,7 +527,7 @@ function WorkspaceContent({
           if (stopped) return;
           // (within the window Settings gives: a workflow's conformer step keeps every one - make3d withinWindow)
           const window3d = useAppSettings.getState().chemistry.window3d ?? WINDOW_3D;
-          const isomersMade = (await conformersOf(chem, block, isomers, options)).map((c) => withinWindow(c, window3d));
+          const isomersMade = (await conformersOf(chem, block, isomers, options, pageCount(block, useAppSettings.getState().chemistry))).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -793,7 +794,7 @@ function WorkspaceContent({
   // Copy, cut and paste, by the keys and from the menu
   /** The structures coordinates on a PDF's pages hold - read where each word lies - shown before they are placed; none, said so. */
   const structuresFrom = async (pages: Promise<PlacedPage[]>, source: string, from: number, to: number, at: { x: number; y: number }) => {
-    const structures = readCoordinates(textOfPages(await pages));
+    const structures = readCoordinates(textOfPages(await pages), quotedTables());
     const named = `${source}, ${from === to ? `p. ${from + 1}` : `pp. ${from + 1}\u2013${to + 1}`}`;
     if (structures.length) setCoords({ structures, at, source, named });
     else setChemError("There are no coordinates in what is selected.");
@@ -2355,7 +2356,7 @@ function WorkspaceContent({
             if (!t) return undefined;
             // (a calculation's output: read as one opened is, by its reader - never in part as coordinates)
             const output = outputKindIn(t.text) != null;
-            const found = output ? [] : readCoordinates(t.text);
+            const found = output ? [] : readCoordinates(t.text, quotedTables());
             return {
               icon: !!t.icon,
               onRead: () => store.getState().readText(t.id),

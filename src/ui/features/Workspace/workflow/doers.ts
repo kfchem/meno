@@ -11,6 +11,7 @@ import { chosenFrom, presetOffer } from "../render/presets";
 import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
 import { valuesOf, type Option, type OptionValues } from "../../../../lib/options";
+import { RING_CONFORMERS, soughtOptions } from "../../../../lib/chem/conformersSought";
 import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
@@ -129,7 +130,13 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
   // (Meno's own choices for the kind, whoever does it - Render's - then the plugin's)
   // (Render's: its looks are the plugin's, declared in its manifest, and those the plugins added bring it, with their studios)
   const brought = kind === "render" && plugin ? renderPresets(plugin.id).offer : undefined;
-  const meno = brought ? renderOptions("picture", [], true, [...(plugin!.roleLooks.render ?? []), ...brought.looks], undefined, undefined, brought.studios) : (kindInfo(kind).own ?? []);
+  // (Conformers': how many are sought, where the plugin's search takes a number of tries - starting from Settings' choice for the page)
+  const settled = useAppSettings.getState().chemistry;
+  const meno = brought
+    ? renderOptions("picture", [], true, [...(plugin!.roleLooks.render ?? []), ...brought.looks], undefined, undefined, brought.studios)
+    : kind === "conformers" && plugin?.roleTries.includes("conformers")
+      ? soughtOptions(settled.sought3d ?? "needed", settled.count3d ?? RING_CONFORMERS)
+      : (kindInfo(kind).own ?? []);
   return [...meno, ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
 }
 

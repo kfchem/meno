@@ -7,7 +7,8 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, pageCount, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -422,5 +423,17 @@ describe("conformers made for the page", () => {
     const chem = { request: async (op: string, args: Record<string, unknown>) => (asked.push({ op, args }), { isomers: [] }) } as unknown as ChemClient;
     await conformersOf(chem, { molblock: "M  END", atoms: [], bonds: [], part: {} } as unknown as Parameters<typeof conformersOf>[1], "one", { count: 3 });
     expect(asked).toEqual([{ op: "conformers", args: { molblock: "M  END", isomers: "one", options: { count: 3 }, onPage: true } }]);
+    // (how many to try, as the page works it out, sent beside the plugin's options)
+    asked.length = 0;
+    await conformersOf(chem, { molblock: "M  END", atoms: [], bonds: [], part: {} } as unknown as Parameters<typeof conformersOf>[1], "one", {}, 40);
+    expect(asked[0].args).toEqual({ molblock: "M  END", isomers: "one", count: 40, options: {}, onPage: true });
+  });
+
+  it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {
+    const [block] = blocksOf(ethanol, [12]);
+    // (ethanol: its OH turns, the rule's fifty - lib/chem/conformersSought)
+    expect(pageCount(block, {})).toBe(50);
+    expect(pageCount(block, { sought3d: "fixed", count3d: 40 })).toBe(40);
+    expect(pageCount(block, { sought3d: "fixed" })).toBe(RING_CONFORMERS);
   });
 });
