@@ -128,6 +128,17 @@ class Level(unittest.TestCase):
         text = echo("! wB97X-D3 6-31G(d) Opt Freq") + self.BASIS.format("6-31G(d)") + "The omegaB97X-D3 functional is recognized. Fit by Chai et al.\n"
         self.assertEqual(reader.level_of(text), ("wB97X-D3", "6-31G(d)"))
 
+    def test_a_functional_the_manual_lists_where_orca_says_it_recognised_none(self):
+        dft = " Density Functional     Method          .... DFT(GTOs)\n"
+        self.assertEqual(reader.level_of(echo("! B3LYP def2-SVP Opt Freq") + self.BASIS.format("def2-SVP") + dft), ("B3LYP", "def2-SVP"))
+        self.assertEqual(reader.level_of(echo("! pbe0 def2-TZVP") + self.BASIS.format("def2-TZVP") + dft), ("pbe0", "def2-TZVP"))
+        self.assertEqual(reader.level_of(echo("! M062X 6-31G(d)") + self.BASIS.format("6-31G(d)") + dft), ("M062X", "6-31G(d)"))
+        # (a composite method: no basis of the input's)
+        self.assertEqual(reader.level_of(echo("! PBEh-3c") + self.BASIS.format("def2-mSVP") + dft), ("PBEh-3c", None))
+        # (whole keywords only: none that merely holds one's name, and none where ORCA ran no DFT)
+        self.assertEqual(reader.level_of(echo("! B3LYPX def2-SVP") + self.BASIS.format("def2-SVP") + dft)[0], None)
+        self.assertEqual(reader.level_of(echo("! B3LYP def2-SVP") + self.BASIS.format("def2-SVP"))[0], None)
+
     def test_a_composite_method_and_no_basis(self):
         text = echo("! r2SCAN-3c Opt") + self.BASIS.format("def2-mTZVPP") + "The R2SCAN3C composite method is recognized\n"
         self.assertEqual(reader.level_of(text), ("r2SCAN-3c", None))

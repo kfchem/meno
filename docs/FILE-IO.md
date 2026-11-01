@@ -1637,8 +1637,11 @@ As step 3 was built:
     its energies are: "ORCA final single-point energy (includes dispersion
     and gCP where the method has them)";
   - **the level**, each as the input names it: the functional or composite
-    method ORCA says it recognised (its "omega" for the input's "w"), a
-    correlated method the input names (the MP2 and MDCI keywords, the
+    method ORCA says it recognised (its "omega" for the input's "w"), else
+    one the input names that the ORCA 6.1 manual lists (3.3, Tables 3.1,
+    3.2, 3.4, 3.6, 3.8 and 3.9) where ORCA ran DFT (it says it recognised
+    none for a functional with no dispersion correction, "! B3LYP
+    def2-SVP"), a correlated method the input names (the MP2 and MDCI keywords, the
     manual's Tables 3.34 and 3.43), Hartree-Fock, or a tight-binding method
     by the xtb program's name; the orbital basis it says it used where the
     input names it, none for a composite or tight-binding method; and the
