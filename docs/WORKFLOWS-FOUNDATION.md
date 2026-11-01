@@ -1096,6 +1096,16 @@ tests: *Optimise*, *Conformers* or *Frequencies* of a lone atom gives its
 energy where it is, as the plugins do today. A chemist who wants it
 otherwise draws a *Filter* on the number of atoms.
 
+**One atom, where a program is given none** (2026-11-01, the plugin boundary).
+A plugin runs its own program and no other. CREST's plugin had run xtb for a
+lone atom, in CREST's place; it no longer does. Its manifest says its program
+is given no lone atom (`noLoneAtom`, on *Conformers* and *Optimise*), and
+Meno does not send it one: the atom passes through the step as it came - a
+lone atom has no conformers and nothing to optimise - with no energy, said
+so on it and on the step's line. This is not routing: nothing is sent
+anywhere else, and its energy is an *Energy* step's, drawn. Where a plugin
+runs its program on one (xTB, ORCA, Gaussian), it is sent as before.
+
 ### Atom mapping, and what Meno does itself
 
 **Meno is the base** (the maintainer, 2026-10-16). Meno owns the store (the

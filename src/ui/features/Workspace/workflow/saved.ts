@@ -314,6 +314,9 @@ function readRunning(v: unknown): StepRunning | undefined {
   const adopted = adoptedIn((r as { adopted?: unknown }).adopted);
   // (those its plugin refused as it prepared the others' jobs: kept to be said failed when it ends)
   const refused = readRefused({ refused: (r as { refused?: unknown }).refused }, Number.MAX_SAFE_INTEGER);
+  // (the lone atoms it passed through as they came: kept to be brought in when it ends)
+  const passedIn = (r as { passed?: unknown }).passed;
+  const passed = Array.isArray(passedIn) ? [...new Set(passedIn.filter((i): i is number => Number.isInteger(i) && i >= 0))] : [];
   return jobs.length
     ? {
         at: r.at,
@@ -325,6 +328,7 @@ function readRunning(v: unknown): StepRunning | undefined {
         ...(typeof note === "string" && note ? { note: note.slice(0, 300) } : {}),
         ...(typeof paired === "string" && paired ? { paired: paired.slice(0, 300) } : {}),
         ...(refused.length ? { refused } : {}),
+        ...(passed.length ? { passed } : {}),
         ...(adopted ? { adopted } : {}),
       }
     : undefined;
