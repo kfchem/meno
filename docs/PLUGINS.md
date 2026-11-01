@@ -1161,6 +1161,17 @@ point, words of the plugin's own for the rest (ORCA's: "NEB image 3 of
 frequencies were worked out. Meno works out the barriers itself, and calls
 no frame a saddle point.
 
+The words of a path are Meno's, for any plugin that works one out
+(`src/lib/calc/paths.ts`): the frames result `path.frame`, and for the one
+frame a step takes as the molecule's entry, "highest point refined" (a
+path search's) or "the point it started from" (a reaction path's) - the
+frame its output also marks `converged`. Meno reads those two words and no
+others: what a plugin says of the other frames is shown as it says it.
+The step takes the frame marked `converged` all the same; but where Meno
+later takes a molecule's frames apart (a set's table, *Take frames*), one
+whose frames name none in those words has its calculation taken as its
+last frame's.
+
 ### Follow the reaction path
 
 A plugin filling *Follow the reaction path* is sent each point as any entry

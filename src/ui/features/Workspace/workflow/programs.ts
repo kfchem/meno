@@ -16,6 +16,7 @@ import { fragmentsOf } from "../../../../lib/chem/fragments";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
+import { REFINED_SAID } from "../../../../lib/calc/paths";
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { convergedAt, convergedOf } from "./converged";
@@ -638,7 +639,7 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
     afterEnergies: energies.slice(k + 1),
     calc,
     // (the point it refined: where it ended converged)
-    converged: convergedAt("highest point refined", frames[k]),
+    converged: convergedAt(REFINED_SAID, frames[k]),
     properties: {
       ...was.properties,
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),

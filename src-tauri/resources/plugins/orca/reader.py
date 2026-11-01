@@ -1159,11 +1159,12 @@ BASE = "input"
 IRC_FULL = f"{BASE}_IRC_Full_trj.xyz"
 MEP = f"{BASE}_MEP_trj.xyz"
 REFINED = f"{BASE}_NEB-TS_converged.xyz"
-#: What each of a path's frames is, as the step says it on each: Meno judges none of them.
+#: What each of a path's frames is, in Meno's words for a path (docs/PLUGINS.md, *Path search* and *Follow the
+#: reaction path*): the frames result's id, and the words for the frame a step takes as the entry - the point a band
+#: refined, the point a reaction path started from. The other frames are said in this reader's own words.
 PATH_FRAME = "path.frame"
 REFINED_SAID = "highest point refined"
-#: What each frame of a reaction path is, as the step says it: Meno judges none of them.
-IRC_STARTED_SAID = "the point it started from"
+STARTED_SAID = "the point it started from"
 #: What ORCA says where a side stopped at its iteration cap, before its end.
 IRC_CAPPED = "MAXIMUM NUMBER OF ITERATIONS REACHED"
 
@@ -1189,7 +1190,7 @@ def irc_output(atoms, files, log, method=None, basis=None):
     if not frames or len(rows) != len(frames) or len(starts) != 1:
         return {"why": "ORCA wrote no reaction path that can be read", "kind": "no-geometry"}
     k = starts[0]
-    said = [f"backward, step {k - i} of {k}" if i < k else IRC_STARTED_SAID if i == k else f"forward, step {i - k} of {len(frames) - 1 - k}" for i in range(len(frames))]
+    said = [f"backward, step {k - i} of {k}" if i < k else STARTED_SAID if i == k else f"forward, step {i - k} of {len(frames) - 1 - k}" for i in range(len(frames))]
     # (each side as ORCA ran it - the forward first, then the backward - and whether it stopped at its cap)
     fwd, back = log.find("FORWARD IRC"), log.find("BACKWARD IRC")
     sides = {"forward": log[fwd:back] if 0 <= fwd < back else "", "backward": log[back:at] if 0 <= back < at else ""}
