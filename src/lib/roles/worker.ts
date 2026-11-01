@@ -38,9 +38,8 @@ export const useChem = create<ChemState>(() => ({ state: "idle" }));
 export function rolePlugin(role: RoleId): PythonPlugin | undefined {
   const can = pluginsFilling(role);
   const { roles, removed } = useAppSettings.getState().plugins;
-  const state = useReaders.getState().state;
   const picked = can.find((p) => p.id === roles[role]);
-  const added = can.filter((p) => state[p.id] === "added" && !removed.includes(p.id));
+  const added = addedFilling(role);
   if (picked && removed.includes(picked.id) && added.length === 1) return added[0];
   return picked ?? (added.length ? (added.length === 1 ? added[0] : undefined) : can.length === 1 ? can[0] : undefined);
 }
@@ -49,10 +48,15 @@ export function rolePlugin(role: RoleId): PythonPlugin | undefined {
 export function roleUndecided(role: RoleId): PythonPlugin[] {
   if (rolePlugin(role)) return [];
   const can = pluginsFilling(role);
+  const added = addedFilling(role);
+  return added.length > 1 ? added : can.length > 1 ? can : [];
+}
+
+/** The plugins added that fill a role, none the chemist took away: what fills it where none is chosen. */
+function addedFilling(role: RoleId): PythonPlugin[] {
   const { removed } = useAppSettings.getState().plugins;
   const state = useReaders.getState().state;
-  const added = can.filter((p) => state[p.id] === "added" && !removed.includes(p.id));
-  return added.length > 1 ? added : can.length > 1 ? can : [];
+  return pluginsFilling(role).filter((p) => state[p.id] === "added" && !removed.includes(p.id));
 }
 
 /** A role asked of a plugin the chemist took away: not a failure of it - it says to add it. */
