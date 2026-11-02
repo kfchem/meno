@@ -1,4 +1,7 @@
 import type { CoordinateStructure } from "../../../../lib/io/coordinates";
+import { quotedEnergies } from "../../../../lib/io/kinds";
+import type { QuotedEnergyDecl } from "../../../../lib/plugins/manifest";
+import { factor } from "../../../../lib/units";
 import { bondsByDistance } from "../../../../utils/structureParsers";
 import type { Molecule3D } from "../store/types";
 
@@ -11,9 +14,9 @@ import type { Molecule3D } from "../store/types";
  * charge and multiplicity it gives, as what the molecule was given; its
  * energy, where a note gives one in hartrees, as its energy.
  */
-export function coordinateMolecules(chosen: readonly { structure: CoordinateStructure; name: string }[], source: string): Omit<Molecule3D, "id" | "at">[] {
+export function coordinateMolecules(chosen: readonly { structure: CoordinateStructure; name: string }[], source: string, quoted: readonly QuotedEnergyDecl[] = quotedEnergies()): Omit<Molecule3D, "id" | "at">[] {
   return chosen.map(({ structure: s, name }) => {
-    const noted = energyNoted(s.notes);
+    const noted = energyNoted(s.notes, quoted);
     const said = [
       ...(s.charge != null && s.multiplicity != null ? [{ label: "Charge, multiplicity", text: `${s.charge} ${s.multiplicity}` }] : []),
       ...s.notes.map((text) => ({ label: "Note", text })),
@@ -70,7 +73,7 @@ function bracketSays(inner: string): boolean {
 
 /** Whether a note's name, before its "=" or ":", is of a geometry's electronic energy, as a calculation states it (`ELECTRONIC_NAME`, `bracketSays`) - and, where it is, whether its bracket gives its unit in hartrees. */
 function electronicName(name: string): { unit: boolean } | null {
-  const m = /^(?:scf\s+done:?\s*)?([A-Za-z_][A-Za-z_\s-]*?)\s*(?:\((.*)\))?$/i.exec(name.trim());
+  const m = /^([A-Za-z_][A-Za-z_\s-]*?)\s*(?:\((.*)\))?$/i.exec(name.trim());
   if (!m || !ELECTRONIC_NAME.test(m[1].trim())) return null;
   if (m[2] == null) return { unit: false };
   return bracketSays(m[2]) ? { unit: HARTREES.test(m[2].trim()) } : null;
@@ -79,26 +82,46 @@ function electronicName(name: string): { unit: boolean } | null {
 /** A value as a note gives it: with a decimal point, or a power of ten. */
 const VALUE = String.raw`[-+]?(?:\d+\.\d*(?:[eE][-+]?\d+)?|\d+[eE][-+]?\d+)`;
 
+/** One unit's number in hartrees, from Meno's units table (a manifest names the hartree in words). */
+const TO_HARTREE: Record<QuotedEnergyDecl["unit"], number> = { hartree: 1, eV: factor("eV", "Eh"), "kcal/mol": factor("kcal/mol", "Eh"), "kJ/mol": factor("kJ/mol", "Eh") };
+
+/** The energy a note gives as a program's line a plugin added declares it (`quoted`), and what it is called; none where none of them is the note. */
+function quotedIn(note: string, quoted: readonly QuotedEnergyDecl[]): { energy: number; name: string } | null {
+  for (const q of quoted) {
+    let m: RegExpExecArray | null;
+    try {
+      m = new RegExp(q.pattern, "i").exec(note);
+    } catch {
+      continue;
+    }
+    const v = Number(m?.groups?.value?.replace(/[dD]/, "e"));
+    if (!m || !Number.isFinite(v)) continue;
+    const method = m.groups?.method?.trim();
+    return { energy: v * TO_HARTREE[q.unit], name: method ? `${q.name}(${method})` : q.name };
+  }
+  return null;
+}
+
 /**
  * The electronic energy a structure's notes give it in hartrees, and what
- * they name it (its method with it: "E(MP2)"): that of a note naming one
- * (`electronicName`) - "E = -154.987654 Hartree", "E(RB3LYP) = -154.98
- * A.U.", "SCF energy (a.u.) = -154.98", "Total energy: -154.98 Eh", ORCA's
- * "FINAL SINGLE POINT ENERGY -154.98" - where they give one, or give it
+ * they name it (its method with it: "E(MP2)"): that of a note that is a
+ * program's line a plugin added declares (`quoted`: lib/plugins/manifest
+ * `quotedEnergies`), or that names one (`electronicName`) - "E =
+ * -154.987654 Hartree", "E(RB3LYP) = -154.98 A.U.", "SCF energy (a.u.) =
+ * -154.98", "Total energy: -154.98 Eh" - where they give one, or give it
  * alike. Its unit in hartrees, after its value or in its bracket; none said,
- * hartrees only of a method's energy as an output states it (E(RB3LYP),
- * the final single point). None where they give none; and none, saying why,
- * where two differ (an MP2 energy and an HF one): never one chosen of them,
- * nor another quantity - a zero-point energy, a free energy, a correction -
- * in its place.
+ * hartrees only of a method's energy as an output states it (E(RB3LYP)).
+ * None where they give none; and none, saying why, where two differ (an MP2
+ * energy and an HF one): never one chosen of them, nor another quantity - a
+ * zero-point energy, a free energy, a correction - in its place.
  */
-export function energyNoted(notes: readonly string[]): { energy: number; name: string } | { why: string } | null {
+export function energyNoted(notes: readonly string[], quoted: readonly QuotedEnergyDecl[] = quotedEnergies()): { energy: number; name: string } | { why: string } | null {
   const found: { energy: number; name: string }[] = [];
   for (const n of notes) {
-    // (ORCA's own line, no "=": a final single point's, in hartrees)
-    const orca = new RegExp(String.raw`^\s*final\s+single\s+point\s+energy\s+(${VALUE})\s*$`, "i").exec(n);
-    if (orca) {
-      found.push({ energy: Number(orca[1]), name: "Final single point energy" });
+    // (a program's own line, as its plugin declares it)
+    const own = quotedIn(n, quoted);
+    if (own) {
+      found.push(own);
       continue;
     }
     for (const m of n.matchAll(new RegExp(String.raw`([^=:,;]*?)\s*[=:]\s*(${VALUE})\s*(hartrees?|a\.\s*u\.|au|eh)?(?![a-z])`, "gi"))) {
@@ -108,7 +131,7 @@ export function energyNoted(notes: readonly string[]): { energy: number; name: s
       if (!named) continue;
       const method = /\(/.test(name) && !named.unit;
       if (!(m[3] || named.unit || method)) continue;
-      found.push({ energy: Number(m[2]), name: name.replace(/^scf\s+done:?\s*/i, "") });
+      found.push({ energy: Number(m[2]), name });
     }
   }
   if (!found.length) return null;
@@ -117,7 +140,7 @@ export function energyNoted(notes: readonly string[]): { energy: number; name: s
 }
 
 /** The electronic energy a structure's notes give it in hartrees (`energyNoted`); none where they give none, or two that differ. */
-export function energyOf(notes: readonly string[]): number | undefined {
-  const e = energyNoted(notes);
+export function energyOf(notes: readonly string[], quoted: readonly QuotedEnergyDecl[] = quotedEnergies()): number | undefined {
+  const e = energyNoted(notes, quoted);
   return e && "energy" in e ? e.energy : undefined;
 }

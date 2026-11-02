@@ -16,6 +16,7 @@ import { fragmentsOf } from "../../../../lib/chem/fragments";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
+import { REFINED_SAID } from "../../../../lib/calc/paths";
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { convergedAt, convergedOf } from "./converged";
@@ -638,7 +639,7 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
     afterEnergies: energies.slice(k + 1),
     calc,
     // (the point it refined: where it ended converged)
-    converged: convergedAt("highest point refined", frames[k]),
+    converged: convergedAt(REFINED_SAID, frames[k]),
     properties: {
       ...was.properties,
       "path.E-barrier": barrier(energies[0], `electronic, at ${levelSaid(calc)}: the energy of the highest point refined, less that of the path's start (its first image)`),
@@ -647,6 +648,39 @@ function pathWorked(entry: SetEntry, out: ReaderOutput, frames: number[][], ener
       ...(entry.paired ? { [PAIRED]: { value: entry.paired, unit: "none" as const, status: "computed" as const } } : {}),
     },
   };
+}
+
+/** What a lone atom is through a kind of step it passes through as it came (lib/plugins/steps `LONE_ATOM_PASSES`), in words. */
+const LONE_ATOM_IS: Partial<Record<StepKind, string>> = { conformers: "one atom: its only conformer", optimise: "one atom: nothing to optimise, no energy" };
+
+/** Whether an entry is a lone atom that passes a step of `kind` as it came, its plugin's program taking none (`StepDecl.noLoneAtom`). */
+export function passesAsLone(kind: StepKind, noLoneAtom: boolean | undefined, entry: SetEntry): boolean {
+  return !!noLoneAtom && LONE_ATOM_IS[kind] != null && entry.atoms.length === 1;
+}
+
+/**
+ * A lone atom - the ion of a salt drawn as ions - through a step of `kind`
+ * its plugin's program takes none of (`passesAsLone`): where it was, as a
+ * program working it out anew would leave all but its geometry - no
+ * calculation, no energy, none having been run - its compound's only
+ * conformer through *Conformers*; and said so on it, as how it was made.
+ */
+export function passedAsLone(kind: StepKind, entry: SetEntry): Worked {
+  const { partOf: _part, ...from } = entry;
+  const kept = keptAnew(entry, entry.xyz).keep;
+  return {
+    ...anewWithoutEnergy(kind === "conformers" ? from : entry),
+    ...(kind === "conformers" ? { number: 1 } : {}),
+    xyz: [...entry.xyz],
+    keep: { ...kept, made: { how: [{ label: kindInfo(kind).name, text: LONE_ATOM_IS[kind] ?? "one atom" }] } },
+  };
+}
+
+/** The lone atoms a step passed through as they came, said on its line: "one atom: its only conformer", "2 lone atoms: each its only conformer" - none, nothing. */
+export function passedSaid(kind: StepKind, count: number): string | null {
+  const is = LONE_ATOM_IS[kind];
+  if (!is || count < 1) return null;
+  return count === 1 ? is : is.replace("one atom: its", "one atom: each its").replace("one atom:", `${count} lone atoms:`);
 }
 
 /**

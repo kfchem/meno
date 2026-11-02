@@ -22,6 +22,7 @@ import { aboveText, numberText } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
+import { PATH_FRAME, REFINED_SAID, STARTED_SAID } from "../../../../lib/calc/paths";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
@@ -783,12 +784,7 @@ export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUn
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
 export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
 
-/** What a path search writes on each of its path's frames (ORCA's worker: `PATH_FRAME`), and on the point it refined. */
-export const PATH_FRAME = "path.frame";
-export const REFINED_SAID = "highest point refined";
-
-/** What a reaction path's program writes on the frame it started from (ORCA's worker: `IRC_STARTED_SAID`). */
-export const STARTED_SAID = "the point it started from";
+export { PATH_FRAME, REFINED_SAID, STARTED_SAID };
 
 /** The one frame of a molecule its frames say is `what`; none where none is, or more than one. */
 function frameSaid(m: Pick<Molecule3D, "calc">, what: string): number | null {

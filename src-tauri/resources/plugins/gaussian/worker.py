@@ -85,7 +85,7 @@ import sys
 
 import reader
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 # The elements by atomic number, from 1: what an atom's element may be.
 SYMBOLS = (
@@ -235,7 +235,7 @@ PROGRAM = "g16"
 INPUT = "input.gjf"
 # what Gaussian's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "gaussian"
-# the wavefunction a step's job keeps, and what kind of file it is (as Multiwfn's step names it)
+# the wavefunction a step's job keeps, and what kind of file it is: Meno's own kind of WFX file
 WAVEFUNCTION = "wavefunction.wfx"
 WAVEFUNCTION_KIND = "wfx"
 # each kind of step, as its job's keyword says it

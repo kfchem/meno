@@ -920,6 +920,8 @@ export type StepRunning = {
   paired?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
+  /** The lone atoms it passed through as they came, its plugin's program taking none (workflow/programs `passesAsLone`): each by its place among those that came in - out of its Done exit when it ends, never sent. */
+  passed?: number[];
 };
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {

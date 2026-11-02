@@ -72,7 +72,7 @@ describe("a plugin's manifest", () => {
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "blender-presets", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -143,6 +143,13 @@ describe("a plugin's manifest", () => {
       { role: "conformers", programs: [], options: [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }] },
       { role: "smiles", programs: [], options: [] },
     ]);
+    // (a conformer search that takes how many to try: said on the conformers role alone, as true - Meno sends the number)
+    const tries = [{ role: "conformers", tries: true }, { role: "smiles", tries: true }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: tries })?.roles).toEqual([
+      { role: "conformers", programs: [], options: [], tries: true },
+      { role: "smiles", programs: [], options: [] },
+    ]);
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", tries: "yes" }] })?.roles).toEqual([{ role: "conformers", programs: [], options: [] }]);
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
@@ -175,9 +182,9 @@ describe("a plugin's manifest", () => {
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
-    // (how many are sought is the molecule's to say unless a number is asked for: the number is shown only then)
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.find((o) => o.id === "count")?.when).toEqual({ id: "sought", in: ["fixed"] });
+    // (how many to try is Meno's - the role says its search takes a number, and Meno sends it - the rest the plugin's)
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["field", "iters", "seed"]);
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.tries).toBe(true);
   });
 
   it("fills kinds of step: several in one with what they share, each Meno's and once, its programs by name - never a path - its options as data", () => {
@@ -219,6 +226,42 @@ describe("a plugin's manifest", () => {
     // (the kinds of file a step takes besides, by their ids - each once, never what is no id)
     const nci = acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["nci"], programs: ["multiwfn"], files: ["molden", "gaussian-fchk", "molden", "Not An Id", 3, "../x"] }] });
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
+  });
+
+  it("may declare its program's energy lines and tables of atoms as papers quote them - each as it must be, or left out", () => {
+    const energy = { id: "scf", pattern: "^\\s*SCF Done:\\s*E\\((?<method>[^)]+)\\)\\s*=\\s*(?<value>-?\\d+\\.\\d+)", name: "E", unit: "hartree" };
+    const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
+    const read = acceptManifest({ ...good, quotedEnergies: [energy, { ...energy, id: "no-value", pattern: "E = (-?\\d+\\.\\d+)" }, { ...energy, id: "unnamed", name: " " }, { ...energy, id: "broken", pattern: "(?<value>" }], quotedTables: [table, { ...table, id: "no-z", columns: ["element", "x", "y"] }, { ...table, id: "twice", columns: ["element", "x", "x", "y", "z"] }, { ...table, id: "both", columns: ["element", "atomic-number", "x", "y", "z"] }, { ...table, id: "unheaded", headings: [] }, { ...table, id: "odd", columns: ["element", "x", "y", "z", "mass"] }] })!;
+    expect(read.quotedEnergies).toEqual([energy]);
+    expect(read.quotedTables).toEqual([table]);
+    // (none said: none, as a plugin that quotes no line of its program's)
+    expect(acceptManifest(good)!.quotedEnergies).toBeUndefined();
+    // (Gaussian's and ORCA's, as Meno carries them)
+    expect(MANIFESTS.filter((m) => m.quotedEnergies || m.quotedTables).map((m) => [m.id, (m.quotedEnergies ?? []).map((q) => q.id), (m.quotedTables ?? []).map((t) => t.id)])).toEqual([
+      ["gaussian", ["scf-done"], ["orientation"]],
+      ["orca", ["final-single-point"], []],
+    ]);
+  });
+
+  it("may say its program takes no lone atom - of a kind a lone atom passes through, as it came, alone: of another, it is its to refuse", () => {
+    const read = acceptManifest({
+      ...good,
+      reads: [],
+      kinds: [],
+      steps: [
+        { kinds: ["conformers", "optimise", "energy"], programs: ["crest"], noLoneAtom: true },
+        { kinds: ["frequencies"], programs: ["crest"], noLoneAtom: "yes" },
+      ],
+    })!;
+    expect(read.steps.map((d) => [d.kind, d.noLoneAtom])).toEqual([
+      ["conformers", true],
+      ["optimise", true],
+      ["energy", undefined],
+      ["frequencies", undefined],
+    ]);
+    // (CREST's, as Meno carries it - which stops on one atom - and no other plugin's: the others run theirs on one)
+    expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.noLoneAtom).map((d) => `${m.id} ${d.kind}`))).toEqual(["crest conformers", "crest optimise"]);
+    expect(MANIFESTS.find((m) => m.id === "crest")!.steps.map((d) => d.programs)).toEqual([["crest"], ["crest"]]);
   });
 
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {

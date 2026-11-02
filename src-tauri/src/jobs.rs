@@ -2350,11 +2350,11 @@ pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need
 
 /// What a job's variable for a program it needs (`Need`) is set to, the
 /// program found at `found`: on macOS and Linux, a link to it put in the
-/// job's work folder - where the job runs - by its own name (`./xtb`), for a
-/// path with a space in it is never given, and a program may take one as two
-/// words (ORCA 6.1.1 on macOS takes "~/Library/Application Support/..." as
-/// no file); on Windows, where no link is made, its path, refused where it
-/// has a space, never quoted.
+/// job's work folder - where the job runs - by its own name (`./tool`), for
+/// a path with a space in it is never given: a program may take it as two
+/// words, and Meno's data folder has one on macOS ("Application Support");
+/// on Windows, where no link is made, its path, refused where it has a
+/// space, never quoted.
 pub fn need_value(found: &Path, windows: bool) -> Result<String, String> {
     if windows {
         // (one separator throughout: an environment's folders may be given with "/", as pixi's activation gives Library/bin)

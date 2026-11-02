@@ -931,11 +931,15 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   holds no charge or multiplicity, so it says neither. The orbitals are
   checked orthonormal in their basis, as PySCF reads them, before any
   surface is promised - where they are not, it says to open a Molden file
-  the program wrote. Its lists' rows promise each orbital's surface and
-  the densities' (`orbital:<spin>:<index>`, `density:total`,
-  `density:spin`); asked for, it works the grid out from the file sent
-  again: 4 Å past the atoms, points 0.2 Å apart (at most 90 to a side),
-  the basis functions' values a chunk of points at a time. Its tests
+  the program wrote. It gives every orbital in Meno's general form (each
+  its spin, energy in hartrees, occupation and symmetry; Meno names and
+  lists them, `lib/calc/orbitals.ts`), each promising its surface, and a
+  list of the densities, each promising its own (`orbital:<spin>:<index>`,
+  `density:total`, `density:spin`); asked for, it works the values out
+  from the file sent again on the grid Meno's request gives (`grid`,
+  `lib/calc/grids.ts`), the basis functions' values a chunk of points at
+  a time, and says whether each grid is an orbital or a density - the
+  value it is drawn at first is Meno's. Its tests
   (`scripts/calc/test_reader_pyscf.py`) run by hand in an environment made
   from its lock.
 - Meno's own reading under the same contract (`MENO` in the catalog,
@@ -1012,13 +1016,16 @@ docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in, ordering them, and
-no energies given; a ring bound through all its atoms, written as a
-multi-centre bond by `chem/etaBound.ts`, held over its metal; the same
-conformer twice kept once (PLUGINS.md, *The same conformer*);
-lowest first, each laid over the first, with every centre's CIP label; of
-two enantiomers, the one whose SMILES comes first is made and the other is
-its mirror image). Both take `like`, a molecule in 3D made before from the
+type for it, a lighter metal of its group standing in, its energies given
+as the model's and none as the molecule's; a ring bound through all its
+atoms, written as a multi-centre bond by `chem/etaBound.ts`, held over its
+metal; every conformer as made, in the order made, with every centre's CIP
+label; of two enantiomers, the one whose SMILES comes first is made and the
+other is its mirror image), and the page keeps each once, lowest first,
+laid over the first, equivalent atoms in the first's places
+(`chem/pageConformers`, in a worker of its own: `chem/shownConformers`;
+WORKSPACE.md, *The page's conformers*). Both take
+`like`, a molecule in 3D made before from the
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
 keeps which drawing atom each of its atoms is and what the drawing was (`drawnFrom`, `drawnAs`;
@@ -1031,17 +1038,22 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
-molecule now saying how many conformers are sought; Stop, while a 3D
+they take (`CONFORMERS_MS`, fifteen minutes at most, as many conformers
+being tried as the molecule needs, or the chemist asks - Meno works the
+number out and sends it: `lib/chem/conformersSought`; Stop, while a 3D
 structure is being made, stops the worker and lets the question go at
 once). What the worker lays out
-in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
-structure with a ring of 34 atoms or more, or 25 rings or more, which
-RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
-CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
-double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
-lays both drawings out again with its own engine; only their
+in 2D (`from_smiles`, `drawing_of`) it lays out by Meno's rule for which of
+RDKit's two depictors runs (`lay_out_2d` in the worker): CoordGen, except
+for a structure with a ring of 34 atoms or more, or 25 rings or more, which
+RDKit's own depictor lays out. The rule is by how long CoordGen takes:
+measured on 2026-11-01 (RDKit 2026.03.6, Apple M4), its time grows unevenly
+past some 25 rings or a ring of some 30 atoms - 9.0 s for a chain of 35
+para-linked benzene rings, 18.9 s for a ring of 37 carbons - where RDKit's
+own took 0.01 s at most; the bounds are those set on 2026-10-11. A SMILES
+whose CoordGen layout does not read back as the SMILES - (E)-cyclooctene's,
+its double bond drawn cis - is laid out by RDKit's own depictor instead.
+Meno lays both drawings out again with its own engine; only their
 stereochemistry and scale come from these coordinates.
 
 The venv lives under the local app data dir at `uv/<profile>/venv`; a stamp
@@ -1622,8 +1634,8 @@ that every kind of these is in this table, by its id, and no other.
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |
 | Calculation programs' outputs | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as the manifest of each plugin that reads it brings it | each program's own plugin, where one is added, by default - the ORCA interface for `orca`, the Gaussian interface for `gaussian` and `gaussian-fchk` (plugin, uv), the xTB plugin for `xtb` (plugin, pixi); cclib (plugin, uv) for every kind listed, as a reading of its own where chosen | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
 | xTB's frequencies in Gaussian's form | `xtb-g98` | `.out` (xtb's `g98.out`) | "frequency output generated by the xtb code", as the xTB plugin's manifest brings it | the xTB plugin (pixi) | never | a molecule in 3D, its vibrations and their motions |
-| Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]`, as PySCF's manifest brings it | PySCF (plugin, pixi) | never | a molecule in 3D, its orbitals and densities promises |
-| AIM extended wavefunction | `wfx` | `.wfx` | `<Number of Primitives>` at a line's start, as the WFX reader's manifest brings it | the WFX reader (plugin, uv: Python, with NumPy for the orbitals' values), as the format's specification has it | never | a molecule in 3D, its energy, charge and spin, its virial ratio, its orbitals' energies and occupations, each orbital's surface on asking (its values on a grid, worked out from the file's primitives); given to Multiwfn's NCI as its wavefunction |
+| Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]` at a line's start, any case, its first line (the Molden format's page) | PySCF (plugin, pixi); Meno tells it | never | a molecule in 3D, its orbitals and densities promises |
+| WFX file | `wfx` | `.wfx` | `<Number of Primitives>` at a line's start, any case, a section the WFX specification requires | Meno, under the readers' contract, in its worker (`lib/calc/wfx.ts`), as the specification (1.0.4c) has it | never | a molecule in 3D, its energy, charge and spin where the file gives them, its virial ratio and RMS gradient, its orbitals (Meno's general form, listed by Meno), each orbital's surface on asking (its values on Meno's grid, worked out from the file's primitives); given to Multiwfn's NCI as its wavefunction |
 | Gaussian input | `gaussian-input` | `.gjf`, `.com` | - | never | Export, by the Gaussian plugin (uv, Python alone) | - |
 | ORCA input | `orca-input` | `.inp` | its name, and what its lines begin with (`!`, `%`, `*`), as the ORCA interface's manifest brings it | the workspace, as text coloured by the plugin's grammar, while it is added | never | a text in the workspace's column |
 | KET | - | `.ket` | - | not read | never | Open does not offer it; one dropped says "not supported yet" |

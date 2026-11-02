@@ -14,6 +14,7 @@ import { IS_MAC } from "../../../lib/doc/shortcuts";
 import { readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { plainLines } from "../../../lib/text/editing";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 import { outputKindIn } from "../../../lib/calc/probe";
 import type { FieldHost, TypingField } from "./typingField";
 
@@ -95,7 +96,7 @@ export function fieldTarget(ed: FieldHost, field: () => TypingField | null): Tex
 export function structuresIn(t: TextMenuTarget): CoordinateStructure[] {
   if (!t.text) return [];
   const text = t.selected() || t.text.whole();
-  return outputKindIn(text) ? [] : readCoordinates(text);
+  return outputKindIn(text) ? [] : readCoordinates(text, quotedTables());
 }
 
 /** A calculation's output in a column's text - what is selected, or the whole of it - told by its program's banner (lib/calc/probe `outputKindIn`): read as one opened is. None where it is none, or no text's. */

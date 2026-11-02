@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import { clipboardFiles, copying, openWorkspacesFrom, readClipboard, writeClipboard, type ClipItem } from "../../../lib/clipboard";
 import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 import { isWorkspaceFile } from "./utils/workspace";
 import { styleOf } from "../../../lib/chem/style";
 import { labelPtOf } from "./restyle";
@@ -200,7 +201,7 @@ export function useClipboardActions(
         if (!found || (!found.atoms.length && !found.molecules3d?.length && !hasFlow(found) && !found.pictures?.length && !found.captions?.length && !found.pdfs?.length && !found.sheets?.length && !found.slides?.length && !found.shapes?.length && !found.inks?.length && !found.arrows?.length && !found.pluses?.length && !found.cycles?.length)) {
           // (text holding coordinates: the structures in it, shown before they are placed)
           const text = onCoordinates ? (await readClipboard(["text"]))?.text : undefined;
-          const structures = text ? readCoordinates(text) : [];
+          const structures = text ? readCoordinates(text, quotedTables()) : [];
           if (structures.length) {
             pastes.current = now;
             onCoordinates!(structures, at);

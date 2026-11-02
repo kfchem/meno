@@ -58,6 +58,8 @@ export type PythonPlugin = ReaderBase &
     writes: readonly WriteDecl[];
     /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
+    /** The roles whose search takes how many to try, which Meno sends (the conformers role's: lib/chem/conformersSought). */
+    roleTries: readonly RoleId[];
     /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The motions it makes of a film for a role, by role, where it declares any (Render: docs/RENDER.md). */
@@ -119,6 +121,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     downloads: m.downloads,
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
+    roleTries: m.roles.filter((r) => r.tries).map((r) => r.role),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
@@ -304,8 +307,10 @@ export type FileChoices = {
  * The reader of a kind: the one chosen for it, where it is added and reads
  * it; else Meno, where Meno reads it - Meno keeps its kinds; else the plugin
  * added whose own program writes it (`ownKinds`) - a program's output is read
- * by that program's plugin before a reader of many programs'; else the first
- * added that reads it, in Meno's order. None, where nothing added reads it.
+ * by that program's plugin before a reader of many programs'; else the one
+ * added that reads it. None, where nothing added reads it - or where several
+ * do and nothing says which (`readersUndecided`): the chemist chooses, in
+ * Settings, Files, never the first by its name (the maintainer, 2026-11-02).
  */
 export function readerFor(
   kind: string,
@@ -314,7 +319,13 @@ export function readerFor(
   readers: readonly ReaderPlugin[] = READERS,
 ): ReaderPlugin | null {
   const can = readersOf(kind, readers).filter((p) => p.builtin || added.has(p.id));
-  return can.find((p) => p.id === choices.read[kind]) ?? can.find((p) => p.builtin) ?? can.find((p) => p.ownKinds?.includes(kind)) ?? can[0] ?? null;
+  return can.find((p) => p.id === choices.read[kind]) ?? can.find((p) => p.builtin) ?? can.find((p) => p.ownKinds?.includes(kind)) ?? (can.length === 1 ? can[0] : null);
+}
+
+/** The plugins added that read a kind where several do and nothing says which reads it - none chosen, none Meno, none its program's own: for the chemist to choose among. None, where it is decided. */
+export function readersUndecided(kind: string, added: ReadonlySet<string>, choices: FileChoices, readers: readonly ReaderPlugin[] = READERS): ReaderPlugin[] {
+  const can = readersOf(kind, readers).filter((p) => p.builtin || added.has(p.id));
+  return can.length > 1 && !readerFor(kind, added, choices, readers) ? can : [];
 }
 
 /** The readers that read a kind as well as its reader, as chosen: each added, each reading it, the reader itself not again. */

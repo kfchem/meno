@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extensionOf, kindOf, kinds, offeredKinds, probeCandidates, registerKinds, registered } from "./kinds";
+import { extensionOf, kindOf, kinds, offeredKinds, probeCandidates, quotedEnergies, quotedTables, registerKinds, registered } from "./kinds";
 import { acceptManifest, type Manifest } from "../plugins/manifest";
 import { MANIFESTS } from "../plugins/known";
 import { pluginOf, readerFor, type ReaderPlugin } from "../calc/catalog";
@@ -73,10 +73,15 @@ describe("what a file is", () => {
   });
 
   it("is no program's output where no plugin added brings its kind: Meno knows no program", () => {
-    expect(kinds().map((k) => k.id)).toEqual(["meno-workspace", "meno-record", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
+    expect(kinds().map((k) => k.id)).toEqual(["meno-workspace", "meno-record", "rxn", "mol", "sdf", "xyz", "pdb", "cube", "wfx", "molden"]);
     expect(id("job.out", ORCA)).toBeNull();
     expect(id("run.log", GAUSSIAN)).toBeNull();
-    expect(id("", "[Molden Format]\n")).toBeNull();
+  });
+
+  it("is a WFX file or a Molden file by what starts its sections, any case: kinds programs of every kind write, which Meno knows itself", () => {
+    expect(id("water.wfx", "<Title>\n water\n</Title>\n<number of primitives>\n 7\n</Number of Primitives>\n")).toBe("wfx");
+    expect(id("", "[Molden Format]\n[Atoms] AU\n")).toBe("molden");
+    expect(id("orbitals.input", "[MOLDEN FORMAT]\n")).toBe("molden");
   });
 
   it("is the program's whose banner comes first, where an output holds another's too", () => {
@@ -271,5 +276,22 @@ describe("kinds only plugins not added read", () => {
     expect(orca?.suggest?.length).toBeGreaterThan(0);
     for (const id of orca!.suggest!) expect(MANIFESTS.find((m) => m.id === id)?.reads).toContain("orca");
     registerKinds([]);
+  });
+});
+
+describe("a program's lines and tables of atoms, as papers quote them", () => {
+  it("are those of the plugins added, read; and of those only offered, each with its plugin's name - to say whose a table is", () => {
+    const gaussian = MANIFESTS.find((m) => m.id === "gaussian")!;
+    const orca = MANIFESTS.find((m) => m.id === "orca")!;
+    registerKinds([orca], [gaussian, orca]);
+    expect(quotedEnergies().map((q) => q.id)).toEqual(["final-single-point"]);
+    expect(quotedTables().added).toEqual([]);
+    expect(quotedTables().offered.map((t) => [t.id, t.plugin])).toEqual([["orientation", gaussian.name]]);
+    registerKinds([gaussian, orca], [gaussian, orca]);
+    expect(quotedEnergies().map((q) => q.id)).toEqual(["scf-done", "final-single-point"]);
+    expect(quotedTables().added.map((t) => t.plugin)).toEqual([gaussian.name]);
+    expect(quotedTables().offered).toEqual([]);
+    registerKinds([]);
+    expect([quotedEnergies(), quotedTables()]).toEqual([[], { added: [], offered: [] }]);
   });
 });

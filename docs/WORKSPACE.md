@@ -487,9 +487,48 @@ Taken on 2026-10-13:
   what to make: every stereoisomer it gives, one, or none for now. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
   chosen - UFF where MMFF has no parameters for the molecule) and comes
-  onto the page as a molecule in 3D, its frames the conformers, lowest
-  first. Of two enantiomers, one is made as the other's mirror image, so
-  the two have the same conformers and shares.
+  onto the page as a molecule in 3D, its frames the conformers, each once,
+  lowest first (*The page's conformers*, below). Of two enantiomers, one is
+  made as the other's mirror image, so the two have the same conformers and
+  shares.
+- **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
+  gives every conformer it made, as it made them (PLUGINS.md); the page
+  makes them its own (`chem/pageConformers`), in a worker of its own so
+  that the page goes on meanwhile (`chem/shownConformers`: 5000 conformers
+  of butyl octanoate kept as 3027 in 0.37 s there, no frame of the page
+  more than 40 ms apart, in the app on an Apple M4, 2026-11-01):
+  - **lowest first**, by their energies - or, where the molecule's are not
+    given, by those of the model they were optimised in (a lighter metal
+    standing in, η rings held), as the line that says how they were made
+    says ("ordered by the model's energies") - else in the order they came;
+  - **each once**, by Meno's one definition (WORKFLOWS.md, *The same
+    conformer*), each against those kept before it, how many set aside and
+    within what said with how they were made (*The same*, *The same
+    within*);
+  - **laid over the first** by their heavy atoms, turned and moved, never
+    reflected;
+  - **equivalent atoms in the first's places** (2026-10-15;
+    `chem/settle`): an embedding does not say which of a CH2's two
+    hydrogens, or of an isopropyl's two methyls, is which, so each
+    equivalent group - neighbours of one atom of the same symmetry class,
+    each the root of a branch joined to the rest through it, and a pendant
+    ring symmetric about its bond - is laid as it is in the first, by whole
+    branches: which way round they go first, then the fit in the parent's
+    frame. Where three bonds lie in a plane (an =CH2's), they go no way
+    round - a triple product under 0.05 Å³, where a tetrahedral centre's
+    are some 0.9 - and the fit alone decides. No heavy atom moves but as a
+    whole equivalent branch, and no whole-molecule symmetry is searched.
+
+  A workflow's entries are never so moved: its *Conformers* step gives
+  every one, as made, and its *Duplicates* and *Rank* steps keep each once
+  and order them, where asked.
+- **Conformers tried.** As many as the molecule needs - by the bonds in
+  it that turn, more where a ring of it can flip, ten where nothing turns
+  (PLUGINS.md, *How many conformers are tried is Meno's to say*) - or a
+  number of the chemist's own, up to 5000: *Conformers sought*, in
+  Settings, *Chemistry*, under *3D*, shown where the plugin chosen there
+  takes a number of tries. A workflow's *Conformers* step says its own,
+  this choice its default.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
@@ -509,8 +548,8 @@ Taken on 2026-10-13:
   has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
   metal of its group stands in for its shape while its bonds are held at
   their own lengths, and no energies are given: the chip says so, and the
-  conformers are not weighted. They are ordered by the stand-in's energies,
-  as the line that says how they were made says. Before, UFF without terms for a
+  conformers are not weighted. The page orders them by the stand-in's
+  energies, as the line that says how they were made says. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
   asked about as the CTfile's multi-centre bond - a bond from the metal to a
@@ -778,6 +817,41 @@ Each result says what it belongs to, and Meno puts it there:
   list, given in full and opening on the LUMO, keeps the ten virtual
   orbitals from it and the ten occupied below - and says so where it
   shows them: "rows 22–41 of 50". Read again, it is kept as it was.
+- **Orbitals are listed by Meno** (2026-11-01; `lib/calc/orbitals.ts`). A
+  reader gives each orbital as its program does - its spin (of both, a
+  restricted calculation's, or alpha or beta), its energy in hartrees,
+  its occupation, its symmetry as printed, and where it can, its surface
+  as a promise - all of them, in the program's order. Meno makes the
+  lists:
+  - one for each spin, from the highest down - by energy, where every
+    energy is given, as a program may write them otherwise (a Molden file
+    by symmetry block) - its energies in electronvolts and its symmetries
+    where any is given;
+  - the HOMO the highest orbital with an electron in it, named only where
+    every occupation is whole and every energy is given; the others named
+    from it ("HOMO−1", "LUMO+2"), the list opening on the LUMO, or on the
+    HOMO where no virtual orbital is given;
+  - where no HOMO can be named - natural orbitals, fractional and with no
+    energies - each by its number, with its occupation;
+  - the HOMO-LUMO gap of a restricted calculation with a LUMO.
+  A list a reader still gives itself, under the same name, is shown as it
+  gave it.
+- **Surfaces: one place for their grids and values** (2026-11-01;
+  `lib/calc/grids.ts`). A grid Meno has a reader work out lies 4 Å past
+  the atoms each way, its points 0.2 Å apart - farther apart, alike each
+  way, only where it would have more than 729,000 points, as many as the
+  readers' own grids had before at 90 to a side, so that a surface takes
+  no longer to work out and send (`GRID_LAID_MOST`).
+  Meno lays it about the atoms of the row's frame and gives it to the
+  reader as it asks for the promise (`grid` in `ask`); the reader works
+  its values out there. A surface is drawn first at 0.05 a.u. for an
+  orbital - chosen, so that its lobes show apart - and at 0.002 a.u. for an
+  electron density - a value in common use for the contour taken as a
+  molecule's outer surface (such contours: Bader, Carroll, Cheeseman and
+  Chang, "Properties of atoms in molecules: atomic volumes", J. Am. Chem.
+  Soc. 1987, 109, 7968-7979); the chemist moves it on each. A grid says
+  which it is (`quantity`), else its signs do. A value a program was run
+  with (NCIPLOT's RDG) is the program's, and kept.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the

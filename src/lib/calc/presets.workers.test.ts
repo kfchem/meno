@@ -18,7 +18,7 @@ vi.mock("../net/network", () => ({
     return true;
   },
 }));
-// (the renderer Meno carries, declaring an interface; and a made-up plugin that brings it presets through it - as no plugin Meno carries yet)
+// (the renderer Meno carries, declaring an interface besides its own; and a made-up plugin that brings it presets through it)
 vi.mock("../plugins/known", async (importOriginal) => {
   const known = await importOriginal<typeof import("../plugins/known")>();
   const { acceptManifest } = await import("../plugins/manifest");
@@ -30,7 +30,7 @@ vi.mock("../plugins/known", async (importOriginal) => {
     depends: [{ plugin: renderer.id, versions: `>=${renderer.version} <100.0.0`, interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }],
     presets: { interface: "styling", looks: [{ id: "chalk", label: "Chalk", file: "chalk.py" }], studios: [{ id: "attic", label: "Attic", file: "attic.py" }] },
   })!;
-  return { ...known, MANIFESTS: [...known.MANIFESTS.map((m) => (m.id === renderer.id ? { ...m, interfaces: [{ id: "styling", version: "1.2.0" }] } : m)), looks] };
+  return { ...known, MANIFESTS: [...known.MANIFESTS.map((m) => (m.id === renderer.id ? { ...m, interfaces: [...(m.interfaces ?? []), { id: "styling", version: "1.2.0" }] } : m)), looks] };
 });
 
 const { addPlugin, removePlugin, useReaders } = await import("./workers");

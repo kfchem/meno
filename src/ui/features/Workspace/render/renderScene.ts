@@ -24,7 +24,6 @@ import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "../utils/measure3d";
 import { COLORS } from "../../../theme/colors";
 import type { PresetHandOff } from "./presets";
-import { MENO_MOTIONS } from "../../../../lib/plugins/manifest";
 import type { Carried3D, Molecule3D } from "../store/types";
 
 /**
@@ -239,11 +238,9 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
   const up = new THREE.Vector3(0, 1, 0);
   const v = new THREE.Vector3();
 
-  const made: { atoms: { el: string; p: Vec3 }[]; bonds: { a: number; b: number; order: number }[] }[] = [];
-  const ownMotion = film && !!motion && !(MENO_MOTIONS as readonly string[]).includes(motion);
   // (the fewest frames a moving ribbon is written at: every one, or every so many)
   let ribbonEvery = 1;
-  for (const { m, surfaces, move } of shown) {
+  for (const [mi, { m, surfaces, move }] of shown.entries()) {
     const molecule = { ...m, id: 0 } as Molecule3D;
     const solid = solidOf(molecule, style);
     const look = lookOf(molecule);
@@ -298,28 +295,14 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     };
     const samples = Array.from({ length: count }, (_, s) => sampleAt(s));
     const animated = moving || swinging;
-    // (what it is made of, for a renderer that makes a motion of its own: each atom drawn, its element and where it stands in the
-    // scene, in ångströms, and its bonds between them - Meno's own data, written only for such a motion: a large entry's every
-    // atom would only weigh down any other scene)
-    if (ownMotion) {
-      const at = new Map<number, number>();
-      const atoms: { el: string; p: Vec3 }[] = [];
-      const mag0 = magnifiedOf(molecule);
-      for (let i = 0; i < n; i++) {
-        if (left[i] || radii[i] <= 0) continue;
-        const p0 = samples[0].places;
-        v.set(p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]).applyQuaternion(samples[0].turn).multiplyScalar(mag0);
-        at.set(i, atoms.length);
-        atoms.push({ el: m.atoms[i].el, p: [centre[0] + v.x, centre[1] + v.y, centre[2] + v.z] });
-      }
-      made.push({ atoms, bonds: bonds.filter((b) => at.has(b.a1) && at.has(b.a2)).map((b) => ({ a: at.get(b.a1)!, b: at.get(b.a2)!, order: b.order })) });
-    }
-
     // the molecule: a node where it stands, turned as it is, holding its atoms, bonds and surfaces
     const root = nodes.length;
     // (as large as it is shown, about where it stands: docs/WORKSPACE.md, *Magnified display*)
     const mag = magnifiedOf(molecule);
-    nodes.push({ name: m.name ?? "Molecule", translation: centre, rotation: quat(samples[0].turn), ...(mag !== 1 ? { scale: [mag, mag, mag] as Vec3 } : {}), children: [] });
+    // (tagged, as its atoms and bonds are below, so that a renderer finds Meno's molecule in the scene as drawn: which molecule,
+    // and its bonds - the atoms at their ends, their order, and a stick to a ring's centre the ring's atoms - docs/RENDER.md)
+    const tagged = bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order, ...(b.endpoints?.length ? { centre: [...b.endpoints] } : {}) }));
+    nodes.push({ name: m.name ?? "Molecule", translation: centre, rotation: quat(samples[0].turn), ...(mag !== 1 ? { scale: [mag, mag, mag] as Vec3 } : {}), children: [], extras: { meno: { molecule: mi, bonds: tagged } } });
     roots.push(root);
     const children = nodes[root].children!;
     if (turning) channels.push({ node: root, path: "rotation", values: continuous(samples.map((x) => x.turn)) });
@@ -330,7 +313,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       const r = radii[i] / k;
       const node = nodes.length;
       const p0 = samples[0].places;
-      nodes.push({ mesh: shapeIn("ball", material(atomColour(m.atoms[i].el, drawn), drawn)), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], scale: [r, r, r] });
+      nodes.push({ mesh: shapeIn("ball", material(atomColour(m.atoms[i].el, drawn), drawn)), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], scale: [r, r, r], extras: { meno: { atom: i, element: m.atoms[i].el } } });
       children.push(node);
       if (animated) channels.push({ node, path: "translation", values: Float32Array.from(samples.flatMap((x) => [x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]])) });
       for (const x of samples) {
@@ -445,7 +428,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
           const mesh = meshes.length;
           meshes.push({ name: `stick ${materials[mat].name}`, positions: tube.positions, normals: tube.normals, indices: tube.indices, material: mat });
           const node = nodes.length;
-          nodes.push({ mesh });
+          nodes.push({ mesh, extras: { meno: { bond: lineOf[st.line] } } });
           children.push(node);
         });
       }
@@ -460,7 +443,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         };
         const first = at(0);
         const node = nodes.length;
-        nodes.push({ mesh: shapeIn("stick", strandMat[pieceStrand[l]]), translation: [first.mid.x, first.mid.y, first.mid.z], rotation: quat(first.turn), scale: [first.r || 1e-6, first.len || 1e-6, first.r || 1e-6] });
+        nodes.push({ mesh: shapeIn("stick", strandMat[pieceStrand[l]]), translation: [first.mid.x, first.mid.y, first.mid.z], rotation: quat(first.turn), scale: [first.r || 1e-6, first.len || 1e-6, first.r || 1e-6], extras: { meno: { bond: lineOf[strands0[pieceStrand[l]].line] } } });
         children.push(node);
         if (animated) {
           const keys = samples.map((_, s) => at(s));
@@ -638,7 +621,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     lights: [{ name: "Key light", type: "directional", colour: [1, 1, 1], intensity: style.keyLight }],
     animations,
     // (what glTF has no word for: the scene's even light, and what the film is)
-    extras: { meno: { ambientLight: style.ambientLight, keyLight: style.keyLight, width, height, frames: count, fps, film, ...(ownMotion ? { molecules: made } : {}) } },
+    extras: { meno: { ambientLight: style.ambientLight, keyLight: style.keyLight, width, height, frames: count, fps, film } },
   };
   return {
     gltf: writeGltf(scene),

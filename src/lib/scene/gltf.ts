@@ -59,6 +59,8 @@ export type GltfNode = {
   rotation?: Quat;
   scale?: Vec3;
   children?: number[];
+  /** What the node says besides (3.12's `extras`): plain data, for the renderer. */
+  extras?: Record<string, unknown>;
 };
 
 /** An orthographic camera (3.10.3.4): half its width and height, and how near and far it sees. */
@@ -249,6 +251,7 @@ export function writeGltf(scene: GltfScene, generator = "Meno"): string {
       if (n.light < 0 || n.light >= scene.lights.length) fail(`node ${i} holds no light`);
       out.extensions = { [LIGHTS]: { light: n.light } };
     }
+    if (n.extras) out.extras = n.extras;
     if (n.children?.length) {
       if (n.children.some((c) => c === i || c < 0 || c >= scene.nodes.length)) fail(`node ${i}'s children are not nodes`);
       out.children = [...n.children];

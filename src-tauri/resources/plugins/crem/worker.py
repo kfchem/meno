@@ -101,8 +101,10 @@ def number(options, key, default, low, high):
 def changed(mol, db, operation, radius, adds, count, seed):
     """What CReM makes of one seed: up to `count` new molecules, [(smiles, change, frequency)], in the order it
     gives them - picked with the random seed `seed` where more are found."""
+    # (*Add to it* replaces a hydrogen - grow_mol adds the seed's hydrogens itself, its documentation's way; *Replace
+    #  fragments* a fragment of one heavy atom or more, `min_size=1`: a hydrogen replaced is the other operation's)
     if operation == "grow":
-        rows = grow_mol(Chem.AddHs(mol), db, radius=radius, min_atoms=1, max_atoms=adds, max_replacements=count, seed=seed, return_rxn=True, return_rxn_freq=True, ncores=1)
+        rows = grow_mol(mol, db, radius=radius, min_atoms=1, max_atoms=adds, max_replacements=count, seed=seed, return_rxn=True, return_rxn_freq=True, ncores=1)
     else:
         rows = mutate_mol(mol, db, radius=radius, min_size=1, max_inc=adds, max_replacements=count, seed=seed, return_rxn=True, return_rxn_freq=True, ncores=1)
     return [(r[0], r[1], r[2]) for r in rows][:count]

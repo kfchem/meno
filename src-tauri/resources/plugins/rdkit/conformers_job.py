@@ -9,9 +9,9 @@ search's options from the file named, makes its conformers as the worker
 beside it does for a structure drawn (ETKDG v3, then MMFF94, MMFF94s or
 UFF), its stereo kept as its 3D structure has it, and writes them to
 conformers.json for the plugin's `collect` to read back: its atoms, each
-conformer's coordinates lowest energy first, their energies in hartrees,
-the force field used and how they were made. What it does it says as it
-goes, into the job's log.
+conformer's coordinates in the order RDKit embedded them, their energies in
+hartrees, the force field used and how they were made. What it does it says
+as it goes, into the job's log.
 """
 
 import json
@@ -29,9 +29,8 @@ def main():
         given = json.load(f)
     rows = worker.restraint_rows(given.get("restraints"), len(given.get("atoms") or []))
     mol = worker.mol_of(given, worker.held_apart(given, rows))
-    how = worker.options_of({"options": given.get("options") or {}})
-    # (as many as the molecule needs, where the options ask for no number of their own: said here, so that the log has it)
-    how["count"] = how["count"] or worker.sought(mol)
+    # (how many to try as Meno sends it: the step's number, or as many as the molecule needs - said here, so that the log has it)
+    how = worker.options_of({"options": given.get("options") or {}, "count": given.get("count")})
     print(f"RDKit {rdBase.rdkitVersion}: up to {how['count']} conformers of {mol.GetNumAtoms()} atoms, {how['field']}", flush=True)
     if rows:
         print(f"with {worker.restraints_words(rows)}", flush=True)
