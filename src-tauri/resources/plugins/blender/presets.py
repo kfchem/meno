@@ -176,7 +176,6 @@ class Ctx:
         """A new node material, its Principled BSDF linked to its output, to build on."""
         import bpy
         m = bpy.data.materials.new(name)
-        m.use_nodes = True
         return m
 
 

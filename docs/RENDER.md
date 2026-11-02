@@ -459,8 +459,9 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
   overhead pooling light on the floor; where Meno's camera looks level, the
   floor lies below what it frames. **Dark cyclorama**: a wall far behind,
   lit as a pool by its own light and seen by the camera alone, a key, a
-  fill, a top light and two coloured rims. On a transparent background the
-  paper only catches the molecules' shadows, and the cyclorama has no wall.
+  fill, a top light and two coloured rims. A studio is the backdrop chosen:
+  on a transparent background the paper is white, and the cyclorama's
+  wall dark.
   Each is built round Meno's molecules at their own size, its lights as
   strong as the key light asked for, and as soft as the shadows' softness;
   a molecule in either reads as bright as Meno lights it with no studio.
