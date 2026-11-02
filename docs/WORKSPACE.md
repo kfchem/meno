@@ -835,7 +835,9 @@ Each result says what it belongs to, and Meno puts it there:
     energies - each by its number, with its occupation;
   - the HOMO-LUMO gap of a restricted calculation with a LUMO.
   A list a reader still gives itself, under the same name, is shown as it
-  gave it.
+  gave it. Of a job with excited states, the orbitals a reader gives are
+  the SCF's - the ground state's - and so is the gap, labelled as any
+  other's: nothing on it says "ground state".
 - **Surfaces: one place for their grids and values** (2026-11-01;
   `lib/calc/grids.ts`). A grid Meno has a reader work out lies 4 Å past
   the atoms each way, its points 0.2 Å apart - farther apart, alike each
