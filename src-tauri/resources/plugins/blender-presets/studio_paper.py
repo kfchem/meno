@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Meno contributors. Under the GPL, in this plugin's LICENSE.
 """The studio "paper" (manifest `presets.studios`): a seamless sweep - a floor curving up into a wall behind - in the
 background's colour, big soft lights, and a soft source overhead pooling light on the floor round the molecules. On a
-transparent background the sweep only catches the molecules' shadows."""
+transparent background - the studio being the backdrop chosen - the paper is white."""
 import math
 
 import bmesh
@@ -54,10 +54,7 @@ def setup(ctx):
     common.area(ctx, "top", 2.4, 240, (1, 1, 1), at(0.0, -0.3, 1.9), mid, 0.18, gain=GAIN)
     common.area(ctx, "rimR", 0.14, 500, (0.85, 0.92, 1.0), at(1.3, 1.2, 0.5), mid, 1.4, gain=GAIN)
     common.area(ctx, "rimL", 0.14, 350, (1.0, 0.9, 0.8), at(-1.3, 1.1, 0.3), mid, 1.4, gain=GAIN)
-    if bg == "transparent":
-        sweep.is_shadow_catcher = True
-    else:
-        sky = common.area(ctx, "sky", 0.8, 330, (0.985, 1.0, 0.99), Vector((mid.x, mid.y + 0.15 * S, zf + 1.6 * S)), Vector((mid.x, mid.y + 0.35 * S, zf)), 1.4, gain=GAIN)
-        sky.visible_glossy = False
+    sky = common.area(ctx, "sky", 0.8, 330, (0.985, 1.0, 0.99), Vector((mid.x, mid.y + 0.15 * S, zf + 1.6 * S)), Vector((mid.x, mid.y + 0.35 * S, zf)), 1.4, gain=GAIN)
+    sky.visible_glossy = False
     common.seen_to(ctx, Vector((mid.x, yw, zf + 9.0 * S)))
     common.soft(ctx)

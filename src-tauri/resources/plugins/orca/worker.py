@@ -9,10 +9,10 @@ each way, as every plugin's:
 
     {"id": 4, "op": "prepare", "step": "optimise", "entries": [...], "options": {...}, "cores": 4}
     {"id": 4, "ok": true, "result": {"jobs": [{"entries": [0], "program": "orca", "args": ["input.inp"], "files": [...],
-        "then": [{"program": "orca_2mkl", "args": ["input", "-molden"]}], "reads": ["input.molden.input"]}]}}
+        "then": [{"program": "orca_2aim", "args": ["input"]}], "reads": ["input.wfx"]}]}}
     {"id": 5, "op": "collect", "step": "optimise", "entries": [...], "options": {...}, "files": {...}, "log": "...", "ended": "done"}
     {"id": 5, "ok": true, "result": {"read": [{"kind": "orca", "log": true, "name": "water.out",
-        "wavefunction": {"kind": "molden", "file": "input.molden.input", "name": "water.molden"}}]}}
+        "wavefunction": {"kind": "wfx", "file": "input.wfx", "name": "water.wfx"}}]}}
     {"id": 6, "op": "read", "kind": "orca", "name": "water.out", "text": "..."}
     {"id": 6, "ok": true, "result": {"schema": 1, "program": "ORCA", "atoms": [...], "frames": [...], ...}}
 
@@ -54,9 +54,10 @@ and stops with no energy. It comes back where it was, with its energy.
 
 ORCA is run as the manual says: by its full path, given the input file,
 printing its output. To keep the wavefunction, the job then runs
-orca_2mkl, installed beside ORCA, as the manual's "orca_2mkl" has it:
-`orca_2mkl BaseName -molden`, writing ORCA's orbitals (BaseName.gbw) in
-Molden's format - which it names BaseName.molden.input.
+orca_2aim, installed beside ORCA, as the manual's "orca_2aim" has it
+(9.2.9): `orca_2aim BaseName`, which reads ORCA's orbitals (BaseName.gbw)
+and writes BaseName.wfx - the WFX format, for closed and open shells -
+and BaseName.wfn. The job keeps the WFX.
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -74,11 +75,11 @@ import reader
 VERSION = "0.2.0"
 PROGRAM = "orca"
 INPUT = "input.inp"
-# the wavefunction a job keeps: orca_2mkl, beside ORCA, writing its orbitals as a Molden file
+# the wavefunction a job keeps: orca_2aim, beside ORCA, writing its orbitals as a WFX file
 BASE = "input"
-TO_MOLDEN = {"program": "orca_2mkl", "args": [BASE, "-molden"]}
-WAVEFUNCTION = f"{BASE}.molden.input"
-WAVEFUNCTION_KIND = "molden"
+TO_WFX = {"program": "orca_2aim", "args": [BASE]}
+WAVEFUNCTION = f"{BASE}.wfx"
+WAVEFUNCTION_KIND = "wfx"
 # what ORCA's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "orca"
 
@@ -450,7 +451,7 @@ def op_prepare(m):
             "program": PROGRAM,
             "args": [INPUT],
             "files": [{"name": INPUT, "text": orca_input(step, entry, options, m.get("cores"))}],
-            **({"then": [TO_MOLDEN]} if keep else {}),
+            **({"then": [TO_WFX]} if keep else {}),
             "reads": [reader.IRC_FULL] if step == "reaction-path" else [WAVEFUNCTION] if keep else [],
             **({"memory": memory} if memory else {}),
             # (the xTB plugin's xtb, where an xTB method runs through it: Meno gives it as manifest.json's `needs` says)
@@ -563,14 +564,14 @@ def op_collect(m):
     if step == "reaction-path":
         method, basis = path_level(m.get("options") or {})
         return {"outputs": [reader.irc_output(elements_of(e), m.get("files") or {}, log, method, basis) for e in m.get("entries") or []]}
-    # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
+    # (its wavefunction, where orca_2aim wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}
 
 
 def wavefunction_of(entry):
     """The wavefunction an entry's job wrote, as Meno keeps it: its kind, its file, and the name it goes by, after the entry."""
-    return {"kind": WAVEFUNCTION_KIND, "file": WAVEFUNCTION, "name": output_name(entry)[: -len(".out")] + ".molden"}
+    return {"kind": WAVEFUNCTION_KIND, "file": WAVEFUNCTION, "name": output_name(entry)[: -len(".out")] + ".wfx"}
 
 
 def op_read(m):

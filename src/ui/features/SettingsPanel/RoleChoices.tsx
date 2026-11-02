@@ -38,6 +38,7 @@ export default function RoleChoices({ where, heading }: { where: Role["where"]; 
                 <Select
                   label={`Who does this: ${ROLES[role].name}`}
                   value={chosen?.id ?? null}
+                  placeholder="Choose which"
                   options={can.map((p) => ({ value: p.id, label: p.name }))}
                   onChange={(v) => setPlugins({ ...plugins, roles: { ...plugins.roles, [role]: v } })}
                 />

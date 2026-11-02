@@ -30,6 +30,14 @@ and in particular:
     and takes in a double bond's second line, the same margin past the
     drawing all along (the drawing reports how far each bond reaches,
     `Layout.reach`).
+  - The view moving under a pointer held still - a wheel's zoom, a glide,
+    a fit - lights what comes under it, found as a move of no distance
+    would find it (`lib/input/stillPointer`). Where the pointer is over
+    the canvas is worked out from the screen, never from the event's
+    offset, so that such a move finds the same place as the system's
+    own at any screen scale: Chromium gives a move Meno makes its offset
+    divided by the screen's pixel ratio, and at 150 % a wheel's zoom lit
+    another bond (2026-11-02; `utils/pageEvents`).
 - **Drawing is dragging bonds out of atoms**, and the editor is made for
   that way of drawing rather than for keys to learn: there are no keyboard
   shortcuts for building structures (agreed 2026-09-27).

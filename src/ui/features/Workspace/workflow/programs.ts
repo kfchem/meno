@@ -122,7 +122,7 @@ export function pluginEntry(e: SetEntry): PluginEntry {
  * program, by name; its arguments; its input files, and the one of them its
  * program reads as its input, where it reads one (Gaussian's, run as
  * `g16 <input`); the programs installed beside its own run after it, each
- * by its name and with its arguments (ORCA's orca_2mkl: its manifest's
+ * by its name and with its arguments (ORCA's orca_2aim: its manifest's
  * `installed[].beside`); and the files it reads back.
  */
 export type Prepared = {

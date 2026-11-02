@@ -6,7 +6,7 @@ vi.mock("../../../../lib/plugins/known", async (importOriginal) => {
   const { acceptManifest } = await import("../../../../lib/plugins/manifest");
   const renderer = known.MANIFESTS.find((m) => m.roles.some((r) => r.role === "render"))!;
   const brings = (id: string, name: string, presets: object) =>
-    acceptManifest({ id, name, version: "1.0.0", depends: [{ plugin: renderer.id, versions: `>=${renderer.version}`, interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }], presets: { interface: "styling", ...presets } })!;
+    acceptManifest({ id, name, version: "1.0.0", depends: [{ plugin: renderer.id, versions: `>=${renderer.version} <100.0.0`, interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }], presets: { interface: "styling", ...presets } })!;
   const grain = { id: "grain", label: "Grain", type: "choice", choices: [{ value: "fine", label: "Fine" }, { value: "coarse", label: "Coarse" }], default: "fine", section: "look", when: { id: "look", in: ["chalk"] } };
   return {
     ...known,

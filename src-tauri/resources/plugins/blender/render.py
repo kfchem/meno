@@ -133,7 +133,6 @@ def light(scene, s, ambient):
             o.data.angle = math.radians(s["softness"])
     world = bpy.data.worlds.new("Meno")
     scene.world = world
-    world.use_nodes = True
     nodes = world.node_tree.nodes
     nodes.clear()
     out = nodes.new("ShaderNodeOutputWorld")

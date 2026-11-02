@@ -134,7 +134,7 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
-    /// well - one writing what it wrote as another kind of file, say - each
+    /// well - ORCA's orca_2aim, writing its orbitals as a WFX file - each
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
@@ -975,8 +975,9 @@ pub fn inside_name(name: &str) -> bool {
 
 /// Whether the arguments `args` of a program installed separately - or of
 /// one beside it - name no file but those written for its job (`written`),
-/// or one of them by its name without its extension, as a program may take
-/// one (`input` for `input.gbw`). Besides those, an argument may be an
+/// or one of them by its name without its extension - the stem a program
+/// takes for files it writes itself beside them, as ORCA's orca_2aim takes
+/// `input` for `input.gbw` (any program alike, and only a file of its job). Besides those, an argument may be an
 /// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
 pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
     let option = |a: &str| {
@@ -1122,7 +1123,8 @@ pub struct Installed {
     /// How it says its version, and the least Meno takes (`version`).
     pub version: Option<VersionRule>,
     /// Programs installed with it, in its folder, that a job may run after it
-    /// (`beside`): each by its name and its file on this system.
+    /// (`beside`): each by its name and its file on this system - ORCA's
+    /// orca_2aim.
     pub beside: Vec<(String, String)>,
     /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI), each process a core
     /// and a thread; else, "threads" or unsaid, as threads of one process.
@@ -2305,6 +2307,11 @@ fn range_of(text: &str) -> Option<(Vec<u64>, Option<Vec<u64>>)> {
     Some((from, before))
 }
 
+/// Whether versions as a manifest writes them are bounded above (`>=A <B`), as every range a manifest gives must be.
+fn bounded(versions: &str) -> bool {
+    range_of(versions).is_some_and(|(_, before)| before.is_some())
+}
+
 /// Whether a plugin of `version` is one a range of versions takes; one that is no version is in none.
 pub fn in_versions(version: &str, versions: &str) -> bool {
     let (Some(v), Some((from, before))) = (version_parts(version), range_of(versions)) else { return false };
@@ -2321,7 +2328,8 @@ pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need
         let field = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
         let (plugin, versions) = (field(d, "plugin"), field(d, "versions"));
         let optional_ok = d.get("optional").is_none_or(|o| o.is_boolean());
-        if !plugin_id(&plugin) || plugin == id || range_of(&versions).is_none() || plugins.contains(&plugin) || !optional_ok {
+        // (versions bounded above, always, as lib/plugins/manifest `dependOf` reads them)
+        if !plugin_id(&plugin) || plugin == id || !bounded(&versions) || plugins.contains(&plugin) || !optional_ok {
             return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
         }
         plugins.push(plugin.clone());
@@ -2457,10 +2465,16 @@ pub fn presets_given(manifest: &serde_json::Value, id: &str, presets: &[String],
         let interface = text(presets_decl, "interface");
         // (of `id`, through an interface it declares - each of a version the preset plugin works with)
         let uses = listed(&theirs, "depends").into_iter().find(|d| text(d, "plugin") == id).ok_or_else(|| format!("{name} does not use {id}"))?;
+        if !bounded(&text(&uses, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id} it works with"));
+        }
         if !in_versions(&version, &text(&uses, "versions")) {
             return Err(format!("{name} works with {id} {}; {} is here", text(&uses, "versions"), if version.is_empty() { "no version of it" } else { &version }));
         }
         let wanted = listed(&uses, "interfaces").into_iter().find(|x| text(x, "id") == interface).ok_or_else(|| format!("{name} does not use {id}'s {interface} interface"))?;
+        if !bounded(&text(&wanted, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id}'s {interface} interface it works with"));
+        }
         let has = listed(manifest, "interfaces").into_iter().find(|x| text(x, "id") == interface).map(|x| text(&x, "version"));
         match has {
             Some(v) if in_versions(&v, &text(&wanted, "versions")) => {}
@@ -3152,13 +3166,13 @@ mod tests {
         let root = temp();
         let (program, _) = shell_program();
         let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside, processes: false };
-        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into(), "-molden".into()] };
-        let there = found(vec![("orca_2mkl".into(), PathBuf::from(&program))]);
-        assert_eq!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap(), vec![Then { name: "orca_2mkl".into(), program: program.clone(), args: vec!["input".into(), "-molden".into()] }]);
-        assert!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap_err().contains("no orca_2aim beside it"));
-        let gone = found(vec![("orca_2mkl".into(), root.join("orca_2mkl"))]);
-        assert!(then_of(&gone, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("not found beside orca"));
-        assert!(then_of(&there, "orca", &vec![ask("orca_2mkl"); 5]).is_err());
+        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into()] };
+        let there = found(vec![("orca_2aim".into(), PathBuf::from(&program))]);
+        assert_eq!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap(), vec![Then { name: "orca_2aim".into(), program: program.clone(), args: vec!["input".into()] }]);
+        assert!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("no orca_2mkl beside it"));
+        let gone = found(vec![("orca_2aim".into(), root.join("orca_2aim"))]);
+        assert!(then_of(&gone, "orca", &[ask("orca_2aim")]).unwrap_err().contains("not found beside orca"));
+        assert!(then_of(&there, "orca", &vec![ask("orca_2aim"); 5]).is_err());
         assert_eq!(then_of(&there, "orca", &[]).unwrap(), vec![]);
         let _ = fs::remove_dir_all(root);
     }
@@ -3166,10 +3180,10 @@ mod tests {
     #[test]
     fn reads_the_programs_installed_beside_one_for_this_system() {
         let m = |beside: serde_json::Value| serde_json::json!({"installed": [{"name": "orca", "files": {"macos": "orca", "windows": "orca.exe"}, "beside": beside}]});
-        let orca = installed_named(&m(serde_json::json!({"orca_2mkl": {"macos": "orca_2mkl", "windows": "orca_2mkl.exe"}})), "orca", "windows").unwrap().unwrap();
-        assert_eq!(orca.beside, vec![("orca_2mkl".to_string(), "orca_2mkl.exe".to_string())]);
+        let orca = installed_named(&m(serde_json::json!({"orca_2aim": {"macos": "orca_2aim", "windows": "orca_2aim.exe"}})), "orca", "windows").unwrap().unwrap();
+        assert_eq!(orca.beside, vec![("orca_2aim".to_string(), "orca_2aim.exe".to_string())]);
         // (one not made for this system: none here)
-        assert_eq!(installed_named(&m(serde_json::json!({"orca_2mkl": {"windows": "orca_2mkl.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
+        assert_eq!(installed_named(&m(serde_json::json!({"orca_2aim": {"windows": "orca_2aim.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
         // (never a path, a shell, or a name that is not one)
         for bad in [serde_json::json!({"x": {"macos": "../x"}}), serde_json::json!({"x": {"macos": "sh"}}), serde_json::json!({"../x": {"macos": "x"}}), serde_json::json!(["x"]), serde_json::json!({"x": "x"})] {
             assert!(installed_named(&m(bad.clone()), "orca", "macos").is_err(), "{bad}");
@@ -3996,8 +4010,9 @@ mod tests {
     fn a_program_installed_separately_is_given_its_job_s_files_options_and_numbers_alone() {
         let written = ["input.inp".to_string(), "wavefunction.molden".to_string(), "nci.txt".to_string()];
         let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written);
-        // ORCA, orca_2mkl, Multiwfn, Gaussian, as their plugins ask
+        // ORCA, orca_2aim, Multiwfn, Gaussian, as their plugins ask
         assert_eq!(ok(&["input.inp"]), Ok(()));
+        assert_eq!(ok(&["input"]), Ok(()));
         assert_eq!(ok(&["input", "-molden"]), Ok(()));
         assert_eq!(ok(&["wavefunction.molden", "-nt", "4", "-silent"]), Ok(()));
         assert_eq!(ok(&[]), Ok(()));
@@ -4016,15 +4031,15 @@ mod tests {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let manifest = serde_json::json!({
             "id": "demo",
-            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2mkl": {system(): exe("orca_2mkl")}}}],
+            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2aim": {system(): exe("orca_2aim")}}}],
             "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
         });
         fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
         let orca = program_file(&base.join("orca_6"), &exe("orca"));
-        program_file(&base.join("orca_6"), &exe("orca_2mkl"));
+        program_file(&base.join("orca_6"), &exe("orca_2aim"));
         let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
         let mut good = spec_for("demo", "orca", &found, &["input.inp"]);
-        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2mkl".into(), args: vec!["input".into()] }]).unwrap();
+        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2aim".into(), args: vec!["input".into()] }]).unwrap();
         let data = base.join("data");
         let written = vec!["input.inp".to_string()];
         assert_eq!(spec_allowed(&data, &plugins, &good, &written), Ok(()));
@@ -4461,9 +4476,9 @@ mod tests {
         assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
         assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
         // (one used only for some of its work: its programs needed by the jobs that say so, as any)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
         // (a plugin used for no program: none of its programs needed)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0"}]}), "orca").unwrap(), vec![]);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0"}]}), "orca").unwrap(), vec![]);
         let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
         // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
@@ -4479,6 +4494,8 @@ mod tests {
             serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
             serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
             serde_json::json!({"plugin": "xtb"}),
+            // (versions with no bound above)
+            serde_json::json!([{"plugin": "xtb", "versions": ">=1.0.0"}]),
         ] {
             assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
         }
@@ -4872,6 +4889,10 @@ mod tests {
         refused(renderer(), with("depends", serde_json::json!([])), &["looks"], "Looks does not use render");
         refused(renderer(), presets("interface", serde_json::json!("other")), &["looks"], "does not use render's other interface");
         refused(renderer(), with("presets", serde_json::json!(null)), &["looks"], "Looks brings no presets");
+        // (versions with no bound above: of the plugin, or of its interface)
+        let open = |plugin: &str, interface: &str| with("depends", serde_json::json!([{"plugin": "render", "versions": plugin, "interfaces": [{"id": "preset", "versions": interface}]}]));
+        refused(renderer(), open(">=0.7.0", ">=1.0.0 <2.0.0"), &["looks"], "no bound above to the versions of render it works with");
+        refused(renderer(), open(">=0.7.0 <0.8.0", ">=1.0.0"), &["looks"], "no bound above to the versions of render's preset interface");
         // (a file not inside its folder, the manifest, one not there, a folder - asked for twice, or itself, or no plugin)
         refused(renderer(), presets("files", serde_json::json!(["../render/manifest.json"])), &["looks"], "names a file it cannot hand over");
         refused(renderer(), presets("files", serde_json::json!(["manifest.json"])), &["looks"], "names a file it cannot hand over");

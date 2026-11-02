@@ -263,7 +263,7 @@ export type System = (typeof SYSTEMS)[number];
  * alone, it prints a line beginning `after`, then the version) - the newest
  * copy new enough then taken; and the programs installed with it, in its
  * folder, that a job may run after it (`beside`: each by its name, and its
- * file on each system - ORCA's orca_2mkl); and how it runs in parallel
+ * file on each system - ORCA's orca_2aim); and how it runs in parallel
  * (`parallel`: "threads", unsaid, or "processes" - MPI, ORCA's `%pal` - each
  * process a physical core, told one thread). Meno's backend reads and checks
  * the same (src-tauri/src/jobs.rs `installed_named`, `installed_choice`).
@@ -716,7 +716,8 @@ function placeOk(t: unknown): t is string {
  * `rangeOf`); whether only some of its work needs it (`optional`: not set
  * up with it, and missing, only a job that needs it refused); and what of
  * it is used - a program it declares, by its name,
- * with the variable a job is told where it is in. A job uses one only where
+ * with the variable a job is told where it is in; a kind of file it
+ * declares, by its id, that a step takes (`kinds`). A job uses one only where
  * its plugin's worker says so of that job; Meno finds it as the other
  * plugin's own jobs would, puts it in the job's folder, and names it there -
  * so that a path with a space in it is never given (src-tauri jobs.rs
@@ -725,8 +726,9 @@ function placeOk(t: unknown): t is string {
 function dependOf(v: unknown, self: string): DependDecl | null {
   const d = v as Record<string, unknown> | null;
   if (!isId(d?.plugin) || d.plugin === self) return null;
+  // (versions bounded above, always: a plugin's next major is never taken on trust)
   const range = rangeOf(d.versions);
-  if (!range) return null;
+  if (!range || range.before === undefined) return null;
   if (d.programs !== undefined && !Array.isArray(d.programs)) return null;
   const programs = list(d.programs).map((v): UsedProgram | null => {
     const p = v as Record<string, unknown> | null;
@@ -739,16 +741,21 @@ function dependOf(v: unknown, self: string): DependDecl | null {
   const interfaces = list(d.interfaces).map((v): UsedInterface | null => {
     const i = v as Record<string, unknown> | null;
     const r = rangeOf(i?.versions);
-    return isId(i?.id) && r ? { id: i.id, versions: (i.versions as string).trim(), range: r } : null;
+    // (bounded above, as the plugin's own versions are)
+    return isId(i?.id) && r && r.before !== undefined ? { id: i.id, versions: (i.versions as string).trim(), range: r } : null;
   });
   if (interfaces.some((i) => i == null) || new Set(interfaces.map((i) => i!.id)).size !== interfaces.length) return null;
   if (d.optional !== undefined && typeof d.optional !== "boolean") return null;
+  // (kinds of file of it a step takes: each an id, once)
+  if (d.kinds !== undefined && (!Array.isArray(d.kinds) || d.kinds.length > 16 || !d.kinds.every(isId) || new Set(d.kinds).size !== d.kinds.length)) return null;
+  const kinds = (d.kinds ?? []) as string[];
   return {
     plugin: d.plugin,
     versions: (d.versions as string).trim(),
     range,
     programs: programs as UsedProgram[],
     ...(interfaces.length ? { interfaces: interfaces as UsedInterface[] } : {}),
+    ...(kinds.length ? { kinds: [...kinds] } : {}),
     ...(d.optional ? { optional: true as const } : {}),
   };
 }
