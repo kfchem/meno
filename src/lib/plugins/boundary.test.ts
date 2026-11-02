@@ -37,6 +37,8 @@ const ALLOWED: { word: string; why: string; files?: string[] }[] = [
   ...["check-structures", "conformers", "descriptors", "energy", "frequencies", "generate", "minimise", "nci", "optimise", "path-search", "reaction-path", "render", "saddle-point", "stereoisomers"].map((word) => ({ word, why: "a kind of step: Meno defines it (workflow/kinds), a plugin only names it to say it fills it" })),
   // (the materials of Meno's scene file, the vocabulary a look's parts are made of - lib/plugins/manifest `LookParts`)
   ...["clay"].map((word) => ({ word, why: "a material of the scene Meno writes (render/renderScene), which a look's parts name" })),
+  // (the kinds of file Meno knows itself, which programs of every kind write - lib/io/kinds `MENO_KINDS`; a plugin names one to read it or to take it)
+  ...["wfx", "molden"].map((word) => ({ word, why: "a kind of file Meno knows itself (lib/io/kinds), which a plugin only names to read it or take it", files: ["src/lib/io/kinds.ts", "src/lib/calc/menoReads.ts"] })),
   { word: "python", why: "the kind of environment Meno runs a plugin's worker in, and a language its text colouring knows" },
   { word: "copper", why: "an element's name, as chemistry knows it", files: ["src/lib/chem/elements.ts"] },
   { word: "gold", why: "an element's name, as chemistry knows it", files: ["src/lib/chem/elements.ts"] },

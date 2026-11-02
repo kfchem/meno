@@ -24,9 +24,10 @@ const none = { read: {}, also: {} };
 
 describe("the readers Meno knows of", () => {
   it("are Meno's own, then each plugin from its manifest in its folder", () => {
-    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "orca", "pyscf", "wfx", "xtb"]);
-    // (the structure files Meno reads on the page, and the cube, under the readers' contract)
-    expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
+    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "orca", "pyscf", "xtb"]);
+    // (the structure files Meno reads on the page, and the cube and the WFX file, under the readers' contract - the Molden file
+    // told by Meno, read by a plugin that reads it)
+    expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube", "wfx"]);
     const [cclib, gaussian, , pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
@@ -55,11 +56,11 @@ describe("the readers Meno knows of", () => {
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
-    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "wfx", "xtb"]);
+    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "xtb"]);
     // (ORCA's own output read by the plugin whose program writes it: its own kind, by its manifest's writtenBy)
     expect(READER_PLUGINS.find((p) => p.id === "orca")).toMatchObject({ reads: ["orca"], ownKinds: ["orca"] });
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);

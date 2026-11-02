@@ -8,6 +8,7 @@
  */
 import { readStructures, type StructureKind } from "../io/structures";
 import { cubeGrid, readCube } from "./cube";
+import { readWfx, wfxGrid } from "./wfx";
 import type { ReaderOutput } from "./output";
 
 export type MenoRead = {
@@ -30,6 +31,7 @@ export const MENO_READS: Record<string, MenoRead> = {
   xyz: structures("xyz"),
   pdb: structures("pdb"),
   cube: { read: readCube, ask: (key, name, text) => cubeGrid(name, text, key) },
+  wfx: { read: readWfx, ask: (key, name, text) => wfxGrid(name, text, key) },
 };
 
 /** A question Meno's own reading is asked, as a plugin's worker is. */
