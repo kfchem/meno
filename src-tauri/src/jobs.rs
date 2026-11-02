@@ -108,8 +108,8 @@ pub struct JobSpec {
     pub name: String,
     pub program: String,
     pub args: Vec<String>,
-    /// A file in its folder that it reads as its input (its standard input) -
-    /// Gaussian's, run as `g16 <input`; none, it reads nothing.
+    /// A file in its folder that it reads as its input (its standard input:
+    /// `program <input`); none, it reads nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stdin: Option<String>,
     /// What it is given beside the environment its runner was started in.
@@ -118,7 +118,7 @@ pub struct JobSpec {
     /// that runs as processes (`processes`) is given them as its processes, each told one thread.
     #[serde(default = "one_core")]
     pub cores: u32,
-    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI: ORCA's `%pal`) - as its
+    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI) - as its
     /// plugin declares it (`installed[].parallel`): each counted by the queue as a whole core, not one of its threads.
     #[serde(default, skip_serializing_if = "is_false")]
     pub processes: bool,
@@ -134,7 +134,7 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
-    /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
+    /// well - one writing what it wrote as another kind of file, say - each
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
@@ -975,8 +975,8 @@ pub fn inside_name(name: &str) -> bool {
 
 /// Whether the arguments `args` of a program installed separately - or of
 /// one beside it - name no file but those written for its job (`written`),
-/// or one of them by its name without its extension, as ORCA's orca_2mkl
-/// takes `input` for `input.gbw`. Besides those, an argument may be an
+/// or one of them by its name without its extension, as a program may take
+/// one (`input` for `input.gbw`). Besides those, an argument may be an
 /// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
 pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
     let option = |a: &str| {
@@ -1026,8 +1026,8 @@ pub struct Found {
 /// plugin's environment in Meno's data folder `data`: one its manifest
 /// names, never a shell, found in its environment's own folders - and, where
 /// it is Python, running a script of the plugin's. Or, where its manifest
-/// says Meno fetches it as the plugin is set up (`downloads[].provides`:
-/// Blender), Meno's own copy of it, in the plugin's files.
+/// says Meno fetches it as the plugin is set up (`downloads[].provides`),
+/// Meno's own copy of it, in the plugin's files.
 pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args: &[String]) -> Result<Found, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
@@ -1122,10 +1122,9 @@ pub struct Installed {
     /// How it says its version, and the least Meno takes (`version`).
     pub version: Option<VersionRule>,
     /// Programs installed with it, in its folder, that a job may run after it
-    /// (`beside`): each by its name and its file on this system - ORCA's
-    /// orca_2mkl.
+    /// (`beside`): each by its name and its file on this system.
     pub beside: Vec<(String, String)>,
-    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI, ORCA's `%pal`), each process a core
+    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI), each process a core
     /// and a thread; else, "threads" or unsaid, as threads of one process.
     pub processes: bool,
 }
@@ -1494,7 +1493,7 @@ fn runnable(p: &Path) -> bool {
 
 /// Every copy of a program installed separately there is, in order: where
 /// the chemist located it, where that is still a program of its file's name -
-/// or a macOS app that holds it (`Blender.app`: its `Contents/MacOS`) - that
+/// or a macOS app that holds it (`Name.app`: its `Contents/MacOS`) - that
 /// alone, `exact`; then each of its file's name where the system finds
 /// programs (`path_var`: PATH, as Meno was given it); then in the folders it
 /// is usually installed in, the newest first.
