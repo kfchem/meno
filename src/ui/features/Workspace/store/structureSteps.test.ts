@@ -1,11 +1,12 @@
 /**
- * A plugin's steps on structures drawn, done at once in its worker - *Check
- * structures* and *Stereoisomers*, RDKit's (docs/PLUGINS.md, *Steps on
- * structures drawn*): each structure given as its MOL blocks; what the
- * plugin says of each taken in, in their order - kept as drawn, made anew
- * (each drawing read as a SMILES's is), or set aside, its record saying
- * why; each made one with the record of the one it was made of; nothing
- * taken in part.
+ * Steps on structures drawn, done at once: a plugin's in its worker -
+ * *Stereoisomers* and *Descriptors*, RDKit's (docs/PLUGINS.md, *Steps on
+ * structures drawn*) - and *Check structures*, Meno's on the facts the
+ * plugin that does the checks gives (workflow/checkStructures): each
+ * structure given as its MOL blocks; what is said of each taken in, in their
+ * order - kept as drawn, made anew (each drawing read as a SMILES's is), or
+ * set aside, its record saying why; each made one with the record of the one
+ * it was made of; nothing taken in part.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Atom, DrawnRecord, Model } from "./types";
@@ -20,6 +21,23 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
     run: async (step: string, entries: { molblocks: string[] }[], options: Record<string, unknown>, holds: string, ms?: number) => {
       asked.push({ step, entries, options, holds, ms });
       return answer(entries);
+    },
+  }),
+}));
+
+/** What the plugin that does the checks makes of each structure, by the test: by default, one carbon with nothing wrong. */
+let facts: (structures: { molblocks: string[] }[]) => unknown[] = (structures) => structures.map(() => FINE);
+const FINE = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 4, most: 4, radicals: 0, part: 0 }] };
+
+vi.mock("../../../../lib/roles/worker", async (actual) => ({
+  ...(await actual<typeof import("../../../../lib/roles/worker")>()),
+  rolePlugin: () => ({ id: "rdkit", name: "RDKit", uses: [{ name: "RDKit", version: "1" }] }),
+  chemAtHand: async () => true,
+  chemWorker: async () => ({
+    request: async (op: string, args: { structures: { molblocks: string[] }[] }, ms?: number) => {
+      if (op !== "structure_facts") throw new Error(`no ${op} here`);
+      asked.push({ step: "check-structures", entries: args.structures, options: {}, holds: "structures", ms });
+      return { structures: facts(args.structures) };
     },
   }),
 }));
@@ -65,7 +83,7 @@ function drawn() {
   return doc;
 }
 
-/** A step of `kind` by RDKit on the three, its set's members given `records` where any; run. */
+/** A step of `kind` on the three - RDKit's, or Meno's Check structures - its set's members given `records` where any; run. */
 async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", records: (DrawnRecord | undefined)[] = []) {
   const doc = drawn();
   const store = createEditorStore(doc);
@@ -78,7 +96,8 @@ async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", r
       sets: d.sets!.map((b) => (b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && records[i] ? { ...m, record: records[i] } : m)) } : b)),
     }));
   }
-  const step = st().addStep(kind, "rdkit", 0, 0);
+  // (Check structures Meno's, on the checks plugin's facts; the others RDKit's)
+  const step = st().addStep(kind, kind === "check-structures" ? "meno" : "rdkit", 0, 0);
   st().connect({ set }, step);
   await st().runStep(step);
   const d = doc.getState();
@@ -99,6 +118,7 @@ describe("a plugin's step on structures drawn", () => {
   beforeEach(() => {
     asked.length = 0;
     answer = () => ({});
+    facts = (structures) => structures.map(() => FINE);
   });
 
   it("takes all the structures a large result set holds - those on the page, then those held off it - each given as its blocks, and keeps all it keeps so too", async () => {
@@ -121,8 +141,7 @@ describe("a plugin's step on structures drawn", () => {
     // (as many as the page shows on it - look DRAWN_ON_PAGE - the rest held in the set after them: all 51 the set's)
     const shown = setMembers(doc.getState(), held).structures.length;
     expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
-    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
-    const check = st().addStep("check-structures", "rdkit", 200, 0);
+    const check = st().addStep("check-structures", "meno", 200, 0);
     st().connect({ set: held.id }, check);
     await st().runStep(check);
     expect(asked).toHaveLength(1);
@@ -209,12 +228,20 @@ describe("a plugin's step on structures drawn", () => {
     expect(step.ran?.said).toContain("1 set aside (1: drawing)");
   });
 
-  it("is given the options the plugin declares for Check structures, every finding set aside unless kept", async () => {
-    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
+  it("checks each structure by Meno's rules on what the plugin makes of it, every finding set aside unless kept", async () => {
     const { step, rest } = await ran("check-structures");
-    expect(asked[0].options).toEqual({ parts: "aside", valence: "aside", electrons: "aside", radicals: "aside" });
     expect(step.ran).toMatchObject({ ok: true, said: "3 of 3 kept" });
     expect(rest!.structures).toEqual([]);
+    // (one a radical, one with a carbon of five bonds: set aside, saying why in Meno's words)
+    const radical = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 3, most: 4, radicals: 1, part: 0 }] };
+    const five = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 5, most: 4, radicals: 0, part: 0 }], problem: "SANITIZE_PROPERTIES" };
+    facts = () => [FINE, radical, five];
+    const found = await ran("check-structures");
+    expect(found.step.ran).toMatchObject({ ok: true, said: "1 of 3 kept \u00b7 2 set aside (1: radical; 1: valence)" });
+    expect(found.rest!.records).toEqual([{ status: { aside: "a radical: unpaired electrons on C" } }, { status: { aside: "an atom with more bonds than it can have (C)" } }]);
+    // (one the toolkit could not read at all: said in its name)
+    facts = () => [FINE, FINE, { read: false }];
+    expect((await ran("check-structures")).rest!.records).toEqual([{ status: { aside: "RDKit could not read it" } }]);
   });
 
   it("keeps what a step worked out of each structure on its record, beside what it had, saying what worked it out", async () => {
@@ -259,7 +286,6 @@ describe("a plugin's step on structures drawn", () => {
     answer = () => ({ structures: [{ as: "drawn", properties: {} }, { as: "drawn", properties: {} }, { as: "drawn" }] });
     expect((await ran("descriptors", [aside, stale])).out!.records[1]?.stale).toBe(stale.stale);
     // (kept with nothing worked out - Check structures: not set aside any more, and still said stale)
-    answer = () => ({ structures: [{ as: "drawn" }, { as: "drawn" }, { as: "drawn" }] });
     const checked = await ran("check-structures", [aside, stale]);
     expect(checked.out!.records.map((r) => [r?.status, r?.stale])).toEqual([
       [undefined, undefined],
@@ -289,8 +315,7 @@ describe("a plugin's step on structures drawn", () => {
     connectStoreToDocument(store, doc);
     const st = () => store.getState();
     const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
-    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
-    const step = st().addStep("check-structures", "rdkit", 0, 0);
+    const step = st().addStep("check-structures", "meno", 0, 0);
     st().connect({ set }, step);
     await st().runStep(step);
     expect(asked).toHaveLength(1);

@@ -2112,56 +2112,33 @@ def drawing_of_parts(blocks):
     return mol
 
 
-def described(atoms):
-    """Atoms said as a chemist reads them: their elements, each once, in the order met - "C, O"."""
-    seen = []
-    for a in atoms:
-        if a.GetSymbol() not in seen:
-            seen.append(a.GetSymbol())
-    return ", ".join(seen)
-
-
-def check_one(blocks, keep):
-    """*Check structures* on one structure: the first of what it finds that
-    is not to be kept, as a reason and its kind - a structure of more than
-    one part, one an atom of which has more bonds than it can have (or that
-    RDKit cannot make sense of otherwise), a part with no electrons (H+), or
-    a radical - else None. Nothing in it is changed."""
-    mol = drawing_of_parts(blocks)
-    # (Meno gives V3000 blocks, in which a lone H+ reads and is found below as having no electrons; given as V2000, RDKit
-    #  reads no lone H+, and it is set aside here, as not read - set aside all the same)
-    if mol is None:
-        return ("it could not be read", "unreadable")
-    if "parts" not in keep and len(blocks) > 1:
-        return (f"{len(blocks)} parts (a salt, or a mixture)", "parts")
-    if "valence" not in keep:
+def op_structure_facts(m):
+    """What RDKit makes of each structure drawn, its parts read as one
+    (`drawing_of_parts`), as facts for Meno's *Check structures* to decide
+    on - none of it judged here: each atom's element, atomic number and
+    charge, the valence RDKit gives it and the most it could be
+    (`too_many`), its unpaired electrons, and which part of the structure it
+    is in; and where RDKit cannot make sense of the whole, what its
+    sanitisation said (`problem`). One it cannot read at all: `read` false.
+    A lone H+ written as V2000 is not read (Meno writes V3000, which it
+    is)."""
+    out = []
+    for e in m.get("structures") or []:
+        mol = drawing_of_parts(e.get("molblocks") or [])
+        if mol is None:
+            out.append({"read": False})
+            continue
         mol.UpdatePropertyCache(strict=False)
-        over = [a for a in mol.GetAtoms() if "most" in too_many(a) and too_many(a)["valence"] > too_many(a)["most"]]
-        if over:
-            return (f"an atom with more bonds than it can have ({described(over)})", "valence")
+        part = {i: k for k, frag in enumerate(Chem.GetMolFrags(mol, asMols=False, sanitizeFrags=False)) for i in frag}
+        atoms = [
+            {"el": a.GetSymbol(), "z": a.GetAtomicNum(), "charge": a.GetFormalCharge(), "radicals": a.GetNumRadicalElectrons(), "part": part[a.GetIdx()], **too_many(a)}
+            for a in mol.GetAtoms()
+        ]
+        facts = {"read": True, "atoms": atoms}
         problem = Chem.SanitizeMol(Chem.Mol(mol), catchErrors=True)
         if problem != Chem.SanitizeFlags.SANITIZE_NONE:
-            return (f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "valence")
-    if "electrons" not in keep:
-        for part in Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False):
-            electrons = sum(a.GetAtomicNum() for a in part.GetAtoms()) - sum(a.GetFormalCharge() for a in part.GetAtoms())
-            if electrons <= 0:
-                return (f"a part with no electrons ({Chem.MolToSmiles(part)})", "no electrons")
-    if "radicals" not in keep:
-        unpaired = [a for a in mol.GetAtoms() if a.GetNumRadicalElectrons()]
-        if unpaired:
-            return (f"a radical: unpaired electrons on {described(unpaired)}", "radical")
-    return None
-
-
-def step_check(entries, options):
-    """*Check structures*: each structure kept as drawn, or set aside saying
-    why - what the options keep is not looked for."""
-    keep = {k for k in ("parts", "valence", "electrons", "radicals") if options.get(k) == "keep"}
-    out = []
-    for e in entries:
-        found = check_one(e.get("molblocks") or [], keep)
-        out.append({"as": "drawn"} if found is None else {"aside": found[0], "kind": found[1]})
+            facts["problem"] = str(problem).split(".")[-1]
+        out.append(facts)
     return {"structures": out}
 
 
@@ -2280,7 +2257,7 @@ UNDEFINED_ALONE = ("logp",)
 
 
 #: The steps on structures drawn, by kind.
-STRUCTURE_STEPS = {"check-structures": step_check, "stereoisomers": step_stereoisomers, "descriptors": step_descriptors}
+STRUCTURE_STEPS = {"stereoisomers": step_stereoisomers, "descriptors": step_descriptors}
 
 
 OPS = {
@@ -2292,6 +2269,7 @@ OPS = {
     "from_smiles": op_from_smiles,
     "smiles_read": op_smiles_read,
     "analyse": op_analyse,
+    "structure_facts": op_structure_facts,
     "open_stereo": op_open_stereo,
     "stereo_left_open": op_stereo_left_open,
     "configurations": op_configurations,
