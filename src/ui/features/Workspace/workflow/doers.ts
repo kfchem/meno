@@ -42,8 +42,8 @@ export function kindsOf(by: string): StepKind[] {
 /**
  * Whether a step of `kind` done by `by` takes a set that holds `holds`:
  * the kind takes it, and - done by a plugin - its manifest does not leave
- * it out (`takes`: CREST's conformer search starts from molecules in 3D,
- * not from structures drawn).
+ * it out (`takes`: a step that starts from molecules in 3D, not from
+ * structures drawn).
  */
 export function takesBy(kind: StepKind, by: string, holds: ValueKind): boolean {
   // (a kind that takes nothing in, made from seeds by this one: the seeds' input's own)
