@@ -1137,7 +1137,10 @@ The same for every plugin and for Meno's own parts:
   WORKSPACE.md, *Orbitals are listed by Meno*): each its spin (`both`,
   `alpha`, `beta`), its energy in hartrees, its occupation, its symmetry as
   printed and, where the reader can work it out, its surface as a promise
-  - all of them, in the program's order. Meno names the HOMO and the LUMO,
+  - all of them, in the program's order; where the program printed only
+  those about the frontier, the rest left out between them, those alone,
+  each with its `number` as the program counts them (from 1; xtb's,
+  2026-11-02). Meno names the HOMO and the LUMO,
   writes the energies in electronvolts, lists them about the frontier and
   works out the HOMO-LUMO gap (`homo-lumo-gap`); a list a reader gives of
   its own (`orbitals`, `orbitals.a`, `orbitals.b`) is shown as it gave it.
