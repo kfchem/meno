@@ -18,7 +18,7 @@ export { chipWide };
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -28,7 +28,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
-import { measuredSet } from "./structureSteps";
+import { measuredSet, modeOnAtomsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
@@ -106,6 +106,15 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "take-frames") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either), keptNames(String(o.keep ?? ""))), key, w);
+  }
+  // (Mode on atoms: its atoms typed, or from the table wired into Atoms)
+  if (step.kind === "mode-on-atoms") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const r = modeRead(o);
+    if ("why" in r) return ranAs(doc, id, { ok: false, said: r.why }, key, w);
+    const entries = setEntries(input.molecules, input.holds as Holds3D);
+    const outcome = modeOnAtomsSet(entries, input.holds as Holds3D, { ...r, table: r.atoms ? undefined : tableInto(doc, id, "atoms"), which: o.which === "every" ? "every" : "made", rows: String(o.rows ?? "") });
+    return ranAs(doc, id, r.atoms && wireInto(doc, id, "atoms") && outcome.ok ? { ...outcome, said: `${outcome.said} \u00b7 the table wired into Atoms not read: atoms typed` } : outcome, key, w);
   }
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)
