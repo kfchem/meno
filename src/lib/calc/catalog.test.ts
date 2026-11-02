@@ -16,7 +16,9 @@ import {
   readerIdOfLine,
   readerNameOf,
   readersOf,
+  kindsNotTaken,
   readersUndecided,
+  stepFiles,
   type PythonPlugin,
   type ReaderPlugin,
 } from "./catalog";
@@ -137,7 +139,16 @@ describe("the readers Meno knows of", () => {
     expect(nciplot.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["nciplot"], undefined]]);
     expect(nciplot.installed[0]).toMatchObject({ name: "nciplot", env: { NCIPLOT_HOME: ["{parent}"] } });
     const multiwfn = PLUGINS.find((p) => p.id === "multiwfn")!;
-    expect(multiwfn.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["multiwfn"], ["molden", "gaussian-fchk", "wfn", "wfx"]]]);
+    expect(multiwfn.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["multiwfn"], ["molden", "gaussian-fchk", "wfx"]]]);
+    // (Meno's own kinds, and the Gaussian interface's formatted checkpoint, which it says it uses - taken only while that plugin is added)
+    expect(multiwfn.depends?.map((d) => [d.plugin, d.kinds, d.optional])).toEqual([["gaussian", ["gaussian-fchk"], true]]);
+    expect(stepFiles(multiwfn, "nci", new Set(["multiwfn"]))).toEqual(["molden", "wfx"]);
+    expect(stepFiles(multiwfn, "nci", new Set(["multiwfn", "gaussian"]))).toEqual(["molden", "gaussian-fchk", "wfx"]);
+    // (Gaussian's of a version it does not work with: not taken, said so - and nothing stopped)
+    expect(kindsNotTaken(multiwfn, new Set(["multiwfn", "gaussian"]))).toEqual([]);
+    const gaussian = PLUGINS.find((p) => p.id === "gaussian")!;
+    expect(multiwfn.depends?.[0].range).toEqual({ from: "0.4.0", before: "1.0.0" });
+    expect(gaussian.version.startsWith("0.")).toBe(true);
     expect(multiwfn.installed[0]).toMatchObject({ name: "multiwfn", env: { Multiwfnpath: ["{folder}"] } });
   });
 

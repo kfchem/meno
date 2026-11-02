@@ -14,7 +14,7 @@
 import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type PresetsDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
-import { dependencyOrder, dependentsOf, dependsRefused, missingWhy, stoppedWhy, type DependDecl, type InterfaceDecl } from "../plugins/depends";
+import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl, type InterfaceDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
 import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
@@ -139,7 +139,10 @@ export const pluginOf = (m: Manifest): Plugin => {
  * not know, or a program it does not declare, and every one of a circle.
  * Not offered.
  */
-export const DEPENDS_REFUSED: ReadonlyMap<string, string> = dependsRefused(MANIFESTS);
+export const DEPENDS_REFUSED: ReadonlyMap<string, string> = new Map([
+  ...filesRefused(MANIFESTS, new Set(Object.values(MENO_KINDS).map((k) => k.id as string))),
+  ...dependsRefused(MANIFESTS),
+]);
 
 /** Every plugin Meno knows of, in Meno's order: those that run something, and those that bring data alone. */
 export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id)).map(pluginOf);
@@ -208,6 +211,31 @@ export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string
   const d = p.depends?.find((x) => x.plugin === id);
   if (!d || !d.programs.length) return `${p.name} asked for ${id}'s program, which it does not say it uses`;
   return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), (x) => anyPluginById(x)?.name ?? x);
+}
+
+/**
+ * The kinds of file a step of `p` of kind `kind` takes besides what comes in (its `files`), as it may be given them now: of
+ * another plugin's kinds it uses, only while that plugin is added, of a version it works with (`added`: the plugins added).
+ */
+export function stepFiles(p: PythonPlugin, kind: string, added: ReadonlySet<string>): string[] {
+  const files = p.steps.find((s) => s.kind === kind)?.files ?? [];
+  const m = manifestOf(p.id);
+  return m ? filesTaken(m, files, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id) : files;
+}
+
+/**
+ * Why a kind of file of another plugin's that a step of `p` uses (its `depends`' `kinds`) is not taken now, that plugin added
+ * but of a version `p` does not work with - each a line, as Settings says it on `p` ("Gaussian formatted checkpoint is not
+ * taken: Needs Gaussian interface from 0.4.0 to before 1.0.0; 1.2.0 is added"). One not added says nothing here: `p`'s line
+ * of the plugins it uses says it is taken where that one is added.
+ */
+export function kindsNotTaken(p: Plugin, added: ReadonlySet<string>): string[] {
+  const version = (id: string) => (added.has(id) ? anyPluginById(id)?.version : undefined);
+  return (manifestOf(p.id)?.depends ?? []).flatMap((d) => {
+    if (!d.kinds?.length || !added.has(d.plugin)) return [];
+    const why = missingWhy(d, version, (id) => anyPluginById(id)?.name ?? id);
+    return why ? d.kinds.map((k) => `${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k} is not taken: ${why}`) : [];
+  });
 }
 
 /** The plugins that fill a role, in Meno's order. */

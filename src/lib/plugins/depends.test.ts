@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, declaredPrograms, dependencyOrder, dependentsOf, dependsRefused, inRange, missingWhy, rangeOf, rangeSaid, stoppedWhy, type DependDecl, type DependingManifest } from "./depends";
+import { compareVersions, declaredPrograms, dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, inRange, missingWhy, rangeOf, rangeSaid, stoppedWhy, type DependDecl, type DependingManifest } from "./depends";
 
 /** A plugin as the use of plugins sees it: made up, as no plugin Meno carries. A plugin's id ending "?" is used only for some of its work (`optional`). */
 function plugin(id: string, uses: [string, string, string[]?][] = [], programs: string[] = [id]): DependingManifest {
@@ -79,17 +79,49 @@ describe("the plugins one uses", () => {
   });
 });
 
+describe("the kinds of file a plugin's step takes", () => {
+  const name = (id: string) => id.toUpperCase();
+  const tool = { ...plugin("tool"), kinds: [{ id: "tool-out" }] };
+  const uses = (kinds: string[], files: string[], optional = true): DependingManifest => ({
+    ...plugin("asks"),
+    kinds: [{ id: "asks-own" }],
+    depends: [{ plugin: "tool", versions: ">=1.0.0 <2.0.0", range: rangeOf(">=1.0.0 <2.0.0")!, programs: [], kinds, ...(optional ? { optional: true as const } : {}) }],
+    steps: [{ programs: ["asks"], files }],
+  });
+  const meno = new Set(["cube"]);
+
+  it("may be only its own, Meno's, or another plugin's it says it uses - else it is refused, saying which", () => {
+    expect(filesRefused([tool, uses(["tool-out"], ["asks-own", "cube", "tool-out"])], meno).size).toBe(0);
+    expect(Object.fromEntries(filesRefused([tool, uses([], ["tool-out"])], meno))).toEqual({ asks: "a step of it takes files of the kind tool-out, which neither it, Meno nor a plugin it says it uses declares" });
+    expect(filesRefused([tool, uses([], ["nowhere"])], meno).has("asks")).toBe(true);
+  });
+
+  it("of another plugin's, is refused where that plugin does not declare it", () => {
+    expect(Object.fromEntries(dependsRefused([tool, uses(["other-out"], [])]))).toEqual({ asks: "it uses TOOL's kind of file other-out, which TOOL does not declare" });
+  });
+
+  it("of another plugin's, are taken only while that plugin is added, of a version it works with - and, used for some of its work, stop nothing", () => {
+    const m = uses(["tool-out"], ["asks-own", "cube", "tool-out"]);
+    expect(filesTaken(m, m.steps[0].files!, () => "1.2.0", name)).toEqual(["asks-own", "cube", "tool-out"]);
+    expect(filesTaken(m, m.steps[0].files!, () => undefined, name)).toEqual(["asks-own", "cube"]);
+    expect(filesTaken(m, m.steps[0].files!, () => "2.0.0", name)).toEqual(["asks-own", "cube"]);
+    expect(stoppedWhy(m, () => undefined, name)).toBeNull();
+    // (of another version, it stops nothing either: its kinds are not taken)
+    expect(stoppedWhy(m, () => "2.0.0", name)).toBeNull();
+  });
+});
+
 describe("a plugin used through its interface", () => {
   const name = (id: string) => id.toUpperCase();
   const tool = { ...plugin("tool"), interfaces: [{ id: "styling", version: "1.4.0" }] };
   const looks = (versions = ">=1.0.0 <2.0.0", id = "styling"): DependingManifest => ({
     ...plugin("looks", [], []),
-    depends: [{ plugin: "tool", versions: ">=1.0.0", range: rangeOf(">=1.0.0")!, programs: [], interfaces: [{ id, versions, range: rangeOf(versions)! }] }],
+    depends: [{ plugin: "tool", versions: ">=1.0.0 <2.0.0", range: rangeOf(">=1.0.0 <2.0.0")!, programs: [], interfaces: [{ id, versions, range: rangeOf(versions)! }] }],
   });
 
   it("is refused where that plugin declares no such interface - and, in turn, any plugin that uses the refused one", () => {
     expect(dependsRefused([tool, looks()]).size).toBe(0);
-    const refused = dependsRefused([tool, looks(">=1.0.0", "other"), plugin("after", [["looks", ">=1.0.0"]])]);
+    const refused = dependsRefused([tool, looks(">=1.0.0 <2.0.0", "other"), plugin("after", [["looks", ">=1.0.0"]])]);
     expect(Object.fromEntries(refused)).toEqual({ looks: "it uses TOOL's other interface, which TOOL does not declare", after: "it uses LOOKS, which is refused" });
   });
 
@@ -100,7 +132,7 @@ describe("a plugin used through its interface", () => {
     expect(stoppedWhy(looks(), () => "1.0.0", name, of(undefined))).toBe("Needs TOOL's styling interface from 1.0.0 to before 2.0.0; the one added has none");
     // (that plugin not added, or of a version it does not work with: said first, as of any plugin used)
     expect(stoppedWhy(looks(), () => undefined, name, of("1.4.0"))).toBe("Needs TOOL, which is not added");
-    expect(missingWhy(looks().depends![0], () => "0.9.0", name, of("1.4.0"))).toBe("Needs TOOL 1.0.0 or later; 0.9.0 is added");
+    expect(missingWhy(looks().depends![0], () => "0.9.0", name, of("1.4.0"))).toBe("Needs TOOL from 1.0.0 to before 2.0.0; 0.9.0 is added");
   });
 
   it("is set up before the plugin that uses it, and takes it away with it - though it runs nothing itself", () => {
