@@ -821,19 +821,24 @@ Each result says what it belongs to, and Meno puts it there:
   reader gives each orbital as its program does - its spin (of both, a
   restricted calculation's, or alpha or beta), its energy in hartrees,
   its occupation, its symmetry as printed, and where it can, its surface
-  as a promise - all of them, in the program's order. Meno makes the
-  lists:
+  as a promise - all of them, in the program's order; or, where the
+  program printed only those about the frontier and left the rest out
+  between them (xtb), those alone, each with its number as the program
+  counts them (2026-11-02). Meno makes the lists:
   - one for each spin, from the highest down - by energy, where every
     energy is given, as a program may write them otherwise (a Molden file
     by symmetry block) - its energies in electronvolts and its symmetries
     where any is given;
   - the HOMO the highest orbital with an electron in it, named only where
     every occupation is whole and every energy is given; the others named
-    from it ("HOMO−1", "LUMO+2"), the list opening on the LUMO, or on the
-    HOMO where no virtual orbital is given;
+    from it ("HOMO−1", "LUMO+2") - by their numbers where they have them,
+    so that one printed past those left out is named as it is, never by
+    its place among those given, and none left out is made up - the list
+    opening on the LUMO, or on the HOMO where no virtual orbital is given;
   - where no HOMO can be named - natural orbitals, fractional and with no
     energies - each by its number, with its occupation;
-  - the HOMO-LUMO gap of a restricted calculation with a LUMO.
+  - the HOMO-LUMO gap of a restricted calculation with a LUMO - the one
+    after the HOMO, by number where they are numbered.
   A list a reader still gives itself, under the same name, is shown as it
   gave it. Of a job with excited states, the orbitals a reader gives are
   the SCF's - the ground state's - and so is the gap, labelled as any

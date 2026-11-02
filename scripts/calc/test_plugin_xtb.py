@@ -243,7 +243,8 @@ class Collect(unittest.TestCase):
         self.assertEqual(out["energies"], [-5.17, -5.206771946579])
         self.assertTrue(out["optimised"])
         self.assertEqual((out["program"], out["version"], out["method"]), ("xtb", "6.7.1", "GFN2-xTB"))
-        self.assertEqual({r["id"] for r in out["results"]}, {"homo-lumo-gap", "charges"})
+        # (its orbitals, where it printed them, as data Meno lists - and works the gap out of: none printed here)
+        self.assertEqual({r["id"] for r in out["results"]}, {"charges"})
         # (xtb writes .xtboptok where it did not converge too: what it says decides)
         failed = collect("optimise", log_of(body="   *** FAILED TO CONVERGE GEOMETRY OPTIMIZATION IN 2 ITERATIONS ***\n"), files)["outputs"][0]
         self.assertFalse(failed["optimised"])
