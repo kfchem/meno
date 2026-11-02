@@ -2307,6 +2307,11 @@ fn range_of(text: &str) -> Option<(Vec<u64>, Option<Vec<u64>>)> {
     Some((from, before))
 }
 
+/// Whether versions as a manifest writes them are bounded above (`>=A <B`), as every range a manifest gives must be.
+fn bounded(versions: &str) -> bool {
+    range_of(versions).is_some_and(|(_, before)| before.is_some())
+}
+
 /// Whether a plugin of `version` is one a range of versions takes; one that is no version is in none.
 pub fn in_versions(version: &str, versions: &str) -> bool {
     let (Some(v), Some((from, before))) = (version_parts(version), range_of(versions)) else { return false };
@@ -2323,7 +2328,8 @@ pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need
         let field = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
         let (plugin, versions) = (field(d, "plugin"), field(d, "versions"));
         let optional_ok = d.get("optional").is_none_or(|o| o.is_boolean());
-        if !plugin_id(&plugin) || plugin == id || range_of(&versions).is_none() || plugins.contains(&plugin) || !optional_ok {
+        // (versions bounded above, always, as lib/plugins/manifest `dependOf` reads them)
+        if !plugin_id(&plugin) || plugin == id || !bounded(&versions) || plugins.contains(&plugin) || !optional_ok {
             return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
         }
         plugins.push(plugin.clone());
@@ -2459,10 +2465,16 @@ pub fn presets_given(manifest: &serde_json::Value, id: &str, presets: &[String],
         let interface = text(presets_decl, "interface");
         // (of `id`, through an interface it declares - each of a version the preset plugin works with)
         let uses = listed(&theirs, "depends").into_iter().find(|d| text(d, "plugin") == id).ok_or_else(|| format!("{name} does not use {id}"))?;
+        if !bounded(&text(&uses, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id} it works with"));
+        }
         if !in_versions(&version, &text(&uses, "versions")) {
             return Err(format!("{name} works with {id} {}; {} is here", text(&uses, "versions"), if version.is_empty() { "no version of it" } else { &version }));
         }
         let wanted = listed(&uses, "interfaces").into_iter().find(|x| text(x, "id") == interface).ok_or_else(|| format!("{name} does not use {id}'s {interface} interface"))?;
+        if !bounded(&text(&wanted, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id}'s {interface} interface it works with"));
+        }
         let has = listed(manifest, "interfaces").into_iter().find(|x| text(x, "id") == interface).map(|x| text(&x, "version"));
         match has {
             Some(v) if in_versions(&v, &text(&wanted, "versions")) => {}
@@ -4464,9 +4476,9 @@ mod tests {
         assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
         assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
         // (one used only for some of its work: its programs needed by the jobs that say so, as any)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
         // (a plugin used for no program: none of its programs needed)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0"}]}), "orca").unwrap(), vec![]);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0"}]}), "orca").unwrap(), vec![]);
         let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
         // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
@@ -4482,6 +4494,8 @@ mod tests {
             serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
             serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
             serde_json::json!({"plugin": "xtb"}),
+            // (versions with no bound above)
+            serde_json::json!([{"plugin": "xtb", "versions": ">=1.0.0"}]),
         ] {
             assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
         }
@@ -4875,6 +4889,10 @@ mod tests {
         refused(renderer(), with("depends", serde_json::json!([])), &["looks"], "Looks does not use render");
         refused(renderer(), presets("interface", serde_json::json!("other")), &["looks"], "does not use render's other interface");
         refused(renderer(), with("presets", serde_json::json!(null)), &["looks"], "Looks brings no presets");
+        // (versions with no bound above: of the plugin, or of its interface)
+        let open = |plugin: &str, interface: &str| with("depends", serde_json::json!([{"plugin": "render", "versions": plugin, "interfaces": [{"id": "preset", "versions": interface}]}]));
+        refused(renderer(), open(">=0.7.0", ">=1.0.0 <2.0.0"), &["looks"], "no bound above to the versions of render it works with");
+        refused(renderer(), open(">=0.7.0 <0.8.0", ">=1.0.0"), &["looks"], "no bound above to the versions of render's preset interface");
         // (a file not inside its folder, the manifest, one not there, a folder - asked for twice, or itself, or no plugin)
         refused(renderer(), presets("files", serde_json::json!(["../render/manifest.json"])), &["looks"], "names a file it cannot hand over");
         refused(renderer(), presets("files", serde_json::json!(["manifest.json"])), &["looks"], "names a file it cannot hand over");

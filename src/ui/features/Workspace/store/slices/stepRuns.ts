@@ -4,7 +4,7 @@ import { join } from "@tauri-apps/api/path";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { DocumentStore } from "../../../../../lib/doc";
-import { anyKindById, neededWhy, pluginById, stoppedOf, type PythonPlugin } from "../../../../../lib/calc/catalog";
+import { anyKindById, neededWhy, pluginById, stepFiles, stoppedOf, type PythonPlugin } from "../../../../../lib/calc/catalog";
 import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
@@ -1022,7 +1022,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       paths.set(decl.name, where);
     }
     // (the files its kind of step takes besides, where an entry's molecule was read from one: Multiwfn's wavefunction)
-    const kinds = plugin.steps.find((s) => s.kind === step.kind)?.files ?? [];
+    // (another plugin's kind it uses only while that plugin is added, of a version it works with)
+    const kinds = stepFiles(plugin, step.kind, addedNow());
     const sourcesOf = (id: number | undefined) => {
       const calc = input.molecules.find((m) => m.id === id)?.calc;
       return [calc?.source, calc?.wavefunction];

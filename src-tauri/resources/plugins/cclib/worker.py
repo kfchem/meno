@@ -156,12 +156,6 @@ def per_frame(data, frames):
     }]
 
 
-def orbital_name(i, homo):
-    if i <= homo:
-        return "HOMO" if i == homo else f"HOMO\u2212{homo - i}"
-    return "LUMO" if i == homo + 1 else f"LUMO+{i - homo - 1}"
-
-
 def vibrations(data, n):
     """The vibrations, as a list: each one's frequency (an imaginary one negative), its
     symmetry, reduced mass, IR intensity and Raman activity where the output gives them;
@@ -259,36 +253,29 @@ def dipole(data):
 
 
 def orbitals(data):
-    """The orbitals, by their energies (eV), as a list each - every one cclib gives, highest first, opening on the
-    LUMO (Meno keeps those about it) - and, of a closed shell, the HOMO-LUMO gap."""
+    """The orbitals cclib gives, in Meno's general form: each its spin (of both, where cclib gives one set; else alpha,
+    then beta), its energy in hartrees, its occupation - that of an orbital at or below cclib's HOMO for its set (two,
+    one set; one, each of two), none above - and its symmetry where cclib gives one; every one, in cclib's order. Meno
+    lists them itself (src/lib/calc/orbitals.ts). None where cclib gives no HOMO for each set."""
     homos = getattr(data, "homos", None)
     energies = getattr(data, "moenergies", None)
     if homos is None or energies is None or len(homos) not in (1, 2) or len(energies) != len(homos):
-        return []
+        return None
     syms = getattr(data, "mosyms", None)
+    spins = ["both"] if len(homos) == 1 else ["alpha", "beta"]
+    full = 2.0 if len(homos) == 1 else 1.0
     out = []
-    spins = ["Molecular orbitals"] if len(homos) == 1 else ["\u03b1 orbitals", "\u03b2 orbitals"]
-    for s, label in enumerate(spins):
+    for s, spin in enumerate(spins):
         e = [float(v) for v in energies[s]]
         homo = int(homos[s])
-        if not 0 <= homo < len(e):
-            continue
+        if not -1 <= homo < len(e):
+            return None
         sym = syms[s] if syms is not None and s < len(syms) and len(syms[s]) == len(e) else None
-        columns = [{"label": "Orbital"}] + ([{"label": "Symmetry", "quantity": "symmetry"}] if sym is not None else []) + [{"label": "Energy", "unit": "eV", "digits": 3}]
-        rows = [{"cells": [orbital_name(i, homo)] + ([str(sym[i])] if sym is not None else []) + [e[i]]} for i in range(len(e) - 1, -1, -1)]
-        out.append({
-            "id": "orbitals" if len(homos) == 1 else f"orbitals.{'ab'[s]}",
-            "on": "list", "group": "Orbitals", "label": label,
-            "columns": columns, "rows": rows,
-            # (opening on the frontier: the LUMO, the HOMO under it)
-            "focus": max(0, len(e) - 1 - homo - 1),
-        })
-        if len(homos) == 1 and homo + 1 < len(e):
-            out.append({
-                "id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO\u2013LUMO gap",
-                "value": e[homo + 1] - e[homo], "unit": "eV", "digits": 2,
-            })
-    return out
+        out += [
+            {"spin": spin, "energy": hartrees(v), "occupation": full if i <= homo else 0.0, **({"symmetry": str(sym[i])} if sym is not None and str(sym[i]).strip() else {})}
+            for i, v in enumerate(e)
+        ]
+    return out or None
 
 
 def converged_of(data, frames):
@@ -365,8 +352,10 @@ def op_read(m):
         + per_frame(data, len(frames))
         + per_atom(data, len(atoms))
         + vibrations(data, len(atoms))
-        + orbitals(data)
     )
+    given = orbitals(data)
+    if given:
+        result["orbitals"] = given
     return result
 
 

@@ -118,19 +118,26 @@ class Orca(unittest.TestCase):
         self.assertTrue(all(x["on"] == "atoms" and x["quantity"] == "charge" and len(x["values"]) == 20 for x in charges))
         self.assertAlmostEqual(sum(charges[0]["values"]), 0, places=3)
 
-    def test_orbitals_every_one_a_list_opening_on_the_lumo(self):
+    def test_orbitals_every_one_as_data_in_hartrees_occupied_to_cclib_s_homo(self):
         r = read(sample("ORCA/dvb_sp_hf.out"))["result"]
-        o = result(r, "orbitals")
-        self.assertEqual((o["columns"][0]["label"], o["columns"][-1]["label"], o["columns"][-1]["unit"]), ("Orbital", "Energy", "eV"))
-        names = [row["cells"][0] for row in o["rows"]]
-        # (every one given, highest first: Meno keeps those about its focus)
-        self.assertGreater(len(names), 20)
-        self.assertEqual(names[o["focus"]], "LUMO")
-        self.assertEqual(names[o["focus"] + 1], "HOMO")
-        energies = [row["cells"][-1] for row in o["rows"]]
-        self.assertEqual(energies, sorted(energies, reverse=True))
-        gap = result(r, "homo-lumo-gap")
-        self.assertAlmostEqual(gap["value"], energies[o["focus"]] - energies[o["focus"] + 1])
+        o = r["orbitals"]
+        # (every one given, in cclib's order, of both spins: Meno names and lists them)
+        self.assertGreater(len(o), 20)
+        self.assertEqual({x["spin"] for x in o}, {"both"})
+        self.assertIsNone(result(r, "orbitals"))
+        # (divinylbenzene: 70 electrons, 35 orbitals of two)
+        self.assertEqual(sum(x["occupation"] for x in o), 70)
+        occupied = [x["energy"] for x in o if x["occupation"]]
+        self.assertTrue(max(occupied) < min(x["energy"] for x in o if not x["occupation"]))
+        # (hartrees: a valence orbital's energy is a fraction of one, not some -10 eV)
+        self.assertTrue(-1 < max(occupied) < 0)
+
+    def test_an_open_shell_s_orbitals_alpha_then_beta_each_occupied_by_one(self):
+        data = types.SimpleNamespace(homos=[1, 0], moenergies=[[-10.0, -5.0, 2.0], [-9.0, 1.0, 3.0]], mosyms=None)
+        o = worker.orbitals(data)
+        self.assertEqual([(x["spin"], x["occupation"]) for x in o], [("alpha", 1.0), ("alpha", 1.0), ("alpha", 0.0), ("beta", 1.0), ("beta", 0.0), ("beta", 0.0)])
+        self.assertAlmostEqual(o[0]["energy"], worker.hartrees(-10.0))
+        self.assertIsNone(worker.orbitals(types.SimpleNamespace(homos=None, moenergies=None)))
 
 
 class Gaussian(unittest.TestCase):

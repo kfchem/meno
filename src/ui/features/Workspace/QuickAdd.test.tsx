@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
+import { LABEL_MOST, labelWidth } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
 import { registerKinds } from "../../../lib/io/kinds";
 import { MANIFESTS } from "../../../lib/plugins/known";
@@ -95,5 +96,17 @@ describe("what is pasted in the SMILES field", () => {
     const water = ORCA.split("\n").slice(3).join("\n");
     expect(pastedAs(water, all)).toMatchObject({ structures: [{ atoms: [{ el: "O" }, { el: "H" }, { el: "H" }] }] });
     expect(pastedAs("c1ccccc1O", all)).toBeNull();
+  });
+});
+
+describe("the names of who does each row of steps", () => {
+  it("stand as wide as the widest of them, with its padding - whoever's it is, no width sized to one name", () => {
+    expect(labelWidth([])).toBe(12);
+    const short = labelWidth(["xTB"]);
+    const long = labelWidth(["xTB", "A plugin with a long name"]);
+    expect(long).toBeGreaterThan(short);
+    expect(labelWidth(["A plugin with a long name", "xTB"])).toBe(long);
+    // (but never wider than the most: a longer name is cut, said whole on hover)
+    expect(labelWidth(["A plugin whose name runs on and on, far past what a row can hold"])).toBe(LABEL_MOST);
   });
 });
