@@ -134,7 +134,7 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
-    /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
+    /// well - ORCA's orca_2aim, writing its orbitals as a WFX file - each
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
@@ -975,8 +975,9 @@ pub fn inside_name(name: &str) -> bool {
 
 /// Whether the arguments `args` of a program installed separately - or of
 /// one beside it - name no file but those written for its job (`written`),
-/// or one of them by its name without its extension, as ORCA's orca_2mkl
-/// takes `input` for `input.gbw`. Besides those, an argument may be an
+/// or one of them by its name without its extension - the stem a program
+/// takes for files it writes itself beside them, as ORCA's orca_2aim takes
+/// `input` for `input.gbw` (any program alike, and only a file of its job). Besides those, an argument may be an
 /// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
 pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
     let option = |a: &str| {
@@ -1123,7 +1124,7 @@ pub struct Installed {
     pub version: Option<VersionRule>,
     /// Programs installed with it, in its folder, that a job may run after it
     /// (`beside`): each by its name and its file on this system - ORCA's
-    /// orca_2mkl.
+    /// orca_2aim.
     pub beside: Vec<(String, String)>,
     /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI, ORCA's `%pal`), each process a core
     /// and a thread; else, "threads" or unsaid, as threads of one process.
@@ -3165,13 +3166,13 @@ mod tests {
         let root = temp();
         let (program, _) = shell_program();
         let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside, processes: false };
-        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into(), "-molden".into()] };
-        let there = found(vec![("orca_2mkl".into(), PathBuf::from(&program))]);
-        assert_eq!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap(), vec![Then { name: "orca_2mkl".into(), program: program.clone(), args: vec!["input".into(), "-molden".into()] }]);
-        assert!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap_err().contains("no orca_2aim beside it"));
-        let gone = found(vec![("orca_2mkl".into(), root.join("orca_2mkl"))]);
-        assert!(then_of(&gone, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("not found beside orca"));
-        assert!(then_of(&there, "orca", &vec![ask("orca_2mkl"); 5]).is_err());
+        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into()] };
+        let there = found(vec![("orca_2aim".into(), PathBuf::from(&program))]);
+        assert_eq!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap(), vec![Then { name: "orca_2aim".into(), program: program.clone(), args: vec!["input".into()] }]);
+        assert!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("no orca_2mkl beside it"));
+        let gone = found(vec![("orca_2aim".into(), root.join("orca_2aim"))]);
+        assert!(then_of(&gone, "orca", &[ask("orca_2aim")]).unwrap_err().contains("not found beside orca"));
+        assert!(then_of(&there, "orca", &vec![ask("orca_2aim"); 5]).is_err());
         assert_eq!(then_of(&there, "orca", &[]).unwrap(), vec![]);
         let _ = fs::remove_dir_all(root);
     }
@@ -3179,10 +3180,10 @@ mod tests {
     #[test]
     fn reads_the_programs_installed_beside_one_for_this_system() {
         let m = |beside: serde_json::Value| serde_json::json!({"installed": [{"name": "orca", "files": {"macos": "orca", "windows": "orca.exe"}, "beside": beside}]});
-        let orca = installed_named(&m(serde_json::json!({"orca_2mkl": {"macos": "orca_2mkl", "windows": "orca_2mkl.exe"}})), "orca", "windows").unwrap().unwrap();
-        assert_eq!(orca.beside, vec![("orca_2mkl".to_string(), "orca_2mkl.exe".to_string())]);
+        let orca = installed_named(&m(serde_json::json!({"orca_2aim": {"macos": "orca_2aim", "windows": "orca_2aim.exe"}})), "orca", "windows").unwrap().unwrap();
+        assert_eq!(orca.beside, vec![("orca_2aim".to_string(), "orca_2aim.exe".to_string())]);
         // (one not made for this system: none here)
-        assert_eq!(installed_named(&m(serde_json::json!({"orca_2mkl": {"windows": "orca_2mkl.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
+        assert_eq!(installed_named(&m(serde_json::json!({"orca_2aim": {"windows": "orca_2aim.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
         // (never a path, a shell, or a name that is not one)
         for bad in [serde_json::json!({"x": {"macos": "../x"}}), serde_json::json!({"x": {"macos": "sh"}}), serde_json::json!({"../x": {"macos": "x"}}), serde_json::json!(["x"]), serde_json::json!({"x": "x"})] {
             assert!(installed_named(&m(bad.clone()), "orca", "macos").is_err(), "{bad}");
@@ -4009,8 +4010,9 @@ mod tests {
     fn a_program_installed_separately_is_given_its_job_s_files_options_and_numbers_alone() {
         let written = ["input.inp".to_string(), "wavefunction.molden".to_string(), "nci.txt".to_string()];
         let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written);
-        // ORCA, orca_2mkl, Multiwfn, Gaussian, as their plugins ask
+        // ORCA, orca_2aim, Multiwfn, Gaussian, as their plugins ask
         assert_eq!(ok(&["input.inp"]), Ok(()));
+        assert_eq!(ok(&["input"]), Ok(()));
         assert_eq!(ok(&["input", "-molden"]), Ok(()));
         assert_eq!(ok(&["wavefunction.molden", "-nt", "4", "-silent"]), Ok(()));
         assert_eq!(ok(&[]), Ok(()));
@@ -4029,15 +4031,15 @@ mod tests {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let manifest = serde_json::json!({
             "id": "demo",
-            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2mkl": {system(): exe("orca_2mkl")}}}],
+            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2aim": {system(): exe("orca_2aim")}}}],
             "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
         });
         fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
         let orca = program_file(&base.join("orca_6"), &exe("orca"));
-        program_file(&base.join("orca_6"), &exe("orca_2mkl"));
+        program_file(&base.join("orca_6"), &exe("orca_2aim"));
         let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
         let mut good = spec_for("demo", "orca", &found, &["input.inp"]);
-        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2mkl".into(), args: vec!["input".into()] }]).unwrap();
+        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2aim".into(), args: vec!["input".into()] }]).unwrap();
         let data = base.join("data");
         let written = vec!["input.inp".to_string()];
         assert_eq!(spec_allowed(&data, &plugins, &good, &written), Ok(()));

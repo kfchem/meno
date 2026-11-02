@@ -263,7 +263,7 @@ export type System = (typeof SYSTEMS)[number];
  * alone, it prints a line beginning `after`, then the version) - the newest
  * copy new enough then taken; and the programs installed with it, in its
  * folder, that a job may run after it (`beside`: each by its name, and its
- * file on each system - ORCA's orca_2mkl); and how it runs in parallel
+ * file on each system - ORCA's orca_2aim); and how it runs in parallel
  * (`parallel`: "threads", unsaid, or "processes" - MPI, ORCA's `%pal` - each
  * process a physical core, told one thread). Meno's backend reads and checks
  * the same (src-tauri/src/jobs.rs `installed_named`, `installed_choice`).

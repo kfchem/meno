@@ -73,9 +73,9 @@ class Prepare(unittest.TestCase):
         jobs = ask("prepare", step="optimise", entries=[WATER, {**WATER, "charge": -1, "multiplicity": 2}], options=defaults("optimise"), cores=4)["jobs"]
         self.assertEqual(len(jobs), 2)
         job = jobs[0]
-        self.assertEqual((job["entries"], job["program"], job["args"], job["reads"]), ([0], "orca", ["input.inp"], ["input.molden.input"]))
-        # (then orca_2mkl, beside ORCA, writing its orbitals as a Molden file, as the manual's "orca_2mkl BaseName -molden")
-        self.assertEqual(job["then"], [{"program": "orca_2mkl", "args": ["input", "-molden"]}])
+        self.assertEqual((job["entries"], job["program"], job["args"], job["reads"]), ([0], "orca", ["input.inp"], ["input.wfx"]))
+        # (then orca_2aim, beside ORCA, writing its orbitals as a WFX file, as the manual's "orca_2aim BaseName")
+        self.assertEqual(job["then"], [{"program": "orca_2aim", "args": ["input"]}])
         self.assertEqual(job["files"][0]["name"], "input.inp")
         lines = job["files"][0]["text"].splitlines()
         # a simple input line; the processes; the coordinates between * xyz charge multiplicity and *
@@ -532,9 +532,9 @@ class Collect(unittest.TestCase):
     def test_what_orca_printed_is_its_output_for_meno_s_readers(self):
         said = ask("collect", step="optimise", entries=[WATER, {**WATER, "name": ""}], options={}, files={}, log=ENDED, ended="done")
         self.assertEqual(said, {"read": [{"kind": "orca", "log": True, "name": "water.out"}, {"kind": "orca", "log": True, "name": "orca.out"}]})
-        # (with the wavefunction orca_2mkl wrote, kept with the molecule)
-        said = ask("collect", step="optimise", entries=[WATER], options={}, files={"input.molden.input": "[Molden Format]"}, log=ENDED, ended="done")
-        self.assertEqual(said["read"][0]["wavefunction"], {"kind": "molden", "file": "input.molden.input", "name": "water.molden"})
+        # (with the wavefunction orca_2aim wrote, kept with the molecule)
+        said = ask("collect", step="optimise", entries=[WATER], options={}, files={"input.wfx": "<Title>\n water\n</Title>"}, log=ENDED, ended="done")
+        self.assertEqual(said["read"][0]["wavefunction"], {"kind": "wfx", "file": "input.wfx", "name": "water.wfx"})
 
     def test_says_why_a_job_failed(self):
         log = "\n ... \nORCA finished by error termination in SCF\nCalling Command: orca_scf input.gbw b input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"

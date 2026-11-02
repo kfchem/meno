@@ -1464,7 +1464,7 @@ path it is given:
   `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder. A program
   installed separately, and each program beside it, is given as arguments
   only the files written for its job (or one by its name without its
-  extension, as orca_2mkl takes `input`), options (`-nt`) and numbers
+  extension, as orca_2aim takes `input`), options (`-nt`) and numbers
   (`names_only_written`). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
