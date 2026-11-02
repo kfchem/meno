@@ -108,8 +108,8 @@ pub struct JobSpec {
     pub name: String,
     pub program: String,
     pub args: Vec<String>,
-    /// A file in its folder that it reads as its input (its standard input) -
-    /// Gaussian's, run as `g16 <input`; none, it reads nothing.
+    /// A file in its folder that it reads as its input (its standard input:
+    /// `program <input`); none, it reads nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stdin: Option<String>,
     /// What it is given beside the environment its runner was started in.
@@ -118,7 +118,7 @@ pub struct JobSpec {
     /// that runs as processes (`processes`) is given them as its processes, each told one thread.
     #[serde(default = "one_core")]
     pub cores: u32,
-    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI: ORCA's `%pal`) - as its
+    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI) - as its
     /// plugin declares it (`installed[].parallel`): each counted by the queue as a whole core, not one of its threads.
     #[serde(default, skip_serializing_if = "is_false")]
     pub processes: bool,
@@ -1027,8 +1027,8 @@ pub struct Found {
 /// plugin's environment in Meno's data folder `data`: one its manifest
 /// names, never a shell, found in its environment's own folders - and, where
 /// it is Python, running a script of the plugin's. Or, where its manifest
-/// says Meno fetches it as the plugin is set up (`downloads[].provides`:
-/// Blender), Meno's own copy of it, in the plugin's files.
+/// says Meno fetches it as the plugin is set up (`downloads[].provides`),
+/// Meno's own copy of it, in the plugin's files.
 pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args: &[String]) -> Result<Found, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
@@ -1126,7 +1126,7 @@ pub struct Installed {
     /// (`beside`): each by its name and its file on this system - ORCA's
     /// orca_2aim.
     pub beside: Vec<(String, String)>,
-    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI, ORCA's `%pal`), each process a core
+    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI), each process a core
     /// and a thread; else, "threads" or unsaid, as threads of one process.
     pub processes: bool,
 }
@@ -1495,7 +1495,7 @@ fn runnable(p: &Path) -> bool {
 
 /// Every copy of a program installed separately there is, in order: where
 /// the chemist located it, where that is still a program of its file's name -
-/// or a macOS app that holds it (`Blender.app`: its `Contents/MacOS`) - that
+/// or a macOS app that holds it (`Name.app`: its `Contents/MacOS`) - that
 /// alone, `exact`; then each of its file's name where the system finds
 /// programs (`path_var`: PATH, as Meno was given it); then in the folders it
 /// is usually installed in, the newest first.
