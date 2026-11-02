@@ -863,15 +863,17 @@ Each result says what it belongs to, and Meno puts it there:
   energies not read" where an excited state was optimised, whose energies
   at each geometry are not the ground state's that the output also gives
   (2026-10-14).
-- **Of a job with excited states, a dipole, charges and the HOMO-LUMO gap
-  say which state they are of** (2026-10-22): "Dipole moment, ground
+- **Of a job with excited states, a dipole and charges say which state
+  they are of** (2026-10-22): "Dipole moment, ground
   state", "Mulliken, excited state 1" - as the output says which density
   they were worked out from (Gaussian's "Population analysis using the SCF
   Density"; ORCA's dipole block's Method and State, and the root heading its
   relaxed density's population analysis). Before, the same words stood for
   either: Gaussian's TD optimisation gave the ground state's at the excited
   state's geometry, ORCA's its root's. Where the output does not say, they
-  are left out. The orbitals are always the ground state's.
+  are left out. The orbitals are always the ground state's (the SCF's), and
+  so is the HOMO-LUMO gap Meno works out from them: since Meno lists the
+  orbitals itself (2026-11-02), the gap no longer says "ground state".
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".
