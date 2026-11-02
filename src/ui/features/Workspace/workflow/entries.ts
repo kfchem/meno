@@ -587,7 +587,7 @@ export type SetEntry = {
    */
   charge?: number;
   multiplicity?: number;
-  /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
+  /** How many forms of it a conformer search found alike - its rotamers - where it said: its Boltzmann weight counts each. */
   degeneracy?: number;
   /**
    * Where its mirror image was counted in (Duplicates, its degeneracy
