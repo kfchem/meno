@@ -127,8 +127,9 @@ By the maintainer, 2026-10-10 and 2026-10-11:
   plugin from 2026-10-12; the format's specification, AIMAll's), so one
   opened goes to Multiwfn's NCI as its wavefunction, and its orbitals are
   drawn as surfaces, as other orbital results are (worked out on Meno's
-  grid from the file's primitives, in Meno's reading worker); WFN files
-  not yet - no specification of that format is published to follow.
+  grid from the file's primitives, in Meno's reading worker); its
+  orbitals only, no list of the total or spin density; WFN files not yet
+  - no specification of that format is published to follow.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).
 - Integrated NCI properties, and the RDG against sign(λ2)ρ plot.
 - Interactions between molecules alone by Multiwfn (NCIPLOT's
