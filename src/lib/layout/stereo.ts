@@ -308,7 +308,7 @@ export function placeStereo(
     // A wedge that says the configuration only as the bonds round it fall
     // exactly - two of them in a line, or all of them on one side of the
     // centre (a bridgehead drawn flat, ibogaine's) - reads by luck: a
-    // reader, RDKit among them, may take it the other way. So each choice
+    // reader may take it the other way. So each choice
     // is first taken only where it reads the same with any one of the bonds
     // in the page turned a little either way; failing every one of them,
     // as it reads.
