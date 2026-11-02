@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orbitalOn, readWfx, wfxGrid } from "./wfx";
+import { orbitalOn, POWERS, readWfx, wfxGrid } from "./wfx";
 import { floatsOf } from "./results";
 import { calcOf } from "./output";
 import { kindOf } from "../io/kinds";
@@ -119,6 +119,20 @@ describe("a WFX file", () => {
     expect(() => wfxGrid("w.wfx", wfx({}), "orbital:7")).toThrow(/no orbital:7/);
   });
 
+  it("reads a tag wherever it stands on a line - a closing one after its section's last values, spaces after it - as real files have them", () => {
+    const orca = wfx({})
+      .replace(/\n<\/Primitive Exponents>/, " </Primitive Exponents> ")
+      .replace("<Net Charge>", "<Net Charge>  ")
+      .replace(/\n<\/Molecular Orbital Energies>/, "</Molecular Orbital Energies>");
+    expect(readWfx("w.wfx", orca)).toEqual(readWfx("w.wfx", wfx({})));
+    expect(wfxGrid("w.wfx", orca, "orbital:1")).toEqual(wfxGrid("w.wfx", wfx({}), "orbital:1"));
+  });
+
+  it("gives no virial ratio where the file says 0, which no bound state's can be", () => {
+    const r = readWfx("w.wfx", wfx({}).replace("2.0040000000E+00", "0.0"));
+    expect(r.results?.some((x) => (x as { id: string }).id === "virial")).toBe(false);
+  });
+
   it("refuses what is not as the specification lays it out", () => {
     expect(() => readWfx("w.wfx", wfx({}).replace("</Net Charge>", ""))).toThrow();
     expect(() => readWfx("w.wfx", wfx({}).replace(/<Nuclear Charges>[^]*?<\/Nuclear Charges>\n/, "").replace(/<Atomic Numbers>[^]*?<\/Atomic Numbers>\n/, ""))).toThrow(/nuclear charges/);
@@ -156,5 +170,24 @@ describe("a WFX file's orbital on a grid", () => {
     expect(g).toMatchObject({ signed: true, quantity: "orbital" });
     expect(g.axes[0][0]).toBeCloseTo(0.2, 12);
     expect(floatsOf(g.values)).toHaveLength(g.counts[0] * g.counts[1] * g.counts[2]);
+  });
+});
+
+describe("the WFX specification's primitive types", () => {
+  const named = (t: number) => {
+    const [x, y, z] = POWERS[t - 1];
+    return "X".repeat(x) + "Y".repeat(y) + "Z".repeat(z);
+  };
+
+  it("are its table's, in its order: S to G as it lists them, H by its loop", () => {
+    expect([1, 2, 3, 4].map(named)).toEqual(["", "X", "Y", "Z"]);
+    expect([5, 6, 7, 8, 9, 10].map(named)).toEqual(["XX", "YY", "ZZ", "XY", "XZ", "YZ"]);
+    expect(Array.from({ length: 10 }, (_, i) => named(11 + i))).toEqual(["XXX", "YYY", "ZZZ", "XXY", "XXZ", "YYZ", "XYY", "XZZ", "YZZ", "XYZ"]);
+    expect(Array.from({ length: 15 }, (_, i) => named(21 + i))).toEqual([
+      "XXXX", "YYYY", "ZZZZ", "XXXY", "XXXZ", "XYYY", "YYYZ", "XZZZ", "YZZZ", "XXYY", "XXZZ", "YYZZ", "XXYZ", "XYYZ", "XYZZ",
+    ]);
+    // (H: x's power outermost, from none up; y's next; z's the rest - type 36 HZZZZZ, 56 HXXXXX)
+    expect([36, 37, 41, 42, 56].map(named)).toEqual(["ZZZZZ", "YZZZZ", "YYYYY", "XZZZZ", "XXXXX"]);
+    expect(POWERS).toHaveLength(56);
   });
 });

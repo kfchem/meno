@@ -30,7 +30,7 @@ import { gridAbout } from "./grids";
 import { BOHR_ANGSTROM } from "../units";
 
 /** The primitive types, from 1, as the specification's table numbers them: each its powers of x, y and z - S to G as it lists them, H by its loop. */
-const POWERS: readonly [number, number, number][] = (() => {
+export const POWERS: readonly [number, number, number][] = (() => {
   const listed = (
     "S PX PY PZ DXX DYY DZZ DXY DXZ DYZ " +
     "FXXX FYYY FZZZ FXXY FXXZ FYYZ FXYY FXZZ FYZZ FXYZ " +
@@ -56,11 +56,18 @@ function tagOf(line: string): [string, boolean] | null {
 
 type Sections = Map<string, string[]>;
 
-/** The file's sections at its top level, by their tags' names: each its lines, a section within one kept among its lines. */
+/**
+ * The file's sections at its top level, by their tags' names: each its
+ * lines, a section within one kept among its lines. A tag is read wherever
+ * it stands on a line: on a line of its own, as the specification's
+ * example has it, or after the last of its section's values, spaces after
+ * it, as real files have it too - unambiguous, a tag being the only text
+ * between `<` and `>`. The rest of the line is its section's.
+ */
 function sectionsOf(text: string, name: string): Sections {
   const out: Sections = new Map();
   const open: [string, string[]][] = [];
-  for (const line of text.split(/\r?\n/)) {
+  for (const line of text.replace(/<\/?[^<>\r\n]+>/g, "\n$&\n").split(/\r?\n/)) {
     const tag = tagOf(line);
     if (tag && !tag[1]) {
       open.push([tag[0], []]);
@@ -135,7 +142,9 @@ export function readWfx(name: string, text: string): ReaderOutput {
   const virial = one(s, "virial ratio (-v/t)", name, false, false);
   const gradients = section(s, "nuclear cartesian energy gradients", name, false);
   const results: unknown[] = [];
-  if (virial != null) results.push({ id: "virial", on: "molecule", group: "Wavefunction", label: "Virial ratio (−V/T)", value: virial, quantity: "number", digits: 6 });
+  // (a ratio of 0 - what a writer that did not work it out puts in the required section - is none: for a bound state the kinetic
+  // energy T is positive and the potential V negative, so -V/T is above 0, 2 by the virial theorem at the exact state)
+  if (virial != null && virial > 0) results.push({ id: "virial", on: "molecule", group: "Wavefunction", label: "Virial ratio (−V/T)", value: virial, quantity: "number", digits: 6 });
   const rms = gradients ? rmsGradient(gradients, z) : undefined;
   if (rms != null) results.push({ id: "rms-gradient", on: "frames", group: "Optimisation", label: "RMS gradient", unit: "Eh/bohr", digits: 6, values: [rms] });
   return {
