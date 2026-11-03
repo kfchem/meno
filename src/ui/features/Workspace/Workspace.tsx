@@ -41,6 +41,7 @@ import { chordedPress } from "./utils/press";
 import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
+import { pageEvents } from "./utils/pageEvents";
 import DocumentStylePanel from "./DocumentStylePanel";
 import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
@@ -2640,6 +2641,8 @@ function WorkspaceContent({
         // (following its box as the panel beside it slides)
         resize={CANVAS_RESIZE}
         dpr={canvasRatio}
+        // (where the pointer is, from the screen: the same for a move of no distance Meno makes as for the system's - utils/pageEvents)
+        events={pageEvents}
         onDoubleClick={handleDoubleClick}
         gl={{
           antialias: true,

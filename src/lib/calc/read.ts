@@ -11,7 +11,7 @@
  */
 import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
-import { alsoReadersFor, anyPluginById, READERS, readerFor, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
+import { alsoReadersFor, anyPluginById, READERS, readerFor, readersUndecided, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
 import { forThisSystem } from "../plugins/here";
 import { frameReads, givenResults, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
 import { readResults, type Result } from "./results";
@@ -48,6 +48,9 @@ export function whoReads(
 ): { reader: ReaderPlugin; also: ReaderPlugin[] } | NotRead {
   const reader = readerFor(kind.id, added, choices, readers);
   if (reader) return { reader, also: alsoReadersFor(kind.id, added, choices, readers) };
+  // (several added read it, and nothing says which: the chemist chooses - never the first by its name)
+  const undecided = readersUndecided(kind.id, added, choices, readers);
+  if (undecided.length) return new NotRead(`${name} (${kind.name}): ${undecided.map((p) => p.name).join(" and ")} each read it - choose which in Settings, Files.`);
   const could = (kind.suggest ?? []).map(anyPluginById).filter((p): p is Plugin => !!p && !added.has(p.id) && forThisSystem(p));
   return could.length
     ? new NotRead(`${name} (${kind.name}): ${could.map((p) => p.name).join(" or ")} would read it.`, could.map((p) => p.id))

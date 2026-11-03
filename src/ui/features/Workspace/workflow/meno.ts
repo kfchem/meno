@@ -914,7 +914,7 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
   if (saddle) return { ok: false, said: saddle };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
-    // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)
+    // (each counted as many times as its conformer search found it alike, where it said: as a search's own populations count it)
     const w = boltzmann(g.map((e) => basis.energy(e)!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
     g.forEach((e, i) => shares.set(e, w[i]));
   }

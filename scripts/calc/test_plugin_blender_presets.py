@@ -79,7 +79,7 @@ class Manifest(unittest.TestCase):
         for m in PRESETS["motions"]:
             text = (FOLDER / m["file"]).read_text(encoding="utf-8")
             self.assertRegex(text, r"(?m)^NOMINAL = ", m["id"])
-            self.assertRegex(text, r'(?m)^(LOOP = "(cycle|seamless)"|def LOOP\(ctx\):)', m["id"])
+            self.assertRegex(text, r'(?m)^(LOOPS = "(cycle|seamless)"|def LOOPS\(ctx\):)', m["id"])
             # (a change of molecules keys a piece, A becoming B; a motion of one molecule keys it)
             self.assertIn("def key_change(ctx, a, b):" if "change" in m.get("shortest", {}) else "def key(ctx):", text, m["id"])
 
@@ -168,6 +168,13 @@ class LooksRender(unittest.TestCase):
                 self.assertTrue((pathlib.Path(d) / "picture.png").is_file())
 
 
+def opaque_share(png):
+    """The share of a picture's pixels that are opaque, as Blender reads it."""
+    code = "import bpy,sys; p=list(bpy.data.images.load(sys.argv[-1]).pixels); a=p[3::4]; print('SHARE', sum(1 for x in a if x > 0.99) / len(a))"
+    run = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", code, "--", str(png)], capture_output=True, text=True, timeout=300)
+    return float(next(l.split()[1] for l in run.stdout.splitlines() if l.startswith("SHARE")))
+
+
 @unittest.skipUnless(blender(), "Blender is not installed here")
 class StudiosRender(unittest.TestCase):
     def test_every_studio_renders_round_meno_s_ball_on_each_background(self):
@@ -178,6 +185,10 @@ class StudiosRender(unittest.TestCase):
                     run = run_job(d, entry, {"samples": 2, "background": bg, "device": "cpu", "denoise": False})
                     self.assertEqual(run.returncode, 0, run.stdout[-2500:] + run.stderr[-2500:])
                     self.assertTrue((pathlib.Path(d) / "picture.png").is_file())
+                    # (the studio is the backdrop chosen: the picture is its backdrop all over, on a transparent background too)
+                    self.assertGreater(opaque_share(pathlib.Path(d) / "picture.png"), 0.99)
+                    # (and Blender's log says nothing is to go: no deprecated part of its API is used)
+                    self.assertNotIn("DeprecationWarning", run.stdout + run.stderr)
 
 
 def two_balls():
@@ -201,3 +212,4 @@ class MotionsRender(unittest.TestCase):
                     run = run_job(d, entry, {"samples": 1, "background": "black", "device": "cpu", "denoise": False}, scene=two_balls() if change else None)
                     self.assertEqual(run.returncode, 0, run.stdout[-2500:] + run.stderr[-2500:])
                     self.assertTrue((pathlib.Path(d) / "film.mp4").is_file())
+                    self.assertNotIn("DeprecationWarning", run.stdout + run.stderr)

@@ -54,7 +54,6 @@ def put_out(ctx):
 def world(ctx, colour, strength):
     w = bpy.data.worlds.new("studio")
     ctx.scene.world = w
-    w.use_nodes = True
     bg = w.node_tree.nodes["Background"]
     bg.inputs["Color"].default_value = (*colour, 1)
     bg.inputs["Strength"].default_value = strength * float(ctx.request.get("ambient", 1.0))
@@ -62,7 +61,6 @@ def world(ctx, colour, strength):
 
 def surface(name, colour, roughness=0.85):
     m = bpy.data.materials.new(name)
-    m.use_nodes = True
     pr = m.node_tree.nodes["Principled BSDF"]
     pr.inputs["Base Color"].default_value = (*colour, 1)
     pr.inputs["Roughness"].default_value = roughness

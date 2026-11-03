@@ -105,6 +105,9 @@ class Molden(unittest.TestCase):
         skew = {**GRID, "axes": [[0.2, 0.1, 0], [0, 0.2, 0], [0, 0, 0.2]]}
         b = worker.answer(json.dumps({"id": 3, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8"), "grid": skew}))
         self.assertEqual((b["ok"], b["error"]), (False, "Meno's request gives a grid whose axes do not run along x, y and z"))
+        big = {**GRID, "counts": [91, 90, 90]}
+        c = worker.answer(json.dumps({"id": 4, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8"), "grid": big}))
+        self.assertEqual((c["ok"], c["error"]), (False, f"Meno's request gives a grid of more points than {90 ** 3}"))
 
     def test_the_density_asked_for_is_its_occupied_orbitals_squared_point_by_point(self):
         path = sample("cube/water.molden")

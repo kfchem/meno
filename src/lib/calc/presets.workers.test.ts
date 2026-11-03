@@ -27,7 +27,7 @@ vi.mock("../plugins/known", async (importOriginal) => {
     id: "test-looks",
     name: "Test looks",
     version: "1.0.0",
-    depends: [{ plugin: renderer.id, versions: `>=${renderer.version}`, interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }],
+    depends: [{ plugin: renderer.id, versions: `>=${renderer.version} <100.0.0`, interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }],
     presets: { interface: "styling", looks: [{ id: "chalk", label: "Chalk", file: "chalk.py" }], studios: [{ id: "attic", label: "Attic", file: "attic.py" }] },
   })!;
   return { ...known, MANIFESTS: [...known.MANIFESTS.map((m) => (m.id === renderer.id ? { ...m, interfaces: [...(m.interfaces ?? []), { id: "styling", version: "1.2.0" }] } : m)), looks] };

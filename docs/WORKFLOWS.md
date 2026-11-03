@@ -1559,8 +1559,9 @@ Decided while building it, for the maintainer to confirm:
   its standard input, which (`stdin`; added with the real runs of
   2026-10-09, for Gaussian) - and the programs installed beside its own
   run after it, in turn, where it ended well (`then`; added 2026-10-11,
-  for ORCA's orca_2mkl: what they print kept apart from the job's log,
-  which is its program's output; one that fails leaves the job done);
+  for the program ORCA's job runs beside it - its orca_2aim: what they
+  print kept apart from the job's log, which is its program's output; one
+  that fails leaves the job done);
   **`collect {step, entries, options, files, log,
   ended}`** gives an output for each entry in the readers' output form
   (lib/calc/output) - or, for a job that did not end done, why, in the
@@ -1719,7 +1720,8 @@ Decided while building it, for the maintainer to confirm:
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the
   search is (full, or CREST's three quicker ones), and the energy window
-  (6 kcal/mol by default). The charge and spin multiplicity are those
+  (6 kcal/mol by default, CREST's own; any above nought, from 0.1, with no
+  upper bound of Meno's - 2026-11-02, before which it stopped at 100). The charge and spin multiplicity are those
   Export reads, as for xTB. Its search samples with the natural masses:
   the plugin gives CREST none, which changes how it explores, not the
   conformers or energies it gives.
@@ -1821,8 +1823,13 @@ Decided while building it, for the maintainer to confirm:
 - **The wavefunction is kept** (2026-10-11) with each molecule a step
   gives, as the output is - kept in the workspace's file, and given to a
   later step that takes it (a step's `files`: Multiwfn's NCI). ORCA's: its
-  job then runs orca_2mkl, installed beside ORCA, as its manual has it -
-  `orca_2mkl input -molden`, writing `input.molden.input`, a Molden file.
+  job then runs orca_2aim, installed beside ORCA, as its manual has it
+  (9.2.9) - `orca_2aim input`, writing `input.wfx`, a WFX file (a kind
+  Meno reads itself: FILE-IO.md), at the job's last geometry. What it holds
+  to draw: the occupied orbitals alone - no LUMO's surface comes from it,
+  though the orbital list, from ORCA's output, has every orbital's energy -
+  and, where an atom has an ECP, no core: a density from it lacks the
+  ECP's electrons.
   Gaussian's: `Output=WFX` in the route, and the file's name on a line of
   its own after the molecule ("read from the input stream, on a separate
   line", gaussian.com, *Output*): a WFX file, at the last geometry, in
@@ -2090,7 +2097,12 @@ Then, of the leftovers the maintainer chose:
   is comes where a program's documentation says how it says it.
 - **CREST optimises a set of conformers in one run** (*Optimise*, `crest
   --mdopt`, as its documentation's "Ensemble Optimization" has it): the
-  entries of each molecule written into one ensemble file, optimised, and
+  entries of each molecule - the same atoms in the same order, the same
+  atoms bonded to each other (whatever the bonds' orders: a ring drawn as
+  another Kekule structure is one molecule), of the same charge and spin, as one ensemble file holds one
+  molecule's ("Coordinate Files"; bonded the same way since 2026-11-02:
+  two of another constitution whose atoms came in the same order went into
+  one before) - written into one ensemble file, optimised, and
   read back from `crest_ensemble.xyz` in the order they went, each with
   its energy. GFN2-xTB, GFN1-xTB or GFN-FF, and a solvent; one method,
   not the search's two.

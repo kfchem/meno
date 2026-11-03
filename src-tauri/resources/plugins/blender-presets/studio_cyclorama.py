@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Meno contributors. Under the GPL, in this plugin's LICENSE.
 """The studio "cyclorama" (manifest `presets.studios`): a wall far behind, lit as a soft pool by its own light and seen by
 the camera alone, in the background's colour, with a key, a fill, a top light and two coloured rims behind the molecules.
-On a transparent background there is no wall."""
+On a transparent background - the studio being the backdrop chosen - the wall is dark."""
 import math
 
 import bmesh
@@ -28,8 +28,6 @@ def setup(ctx):
     common.area(ctx, "rimR", 0.14, 1400, (0.45, 0.75, 1.0), at(1.3, 1.5, 0.5), mid, 1.6, gain=GAIN)
     common.area(ctx, "rimL", 0.14, 1000, (1.0, 0.62, 0.35), at(-1.4, 1.4, 0.2), mid, 1.6, gain=GAIN)
     common.soft(ctx)
-    if bg == "transparent":
-        return
     pool = common.COLOURS.get(bg, common.COLOURS["black"])
     me = bpy.data.meshes.new("wall")
     bm = bmesh.new()
@@ -42,7 +40,6 @@ def setup(ctx):
     wall.rotation_euler = (math.radians(90), 0, 0)
     common.seen_to(ctx, wall.location)
     m = bpy.data.materials.new("wall")
-    m.use_nodes = True
     nt = m.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")

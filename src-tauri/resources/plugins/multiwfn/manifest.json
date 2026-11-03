@@ -1,7 +1,7 @@
 {
   "id": "multiwfn",
   "name": "Multiwfn interface",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shows non-covalent interactions - hydrogen bonds, van der Waals contacts, steric clashes - as surfaces coloured by their strength, from a wavefunction or the geometry alone. Multiwfn is installed separately, under its own licence, and never downloaded by Meno; work that uses it cites its papers.",
   "licence": "Apache-2.0",
   "homepage": "http://sobereva.com/multiwfn",
@@ -9,11 +9,14 @@
   "installed": [
     {"name": "multiwfn", "label": "Multiwfn", "files": {"macos": "multiwfn", "linux": "Multiwfn", "windows": "Multiwfn.exe"}, "env": {"Multiwfnpath": "{folder}"}}
   ],
+  "depends": [
+    {"plugin": "gaussian", "versions": ">=0.4.0 <1.0.0", "optional": true, "kinds": ["gaussian-fchk"]}
+  ],
   "steps": [
     {
       "kinds": ["nci"],
       "programs": ["multiwfn"],
-      "files": ["molden", "gaussian-fchk", "wfn", "wfx"],
+      "files": ["molden", "gaussian-fchk", "wfx"],
       "options": [
         {"id": "density", "label": "Density", "type": "choice", "choices": [{"value": "wavefunction", "label": "Wavefunction, else promolecular"}, {"value": "promolecular", "label": "Promolecular"}], "default": "wavefunction"},
         {"id": "grid", "label": "Grid", "type": "choice", "choices": [{"value": "low", "label": "Low (about 125,000 points)"}, {"value": "medium", "label": "Medium (about 512,000 points)"}, {"value": "high", "label": "High (about 1,728,000 points)"}], "default": "medium"},

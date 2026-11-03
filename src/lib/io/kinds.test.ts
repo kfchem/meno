@@ -73,10 +73,15 @@ describe("what a file is", () => {
   });
 
   it("is no program's output where no plugin added brings its kind: Meno knows no program", () => {
-    expect(kinds().map((k) => k.id)).toEqual(["meno-workspace", "meno-record", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
+    expect(kinds().map((k) => k.id)).toEqual(["meno-workspace", "meno-record", "rxn", "mol", "sdf", "xyz", "pdb", "cube", "wfx", "molden"]);
     expect(id("job.out", ORCA)).toBeNull();
     expect(id("run.log", GAUSSIAN)).toBeNull();
-    expect(id("", "[Molden Format]\n")).toBeNull();
+  });
+
+  it("is a WFX file or a Molden file by what starts its sections, any case: kinds programs of every kind write, which Meno knows itself", () => {
+    expect(id("water.wfx", "<Title>\n water\n</Title>\n<number of primitives>\n 7\n</Number of Primitives>\n")).toBe("wfx");
+    expect(id("", "[Molden Format]\n[Atoms] AU\n")).toBe("molden");
+    expect(id("orbitals.input", "[MOLDEN FORMAT]\n")).toBe("molden");
   });
 
   it("is the program's whose banner comes first, where an output holds another's too", () => {

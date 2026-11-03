@@ -128,6 +128,25 @@ class Prepare(unittest.TestCase):
         # (two Xmol frames, one after the other)
         self.assertEqual([ensemble[0], ensemble[8]], ["6", "6"])
 
+    def test_an_ensemble_holds_one_constitution_though_another_has_its_atoms_in_the_same_order(self):
+        # (the same atoms in the same order, one H bonded to O in one and to C in the other: two molecules, two ensembles)
+        other = {**METHANOL, "bonds": [b if b["a2"] != 5 else {**b, "a1": 1} for b in METHANOL["bonds"]]}
+        self.assertNotEqual(other["bonds"], METHANOL["bonds"])
+        jobs = ask("prepare", step="optimise", entries=[METHANOL, other, METHANOL], options={"method": "gfn2"})["jobs"]
+        self.assertEqual([j["entries"] for j in jobs], [[0, 2], [1]])
+        # (the bonds of one molecule, written in another order or either way round, or with other orders - a ring drawn
+        #  as another Kekule structure - are the same molecule's)
+        turned = {**METHANOL, "bonds": [{**b, "a1": b["a2"], "a2": b["a1"]} for b in reversed(METHANOL["bonds"])]}
+        kekule = {**METHANOL, "bonds": [{**b, "order": 2} if i == 0 else b for i, b in enumerate(METHANOL["bonds"])]}
+        jobs = ask("prepare", step="optimise", entries=[METHANOL, turned, kekule], options={"method": "gfn2"})["jobs"]
+        self.assertEqual([j["entries"] for j in jobs], [[0, 1, 2]])
+
+    def test_any_energy_window_above_nought(self):
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        ewin = next(o for s in manifest["steps"] for o in s["options"] if o["id"] == "ewin")
+        self.assertNotIn("max", ewin)
+        self.assertIn("--ewin", ask("prepare", step="conformers", entries=[METHANOL], options={**defaults(), "ewin": 150})["jobs"][0]["args"])
+
     def test_the_programs_its_jobs_run_are_those_its_manifest_names(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         for step in manifest["steps"]:

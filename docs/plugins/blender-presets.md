@@ -26,8 +26,10 @@ by; the options that adjust them (`options`, each shown `when` its look,
 studio or motion is chosen); and the files those share (`files`).
 
 A preset plugin has no worker. Meno copies the files its presets name
-into the render job (`presets/<plugin id>/`), and the renderer runs the
-chosen ones inside its Blender, after it has built Meno's scene, against
+into the render job (`presets/<plugin id>/`) - which names those files may
+have is Meno's to say (docs/PLUGINS.md, *Presets*), the renderer checking
+the entry's shape alone - and the renderer runs the chosen ones inside its
+Blender, after it has built Meno's scene, against
 one object, `ctx`. A preset runs against `ctx` alone: it reaches nothing
 of Meno's, of another plugin's or of the network beyond what the
 renderer's own job has. That is what using the renderer means.
@@ -38,7 +40,7 @@ renderer's own job has. That is what using the renderer means.
 |---|---|
 | `version` | `1`. |
 | `scene` | Blender's scene, as the renderer built it from Meno's. |
-| `request` | What Meno asked: `width`, `height`, `fps`, `frames`, `seconds`, `mode` (`once` or `loop`), `background` (`transparent`, `white`, `black` or `grey`), `key`, `ambient` and `softness` (the light against the canvas's), the look's parts as asked, and `values`: this preset's own options. |
+| `request` | What Meno asked: `width`, `height`, `fps`, `frames`, `seconds`, `mode` (`once` or `loop`), `background` (`transparent`, `white`, `black` or `grey`), `key`, `ambient` and `softness` (the light against the canvas's), the look's parts as asked, and `values`: the options of the preset plugins chosen from, together - so one preset plugin's option ids are never another's. |
 | `molecules` | Meno's molecules, in the order Meno wrote them. Each has `object` (its node), `atoms` and `bonds`. An atom: `object` (its ball), `index` (its atom in the molecule), `element`, `radius` (the ball's, in the scene's units) and `colour` (linear RGB, as Meno drew it). A bond: `objects` (its sticks: a double bond's lines are two, a line coloured by its atoms is two halves), `order`, `atoms` (the indices at its ends) and `centre` (a stick to a ring's centre: that ring's atoms). |
 | `camera` | Meno's camera. A motion may key it. |
 | `folder` | Where the job's files are, the preset's beside them. |
@@ -77,7 +79,7 @@ backdrop.
 
 - `NOMINAL`: the length in seconds it is timed in; a film of another
   length plays it faster or slower.
-- `LOOP`: `"seamless"` where its Loop joins of itself, `"cycle"` where a
+- `LOOPS`: `"seamless"` where its Loop joins of itself, `"cycle"` where a
   Loop plays it forward and then back - or a function of `ctx` saying
   which, where that depends on what was asked. A cycle's half is keyed
   with `ctx.request["cycle"]` true, its Once over half the frames.

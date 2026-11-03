@@ -70,9 +70,12 @@ for either grid. Saved with the workspace as any surface is.
   its molecule was read from where it is of one of them - and the entry is
   its molecule's last geometry, the one an output ends on - as `{kind,
   name, text}` in `files`. Multiwfn's step names `molden`,
-  `gaussian-fchk`, `wfn` and `wfx`: the kinds the Gaussian
-  interface's, cclib's and PySCF's manifests bring, joined by their ids
-  alone, sharing no code.
+  `gaussian-fchk` and `wfx`: `molden` and `wfx` are Meno's own kinds, and
+  `gaussian-fchk` the Gaussian interface's, which Multiwfn's manifest says
+  it uses (`depends`, `kinds`: PLUGINS.md, *Depends*) - taken only while
+  that plugin is added, of a version it works with. A step names no kind
+  but its own, Meno's, or one it says it uses of another plugin; joined by
+  their ids alone, sharing no code.
 - **Surfaces in files Meno reads itself**: `collect` may answer, for each
   entry, `{"surfaces": [{"name", "rows": [{"label", "file", "iso",
   "colour": {"file", "from", "to", "label"}}]}]}` - which cube files of the
@@ -123,12 +126,13 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 
 ## Not yet
 
-- WFX files are read by the WFX reader (2026-10-12; the format's
-  specification, AIMAll's), so one opened goes to Multiwfn's NCI as its
-  wavefunction, and its orbitals are drawn as surfaces, as other orbital
-  results are (worked out on a grid from the file's primitives, with
-  NumPy in the plugin's environment); WFN files not yet - no
-  specification of that format is published to follow.
+- WFX files are read by Meno itself (2026-11-01, before by a reader
+  plugin from 2026-10-12; the format's specification, AIMAll's), so one
+  opened goes to Multiwfn's NCI as its wavefunction, and its orbitals are
+  drawn as surfaces, as other orbital results are (worked out on Meno's
+  grid from the file's primitives, in Meno's reading worker); its
+  orbitals only, no list of the total or spin density; WFN files not yet
+  - no specification of that format is published to follow.
 - NCI from a wavefunction by NCIPLOT (it reads WFN and WFX too).
 - Integrated NCI properties, and the RDG against sign(λ2)ρ plot.
 - Interactions between molecules alone by Multiwfn (NCIPLOT's

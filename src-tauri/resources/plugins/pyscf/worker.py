@@ -47,6 +47,9 @@ SCHEMA = 1
 ORTHONORMAL_MOST = 1e-3
 # how many grid points are worked out at once
 CHUNK = 20000
+# how many points a grid it is given may have at most: as many as Meno lays (lib/calc/grids `GRID_LAID_MOST`), so that a request
+# sets no more memory than that
+POINTS_MOST = 90 ** 3
 
 
 def is_molden(text):
@@ -167,6 +170,8 @@ def grid_given(asked):
         raise ValueError("Meno's request gives no grid to work the values out on")
     if any(axes[k][j] != 0 for k in range(3) for j in range(3) if j != k) or any(axes[k][k] <= 0 for k in range(3)) or any(c < 2 for c in counts):
         raise ValueError("Meno's request gives a grid whose axes do not run along x, y and z")
+    if counts[0] * counts[1] * counts[2] > POINTS_MOST:
+        raise ValueError(f"Meno's request gives a grid of more points than {POINTS_MOST}")
     return [v / ANGSTROM_PER_BOHR for v in origin], [axes[k][k] / ANGSTROM_PER_BOHR for k in range(3)], counts
 
 

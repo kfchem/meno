@@ -54,12 +54,12 @@ export type ReaderOutput = {
   /**
    * Each geometry's population - its share of its compound, the program's
    * own Boltzmann weight, adding up to one - where the program works them
-   * out: a conformer search's (CREST counts each conformer's rotamers in).
+   * out: a conformer search's, which may count each conformer's rotamers in.
    */
   populations?: number[] | null;
   /**
    * Each geometry's degeneracy - how many forms of it the program found
-   * alike, its rotamers (CREST's) - where it says: what Meno's own
+   * alike, its rotamers - where it says: what Meno's own
    * Boltzmann weights count in too, as the program's populations do.
    */
   degeneracies?: number[] | null;
@@ -119,7 +119,7 @@ export type CalcInfo = {
   /**
    * The wavefunction the calculation wrote besides, kept with it - a Molden
    * file, a WFX - its name, kind and SHA-256: given to a step that takes
-   * one (a step's `files`: Multiwfn's NCI), as the output is.
+   * one (a step's `files`), as the output is.
    */
   wavefunction?: CalcSource;
   /** The readers chosen to read it as well that could not, each by id, and why (lib/calc/read). */

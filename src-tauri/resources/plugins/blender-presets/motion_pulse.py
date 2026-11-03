@@ -9,7 +9,7 @@ Keyed with the kit (motionkit.py) on Meno's molecule: docs/plugins/blender-prese
 import motion_kit as kit
 
 NOMINAL = 6.0
-LOOP = "seamless"
+LOOPS = "seamless"
 
 
 def key(ctx):

@@ -35,11 +35,6 @@ SYMBOLS = (
     "Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og"
 ).split()
 
-# electronvolts in a hartree (CODATA 2018): orbital energies, printed in hartrees, are given in eV
-EV_PER_HARTREE = 27.211386245988
-
-# a frontier orbital's names: how many orbitals a list may hold at most (src/lib/calc/results.ts ROWS_MOST)
-ROWS_MOST = 5000
 
 
 # --- numbers as Gaussian prints them ---------------------------------------------
@@ -671,12 +666,6 @@ def dipole(lines):
     }]
 
 
-def orbital_name(i, homo):
-    if i <= homo:
-        return "HOMO" if i == homo else f"HOMO−{homo - i}"
-    return "LUMO" if i == homo + 1 else f"LUMO+{i - homo - 1}"
-
-
 # " Alpha  occ. eigenvalues --  -10.02022 -10.02017", "  Beta virt. eigenvalues --    0.03742"
 EIGENVALUES = re.compile(r"^\s+(Alpha|Beta)\s+(occ\.|virt\.) eigenvalues --(.*)$")
 
@@ -706,16 +695,18 @@ def orbital_symmetries(lines):
 
 
 def orbitals(lines):
-    """The orbitals, each spin's, by their energies (eV), as a list from the highest down, opening on the frontier;
-    and, for a closed shell, the HOMO-LUMO gap - the last Gaussian printed (gaussian.com, Pop). Every orbital, but no
-    more than a list holds: then those about the frontier."""
+    """The orbitals Gaussian printed last (gaussian.com, Pop), in Meno's general form: each its spin - of both, where it
+    printed one set (a restricted calculation's), else alpha, then beta - its energy in hartrees, its occupation (an
+    occupied orbital's electrons, two of a restricted calculation's, one of a spin's; none of a virtual one) and its
+    symmetry where it printed them; every one, in Gaussian's order. Meno lists them itself (src/lib/calc/orbitals.ts).
+    None where it printed none."""
     blocks = []
     for i, line in enumerate(lines):
         m = EIGENVALUES.match(line)
         if m and m.group(1) == "Alpha" and m.group(2) == "occ." and (i == 0 or not EIGENVALUES.match(lines[i - 1])):
             blocks.append(i)
     if not blocks:
-        return []
+        return None
     spins = {"Alpha": ([], []), "Beta": ([], [])}
     for line in lines[blocks[-1] :]:
         m = EIGENVALUES.match(line)
@@ -726,34 +717,19 @@ def orbitals(lines):
         spins[m.group(1)][0 if m.group(2) == "occ." else 1].extend(numbers(m.group(3)))
     present = [s for s in ("Alpha", "Beta") if spins[s][0] or spins[s][1]]
     syms = orbital_symmetries(lines[: blocks[-1]])
+    one = len(present) == 1
     out = []
-    labels = ["Molecular orbitals"] if len(present) == 1 else ["α orbitals", "β orbitals"]
-    for s, (spin, label) in enumerate(zip(present, labels)):
+    for s, spin in enumerate(present):
         occ, virt = spins[spin]
-        e = [None if v is None else v * EV_PER_HARTREE for v in occ + virt]
-        homo = len(occ) - 1
-        if homo < 0:
-            continue
-        sym = syms[s] if syms is not None and s < len(syms) and len(syms[s]) == len(e) else None
-        first, last = 0, len(e) - 1
-        if len(e) > ROWS_MOST:
-            first = max(0, homo - ROWS_MOST // 2 + 1)
-            last = min(len(e) - 1, first + ROWS_MOST - 1)
-            first = max(0, last - ROWS_MOST + 1)
-        columns = [{"label": "Orbital"}] + ([{"label": "Symmetry", "quantity": "symmetry"}] if sym is not None else []) + [{"label": "Energy", "unit": "eV", "digits": 3}]
-        rows = [{"cells": [orbital_name(i, homo)] + ([sym[i]] if sym is not None else []) + [e[i]]} for i in range(last, first - 1, -1)]
-        out.append({
-            "id": "orbitals" if len(present) == 1 else f"orbitals.{'ab'[s]}",
-            "on": "list", "group": "Orbitals", "label": label, "columns": columns, "rows": rows,
-            # (opening on the frontier: the LUMO, the HOMO under it)
-            "focus": max(0, last - homo - 1),
-        })
-        if len(present) == 1 and homo + 1 < len(e) and e[homo] is not None and e[homo + 1] is not None:
+        sym = syms[s] if syms is not None and s < len(syms) and len(syms[s]) == len(occ) + len(virt) else None
+        for i, e in enumerate(occ + virt):
             out.append({
-                "id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap",
-                "value": e[homo + 1] - e[homo], "unit": "eV", "digits": 2,
+                "spin": "both" if one else spin.lower(),
+                "energy": e,
+                "occupation": (2.0 if one else 1.0) if i < len(occ) else 0.0,
+                **({"symmetry": sym[i]} if sym is not None else {}),
             })
-    return out
+    return out or None
 
 
 # a vibration's values as Gaussian lists them, three to a block (gaussian.com, Freq; "Vibrational Analysis in
@@ -1005,28 +981,22 @@ DENSITY = re.compile(r"Population analysis using the (\S+) density", re.I)
 
 
 def density_states(lines):
-    """Of a job with excited states, which state its dipole, its charges and its orbitals are of, as the output says:
-    "ground state" where its last population analysis is of the SCF density, else "" - not said, so that they are left
-    out. For a job with none: None each, said as ever. The orbitals are always the ground state's (its SCF's)."""
+    """Of a job with excited states, which state its dipole and its charges are of, as the output says: "ground state"
+    where its last population analysis is of the SCF density, else "" - not said, so that they are left out. For a job
+    with none: None each, said as ever. (Its orbitals are always the SCF's, given as any job's are.)"""
     if not any(EXCITED.match(line) for line in lines):
-        return (None, None, None)
+        return (None, None)
     found = [m.group(1) for line in lines for m in [DENSITY.search(line)] if m]
     state = "ground state" if found and found[-1].upper() == "SCF" else ""
-    return (state, state, "ground state")
+    return (state, state)
 
 
-def of_state(results, state, only=None):
+def of_state(results, state):
     """Results said to be of the state they are (`density_states`): their labels so, or left out where the output
-    does not say which; as they are where the job has no excited states. `only`, the one result this is of."""
+    does not say which; as they are where the job has no excited states."""
     if state is None:
         return results
-    out = []
-    for r in results:
-        if only and r.get("id") != only:
-            out.append(r)
-        elif state:
-            out.append({**r, "label": f"{r['label']}, {state}"})
-    return out
+    return [{**r, "label": f"{r['label']}, {state}"} for r in results] if state else []
 
 
 # --- results said first in the chip's line ------------------------------------------------------
@@ -1207,9 +1177,11 @@ def read_fchk(name, text):
     if isinstance(g, list) and len(g) == 3 * len(zs) and None not in g:
         out.append({"id": "rms-gradient", "on": "frames", "group": "Optimisation", "label": "RMS gradient", "unit": "Eh/bohr", "digits": 6,
                     "values": [(sum(c * c for c in g) / len(g)) ** 0.5]})
-    out += fchk_orbitals(items)
     out += vibration_list(fchk_modes(items, len(zs)), len(zs))
     result["results"] = out
+    found = fchk_orbitals(items)
+    if found:
+        result["orbitals"] = found
     return result
 
 
@@ -1232,34 +1204,18 @@ def fchk_modes(items, n):
 
 
 def fchk_orbitals(items):
-    """A formatted checkpoint's orbitals (its "Alpha Orbital Energies", and for an open shell its beta ones), each
-    spin's HOMO the last of as many as its electrons, as a list as a log's are (`orbitals`)."""
-    spins = []
-    for spin in ("Alpha", "Beta"):
-        e = items.get(f"{spin} Orbital Energies")
-        n = items.get(f"Number of {spin.lower()} electrons")
-        if isinstance(e, list) and e and isinstance(n, int):
-            spins.append(([None if v is None else v * EV_PER_HARTREE for v in e], n - 1))
-    out = []
-    labels = ["Molecular orbitals"] if len(spins) == 1 else ["α orbitals", "β orbitals"]
-    for s, ((e, homo), label) in enumerate(zip(spins, labels)):
-        if homo < 0 or homo >= len(e):
-            continue
-        first, last = 0, len(e) - 1
-        if len(e) > ROWS_MOST:
-            first = max(0, homo - ROWS_MOST // 2 + 1)
-            last = min(len(e) - 1, first + ROWS_MOST - 1)
-            first = max(0, last - ROWS_MOST + 1)
-        rows = [{"cells": [orbital_name(i, homo), e[i]]} for i in range(last, first - 1, -1)]
-        out.append({
-            "id": "orbitals" if len(spins) == 1 else f"orbitals.{'ab'[s]}",
-            "on": "list", "group": "Orbitals", "label": label,
-            "columns": [{"label": "Orbital"}, {"label": "Energy", "unit": "eV", "digits": 3}], "rows": rows,
-            "focus": max(0, last - homo - 1),
-        })
-        if len(spins) == 1 and homo + 1 < len(e) and e[homo] is not None and e[homo + 1] is not None:
-            out.append({"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap", "value": e[homo + 1] - e[homo], "unit": "eV", "digits": 2})
-    return out
+    """A formatted checkpoint's orbitals in Meno's general form (`orbitals`): its "Alpha Orbital Energies" - of both
+    spins where it holds no beta ones - and for an unrestricted calculation its beta ones, each spin's first as many
+    occupied as its electrons ("Number of alpha electrons", "Number of beta electrons"); none where it holds none."""
+    alpha, beta = items.get("Alpha Orbital Energies"), items.get("Beta Orbital Energies")
+    na, nb = items.get("Number of alpha electrons"), items.get("Number of beta electrons")
+    if not isinstance(alpha, list) or not alpha or not isinstance(na, int) or not isinstance(nb, int):
+        return None
+    if not isinstance(beta, list) or not beta:
+        return [{"spin": "both", "energy": e, "occupation": float((i < na) + (i < nb))} for i, e in enumerate(alpha)]
+    return [{"spin": "alpha", "energy": e, "occupation": float(i < na)} for i, e in enumerate(alpha)] + [
+        {"spin": "beta", "energy": e, "occupation": float(i < nb)} for i, e in enumerate(beta)
+    ]
 
 
 # --- a job, read ----------------------------------------------------------------------------------
@@ -1340,8 +1296,10 @@ def read(name, text, followed=False):
         + rms_gradients(lines, frames, ends)
         + of_state(charges(lines, n, route_list), states[1])
         + vibration_list(vibrations(lines, n), n)
-        + of_state(orbitals(lines), states[2], only="homo-lumo-gap")
     )
+    found = orbitals(lines)
+    if found:
+        result["orbitals"] = found
     # (the imaginary frequencies, as Gaussian itself counted them - NImag - the most negative of those listed)
     nimag = nimag_of(text)
     if nimag is not None:

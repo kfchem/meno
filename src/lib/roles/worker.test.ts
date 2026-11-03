@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { rolePlugin } from "./worker";
+import { rolePlugin, roleUndecided } from "./worker";
 import { useReaders } from "../calc/workers";
 import { useAppSettings } from "../settings/appSettings";
 
@@ -13,10 +13,14 @@ describe("the plugin that fills a role", () => {
     useReaders.setState({ state: {} });
   });
 
-  it("is the one chosen; else the first added that fills it - the one the chemist added; else the first", () => {
-    // (two read pictures, MolNexTR first in Meno's order)
-    expect(rolePlugin("pictures")?.id).toBe("molnextr");
+  it("is the one chosen; else the one added that fills it - the one the chemist added; else, of several, none: the chemist chooses, never the first by its name", () => {
+    // (two read pictures, none added and none chosen: none - both to choose among)
+    expect(rolePlugin("pictures")).toBeUndefined();
+    expect(roleUndecided("pictures").map((p) => p.id)).toEqual(["molnextr", "molscribe"]);
+    useReaders.setState({ state: { molnextr: "added", molscribe: "added" } });
+    expect(rolePlugin("pictures")).toBeUndefined();
     useReaders.setState({ state: { molnextr: "absent", molscribe: "added" } });
+    expect(roleUndecided("pictures")).toEqual([]);
     expect(rolePlugin("pictures")?.id).toBe("molscribe");
     roles({ pictures: "molnextr" });
     expect(rolePlugin("pictures")?.id).toBe("molnextr");
