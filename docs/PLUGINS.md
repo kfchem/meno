@@ -272,8 +272,8 @@ The plugins Meno carries come in its own folder, as trusted as Meno itself, so t
 ## Licences
 
 Meno is Apache-2.0, and so is what the folders of the plugins it carries
-hold - their workers, manifests, locks and grammars - but for one plugin
-(below). A plugin's `licence`, as its `version` and `homepage`, is that of
+hold - their workers, manifests, locks and grammars - but for the plugins
+below. A plugin's `licence`, as its `version` and `homepage`, is that of
 what it brings: the program or package its environment is made with
 (cclib's BSD-3-Clause, xTB's LGPL-3.0-or-later, MolScribe's MIT), or,
 where it brings only its own code - an interface to a program installed
@@ -313,8 +313,10 @@ worthwhile):
 - it is listed with its licence wherever Meno lists the licences of what
   it carries: README, and Settings, *Plugins*.
 
-The Blender plugin (`resources/plugins/blender`, RENDER.md) is the first
-such plugin.
+Two such plugins come with Meno, both GPL-3.0-or-later: the Blender plugin
+(`resources/plugins/blender`, RENDER.md), and the Blender looks and motions
+plugin (`resources/plugins/blender-presets`), whose looks, studios and film
+motions are scripts for Blender too.
 
 A plugin Meno stops carrying leaves its files behind on Windows unless the
 installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
