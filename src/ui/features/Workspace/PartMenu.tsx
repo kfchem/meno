@@ -1049,7 +1049,8 @@ export default function PartMenu({
         </div>
       )}
       {font && (
-        <div role="group" aria-label="Font" className="pb-1 mb-1 border-b border-gh-line">
+        // (over the items after it: the typefaces' list opens across them)
+        <div role="group" aria-label="Font" className="relative z-10 pb-1 mb-1 border-b border-gh-line">
           {font}
         </div>
       )}
