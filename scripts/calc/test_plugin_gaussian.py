@@ -326,5 +326,17 @@ class OnWindows(unittest.TestCase):
         self.assertEqual(installed["env"]["GAUSS_EXEDIR"], "{folder}")
 
 
+class SystemForm(unittest.TestCase):
+    """Which form a job takes, as the system the worker runs on says it."""
+
+    def test_the_form_follows_the_system_the_worker_runs_on(self):
+        # (windows() itself, unpatched: Windows by sys.platform's "win32" alone - macOS and Linux the standard input's form)
+        for system, named in [("win32", True), ("darwin", False), ("linux", False)]:
+            with mock.patch.object(worker.sys, "platform", system):
+                self.assertEqual(worker.windows(), named, system)
+                [job] = ask("prepare", step="energy", entries=[ENTRY], options={**step_defaults("energy"), "wavefunction": False}, cores=1)["jobs"]
+                self.assertEqual((job["args"], job.get("stdin"), job["reads"]), (["input.gjf", "input.log"], None, ["input.log"]) if named else ([], "input.gjf", []), system)
+
+
 if __name__ == "__main__":
     unittest.main()
