@@ -78,6 +78,13 @@ describe("a catalogue of plugins online, read", () => {
   it("takes a plugin's files only on https, from where the plugins' releases are - nowhere else", () => {
     const at = (url: string, sha256 = HEX, bytes: unknown = 10) => why(catalogue([entry({ source: { url, sha256, bytes } })]));
     expect(at("https://objects.githubusercontent.com/x/sketch.tar.gz")).toBeUndefined();
+    expect(at("https://release-assets.githubusercontent.com/x/sketch.tar.gz")).toBeUndefined();
+    // (letters made small, as the address reads them: the same host)
+    expect(at("https://GITHUB.com/x.tar.gz")).toBeUndefined();
+    // (a host only like one of them, or one of them with a dot at its end: none of them, and the whole list refused)
+    for (const url of ["https://evilgithub.com/x.tar.gz", "https://github.com.evil.net/x.tar.gz", "https://objects.githubusercontent.com.evil.net/x.tar.gz", "https://github.com./x.tar.gz", "https://xgithub.com/x.tar.gz", "https://api.github.com/x.tar.gz"]) {
+      expect(at(url), url).toMatch(/where its files are/);
+    }
     for (const url of ["http://github.com/x.tar.gz", "https://example.org/x.tar.gz", "https://github.com:8443/x.tar.gz", "https://user:pw@github.com/x.tar.gz", "file:///tmp/x.tar.gz", "not a url"]) {
       expect(at(url)).toMatch(/where its files are/);
     }

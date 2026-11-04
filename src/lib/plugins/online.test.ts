@@ -99,27 +99,39 @@ function files(manifest: unknown): PluginFiles & { did: string[] } {
 
 const MANIFEST = { id: "sketch", name: "Sketch interface", version: "0.2.0", description: "Draws.", licence: "Apache-2.0", homepage: "https://example.org", environment: "uv", kinds: [], reads: [], roles: [{ role: "smiles" }] };
 
+/** The SHA-256 of a manifest's text, as a catalogue gives it. */
+const shaOf = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+/** The entry, with its manifest's fingerprint that of `manifest` as staged. */
+const entryFor = async (manifest: unknown) => ({ ...ENTRY, manifestSha256: await shaOf(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }) as CatalogueEntry;
+
 describe("a plugin got from the list", () => {
   beforeEach(() => useNetwork.setState({ granted: [CATALOGUE_PURPOSE] }));
 
   it("is staged, its manifest read as any plugin's is, then taken into use and the plugins read again", async () => {
     const f = files(MANIFEST);
-    await getPlugin(ENTRY as CatalogueEntry, f);
+    await getPlugin(await entryFor(MANIFEST), f);
     expect(f.did).toEqual(["stage sketch 0.2.0", "commit s1", "reload"]);
   });
 
   it("is thrown away, nothing of it used, where its files are not the plugin and version the list offered", async () => {
     for (const manifest of [{ ...MANIFEST, id: "other" }, { ...MANIFEST, version: "0.2.1" }, { ...MANIFEST, environment: "anything" }, "{not json"]) {
       const f = files(manifest);
-      await expect(getPlugin(ENTRY as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
+      await expect(getPlugin(await entryFor(manifest), f)).rejects.toThrow("its files are not the plugin the list offered");
       expect(f.did).toEqual(["stage sketch 0.2.0", "discard s1"]);
     }
+  });
+
+  it("is thrown away where its manifest's fingerprint is not the one the list gave - the plugin and version right or not", async () => {
+    const f = files(MANIFEST);
+    await expect(getPlugin({ ...ENTRY, manifestSha256: await shaOf(JSON.stringify({ ...MANIFEST, description: "Other." })) } as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
+    expect(f.did).toEqual(["stage sketch 0.2.0", "discard s1"]);
   });
 
   it("is not got offline, nothing staged", async () => {
     useNetwork.setState({ offline: true });
     const f = files(MANIFEST);
-    await expect(getPlugin(ENTRY as CatalogueEntry, f)).rejects.toThrow("needs the network");
+    await expect(getPlugin(await entryFor(MANIFEST), f)).rejects.toThrow("needs the network");
     expect(f.did).toEqual([]);
   });
 });

@@ -26,8 +26,13 @@ export const CONTRACTS_SPOKEN: readonly number[] = [1];
 /** What the catalogue is fetched under, asked once as any first use of the network is (lib/net/network). */
 export const CATALOGUE_PURPOSE = "plugin-catalogue";
 
-/** Where the catalogue and the plugins' files come from: their releases, and where those send their files. */
-export const CATALOGUE_HOSTS: readonly string[] = ["github.com", "objects.githubusercontent.com"];
+/**
+ * Where the catalogue and the plugins' files come from: their releases, and
+ * where those send their files. Each host exactly, as the address reads it -
+ * letters made small, nothing more: a host only like one of them, or one with
+ * a dot at its end, is none of them.
+ */
+export const CATALOGUE_HOSTS: readonly string[] = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 
 /** A plugin on offer: what Settings says of it before it is got, and where its files are. */
 export type CatalogueEntry = {

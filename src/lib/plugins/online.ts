@@ -104,19 +104,27 @@ export const PLUGIN_FILES: PluginFiles = {
   reload: async () => {},
 };
 
+/** The SHA-256 of a text's UTF-8 bytes, in hex. */
+async function sha256Of(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
- * Gets a plugin's files from the catalogue: staged, its manifest read as
- * any plugin's is and checked to be the plugin and version the catalogue
- * offered - else thrown away, nothing of it used - then taken into use.
- * Nothing of it runs before all that; it is added after, by the caller, as
- * any plugin is.
+ * Gets a plugin's files from the catalogue: staged - the backend refusing
+ * them, before it answers, where their archive's fingerprint and size, or
+ * its manifest's fingerprint, are not the catalogue's - then its manifest
+ * checked again here, by its fingerprint, and read as any plugin's is: the
+ * plugin and version the catalogue offered, or thrown away, nothing of it
+ * used. Only then taken into use. Nothing of it runs before all that; it is
+ * added after, by the caller, as any plugin is.
  */
 export async function getPlugin(entry: CatalogueEntry, files: PluginFiles = PLUGIN_FILES): Promise<void> {
   if (!(await askToConnect(CATALOGUE_REQUEST))) throw new Error(`${entry.name} was not got: it needs the network, and Meno is offline or the network was not allowed.`);
   const { stage, manifest } = await files.stage(entry.id, entry.version);
   let m: ReturnType<typeof acceptManifest> = null;
   try {
-    m = acceptManifest(JSON.parse(manifest));
+    m = (await sha256Of(manifest)) === entry.manifestSha256 ? acceptManifest(JSON.parse(manifest)) : null;
   } catch {
     m = null;
   }

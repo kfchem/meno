@@ -24,6 +24,9 @@ const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") 
 /** The kinds of a workflow's step a plugin fills, by their names - those Meno defines. */
 const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k) => p.steps.some((d) => d.kind === k.kind)).map((k) => k.name);
 
+/** A date, for people. */
+const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" });
+
 /** A date and time, for people: its hour and minutes both of two digits. */
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -79,7 +82,7 @@ function OnlineList({ online, offered }: { online: Online; offered: number }) {
         : online.state === "listed"
           ? online.kept
             ? `The list as it was${online.fetchedAt ? ` on ${when(online.fetchedAt)}` : ""}: a newer one could not be fetched (${online.kept}).`
-            : `${offered === 1 ? "One plugin" : `${offered} plugins`} online${online.fetchedAt ? `, as listed on ${when(online.fetchedAt)}` : ""}.`
+            : `${offered === 1 ? "One plugin" : `${offered} plugins`} online${online.fetchedAt ? `, as listed on ${when(online.fetchedAt)}` : ""}${online.catalogue ? ` - the list of ${day(online.catalogue.issued)}` : ""}.`
           : "Plugins are got from a list online, which Meno checks is its own before reading it.";
   return (
     <div className="flex items-center gap-4">

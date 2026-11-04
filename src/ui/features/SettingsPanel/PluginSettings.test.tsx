@@ -61,7 +61,7 @@ describe("Plugins in Settings, with the list online", () => {
         plugins: [entry({ id: "sketch", name: "Sketch interface", description: "Draws a structure from its name.", roles: ["smiles"], terms: "Free for academic use.", cite: "A. Author, J. Chem. 1 (2020) 1." })] as never,
       },
     });
-    expect(html).toMatch(/One plugin online, as listed on /);
+    expect(html).toMatch(/One plugin online, as listed on .+? - the list of .+?\./);
     expect(html).toContain("Online, not here yet");
     expect(html).toContain("Sketch interface <span");
     expect(html).toContain("Draws a structure from its name.");

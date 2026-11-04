@@ -1426,9 +1426,19 @@ comes in its own pull request.
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
 - **Read strictly, whole.** The backend checks the signature before
-  anything of it is read; what comes to Settings is read again as data
-  (`acceptCatalogue`). One entry Meno cannot read, or a plugin offered
-  twice, refuses the whole of it, as it is signed whole, and says why.
+  anything of it is read, and its serial against the one kept: one lower
+  is refused, and the one kept stays, so that an older list replayed
+  never undoes a plugin taken off it. What comes to Settings is read again
+  as data (`acceptCatalogue`). One entry Meno cannot read, or a plugin
+  offered twice, refuses the whole of it, as it is signed whole, and says
+  why. A list is not refused for its age: Settings shows the day it was
+  issued, beside when it was listed.
+- **Where a plugin's files may be.** On https, at the hosts the plugins'
+  releases are at - each exactly, its letters made small, nothing only
+  like one, nor one with a dot at its end - with no port and no name or
+  password. Any repository there: the signature makes the choice the
+  signer's. The backend follows redirects to those hosts alone, and
+  fetches no more than the entry's size, nor than a most of its own.
 - **When it is fetched.** Under a purpose of its own, `plugin-catalogue`,
   asked once as any first use of the network is: whenever the chemist
   asks (*List them*, *Look again*), and, where the network was allowed
@@ -1439,11 +1449,14 @@ comes in its own pull request.
 - **What is offered** (`offersOf`): a plugin not here, *Add*; one here at
   an older version, *Update to x.y.z*; one here at that version or a
   newer one, nothing; one for another system or a newer Meno, why not.
-- **Got.** A plugin's files are staged - fetched, checked against the
-  catalogue's fingerprint and size, and unpacked apart from the plugins
-  in use - and its manifest read as any plugin's is. Only where it is the
-  plugin and version the catalogue offered are they taken into use; else
-  they are thrown away and nothing of them is used. Nothing of a plugin
+- **Got.** A plugin's files are staged by the backend - fetched, checked
+  against the catalogue's fingerprint and size, unpacked apart from the
+  plugins in use, and its manifest checked against the catalogue's
+  fingerprint of it, all before it answers; anything not as the
+  catalogue gave refuses the whole. Then its manifest is checked again,
+  by its fingerprint, and read as any plugin's is. Only where it is the
+  plugin and version the catalogue offered are its files taken into use;
+  else they are thrown away and nothing of them is used. Nothing of a plugin
   runs before all that. It is then added as any plugin is: its
   environment set up, asked of first.
 - **Updated.** The newer version is got the same way, and set up again
