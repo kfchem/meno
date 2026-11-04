@@ -84,6 +84,10 @@ class Nciplot(unittest.TestCase):
         files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
         self.assertEqual(files["input.nci"].splitlines(), ["2", "molecule1.xyz", "molecule2.xyz", "ONAME NCI", "OUTPUT 2", "FINE", "INTERMOLECULAR", "CUTPLOT 0.07 0.4"])
         self.assertEqual(files["molecule1.xyz"].splitlines()[0], "3")
+        # (the density left out above, where chosen: CUTPLOT's first value - 0.07 unless chosen, the manual's default)
+        said = ask(nciplot, "prepare", entries=[DIMER], options={"density-cut": 0.05})
+        files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
+        self.assertEqual(files["input.nci"].splitlines()[-1], "CUTPLOT 0.05 0.3")
         # (one molecule has none to be between)
         one = {**DIMER, "atoms": DIMER["atoms"][:3], "bonds": DIMER["bonds"][:2], "fragments": [[0, 1, 2]]}
         self.assertFalse(ask(nciplot, "prepare", entries=[one], options={"between": True})["ok"])
@@ -115,7 +119,7 @@ class Nciplot(unittest.TestCase):
         self.assertEqual(failed["result"], {"why": "ERROR: no atoms"})
 
     def test_refuses_what_it_cannot_do(self):
-        for options in [{"grid": "huge"}, {"isovalue": 0}, {"between": "yes"}]:
+        for options in [{"grid": "huge"}, {"isovalue": 0}, {"between": "yes"}, {"density-cut": 0}, {"density-cut": 0.6}, {"density-cut": "0.07"}]:
             self.assertFalse(ask(nciplot, "prepare", entries=[DIMER], options=options)["ok"], options)
         self.assertFalse(ask(nciplot, "prepare", entries=[{**DIMER, "atoms": [{"el": "x1", "x": 0, "y": 0, "z": 0}]}], options={})["ok"])
         self.assertFalse(nciplot.answer(json.dumps({"id": 1, "op": "prepare", "step": "energy", "entries": [DIMER]}))["ok"])
@@ -209,7 +213,7 @@ class Multiwfn(unittest.TestCase):
 
 class Manifests(unittest.TestCase):
     def test_declare_what_the_workers_read(self):
-        for name, ids in [("nciplot", {"grid", "between", "isovalue", "range"}), ("multiwfn", {"density", "grid", "isovalue", "isovalue-promolecular", "from", "to"})]:
+        for name, ids in [("nciplot", {"grid", "between", "isovalue", "density-cut", "range"}), ("multiwfn", {"density", "grid", "isovalue", "isovalue-promolecular", "from", "to"})]:
             m = json.loads((ROOT / f"src-tauri/resources/plugins/{name}/manifest.json").read_text(encoding="utf-8"))
             self.assertEqual({o["id"] for o in m["steps"][0]["options"]}, ids, name)
             self.assertEqual(m["steps"][0]["kinds"], ["nci"])
