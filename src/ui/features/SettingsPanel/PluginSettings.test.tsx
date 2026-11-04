@@ -69,7 +69,8 @@ describe("Plugins in Settings, with the list online", () => {
     expect(html).toContain("Apache-2.0 · 240 KB to download");
     expect(html).toContain("Terms: Free for academic use.");
     expect(html).toContain("Cite: A. Author, J. Chem. 1 (2020) 1.");
-    expect(html).toMatch(/>Not added<\/span><button[^>]*>Add</);
+    // (not added: the heading says so, the card only Add)
+    expect(html).toMatch(/<div class="flex flex-col items-end gap-1\.5"><button[^>]*>Add</);
   });
 
   it("offers a newer version of a plugin here as an update - and says why one is not for here", () => {
@@ -84,6 +85,9 @@ describe("Plugins in Settings, with the list online", () => {
     });
     expect(html).toMatch(/>Update to 99\.0\.0</);
     expect(html).toContain("For Windows only");
+    // (one that cannot be added here: its name in grey)
+    expect(html).toMatch(/<div class="text-sm text-gh-gray">Windows thing <span/);
+    expect(html).not.toMatch(/<div class="text-sm text-gh-black">Windows thing/);
     expect(html).toContain("It is for a newer Meno");
     // (the plugin here not offered again)
     expect(html.split(`${HERE.name} <span`).length).toBe(2);

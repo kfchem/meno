@@ -24,8 +24,8 @@ const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") 
 /** The kinds of a workflow's step a plugin fills, by their names - those Meno defines. */
 const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k) => p.steps.some((d) => d.kind === k.kind)).map((k) => k.name);
 
-/** A date and time, for people. */
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+/** A date and time, for people: its hour and minutes both of two digits. */
+const when = (iso: string) => new Date(iso).toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 /**
  * Plugins in Settings: every plugin here, added or not - what it
@@ -69,7 +69,7 @@ export default function PluginSettings() {
   );
 }
 
-/** The list of plugins online: when it was fetched, or why it is not here, and the button that fetches it again. */
+/** The list of plugins online: when it was fetched, or why it is not here, and the button that fetches it again - a line, not a card, as no plugin is. */
 function OnlineList({ online, offered }: { online: Online; offered: number }) {
   const line =
     online.state === "listing"
@@ -82,7 +82,7 @@ function OnlineList({ online, offered }: { online: Online; offered: number }) {
             : `${offered === 1 ? "One plugin" : `${offered} plugins`} online${online.fetchedAt ? `, as listed on ${when(online.fetchedAt)}` : ""}.`
           : "Plugins are got from a list online, which Meno checks is its own before reading it.";
   return (
-    <div className="rounded-lg border border-gh-line bg-white px-4 py-3 flex items-center gap-4">
+    <div className="flex items-center gap-4">
       <p key={line} className={`flex-1 text-xs meno-fade-in ${online.state === "failed" ? "text-accel-accent" : "text-gh-gray"}`} aria-live="polite">
         {line}
       </p>
@@ -125,10 +125,12 @@ function OnlinePlugin({ offer }: { offer: Offer }) {
       .catch((err: unknown) => setProblem(err instanceof Error ? err.message : String(err)))
       .finally(() => setBusy(false));
   };
+  // (one that cannot be added here, passed over: its name in grey, why on the right)
+  const here = offer.offer !== "not-here";
   return (
     <div className="rounded-lg border border-gh-line bg-white px-4 py-3 flex items-start gap-4">
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-gh-black">
+        <div className={`text-sm ${here ? "text-gh-black" : "text-gh-gray"}`}>
           {e.name} <span className="text-gh-gray">{e.version}</span>
         </div>
         {e.description && <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">{e.description}</p>}
@@ -146,9 +148,8 @@ function OnlinePlugin({ offer }: { offer: Offer }) {
           <span className="max-w-[10rem] text-right text-xs text-gh-gray">{offer.why}</span>
         ) : (
           <>
-            <span key={String(busy)} className="text-xs text-gh-gray meno-fade-in">
-              {busy ? "Getting…" : "Not added"}
-            </span>
+            {/* (not added: the heading says so - only getting it is said) */}
+            {busy && <span className="text-xs text-gh-gray meno-fade-in">Getting…</span>}
             <button
               disabled={busy}
               onClick={get}
