@@ -901,6 +901,20 @@ function Set-HeldKeys {
     [MacGui]::HoldKeys([uint16[]] @($Hold | ForEach-Object { $codes[$_] }), [uint64[]] @($Hold | ForEach-Object { $flags[$_] }), -not $Up)
 }
 
+function Set-MenoHeldKeys {
+    <#
+      .SYNOPSIS
+      Press the modifier keys -Hold names and keep them down - or, with -Up,
+      let them go: what the pointer shows with a key held (Option, Alt here
+      on Windows, over an atom: docs/EDITOR-2D.md, *A bond by one click*).
+      A scenario lets them go before it ends.
+    #>
+    param([Parameter(Mandatory)] [ValidateSet("Shortcut", "Shift", "Alt")] [string[]] $Hold, [switch] $Up)
+    Assert-MenoFront
+    Set-HeldKeys -Hold $Hold -Up:$Up
+    Start-Sleep -Milliseconds 100
+}
+
 function Invoke-MenoClick {
     <#
       .SYNOPSIS
@@ -1304,6 +1318,6 @@ function Wait-MenoSettled {
 Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
-    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
+    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Set-MenoHeldKeys, Wait-MenoSettled,
     # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
     Find-SystemWindow, Find-WindowAt
