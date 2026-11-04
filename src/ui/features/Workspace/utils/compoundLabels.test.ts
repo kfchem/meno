@@ -47,6 +47,29 @@ describe("the compounds' numbers of a figure", () => {
     expect(compoundLabelsOf([zigzag("0:0", 100, 300, false)], [word("1", mid(a) - 2.5, a.box[3] + 6)], NONE)).toEqual([]);
   });
 
+  it("are numbers a little shorter than the figure's words, and of their usual height however tall one word is - a title", () => {
+    const usual = [word("Scheme", 0, 0), word("of", 50, 0), word("this", 70, 0)];
+    expect(compoundLabelsOf([a], [...usual, word("1", mid(a) - 2.5, a.box[3] + 6, 0.8 * 8)], NONE).map((l) => l.label)).toEqual(["1"]);
+    // (a title three times as tall: the numbers still the usual height's)
+    const title = word("Synthesis", 0, -60, 24);
+    expect(compoundLabelsOf([a], [title, ...usual, word("1", mid(a) - 2.5, a.box[3] + 6)], NONE).map((l) => l.label)).toEqual(["1"]);
+  });
+
+  it("are none off a corner even within a bond: beyond the structure's breadth and its height both", () => {
+    const corner = word("2", a.box[2] + 2, a.box[3] + 2);
+    expect(compoundLabelsOf([a], [corner], NONE)).toEqual([]);
+  });
+
+  it("are a structure's by its labels and its lone atom too: a number by OH, and by a lone atom", () => {
+    const oh: PageStructure = { ...zigzag("0:0", 100), labels: [[100 + 4 * 14.4 * Math.sqrt(3) / 2 + 2, 296, 100 + 4 * 14.4 * Math.sqrt(3) / 2 + 14, 306]] };
+    const beyondOh = word("4", oh.labels[0][2] + 6, 297);
+    // (its box made as the bonds alone, the label passing it - the number within a bond of OH, not of the bonds)
+    expect(compoundLabelsOf([{ ...oh, box: [oh.box[0], 296, oh.labels[0][2], oh.box[3]] }], [beyondOh], NONE).map((l) => l.label)).toEqual(["4"]);
+    // (a lone atom, by its place alone: no bond to it, and no label's box)
+    const lone: PageStructure = { key: "0:1", bonds: [], atoms: [{ x: 300, y: 300 }], labels: [], box: [296, 296, 304, 304], ends: [], reach: 14.4 / 3, read: { model: {} as never } };
+    expect(compoundLabelsOf([lone], [word("5", 297, 312)], NONE).map((l) => l.key)).toEqual(["0:1"]);
+  });
+
   it("are none where an arrow or a \"+\" lies nearer: a scheme's conditions, a step's number", () => {
     const w = word("2", mid(a) - 2.5, a.box[3] + 8);
     const arrow: PageMarks = { segments: [[{ x: w.box[0] - 10, y: w.box[3] + 1 }, { x: w.box[2] + 10, y: w.box[3] + 1 }]], points: [], boxes: [] };
@@ -88,5 +111,14 @@ describe("the compounds' numbers on a page drawn as Meno draws one", () => {
       ["1", 1],
       ["2", 2],
     ]);
+  });
+
+  it("are read from the page's own words too, where the figure's drawing holds no letters of them", () => {
+    const drawn: FigureDrawn = { paths: [zig(100)], letters: [], pictures: [] };
+    const number: B = [100 + 2 * L * ALONG - 3.4, 300 + 1.4 * L - 3.6, 100 + 2 * L * ALONG + 3.4, 300 + 1.4 * L + 3.6];
+    const objects: PageObject[] = [{ kind: "path", box: [100, 300, 100 + 4 * L * ALONG, 300 + L * 0.5] }, { kind: "text", box: number }];
+    const figures: B[] = [[98, 298, 104 + 4 * L * ALONG, number[3] + 2]];
+    const read = pageStructuresOf({ objects, wordsIn: (b) => (b === number ? "9" : "") }, figures, () => drawn, "pdf", 0);
+    expect(read.labels.map((l) => l.label)).toEqual(["9"]);
   });
 });
