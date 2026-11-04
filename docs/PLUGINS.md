@@ -1153,6 +1153,24 @@ The same for every plugin and for Meno's own parts:
   writes the energies in electronvolts, lists them about the frontier and
   works out the HOMO-LUMO gap (`homo-lumo-gap`); a list a reader gives of
   its own (`orbitals`, `orbitals.a`, `orbitals.b`) is shown as it gave it.
+- **Gives a wavefunction whole, where its program writes its orbitals
+  otherwise** (2026-11-04; `lib/calc/expansion.ts`): one promise,
+  `expansion`, answered `{expansion: {nuclei, centres, powers, exponents,
+  functions, orbitals}}` - the nuclei in bohr; each Gaussian primitive's
+  centre (a nucleus, from 0), powers of x, y and z (summing to at most 5)
+  and exponent, unnormalised; each basis function's primitives, by their
+  places, and its coefficients of them; each orbital's coefficients of the
+  functions, in the order its orbitals are given - and each orbital's
+  surface promised as `expansion:<its place>`. Meno asks for the whole
+  once, checks that the orbitals a list offers (of one spin: an
+  unrestricted calculation's alpha and beta orbitals are not orthogonal to
+  each other) are orthonormal over the primitives (`C S Cᵀ` within 1e-4
+  of one, S worked out from the primitives themselves, by Obara and
+  Saika's recurrence), and only then works an orbital's values out on its
+  grid and draws it; where they are not, none is drawn, and it says so.
+  A reader converts its program's own basis and coefficients so, and works
+  out no values itself. The Gaussian plugin gives a formatted
+  checkpoint's so.
 - **Names a geometry's RMS gradient alike** (`rms-gradient`, of each frame,
   in Eh/bohr, where the output gives the forces), whichever reader reads it,
   Meno's own WFX reader among them.

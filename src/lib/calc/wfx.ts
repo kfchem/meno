@@ -189,7 +189,7 @@ function orbitalsOf(s: Sections, name: string): ReaderOutput["orbitals"] {
   return spins.map((v, i) => ({ spin: SPINS[v], energy: energies[i], occupation: occupations[i], ...(drawn ? { surface: { ask: `orbital:${i}` } } : {}) }));
 }
 
-type Wavefunction = { nuclei: number[]; centres: number[]; powers: [number, number, number][]; exponents: number[]; coefficients: number[][] };
+export type Wavefunction = { nuclei: number[]; centres: number[]; powers: [number, number, number][]; exponents: number[]; coefficients: number[][] };
 
 /** Its nuclei (bohr) and its primitives - each one's centre, by the nucleus's place from 0, its powers and its exponent - and each orbital's coefficients of them, in order. */
 function wavefunctionOf(s: Sections, name: string): Wavefunction {
