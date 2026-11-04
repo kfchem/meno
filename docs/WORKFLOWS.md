@@ -1814,8 +1814,14 @@ Decided while building it, for the maintainer to confirm:
   isotope by its mass number ("(Iso=n)") - and run
   as `g16 <input.gjf` (`g16 input` until 2026-10-09: *Real runs*, below),
   given `g16root` (the folder above its own) and GAUSS_EXEDIR (its own
-  folder), its scratch files where it runs. Why a run failed is read from
-  its output.
+  folder), its scratch files where it runs. On Windows, Gaussian 16W is
+  run as `g16 input.gjf input.log` - its input and its output file named
+  on its command line, as its GaussView help's "Specifying How the
+  Gaussian Program is Executed" has the Windows program run - and its
+  output is that file, read back once it ends: where it goes when no
+  output file is named is documented nowhere, so one is always named.
+  GAUSS_EXEDIR is its folder, as its release notes' "Input Notes" say
+  (2026-11-04). Why a run failed is read from its output.
 - **The options** are the method and basis set as text - as *Export*'s
   are - the dispersion, the solvation and its solvent, more keywords, the
   memory, and whether to keep the wavefunction (on unless turned off); the
@@ -1838,9 +1844,11 @@ Decided while building it, for the maintainer to confirm:
 
 Not yet, and where it comes:
 
-- **Gaussian on Windows**: its steps are offered on macOS and Linux only,
-  until Gaussian's own documentation for running it on Windows is read;
-  *Export* writes its input everywhere.
+- **Gaussian on Windows, followed as it runs**: its output is a file it
+  writes, read once it ends, so *Show log* says nothing while it runs
+  there; and `g16root` is given on Windows too (the manifest's variables
+  are the same on each system), which Gaussian 16W's installed documents
+  do not name - a run with it and one without gave the same result.
 - **ORCA running in parallel** needs OpenMPI where programs are looked
   for; a Meno opened from the Dock is not given a shell's PATH, so a
   located OpenMPI comes later. With one core for each job (Settings,
