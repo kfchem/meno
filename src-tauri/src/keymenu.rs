@@ -24,7 +24,8 @@ pub fn start(app: &AppHandle) {
     // (Tauri's handle is of the windows crate Tauri is built on: the same window, as a pointer - drop.rs)
     let Ok(hwnd) = window.hwnd() else { return };
     // SAFETY: the main window, of this thread, there as long as the app is;
-    // the procedure keeps no data of its own.
+    // the procedure keeps no data of its own. (Never taken off again: the
+    // window and the subclass go together when the app ends.)
     unsafe {
         let _ = SetWindowSubclass(HWND(hwnd.0), Some(window_proc), SUBCLASS, 0);
     }
