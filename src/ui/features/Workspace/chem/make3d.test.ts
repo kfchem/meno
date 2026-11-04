@@ -9,6 +9,7 @@ import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
 import { RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
+import { vdwRadius } from "../../../../lib/chem/elements";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, pageCount, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
@@ -474,6 +475,41 @@ describe("conformers made for the page", () => {
     // (the plugin's own row as it wrote it; Meno's after it)
     expect(made.how?.filter((r) => r.label === "Kept")).toEqual([{ label: "Kept", text: "2 of 2 embedded (2 sought)" }]);
     expect(made.how?.filter((r) => r.label === "Set aside")).toEqual([{ label: "Set aside", text: expect.stringMatching(/^1 of 2: a bond to a metal far from its length \(the worst: Pd-P at /) }]);
+  });
+
+  it("sets a salt's parts side by side, not on one another as the plugin gives them, and says so", async () => {
+    // (methylammonium chloride drawn; the plugin's answer its three heavy atoms, the chloride 0.7 Å from the N)
+    const salt: Model = {
+      atoms: [
+        { id: 51, x: 0, y: 0, r: 0.9, el: "C" },
+        { id: 52, x: 1.5, y: 0, r: 0.9, el: "N", charge: 1 },
+        { id: 53, x: 4, y: 0, r: 0.9, el: "Cl", charge: -1 },
+      ],
+      bonds: [{ id: 61, a: 51, b: 52, order: 1 }],
+    };
+    const answer: Omit<Conformers, "chosen"> = {
+      atoms: [
+        { el: "C", charge: 0 },
+        { el: "N", charge: 1 },
+        { el: "Cl", charge: -1 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      frames: [[0, 0, 0, 1.47, 0, 0, 1.47, 0.7, 0]],
+      energies: [-0.01],
+      field: "MMFF94",
+      how: [{ label: "Kept", text: "1 of 1 embedded (1 sought)" }],
+      cip: { atoms: {}, bonds: {} },
+      smiles: "C[NH3+].[Cl-]",
+    };
+    const chem = { request: async () => ({ isomers: [answer] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(salt, [51, 53]);
+    const [made] = await conformersOf(chem, stereo, block, "one", {});
+    const [f] = made.frames;
+    const apart = (i: number) => Math.hypot(f[3 * i] - f[6], f[3 * i + 1] - f[7], f[3 * i + 2] - f[8]);
+    // (the chloride no nearer either atom of the cation than their van der Waals contact)
+    for (const i of [0, 1]) expect(apart(i)).toBeGreaterThanOrEqual(vdwRadius(made.atoms[i].el) + vdwRadius("Cl") - 1e-3);
+    expect(made.how?.filter((r) => r.label === "Parts")).toEqual([{ label: "Parts", text: "2, side by side: where they lie against each other is not modelled" }]);
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {
