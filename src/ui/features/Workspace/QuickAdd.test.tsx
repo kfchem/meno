@@ -12,26 +12,25 @@ import { resolve } from "./chem/resolve";
 
 const none = () => {};
 
-/** Quick Add as it opens: the names in its first row, in order, and in its row of shapes. */
+/** Quick Add as it opens: the names in its first row, in order, and in the rows its groups open below it. */
 function rows() {
   const html = renderToString(
     <QuickAdd x={10} y={10} within={{ width: 800, height: 600 }} steps={[]} onChoose={none} onChain={none} onArrow={none} onShape={none} onSmiles={async () => {}} onStep={none} onClose={none} />,
   );
   const first = html.match(/<div role="toolbar" aria-label="Add"[^>]*><div class="flex items-center gap-0.5">(.*?)<div class="mx-1/)?.[1] ?? "";
-  const shapes = html.match(/<div role="group" aria-label="Shapes"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
+  const group = (name: string) => html.match(new RegExp(`<div role="group" aria-label="${name}"[^>]*>(.*?)</div>`))?.[1] ?? "";
   const names = (s: string) => [...s.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
-  return { first: names(first), shapes: names(shapes) };
+  return { first: names(first), scheme: names(group("Scheme")), marks: names(group("Marks on the page")) };
 }
 
 describe("Quick Add", () => {
-  it("has one arrow, called Arrow, in its first row - the page's one Arrow, a reaction's or any", () => {
-    const { first, shapes } = rows();
-    expect(first.filter((n) => /arrow/i.test(n))).toEqual(["Arrow", "Electron-pushing arrow"]);
-    expect(shapes).not.toContain("Arrow");
-  });
-
-  it("offers as shapes a rectangle - its corners rounded from its menu - an ellipse and a line", () => {
-    expect(rows().shapes).toEqual(["Rectangle", "Ellipse", "Line"]);
+  it("has in its first row what makes a structure and a scheme's words and arrow, then two groups - each opening a row of its own (layout A, 2026-10-29)", () => {
+    const { first, scheme, marks } = rows();
+    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page"]);
+    // (Scheme: the "+", the electron-pushing arrow, the catalytic cycle and the slide; one arrow on the page, the Arrow, in the first row)
+    expect(scheme).toEqual(["Plus", "Electron-pushing arrow", "Catalytic cycle", "Slide"]);
+    // (Marks on the page: the shapes - a rectangle, its corners rounded from its menu, an ellipse and a line - and the pen)
+    expect(marks).toEqual(["Rectangle", "Ellipse", "Line", "Pen"]);
   });
 
   it("its rules and its SMILES field span the row whole: each icon, the gaps between them, the divider", () => {
@@ -43,7 +42,8 @@ describe("Quick Add", () => {
     const icons = (first.match(/<button/g)?.length ?? 0) + 1;
     const row = icons * (36 + 2) + 9;
     expect(html).toMatch(new RegExp(`<form class="[^"]*border-t[^"]*" style="width:${row}px"`));
-    expect(html).toMatch(new RegExp(`aria-label="Shapes" class="[^"]*border-t[^"]*" style="width:${row}px"`));
+    expect(html).toMatch(new RegExp(`aria-label="Scheme" class="[^"]*border-t[^"]*" style="width:${row}px"`));
+    expect(html).toMatch(new RegExp(`aria-label="Marks on the page" class="[^"]*border-t[^"]*" style="width:${row}px"`));
   });
 });
 

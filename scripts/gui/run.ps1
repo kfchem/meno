@@ -204,31 +204,36 @@ function Invoke-MenoQuickAdd {
       saved on the computer the run is on - which a scenario cannot know.
       Should the box not be found, the icon is clicked where it would stand
       with -CalcRows rows of steps (and procedures) at most -CalcMost icons
-      long - Meno's own, alone, by default - and a warning says so. SMILES
-      opens the field below the row, which then takes the keys; Shapes, the
-      shapes; Calculations, the calculations. A build whose row has Pen,
-      after Slide, is told by the box's width (ten icons, not nine); where the
-      box is not found - or always, where -Pen says it has one. -PassThru returns where the box
-      stands, in shot pixels (Left, Top): a shape is drawn by a press on its
-      icon in the row below (Get-MenoShapeIcon) and a drag.
+      long - Meno's own, alone, by default - and a warning says so.
+
+      The first row (src/ui/features/Workspace/QuickAdd.tsx ROW, layout A of
+      2026-10-29): Bond, Chain, SMILES, Text, Arrow, then two groups that each
+      open a row below it - Scheme (Plus, Electron-pushing arrow, Catalytic
+      cycle, Slide) and Marks on the page (the shapes, then Pen). An item of
+      a group's row is clicked there, its group opened first. SMILES opens
+      the field below the row, which then takes the keys; Shapes (or Marks),
+      the marks' row; Calculations, the calculations. -Pen is taken and
+      ignored: the pen is always among the marks. -PassThru returns where the
+      box stands, in shot pixels (Left, Top): a shape is drawn by a press on
+      its icon in the row below (Get-MenoShapeIcon) and a drag.
     #>
     param(
         [Parameter(Mandatory)] [int] $X,
         [Parameter(Mandatory)] [int] $Y,
-        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes", "Calculations")] [string] $Item,
+        [Parameter(Mandatory)] [ValidateSet("Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks", "Shapes", "Plus", "Electron-pushing arrow", "Catalytic cycle", "Slide", "Pen", "Calculations")] [string] $Item,
         [int] $CalcRows = 1,
         [int] $CalcMost = 4,
         [switch] $Pen,
         [switch] $PassThru
     )
-    # (as src/ui/features/Workspace/QuickAdd.tsx's ROW has them, the Calculations button after them)
-    $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes")
+    # (as QuickAdd.tsx's ROW has them, the Calculations button after them; and the rows Scheme and Marks open)
+    $row = @("Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks")
+    $scheme = @("Plus", "Electron-pushing arrow", "Catalytic cycle", "Slide")
+    $marks = @("Rectangle", "Ellipse", "Line", "Pen")
+    $null = $Pen
     Invoke-MenoClick -X $X -Y $Y -Count 2
     Start-Sleep -Milliseconds 350
     $box = Find-MenoQuickAdd -X $X -Y $Y
-    # (a row of ten, with the pen: the rule before Calculations comes first, some 389 CSS px in - nine's right edge is at 379)
-    if ($Pen -or ($box -and $box.Width -gt 768)) { $row = @("Bond", "Chain", "SMILES", "Text", "Reaction arrow", "Plus", "Electron-pushing arrow", "Slide", "Pen", "Shapes") }
-    if ($Item -eq "Pen" -and $row -notcontains "Pen") { throw "this Meno's Quick Add has no Pen" }
     if ($box) {
         $left = $box.Left / 2; $top = $box.Top / 2 - 40
     } else {
@@ -245,23 +250,32 @@ function Invoke-MenoQuickAdd {
         $top = if ($py - 14 - $h -ge 4) { $py - 14 - $h } else { $py + 14 }
         $top = [Math]::Max(4, [Math]::Min($top, $ch - 4 - $mostH))
     }
-    $ix = if ($Item -eq "Calculations") { $left + 1 + 4 + $row.Count * 38 + 9 + 18 } else { $left + 1 + 4 + $row.IndexOf($Item) * 38 + 18 }
+    $first = if ($Item -eq "Shapes") { "Marks" } elseif ($scheme -contains $Item) { "Scheme" } elseif ($marks -contains $Item) { "Marks" } else { $Item }
+    $ix = if ($first -eq "Calculations") { $left + 1 + 4 + $row.Count * 38 + 9 + 18 } else { $left + 1 + 4 + $row.IndexOf($first) * 38 + 18 }
     $iy = $top + 1 + 4 + 18
     Invoke-MenoClick -X ([int](2 * $ix)) -Y ([int](2 * ($iy + 40)))
     Start-Sleep -Milliseconds 300
+    # (an item of a group's row: clicked in the row its group opened below, 4 + 1 + 4 CSS px under the first)
+    $inRow = if ($scheme -contains $Item) { $scheme } elseif ($Item -ne "Shapes" -and $marks -contains $Item) { $marks } else { $null }
+    if ($inRow) {
+        $jx = $left + 1 + 4 + $inRow.IndexOf($Item) * 38 + 18
+        $jy = $top + 1 + 4 + 36 + 4 + 1 + 4 + 18
+        Invoke-MenoClick -X ([int](2 * $jx)) -Y ([int](2 * ($jy + 40)))
+        Start-Sleep -Milliseconds 300
+    }
     if ($PassThru) { [pscustomobject]@{ Left = [int](2 * $left); Top = [int](2 * ($top + 40)) } }
 }
 
 function Get-MenoShapeIcon {
     <#
       .SYNOPSIS
-      Where a shape's icon stands in the row Shapes opens below Quick Add's
-      (src/ui/features/Workspace/QuickAdd.tsx, SHAPE_KINDS), in shot pixels,
+      Where a shape's icon stands in the row Marks on the page opens below
+      Quick Add's (src/ui/features/Workspace/QuickAdd.tsx, SHAPE_KINDS), in shot pixels,
       for Quick Add's box as Invoke-MenoQuickAdd returned it: its row 4 + 1
       + 4 CSS px below the first.
     #>
-    param([Parameter(Mandatory)] $Box, [Parameter(Mandatory)] [ValidateSet("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout")] [string] $Shape)
-    $kinds = @("Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout")
+    param([Parameter(Mandatory)] $Box, [Parameter(Mandatory)] [ValidateSet("Rectangle", "Ellipse", "Line")] [string] $Shape)
+    $kinds = @("Rectangle", "Ellipse", "Line")
     [pscustomobject]@{ X = $Box.Left + 2 * (1 + 4 + $kinds.IndexOf($Shape) * 38 + 18); Y = $Box.Top + 2 * (1 + 4 + 36 + 4 + 1 + 4 + 18) }
 }
 

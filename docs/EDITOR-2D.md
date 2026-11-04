@@ -375,15 +375,20 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, an arrow (*Arrows* below), a "+", an electron-pushing
-arrow (from the first atom or bond pressed, *Electron-pushing arrows*
-below), a slide of what is seen (docs/PRESENTING.md), *Pen* - its card
-opened, to write by hand with the mouse or the trackpad
-(docs/PRESENTING.md, *Handwriting*; a pen writes anywhere, always) - and
-*Shapes*, which opens a row below it of a rectangle, an ellipse and a
-line - each drawn from where the double-click
-was by a drag from its icon, or traced with the button up until a click
-(docs/PRESENTING.md, *Shapes*). A choice puts it down where the
+SMILES, text and an arrow (*Arrows* below); then two groups, each with a
+small mark at its corner, each opening a row of its own below the first,
+with no heading (the maintainer, 2026-10-29, layout A): *Scheme* - a "+",
+an electron-pushing arrow (from the first atom or bond pressed,
+*Electron-pushing arrows* below), a catalytic cycle and a slide of what
+is seen (docs/PRESENTING.md) - and *Marks on the page* - a rectangle, an
+ellipse and a line, each drawn from where the double-click was by a drag
+from its icon, or traced with the button up until a click
+(docs/PRESENTING.md, *Shapes*), and *Pen*, its card opened, to write by
+hand with the mouse or the trackpad (docs/PRESENTING.md, *Handwriting*;
+a pen writes anywhere, always). What is in a group's row is put down as
+the first row's is. Opening a row closes any other below the first; each
+opens and closes in a short ease, and nothing of which was open is kept
+for the next time Quick Add opens. A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. Going, it does nothing more as it fades - nor does the right-click
 menu: an icon double-clicked put its choice down once, not a second time
@@ -1236,7 +1241,7 @@ All hover-based, as above.
 - **Catalytic cycles** (the maintainer, 2026-10-15): a circle on the
   page, and what is placed on it, round which a cycle's reaction arrows
   run (`lib/chem/cycle`, `Cycles2D`, `utils/cycles`).
-  - **Put down from Quick Add**, its *Catalytic cycle*, where Quick Add
+  - **Put down from Quick Add**, its *Catalytic cycle* (under *Scheme*), where Quick Add
     was opened: four and a half bonds from its middle to its line.
   - **On it** is a structure or words whose middle - of the box round
     what is drawn, its labels' letters included, the H of HO and all -
