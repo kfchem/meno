@@ -228,6 +228,16 @@ describe("createDocument", () => {
     await Promise.resolve();
   });
 
+  it("refuses a change set that gives any thenable, not only a promise", () => {
+    const { doc } = withClock();
+    const waits = () => {
+      doc.edit("add N", addAtom("N"));
+      return { then() {} };
+    };
+    expect(() => doc.actAs("conversation", changeSet("turn:1", "a conversation"), waits as never)).toThrow("A change set does its work at once");
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoBy: "a conversation" });
+  });
+
   it("lets nothing of the history be gone back on while a change set runs", () => {
     const { doc } = withClock();
     doc.edit("add C", addAtom("C"));

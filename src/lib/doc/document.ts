@@ -314,9 +314,13 @@ export function createDocument<T>(
       } finally {
         if (outer) acting = null;
       }
+      // A thenable refused, as soon as it is given: the developer's alarm at the first call, not a
+      // stop on what comes after. The act runs on past its wait, and what it makes then is
+      // the person's, not this change set's, and is not undone with it; what it made before
+      // it waited is the one step to drop.
       if (typeof (gave as { then?: unknown } | null)?.then === "function") {
         // (its own failure no more than this one: never left unhandled)
-        (gave as Promise<unknown>).then(undefined, () => {});
+        (gave as PromiseLike<unknown>).then(undefined, () => {});
         throw new Error("A change set does its work at once: one that waits is refused, and what it made before it waited is one step to drop");
       }
       return edits > before;
