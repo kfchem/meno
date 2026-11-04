@@ -543,8 +543,8 @@ them a saddle point.
   QST3). Its *First Hessian* computed at the start adds `CalcFC`, else
   Gaussian's own estimate; *Tight convergence* adds `Tight`. So a chain
   can run a saddle point from a reaction path's two ends and its highest
-  point. Not yet run with Gaussian itself: none on the computer it was
-  built on can.
+  point. QST3 from two linear ends can stall; a guess alone (Opt=TS) is
+  then the way.
 
 ### Barrier
 
