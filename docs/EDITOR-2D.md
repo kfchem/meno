@@ -58,12 +58,7 @@ and in particular:
     not select the structure instead (the maintainer's ruling).
     While the key is held and the pointer is on an atom, a thin line in the
     highlight's colour shows where the bond would go, easing in, and out as
-    the key is let go (`ClickBondPreview2D`). On Windows, Alt let go on its
-    own no longer takes the window into its menu by the keyboard - which
-    left the next key going to a menu not shown and the page answering
-    nothing until Esc - so Alt can be held and let go freely; Alt+Space
-    still opens the window's menu, and Alt+F4 still closes it
-    (src-tauri `keymenu.rs`).
+    the key is let go (`ClickBondPreview2D`).
   - A click alone selects the atom, alone, at once: its shade spreads out
     from the atom in 160 ms (`SPREAD_MS`, eased). The second click of a
     double-click, within DOUBLE_CLICK_MS (half a second), takes it back -
