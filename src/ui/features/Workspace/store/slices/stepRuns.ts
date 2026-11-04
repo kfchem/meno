@@ -1067,7 +1067,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!where) return void fail(id, tooOld(plugin.id, decl.name) ?? notFound(decl.label), at, key);
       paths.set(decl.name, where);
     }
-    // (the files its kind of step takes besides, where an entry's molecule was read from one: Multiwfn's wavefunction)
+    // (the files its kind of step takes besides, where an entry's molecule was read from one: a wavefunction, say)
     // (another plugin's kind it uses only while that plugin is added, of a version it works with)
     const kinds = stepFiles(plugin, step.kind, addedNow());
     const sourcesOf = (id: number | undefined) => {
@@ -1119,7 +1119,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
-    // (a program of another plugin its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: of one its manifest says it uses,
+    // (a program of another plugin its jobs need, for methods its own program runs with it: of one its manifest says it uses,
     //  that plugin added and of a version it works with - or no job starts, said, naming it; one used only for some of its work
     //  stops the plugin for nothing else)
     for (const n of [...new Set(prepared.flatMap((p) => p.needs ?? []))]) {
@@ -1138,7 +1138,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           files: p.files,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),
-          // (the cores Settings gives it - or fewer, where its plugin says it takes fewer: ORCA with no MPI, one)
+          // (the cores Settings gives it - or fewer, where its plugin says it takes fewer: a program that runs as processes with no MPI, one)
           cores: p.cores ? Math.min(p.cores, cores) : cores,
           ...(p.memory ? { memory: p.memory } : {}),
           // (its folder named from its first entry's name, or its compound's letter, and its step's kind)
