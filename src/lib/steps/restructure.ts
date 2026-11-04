@@ -44,7 +44,7 @@ export function restructured(e: Entry, step: string): { entry: Entry; stale: str
       properties[name] = p;
       continue;
     }
-    const why = p.of != null ? `worked out on the structure before ${step}` : `not known to be of the structure after ${step}: it names neither the geometry nor the structure it was worked out on`;
+    const why = p.of != null ? `worked out on the structure before ${step}` : `not known to be of the structure after ${step}`;
     (p.of != null ? stale : unknown).push(name);
     // (already failed or not applicable: as it was, its reason kept)
     properties[name] = p.status === "computed" ? { ...p, status: { notApplicable: why } } : p;

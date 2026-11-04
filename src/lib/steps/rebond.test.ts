@@ -83,13 +83,13 @@ describe("Re-bond", () => {
     // (one not known to be of the entry's structure: kept, marked, never shown as standing)
     expect(r.entry.properties.note).toEqual({
       ...g.properties.note,
-      status: { notApplicable: "not known to be of the structure after Re-bond: it names neither the geometry nor the structure it was worked out on" },
+      status: { notApplicable: "not known to be of the structure after Re-bond" },
     });
     // (the group Re-bond gives, a label of its own: as it is)
     expect(r.entry.properties.group.status).toBe("computed");
     expect(r.said).toEqual([
       "mw, logp were worked out on another structure, so they are marked not applicable.",
-      "note names neither the geometry nor the structure it was worked out on, so it is marked not applicable.",
+      "note is not known to be of the structure after Re-bond, so it is marked not applicable.",
     ]);
   });
 

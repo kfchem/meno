@@ -69,8 +69,8 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
   // (values of the structure either was, now another: kept, marked, and said - never shown as current)
   const { entry, stale, unknown } = restructured(made, "Re-bond");
   if (stale.length) said.push(`${stale.join(", ")} ${stale.length === 1 ? "was" : "were"} worked out on another structure, so ${stale.length === 1 ? "it is" : "they are"} marked not applicable.`);
-  // (and those that say neither what geometry nor what structure they are of: not known to stand, so not shown as standing)
+  // (and those not known to be of the entry's structure now: not shown as standing)
   if (unknown.length)
-    said.push(`${unknown.join(", ")} ${unknown.length === 1 ? "names" : "name"} neither the geometry nor the structure ${unknown.length === 1 ? "it was" : "they were"} worked out on, so ${unknown.length === 1 ? "it is" : "they are"} marked not applicable.`);
+    said.push(`${unknown.join(", ")} ${unknown.length === 1 ? "is" : "are"} not known to be of the structure after Re-bond, so ${unknown.length === 1 ? "it is" : "they are"} marked not applicable.`);
   return { entry, said };
 }

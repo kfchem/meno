@@ -109,15 +109,16 @@ describe("Re-bond, as a step", () => {
   });
 
   it("carries a label as it is, marks a value of neither the geometry nor the structure, and keeps no name of the structure before", () => {
-    // (the geometry named, tagged, and with a value that says nothing of what it is of; Meno's own number and state not said as marked)
-    const geometry = { ...tagged(water(1, 0, 2.5), "id", "a"), name: "water" } as SetEntry;
+    // (the geometry named, tagged, failed, and with a value that says nothing of what it is of; Meno's own number, state and failure
+    //  not said as marked)
+    const geometry = { ...tagged(water(1, 0, 2.5), "id", "a"), name: "water", failed: { kind: "no-geometry", why: "It found no conformer" } } as SetEntry;
     geometry.properties = { ...geometry.properties, note: { value: "by hand", unit: "none", status: "computed" } };
     const o = ok(runMenoPair("rebond", { entries: [geometry], holds: "molecules" }, { entries: [{ ...water(1), bonds: [{ a1: 0, a2: 1, order: 1 }] } as SetEntry], holds: "molecules" }));
     expect(o.kept).toHaveLength(1);
     expect(o.kept[0].properties?.id).toEqual({ value: "a", unit: "none", label: true, status: "computed" });
     expect(o.kept[0].properties?.note.status).toEqual({ notApplicable: expect.stringMatching(/^not known to be of the structure after Re-bond/) });
     expect(o.kept[0].name).toBeUndefined();
-    expect(o.said).toMatch(/note, name name neither the geometry nor the structure they were worked out on, so they are marked not applicable/);
+    expect(o.said).toMatch(/note, name are not known to be of the structure after Re-bond, so they are marked not applicable/);
     expect(o.said).not.toMatch(/number|state|failure/);
   });
 
