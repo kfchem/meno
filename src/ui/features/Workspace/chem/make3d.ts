@@ -548,8 +548,14 @@ export async function conformersOf(
 ): Promise<Conformers[]> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
-  const ask = async (molblock: string, isomers: Configuration[]): Promise<Omit<Conformers, "chosen">[]> =>
-    isomers.length ? (await chem.request("conformers", { molblock, isomers, ...tries, options }, CONFORMERS_MS)).isomers : [];
+  const once = async (molblock: string, isomers: Configuration[]) => (await chem.request("conformers", { molblock, isomers, ...tries, options }, CONFORMERS_MS)).isomers;
+  // (each one's conformers by its place among those asked for: where the plugin answers other than one for each of
+  //  several, each asked for alone)
+  const ask = async (molblock: string, isomers: Configuration[]): Promise<(Omit<Conformers, "chosen"> | undefined)[]> => {
+    if (!isomers.length) return [];
+    const got = await once(molblock, isomers);
+    return got.length === isomers.length || isomers.length === 1 ? got : Promise.all(isomers.map(async (iso) => (await once(molblock, [iso]))[0]));
+  };
   // (of two enantiomers, the one whose identity comes first made, the other its mirror image's reflection; one
   //  whose reflection does not have its configuration after all made itself - chem/pageMirror)
   const as = made.isomers.map((iso) => madeAs(block.part, iso));
@@ -557,8 +563,8 @@ export async function conformersOf(
   const twins = made.isomers.filter((_, i) => as[i] === "mirror");
   const own = await ask(block.molblock, mine);
   const mirrorBlock = twins.length ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
-  const reflected = (await ask(mirrorBlock, twins.map(mirroredConfiguration))).map(reflectedConformers);
-  const missed = twins.filter((iso, k) => !reflected[k] || !hasConfiguration(reflected[k], block.part, iso));
+  const reflected = (await ask(mirrorBlock, twins.map(mirroredConfiguration))).map((c) => c && reflectedConformers(c));
+  const missed = twins.filter((iso, k) => !reflected[k] || !hasConfiguration(reflected[k]!, block.part, iso));
   const again = await ask(block.molblock, missed);
   let [o, r, m] = [0, 0, 0];
   // (in the order asked for: each the plugin answered)
@@ -568,7 +574,7 @@ export async function conformersOf(
       const c = reflected[r++];
       return missed.includes(iso) ? again[m++] : c;
     })
-    .filter((c) => c != null);
+    .filter((c): c is Omit<Conformers, "chosen"> => c != null);
   return shownConformers(got.map((c) => withChosen(c, made.open)));
 }
 

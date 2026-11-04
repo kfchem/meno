@@ -491,7 +491,9 @@ Taken on 2026-10-13:
   lowest first (*The page's conformers*, below). Of two enantiomers, one is
   made as the other's mirror image, so the two have the same conformers and
   shares: the one whose identity with its configuration comes first is
-  made (lib/chem/identity), and the other's conformers are its
+  made (lib/chem/identity) - a choice either way would be as right, this
+  one fixed so that a pair is always made alike - and the other's
+  conformers are its
   reflections, each checked to have the configuration drawn - one whose
   drawing Meno cannot read whole (a wedge it does not read, a label
   written out, a ring bound to a metal through a star) made itself.

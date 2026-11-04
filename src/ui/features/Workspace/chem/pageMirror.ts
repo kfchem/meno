@@ -5,10 +5,12 @@
  * the page with the same conformers - each the other's reflection - and the
  * same shares. Which is made is Meno's choice, not the plugin's (the plugin
  * boundary, 2026-10-31): the one whose identity with its configuration
- * (lib/chem/identity) comes first. The other is made as that one's mirror
- * image: its drawing's wedges turned over and its chosen configuration
- * turned with them, made by the plugin as asked, and each conformer
- * reflected through a plane - every x turned - and its R and S turned.
+ * (lib/chem/identity) comes first - a choice either way would be as right,
+ * this one fixed so that a pair is always made alike. The other is made as
+ * that one's mirror image: its drawing's wedges turned over and its chosen
+ * configuration turned with them, made by the plugin as asked, and each
+ * conformer reflected through a plane - every x turned - and its R and S
+ * turned.
  */
 import { identityText, type IdentityInput } from "../../../../lib/chem/identity";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";

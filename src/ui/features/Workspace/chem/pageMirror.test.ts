@@ -83,6 +83,37 @@ describe("the page's mirror images", () => {
     expect(madeAs(labelled, none)).toBe("itself");
   });
 
+  it("takes neither of a chiral pair for the other's mirror image where it cannot read the drawing whole: a label, a wedge it does not read, a ring through a star", () => {
+    // (each a pair of butan-2-ols, its O up and down, with something more drawn on it alike)
+    const pair = (more: (m: Model) => Model) => (["up", "down"] as const).map((s) => madeAs(more(butanol(s)), none));
+    // (a label written out: phenyl for the methyl)
+    expect(pair((m) => ({ ...m, atoms: m.atoms.map((a) => (a.id === 4 ? { ...a, el: "Ph" } : a)) }))).toEqual(["itself", "itself"]);
+    // (an N of three bonds on the methyl, its own wedge drawn - a wedge at such an N is not read)
+    const amine = (m: Model): Model => ({
+      atoms: [...m.atoms, { id: 30, x: 3.9, y: 2.25, r: 0.9, el: "N" }, { id: 31, x: 5.2, y: 3, r: 0.9, el: "C" }, { id: 32, x: 2.6, y: 3, r: 0.9, el: "C" }],
+      bonds: [...m.bonds, { id: 40, a: 4, b: 30, order: 1 }, { id: 41, a: 30, b: 31, order: 1, stereo: "up" }, { id: 42, a: 30, b: 32, order: 1 }],
+    });
+    expect(pair(amine)).toEqual(["itself", "itself"]);
+    // (an allyl bound to an Fe through a star at its centre, apart from the alcohol)
+    const star = (m: Model): Model => ({
+      atoms: [
+        ...m.atoms,
+        ...[50, 51, 52].map((id, k) => ({ id, x: 8 + 1.3 * k, y: k % 2 ? 0.75 : 0, r: 0.9, el: "C" })),
+        { id: 53, x: 9.3, y: -1.5, r: 0.9, el: "Fe" },
+        { id: 54, x: 9.3, y: 0.25, r: 0.9, el: "*" },
+      ],
+      bonds: [...m.bonds, { id: 60, a: 50, b: 51, order: 1 }, { id: 61, a: 51, b: 52, order: 1 }, { id: 62, a: 53, b: 54, order: 1, endpoints: [50, 51, 52] }],
+    });
+    expect(pair(star)).toEqual(["itself", "itself"]);
+  });
+
+  it("turns a drawing over: each wedge up for down, each depth a perspective drawing gives turned", () => {
+    const deep: Model = { ...butanol("up"), atoms: butanol("up").atoms.map((a, k) => (k < 2 ? { ...a, z: k ? -0.5 : 0.8 } : a)) };
+    const m = mirroredPart(deep);
+    expect(m.atoms.map((a) => a.z)).toEqual([-0.8, 0.5, undefined, undefined, undefined]);
+    expect(m.bonds.find((b) => b.id === 14)?.stereo).toBe("down");
+  });
+
   it("asks the plugin for the same structure whichever of the two is asked for, and gives the other its reflection", async () => {
     const made = [];
     const sent = [];
@@ -134,11 +165,131 @@ describe("the page's mirror images", () => {
     });
   });
 
+  it("says whether conformers have the cis or trans asked for at a double bond", () => {
+    // (but-2-ene drawn: C1-C2=C3-C4; asked cis, then trans, by its end carbons)
+    const butene: Model = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C" },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C" },
+        { id: 3, x: 2.6, y: 0, r: 0.9, el: "C" },
+        { id: 4, x: 3.9, y: 0.75, r: 0.9, el: "C" },
+      ],
+      bonds: [
+        { id: 11, a: 1, b: 2, order: 1 },
+        { id: 12, a: 2, b: 3, order: 2 },
+        { id: 13, a: 3, b: 4, order: 1 },
+      ],
+    };
+    const asked = (cis: boolean) => ({ centres: [], doubles: [{ bond: 1, ends: [0, 3] as [number, number], cis }] });
+    // (C2=C3 along x; C1 above C2, C4 above C3 or below it)
+    const at = (side: number) => ({ frames: [[-0.7, 1.2, 0, 0, 0, 0, 1.34, 0, 0, 2.04, 1.2 * side, 0]] });
+    expect(hasConfiguration(at(1), butene, asked(true))).toBe(true);
+    expect(hasConfiguration(at(-1), butene, asked(true))).toBe(false);
+    expect(hasConfiguration(at(-1), butene, asked(false))).toBe(true);
+    expect(hasConfiguration(at(1), butene, asked(false))).toBe(false);
+  });
+
   it("says whether conformers have the configuration asked for: a reflection that did not give it is made itself", () => {
     const part = butanol("up");
     // (C2 at the origin, its O out of the page as drawn, or behind it)
     const at = (oz: number) => [[0, 0, 0, 1.3, 0.75, 0, 2.6, 0, 0, 3.9, 0.75, 0, 1.3, 2.25, oz]];
     expect(hasConfiguration({ frames: at(1) }, part, none)).toBe(true);
     expect(hasConfiguration({ frames: at(-1) }, part, none)).toBe(false);
+  });
+
+  /** A centre configured: its atom, its neighbours (the O last), and the sense their volume takes. */
+  const centre = (atom: number, neighbours: number[], sense: 1 | -1) => ({ atom, neighbours, sense });
+
+  /**
+   * A plugin that makes each stereoisomer it is asked for with the configuration asked: the drawing's places,
+   * each centre's last neighbour lifted out of the page or put behind it as the sense asks - labelled R where
+   * the first centre's sense is 1, a stand-in for the toolkit's label. Asked for more than one at once where
+   * `firstOnly`, it answers the first alone.
+   */
+  function shaper(firstOnly = false) {
+    const asked: number[] = [];
+    const chem = {
+      request: async (_op: string, args: { molblock: string; isomers: { centres: ReturnType<typeof centre>[] }[] }) => {
+        asked.push(args.isomers.length);
+        const ct = readMolfile(args.molblock)!;
+        const one = (iso: { centres: ReturnType<typeof centre>[] }) => {
+          const f = ct.atoms.flatMap((a) => [a.x, a.y, 0]);
+          for (const c of iso.centres) {
+            const o = c.neighbours[2];
+            const vol = () => {
+              const [u, v, w] = c.neighbours.map((n) => [0, 1, 2].map((d) => f[3 * n + d] - f[3 * c.atom + d]));
+              return u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0]);
+            };
+            f[3 * o + 2] = 1;
+            if (Math.sign(vol()) !== c.sense) f[3 * o + 2] = -1;
+          }
+          return {
+            atoms: ct.atoms.map((a) => ({ el: a.symbol, charge: 0 })),
+            bonds: ct.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: 1 })),
+            frames: [f],
+            field: "MMFF94",
+            cip: { atoms: { "1": iso.centres[0]?.sense > 0 ? "R" : "S" }, bonds: {} },
+            smiles: "",
+          };
+        };
+        const isomers = firstOnly && args.isomers.length > 1 ? args.isomers.slice(0, 1) : args.isomers;
+        return { isomers: isomers.map(one) };
+      },
+    } as unknown as ChemClient;
+    return { chem, asked };
+  }
+
+  /** The plugin that finds stereoisomers: `at` its centres left open, `isomers` the stereoisomers it gives, in order. */
+  const opener = (at: number[], isomers: { centres: ReturnType<typeof centre>[]; doubles: [] }[]) =>
+    ({
+      request: async (op: string) =>
+        op === "stereo_elements"
+          ? { read: true, elements: at.map((a) => ({ kind: "centre", at: a, state: "unspecified" })) }
+          : op === "stereoisomers"
+            ? { isomers: isomers.map((configured, k) => ({ configured, smiles: `isomer ${k}` })), free: false }
+            : Promise.reject(new Error(`no ${op} here`)),
+    }) as unknown as ChemClient;
+
+  it("gives each stereoisomer asked for its own, in the order asked, where one is made itself and the other as its mirror image", async () => {
+    // (butan-2-ol drawn with no wedge, both its enantiomers asked for)
+    const open: Model = { ...butanol("up"), bonds: butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)) };
+    // (asked for in either order: so that the one made as a mirror image comes first in one of them)
+    for (const order of [
+      [1, -1],
+      [-1, 1],
+    ] as const) {
+      const isomers = order.map((s) => ({ centres: [centre(1, [0, 2, 4], s)], doubles: [] as [] }));
+      const { chem, asked } = shaper();
+      const [block] = blocksOf(open, [1]);
+      const made = await conformersOf(chem, opener([1], isomers), block, "all");
+      // (one asked for itself, one as its mirror image)
+      expect(asked).toEqual([1, 1]);
+      expect(made).toHaveLength(2);
+      made.forEach((c, k) => expect(hasConfiguration(c, block.part, isomers[k]), `${order} ${k}`).toBe(true));
+      expect(made.map((c) => c.cip.atoms["1"])).toEqual(order.map((s) => (s > 0 ? "R" : "S")));
+    }
+  });
+
+  it("asks for each stereoisomer alone where the plugin answers fewer than it was asked for", async () => {
+    // (butane-2,3-diol drawn with no wedge: its two enantiomers and its meso form asked for - two of them made themselves
+    //  at once. Each centre's neighbours in the order given, the same sense at both is the meso form)
+    const diol: Model = {
+      atoms: [...butanol("up").atoms, { id: 6, x: 2.6, y: -1.5, r: 0.9, el: "O" }],
+      bonds: [...butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)), { id: 15, a: 3, b: 6, order: 1 }],
+    };
+    const isomers = (
+      [
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ] as const
+    ).map(([p, q]) => ({ centres: [centre(1, [0, 2, 4], p), centre(2, [1, 3, 5], q)], doubles: [] as [] }));
+    const { chem, asked } = shaper(true);
+    const [block] = blocksOf(diol, [1]);
+    const made = await conformersOf(chem, opener([1, 2], isomers), block, "all");
+    // (the two made themselves asked together, answered one short, then each alone; the third as a mirror image)
+    expect(asked.filter((n) => n === 2)).toHaveLength(1);
+    expect(made).toHaveLength(3);
+    made.forEach((c, k) => expect(hasConfiguration(c, block.part, isomers[k]), `${k}`).toBe(true));
   });
 });
