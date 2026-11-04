@@ -531,19 +531,58 @@ class Renders(unittest.TestCase):
             self.assertIn("Rendering on the processor", out)
             self.assertFalse(os.path.exists(cache))
 
+    def made(self, d, entry):
+        """The renderer's job for one entry on the ball's scene, run by Blender in `d`."""
+        (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
+        said = ask("prepare", step="render", entries=[entry], options={"samples": 2, "background": "white", "device": "cpu"})
+        job = said["result"]["jobs"][0]
+        for f in job["files"]:
+            (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+        run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
+        self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+
+    def read_back(self, code, path):
+        out = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", code, "--", str(path)], capture_output=True, text=True, timeout=300)
+        return next(l for l in out.stdout.splitlines() if l.startswith("READ")).split()[1:]
+
     def test_a_film_of_an_odd_side_is_a_video_a_pixel_more_its_frames_as_asked(self):
+        size = "import bpy,sys; c=bpy.data.movieclips.load(sys.argv[-1]); print('READ', c.size[0], c.size[1])"
+        for (w, h), video in (((65, 37), ["66", "38"]), ((64, 36), ["64", "36"])):
+            with self.subTest(size=(w, h)), tempfile.TemporaryDirectory() as d:
+                self.made(d, {**SCENE, "film": True, "frames": 3, "fps": 3, "width": w, "height": h})
+                # (the video H.264 can carry: even sides - an even side as it was - read back by Blender)
+                self.assertEqual(self.read_back(size, pathlib.Path(d) / "film.mp4"), video)
+
+    def test_a_padded_films_frames_lie_unscaled_in_its_corner(self):
+        # (the video's first frame against the rendered frame over white: closest where neither is moved - not a pixel
+        # across, nor up)
+        code = """
+import bpy, sys, glob
+d = sys.argv[-1]
+im = bpy.data.images.load(sorted(glob.glob(d + '/frames/*.png'))[0]); w, h = im.size; f = list(im.pixels)
+mv = bpy.data.images.load(d + '/film.mp4'); W, H = mv.size; v = list(mv.pixels)
+def off(dx, dy):
+    t = n = 0
+    for y in range(h):
+        for x in range(w):
+            if x + dx < W and y + dy < H:
+                i = 4 * (y * w + x); a = f[i + 3]
+                t += abs(v[4 * ((y + dy) * W + x + dx)] - (f[i] * a + 1 - a)); n += 1
+    return t / n
+print('READ', off(0, 0), off(1, 0), off(0, 1))
+"""
         with tempfile.TemporaryDirectory() as d:
-            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
-            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 3, "fps": 3, "width": 65, "height": 37}], options={"samples": 2, "background": "white", "device": "cpu"})
-            job = said["result"]["jobs"][0]
-            for f in job["files"]:
-                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
-            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
-            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
-            # (the video H.264 can carry: even sides, read back by Blender)
-            code = "import bpy,sys; c=bpy.data.movieclips.load(sys.argv[-1]); print('SIZE', c.size[0], c.size[1])"
-            size = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", code, "--", str(pathlib.Path(d) / "film.mp4")], capture_output=True, text=True, timeout=300)
-            self.assertIn("SIZE 66 38", size.stdout)
+            self.made(d, {**SCENE, "film": True, "frames": 2, "fps": 2, "width": 129, "height": 73})
+            here, across, up = map(float, self.read_back(code, d))
+            # (by far: a frame drawn between pixels - moved half a pixel - is nearly as far from both)
+            self.assertLess(here, across / 2)
+            self.assertLess(here, up / 2)
+
+    def test_a_picture_keeps_its_own_size_odd_or_not(self):
+        size = "import bpy,sys; i=bpy.data.images.load(sys.argv[-1]); print('READ', i.size[0], i.size[1])"
+        with tempfile.TemporaryDirectory() as d:
+            self.made(d, {**SCENE, "width": 65, "height": 37})
+            self.assertEqual(self.read_back(size, pathlib.Path(d) / "picture.png"), ["65", "37"])
 
     def test_a_film_moves_its_progress_by_its_frames_samples_and_never_back(self):
         with tempfile.TemporaryDirectory() as d:

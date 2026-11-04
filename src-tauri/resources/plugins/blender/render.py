@@ -568,11 +568,10 @@ def assemble(frames, s, folder):
         for name in names[1:]:
             over.elements.append(name)
         over.blend_type = "ALPHA_OVER"
-        # (at their own size, never scaled to a padded video's: from its bottom left corner)
+        # (at their own size, never scaled to a padded video's, nor moved: Blender sets a strip a pixel smaller than its canvas
+        # in the canvas's middle on its pixels - its corner - each pixel the frame's own, none drawn between two)
         over.transform.filter = "NEAREST"
         over.transform.scale_x = over.transform.scale_y = 1.0
-        over.transform.offset_x = -(made.render.resolution_x - s["width"]) / 2
-        over.transform.offset_y = -(made.render.resolution_y - s["height"]) / 2
     image = made.render.image_settings
     if s["film"]:
         image.media_type = "VIDEO"
