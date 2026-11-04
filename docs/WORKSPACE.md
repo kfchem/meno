@@ -1894,28 +1894,40 @@ same way.
   first. The record shown moved whole, every atom alike, takes its stack
   with it.
 - **Lined up as it is opened** (`alignedRecords`; the maintainer,
-  2026-11-04). Each record that is the same structure as the one before
-  it, atom for atom (`lib/layout/morph` `sameAtoms`: the same elements,
-  charges and labels bonded alike, two Kekulé structures one), is turned
-  about its middle to lie as nearly as it can on that one - moved, never
-  reshaped. It is mirrored where that lies nearer, only where it has no
-  mark a mirror would change: a wedge, a hash, a bold or dashed line, a
-  double bond drawn to one side, a mark put by hand. A record of another
-  structure keeps the file's orientation, and those after it line up on
-  it. Of the ways a symmetric structure matches, the one that moves its
-  atoms least is taken, so a ring turns the least it can.
+  2026-11-04). Each record that shares a core with the one before it is
+  turned about the middle of what they share to lie as nearly as it can on
+  that one - moved, never reshaped:
+  - the same structure, atom for atom (`lib/layout/morph` `sameAtoms`: the
+    same elements, charges and labels bonded alike, two Kekulé structures
+    one);
+  - or analogues, on the largest core they share (`commonAtoms`): connected,
+    its atoms alike and bonded alike in both, no hydrogen in it, holding at
+    least 60 % of the smaller record's other atoms. It is searched as
+    McGregor's backtracking does, a bounded number of steps (20,000 for two
+    records; 50,000 for a whole stack as it opens, shared out among its
+    records), the largest found by then taken.
+
+  It is mirrored where that lies nearer, only where it has no mark a mirror
+  would change: a wedge, a hash, a bold or dashed line, a double bond drawn
+  to one side, a mark put by hand. A record sharing too little keeps the
+  file's orientation, and those after it line up on it. Of the ways a
+  symmetric core lies, the one that lies best, with what is outside it
+  nearest what is outside the other's, then the one that moves its atoms
+  least, so a ring turns the least it can.
 - **Going over** (`StackSwap2D`, 0.42 s, eased). Where the record let go of
-  and the next are one structure atom for atom, each atom goes from where
-  it stood to where it stands in the next, the drawing turned as one the
-  shorter way round and what that leaves of each atom's way taken in a
-  straight line; the next comes in over the first half while the one let
-  go of stays, and that one fades over the second, so what the two share
-  stays solid all the way. Records with nothing to match - another
-  structure, or past 300 atoms - cross where they stand, never growing or
-  shrinking. Steps through a stack faster than one can follow fade alone.
-  Each record is drawn on a layer of its own in the drawing's style, and
-  the drawing draws the next once it is there. The record shown is kept
-  ready on that layer, out of sight, so its labels are set when it goes.
+  and the next share a core, each atom of it goes from where it stood to
+  where it stands in the next, the drawing turned as one the shorter way
+  round and what that leaves of each atom's way taken in a straight line;
+  what either has outside the core rides with it, turned as one with it.
+  The next comes in over the first half while the one let go of stays, and
+  that one fades over the second, so what the two share stays solid all the
+  way, and what differs grows in or fades where it rides. Records sharing
+  too little - or past 300 atoms, or 120 for a core - cross where they
+  stand, never growing or shrinking. Steps through a stack faster than one
+  can follow fade alone. Each record is drawn on a layer of its own in the
+  drawing's style, and the drawing draws the next once it is there. The
+  record shown is kept ready on that layer, out of sight, so its labels are
+  set when it goes.
 - **A grid.** *Lay out as a grid* on a record's menu lays the records out
   round their middle, in rows about as many as its columns, each cell as
   wide as the widest record and as tall as the tallest, two bonds' room

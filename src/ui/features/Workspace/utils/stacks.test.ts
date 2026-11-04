@@ -306,15 +306,23 @@ describe("a stack of drawings, lined up as it is opened", () => {
     [10, 20].forEach((first) => [0, 1, 2].forEach((i) => expect(near(at(first + i), at(1 + i))).toBe(true)));
   });
 
-  it("only turns one with a wedge - a mirror would change what it says - and leaves another structure, and those after it, as the file has them", () => {
+  it("only turns one with a wedge - a mirror would change what it says - and leaves one sharing nothing, and those after it, as the file has them", () => {
     const wedged = stacked(ethanol(1, 0, 0), ethanol(10, 1, 30, true, true));
     const out = alignedRecords(wedged, [{ atoms: [1, 2, 3] }, { atoms: [10, 11, 12] }]);
     const at = (id: number) => out.atoms.find((a) => a.id === id)!;
     expect([0, 1, 2].every((i) => near(at(10 + i), at(1 + i)))).toBe(false);
     // (turned only: each bond as long, the mirrored record not mirrored back)
     expect(Math.hypot(at(10).x - at(11).x, at(10).y - at(11).y)).toBeCloseTo(1, 1);
-    const other = { ...ethanol(10, 1, 90), atoms: ethanol(10, 1, 90).atoms.map((a) => (a.id === 12 ? { ...a, el: "N" } : a)) };
+    // (sharing nothing - no core at all - kept as it is)
+    const other = { ...ethanol(10, 1, 90), atoms: ethanol(10, 1, 90).atoms.map((a) => ({ ...a, el: "N" })) };
     const m = stacked(ethanol(1, 0, 0), other);
     expect(alignedRecords(m, [{ atoms: [1, 2, 3] }, { atoms: [10, 11, 12] }])).toBe(m);
+  });
+
+  it("turns an analogue - ethylamine after ethanol - onto it by the core they share, the rest of it moved with it", () => {
+    const amine = { ...ethanol(10, 1, 90), atoms: ethanol(10, 1, 90).atoms.map((a) => (a.id === 12 ? { ...a, el: "N" } : a)) };
+    const out = alignedRecords(stacked(ethanol(1, 0, 0), amine), [{ atoms: [1, 2, 3] }, { atoms: [10, 11, 12] }]);
+    const at = (id: number) => out.atoms.find((a) => a.id === id)!;
+    expect(near(at(10), at(1)) && near(at(11), at(2)) && near(at(12), at(3))).toBe(true);
   });
 });
