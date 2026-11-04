@@ -156,6 +156,17 @@ describe("a Filter step", () => {
     ]);
     expect(howOf(options, { method: "NATIVE-XTB2" })).toBe("NATIVE-XTB2");
     expect(howOf(options, { method: "B3LYP", solvation: "SMD", maxcore: 3000 })).toBe("B3LYP \u00b7 Solvation: SMD \u00b7 Solvent: Water \u00b7 3000 MB");
+    // (a switch on is its own label, as before - never "name: on"; off, nothing)
+    const switched = acceptOptions([{ id: "tight", label: "Tight convergence", type: "switch", default: false }]);
+    expect(howOf(switched, { tight: true })).toBe("Tight convergence");
+    expect(howOf(switched, { tight: false })).toBe("");
+  });
+
+  it("takes a brief of forty letters at most from a manifest - a longer one is not read, the label said instead", () => {
+    const of = (brief: string) => acceptOptions([{ id: "o", label: "Radicals (one unpaired electron or more)", brief, type: "choice", choices: [{ value: "keep", label: "Keep" }], default: "keep" }]);
+    expect(of("x".repeat(40))[0].brief).toBe("x".repeat(40));
+    expect(of("x".repeat(41))[0].brief).toBeUndefined();
+    expect(howOf(of("x".repeat(41)), {})).toBe("Radicals: Keep");
   });
 
   it("says each choice by its name and what is chosen - and several choices with one value once, the options after it", () => {
