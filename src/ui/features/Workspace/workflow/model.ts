@@ -205,7 +205,7 @@ export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocu
     // (holding nothing yet: what lies under a new frame is not what its step made)
     if (!was) {
       const setId = next.nextWorkflowId ?? 1;
-      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id });
+      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id, exit: exit.id });
       next = holdMembers(addSet(next, frame, { step: step.id, exit: exit.id }), setId, []);
       top = frame.y0 - BETWEEN;
     } else top = was.y0 - BETWEEN;

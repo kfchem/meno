@@ -10,7 +10,7 @@ import type { WorkspaceDocument } from "../document";
 import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { inputsOf } from "./kinds";
+import { exitPlace, inputsOf } from "./kinds";
 import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
@@ -20,10 +20,11 @@ export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({
  * Where a step's result set goes (docs/WORKFLOWS.md, *Where a result set
  * goes*): to the right of the step, level with it - or, where something is
  * there already, lower, as far as it must to keep clear of the page's sets,
- * steps' cards, structures, molecules and wires, its own line from the step
- * crossing no card or set (`clearOf`). Below all of them is clear, so there
- * is always a place: it never lies over another. `self`: the set it is,
- * where it was made before, and what goes with it.
+ * steps' cards, structures, molecules and wires, its own line from its
+ * exit's port on the step's card crossing no card or set (`clearOf`).
+ * Below all of them is clear, so there is always a place: it never lies
+ * over another. `self`: the set it is, where it was made before, and what
+ * goes with it.
  */
 export function placeFor(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, width: number, height: number, self?: Self): Frame {
   // (half a card at a time, down to below all that is on the page)
@@ -33,10 +34,11 @@ export function placeFor(doc: WorkspaceDocument, step: { id: number; x: number; 
 /**
  * A set being placed: itself, the molecules it holds, and other sets that
  * go with it - none of them in its way; and the step whose result it is,
- * its line from that step's card to be clear too, as the wires from it to
+ * and which of its exits (its first, where none is said), its line from
+ * that exit's port on the card to be clear too, as the wires from it to
  * the steps it goes into are.
  */
-export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: ReadonlySet<number>; step?: number };
+export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: ReadonlySet<number>; step?: number; exit?: string };
 
 /** A step's card, shut: where it stands on the page. */
 const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
@@ -95,11 +97,12 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const s = b.made ? steps.get(b.made.step) : undefined;
     if (s && !own(b.id)) {
       const e = { from: cardOf(s), to: b };
-      points.push(...wirePath(stepGives(s), setTakes(b), e, nearWire(stepGives(s), setTakes(b), e, round)));
+      const p = stepGives(s, exitPlace(s.kind, b.made!.exit));
+      points.push(...wirePath(p, setTakes(b), e, nearWire(p, setTakes(b), e, round)));
     }
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;
-  return { frames, round, points, ...(step ? { from: { step: step.id, at: stepGives(step), card: cardOf(step) } } : {}), to };
+  return { frames, round, points, ...(step ? { from: { step: step.id, at: stepGives(step, self?.exit != null ? exitPlace(step.kind, self.exit) : 0), card: cardOf(step) } } : {}), to };
 }
 
 /**
@@ -158,7 +161,8 @@ export function clearOf(doc: WorkspaceDocument, f: Frame, self?: Self): boolean 
  */
 export function placeAgain(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, was: Frame & { id: number }, width: number, height: number): Frame {
   const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === step.id && b.id !== was.id).map((b) => b.id));
-  const self: Self = { set: was.id, sets: siblings, step: step.id };
+  const exit = doc.sets?.find((b) => b.id === was.id)?.made?.exit;
+  const self: Self = { set: was.id, sets: siblings, step: step.id, ...(exit ? { exit } : {}) };
   const there = frameAt(was.x0, was.y1, width, height);
   return clearOf(doc, there, self) ? there : placeFor(doc, step, width, height, self);
 }

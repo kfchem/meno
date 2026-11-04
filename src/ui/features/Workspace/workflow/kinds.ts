@@ -1353,6 +1353,9 @@ export function exitOf(kind: StepKind, exit: string): StepExit {
   return exits.find((e) => e.id === exit) ?? exits[0];
 }
 
+/** Where `exit` is among its kind's exits, from 0 - its port's place down the card's right side (look `stepGives`): the first's, where the kind has no such exit, as `exitOf` takes it. */
+export const exitPlace = (kind: StepKind, exit: string): number => Math.max(0, exitsOf(kind).findIndex((e) => e.id === exit));
+
 /** What *Compare bonding* still needs of its options before it can run: a property to pair on, or to write the match as; atoms that read. */
 export function compareNeeds(v: OptionValues): string | undefined {
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";

@@ -663,7 +663,7 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
   const madeBy = { step: step.id, exit, holds: "table" as const };
   const was = resultOf(doc, step.id, exit);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h);
+  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h, { exit });
   if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
   const id = doc.nextWorkflowId ?? 1;
   return holdTable(markMade(addSet(doc, frame, madeBy), id, madeBy), id, table);
@@ -685,7 +685,7 @@ function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | 
     //  but the step's sets of exits after it, which go under it in turn)
     const under = b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN;
     const after = new Set(exits.slice(k + 2).flatMap((e) => resultOf(doc, step.id, e.id)?.id ?? []));
-    const self = { set: b.id, sets: after, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
+    const self = { set: b.id, sets: after, molecules: new Set(setMembers(doc, b).molecules), step: step.id, exit: exit.id };
     if (under || !clearOf(doc, b, self)) {
       const to = placeBelow(doc, b.x0, Math.min(b.y1, reach), b.x1 - b.x0, b.y1 - b.y0, self);
       doc = moveSet(doc, b.id, to.x0 - b.x0, to.y1 - b.y1);
@@ -790,7 +790,7 @@ function filled(
   if (was) doc = emptied(doc, was);
   const madeBy = { step: step.id, exit: of.exit, holds: of.holds };
   if (of.collection || of.drawnCollection) {
-    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H, { exit: of.exit });
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
@@ -803,7 +803,7 @@ function filled(
   // (in rows no wider than its step's column, where the next step's card is close: the set grows down, not over the steps after it)
   const room = columnWidth(doc, step) - 2 * SET_PAD;
   const lay = laidOut(rooms, LEAST_W, Math.max(...rooms.map((r) => r.x1 - r.x0), Math.min(rowMost(rooms), room)));
-  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
+  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height, { exit: of.exit });
   const put = place(doc, lay.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })));
   doc = put.doc;
   const id = was ? was.id : (doc.nextWorkflowId ?? 1);

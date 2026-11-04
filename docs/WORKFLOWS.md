@@ -127,9 +127,12 @@ built*).
   step and standing to the right of its card, empty and *Not run yet*
   until the step runs. Every step has its first exit; a step that can set
   entries aside has a second, under it (*Outside it*, *Alike*, *The
-  rest*). A step has no port that gives of its own: its exits' sets give.
+  rest*). Each exit has a port of its own on the card's right edge, in
+  its kind's order, the line to its set leaving from it: the port is that
+  set's (*Exit ports*, below).
 - **Port** - where a wire starts or ends: a set gives from its right
-  edge; a step's input takes on its card's left edge.
+  edge, and a step's exit from its port on the card's right edge; a
+  step's input takes on its card's left edge.
 - **Wire** - a line from a set to a step's input.
 - **Run** - one time a step was carried out, and what it gave; a step
   keeps its runs.
@@ -2182,6 +2185,32 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### Exit ports (2026-11-05)
+
+Each of a step's exits has a port of its own on the card - what it kept,
+and what it set aside or could not do - as each of its inputs has (the
+maintainer, 2026-10-31). A wire still starts at a set (`WireEnd`): the
+port is that exit's set's.
+
+- **Where:** down the card's right edge, in the order its kind declares
+  its exits (`exitsOf`), each as far down as the input of the same place
+  on its left (look `stepGives`, kinds `exitPlace`): the first level with
+  the first input. A kind has three exits at most (*Atom map*), and three
+  fit on a card shut, as three inputs do.
+- **The line to an exit's set** leaves from that exit's port. Placing a
+  set keeps that line clear, as before (place `Self.exit`).
+- **A wire drawn out of an exit's port** is drawn out of its set: from
+  the card's port as it is drawn, then from the set's own port, as every
+  wire out of a set is. A wire drawn back from an input can be let go on
+  either. While a wire is drawn, both of a set's ports light as one.
+- **Not named beside it** while its set is on the page beside it: the
+  set's frame names it. Its label says which it is ("Failed out of
+  Optimise"), as an input's does.
+
+It is the first part of the direct wiring the maintainer asked for
+(2026-10-31): steps wired to steps, a result set's frame shown only
+where its exit is not wired on.
 
 ### The same conformer (2026-10-22)
 
