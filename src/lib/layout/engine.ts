@@ -2033,6 +2033,9 @@ function stereoScore(
     }),
     ...stereo.hydrogens.map(() => undefined),
   ];
+  // (a straight end measured as `scorer` measures it: the drawings put to this are
+  // tied by `scorer`, the straight end counted alike in each, so it keeps the
+  // measure the same rather than deciding between them - no test can tell it apart)
   const straight = piece.map((a) => mol.straight.has(a));
   return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
