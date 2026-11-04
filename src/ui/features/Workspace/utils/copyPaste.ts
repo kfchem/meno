@@ -11,7 +11,7 @@ import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
-import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
+import { withRingStars, writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { ARROW_KINDS, ARROW_SETTINGS, WEIGHT_SHARE, type ArrowLook } from "../../../../lib/chem/reactionArrow";
 import { acceptValue, fieldOf, isTypefaceName } from "../../../../lib/chem/styleFields";
@@ -144,16 +144,19 @@ export function clipItems(part: Drawn): ClipItem[] {
     if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length || part.cycles?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
-    const seen = ms.map((m) => (isSkeleton(m) ? asSeen(m, m.turn, m.frame, placed).map((a) => ({ ...a, noImplicitH: true })) : asSeen(m, m.turn, m.frame, placed)));
-    const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
+    // (each with the bonds the frame it shows has, and each ring bound to a metal through all its atoms as a file holds one - lib/chem/molWriter)
+    const written = ms.map((m) => {
+      const atoms = isSkeleton(m) ? asSeen(m, m.turn, m.frame, placed).map((a) => ({ ...a, noImplicitH: true })) : asSeen(m, m.turn, m.frame, placed);
+      return withRingStars(atoms, bondsAt(m, m.frame), m.centres ?? []);
+    });
+    const offsets = written.map((_, i) => written.slice(0, i).reduce((n, w) => n + w.atoms.length, 0));
     return [
       { flavor: "meno", text: recordText(part) },
       {
         flavor: "mol",
         text: writeMolfile3d(
-          seen.flat(),
-          // (each with the bonds the frame it shows has)
-          ms.flatMap((m, i) => bondsAt(m, m.frame).map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
+          written.flatMap((w) => w.atoms),
+          written.flatMap((w, i) => w.bonds.map((b) => ({ ...b, a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], ...(b.endpoints ? { endpoints: b.endpoints.map((e) => e + offsets[i]) } : {}) }))),
           { title: ms.length === 1 ? ms[0].name?.replace(/\.[^.]*$/, "") : undefined },
         ),
       },
