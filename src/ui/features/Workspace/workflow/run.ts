@@ -846,7 +846,7 @@ function movedBy(m: Model, dx: number, dy: number): Model {
  * adds by id - and none of them a record of a stack (utils/stacks): each a
  * structure in its own right.
  */
-function numberedApart(models: readonly Model[]): Model {
+export function numberedApart(models: readonly Model[]): Model {
   const out: Model = { atoms: [], bonds: [] };
   let next = 1;
   for (const m of models) {
