@@ -11,7 +11,12 @@
  * temperature - on the barriers Rauk, Allen and Mislow review (Angew.
  * Chem. Int. Ed. Engl. 9, 400, 1970), section and page given:
  * - P, As and S, measured: a phosphine's P, 29-36 kcal/mol (Table 2,
- *   p. 408); an arsine's As, its invertomers told apart and one resolved
+ *   p. 408) - but not one whose planar form would close an aromatic ring
+ *   with its lone pair: a phosphole's, about 16 kcal/mol, some 25 below its
+ *   saturated analogues (Sec. 4.2, p. 408), lower than a plain N-alkyl
+ *   aziridine's (below), nor an arsole's As alike, by Meno's count of an
+ *   aromatic ring (lib/chem/conformersSought `flatRingAtoms`); an arsine's
+ *   As, its invertomers told apart and one resolved
  *   (Sec. 4.4.2, p. 413); a sulfoxide's, a sulfinate's, a sulfinamide's, a
  *   sulfilimine's and a sulfite's S, its pyramid stable at ordinary
  *   temperatures (p. 412), and a sulfonium's, 25-29 kcal/mol (p. 414);
@@ -41,6 +46,8 @@
  * iminium's N+ or SO3's S.
  */
 import { isMetal } from "../layout/perceive";
+import { smallestRings } from "../layout/rings";
+import { flatRingAtoms } from "./conformersSought";
 
 /** The elements of the rule but N, which keeps its configuration only where its ring or its cage holds it. */
 const KEPT: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
@@ -75,6 +82,15 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
     if (o > 1) pi[b.a] = pi[b.b] = true;
   }
   const metal = (k: number) => isMetal(atoms[k].el ?? "C");
+  // (the atoms on a ring that is aromatic with a P's or an As's lone pair given it - an arsole counted as its phosphole,
+  //  As giving its ring its pair as P does - worked out once, where a P or an As is asked of)
+  let aromatic: Set<number> | null = null;
+  const onAromatic = (at: number) =>
+    (aromatic ??= flatRingAtoms(
+      atoms.map((a) => ({ el: a.el === "As" ? "P" : (a.el ?? "C"), charge: a.charge ?? 0 })),
+      bonds,
+      smallestRings(atoms.length, bonds.map((b) => [b.a, b.b] as const)),
+    )).has(at);
   const known = new Map<number, boolean>();
   return (at) => {
     if (!known.has(at)) known.set(at, centre(at));
@@ -86,6 +102,7 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
     const el = atom?.el ?? "C";
     if (!atom || atom.hs || around[at].length !== 3) return false;
     if (!lonePairOfThree(el, atom.charge ?? 0, 3, order[at], 0)) return false;
+    if (el === "P" || el === "As") return !onAromatic(at);
     if (el !== "N") return KEPT.has(el);
     // (an N held by its ring or its cage: its three bonds single, none to a metal)
     if (order[at] !== 3 || around[at].some(metal)) return false;

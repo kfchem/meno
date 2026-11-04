@@ -1586,7 +1586,10 @@ lipids each have their own way of being drawn, which it should know.
      (Angew. Chem. Int. Ed. Engl. 9, 400, 1970):
      - P, As and S, measured there: a phosphine's P (Table 2), an arsine's
        As (Sec. 4.4.2), a sulfoxide's, a sulfinamide's, a sulfonium's S
-       (Sec. 4.4.2);
+       (Sec. 4.4.2). Not a P or an As whose planar form would close an
+       aromatic ring with its lone pair (a phosphole's, an arsole's): a
+       phosphole's is about 16 kcal/mol, lower than a plain N-alkyl
+       aziridine's (Sec. 4.2);
      - Sb, Bi, Se and Te, by the review's trend - barriers rise down a group
        (Sec. 4) - none of them measured there;
      - an N in a three-membered ring with a halogen, an O or an N on it or

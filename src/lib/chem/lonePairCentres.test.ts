@@ -26,6 +26,15 @@ describe("lonePairCentres", () => {
     expect(centres("C[Bi](CC)c1ccccc1")).toEqual(["Bi1"]);
   });
 
+  it("keeps no phosphole's P nor arsole's As, whose planar form closes an aromatic ring with its lone pair - but a phospholane's and an arsolane's", () => {
+    expect(centres("CP1C=CC=C1")).toEqual([]);
+    expect(centres("C[As]1C=CC=C1")).toEqual([]);
+    expect(centres("CP1CCCC1")).toEqual(["P1"]);
+    expect(centres("C[As]1CCCC1")).toEqual(["As1"]);
+    // (a 2,3-dihydrophosphole's: its ring's CH2 gives it no aromatic count)
+    expect(centres("CP1C=CCC1")).toEqual(["P1"]);
+  });
+
   it("keeps a sulfoxide's, a sulfonium's and a sulfinamide's S, measured - and a selenoxide's, a selenonium's Se and a telluroxide's, a telluronium's Te, by the group's trend", () => {
     expect(centres("C[S](=O)CC")).toEqual(["S1"]);
     expect(centres("C[S+](CC)CCC")).toEqual(["S1"]);
@@ -43,6 +52,7 @@ describe("lonePairCentres", () => {
 
   it("keeps an aziridine's N with a halogen, an O or an N on it or next to it in the ring: an N-chloro, an N-methoxy, an N-amino aziridine's, an oxaziridine's, a diaziridine's", () => {
     expect(centres("CC1(C)CN1Cl")).toEqual(["N4"]);
+    expect(centres("CC1(C)CN1F")).toEqual(["N4"]);
     expect(centres("CC1(C)CN1OC")).toEqual(["N4"]);
     expect(centres("CC1(C)CN1N(C)C")).toEqual(["N4"]);
     expect(centres("CC1ON1C")).toEqual(["N3"]);
@@ -78,6 +88,11 @@ describe("lonePairCentres", () => {
     expect(centres("CC1CCN1C")).toEqual([]);
     // (a tropane's N is a bridge of one atom, its methyl out of the rings: no bridgehead)
     expect(centres("CN1C2CCC1CC2")).toEqual([]);
+    // (1-azabicyclo[3.1.0]hexane, its rings fused at the N's bond: three paths reach C1, through C0, C2 and C3 - but
+    //  that through C3 goes through C2 as well, so the three are no three bridges; and the same written from its N, the
+    //  two paths that share an atom then the first two it walks)
+    expect(centres("C1CC2CN12")).toEqual([]);
+    expect(centres("N12CC1CCC2")).toEqual([]);
   });
 
   it("keeps no atom without a lone pair, or with an H", () => {
@@ -100,6 +115,12 @@ describe("lonePairCentres", () => {
     ];
     // (four neighbours, the metal one of them: no centre by its lone pair, whose pair is the metal's bond)
     expect(lonePairCentres(atoms, bonds)(0)).toBe(false);
+    // (an N-chloro aziridine's N, held - but not where its ring closes at a metal it is bonded to)
+    expect(centres("ClN1CC1")).toEqual(["N1"]);
+    expect(centres("ClN1C[Pd]1")).toEqual([]);
+    // (a quinuclidine's N, held - but not where one of its bridges runs through a metal)
+    expect(centres("N12CCC(CC1)CC2")).toEqual(["N0"]);
+    expect(centres("N12CCC(CC1)[Pd]C2")).toEqual([]);
   });
 });
 
