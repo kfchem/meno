@@ -119,27 +119,35 @@ Listings first, and a thing in full only when asked for.
 
 ## Connections
 
+**Only through a plugin** (the maintainer, 2026-11-04). Core holds no code
+that talks to a model's service, and no way out for one: where no plugin
+for it is added, nothing of a conversation is sent anywhere, and nothing
+listens for a program outside Meno. Adding the plugin is the step of
+trust, and its question says so plainly.
+
 A Conversation object has one connection: a model plugin, or a program
-outside Meno that connects to it. Its frame bounds both alike.
+outside Meno through a plugin of its own. Its frame bounds both alike.
+With none added, a Conversation object can be placed and edited, sends
+nothing, and its card says why in one line.
 
 - **A model plugin**, of a new kind of role, *language model* (PLUGINS.md,
   *Roles*).
-  - Core holds the conversation, the tools, the scope, the rights, the send log and the history.
-  - The plugin only converts: Meno's messages and tools into a request for its service, and the reply back into words and tool calls. It names its service and its hosts as a plugin names its program; core names none.
-  - Its connections go through the app's network gate under a purpose of their own. The consent names its hosts, and every connection is in the network's record.
-  - **Core makes the request, and the key never reaches the plugin.** The plugin's worker builds a request's body from Meno's messages and reads the reply; core sends it, over https, to a host the consent names, and puts the key in it itself. A worker never sees the key, and never connects anywhere of its own: a model plugin's worker is given no network.
-  - The key is the person's own, typed by them in Settings. It is kept in the system's keychain (the Keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux), by the `keyring` crate. It is never in the .meno, a log, the send log, a job folder, a worker or a file Meno writes. Where the system has no keychain, a model plugin is not run, saying why; the key is never kept in a file instead.
+  - Core holds the conversation, the tools, the scope, the rights, the limits, the send log and the history.
+  - The plugin calls its service and converts: Meno's messages and tools to its service's request, and the reply back to words and tool calls. It names its service and hosts as a plugin names its program; core names none.
+  - Its connections go through the app's network gate under a purpose of their own; the consent names its hosts, and every connection is in the network's record. Its question says plainly that it sends what the conversation shares to its service, with the person's key.
+  - The key is the person's own, typed by them in Settings. Core keeps it in the system's keychain (the Keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux), by the `keyring` crate, and hands it to that plugin's worker in memory for each request: never in its arguments or environment, never in the .meno, a log, the send log, a job folder or any file Meno writes. Where the system has no keychain, no model plugin is run, saying why; the key is never kept in a file instead.
 - **A program outside Meno**, connecting by the model-tool protocol, reaches
-  the same tools by another entrance.
-  - Meno starts a local server for one Conversation object, on the person's click. It listens on a local socket only, never on TCP: a Unix socket in a folder of the person's own, readable and writable by them alone (mode 0600); on Windows, a named pipe whose access is the person's alone.
-  - **Its token.** Random, from the system's generator, at least 128 bits; one per object; compared in constant time; dead once the object's server stops. It is never put in a program's arguments, which other people on the machine can see. The person is shown it only on their click, and the bridge reads it from its environment or from a file only they can read.
-  - Most such programs start their tools as a command over standard input and output. Meno ships a small bridge command: the program starts it, and it connects to the object's socket with the token.
+  the same tools through a plugin of its own kind, *outside entrance*.
+  Without it added, nothing listens.
+  - The plugin listens for one Conversation object, started on the person's click. It listens on a local socket only, never on TCP: a Unix socket in a folder of the person's own, readable and writable by them alone (mode 0600); on Windows, a named pipe whose access is the person's alone. Each call it takes it hands to core's tools, as a model plugin's tool calls are.
+  - **Its token.** Random, from the system's generator, at least 128 bits; one per object; compared in constant time; dead once the object's listening stops. It is never put in a program's arguments or environment, which other people or programs may see: the person is shown it only on their click, and the bridge reads it from a file only they can read.
+  - Most such programs start their tools as a command over standard input and output. The plugin brings a small bridge command: the program starts it, and it connects to the object's socket with the token.
   - It sees that object's frame and nothing else. It stops when the object is closed or deleted, or when the person stops it.
   - The card says so plainly: any program of the person's own that can read the token can drive that conversation, within its rights.
   - Each call is in the send log.
-- **A scripted test model**: a plugin of the same kind whose worker plays
-  back a script of replies and tool calls. It is for tests alone, never
-  offered.
+- **A scripted test model**: a plugin of the language-model kind whose
+  worker plays back a script of replies and tool calls. It is for tests
+  alone, never offered.
 
 ## Rights
 
@@ -200,7 +208,8 @@ with its key.
     - one undo of its change set while one of its steps runs asks the person;
     - it asks to run or stop a step, or to change the cores, and each is refused;
   - the send log lists what each turn sent and where;
-  - a key typed is in the keychain and in no file Meno writes: the workspace, the logs and the settings file are searched for it; nor is it in anything a worker is given;
+  - a key typed is in the keychain and in no file Meno writes: the workspace, the logs and the settings file are searched for it; nor is it, or a token, in the arguments or environment of the bridge or of any worker;
+  - with no model or outside-entrance plugin added, nothing is sent and nothing listens, and the card says why;
   - a reply holding HTML, a picture or a link is shown as text, and nothing is fetched for it;
   - a turn that reaches its limit stops and says so.
 
@@ -216,9 +225,9 @@ Each is independent, from main, with its tests and its part of this file.
 | 4 | Search: the same compound, and a substructure by Meno's own matcher. |
 | 5 | Changes: structures, arrows and texts placed inside the frame; steps built under the rules above; *Keep* and *Discard*; what will run again, said. |
 | 6 | The Conversation object: its frame and card, the right column, the whole-page flag, saved in the .meno, *Clear* and the warning on *Save as*. |
-| 7 | The *language model* kind of role: its manifest, its worker with no network of its own, core's request to the hosts its consent names, the key in the keychain. |
+| 7 | The *language model* kind of role: its manifest, its worker, its network purpose and hosts, the key kept in the keychain and handed to it in memory; with none added, a conversation that sends nothing, saying why. |
 | 8 | A first model plugin, checked live by the maintainer with their own key. |
-| 9 | The outside entrance: the local server for one object, its token, start and stop, the bridge command, every call in the send log. |
+| 9 | The *outside entrance* kind of role, and its plugin: listening on the local socket for one object, its token, start and stop, the bridge command, every call in the send log. |
 
 Stage 2: a model run on the person's own machine;
 confirming each change; structures read from PDFs; similarity and searches
@@ -234,10 +243,16 @@ The maintainer's answers to the questions of this design:
    asking.
 2. **The outside entrance:** a local socket only, never TCP, with one
    token per object, and the bridge command over standard input and output.
+   It is a plugin too, so that nothing listens unless it is added.
 3. **A conversation of the whole page:** a flag on its card, in Meno's
    warning colour, not a frame the size of the page.
 4. **The exchange:** saved in the .meno by default, with *Clear* on the
    card and a warning, once, on *Save as*.
+5. **Through plugins alone:** core holds no code that talks to a model's
+   service and no way out for one. Model requests are made by a
+   language-model plugin only, with the key core keeps and hands it in
+   memory; adding the plugin is the step of trust. Without one, nothing
+   is sent.
 
 ## As built
 

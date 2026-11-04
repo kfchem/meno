@@ -67,6 +67,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Molecules in 3D | pictures and films of them, rendered (RENDER.md) | Blender (a job: Blender, Meno's own copy, fetched as the plugin is set up) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
 | Later | a language model, in a conversation on the page ([CONVERSATIONS.md](CONVERSATIONS.md)) | - |
+| Later | a program outside Meno, connecting to a conversation on the page (*outside entrance*, CONVERSATIONS.md) | - |
 | Later | fingerprints, similarity | - |
 | Later | structure search in outside databases | - |
 | Later | running a calculation, an input written and an output read back | - |
@@ -390,9 +391,10 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   coloured by another grid as a general form, a step's `files`, and the
   NCIPLOT and Multiwfn interfaces: [`NCI.md`](./NCI.md).
 - **A language model** (designed 2026-11-04): a new kind of role, for
-  a conversation on the page. The plugin converts, to its service's
-  requests and back; the requests themselves, the conversation, its
-  tools, its scope and its key are core's:
+  a conversation on the page. The plugin calls its service and converts,
+  and is the only way a conversation is sent anywhere; the conversation,
+  its tools, its scope and keeping its key are core's. A program outside
+  Meno connects through a plugin too (*outside entrance*):
   [`CONVERSATIONS.md`](./CONVERSATIONS.md).
 
 ## Several plugins, one role
