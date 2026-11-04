@@ -1642,7 +1642,7 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
                 {"label": "Energies", "text": "none: \u03b7-bound rings are held, not modelled" if eta
                  else "none: UFF has no parameters for " + " or ".join(untyped or ["it"])},
             ]),
-            *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
+            *([{"label": "Asked for", "text": f"{asked}, which has no parameters for this molecule"}] if field and field != asked else []),
             *([{"label": "Held", "text": "; ".join(w for w in (restraints_words(rows), missed_words(missed)) if w)}] if rows else []),
             *([{"label": "Coordination bonds", "text": dipolar_words(mol)}] if dipolar_words(mol) else []),
             *[{"label": el, "text": ("bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
