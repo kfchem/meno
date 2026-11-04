@@ -1647,8 +1647,8 @@ As step 3 was built:
   *Several plugins, one role*): its manifest declares ORCA's output as its
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
-  file opened by hand alike. Written from the ORCA 6.1 manual and ORCA's
-  own outputs (ORCA 6.1.1, `scripts/calc/test_reader_orca.py`), it gives:
+  file opened by hand alike. Written from the ORCA 6.1 manual and the
+  program's printed forms (`scripts/calc/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry

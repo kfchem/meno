@@ -896,11 +896,9 @@ given with where its output was, to be asked for from there.
 
 ### Tests
 
-No program's output is committed (the maintainer, 2026-10-05). Gaussian's
-carry Gaussian's own copyright notice, and the rest are kept out the same
-way. Sample outputs - small ones from cclib's repository, ORCA's, xTB's
-and Gaussian's - are kept on the developer's machine, in a folder git
-ignores. The tests that read them run where they are there and are
+No program's output is committed (the maintainer, 2026-10-05). Sample
+outputs are kept on the developer's machine, in a folder git ignores.
+The tests that read them run where they are there and are
 skipped where they are not, as in CI. What a reader hands back is Meno's
 own plain data, so CI tests Meno's side of it - opening, saving, showing -
 with that data written by hand.

@@ -385,11 +385,9 @@ are a *Frequencies* step's, wired after it.
   matched on a *Tag*'s ID. *Each with each* makes at most as many pairs as
   *At most* says - 10 unless changed, so that one option does not start a
   job for every pair of two large sets (two of 29 conformers make 841). A
-  Diels-Alder pair's NEB-TS at ORCA's own GFN2-xTB, on one core
-  (2026-10-30), took 8 to 10 min for ends about 3 Å apart, and 29 to 132
-  min (median about 55) for ends 3.5 to 7.8 Å apart, as optimised starts
-  are: so 10 pairs are about a night of one core (1.5 to 22 hours). Past
-  it, nothing is run, and the step says how many it would make; pairs
+  path search takes long on one core, the longer the further apart its
+  ends are, so that a night's pairs are few. Past it, nothing is run,
+  and the step says how many it would make; pairs
   matched on a property are as many as the starts, and not limited. Each
   path keeps how its start and end were paired (`path.paired`: "in order,
   by place: start a #2 with end b #2", "each with each", "matched on pc"),
@@ -504,7 +502,7 @@ after it. Meno calls none of it a saddle point or a minimum.
 - **ORCA's plugin** runs IRC (the ORCA 6.1 manual, 4.4 *Intrinsic Reaction
   Coordinate*), both ways in one job, the manual's default direction, at
   the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
-  own unless said (ORCA 6.1.1 prints 20).
+  own unless said.
   The first Hessian is ORCA's: computed where none comes with the point.
 
 ### Optimise to a saddle point
@@ -1556,7 +1554,7 @@ Decided while building it, for the maintainer to confirm:
 - **`prepare {step, entries, options, cores}`** gives each job's input
   files, its program and arguments, the entries it is for, and the files
   `collect` will want - and, where its program reads one of its files as
-  its standard input, which (`stdin`; added with the real runs of
+  its standard input, which (`stdin`; added with the first runs of
   2026-10-09, for Gaussian) - and the programs installed beside its own
   run after it, in turn, where it ended well (`then`; added 2026-10-11,
   for the program ORCA's job runs beside it - its orca_2aim: what they
@@ -1779,8 +1777,8 @@ Decided by the maintainer (2026-10-08), as it was built:
   - a card, Quick Add, Settings' defaults - they go by the program's name:
   *ORCA*, *Gaussian 16*. *Plugins* stays the name of the whole.
 - **Checked with stand-ins on the Mac**: no ORCA or Gaussian was installed
-  there then; the programs themselves were run on 2026-10-09 (*Real runs
-  of ORCA and Gaussian*, below).
+  there then; the programs themselves were run on 2026-10-09 (*First runs
+  with the programs installed*, below).
 
 Decided while building it, for the maintainer to confirm:
 
@@ -1812,7 +1810,7 @@ Decided while building it, for the maintainer to confirm:
   kind (Opt, SP, Freq), PCM or SMD with one of 22 solvents as SCRF says,
   %NProcShared from the cores a job may use, no checkpoint file, an
   isotope by its mass number ("(Iso=n)") - and run
-  as `g16 <input.gjf` (`g16 input` until 2026-10-09: *Real runs*, below),
+  as `g16 <input.gjf` (`g16 input` until 2026-10-09: *First runs*, below),
   given `g16root` (the folder above its own) and GAUSS_EXEDIR (its own
   folder), its scratch files where it runs. Why a run failed is read from
   its output.
@@ -1851,24 +1849,20 @@ Not yet, and where it comes:
   no plugin Meno carries says so since Blender became Meno's own copy,
   2026-10-12, docs/RENDER.md), and then takes only a copy new enough.
 
-### Real runs of ORCA and Gaussian (2026-10-09)
+### First runs with the programs installed (2026-10-09)
 
-Step 6 had run only against stand-ins. On 2026-10-09 the real programs
-were run from the built app on the Mac: ORCA 6.1.1 (macOS, arm64) and
-Gaussian 16 Rev. B.01 (x86_64, under Rosetta), each located in Settings,
-*Plugins*, with one core for each job (Settings, *Calculations*: OpenMPI
-is not installed there, so ORCA runs one process). Methanol, opened from
-a MOL file, was made the input of two chains from Quick Add: ORCA's
-*Optimise* then *Frequencies* (B3LYP-D3BJ/def2-SVP), Gaussian 16's the
-same (B3LYP-D3BJ/6-31G(d)), the four queued one at a time.
+Step 6 had run only against stand-ins. On 2026-10-09 the programs
+themselves were run from the built app, each located in Settings,
+*Plugins*, with one core for each job: an *Optimise* then a
+*Frequencies* step of each, made from Quick Add on one molecule, queued
+one at a time.
 
 What was seen, and what was put right:
 
-- **ORCA**: both ran and were read back as designed - *Optimise* in about
-  12 s, −115.568850 Eh, its path of 7 frames on the frames chip;
-  *Frequencies* in 10 s, its 12 vibrations in the molecule's list (330.5
-  to 3819.7 cm⁻¹, none imaginary), its partial charges by pointing at an
-  atom, and what the calculation was on the chip.
+- **ORCA**: both steps came back as designed - the optimisation's path
+  as frames on the frames chip, the vibrations in the molecule's list,
+  its partial charges by pointing at an atom, and what the calculation
+  was on the chip.
 - **Gaussian's output went to a file nobody followed.** Run as `g16
   input`, Gaussian writes `input.log`, and what it printed - nothing - was
   the job's log: *Show log* said *(Nothing yet)*, the running card had no
@@ -1882,8 +1876,8 @@ What was seen, and what was put right:
   the job's log - followed while it runs, as ORCA's and xTB's are - and
   `collect` says the log is the output to read.
 - **Gaussian gives molecules back turned.** It works in its standard
-  orientation, and that is the geometry it prints: methanol came back a
-  half turn round, a molecule's results not lying as it went in.
+  orientation, and that is the geometry it prints, so a molecule's
+  results could come back turned, not lying as it went in.
   Results that are what came in worked out - *Optimise*, *Energy*,
   *Frequencies* - are now put down turned the way that lays each over the
   entry it was worked out from (Horn's quaternion, as a structure in 3D is
