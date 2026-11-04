@@ -645,10 +645,11 @@ function Send-MenoText {
 }
 
 function Send-MenoKey {
-    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
+    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down", "1", "2", "3")] [string] $Key, [switch] $Shift)
     # (Escape answers a question no: always let through)
     if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
-    $vk = @{ Enter = 0x0D; Escape = 0x1B; Tab = 0x09; Backspace = 0x08; Up = 0x26; Down = 0x28 }[$Key]
+    # (a digit too, alone - a bond key: docs/EDITOR-2D.md, *Bond keys*)
+    $vk = @{ Enter = 0x0D; Escape = 0x1B; Tab = 0x09; Backspace = 0x08; Up = 0x26; Down = 0x28; "1" = 0x31; "2" = 0x32; "3" = 0x33 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [NativeGui]::Chord([uint16[]] @(0x10), [uint16] $vk) }
     else { [NativeGui]::TapKey([ushort] $vk) }
