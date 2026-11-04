@@ -125,7 +125,7 @@
       {
         "id": "paper",
         "label": "Paper sweep",
-        "description": "A seamless sweep in the background's colour, lit softly from above.",
+        "description": "A seamless white sweep, lit softly from above.",
         "file": "studio_paper.py",
         "fixed": [
           {
