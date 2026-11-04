@@ -1180,7 +1180,7 @@ The same for every plugin and for Meno's own parts:
   atoms' functions overlap, but is no proof of one: a sign turned on
   every function of one l and m of a lone atom leaves `C S Cᵀ` as it was.
   A reader's conversion is shown right by comparing it with its program's
-  own expansion of the same orbitals (Gaussian's Output=WFX, say).
+  own expansion of the same orbitals, where the program writes one.
   A reader converts its program's own basis and coefficients so, and works
   out no values itself. The Gaussian plugin gives a formatted
   checkpoint's so.

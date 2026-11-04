@@ -1029,8 +1029,7 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   Meno works out each orbital on its grid itself - once it has found the
   orbitals a list offers orthonormal over that basis, which catches a
   basis converted wrong in a molecule, though not every such mistake
-  (docs/PLUGINS.md, *Gives a wavefunction whole*). The conversion was
-  shown right against Gaussian 16's own WFX files of the same jobs.
+  (docs/PLUGINS.md, *Gives a wavefunction whole*).
 
 ### In order
 
