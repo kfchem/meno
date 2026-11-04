@@ -71,9 +71,12 @@ export function gestureStep(coalesceKey: string): EditMeta {
  * theirs (`by`). Its key names it alone, as a gesture's does
  * (`DocumentStore.actAs`).
  */
-export function changeSet(coalesceKey: string, by: string): EditMeta {
-  return { ...gestureStep(coalesceKey), by };
+export function changeSet(coalesceKey: string, by: string): ChangeSetMeta {
+  return { coalesceKey, coalesceWithinMs: Infinity, by };
 }
+
+/** What a change set is made with: its own key, by which its caller may drop it, and who made it. */
+export type ChangeSetMeta = EditMeta & { coalesceKey: string; by: string };
 
 export type HistoryInfo = {
   undoDepth: number;
@@ -100,14 +103,22 @@ export interface DocumentStore<T> {
   edit(label: string, updater: (state: T) => T, meta?: EditMeta): boolean;
   /**
    * Runs `act`, every edit it makes - whatever label and meta each is made
-   * with - taken as one step, `label`, made with `meta` (a `changeSet`): a
-   * turn of a conversation that places structures, wires steps and sets
-   * their options through the store's own calls is one step to undo, said
-   * as its. True where it made any. One within another is part of the
-   * outer one. Where `act` throws, what it made before stays one step, for
-   * the caller to take back (`drop`, with `meta`'s key).
+   * with - taken as one step, `label`, made with `meta` (a `changeSet`, its
+   * key its own): a turn of a conversation that places structures, wires
+   * steps and sets their options through the store's own calls is one step
+   * to undo, said as its. True where it made any. One within another is
+   * part of the outer one. Where `act` throws, what it made before stays one
+   * step, for the caller to take back (`drop`, with `meta`'s key).
+   *
+   * `act` does its work at once. One that waits - that returns a promise -
+   * is refused, thrown, as soon as it returns: what it would edit after
+   * its wait could be told from no edit of the person's, and so would be
+   * taken for theirs. What it made before it waited stays one step, to be
+   * dropped. While it runs, nothing of the history may be gone back on -
+   * undo, redo, a drop, a take-back or a reset throw - so that no change
+   * set takes back a step it did not make.
    */
-  actAs(label: string, meta: EditMeta, act: () => void): boolean;
+  actAs(label: string, meta: ChangeSetMeta, act: () => undefined): boolean;
   undo(): boolean;
   redo(): boolean;
   /**
@@ -213,10 +224,14 @@ export function createDocument<T>(
   let future: Entry<T>[] = [];
   let savedState: T = initial;
   let travelled = false;
-  // (a change set under way: every edit made in it is its, the first a step of its own - `actAs`)
+  // (a change set under way: every edit made in it is its, the first a step of its own - `actAs`. An edit a
+  //  listener makes as it is told of one is made within it too: none does today)
   let acting: { label: string; meta: EditMeta; made: boolean } | null = null;
-  let changeSets = 0;
   let edits = 0;
+  // (nothing of the history gone back on while a change set runs)
+  const unmoved = () => {
+    if (acting) throw new Error("Nothing of the history is gone back on while a change set runs");
+  };
 
   // (the history kept within what it may hold, where its steps say what
   // they cost: the oldest dropped first, down to one step to undo; the
@@ -290,21 +305,25 @@ export function createDocument<T>(
 
     actAs(label, meta, act) {
       const before = edits;
-      if (acting) {
-        act();
-        return edits > before;
-      }
-      // (its edits one step by a key of its own, where it was given none)
-      acting = { label, meta: { ...meta, coalesceKey: meta.coalesceKey ?? `change set ${++changeSets}`, coalesceWithinMs: Infinity }, made: false };
+      const outer = acting == null;
+      // (its edits one step, however long apart: its key's, never a window's - or, within another, the other's)
+      if (outer) acting = { label, meta: { ...meta, coalesceWithinMs: Infinity }, made: false };
+      let gave: unknown;
       try {
-        act();
+        gave = act();
       } finally {
-        acting = null;
+        if (outer) acting = null;
+      }
+      if (typeof (gave as { then?: unknown } | null)?.then === "function") {
+        // (its own failure no more than this one: never left unhandled)
+        (gave as Promise<unknown>).then(undefined, () => {});
+        throw new Error("A change set does its work at once: one that waits is refused, and what it made before it waited is one step to drop");
       }
       return edits > before;
     },
 
     undo() {
+      unmoved();
       const previous = past.pop();
       if (!previous) return false;
       future.unshift(present);
@@ -315,6 +334,7 @@ export function createDocument<T>(
     },
 
     drop(coalesceKey) {
+      unmoved();
       if (present.coalesceKey !== coalesceKey || !past.length) return false;
       present = past.pop()!;
       travelled = true;
@@ -323,6 +343,7 @@ export function createDocument<T>(
     },
 
     takeBackTo(depth, state) {
+      unmoved();
       if (past.length < depth) return false;
       // (the step that was on top then: still on top - an edit since coalesced into it - or now under what came after)
       const at = past.length === depth ? present : past[depth];
@@ -338,6 +359,7 @@ export function createDocument<T>(
     },
 
     redo() {
+      unmoved();
       const next = future.shift();
       if (!next) return false;
       past.push(present);
@@ -348,6 +370,7 @@ export function createDocument<T>(
     },
 
     reset(state, label = "open") {
+      unmoved();
       past = [];
       future = [];
       present = { state, label, at: now() };

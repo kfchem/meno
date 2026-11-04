@@ -181,9 +181,18 @@ and another's are always steps of their own. `actAs(label, meta, act)` runs
 through whatever store call and with whatever label and key it is made, is
 one step to undo, `label`, said as `by`'s - so a turn of a conversation that
 places a set, a step and a wire and sets the step's options is taken back by
-one undo (2026-11-04). Its first edit always begins a step of its own. Where
-`act` throws, what it made stays one step, for the caller to take back with
-`drop`.
+one undo (2026-11-04). Its first edit always begins a step of its own, and
+it is given a key of its own, by which its caller can always `drop` it. Where
+`act` throws, what it made stays one step, for the caller to take back.
+
+A change set does its work at once. One whose `act` waits - returns a
+promise - is refused, by its type and as soon as it returns: what it edited
+after its wait would be told from no edit of the person's. What it made
+before stays one step, to drop. While a change set runs, nothing of the
+history may be gone back on (undo, redo, a drop, a take-back, a reset), so
+that none takes back a step it did not make. An edit a listener made as it
+was told of one would be made within the change set too; no listener edits
+today.
 `subscribe` matches React's `useSyncExternalStore`; nothing in `lib/doc`
 imports React.
 

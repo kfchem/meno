@@ -194,6 +194,58 @@ describe("createDocument", () => {
     expect(doc.history().undoBy).toBeUndefined();
   });
 
+  it("keeps two change sets apart, the same maker's with the same key one after the other: one turn, one undo", () => {
+    const { doc } = withClock();
+    doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => void doc.edit("add N", addAtom("N")));
+    doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => void doc.edit("add O", addAtom("O")));
+    expect(doc.history().undoDepth).toBe(2);
+  });
+
+  it("holds a change set's edits as one step however far apart - its own key's, never a window its caller gave", () => {
+    const { doc, tick } = withClock();
+    doc.actAs("conversation", { ...changeSet("turn:1", "a conversation"), coalesceWithinMs: 10 }, () => {
+      doc.edit("add N", addAtom("N"));
+      tick(1000);
+      doc.edit("add O", addAtom("O"));
+      return undefined;
+    });
+    expect(doc.history().undoDepth).toBe(1);
+  });
+
+  it("refuses a change set that waits, as soon as it returns - what it made before it waited one step, to drop", async () => {
+    const { doc } = withClock();
+    // (refused by its type)
+    // @ts-expect-error - a change set does its work at once
+    const waits: Parameters<typeof doc.actAs>[2] = async () => {
+      doc.edit("add N", addAtom("N"));
+      await Promise.resolve();
+    };
+    // (and as it runs, whatever its type said)
+    expect(() => doc.actAs("conversation", changeSet("turn:1", "a conversation"), waits)).toThrow("A change set does its work at once");
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoBy: "a conversation" });
+    expect(doc.drop("turn:1")).toBe(true);
+    expect(doc.getState().atoms).toEqual([]);
+    await Promise.resolve();
+  });
+
+  it("lets nothing of the history be gone back on while a change set runs", () => {
+    const { doc } = withClock();
+    doc.edit("add C", addAtom("C"));
+    doc.edit("add S", addAtom("S"));
+    doc.undo();
+    for (const travel of [() => doc.undo(), () => doc.redo(), () => doc.drop("x"), () => doc.takeBackTo(0, doc.getState()), () => doc.reset(doc.getState())]) {
+      expect(() =>
+        doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => {
+          travel();
+          return undefined;
+        }),
+      ).toThrow("Nothing of the history is gone back on");
+    }
+    // (the person's steps as they were: one to undo, one to redo)
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 1, undoLabel: "add C", redoLabel: "add S" });
+    expect(doc.getState().atoms).toEqual(["C"]);
+  });
+
   it("takes back a gesture's step when it is let go of, leaving nothing to redo", () => {
     const { doc } = withClock();
     doc.edit("add C", addAtom("C"));
