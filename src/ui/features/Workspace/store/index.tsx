@@ -6,6 +6,7 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
+import type { Conversation } from "../conversation/types";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -77,6 +78,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     shapes: doc.shapes ?? NO_SHAPES,
     inks: doc.inks ?? NO_INKS,
     cycles: doc.cycles ?? NO_CYCLES,
+    conversations: doc.conversations ?? NO_CONVERSATIONS,
   };
 }
 
@@ -116,6 +118,7 @@ const NO_SLIDES: Slide[] = [];
 const NO_SHAPES: Shape[] = [];
 const NO_INKS: Ink[] = [];
 const NO_CYCLES: Cycle[] = [];
+const NO_CONVERSATIONS: Conversation[] = [];
 
 /** The pictures selected, kept to those the document still has. */
 function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Set<number> {

@@ -10,6 +10,8 @@
  * calculations' outputs its molecules were read from, its texts, its PDFs
  * and its pictures.
  */
+import type { Conversation } from "../conversation/types";
+import { readConversations } from "../conversation/saved";
 import { carriedDrawing, hiddenInStacks } from "./stacks";
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
 import { fillsAmong } from "./rings";
@@ -58,6 +60,8 @@ export type Workspace = {
   pdfs: Omit<PdfItem, "id">[];
   /** Which of them its column showed, by its place among them - a text, or none, if it showed none of them. */
   pdfShown?: number;
+  /** Its conversations, each as saved, numbered again as it opens (conversation/saved). */
+  conversations?: Omit<Conversation, "id">[];
   /** What its file held that could not be read, and was left out (utils/readNotes); none where it read whole. */
   leftOut?: LeftOut;
 };
@@ -73,7 +77,7 @@ type Saved = Pick<
   Partial<Pick<EditorState, "docStyle" | "docStyle3d">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "stacksShown" | "fullModel" | "recordsShown">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "conversations" | "stacksShown" | "fullModel" | "recordsShown">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -187,6 +191,8 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.inks?.length ? { inks: state.inks } : {}),
       // (catalytic cycles: lib/chem/cycle)
       ...(state.cycles?.length ? { cycles: state.cycles } : {}),
+      // (conversations, what was said and sent with them: saved by default - conversation/saved)
+      ...(state.conversations?.length ? { conversations: state.conversations.map(({ id: _id, ...c }) => c) } : {}),
     }) + "\n"
   );
 }
@@ -450,6 +456,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     textShown?: unknown;
     pdfs?: unknown;
     pdfShown?: unknown;
+    conversations?: unknown;
   };
   if (r?.format !== WORKSPACE || !READS.includes(r.version as number)) return null;
   // (what is drawn read at the point of the style it was drawn in)
@@ -496,6 +503,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
   const pdfs = pdfsAt.map(({ pdf }) => pdf);
   const pdfShownAt = Number.isInteger(r.pdfShown) ? pdfsAt.findIndex(({ at }) => at === r.pdfShown) : -1;
   const pdfShown = pdfShownAt >= 0 && !!pdfs[pdfShownAt].reading;
+  const conversations = readConversations(r.conversations, () => leftOut("conversation"));
   return {
     drawn,
     ...(workflow ? { workflow } : {}),
@@ -507,6 +515,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     ...(textShown != null ? { textShown } : {}),
     pdfs,
     ...(pdfShown ? { pdfShown: pdfShownAt } : {}),
+    ...(conversations.length ? { conversations } : {}),
   };
 }
 
