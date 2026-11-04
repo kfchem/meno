@@ -21,9 +21,28 @@ describe("one bond out of an atom, where there is room (a click with Option or A
     expect(atom.x).toBeCloseTo(0, 6);
     expect(atom.y).toBeCloseTo(NOMINAL_BOND_LENGTH, 6);
     expect(st().model.bonds).toHaveLength(1);
+    // (a carbon, by a single bond)
+    expect(atom.el).toBe("C");
+    expect(st().model.bonds[0]).toMatchObject({ order: 1 });
     expect(doc.history().undoDepth).toBe(before + 1);
     doc.undo();
     expect(st().model.atoms).toHaveLength(1);
+  });
+
+  it("closes onto an atom standing near where it would end - the bond alone, one undo step, that atom's id - and is nothing for an atom not there", () => {
+    const { doc, st } = drawing();
+    const a = st().addAtom(0, 0, "C");
+    // (a tenth of a bond off its end: too far to be steered around, near enough to close onto)
+    const there = st().addAtom(0.1 * NOMINAL_BOND_LENGTH, NOMINAL_BOND_LENGTH, "N");
+    const before = doc.history().undoDepth;
+    expect(st().bondOut(a, { x: 0, y: 5 })).toBe(there);
+    expect(st().model.atoms).toHaveLength(2);
+    expect(st().model.bonds).toHaveLength(1);
+    expect(st().model.bonds[0]).toMatchObject({ order: 1 });
+    expect([st().model.bonds[0].a, st().model.bonds[0].b].sort()).toEqual([a, there].sort());
+    expect(doc.history().undoDepth).toBe(before + 1);
+    expect(st().bondOut(9999, { x: 0, y: 5 })).toBeNull();
+    expect(doc.history().undoDepth).toBe(before + 1);
   });
 
   it("goes on a chain at 120 degrees from the bond before it, wherever the pointer is", () => {
