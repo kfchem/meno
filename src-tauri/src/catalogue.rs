@@ -33,8 +33,7 @@ pub const HOSTS: [&str; 3] = ["github.com", "objects.githubusercontent.com", "re
 const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue.json";
 
 /// The keys the catalogue is signed with (minisign, base64): the one in use, and the next, so that one is
-/// changed for the other by a Meno that carries both first. None until the maintainer gives the first: no
-/// catalogue is taken until then.
+/// changed for the other by a Meno that carries both first. Until one is carried, no catalogue is taken.
 const KEYS: &[&str] = &[];
 
 /// The most the catalogue, its signature, a plugin's archive, its files unpacked, and their number may be.
@@ -72,17 +71,33 @@ fn signature_of(sig: &[u8]) -> Result<Signature, String> {
     Signature::decode(&text).map_err(|_| "its signature is not one Meno reads".to_string())
 }
 
-/// The catalogue, checked: signed by one of `keys`, of the form Meno reads, and - where Meno has taken one
-/// before (`floor`, its serial) - not older than it. Only then is it read at all; its serial with it.
-fn checked(list: &[u8], sig: &[u8], keys: &[&str], floor: Option<u64>) -> Result<(Value, u64), String> {
+/// Whether a list is signed with one of `keys`. Only a signature of minisign's own form, made over the
+/// list's hash, is taken: never the older form made over the list itself (`allow_legacy` false).
+fn signed(list: &[u8], sig: &[u8], keys: &[&str]) -> Result<(), String> {
     let signature = signature_of(sig)?;
     let signed = keys
         .iter()
         .filter_map(|k| PublicKey::from_base64(k).ok())
         .any(|k| k.verify(list, &signature, false).is_ok());
-    if !signed {
-        return Err(if keys.is_empty() { "Meno has no key to check the list with yet".to_string() } else { "the list is not signed with Meno's key".to_string() });
+    if signed {
+        Ok(())
+    } else if keys.is_empty() {
+        Err("Meno has no key to check the list with yet".to_string())
+    } else {
+        Err("the list is not signed with Meno's key".to_string())
     }
+}
+
+/// The catalogue, checked: signed by one of `keys` - before anything of it is read - then of the form Meno
+/// reads, and not older than one taken before (`floor`).
+fn checked(list: &[u8], sig: &[u8], keys: &[&str], floor: Option<u64>) -> Result<(Value, u64), String> {
+    signed(list, sig, keys)?;
+    form_of(list, floor)
+}
+
+/// A signed list read: of the form Meno reads, with a serial, and - where Meno has taken one before
+/// (`floor`, its serial) - not older than it.
+fn form_of(list: &[u8], floor: Option<u64>) -> Result<(Value, u64), String> {
     let value: Value = serde_json::from_slice(list).map_err(|_| "the list is not one Meno reads".to_string())?;
     if value.get("schema").and_then(Value::as_u64) != Some(SCHEMA) {
         return Err("the list is of a form this Meno does not read: a newer Meno may".to_string());
@@ -142,7 +157,7 @@ fn floor(root: &Path) -> Option<u64> {
 
 /// What the page is given: the catalogue checked, when it was fetched, and - where it is the one kept from
 /// before, though a newer one was asked for - why.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Got {
     catalogue: Value,
@@ -158,8 +173,8 @@ fn now_iso() -> String {
 }
 
 /// The catalogue and its signature, fetched under its purpose, to its hosts alone.
-async fn fetch_list(net: &net::Net) -> Result<(Vec<u8>, Vec<u8>), String> {
-    let task = net.begin(PURPOSE, "The plugins online", Some(HOSTS.iter().map(|h| h.to_string()).collect()))?;
+async fn fetch_list(net: &net::Net) -> Fetched {
+    let task = net.begin(PURPOSE, "The plugins online", Some(hosts()))?;
     let proxy = task.proxy_url().ok_or("the network is not ready")?;
     let got = async {
         let list = tools::download(LIST_URL, &proxy, LIST_MOST).await?;
@@ -180,26 +195,36 @@ async fn fetch_list(net: &net::Net) -> Result<(Vec<u8>, Vec<u8>), String> {
 #[tauri::command]
 pub async fn catalogue_get(app: AppHandle, net: State<'_, net::Net>, fetch: bool) -> Result<Option<Got>, String> {
     let root = root(&app)?;
+    let fetched = if fetch { Some(fetch_list(&net).await) } else { None };
+    got(&root, KEYS, fetched, &now_iso())
+}
+
+/// A list and its signature as fetched, or why not.
+type Fetched = Result<(Vec<u8>, Vec<u8>), String>;
+
+/// What `catalogue_get` gives, from what was fetched, if anything: a list fetched taken - checked, held to
+/// the serial of the one kept, then kept - else the one kept, saying why a newer one was not had.
+fn got(root: &Path, keys: &[&str], fetched: Option<Fetched>, now: &str) -> Result<Option<Got>, String> {
     let mut why = None;
-    if fetch {
-        let fetched = fetch_list(&net).await.and_then(|(list, sig)| {
-            let (value, serial) = checked(&list, &sig, KEYS, floor(&root))?;
-            Ok((list, sig, value, serial))
-        });
-        match fetched {
-            Ok((list, sig, catalogue, serial)) => {
-                let fetched_at = now_iso();
-                keep(&root, &list, &sig, serial, &fetched_at)?;
-                return Ok(Some(Got { catalogue, fetched_at, kept: None }));
-            }
+    if let Some(fetched) = fetched {
+        match fetched.and_then(|(list, sig)| take_fetched(root, &list, &sig, keys, now)) {
+            Ok(got) => return Ok(Some(got)),
             Err(e) => why = Some(e),
         }
     }
-    match (kept(&root, KEYS), why) {
+    match (kept(root, keys), why) {
         (Some((catalogue, state)), why) => Ok(Some(Got { catalogue, fetched_at: state.fetched_at, kept: why })),
         (None, Some(why)) => Err(why),
         (None, None) => Ok(None),
     }
+}
+
+/// A list fetched, taken: signed, of the form Meno reads, and not older than the one kept - else refused,
+/// and nothing written - then kept.
+fn take_fetched(root: &Path, list: &[u8], sig: &[u8], keys: &[&str], now: &str) -> Result<Got, String> {
+    let (catalogue, serial) = checked(list, sig, keys, floor(root))?;
+    keep(root, list, sig, serial, now)?;
+    Ok(Got { catalogue, fetched_at: now.to_string(), kept: None })
 }
 
 /// A plugin's entry in a catalogue, by its id and version.
@@ -213,7 +238,10 @@ fn entry_of<'a>(catalogue: &'a Value, id: &str, version: &str) -> Option<&'a Val
 
 /// What an entry says of its files: where they are - on https, at the catalogue's hosts, nowhere else - their
 /// fingerprint and size, and the fingerprint of the manifest among them.
+#[derive(Debug)]
 struct Source {
+    id: String,
+    version: String,
     url: String,
     sha256: String,
     bytes: u64,
@@ -236,7 +264,9 @@ fn source_of(entry: &Value) -> Result<Source, String> {
     // (no more than its entry says, and never more than Meno's own most)
     let bytes = s.get("bytes").and_then(Value::as_u64).filter(|b| *b > 0 && *b <= ARCHIVE_MOST).ok_or("its files' size is not one Meno takes")?;
     let manifest_sha256 = hex64(entry.get("manifestSha256")).ok_or("its manifest's fingerprint is not one Meno takes")?;
-    Ok(Source { url: url.to_string(), sha256, bytes, manifest_sha256 })
+    let id = entry.get("id").and_then(Value::as_str).filter(|i| crate::plugin_id_ok(i)).ok_or("its entry gives no id Meno takes")?;
+    let version = entry.get("version").and_then(Value::as_str).filter(|v| version_ok(v)).ok_or("its entry gives no version Meno takes")?;
+    Ok(Source { id: id.to_string(), version: version.to_string(), url: url.to_string(), sha256, bytes, manifest_sha256 })
 }
 
 /// A plugin's files, unpacked into `dir`: regular files and folders alone, each where the archive puts it
@@ -261,7 +291,8 @@ fn unpack_all(archive: &[u8], dir: &Path) -> Result<(), String> {
         let mut rel = PathBuf::new();
         for part in path.components() {
             match part {
-                Component::Normal(p) => rel.push(p),
+                // (a name, and no more: a colon - a drive, or another stream of a file on Windows - or a backslash refused)
+                Component::Normal(p) if !p.to_string_lossy().contains([':', '\\']) => rel.push(p),
                 Component::CurDir => {}
                 _ => return Err(format!("its archive holds a path Meno does not take: {}", path.display())),
             }
@@ -313,32 +344,61 @@ fn stage_from(archive: &[u8], source: &Source, root: &Path) -> Result<Staged, St
     let stage = uuid::Uuid::new_v4().simple().to_string();
     let dir = root.join(".staging").join(&stage);
     unpack_into(archive, &dir)?;
+    // (the entry it was staged for, beside it: what its manifest must say when it is taken into use)
+    put(&for_of(&dir), format!("{}\n{}", source.id, source.version).as_bytes())?;
     let manifest = std::fs::read(dir.join("manifest.json")).ok();
     let fits = manifest.as_deref().is_some_and(|m| tools::check(m, &source.manifest_sha256).is_ok());
     let text = manifest.and_then(|m| String::from_utf8(m).ok());
     match (fits, text) {
         (true, Some(manifest)) => Ok(Staged { stage, manifest }),
         _ => {
-            let _ = std::fs::remove_dir_all(&dir);
+            throw_away(&dir);
             Err("its manifest is not the one the list gave the fingerprint of".to_string())
         }
     }
+}
+
+/// Where a stage's entry - the id and version it was staged for - is kept: beside its folder.
+fn for_of(dir: &Path) -> PathBuf {
+    dir.with_extension("for")
+}
+
+/// A stage thrown away, and its entry with it.
+fn throw_away(dir: &Path) {
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_file(for_of(dir));
+}
+
+/// The hosts a task of the plugins online is kept to.
+fn hosts() -> Vec<String> {
+    HOSTS.iter().map(|h| h.to_string()).collect()
+}
+
+/// A plugin's entry and what it says of its files, found in the catalogue kept - checked again as it is
+/// read - never as the page says it.
+fn entry_for(root: &Path, keys: &[&str], id: &str, version: &str) -> Result<Source, String> {
+    if !crate::plugin_id_ok(id) || !version_ok(version) {
+        return Err("not a plugin's id and version".to_string());
+    }
+    let (catalogue, _) = kept(root, keys).ok_or("there is no list of the plugins online here")?;
+    let entry = entry_of(&catalogue, id, version).ok_or_else(|| format!("the list holds no {id} {version}"))?;
+    source_of(entry)
+}
+
+/// The most of a plugin's archive that is fetched: its entry's size - itself never more than Meno's own most.
+fn archive_most(source: &Source) -> u64 {
+    source.bytes
 }
 
 /// A plugin's files got (lib/plugins/online `getPlugin`): its entry found in the catalogue kept - checked
 /// again, never as the page says it - its archive fetched under the catalogue's purpose, and staged.
 #[tauri::command]
 pub async fn plugin_stage(app: AppHandle, net: State<'_, net::Net>, id: String, version: String) -> Result<Staged, String> {
-    if !crate::plugin_id_ok(&id) || !version_ok(&version) {
-        return Err("not a plugin's id and version".to_string());
-    }
     let root = root(&app)?;
-    let (catalogue, _) = kept(&root, KEYS).ok_or("there is no list of the plugins online here")?;
-    let entry = entry_of(&catalogue, &id, &version).ok_or_else(|| format!("the list holds no {id} {version}"))?;
-    let source = source_of(entry)?;
-    let task = net.begin(PURPOSE, &format!("Getting the plugin {id} {version}"), Some(HOSTS.iter().map(|h| h.to_string()).collect()))?;
+    let source = entry_for(&root, KEYS, &id, &version)?;
+    let task = net.begin(PURPOSE, &format!("Getting the plugin {id} {version}"), Some(hosts()))?;
     let proxy = task.proxy_url().ok_or("the network is not ready")?;
-    let archive = match tools::download(&source.url, &proxy, source.bytes).await {
+    let archive = match tools::download(&source.url, &proxy, archive_most(&source)).await {
         Ok(a) => {
             task.finish(true);
             a
@@ -365,15 +425,21 @@ fn set_current(root: &Path, id: &str, version: &str) -> Result<(), String> {
     put(&root.join(id).join("current"), version.as_bytes())
 }
 
-/// A stage taken into use: its folder made `<id>/<version>` - by its manifest's id and version - and
-/// `current` naming it. A version once in place is never changed: where it is there already, the stage is
-/// thrown away and `current` names that one.
+/// A stage taken into use: its folder made `<id>/<version>` - by its manifest's id and version, which must
+/// be those of the entry it was staged for - and `current` naming it. A version once in place is never
+/// changed: where it is there already, the stage is thrown away and `current` names that one.
 fn commit_stage(root: &Path, stage: &str) -> Result<(), String> {
     let dir = stage_dir(root, stage)?;
     let manifest: Value = serde_json::from_slice(&std::fs::read(dir.join("manifest.json")).map_err(|_| "no such stage")?).map_err(|_| "its manifest is not one Meno reads")?;
     let id = manifest.get("id").and_then(Value::as_str).filter(|i| crate::plugin_id_ok(i)).ok_or("its manifest gives no id Meno takes")?;
     let version = manifest.get("version").and_then(Value::as_str).filter(|v| version_ok(v)).ok_or("its manifest gives no version Meno takes")?;
+    let staged_for = std::fs::read_to_string(for_of(&dir)).map_err(|_| "no such stage")?;
+    if staged_for != format!("{id}\n{version}") {
+        throw_away(&dir);
+        return Err("its manifest is not the plugin it was got as".to_string());
+    }
     let target = root.join(id).join(version);
+    let _ = std::fs::remove_file(for_of(&dir));
     if target.exists() {
         let _ = std::fs::remove_dir_all(&dir);
     } else {
@@ -391,16 +457,15 @@ pub fn plugin_commit(app: AppHandle, stage: String) -> Result<(), String> {
 /// A stage thrown away: none of it used.
 #[tauri::command]
 pub fn plugin_discard(app: AppHandle, stage: String) -> Result<(), String> {
-    let dir = stage_dir(&root(&app)?, &stage)?;
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(|e| format!("throwing the stage away: {e}"))?;
-    }
+    throw_away(&stage_dir(&root(&app)?, &stage)?);
     Ok(())
 }
 
 /// A plugin's files taken away: `current` first - so that a folder left half taken is no plugin in use - then
-/// its folder.
-fn remove_files(root: &Path, id: &str) -> Result<(), String> {
+/// its folder (`remove_dir`). Asked only once its jobs are stopped: the page asks the person first, as it
+/// does before a plugin is removed (lib/calc/workers `removePlugin`). While Meno still carries plugins, one
+/// it carries is put back as it next starts.
+fn remove_files(root: &Path, id: &str, remove_dir: impl Fn(&Path) -> std::io::Result<()>) -> Result<(), String> {
     if !crate::plugin_id_ok(id) {
         return Err("not a plugin's id".to_string());
     }
@@ -410,14 +475,14 @@ fn remove_files(root: &Path, id: &str) -> Result<(), String> {
         std::fs::remove_file(&current).map_err(|e| format!("taking {id} out of use: {e}"))?;
     }
     if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(|e| format!("removing {id}'s files: {e}"))?;
+        remove_dir(&dir).map_err(|e| format!("removing {id}'s files: {e}"))?;
     }
     Ok(())
 }
 
 #[tauri::command]
 pub fn plugin_files_remove(app: AppHandle, id: String) -> Result<(), String> {
-    remove_files(&root(&app)?, &id)
+    remove_files(&root(&app)?, &id, |d| std::fs::remove_dir_all(d))
 }
 
 #[cfg(test)]
@@ -527,7 +592,7 @@ mod tests {
     const MANIFEST: &[u8] = br#"{"id":"sketch","version":"0.3.0","name":"Sketch interface"}"#;
 
     fn source(archive: &[u8]) -> Source {
-        Source { url: String::new(), sha256: sha(archive), bytes: archive.len() as u64, manifest_sha256: sha(MANIFEST) }
+        Source { id: "sketch".into(), version: "0.3.0".into(), url: String::new(), sha256: sha(archive), bytes: archive.len() as u64, manifest_sha256: sha(MANIFEST) }
     }
 
     #[test]
@@ -547,9 +612,9 @@ mod tests {
         commit_stage(&root, &again.stage).unwrap();
         assert!(!root.join(".staging").join(&again.stage).exists());
         // (taken away: current first, then its folder)
-        remove_files(&root, "sketch").unwrap();
+        remove_files(&root, "sketch", |d| std::fs::remove_dir_all(d)).unwrap();
         assert!(!root.join("sketch").exists());
-        assert!(remove_files(&root, "../up").is_err());
+        assert!(remove_files(&root, "../up", |d| std::fs::remove_dir_all(d)).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -580,6 +645,8 @@ mod tests {
             (archive(&[("manifest.json", MANIFEST), ("../up.txt", b"x")], None), "a path that goes up"),
             (archive(&[("manifest.json", MANIFEST), ("/abs.txt", b"x")], None), "an absolute path"),
             (archive(&[("manifest.json", MANIFEST), ("manifest.json", b"{}")], None), "a file twice"),
+            (archive(&[("manifest.json", MANIFEST), ("a:b.txt", b"x")], None), "a colon: a drive, or another stream of a file"),
+            (archive(&[("manifest.json", MANIFEST), ("a\\b.txt", b"x")], None), "a backslash"),
         ] {
             let dir = scratch("unpack");
             assert!(unpack_into(&a, &dir).is_err(), "{what}");
@@ -603,7 +670,7 @@ mod tests {
 
     #[test]
     fn an_entry_s_files_are_taken_only_from_the_catalogue_s_hosts_on_https() {
-        let entry = |url: &str| serde_json::json!({ "source": { "url": url, "sha256": "a".repeat(64), "bytes": 10 }, "manifestSha256": "b".repeat(64) });
+        let entry = |url: &str| serde_json::json!({ "id": "sketch", "version": "0.3.0", "source": { "url": url, "sha256": "a".repeat(64), "bytes": 10 }, "manifestSha256": "b".repeat(64) });
         assert!(source_of(&entry("https://github.com/x/y/releases/download/z/a.tar.gz")).is_ok());
         assert!(source_of(&entry("https://release-assets.githubusercontent.com/a")).is_ok());
         // (letters made small, as the address reads them: the same host)
@@ -624,7 +691,7 @@ mod tests {
         ] {
             assert!(source_of(&entry(url)).is_err(), "{url}");
         }
-        let big = serde_json::json!({ "source": { "url": "https://github.com/a", "sha256": "a".repeat(64), "bytes": ARCHIVE_MOST + 1 }, "manifestSha256": "b".repeat(64) });
+        let big = serde_json::json!({ "id": "sketch", "version": "0.3.0", "source": { "url": "https://github.com/a", "sha256": "a".repeat(64), "bytes": ARCHIVE_MOST + 1 }, "manifestSha256": "b".repeat(64) });
         assert!(source_of(&big).is_err());
         let catalogue = serde_json::json!({ "plugins": [{ "id": "sketch", "version": "0.3.0" }] });
         assert!(entry_of(&catalogue, "sketch", "0.3.0").is_some());
@@ -636,5 +703,154 @@ mod tests {
         let t = now_iso();
         assert_eq!(t.len(), 20);
         assert!(t.starts_with("20") && t.ends_with('Z'));
+    }
+
+    #[test]
+    fn a_list_is_read_only_of_the_form_meno_reads_with_a_serial_never_lower_than_the_one_taken() {
+        let list = |schema: u64, serial: u64| format!(r#"{{"schema":{schema},"issued":"2026-11-05T00:00:00Z","serial":{serial},"plugins":[]}}"#).into_bytes();
+        assert_eq!(form_of(&list(1, 3), None).unwrap().1, 3);
+        assert_eq!(form_of(&list(2, 3), None).unwrap_err(), "the list is of a form this Meno does not read: a newer Meno may");
+        assert_eq!(form_of(&list(1, 0), None).unwrap_err(), "the list has no serial");
+        assert_eq!(form_of(br#"{"schema":1,"plugins":[]}"#, None).unwrap_err(), "the list has no serial");
+        assert!(form_of(b"not json", None).is_err());
+        assert!(form_of(&list(1, 3), Some(3)).is_ok());
+        assert!(form_of(&list(1, 3), Some(4)).is_err());
+    }
+
+    #[test]
+    fn a_list_kept_is_not_read_where_its_serial_is_not_the_one_kept_with_it() {
+        let root = scratch("serial");
+        keep(&root, SERIAL3, SERIAL3_A, 3, "2026-11-05T00:00:00Z").unwrap();
+        std::fs::write(root.join("catalogue-state.json"), br#"{"serial":4,"fetchedAt":"2026-11-05T00:00:00Z"}"#).unwrap();
+        assert!(kept(&root, &[KEY_A]).is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_list_fetched_older_than_the_one_kept_is_refused_and_nothing_written() {
+        let root = scratch("replay");
+        let now = "2026-11-06T00:00:00Z";
+        take_fetched(&root, SERIAL3, SERIAL3_A, &[KEY_A], "2026-11-05T00:00:00Z").unwrap();
+        let before: Vec<Vec<u8>> = ["catalogue.json", "catalogue.json.minisig", "catalogue-state.json"].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
+        assert!(take_fetched(&root, SERIAL2, SERIAL2_A, &[KEY_A], now).unwrap_err().contains("older"));
+        let after: Vec<Vec<u8>> = ["catalogue.json", "catalogue.json.minisig", "catalogue-state.json"].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
+        assert_eq!(before, after);
+        // (as the command gives it: the one kept, saying why the newer one was not taken)
+        let given = got(&root, &[KEY_A], Some(Ok((SERIAL2.to_vec(), SERIAL2_A.to_vec()))), now).unwrap().unwrap();
+        assert_eq!(given.catalogue["serial"], 3);
+        assert!(given.kept.unwrap().contains("older"));
+        // (a newer one, signed with the next key Meno carries: taken, and kept)
+        let given = got(&root, &[KEY_A, KEY_B], Some(Ok((SERIAL4.to_vec(), SERIAL4_B.to_vec()))), now).unwrap().unwrap();
+        assert_eq!((given.catalogue["serial"].as_u64(), given.kept), (Some(4), None));
+        assert_eq!(floor(&root), Some(4));
+        // (not fetched: the one kept, no word of why; fetching failed: the one kept, and why)
+        assert!(got(&root, &[KEY_A, KEY_B], None, now).unwrap().unwrap().kept.is_none());
+        assert_eq!(got(&root, &[KEY_A, KEY_B], Some(Err("offline".into())), now).unwrap().unwrap().kept.as_deref(), Some("offline"));
+        let _ = std::fs::remove_dir_all(&root);
+        // (none kept: none given - or, a fetch failed, why)
+        let empty = scratch("empty");
+        assert!(got(&empty, &[KEY_A], None, now).unwrap().is_none());
+        assert_eq!(got(&empty, &[KEY_A], Some(Err("offline".into())), now).unwrap_err(), "offline");
+    }
+
+    #[test]
+    fn a_plugin_s_entry_is_found_in_the_list_kept_never_as_the_page_says_it() {
+        let root = scratch("entry");
+        assert_eq!(entry_for(&root, &[KEY_A], "sketch", "0.3.0").unwrap_err(), "there is no list of the plugins online here");
+        keep(&root, SERIAL3, SERIAL3_A, 3, "2026-11-05T00:00:00Z").unwrap();
+        let source = entry_for(&root, &[KEY_A], "sketch", "0.3.0").unwrap();
+        assert_eq!((source.id.as_str(), source.version.as_str(), source.bytes), ("sketch", "0.3.0", 10));
+        assert!(entry_for(&root, &[KEY_A], "sketch", "0.4.0").unwrap_err().contains("holds no"));
+        assert!(entry_for(&root, &[KEY_A], "../sketch", "0.3.0").is_err());
+        // (the list kept, its signature no longer Meno's: none)
+        assert!(entry_for(&root, &[KEY_B], "sketch", "0.3.0").is_err());
+        // (fetched no further than its entry's size, under the catalogue's hosts alone)
+        assert_eq!(archive_most(&source), source.bytes);
+        assert_eq!(hosts(), HOSTS.to_vec());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_entry_s_fingerprints_and_size_are_only_as_meno_takes_them() {
+        let entry = |sha: &str, bytes: u64, manifest: &str| serde_json::json!({ "id": "sketch", "version": "0.3.0", "source": { "url": "https://github.com/a", "sha256": sha, "bytes": bytes }, "manifestSha256": manifest });
+        let (a, b) = ("a".repeat(64), "b".repeat(64));
+        assert!(source_of(&entry(&a, 10, &b)).is_ok());
+        assert!(source_of(&entry(&"a".repeat(63), 10, &b)).is_err());
+        assert!(source_of(&entry(&"a".repeat(65), 10, &b)).is_err());
+        assert!(source_of(&entry(&a, 0, &b)).is_err());
+        assert!(source_of(&entry(&a, 10, &"b".repeat(63))).is_err());
+        assert!(source_of(&entry(&"A".repeat(64), 10, &b)).is_err());
+    }
+
+    #[test]
+    fn an_archive_of_more_files_or_more_bytes_than_meno_takes_is_refused_whole() {
+        let many: Vec<(String, Vec<u8>)> = (0..=FILES_MOST).map(|i| (format!("f{i}"), Vec::new())).collect();
+        let refs: Vec<(&str, &[u8])> = many.iter().map(|(p, b)| (p.as_str(), b.as_slice())).collect();
+        let dir = scratch("many");
+        assert!(unpack_into(&archive(&refs, None), &dir).unwrap_err().contains("more than"));
+        assert!(!dir.exists());
+        // (a file whose header says it is more than Meno takes - nothing of it read)
+        let mut header = tar::Header::new_gnu();
+        header.set_path("big.bin").unwrap();
+        header.set_size(UNPACKED_MOST + 1);
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_cksum();
+        let mut raw = header.as_bytes().to_vec();
+        raw.extend_from_slice(&[0u8; 1024]);
+        let mut big = Vec::new();
+        {
+            let mut gz = flate2::write::GzEncoder::new(&mut big, flate2::Compression::default());
+            std::io::Write::write_all(&mut gz, &raw).unwrap();
+            gz.finish().unwrap();
+        }
+        let dir = scratch("big");
+        assert!(unpack_into(&big, &dir).unwrap_err().contains("more than"));
+        assert!(!dir.exists());
+    }
+
+    /// A stage as `plugin_stage` leaves one: its folder with `manifest`, and the entry it was staged for.
+    fn staged(root: &Path, manifest: &str, staged_for: &str) -> String {
+        let stage = uuid::Uuid::new_v4().simple().to_string();
+        let dir = root.join(".staging").join(&stage);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("manifest.json"), manifest).unwrap();
+        std::fs::write(for_of(&dir), staged_for).unwrap();
+        stage
+    }
+
+    #[test]
+    fn a_stage_is_taken_into_use_only_as_the_plugin_it_was_got_as() {
+        let root = scratch("commit");
+        // (an id or version Meno does not take, in its manifest)
+        for (manifest, what) in [(r#"{"id":"../x","version":"0.3.0"}"#, "id"), (r#"{"id":"sketch","version":"1.2.3-rc"}"#, "version")] {
+            let stage = staged(&root, manifest, "sketch\n0.3.0");
+            assert!(commit_stage(&root, &stage).unwrap_err().contains(what), "{what}");
+        }
+        // (its manifest another plugin than the entry it was got for - one in use, say: thrown away, nothing of it used)
+        let stage = staged(&root, r#"{"id":"other","version":"0.3.0"}"#, "sketch\n0.3.0");
+        assert_eq!(commit_stage(&root, &stage).unwrap_err(), "its manifest is not the plugin it was got as");
+        assert!(!root.join(".staging").join(&stage).exists() && !root.join("other").exists());
+        // (as it was got: taken in, and its entry beside it gone)
+        let stage = staged(&root, r#"{"id":"sketch","version":"0.3.0"}"#, "sketch\n0.3.0");
+        commit_stage(&root, &stage).unwrap();
+        assert!(root.join("sketch/0.3.0/manifest.json").exists());
+        assert!(!for_of(&root.join(".staging").join(&stage)).exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_plugin_s_files_are_taken_out_of_use_before_its_folder_is_taken_away() {
+        let root = scratch("order");
+        std::fs::create_dir_all(root.join("sketch/0.3.0")).unwrap();
+        set_current(&root, "sketch", "0.3.0").unwrap();
+        // (its folder not taken away - say, a file in it held: `current` gone already, so it is no plugin in use)
+        let refused = remove_files(&root, "sketch", |d| {
+            assert!(!d.join("current").exists(), "current taken away first");
+            Err(std::io::Error::other("held"))
+        });
+        assert!(refused.unwrap_err().contains("held"));
+        assert!(!root.join("sketch/current").exists());
+        assert!(root.join("sketch/0.3.0").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

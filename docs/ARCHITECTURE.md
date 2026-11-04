@@ -1447,27 +1447,34 @@ page reads anything of them (`catalogue.rs`):
   replayed never undoes a plugin taken off it. None but a list checked is
   kept: `catalogue.json`, its `.minisig` and `catalogue-state.json` (its
   serial, and when it was fetched), each written whole. The one kept is
-  checked again each time it is read. Until the maintainer gives the first
-  key, Meno has none, and takes no list.
+  checked again each time it is read. Until a key is carried, no list is
+  taken. Only minisign's own signatures, made over the list's hash, are
+  taken - never its older form, made over the list itself.
 - **A plugin's files** (`plugin_stage`) are found by their id and version in
   the catalogue kept - checked again, never as the page gives them - and
   fetched under the same purpose: on https, at those hosts exactly, no
   more than the entry's size nor than 512 MB. Their size and SHA-256 must be
   the entry's; then they are unpacked into `.staging/<stage>`, and their
   manifest's SHA-256 must be the entry's too. Anything not so refuses the
-  whole, and what was unpacked is taken away, all before it answers.
+  whole, and what was unpacked is taken away, all before it answers. The
+  entry the stage was got for is kept beside it (`<stage>.for`).
 - **The archive** is the plugin's folder as a `.tar.gz`: its contents at the
   top - `manifest.json` there - with no folder around them. Regular files
-  and folders alone: a link, a path that is absolute or goes up, a file
-  named twice, more than 10,000 files or more than 1 GB unpacked refuses it.
+  and folders alone: a link, a path that is absolute or goes up, a name
+  with a colon or a backslash in it, a file named twice, more than 10,000
+  files or more than 1 GB unpacked refuses it.
 - **Taken into use** (`plugin_commit`): the stage becomes
-  `<id>/<version>` by its manifest's id and version, and `<id>/current`,
+  `<id>/<version>` by its manifest's id and version - which must be those
+  of the entry it was got for, or it is thrown away - and `<id>/current`,
   written whole, names it. A version once in place is never changed: got
   again, the stage is thrown away and `current` names the one there. An
   older version is left where it is; core takes it away as Meno starts,
   where no job of it waits or runs.
 - **Taken away** (`plugin_files_remove`): `current` first, so that a folder
-  left half taken away is no plugin in use, then its folder.
+  left half taken away is no plugin in use, then its folder. The page asks
+  the person, and stops the plugin's jobs, before it asks for this, as it
+  does before a plugin is removed. While Meno still carries plugins, one it
+  carries is put back as it next starts.
 
 What is in the plugins' folder (`<local app data>/plugins`), and whose:
 `<id>/<version>/` and `<id>/current` are core's to read as the plugins in
