@@ -1653,6 +1653,23 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn a_plugins_lock_is_of_its_version_in_use_only() {
+        let data = std::env::temp_dir().join(format!("meno-test-{}", Uuid::new_v4()));
+        let dir = installed::tests::in_place(&installed::root(&data), "p", "1.0.0", "{}");
+        fs::write(dir.join("uv.lock"), "").unwrap();
+        // (a version of p no longer in use, its lock still there)
+        fs::create_dir_all(data.join("plugins/p/0.9.0")).unwrap();
+        fs::write(data.join("plugins/p/0.9.0/uv.lock"), "").unwrap();
+        let path = |rel: &str| plugin_path(&data, Path::new(rel));
+        assert_eq!(path("plugins/p/1.0.0/uv.lock").unwrap(), dir.join("uv.lock"));
+        // another version's lock, a plugin not in place, a path that is no plugin's file or lies deeper in the folder
+        for rel in ["plugins/p/0.9.0/uv.lock", "plugins/q/1.0.0/uv.lock", "plugins/p/uv.lock", "plugins/p/1.0.0/env/uv.lock", "other/p/1.0.0/uv.lock"] {
+            assert!(path(rel).is_err(), "{rel}");
+        }
+        let _ = fs::remove_dir_all(&data);
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_worker_that_stops_reading_holds_up_no_other() {

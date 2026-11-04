@@ -151,8 +151,9 @@ fn bundled_mark(dir: &Path) -> Option<String> {
 }
 
 /// The plugins Meno carries (`bundle`: its resources' `plugins` folder) each put in place in `root`, as Meno starts:
-/// - one with nothing in place, or whose version in use was put there from Meno and is not what Meno carries now -
-///   another version, or the same one changed - put in place, marked as from Meno, and made the one in use;
+/// - one with nothing in place - none named by its `current`, or one named whose folder holds no manifest, as a
+///   replace cut short leaves it - or whose version in use was put there from Meno and is not what Meno carries now
+///   (another version, or the same one changed): put in place, marked as from Meno, and made the one in use;
 /// - never one put there otherwise (a catalogue's), nor one replaced while a job of that plugin runs (`running`):
 ///   one with nothing in place is put there all the same - nothing of it is in use.
 ///
@@ -173,7 +174,8 @@ pub fn seed(bundle: &Path, root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<S
             continue;
         };
         let Ok(print) = fingerprint(&from) else { continue };
-        let in_use = current(root, &id);
+        // (a current naming a folder with no manifest - a replace cut short - is nothing in place)
+        let in_use = current(root, &id).filter(|_| dir(root, &id).is_ok());
         let ours = in_use.as_ref().map(|v| bundled_mark(&root.join(&id).join(v)));
         let wanted = match (&in_use, &ours) {
             (None, _) => true,
@@ -228,24 +230,39 @@ pub fn tidy(root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<String> {
     said
 }
 
-/// One plugin Meno carries put in place as `version`: made in the staging folder, renamed into its place (over a
-/// version from Meno of the same number, never over another), marked, and made the one in use.
+/// One plugin Meno carries put in place as `version`: made in the staging folder, renamed into its place, marked,
+/// and made the one in use. A folder of the same number already there - one from Meno, or one with no manifest - is
+/// first moved aside, and taken away only once the new one is in use: a step that fails or is cut short loses
+/// nothing (what is left aside, `tidy` takes away). Never over a plugin of that number put there otherwise.
 fn put(from: &Path, root: &Path, id: &str, version: &str, print: &str) -> io::Result<()> {
     let staging = root.join(STAGING).join(format!("bundle-{id}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&staging);
     copy_tree(from, &staging)?;
     fs::write(staging.join(FROM_BUNDLE), print)?;
     let target = root.join(id).join(version);
-    if target.exists() {
-        if bundled_mark(&target).is_none() {
+    let aside = root.join(id).join(format!("old-{}", std::process::id()));
+    let moved = target.exists();
+    if moved {
+        if bundled_mark(&target).is_none() && target.join("manifest.json").is_file() {
             let _ = fs::remove_dir_all(&staging);
             return Err(io::Error::other("a version of that number is in place from elsewhere"));
         }
-        fs::remove_dir_all(&target)?;
+        let _ = fs::remove_dir_all(&aside);
+        if let Err(e) = fs::rename(&target, &aside) {
+            let _ = fs::remove_dir_all(&staging);
+            return Err(e);
+        }
     }
     fs::create_dir_all(root.join(id))?;
-    fs::rename(&staging, &target)?;
-    set_current(root, id, version)
+    if let Err(e) = fs::rename(&staging, &target) {
+        if moved {
+            let _ = fs::rename(&aside, &target);
+        }
+        return Err(e);
+    }
+    set_current(root, id, version)?;
+    let _ = fs::remove_dir_all(&aside);
+    Ok(())
 }
 
 /// What a plugin in place gives the page (`plugins_installed`): its id, version and folder, its manifest as it is
@@ -371,6 +388,61 @@ pub(crate) mod tests {
         // (one with nothing in place - its jobs run from before, of a Meno that carried it - put in place all the same)
         carried(&bundle, "gamma", "1.0.0", "print(3)");
         assert_eq!(seed(&bundle, &root, &busy), ["alpha: not put in place while a job of it runs", "gamma 1.0.0: put in place from Meno"]);
+        let _ = (fs::remove_dir_all(&bundle), fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn a_replace_cut_short_is_put_right_at_the_next_start() {
+        let (bundle, root) = (temp("cut-bundle"), temp("cut-root"));
+        carried(&bundle, "alpha", "0.1.0", "print(1)");
+        carried(&bundle, "beta", "0.2.0", "print(2)");
+        let none = |_: &str| false;
+        seed(&bundle, &root, &none);
+        // (the version in use gone, as a replace cut short between its two renames leaves it: put in place again, even
+        // while a job of it is said to run - nothing of it is in use)
+        fs::remove_dir_all(root.join("alpha").join("0.1.0")).unwrap();
+        assert!(dir(&root, "alpha").is_err());
+        let busy = |id: &str| id == "alpha";
+        assert_eq!(seed(&bundle, &root, &busy), ["alpha 0.1.0: put in place from Meno"]);
+        assert_eq!(fs::read_to_string(dir(&root, "alpha").unwrap().join("worker.py")).unwrap(), "print(1)");
+        // (half of it left, its manifest and its mark gone: put in place over what is left)
+        let b = root.join("beta").join("0.2.0");
+        fs::remove_file(b.join("manifest.json")).unwrap();
+        fs::remove_file(b.join(FROM_BUNDLE)).unwrap();
+        assert_eq!(seed(&bundle, &root, &none), ["beta 0.2.0: put in place from Meno"]);
+        assert!(dir(&root, "beta").unwrap().join(FROM_BUNDLE).is_file());
+        // (nothing set aside is left over)
+        assert!(tidy(&root, &none).is_empty());
+        let _ = (fs::remove_dir_all(&bundle), fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn a_version_of_the_same_number_put_there_otherwise_is_never_replaced() {
+        let (bundle, root) = (temp("foreign-bundle"), temp("foreign-root"));
+        carried(&bundle, "alpha", "0.1.0", "print(1)");
+        // (a version of the number Meno carries, put there otherwise - not the one in use)
+        let theirs = root.join("alpha").join("0.1.0");
+        fs::create_dir_all(&theirs).unwrap();
+        fs::write(theirs.join("manifest.json"), r#"{"id": "alpha", "version": "0.1.0"}"#).unwrap();
+        fs::write(theirs.join("worker.py"), "print(0)").unwrap();
+        let none = |_: &str| false;
+        assert_eq!(seed(&bundle, &root, &none), ["alpha 0.1.0: could not be put in place: a version of that number is in place from elsewhere"]);
+        assert_eq!(fs::read_to_string(theirs.join("worker.py")).unwrap(), "print(0)");
+        assert!(current(&root, "alpha").is_none() && !theirs.join(FROM_BUNDLE).exists());
+        let _ = (fs::remove_dir_all(&bundle), fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn a_carried_manifest_must_name_a_version_meno_takes() {
+        let (bundle, root) = (temp("badver-bundle"), temp("badver-root"));
+        carried(&bundle, "alpha", "../x", "print(1)");
+        carried(&bundle, "beta", ".hidden", "print(2)");
+        let none = |_: &str| false;
+        assert_eq!(
+            seed(&bundle, &root, &none),
+            ["alpha: the manifest Meno carries names no version Meno takes", "beta: the manifest Meno carries names no version Meno takes"]
+        );
+        assert!(list(&root).is_empty());
         let _ = (fs::remove_dir_all(&bundle), fs::remove_dir_all(&root));
     }
 

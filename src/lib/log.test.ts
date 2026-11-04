@@ -20,6 +20,10 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     // (how many atom numbers a picture left out: a count, kept)
     const left = "Meno: a picture of molecules in 3D left out 12 of their atom numbers, too small to read in it or with no room on their balls.";
     expect(logText([left])).toBe(left);
+    // (the plugins not read as Meno starts: said, and the backend's reason, which may name a folder, left out)
+    expect(logText(["Meno: the plugins in place could not be read.", "no such folder: /Users/x/Library"])).toBe(
+      "Meno: the plugins in place could not be read. [text]",
+    );
   });
 
   it("never what a document holds, nor a file's name - a SMILES and a file's name in a message are left out", () => {

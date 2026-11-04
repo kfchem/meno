@@ -24,9 +24,10 @@ window.addEventListener(
 );
 
 // The plugins Meno knows of, taken from its backend before anything reads them (lib/plugins/known): where that
-// fails, Meno starts knowing of none, and says so in its log.
+// fails, Meno starts knowing of none, and says so in its log (lib/log: the reason given only as what it is, as it
+// may name a folder).
 void (isTauri() ? refreshPlugins() : Promise.resolve())
-  .catch((e) => console.error(`The plugins could not be read: ${e instanceof Error ? e.message : String(e)}`))
+  .catch((e) => console.error("Meno: the plugins in place could not be read.", e))
   .then(() =>
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <React.StrictMode>
