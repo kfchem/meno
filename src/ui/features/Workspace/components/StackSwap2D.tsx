@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import type { Model, RecordSwap } from "../store/types";
@@ -12,15 +12,10 @@ import Fills2D from "./Fills2D";
 import { Texts2D } from "./Labels2D";
 import { recordsOf, shownRecord, STACK_SWAP_MS } from "../utils/stacks";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
+import { fitOnto, morphAt, sameAtoms, type Fit, type MatchDrawing } from "../../../../lib/layout/morph";
 
-/**
- * A stack going over from one record to the next (as long as
- * STACK_SWAP_MS): how much larger the one let go of grows as it fades, and
- * how much smaller the next starts as it comes into view - as a stack of
- * molecules in 3D goes over (Molecule3DView).
- */
-const SWAP_NEAR = 0.35;
-const SWAP_FAR = 0.3;
+/** Steps through a stack come closer together than this, and a record goes over by fading alone: none moves while the next is already asked for. */
+const HELD_MS = 120;
 const easeInOutCubic = (u: number) => {
   const t = Math.min(Math.max(u, 0), 1);
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -33,7 +28,53 @@ const easeInOutCubic = (u: number) => {
  * going out of sight as their stack is stacked again go as one, as they
  * stood (`as`), fading where they are (`still`).
  */
-type Going = { stack: number; record: number; atoms: number[]; mode: "rest" | "in" | "out"; start: number; as?: Model; still?: true };
+type Going = { stack: number; record: number; atoms: number[]; mode: "rest" | "in" | "out"; start: number; as?: Model; still?: true; morph?: Morph };
+
+/**
+ * A record becoming the next, atom for atom (lib/layout/morph): when it began; the fit of the next's atoms onto where the
+ * one let go of stood; and for each atom of the next, by id, where it stood as its match in the one let go of, and that
+ * atom's id. Both records are drawn on these places as they go, the one let go of fading and the next coming.
+ */
+type Morph = { start: number; fit: Fit; was: Map<number, { x: number; y: number }>; from: Map<number, number> };
+
+/** Where each atom of a record going over stands at `now`: by id - the next's atoms on their ways, and the one let go of on its matches' ways. */
+function morphPlaces(m: Morph, model: Model, role: "in" | "out", now: number): Map<number, { x: number; y: number }> {
+  const u = easeInOutCubic((now - m.start) / STACK_SWAP_MS);
+  const at = new Map(model.atoms.map((a) => [a.id, a]));
+  const out = new Map<number, { x: number; y: number }>();
+  for (const [id, was] of m.was) {
+    const a = at.get(id);
+    if (!a) continue;
+    const p = morphAt(m.fit, was, a, u);
+    out.set(role === "in" ? id : m.from.get(id)!, p);
+  }
+  return out;
+}
+
+/**
+ * How the record let go of becomes the next (`to`, its atoms by id), where they are one structure atom for atom: from
+ * where the one let go of stands now (`from`, its atoms' places by id - on their way still, where it was coming), each
+ * atom of the next matched to the one it is. None where they are not.
+ */
+function morphOf(model: Model, from: Map<number, { x: number; y: number }>, to: readonly number[], start: number): Morph | undefined {
+  const at = new Map(model.atoms.map((a) => [a.id, a]));
+  const drawing = (ids: readonly number[], place: (id: number) => { x: number; y: number }): MatchDrawing => {
+    const index = new Map(ids.map((id, k) => [id, k]));
+    return {
+      atoms: ids.map((id) => ({ el: at.get(id)!.el, ...(at.get(id)!.charge ? { charge: at.get(id)!.charge } : {}), ...place(id) })),
+      bonds: model.bonds.flatMap((b) => (index.has(b.a) && index.has(b.b) ? [{ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }] : [])),
+    };
+  };
+  const was = [...from.keys()].filter((id) => at.has(id));
+  const now = to.filter((id) => at.has(id));
+  const match = sameAtoms(drawing(was, (id) => from.get(id)!), drawing(now, (id) => at.get(id)!));
+  if (!match) return undefined;
+  const fit = fitOnto(
+    now.map((id) => at.get(id)!),
+    match.map((j) => from.get(was[j])!),
+  );
+  return { start, fit, was: new Map(now.map((id, i) => [id, from.get(was[match[i]])!])), from: new Map(now.map((id, i) => [id, was[match[i]]])) };
+}
 
 /**
  * Stacks of drawings going over from one record to the next (utils/stacks,
@@ -67,14 +108,23 @@ export default function StackSwap2D() {
       const stack = Number(key);
       if (was[stack] === swap) continue;
       const before = [...list.values()].find((g) => g.stack === stack && g.mode !== "out");
+      const record = full.atoms.find((a) => a.id === swap.to[0])?.stack?.record;
+      // (the one let go of becoming the next, atom for atom, where they are one structure - from where it stands now, on
+      //  its way still where it was coming; not where steps come faster than one can be followed)
+      const held = before?.mode === "in" && now - before.start < HELD_MS;
+      const from = before && (before.morph && before.mode === "in" ? morphPlaces(before.morph, full, "in", now) : new Map(before.atoms.flatMap((id) => {
+        const a = full.atoms.find((x) => x.id === id);
+        return a ? [[id, { x: a.x, y: a.y }] as const] : [];
+      })));
+      const morph = before && from && record != null && !held && !swap.gone?.atoms.length ? morphOf(full, from, swap.to, swap.start) : undefined;
       if (before) {
         const came = before.mode === "in" ? Math.min(1, (now - before.start) / STACK_SWAP_MS) : 1;
-        list.set(keyOf(stack, before.record), { ...before, mode: "out", start: now - (1 - came) * STACK_SWAP_MS });
+        // (going over atom for atom, it fades as the next comes, from where it stands: else from as far as it had come)
+        list.set(keyOf(stack, before.record), morph ? { ...before, mode: "out", start: swap.start, morph, still: true } : { ...before, mode: "out", start: now - (1 - came) * STACK_SWAP_MS, still: true, morph: undefined });
       }
       const outs = [...list.entries()].filter(([, g]) => g.stack === stack && g.mode === "out");
       for (const [k] of outs.slice(0, -2)) list.delete(k);
-      const record = full.atoms.find((a) => a.id === swap.to[0])?.stack?.record;
-      if (record != null) list.set(keyOf(stack, record), { stack, record, atoms: swap.to, mode: "in", start: swap.start });
+      if (record != null) list.set(keyOf(stack, record), { stack, record, atoms: swap.to, mode: "in", start: swap.start, ...(morph ? { morph } : {}) });
       // (stacked again: the others fading where they stood, all as one)
       if (swap.gone?.atoms.length) list.set(`${stack}-gone-${swap.start}`, { stack, record: -1, atoms: swap.from, mode: "out", start: swap.start, as: swap.gone, still: true });
     }
@@ -107,6 +157,9 @@ export default function StackSwap2D() {
 function RecordGoing({ going, model }: { going: Going; model: Model }) {
   const { opts, laidAt } = useDrawnLayout();
   const invalidate = useThree((s) => s.invalidate);
+  // (going over atom for atom: drawn again each frame, its atoms where their ways have come)
+  const [, frame] = useState(0);
+  const moving = going.morph && going.mode !== "rest" ? morphPlaces(going.morph, model, going.mode === "out" ? "out" : "in", performance.now()) : null;
   // (as it is - and once it goes, as it was as it began to go: what it is drawn from all the way)
   const kept = useRef<Model | null>(null);
   if (going.mode !== "out" || !kept.current) {
@@ -117,7 +170,8 @@ function RecordGoing({ going, model }: { going: Going; model: Model }) {
     const same = <T,>(p: readonly T[], q: readonly T[]) => p.length === q.length && p.every((x, i) => x === q[i]);
     if (!was || !same(atoms, was.atoms) || !same(bonds, was.bonds)) kept.current = { atoms, bonds };
   }
-  const part = kept.current!;
+  const kept2 = kept.current!;
+  const part = useMemo(() => (moving ? { atoms: kept2.atoms.map((a) => (moving.has(a.id) ? { ...a, ...moving.get(a.id)! } : a)), bonds: kept2.bonds } : kept2), [kept2, moving]);
   const value = useMemo(() => {
     const drawn = part.atoms.map((a) => layoutAtomOf(a));
     const index = new Map(drawn.map((a, i) => [a.id, i]));
@@ -135,8 +189,12 @@ function RecordGoing({ going, model }: { going: Going; model: Model }) {
   useFrame(() => {
     const t = going.mode === "rest" ? 1 : Math.min(1, (performance.now() - going.start) / STACK_SWAP_MS);
     const u = easeInOutCubic(t);
-    const scale = going.still ? 1 : going.mode === "out" ? 1 + SWAP_NEAR * u : 1 - SWAP_FAR * (1 - u);
-    const seenBy = going.mode === "rest" ? 0 : going.mode === "out" ? 1 - u : u;
+    // (never larger or smaller: where it stands, fading - and, going over atom for atom, moving)
+    const scale = 1;
+    // (going over atom for atom: the next comes in over the first half while the one let go of stays, which goes over the
+    //  second - so what the two share stays as it is all the way, never fading through half of each)
+    const half = (v: number) => Math.min(1, Math.max(0, v));
+    const seenBy = going.mode === "rest" ? 0 : going.morph ? (going.mode === "out" ? 1 - half(2 * u - 1) : half(2 * u)) : going.mode === "out" ? 1 - u : u;
     outer.current.position.set(middle.x, middle.y, going.mode === "out" ? 0.02 : 0.01);
     outer.current.scale.setScalar(scale);
     inner.current.position.set(-middle.x, -middle.y, 0);
@@ -157,7 +215,10 @@ function RecordGoing({ going, model }: { going: Going; model: Model }) {
         if (text.outlineWidth) text.outlineOpacity = seenBy;
       }
     });
-    if (t < 1) invalidate();
+    if (t < 1) {
+      invalidate();
+      if (going.morph) frame((k) => k + 1);
+    }
   });
   return (
     <group ref={outer} visible={false}>
