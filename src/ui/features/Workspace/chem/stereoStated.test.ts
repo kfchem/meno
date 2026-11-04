@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, straightEnds } from "../../../../lib/layout/drawn";
+import { readStereo, straightEnds, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -117,6 +117,33 @@ describe("a configuration the drawing does not state", () => {
     expect(ends(double(178, 176)).sort()).toEqual([0, 1]);
     expect(ends(double(120, 120))).toEqual([]);
     expect(ends(double(165, 120))).toEqual([]);
+  });
+
+  it("finds none in a ring of seven atoms or fewer, nor beside a wavy bond", () => {
+    // (a C=C, 0=1, its ring neighbour at 0 straight on from it, the rest of the ring round above it; n atoms in the ring)
+    const ring = (n: number): DrawnBond[] => [{ a: 0, b: 1, order: 2 }, ...Array.from({ length: n - 1 }, (_, i) => ({ a: i + 1, b: (i + 2) % n, order: 1 }))];
+    const placed = (n: number): DrawnAtom[] => [
+      { x: 0, y: 0, hs: 1 },
+      { x: L, y: 0, hs: 1 },
+      ...Array.from({ length: n - 3 }, (_, i) => ({ x: L - (i * 2 * L) / Math.max(1, n - 4), y: L * (1 + (i % 2) * 0.2), hs: 2 })),
+      { x: -L, y: 0, hs: 2 },
+    ];
+    expect([...straightEnds(placed(6), ring(6))]).toEqual([]);
+    expect([...straightEnds(placed(9), ring(9))]).toEqual([0]);
+    // (F-CH=CH-Cl, the F straight on, the Cl's bond wavy: the double bond said to be either)
+    const atoms: DrawnAtom[] = [
+      { x: 0, y: 0, hs: 1 },
+      { x: L, y: 0, hs: 1 },
+      { x: -L, y: 0.02, el: "F", hs: 0 },
+      { x: L + toward(-60)[0], y: toward(-60)[1], el: "Cl", hs: 0 },
+    ];
+    const bonds = (either: boolean): DrawnBond[] => [
+      { a: 0, b: 1, order: 2 },
+      { a: 0, b: 2, order: 1 },
+      { a: 1, b: 3, order: 1, ...(either ? { either: true } : {}) },
+    ];
+    expect([...straightEnds(atoms, bonds(true))]).toEqual([]);
+    expect([...straightEnds(atoms, bonds(false))]).toEqual([0]);
   });
 
   it("is kept unsaid by Clean-up, which keeps the straight end straight and lays out the rest (ST-4.4)", async () => {

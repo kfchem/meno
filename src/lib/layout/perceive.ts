@@ -563,7 +563,6 @@ function cycleOf(atoms: readonly number[], neighbours: number[][]): number[] | n
   return near(order[order.length - 1]).includes(order[0]) ? order : null;
 }
 
-/** The order of the bond between two atoms, or 0. */
 /**
  * Whether an atom is drawn straight through, its two bonds in one line: by a
  * triple bond, between two double ones (an allene's middle, a ketene's,
@@ -576,6 +575,7 @@ export function straightThrough(mol: Molecule, a: number): boolean {
   return orders.includes(3) || orders.every((o) => o === 2);
 }
 
+/** The order of the bond between two atoms, or 0. */
 export function orderOf(mol: Molecule, a: number, b: number): number {
   const i = mol.bondIndex.get(key(a, b));
   return i == null ? 0 : mol.bonds[i].order;

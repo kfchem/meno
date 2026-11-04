@@ -1574,8 +1574,8 @@ lipids each have their own way of being drawn, which it should know.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
-     leaves it unsaid as the old one did (the maintainer, 2026-10-27; built
-     2026-11-05: `straightEnds`, `LayoutAtom.linear`). An end with two
+     leaves it unsaid as the old one did (the maintainer's ruling;
+     `straightEnds`, `LayoutAtom.linear`). An end with two
      groups is not one of these: its other group states the bond. A
      structure not yet drawn - its
      atoms all on one point, as a SMILES's are before it is laid out - is
