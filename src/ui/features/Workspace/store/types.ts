@@ -1875,6 +1875,11 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
+  /**
+   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it and of
+   * every bond selected where it is among them, as one step. False where it would change nothing.
+   */
+  bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (

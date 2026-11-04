@@ -280,6 +280,27 @@ molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
 come up, so a right drag is a move, not a menu.
 
+**Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
+again they go on as clicks do, 2026-11-04). With the pointer on a bond, 1, 2
+and 3 set its kind, and a key pressed again goes on round as a click would:
+- **1** makes a double or triple bond single; on a single bond it goes round
+  as a click does - wedge, hashed wedge, plain with the other end narrow.
+- **2** makes a bond double; on a double bond it moves the second line to
+  the next side as a double-click does - its own side, the middle, the
+  other side (`doubleClickPatch`, shared with the double-click).
+- **3** makes it triple.
+
+Where the bond is among those selected, every bond selected takes what the
+one under the pointer becomes, as one step; a key that would change
+nothing is no step (`bondKey`, utils/bondKinds `bondKeyPatch`). The key the
+hand pressed is read (`code`, the top row or the keypad), so a keyboard
+whose digits take Shift and an input method that is on set it all the same.
+None is taken with Ctrl, ⌘ or Alt held (⌘1 fits the view), held down and
+coming again, over an atom - digits never begin a label - or while a label
+or any field is typed in. A bond's menu says each beside *Single bond*,
+*Double bond* and *Triple bond*. They are the only keys that change a structure;
+ring templates and the like are still not keys.
+
 **A menu's first row is icons** (the maintainer, 2026-10-10: the menus had
 grown busy, and a row of icons for what is done most - as Windows has -
 was asked for). What is done most to the thing right-clicked comes first,
