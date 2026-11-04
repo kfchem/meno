@@ -75,6 +75,16 @@ describe("the compounds' numbers of a figure", () => {
     expect(compoundLabelsOf([ring, big], [w], NONE).map((l) => l.key)).toEqual(["0:1"]);
   });
 
+  it("are the nearer box's, though another structure's ink lies nearer than the first's own ink", () => {
+    // (A: its box reaching down to 2 points over the word - a label's, say - its bonds ten points off; B: its box, and so its ink, six off)
+    const zA = zigzag("0:0", 100, 300);
+    const a: PageStructure = { ...zA, box: [zA.box[0], zA.box[1], zA.box[2], zA.box[3] + 8] };
+    const w = word("8", mid(a) - 2.5, zA.box[3] + 10);
+    const b = zigzag("0:1", w.box[2] + 6, w.box[1]);
+    expect(compoundLabelsOf([a, b], [w], NONE).map((l) => l.key)).toEqual(["0:0"]);
+    expect(compoundLabelsOf([b, a], [w], NONE).map((l) => l.key)).toEqual(["0:0"]);
+  });
+
   it("are none off a corner even within a bond: beyond the structure's breadth and its height both", () => {
     const corner = word("2", a.box[2] + 2, a.box[3] + 2);
     expect(compoundLabelsOf([a], [corner], NONE)).toEqual([]);
