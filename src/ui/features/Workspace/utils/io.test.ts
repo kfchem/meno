@@ -189,7 +189,7 @@ describe("files of 3D structures", () => {
     // as below: which converged is said in their outputs, not there)
     registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
     const water = (comment: string, x: number) => `3\n${comment}\nO 0 0 0\nH ${x} 0 0\nH -0.24 0.93 0\n`;
-    const xtb = water(" energy: -5.061234567891 gnorm: 0.061234567891 xtb: 6.7.1 (edcfbbe)", 0.99) + water(" energy: -5.071234 gnorm: 0.000321 xtb: 6.7.1 (edcfbbe)", 0.96);
+    const xtb = water(" energy: -5.061234567891 gnorm: 0.061234567891 xtb: 6.7.1 (abc1234)", 0.99) + water(" energy: -5.071234 gnorm: 0.000321 xtb: 6.7.1 (abc1234)", 0.96);
     const orca = water("Coordinates from ORCA-job opt E -76.02", 0.99) + water("Coordinates from ORCA-job opt E -76.03", 0.96);
     // (ORCA's relaxed scan's points, each converged, and a conformer search's: ensembles)
     const scan = water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 1 E -113.548212345678", 0.99) + ">\n" + water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 2 E -113.541850", 0.96);

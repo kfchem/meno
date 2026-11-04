@@ -109,8 +109,8 @@ def final(value):
 class Run(unittest.TestCase):
     def test_ended_normally_with_an_error_or_cut_short(self):
         self.assertEqual(reader.run_of("...\n                             ****ORCA TERMINATED NORMALLY****\n")[:2], ("normal", None))
-        error = "[file orca_leanscf/orca_leanscf.cpp, line 306]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged.\n\nORCA finished by error termination in LEANSCF\n"
-        self.assertEqual(reader.run_of(error)[:2], ("error", "unfortunately, the SCF has not converged."))
+        error = "[file made_up/made_up.cpp, line 1]: Error (MADE_UP): made-up words, the SCF has not converged.\n\nORCA finished by error termination in LEANSCF\n"
+        self.assertEqual(reader.run_of(error)[:2], ("error", "made-up words, the SCF has not converged."))
         self.assertEqual(reader.run_of("ORCA finished by error termination in Startup\n")[:2], ("error", "ORCA finished by error termination in Startup"))
         self.assertEqual(reader.run_of("still going\n")[:2], ("cut", None))
         # (a job another follows says its end only at the file's end)

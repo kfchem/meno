@@ -1,8 +1,7 @@
 """ORCA's output, read into Meno's form (docs/PLUGINS.md, *The contract*; src/lib/calc/output.ts).
 
 The ORCA plugin's own reading of what ORCA wrote: a job's output and a file opened by hand alike, one reading for
-both. Written from the ORCA 6.1 manual (faccts.de) and from ORCA's own outputs - ORCA 6.1.1's, run on small
-molecules for its tests (scripts/calc/test_reader_orca.py) - and from nothing else. Python alone, no package:
+both. Written from the ORCA 6.1 manual (faccts.de) and the program's printed forms, and from nothing else. Python alone, no package:
 each function is given the text and gives back plain data; nothing here reads a file of its own choosing.
 
 What it gives, in Meno's units: the atoms and each geometry ORCA wrote, in angstroms; each geometry's energy as
@@ -25,11 +24,10 @@ CAL_PER_HARTREE = 627509.474
 
 # --- the run as a whole ---------------------------------------------------------------------------------------------
 
-#: The version in ORCA's banner: "Program Version 6.1.1  -  RELEASE   -".
+#: The version in ORCA's banner: "Program Version 9.8.7  -  RELEASE   -".
 VERSION = re.compile(r"^\s*Program Version (\S+)", re.M)
 #: What ORCA prints where it came to its end, and where it stopped on an error ("ORCA finished by error termination in
-#: LEANSCF"), and its error lines ("[file ...]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged...",
-#: "[file ...]: Error : multiplicity (1) is odd and number of electrons (9) is odd -> impossible").
+#: <its part>"), and its error lines ("[file ...]: Error (...): <its message>").
 NORMAL = "****ORCA TERMINATED NORMALLY****"
 ERROR_TERMINATION = re.compile(r"error termination", re.I)
 ERROR_LINE = re.compile(r"^(?:\[file [^\]]*\]:\s*)?(Error\b.*\S)\s*$", re.M)
@@ -51,11 +49,10 @@ def run_of(text, followed=False):
 
 
 def why_of(text):
-    """Why ORCA stopped, in its words: its error's own message ("Error (ORCA_LEANSCF): unfortunately, the SCF has not
-    converged. ..." - the words after it), else the line it says it ended by an error on, else the first that begins
+    """Why ORCA stopped, in its words: its error's own message (the words after "Error (...):"), else the line it says it ended by an error on, else the first that begins
     "ERROR" or "FATAL ERROR", else the first of its other error words ("INPUT ERROR", "... aborting the run"); else - where
     it stopped with no word of an error, as a run brought down does - the last thing it said. Not every line with
-    "error" in it: its SCF settings print one ("Startup error   DIISStart   ....  0.200000")."""
+    "error" in it: its SCF settings table has a "Startup error" row."""
     found = ERROR_LINE.search(text or "")
     if found:
         said = re.sub(r"^Error\s*(?:\([^)]*\))?\s*:\s*", "", found.group(1)).strip()
@@ -1131,7 +1128,7 @@ def finite(value):
 # --- a path's own files: a band's images and the point it refined, a reaction path's points ------------------------
 
 #: The files ORCA writes a path's points to, after its input's base name (the job's "input.inp"): a reaction path's, end
-#: to end; a band's images, and the point it refined (ORCA 6.1.1).
+#: to end; a band's images, and the point it refined.
 BASE = "input"
 IRC_FULL = f"{BASE}_IRC_Full_trj.xyz"
 MEP = f"{BASE}_MEP_trj.xyz"
@@ -1250,8 +1247,8 @@ def frequencies_of(log):
     return found
 
 
-#: What ORCA says where an image's SCF did not converge ("Error (ORCA_LEANSCF): unfortunately, the SCF has not converged.
-#: ..."), after which it carries on with the band.
+#: The marker words of an image's SCF that did not converge ("... SCF has not converged ..."), after which ORCA carries
+#: on with the band.
 IMAGE_SCF_FAILED = re.compile(r"^.*\bSCF has not converged\b.*$", re.M)
 
 

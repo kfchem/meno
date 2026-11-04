@@ -2380,8 +2380,8 @@ them again*; the maintainer's rulings of 2026-10-22):
   so that *Take frames* can take it on.
   An optimisation - a saddle point's too - that took the most cycles its
   program allows is so, however its program ended after: ORCA's is read
-  by its words ("The optimization did not converge but reached the
-  maximum number of optimization cycles"), never as a result even where
+  by its marker words ("did not converge but reached the maximum number
+  of optimization cycles"), never as a result even where
   ORCA then ended normally, and said *not converged* with how many cycles
   (2026-10-30). A plugin's reason for a whole job is of the kind it
   names, one of core's, else a program's error.

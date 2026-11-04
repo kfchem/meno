@@ -77,7 +77,7 @@ def last(pattern, text, flags=re.M):
 
 # --- what the run was ----------------------------------------------------------
 
-# "   * xtb version 6.7.1 (edcfbbe) compiled by 'someone' on 2026-01-01"
+# "   * xtb version 6.7.1 (abc1234) compiled by 'someone' on 2026-01-01"
 VERSION = re.compile(r"^\s*\*\s*xtb version\s+(\S+)", re.M)
 # the setup box: ":  Hamiltonian                  GFN2-xTB          :"
 HAMILTONIAN = re.compile(r"^\s*:\s*Hamiltonian\s+(\S+)\s*:", re.M)

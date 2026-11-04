@@ -69,7 +69,7 @@ def log_of(atoms="    1    1 H      1, 4\n    2    6 C      2, 3\n", body="", ca
         "          :  unpaired electrons                  0          :\n"
     ) if setup else ""
     return (
-        "   * xtb version 6.7.1 (edcfbbe) compiled by 'someone' on 2026-01-01\n"
+        "   * xtb version 6.7.1 (abc1234) compiled by 'someone' on 2026-01-01\n"
         f"   ID    Z sym.   atoms\n{atoms}\n"
         f"          program call               : {call}\n{box}{body}"
         "         :: total energy              -5.200000000000 Eh    ::\n"

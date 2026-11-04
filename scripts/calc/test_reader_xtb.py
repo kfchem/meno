@@ -39,7 +39,7 @@ INPUTS = {
 
 # the table of elements a run begins with, and its setup box (GFN2-xTB): a charge, its unpaired electrons, no solvation
 BEGUN = """
-   * xtb version 6.7.1 (edcfbbe) compiled by 'someone' on 2026-01-01
+   * xtb version 6.7.1 (abc1234) compiled by 'someone' on 2026-01-01
  * started run on 2026/01/01 at 12:00:00.000
    ID    Z sym.   atoms
     1    6 C      1, 2
@@ -79,7 +79,7 @@ OPTIMISED = """
  final structure:
 ================
 7
- xtb: 6.7.1 (edcfbbe)
+ xtb: 6.7.1 (abc1234)
 C           -1.10000000000000        0.01000000000000        0.00000000000000
 C            0.50000000000000        0.00000000000000        0.00000000000000
 O            1.10000000000000        1.10000000000000        0.00000000000000
