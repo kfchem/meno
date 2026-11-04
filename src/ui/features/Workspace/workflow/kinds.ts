@@ -1278,7 +1278,8 @@ export const briefOf = (o: Option) => o.brief ?? o.label.replace(/\s*\([^)]*\)/g
 /**
  * How a step does its work, in a line: each option that applies (`shownOptions`) - a number by its value with its unit, a
  * switch on by its label, a choice by its name and what is chosen ("Method: GFN2-xTB"), so that two choices alike never
- * read as one twice; several choices with one value said once, the options after it ("Set aside: parts, radicals"). One of
+ * read as one twice; several choices with one value said once, the options after it ("Set aside: parts, radicals"), after the
+ * rest - so a choice that differs is read first, where a card cuts its line short. One of
  * none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it).
  */
 export function howOf(
@@ -1297,7 +1298,12 @@ export function howOf(
     if (c != null) alike.set(c, [...(alike.get(c) ?? []), o]);
   }
   const said2 = new Set<string>();
-  return shown
+  // (several choices with one value said after the rest: a choice that differs is read first, where a card cuts its line short)
+  const many = (o: Option) => {
+    const c = chosen(o);
+    return c != null && alike.get(c)!.length > 1;
+  };
+  return [...shown.filter((o) => !many(o)), ...shown.filter(many)]
     .flatMap((o) => {
       const v = values[o.id];
       if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];

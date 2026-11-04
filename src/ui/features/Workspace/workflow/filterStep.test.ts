@@ -175,6 +175,8 @@ describe("a Filter step", () => {
     // (never "Set aside" four times over: once, the options after it - each by its brief, or its label without what it says in brackets)
     expect(howOf(four, {})).toBe("Set aside: radicals, more than one part, too many bonds, SMILES left open");
     expect(howOf(four, { o0: "keep" })).toBe("Radicals: Keep \u00b7 Set aside: more than one part, too many bonds, SMILES left open");
+    // (the one that differs read first, wherever it stands among them: a card cuts its line short)
+    expect(howOf(four, { o3: "keep" })).toBe("SMILES left open: Keep \u00b7 Set aside: radicals, more than one part, too many bonds");
   });
 
   it("is run again when the properties of what comes in change", () => {
