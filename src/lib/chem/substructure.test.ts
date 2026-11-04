@@ -58,6 +58,14 @@ describe("whether one structure holds another", () => {
     expect(holds("[13CH3]O", "CO")).toBe(true);
   });
 
+  it("matches an atom of its unpaired electrons: a radical asked of a radical alone", () => {
+    const ethyl: IdentityInput = { atoms: [{ el: "C", hs: 3 }, { el: "C", hs: 2, radical: "doublet" }], bonds: [{ a: 0, b: 1, order: 1 }] };
+    const radical: IdentityInput = { atoms: [{ el: "C" }, { el: "C", radical: "doublet" }], bonds: [{ a: 0, b: 1, order: 1 }] };
+    expect(holdsSubstructure(radical, ethyl).found).toBe(true);
+    expect(holdsSubstructure(of("CC"), ethyl).found).toBe(false);
+    expect(holdsSubstructure(radical, of("CC")).found).toBe(false);
+  });
+
   it("asks no hydrogens but those drawn as atoms: a hydrogen drawn asks for one on its atom's match", () => {
     // (a carbon drawn as "C": any carbon, a quaternary one too)
     expect(holds("CC(C)(C)C", "CC")).toBe(true);
@@ -66,6 +74,26 @@ describe("whether one structure holds another", () => {
     expect(holds("CC(C)(C)C", "[H]C(C)(C)C")).toBe(false);
     // (a hydrogen drawn in the target counts as one)
     expect(holds("[H]C([H])([H])O", "[H]CO")).toBe(true);
+  });
+
+  it("asks a deuterium drawn for a deuterium, never a hydrogen", () => {
+    const cd: IdentityInput = { atoms: [{ el: "C", hs: 3 }, { el: "H", isotope: 2 }], bonds: [{ a: 0, b: 1, order: 1 }] };
+    const ch: IdentityInput = { atoms: [{ el: "C", hs: 3 }, { el: "H" }], bonds: [{ a: 0, b: 1, order: 1 }] };
+    expect(holdsSubstructure(cd, cd).found).toBe(true);
+    expect(holdsSubstructure(cd, ch).found).toBe(false);
+    expect(holdsSubstructure(cd, of("C")).found).toBe(false);
+    // (a hydrogen drawn asked: a deuterium is none)
+    expect(holdsSubstructure(ch, { atoms: [{ el: "C", hs: 0 }, { el: "H", isotope: 2 }], bonds: [{ a: 0, b: 1, order: 1 }] }).found).toBe(false);
+  });
+
+  it("says where by each atom's place among all its structure's atoms, hydrogens drawn before them too", () => {
+    // (methanol with its methyl's hydrogens drawn first)
+    const target: IdentityInput = {
+      atoms: [{ el: "H" }, { el: "H" }, { el: "H" }, { el: "C", hs: 0 }, { el: "O", hs: 1 }],
+      bonds: [{ a: 0, b: 3, order: 1 }, { a: 1, b: 3, order: 1 }, { a: 2, b: 3, order: 1 }, { a: 3, b: 4, order: 1 }],
+    };
+    const query: IdentityInput = { atoms: [{ el: "H" }, { el: "O", hs: 0 }, { el: "C", hs: 0 }], bonds: [{ a: 0, b: 2, order: 1 }, { a: 1, b: 2, order: 1 }] };
+    expect(holdsSubstructure(query, target)).toEqual({ found: true, map: [[1, 4], [2, 3]] });
   });
 
   it("finds nothing for a query of nothing, or of more atoms than the target", () => {
@@ -79,5 +107,10 @@ describe("whether one structure holds another", () => {
     const chain = of(`${"C".repeat(12)}N`);
     expect(holdsSubstructure(chain, rings, 50)).toEqual({ found: false, finished: false });
     expect(holdsSubstructure(chain, rings)).toEqual({ found: false, finished: true });
+  });
+
+  it("tries an atom bonded to one placed among that one's neighbours alone", () => {
+    // (the oxygen found among 51 atoms, then its carbon at once: within 60 placements, never trying every carbon again)
+    expect(holdsSubstructure(of("OC"), of(`${"C".repeat(50)}O`), 60)).toEqual({ found: true, map: [[0, 50], [1, 49]] });
   });
 });
