@@ -189,11 +189,11 @@ describe("files of 3D structures", () => {
     // as below: which converged is said in their outputs, not there)
     registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
     const water = (comment: string, x: number) => `3\n${comment}\nO 0 0 0\nH ${x} 0 0\nH -0.24 0.93 0\n`;
-    const xtb = water(" energy: -5.068684795763 gnorm: 0.065230900969 xtb: 6.7.1 (edcfbbe)", 0.99) + water(" energy: -5.070539 gnorm: 0.000312 xtb: 6.7.1 (edcfbbe)", 0.96);
+    const xtb = water(" energy: -5.061234567891 gnorm: 0.061234567891 xtb: 6.7.1 (edcfbbe)", 0.99) + water(" energy: -5.071234 gnorm: 0.000321 xtb: 6.7.1 (edcfbbe)", 0.96);
     const orca = water("Coordinates from ORCA-job opt E -76.02", 0.99) + water("Coordinates from ORCA-job opt E -76.03", 0.96);
     // (ORCA's relaxed scan's points, each converged, and a conformer search's: ensembles)
-    const scan = water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 1 E -113.549190716119", 0.99) + ">\n" + water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 2 E -113.545986", 0.96);
-    const crest = water("        -5.07053900", 0.96) + water("        -5.06871200", 0.99);
+    const scan = water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 1 E -113.548212345678", 0.99) + ">\n" + water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 2 E -113.541850", 0.96);
+    const crest = water("        -5.07123400", 0.96) + water("        -5.06912300", 0.99);
     const opened = async (name: string, text: string) => (await processFileContent(name, text)).molecules3d![0];
     for (const [name, text] of [["xtbopt.log", xtb], ["opt.log", xtb], ["water_xtbopt.log", xtb], ["opt_trj.xyz", orca], ["OPT_TRJ.XYZ", crest], ["steps.xyz", orca]]) {
       const m = await opened(name, text);
@@ -308,11 +308,11 @@ describe("a calculation's output, as a reader read it", () => {
   });
 
   describe("of an optimisation or a relaxed scan, the geometries it converged on are its entries", () => {
-    // (methanol, HF/STO-3G, Gaussian 16: its H-C-O-H dihedral scanned over three points - 21 geometries, the
-    // four it converged on marked as cclib marks them; their energies as the output's scan summary gives them)
+    // (methanol's H-C-O-H dihedral scanned over its points - 21 geometries, the four it converged on marked as cclib
+    // marks them; their energies, made up)
     const SCAN = [
-      -113.543862, -113.545317, -113.545941, -113.545976, -113.545985, -113.493398, -113.535107, -113.548734, -113.549175, -113.54919, -113.549191,
-      -113.488332, -113.529495, -113.545796, -113.545969, -113.545986, -113.484845, -113.533240, -113.548998, -113.549185, -113.549193,
+      -113.540100, -113.541200, -113.541800, -113.541900, -113.541950, -113.490100, -113.530100, -113.547100, -113.548100, -113.548150, -113.548200,
+      -113.485100, -113.525100, -113.541100, -113.541800, -113.541850, -113.480100, -113.530100, -113.546100, -113.547100, -113.547200,
     ];
     const methanol = (k: number) => [0, 0, 0, 0, 0, 1.42, 1.03, 0, -0.36, -0.515, 0.892, -0.36, -0.515, -0.892, -0.36, 0.93 - 0.01 * k, 0.01 * k, 1.74];
     const output = (n: number, converged: boolean[], energies = SCAN.slice(0, n)) => ({
@@ -331,7 +331,7 @@ describe("a calculation's output, as a reader read it", () => {
       expect(m.frames).toHaveLength(20);
       expect(m.entryFrames).toEqual([4, 10, 15, 20]);
       expect(entriesIn(m)).toBe(4);
-      expect(entries(m).map((e) => e.energy)).toEqual([-113.545985, -113.549191, -113.545986, -113.549193]);
+      expect(entries(m).map((e) => e.energy)).toEqual([-113.54195, -113.5482, -113.54185, -113.5472]);
       expect(m.notConverged).toBeUndefined();
     });
 
@@ -359,13 +359,13 @@ describe("a calculation's output, as a reader read it", () => {
     });
 
     it("a scan stopped before its last point converged: the points it converged on - and that last point, an entry marked failed, not converged", () => {
-      // (the same Gaussian scan's output cut short in its third point - 13 geometries, points 1 and 2 converged)
+      // (the same scan's output cut short in its third point - 13 geometries, points 1 and 2 converged)
       const converged = SCAN.slice(0, 13).map((_, k) => [4, 10].includes(k));
       const [m] = calcResult(output(13, converged), ["cclib"], "scan-cut.log").molecules3d!;
       expect(m.entryFrames).toEqual([4, 10, 12]);
       expect(entries(m).map((e) => [e.energy, e.failed?.kind])).toEqual([
-        [-113.545985, undefined],
-        [-113.549191, undefined],
+        [-113.54195, undefined],
+        [-113.5482, undefined],
         [SCAN[12], "not-converged"],
       ]);
       expect(m.frames).toHaveLength(12);

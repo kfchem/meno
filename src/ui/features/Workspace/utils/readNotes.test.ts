@@ -112,7 +112,7 @@ describe("a conformer that does not read", () => {
     const two = (more: object) => molecule(0, { frames: [frame(0.01)], energies: [-1, -2], conformerSet: true, ...more });
     const read = (more: object) => readWorkspace(workspace({ molecules3d: [two(more)] }))!;
     // (one mark for two frames; a mark that is neither a failure nor none; imaginary frequencies that are no list)
-    for (const more of [{ failed: [{ kind: "not-converged", why: "it did not converge" }] }, { failed: [null, { kind: "not-converged" }] }, { imaginary: [null, "382.6i"] }, { imaginary: [[-382.6]] }]) {
+    for (const more of [{ failed: [{ kind: "not-converged", why: "it did not converge" }] }, { failed: [null, { kind: "not-converged" }] }, { imaginary: [null, "391.3i"] }, { imaginary: [[-391.3]] }]) {
       const r = read(more);
       const [got] = r.drawn.molecules3d!;
       // (its geometry, frames and energies as they were: nothing of the chemist's lost)
@@ -122,7 +122,7 @@ describe("a conformer that does not read", () => {
       expect(r.leftOut, JSON.stringify(more)).toEqual({ frameMarks: 1 });
     }
     // (marks that read, none among them, or an empty list for a frame with none: read, nothing said)
-    for (const more of [{ failed: [null, null] }, { imaginary: [[], null] }, { imaginary: [null, [-382.6]] }]) {
+    for (const more of [{ failed: [null, null] }, { imaginary: [[], null] }, { imaginary: [null, [-391.3]] }]) {
       const r = read(more);
       expect(r.drawn.molecules3d?.[0].marksUnread, JSON.stringify(more)).toBeUndefined();
       expect(r.leftOut ?? {}, JSON.stringify(more)).toEqual({});

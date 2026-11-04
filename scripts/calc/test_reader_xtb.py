@@ -231,8 +231,8 @@ class Results(unittest.TestCase):
         self.assertEqual(d["label"], "Dipole moment")
         self.assertNotIn("centre", d)
         # (after an optimisation, its Geometry Summary says where that geometry's centre of mass is: given with it)
-        summary = "      molecular mass/u    :       59.0440000\n   center of mass at/Å    :        0.3964305       0.0011634       0.0000000\n"
-        self.assertEqual(self.results(PRINTOUT + summary)["dipole"]["centre"], [0.3964305, 0.0011634, 0.0])
+        summary = "      molecular mass/u    :       59.0440000\n   center of mass at/Å    :        0.3912345       0.0012345       0.0000000\n"
+        self.assertEqual(self.results(PRINTOUT + summary)["dipole"]["centre"], [0.3912345, 0.0012345, 0.0])
         # (one printed before the dipole is of another geometry: not given)
         self.assertNotIn("centre", self.results(summary + PRINTOUT)["dipole"])
         gfn1 = " dipole moment from electron density (au)\n     X       Y       Z   \n   0.0000   0.0000  -1.1000  total (Debye):    2.796\n"

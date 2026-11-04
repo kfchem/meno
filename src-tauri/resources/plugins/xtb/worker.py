@@ -239,7 +239,7 @@ def energy_in(comment):
 
 def g98_intensities(text):
     """Each vibration's frequency (cm-1) and IR intensity (km/mol) as xtb's `g98.out` gives them, in its Gaussian
-    form: "Frequencies --   600.1838   600.1838  1424.9489" over "IR Inten    --    68.7004    68.7003     0.0000"."""
+    form: "Frequencies --   612.3456   612.3456  1412.3456" over "IR Inten    --    67.8901    67.8900     0.0000"."""
     freqs, irs = [], []
     for line in (text or "").splitlines():
         head, _, values = line.partition("--")

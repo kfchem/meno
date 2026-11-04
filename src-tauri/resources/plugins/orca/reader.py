@@ -403,7 +403,7 @@ def input_geometry(text):
 
 #: ORCA's own statement of a geometry's whole electronic energy, after it: the SCF's and every term the method adds -
 #: dispersion, gCP, a composite method's others, a correlated method's correlation ("FINAL SINGLE POINT ENERGY
-#: -93.399651434575").
+#: -93.312345678901").
 FINAL = re.compile(r"^FINAL SINGLE POINT ENERGY\s+(\S+)\s*$", re.M)
 #: What the energies are, said with them.
 FINAL_SAID = "ORCA final single-point energy (includes dispersion and gCP where the method has them)"
@@ -558,9 +558,9 @@ def xtb_said(text):
 # --- thermochemistry ------------------------------------------------------------------------------------------------
 
 #: The last thermochemistry ORCA printed, each value as it prints it ("Temperature         ...   298.15 K", "Zero point
-#: energy                ...      0.02160239 Eh", "Total Enthalpy                    ...    -76.36089187 Eh", "Final
-#: entropy term                ...      0.02142887 Eh", "Final Gibbs free energy         ...    -76.38232074 Eh",
-#: "G-E(el)                           ...      0.00395222 Eh"), the symmetry it took ("Point Group:  C2v, Symmetry
+#: energy                ...      0.02134567 Eh", "Total Enthalpy                    ...    -76.31234567 Eh", "Final
+#: entropy term                ...      0.02187654 Eh", "Final Gibbs free energy         ...    -76.33456789 Eh",
+#: "G-E(el)                           ...      0.00412345 Eh"), the symmetry it took ("Point Group:  C2v, Symmetry
 #: Number:   2"), and how it treated the low vibrations ("Quasi RRHO          ...    False"; "Vibrational entropy computed
 #: according to the QRRHO of S. Grimme ... using a reference frequency of 100.0 cm-1").
 THERMO_START = re.compile(r"^THERMOCHEMISTRY AT", re.M)
@@ -629,10 +629,10 @@ def thermo_of(text):
 
 # --- vibrations -----------------------------------------------------------------------------------------------------
 
-#: The last list of frequencies ("     6:    1720.29 cm**-1", "     6:    -819.83 cm**-1  ***imaginary mode***" - and, where
-#: the run used its symmetry, each mode's irreducible representation, numbered: "     6:      43.87 cm**-1    2-Au"), and the
-#: normal modes after it; the IR spectrum ("  6:   1720.29   0.017645   89.17  0.003201  (...)", its Int in km/mol) and
-#: the Raman spectrum ("   6:      1610.82      6.135129      0.525512", its Activity).
+#: The last list of frequencies ("     6:    1712.34 cm**-1", "     6:    -812.34 cm**-1  ***imaginary mode***" - and, where
+#: the run used its symmetry, each mode's irreducible representation, numbered: "     6:      41.23 cm**-1    2-Au"), and the
+#: normal modes after it; the IR spectrum ("  6:   1712.34   0.012345   62.34  0.002345  (...)", its Int in km/mol) and
+#: the Raman spectrum ("   6:      1612.34      5.123456      0.412345", its Activity).
 FREQ_START = "VIBRATIONAL FREQUENCIES"
 FREQ_ROW = re.compile(r"^\s*(\d+):\s+(-?\d+\.\d+)\s+cm\*\*-1(\s+\*\*\*imaginary mode\*\*\*)?(?:\s+\d+-(\S+))?\s*$")
 IR_ROW = re.compile(r"^\s*(\d+):\s+(-?\d+\.\d+)\s+(\S+)\s+(\S+)\s")
@@ -756,8 +756,8 @@ def vibrations_of(text, n, ghosts):
 # --- the dipole, partial charges, orbitals --------------------------------------------------------------------------
 
 #: The dipole moment block: the method and state it is of, its total in atomic units ("Total Dipole Moment    :
-#: -0.000000000      -0.000000000      -0.841064215"), and its magnitude in both ("Magnitude (a.u.)       :      0.841064215",
-#: "Magnitude (Debye)      :      2.137815339"); and the point it was taken about, said before it ("Position of electric
+#: -0.000000000      -0.000000000      -0.812345678"), and its magnitude in both ("Magnitude (a.u.)       :      0.812345678",
+#: "Magnitude (Debye)      :      2.064791234"); and the point it was taken about, said before it ("Position of electric
 #: origin ...  0.000000 -0.000000 -0.000000", or "... (  0.0000,  0.0000,  0.1086)"), in bohr.
 DIPOLE_BLOCK = re.compile(r"^DIPOLE MOMENT\s*\n-+\s*\n(.*?)^Magnitude \(Debye\)[^\n]*", re.M | re.S)
 DIPOLE_TOTAL = re.compile(r"^Total Dipole Moment\s*:\s*(\S+)\s+(\S+)\s+(\S+)\s*$", re.M)
@@ -768,7 +768,7 @@ STATE = re.compile(r"^State\s*:\s*(\d+)", re.M)
 METHOD_SCF = re.compile(r"^Method\s*:\s*SCF\b", re.M)
 #: The relaxed density's population analysis of an excited state: "RELAXED CIS/TDA DENSITY POPULATION ANALYSIS" over "IROOT 1".
 ROOT_POPULATION = re.compile(r"DENSITY POPULATION ANALYSIS\s*\n\s*IROOT\s+(\d+)")
-#: The excited states a TD-DFT or CIS job worked out ("STATE  1:  E=   0.148157 au ...").
+#: The excited states a TD-DFT or CIS job worked out ("STATE  1:  E=   0.151234 au ...").
 EXCITED = re.compile(r"^STATE\s+\d+:\s+E=", re.M)
 
 
@@ -823,9 +823,9 @@ def dipole_of(text):
 
 
 #: Each scheme's partial charges as ORCA prints them, the last of each: "MULLIKEN ATOMIC CHARGES" (and spin populations,
-#: "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS", a column each), "LOEWDIN ...", rows "   0 O :   -0.824032"; the
-#: Hirshfeld and MBIS analyses' tables ("  ATOM     CHARGE      SPIN", rows "   0 O   -0.318868    0.000000"); CHELPG's
-#: ("CHELPG Charges", rows "  0   O   :      -0.720605").
+#: "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS", a column each), "LOEWDIN ...", rows "   0 O :   -0.812345"; the
+#: Hirshfeld and MBIS analyses' tables ("  ATOM     CHARGE      SPIN", rows "   0 O   -0.323456    0.000000"); CHELPG's
+#: ("CHELPG Charges", rows "  0   O   :      -0.734567").
 SCHEMES = [
     ("mulliken", "Mulliken", re.compile(r"^MULLIKEN ATOMIC CHARGES(?: AND SPIN POPULATIONS)?\s*$", re.M), "colon"),
     ("lowdin", "Löwdin", re.compile(r"^LOEWDIN ATOMIC CHARGES(?: AND SPIN POPULATIONS)?\s*$", re.M), "colon"),
@@ -887,8 +887,8 @@ def charges_of(text, n, ghosts):
 
 
 #: The orbital energies: under "ORBITAL ENERGIES", each orbital's number, occupation and energy in hartrees and in eV
-#: ("   4   2.0000      -0.391615       -10.6564") - and, where the run used its symmetry, its irreducible representation,
-#: numbered ("   0   2.0000     -10.017320      -272.5851    1-Bu"); an open shell's under "SPIN UP ORBITALS" and "SPIN DOWN
+#: ("   4   2.0000      -0.412345       -11.2205") - and, where the run used its symmetry, its irreducible representation,
+#: numbered ("   0   2.0000     -10.123456      -275.4730    1-Bu"); an open shell's under "SPIN UP ORBITALS" and "SPIN DOWN
 #: ORBITALS".
 ORBITAL_ROW = re.compile(r"^\s*(\d+)\s+(\d+\.\d+)\s+(\S+)\s+(\S+)(?:\s+\d+-(\S+))?\s*$")
 
@@ -1191,7 +1191,7 @@ def irc_output(atoms, files, log, method=None, basis=None):
 
 
 def xyz_frames(text, n):
-    """An XYZ file's frames, each its places and the energy its comment line gives ("... E -4.426151532280"), as ORCA
+    """An XYZ file's frames, each its places and the energy its comment line gives ("... E -4.412345678901"), as ORCA
     writes a path's images and the point it refines; none where it does not read as frames of `n` atoms."""
     lines = text.splitlines()
     frames = []
