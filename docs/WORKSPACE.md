@@ -490,7 +490,11 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, each once,
   lowest first (*The page's conformers*, below). Of two enantiomers, one is
   made as the other's mirror image, so the two have the same conformers and
-  shares.
+  shares: the one whose identity with its configuration comes first is
+  made (lib/chem/identity), and the other's conformers are its
+  reflections, each checked to have the configuration drawn - one whose
+  drawing Meno cannot read whole (a wedge it does not read, a label
+  written out, a ring bound to a metal through a star) made itself.
 - **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
   gives every conformer it made, as it made them (PLUGINS.md); the page
   makes them its own (`chem/pageConformers`), in a worker of its own so

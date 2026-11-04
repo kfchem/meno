@@ -677,9 +677,12 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   own page and for a workflow's *Conformers* step alike. Which are the
   same, which comes first and how they lie over each other are Meno's
   (WORKSPACE.md, *The page's conformers*; a workflow's *Duplicates* and
-  *Rank*). Of two enantiomers, one is made as the other's mirror image for
-  Meno's own page alone, which asks for that (`onPage`): the core sends it
-  with *3D structure* alone, and no option of the step's carries it. So a
+  *Rank*). Each stereoisomer is made as it is asked for. Of two
+  enantiomers, which one Meno's own page makes and which it gives as that
+  one's mirror image is Meno's (Workspace/chem/pageMirror): the one whose
+  identity with its configuration comes first is asked for, and the
+  other's conformers are its reflections, each checked to have the
+  configuration asked for (one that has not is asked for itself). So a
   molecule with one shape can come back as many frames of it: [OsCl6]2-,
   ten embeddings sought, gives nine, its octahedron and eight relabellings
   of it (the tenth is dropped below the floor); the page keeps one, and a
@@ -938,14 +941,13 @@ The same for every plugin and for Meno's own parts:
     configuration of the `open` elements, its SMILES and, with `drawings`,
     a drawing of it - or why it cannot be one - and `free` where none
     holds in 3D); `conformers {molblock, isomers?, count,
-    options, onPage?}` (structures in 3D and their conformers - of each
+    options}` (structures in 3D and their conformers - of each
     configuration `isomers` gives, which Meno chose, or of the structure
     as drawn - `count`
     tried - Meno's number, where the role says `tries` - with the role's
     options: every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
-    `modelEnergies`; `onPage`, of two enantiomers one made as the other's
-    mirror image);
+    `modelEnergies` - each stereoisomer made itself);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens

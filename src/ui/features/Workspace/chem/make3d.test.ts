@@ -426,11 +426,11 @@ describe("conformers made for the page", () => {
     const [block] = blocksOf(ethanol, [12]);
     const none = { centres: [], doubles: [] };
     await conformersOf(chem, stereo, block, "one", { count: 3 });
-    expect(asked).toEqual([{ op: "conformers", args: { molblock: block.molblock, isomers: [none], options: { count: 3 }, onPage: true } }]);
+    expect(asked).toEqual([{ op: "conformers", args: { molblock: block.molblock, isomers: [none], options: { count: 3 } } }]);
     // (how many to try, as the page works it out, sent beside the plugin's options)
     asked.length = 0;
     await conformersOf(chem, stereo, block, "one", {}, 40);
-    expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {}, onPage: true });
+    expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {} });
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {
