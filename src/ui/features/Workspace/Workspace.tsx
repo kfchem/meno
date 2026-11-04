@@ -1,3 +1,5 @@
+import RoleOffer from "./RoleOffer";
+import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
@@ -411,6 +413,8 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
+  // (the role a chemistry asked of that no plugin here fills: what the line of its error offers plugins for)
+  const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
     (aroundAtom: number | Iterable<number> | null) => {
@@ -1492,7 +1496,13 @@ function WorkspaceContent({
   const alerts = canvasAlerts({
     import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
     files: { text: files.error, dismiss: files.dismissError },
-    chem: { text: chemError, dismiss: () => setChemError(null) },
+    chem: {
+      text: chemError,
+      dismiss: () => {
+        setChemError(null);
+        useRoleOffer.setState({ role: null });
+      },
+    },
   });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
@@ -1661,6 +1671,16 @@ function WorkspaceContent({
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
           <span className="break-words">{a.text}</span>
           {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          {/* (a role no plugin here fills: the plugins online that fill it, each to add) */}
+          {a.key === "chem" && offerRole && chemError?.includes(noPluginSaid(offerRole)) && (
+            <RoleOffer
+              role={offerRole}
+              done={() => {
+                setChemError(null);
+                useRoleOffer.setState({ role: null });
+              }}
+            />
+          )}
           <button
             aria-label="Dismiss"
             title="Dismiss"

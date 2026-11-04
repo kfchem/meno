@@ -26,6 +26,19 @@ export type ChemState =
 
 export const useChem = create<ChemState>(() => ({ state: "idle" }));
 
+/** A role asked of and no plugin here filling it: what Meno offers then, from the plugins online (lib/plugins/roleOffer). */
+export class NoPlugin extends Error {
+  constructor(readonly role: RoleId) {
+    super(noPluginSaid(role));
+  }
+}
+
+/** What is said where a role is asked of and no plugin here fills it: what is needed, and that none here does it. */
+export const noPluginSaid = (role: RoleId) => `${ROLES[role].name} needs a plugin, and none here does it.`;
+
+/** The role last asked of that no plugin here fills: what the canvas offers plugins for, until it is let go. */
+export const useRoleOffer = create<{ role: RoleId | null }>(() => ({ role: null }));
+
 /**
  * The plugin that fills a role: the one chosen, where it fills it - unless
  * the chemist took it away and another that fills it is added (the
@@ -80,7 +93,10 @@ export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
   const plugin = rolePlugin(role);
   const undecided = plugin ? [] : roleUndecided(role);
   if (undecided.length) return Promise.reject(new Error(`${undecided.map((p) => p.name).join(" and ")} each do this: ${ROLES[role].name} - choose which in Settings.`));
-  if (!plugin) return Promise.reject(new Error(`No plugin Meno knows of does this: ${ROLES[role].name}.`));
+  if (!plugin) {
+    useRoleOffer.setState({ role });
+    return Promise.reject(new NoPlugin(role));
+  }
   return pluginWorker(plugin);
 }
 
