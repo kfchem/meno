@@ -21,6 +21,8 @@ describe("C=N double bonds whose E/Z is none of their own", () => {
   it("are one whose N bears a hydrogen, and an amidinium's or guanidinium's, its double bond shared", () => {
     expect(moving("CC=N")).toEqual(["nh"]);
     expect(moving("CC(N(C)C)=[N+](C)C")).toEqual(["cation"]);
+    // (an amidinium whose N beside it is a pyrrole's, its lone pair the ring's: no bond it shares)
+    expect(moving("CC(n1cccc1)=[N+](C)CC")).toEqual([]);
   });
 
   it("are not an imine whose N bears a carbon, an oxime's, a hydrazone's - nor one in a ring held flat", () => {
@@ -72,6 +74,9 @@ describe("configurations read from places made before", () => {
     expect(a.sense).toBe(-b.sense);
     // (flat: no configuration to read)
     expect(configuredFrom(centre, { 0: [0, 0, 0], 1: [1, 0, 0], 2: [-0.5, 0.87, 0], 3: [-0.5, -0.87, 0] }, [0], []).centres).toEqual([]);
+    // (a centre with two neighbours placed spans no volume: none read)
+    const two = [{ a: 0, b: 1, order: 1 }, { a: 0, b: 2, order: 1 }];
+    expect(configuredFrom(two, { 0: [0, 0, 0], 1: [1, 0, -0.3], 2: [-0.5, 0.87, -0.3] }, [0], []).centres).toEqual([]);
   });
 });
 
@@ -116,5 +121,10 @@ describe("what a structure leaves open, as Meno decides it", () => {
     // (the N's one unpaired electron takes the hydrogen its valence would leave it)
     expect(g.atoms[3].hs).toBe(0);
     expect(stereoGraphOf(["not a block"])).toBeNull();
+    // (an allyl bound through all its atoms - a bond to a star, ENDPTS its atoms: of no order, its atoms' hydrogens as their own bonds leave them)
+    const eta = ["", "  test", "", "  0  0  0  0  0  0  0  0  0  0999 V3000", "M  V30 BEGIN CTAB", "M  V30 COUNTS 5 3 0 0 0", "M  V30 BEGIN ATOM",
+      "M  V30 1 Pd 0 0 0 0", "M  V30 2 C 1 0 0 0", "M  V30 3 C 2 0 0 0", "M  V30 4 C 3 0 0 0", "M  V30 5 * 2 1 0 0", "M  V30 END ATOM", "M  V30 BEGIN BOND",
+      "M  V30 1 1 2 3", "M  V30 2 2 3 4", "M  V30 3 9 1 5 ENDPTS=(3 2 3 4) ATTACH=ALL", "M  V30 END BOND", "M  V30 END CTAB", "M  END"].join("\n");
+    expect(stereoGraphOf([eta])!.bonds[2]).toEqual({ a: 0, b: 4, order: 0 });
   });
 });

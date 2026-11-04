@@ -44,5 +44,21 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     const open = await openStereo(plugin().chem, [BUTANOL]);
     const c = withChosen({ cip: { atoms: { "1": "R", "7": "S" }, bonds: { "3": "E" } } }, open);
     expect(c.chosen).toEqual({ atoms: { "1": "R" }, bonds: {} });
+    // (pent-3-en-2-ol, its double bond - bond 1 - and its carbinol carbon - atom 3 - both open: each label where it belongs)
+    const pentenol = v2000(["C", "C", "C", "C", "O", "C"], [[0, 1, 1], [1, 2, 2], [2, 3, 1], [3, 4, 1], [3, 5, 1]]);
+    const both = { request: async () => ({ read: true, elements: [{ kind: "double", at: 1, state: "unspecified" }, { kind: "centre", at: 3, state: "unspecified" }] }) } as unknown as ChemClient;
+    const opened = await openStereo(both, [pentenol]);
+    const labelled = withChosen({ cip: { atoms: { "3": "R", "0": "S" }, bonds: { "1": "E", "3": "Z" } } }, opened);
+    expect(labelled.chosen).toEqual({ atoms: { "3": "R" }, bonds: { "1": "E" } });
+  });
+
+  it("gives an allene's axis left open no configuration from places made before, however they lie", async () => {
+    // (penta-2,3-diene: its two cumulated double bonds, 1 and 2, open; the places bend C0 and C3 off the axis)
+    const allene = v2000(["C", "C", "C", "C", "C"], [[0, 1, 1], [1, 2, 2], [2, 3, 2], [3, 4, 1]]);
+    const doubles = { request: async () => ({ read: true, elements: [{ kind: "double", at: 1, state: "unspecified" }, { kind: "double", at: 2, state: "unspecified" }] }) } as unknown as ChemClient;
+    const like = { 0: [-1, 1, 0], 1: [0, 0, 0], 2: [1.3, 0, 0], 3: [2.6, 0.4, 0.3], 4: [3.6, 1, 0] } as const;
+    const open = await openStereo(doubles, [allene], like as never);
+    expect(open.configured.doubles).toEqual([]);
+    expect(open.left).toMatchObject({ bonds: [1, 2], cumulenes: [1, 2], cumulated: [[1, 2]] });
   });
 });
