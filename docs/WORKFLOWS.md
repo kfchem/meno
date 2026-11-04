@@ -1554,8 +1554,8 @@ Decided while building it, for the maintainer to confirm:
 - **`prepare {step, entries, options, cores}`** gives each job's input
   files, its program and arguments, the entries it is for, and the files
   `collect` will want - and, where its program reads one of its files as
-  its standard input, which (`stdin`; added with the first runs of
-  2026-10-09, for Gaussian) - and the programs installed beside its own
+  its standard input, which (`stdin`, as
+  Gaussian's input is: step 6, below) - and the programs installed beside its own
   run after it, in turn, where it ended well (`then`; added 2026-10-11,
   for the program ORCA's job runs beside it - its orca_2aim: what they
   print kept apart from the job's log, which is its program's output; one
@@ -1776,9 +1776,6 @@ Decided by the maintainer (2026-10-08), as it was built:
   for the program, nor its version for the program's. Where its steps are
   - a card, Quick Add, Settings' defaults - they go by the program's name:
   *ORCA*, *Gaussian 16*. *Plugins* stays the name of the whole.
-- **Checked with stand-ins on the Mac**: no ORCA or Gaussian was installed
-  there then; the programs themselves were run on 2026-10-09 (*First runs
-  with the programs installed*, below).
 
 Decided while building it, for the maintainer to confirm:
 
@@ -1810,10 +1807,36 @@ Decided while building it, for the maintainer to confirm:
   kind (Opt, SP, Freq), PCM or SMD with one of 22 solvents as SCRF says,
   %NProcShared from the cores a job may use, no checkpoint file, an
   isotope by its mass number ("(Iso=n)") - and run
-  as `g16 <input.gjf` (`g16 input` until 2026-10-09: *First runs*, below),
-  given `g16root` (the folder above its own) and GAUSS_EXEDIR (its own
-  folder), its scratch files where it runs. Why a run failed is read from
-  its output.
+  as `g16 <input.gjf`, given `g16root` (the folder above its own) and
+  GAUSS_EXEDIR (its own folder), its scratch files where it runs. Given
+  no job name, Gaussian reads its input from standard input and writes
+  its output to standard output (gaussian.com, *Running Gaussian*,
+  *Running under UNIX*): its input is the file the job names as its
+  standard input (`stdin`), and its output is the job's log, followed
+  while it runs as ORCA's and xTB's are, which `collect` says is the
+  output to read. Why a run failed is read from its output; one that
+  stops without saying why says what it printed last (*Gaussian stopped
+  without saying why, after: ...*).
+- **ORCA in parallel** runs through OpenMPI: with the cores left unset,
+  all of a computer's go to a job, so ORCA is given `%pal`, which it runs
+  through OpenMPI. Settings, *Calculations*, *Cores for each* set to 1
+  runs it. Where this computer has no OpenMPI,
+  the step's failure says so plainly, with what to do (2026-10-30): *ORCA runs on more than
+  one core only with Open MPI, whose mpirun this computer does not have
+  (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
+  install Open MPI*. Meno never runs it on fewer cores than asked without a word.
+  Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
+  processes with before any job is made - Open MPI's `mpirun` on macOS
+  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
+  jobs are given: ORCA's own folder, where it was found, before the PATH
+  Meno was started with - never the plugin's own environment's folders,
+  which no job is given. Not there, each job runs on one core - no
+  `%pal` written, one core asked, so that the queue counts it as one and
+  as many run side by side as there are cores - and the step's line says
+  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
+  applies to every program, and those that need no launcher still take
+  it. The failure above stays for a launcher found that ORCA's job then
+  cannot run.
 - **The options** are the method and basis set as text - as *Export*'s
   are - the dispersion, the solvation and its solvent, more keywords, the
   memory, and whether to keep the wavefunction (on unless turned off); the
@@ -1849,89 +1872,34 @@ Not yet, and where it comes:
   no plugin Meno carries says so since Blender became Meno's own copy,
   2026-10-12, docs/RENDER.md), and then takes only a copy new enough.
 
-### First runs with the programs installed (2026-10-09)
+### A job's results laid over what went in
 
-Step 6 had run only against stand-ins. On 2026-10-09 the programs
-themselves were run from the built app, each located in Settings,
-*Plugins*, with one core for each job: an *Optimise* then a
-*Frequencies* step of each, made from Quick Add on one molecule, queued
-one at a time.
+Results that are what came in worked out - *Optimise*, *Energy*,
+*Frequencies* - are put down turned the way that lays each over the
+entry it was worked out from (Horn's quaternion, as a structure in 3D is
+laid over its drawing), and then as that molecule is turned on the page.
+A program may give its geometries in a frame of its own: Gaussian may
+turn a molecule to its standard orientation before it works, and prints
+its geometries so (gaussian.com, *Symmetry*, its description). The turn
+is the view's, as any molecule's is: its geometry, its vibrations and
+anything read from its output stay as the program gave them, and *Reset
+orientation* shows it as the output has it. Its room in the result set
+is made for it turned. A program that keeps the input's orientation is
+laid over it as it is.
 
-What was seen, and what was put right:
-
-- **ORCA**: both steps came back as designed - the optimisation's path
-  as frames on the frames chip, the vibrations in the molecule's list,
-  its partial charges by pointing at an atom, and what the calculation
-  was on the chip.
-- **Gaussian's output went to a file nobody followed.** Run as `g16
-  input`, Gaussian writes `input.log`, and what it printed - nothing - was
-  the job's log: *Show log* said *(Nothing yet)*, the running card had no
-  last line, and a run that died said *Gaussian said nothing*. Gaussian's
-  "Running Gaussian" page gives a second form, `g16 <input-file
-  >output-file`: given no job name, it reads its input from standard input
-  and writes its output to standard output. A job's program may now be
-  given one of its input files as what it reads (`stdin`, in `prepare`'s
-  answer; `jobs.rs` opens it in the job's folder, and takes only a file
-  written for that job), so Gaussian runs as `g16 <input.gjf`, its output
-  the job's log - followed while it runs, as ORCA's and xTB's are - and
-  `collect` says the log is the output to read.
-- **Gaussian gives molecules back turned.** It works in its standard
-  orientation, and that is the geometry it prints, so a molecule's
-  results could come back turned, not lying as it went in.
-  Results that are what came in worked out - *Optimise*, *Energy*,
-  *Frequencies* - are now put down turned the way that lays each over the
-  entry it was worked out from (Horn's quaternion, as a structure in 3D is
-  laid over its drawing), and then as that molecule is turned on the page.
-  The turn is the view's, as any molecule's is: its geometry, its
-  vibrations and anything read from its output stay as the program gave
-  them, and *Reset orientation* shows it as the output has it. Its room in
-  the result set is made for it turned. ORCA and xTB keep the input's
-  orientation, so for them it is the turn of the input, if any.
-- **A Gaussian run that dies without an error** now says what it printed
-  last: *Gaussian stopped without saying why, after: ...*.
-- **The vibrations could not be chosen**, in a result set or in an output
-  opened: their rows were neither pointed at nor chosen, and no molecule
-  moved (the release 0.1.7 does both). Since the page's HTML went into the
-  layer cut off where the column begins (PDF.md), which lets the pointer
-  through to the canvas, what drei's Html lays flat on the screen let it
-  through as well - the list, the frames chip's slider and details. It
-  takes the pointer again (`PageHtml`), unless it says it does not.
-
-Decided while building it, for the maintainer to confirm:
-
-- **Results laid over what went in, by the view's turn**, as above -
-  not by turning the coordinates, which would part them from the output
-  they were read from (its vibrations, the surfaces asked of it later).
-  A run shown again from *Runs* is laid over what comes in now; results
-  undone and done again are shown as the output has them, the view's
-  turns being no part of an undo.
-
-Not put right here:
-
-- **A Gaussian job that ends with an error** marks its step failed, and
-  the step says where Gaussian stopped.
-- **ORCA in parallel** still needs OpenMPI (step 6, *Not yet*): with the
-  cores left unset, all of a computer's go to a job, so ORCA is given
-  `%pal`, which it runs through OpenMPI. Settings, *Calculations*,
-  *Cores for each* set to 1 runs it. Where this computer has no OpenMPI,
-  the step's failure says so plainly, with what to do (2026-10-30): *ORCA runs on more than
-  one core only with Open MPI, whose mpirun this computer does not have
-  (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
-  install Open MPI*. Meno never runs it on fewer cores than asked without a word.
-  Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
-  processes with before any job is made - Open MPI's `mpirun` on macOS
-  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
-  jobs are given: ORCA's own folder, where it was found, before the PATH
-  Meno was started with - never the plugin's own environment's folders,
-  which no job is given. Not there, each job runs on one core - no
-  `%pal` written, one core asked, so that the queue counts it as one and
-  as many run side by side as there are cores - and the step's line says
-  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
-  applies to every program, and those that need no launcher still take
-  it. The failure above stays for a launcher found that ORCA's job then
-  cannot run.
+- **By the view's turn**, not by turning the coordinates, which would
+  part them from the output they were read from (its vibrations, the
+  surfaces asked of it later). A run shown again from *Runs* is laid over
+  what comes in now; results undone and done again are shown as the
+  output has them, the view's turns being no part of an undo.
 - **A conformer set worked out by Gaussian** keeps each conformer in its
   standard orientation: the turn is one for the molecule, not each frame.
+- **A result's vibrations are chosen and pointed at**, in a result set or
+  in an output opened. The page's HTML lies in the layer cut off where
+  the column begins (PDF.md), which lets the pointer through to the
+  canvas, so what drei's Html lays flat on the screen - the list, the
+  frames chip's slider and details - takes the pointer again
+  (`PageHtml`), unless it says it does not.
 
 ### Step 7: procedures and copying (2026-10-08)
 
