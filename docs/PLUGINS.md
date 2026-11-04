@@ -1430,10 +1430,12 @@ comes in its own pull request.
   (`acceptCatalogue`). One entry Meno cannot read, or a plugin offered
   twice, refuses the whole of it, as it is signed whole, and says why.
 - **When it is fetched.** Under a purpose of its own, `plugin-catalogue`,
-  asked once as any first use of the network is. As Settings' *Plugins*
-  opens, once a launch, where the network was allowed for it; and
-  whenever the chemist asks (*List them*, *Look again*). Otherwise, and
-  offline, the one kept from before is shown, saying it is.
+  asked once as any first use of the network is: whenever the chemist
+  asks (*List them*, *Look again*), and, where the network was allowed
+  for it, as Settings' *Plugins* opens, once a launch - the one kept from
+  before after that. Where it was never allowed, nothing is fetched or
+  shown until the chemist asks. Offline, or where a fetch fails, the one
+  kept from before is shown, saying it is.
 - **What is offered** (`offersOf`): a plugin not here, *Add*; one here at
   an older version, *Update to x.y.z*; one here at that version or a
   newer one, nothing; one for another system or a newer Meno, why not.

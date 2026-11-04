@@ -43,43 +43,40 @@ beforeEach(() => {
 });
 
 describe("the plugins online, listed", () => {
-  it("shows the one kept from before as Settings opens, fetching nothing where the network was not allowed for it", async () => {
-    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
+  it("asks, fetches and shows nothing as Settings opens where the network was never allowed for it", async () => {
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
     await listOnline(false, ask);
-    expect(asked).toEqual([{ fetch: false }]);
-    expect(useOnline.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { serial: 3 } });
-    // (none kept: nothing to show, and nothing said wrong)
-    useOnline.setState({ state: "unlisted", catalogue: undefined });
-    await listOnline(false, backend(() => null).ask);
+    expect(asked).toEqual([]);
     expect(useOnline.getState().state).toBe("unlisted");
   });
 
-  it("fetches once a launch where the network was allowed for it, and whenever asked", async () => {
+  it("fetches once a launch where the network was allowed for it, the one kept after that - and fetches whenever asked", async () => {
     const { listOnline: list, useOnline: online } = await fresh();
-    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
     await list(false, ask);
     await list(false, ask);
     await list(true, ask);
     expect(asked).toEqual([{ fetch: true }, { fetch: false }, { fetch: true }]);
-    expect(online.getState().state).toBe("listed");
+    expect(online.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { serial: 3 } });
   });
 
-  it("says why, offline: the one kept from before still shown, or none", async () => {
+  it("shows the one kept from before offline, saying why - or, none kept, that it needs the network", async () => {
     useNetwork.setState({ offline: true });
-    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
-    await listOnline(true, ask);
-    expect(asked).toEqual([]);
-    expect(useOnline.getState()).toMatchObject({ state: "failed", problem: expect.stringMatching(/needs the network/) });
-    await listOnline(false, ask);
-    await listOnline(true, ask);
-    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/) });
+    const kept = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
+    await listOnline(true, kept.ask);
+    expect(kept.asked).toEqual([{ fetch: false }]);
+    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/), catalogue: { serial: 3 } });
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    await listOnline(true, backend(() => null).ask);
+    expect(useOnline.getState()).toMatchObject({ state: "failed", problem: expect.stringMatching(/^Listing them needs the network: Meno is offline/) });
   });
 
   it("shows nothing of a list it cannot read, and says why", async () => {
-    await listOnline(false, backend(() => ({ catalogue: { ...CATALOGUE, plugins: [{ ...ENTRY, source: { ...ENTRY.source, url: "https://example.org/x.tar.gz" } }] } })).ask);
+    useNetwork.setState({ granted: [CATALOGUE_PURPOSE] });
+    await listOnline(true, backend(() => ({ catalogue: { ...CATALOGUE, plugins: [{ ...ENTRY, source: { ...ENTRY.source, url: "https://example.org/x.tar.gz" } }] } })).ask);
     expect(useOnline.getState()).toMatchObject({ state: "failed", catalogue: undefined, problem: expect.stringMatching(/could not be read: It holds sketch: where its files are/) });
     await listOnline(
-      false,
+      true,
       backend(() => {
         throw new Error("Its signature is not Meno's");
       }).ask,

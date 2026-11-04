@@ -50,21 +50,23 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * Lists the plugins online. Asked for (`again`), it fetches - asking first,
- * where the network was not allowed for it yet. Else, as Settings opens, it
- * fetches once a launch where the network was allowed for it, and shows the
- * one kept from before otherwise: nothing asked, nothing fetched.
+ * where the network was not allowed for it yet. As Settings opens, where
+ * the network was allowed for it: it fetches once a launch, and shows the
+ * one kept from before after that. Where it was never allowed, nothing is
+ * asked, fetched or shown until the person asks. Offline, or where the
+ * fetch fails, the one kept from before is shown, saying so.
  */
 export async function listOnline(again = false, ask: typeof invoke = invoke): Promise<void> {
   if (useOnline.getState().state === "listing") return;
-  const allowed = useNetwork.getState().granted.includes(CATALOGUE_PURPOSE);
-  const fetch = again || (allowed && !fetched);
-  if (fetch) {
-    fetched = true;
-    useOnline.setState({ state: "listing", problem: undefined });
-    if (!(await askToConnect(CATALOGUE_REQUEST))) {
-      useOnline.setState((s) => (s.catalogue ? { state: "listed", kept: "Meno is offline, or the network was not allowed" } : { state: "failed", problem: "Listing them needs the network: Meno is offline, or the network was not allowed for it." }));
-      return;
-    }
+  if (!again && !useNetwork.getState().granted.includes(CATALOGUE_PURPOSE)) return;
+  let fetch = again || !fetched;
+  fetched = true;
+  useOnline.setState({ state: "listing", problem: undefined });
+  // (no network for it - offline, or not allowed: the one kept from before, saying why)
+  let offline: string | undefined;
+  if (fetch && !(await askToConnect(CATALOGUE_REQUEST))) {
+    fetch = false;
+    offline = "Meno is offline, or the network was not allowed for it";
   }
   let got: Got | null;
   try {
@@ -73,11 +75,11 @@ export async function listOnline(again = false, ask: typeof invoke = invoke): Pr
     useOnline.setState((s) => (s.catalogue ? { state: "listed", kept: said(e) } : { state: "failed", problem: `The plugins online could not be listed: ${said(e)}.` }));
     return;
   }
-  // (none kept, and none fetched: nothing to show yet)
-  if (!got) return useOnline.setState({ state: "unlisted" });
+  // (none kept, and none fetched: nothing to show - or, with no network for it, why)
+  if (!got) return useOnline.setState(offline ? { state: "failed", problem: `Listing them needs the network: ${offline}.` } : { state: "unlisted" });
   const read = acceptCatalogue(got.catalogue);
   if ("why" in read) return useOnline.setState({ state: "failed", catalogue: undefined, problem: `The list of plugins online could not be read: ${read.why}.` });
-  useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got.fetchedAt, kept: got.kept, problem: undefined });
+  useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got.fetchedAt, kept: got.kept ?? offline, problem: undefined });
 }
 
 /**
