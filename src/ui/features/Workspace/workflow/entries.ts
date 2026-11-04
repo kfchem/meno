@@ -873,7 +873,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
         ...(m.marksUnread ? { marksUnread: true as const } : {}),
-        ...(m.madeOf?.length ? { madeOf: m.madeOf } : {}),
+        ...(m.madeOf?.length ? { madeOf: [...m.madeOf] } : {}),
         keep,
         from: m.id,
         frame: f,
@@ -1246,7 +1246,7 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     ...(was?.from != null ? { from: was.from } : {}),
     ...(was?.frame != null ? { frame: was.frame } : {}),
     ...(was?.last != null ? { last: was.last } : {}),
-    ...(was?.madeOf?.length ? { madeOf: was.madeOf } : {}),
+    ...(was?.madeOf?.length ? { madeOf: [...was.madeOf] } : {}),
   };
   if (!was || !sameAs(was, made)) return made;
   // (that entry still: all it held, its properties as the step left them - and its charge and spin given, where the step gave the ones it had)

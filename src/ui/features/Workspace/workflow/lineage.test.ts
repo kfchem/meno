@@ -36,26 +36,36 @@ const extentOf: RunWith["extentOf"] = () => ({ x0: -1, x1: 1, y0: -1, y1: 1 });
 
 describe("what an entry was made from", () => {
   it("is each frame's entry's, and its entry record's lineage - the molecule it is a frame of where it has none", () => {
-    const made = setEntries([onPage(water(0, { madeOf: ["a#1", "b#2"] }, 2), 4)], "conformers");
+    const m = onPage(water(0, { madeOf: ["a#1", "b#2"] }, 2), 4);
+    const made = setEntries([m], "conformers");
     expect(made.map((e) => [e.madeOf, e.from])).toEqual([
       [["a#1", "b#2"], 4],
       [["a#1", "b#2"], 4],
     ]);
     expect(entryOfSet(made[1], "x").from).toEqual(["a#1", "b#2"]);
+    // (each its own list, none the molecule's nor another's: one changed changes no other)
+    expect(new Set([m.madeOf, ...made.map((e) => e.madeOf), entryOfSet(made[0], "x").from]).size).toBe(4);
     const plain = setEntries([onPage(water(), 4)], "molecules")[0];
     expect([plain.madeOf, entryOfSet(plain, "x").from]).toEqual([undefined, ["molecule:4#0"]]);
   });
 
   it("is kept by a step's molecules: one each; a compound's where all its conformers have the same, else none", () => {
     const entry = (compound: number, number: number, madeOf?: string[]): SetEntry => ({ ...setEntries([onPage(water(number))], "molecules")[0], compound, number, ...(madeOf ? { madeOf } : {}) });
-    const each = resultsOf({ ok: true, holds: "molecules", kept: [entry(0, 1, ["a"]), entry(1, 1)], aside: [], said: "" }, "duplicates");
+    const one = entry(0, 1, ["a"]);
+    const each = resultsOf({ ok: true, holds: "molecules", kept: [one, entry(1, 1)], aside: [], said: "" }, "duplicates");
     expect(each.molecules.map((m) => m.madeOf)).toEqual([["a"], undefined]);
-    const compounds = resultsOf({ ok: true, holds: "conformers", kept: [entry(0, 1, ["a"]), entry(0, 2, ["a"]), entry(1, 1, ["a"]), entry(1, 2, ["b"]), entry(2, 1, ["a"]), entry(2, 2)], aside: [], said: "" }, "duplicates");
+    expect(each.molecules[0].madeOf).not.toBe(one.madeOf);
+    const first = entry(0, 1, ["a"]);
+    const compounds = resultsOf({ ok: true, holds: "conformers", kept: [first, entry(0, 2, ["a"]), entry(1, 1, ["a"]), entry(1, 2, ["b"]), entry(2, 1, ["a"]), entry(2, 2)], aside: [], said: "" }, "duplicates");
     expect(compounds.molecules.map((m) => m.madeOf)).toEqual([["a"], undefined, undefined]);
+    expect(compounds.molecules[0].madeOf).not.toBe(first.madeOf);
   });
 
   it("is kept by the frames a set's table takes of a molecule", () => {
-    expect(framesMolecule(onPage(water(0, { madeOf: ["a"] }, 3)), [2, 0]).madeOf).toEqual(["a"]);
+    const m = onPage(water(0, { madeOf: ["a"] }, 3));
+    const taken = framesMolecule(m, [2, 0]).madeOf;
+    expect(taken).toEqual(["a"]);
+    expect(taken).not.toBe(m.madeOf);
   });
 
   it("is kept by an entry a step gives back as it was, and by one it made anew of that one entry - not by one made of several", () => {
@@ -66,6 +76,7 @@ describe("what an entry was made from", () => {
     // (at another geometry: what was worked out at the old one gone, its lineage at a remove kept)
     const moved = setEntryOfEntry({ ...same, geometry: { kind: "3d", xyz: was.xyz.map((v, i) => (i === 0 ? v + 0.1 : v)) } }, { compound: 0, number: 1 }, was)!;
     expect([moved.madeOf, moved.from, moved.energy]).toEqual([["a"], 4, undefined]);
+    expect(moved.madeOf).not.toBe(was.madeOf);
     // (no one entry it was made of - Re-bond's, several parts combined: none)
     expect(setEntryOfEntry(same, { compound: 0, number: 1 })!.madeOf).toBeUndefined();
   });
