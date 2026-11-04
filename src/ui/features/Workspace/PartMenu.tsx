@@ -11,7 +11,7 @@ import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
-import { WORDS_FONT_HEIGHT } from "./WordsFont";
+import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -439,12 +439,15 @@ export default function PartMenu({
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the magnifications offered, as "Magnification" is pressed
   const [magnifying, setMagnifying] = useState(false);
-  // the width it came out at, so that the whole of it stays in the canvas
+  // the width and height it came out at, so that the whole of it stays in the canvas (before it is drawn: no jump)
   const [width, setWidth] = useState(WIDTH);
+  const [tall, setTall] = useState<number | null>(null);
   useLayoutEffect(() => {
-    // (the same width again changes nothing: React leaves it be)
+    // (the same again changes nothing: React leaves it be)
     const w = ref.current?.offsetWidth;
     if (w) setWidth(w);
+    const h = ref.current?.offsetHeight;
+    if (h) setTall(h);
   }, [target, radical]);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
@@ -456,7 +459,7 @@ export default function PartMenu({
       if (e.key === "Escape") onClose();
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       // (in a field of the menu's - a size typed - the keys are the field's)
-      if (e.target instanceof HTMLInputElement) return;
+      if (!arrowMovesMenu(e.target)) return;
       e.preventDefault();
       const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
       const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -473,7 +476,7 @@ export default function PartMenu({
     };
     // (a list scrolled inside it - the typefaces' - is no turn of the wheel elsewhere)
     const onWheel = (e: WheelEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      if (wheelClosesMenu(e.target, ref.current)) onClose();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
@@ -940,8 +943,10 @@ export default function PartMenu({
   const stepNote = target.kind === "step" ? step?.note : undefined;
   // (words' size, line spacing and typeface, under the icons)
   const font = target.kind === "caption" ? words?.font : undefined;
-  const height =
-    (row.length ? ROW + 9 : 0) + (font ? WORDS_FONT_HEIGHT : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
+  // (reckoned from its rows, and as it came out once laid out - the words' font rows, say - the larger: a row opened since, Magnification's, reckoned)
+  const reckoned =
+    (row.length ? ROW + 9 : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
+  const height = Math.max(tall ?? 0, reckoned);
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();

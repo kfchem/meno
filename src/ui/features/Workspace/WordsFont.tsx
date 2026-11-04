@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { WORDS_SIZE_CHIPS, WORDS_SIZE_RANGE, WORDS_SPACING_RANGE, WORDS_SPACINGS } from "../../../lib/chem/captions";
+import { WORDS_SIZE_CHIPS, WORDS_SPACINGS } from "../../../lib/chem/captions";
 import { LABEL_TYPEFACES } from "../../../lib/chem/styleFields";
 import TypefacePicker from "../StyleEditor/TypefacePicker";
 import { useEditor } from "./store";
+import { faceFor, parsePoints, parseSpacing, spacingFor } from "./utils/wordsFont";
 
 const ROUND = (v: number) => String(Math.round(v * 100) / 100);
 
-/** How tall the rows are, in pixels, as the menu reckons where it goes (PartMenu). */
-export const WORDS_FONT_HEIGHT = 196;
 
 /**
  * How words on the page are set, inside their menu under its icons
@@ -46,16 +45,16 @@ export default function WordsFont({
   const pt = c?.size ?? label;
   const [typed, setTyped] = useState(() => ROUND(pt));
   const [spaced, setSpaced] = useState(() => ROUND(lines));
-  const typedPt = Number(typed.replace(",", "."));
-  const typedOk = Number.isFinite(typedPt) && typedPt >= WORDS_SIZE_RANGE[0] && typedPt <= WORDS_SIZE_RANGE[1];
-  const spacedBy = Number(spaced.replace(",", "."));
-  const spacedOk = Number.isFinite(spacedBy) && spacedBy >= WORDS_SPACING_RANGE[0] && spacedBy <= WORDS_SPACING_RANGE[1];
+  const typedPt = parsePoints(typed);
+  const typedOk = typedPt != null;
+  const spacedBy = parseSpacing(spaced);
+  const spacedOk = spacedBy != null;
   const giveSize = (v: number) => {
     onSize(v);
     setTyped(ROUND(v));
   };
   const giveLines = (v: number) => {
-    onLines(v === 1 ? null : v);
+    onLines(spacingFor(v));
     setSpaced(ROUND(v));
   };
   const chip = (on: boolean) =>
@@ -79,7 +78,7 @@ export default function WordsFont({
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && typedOk) giveSize(typedPt);
+              if (e.key === "Enter" && typedPt != null) giveSize(typedPt);
             }}
             className={`${field(typedOk)} ml-1`}
           />
@@ -100,7 +99,7 @@ export default function WordsFont({
             value={spaced}
             onChange={(e) => setSpaced(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && spacedOk) giveLines(spacedBy);
+              if (e.key === "Enter" && spacedBy != null) giveLines(spacedBy);
             }}
             className={`${field(spacedOk)} ml-1`}
           />
@@ -110,7 +109,7 @@ export default function WordsFont({
       <div>
         <span className={heading}>Typeface</span>
         {/* (the drawing's first: picked, the words follow the drawing's typeface again) */}
-        <TypefacePicker value={family ?? drawing} suggested={[drawing, ...LABEL_TYPEFACES.filter((f) => f !== drawing)]} label="Typeface" onChange={(f) => onFont(f === drawing ? null : f)} />
+        <TypefacePicker value={family ?? drawing} suggested={[drawing, ...LABEL_TYPEFACES.filter((f) => f !== drawing)]} label="Typeface" onChange={(f) => onFont(faceFor(f, drawing))} />
       </div>
     </div>
   );
