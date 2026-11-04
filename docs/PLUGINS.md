@@ -314,7 +314,7 @@ worthwhile):
   it carries: README, and Settings, *Plugins*.
 
 Two such plugins come with Meno, both GPL-3.0-or-later: the Blender plugin
-(`resources/plugins/blender`, RENDER.md), and the Blender looks and motions
+(`resources/plugins/blender`, RENDER.md), and the Film looks and motions
 plugin (`resources/plugins/blender-presets`), whose looks, studios and film
 motions are scripts for Blender too.
 
