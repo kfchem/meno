@@ -39,8 +39,9 @@ and in particular:
     divided by the screen's pixel ratio, and at 150 % a wheel's zoom lit
     another bond (2026-11-02; `utils/pageEvents`).
 - **Drawing is dragging bonds out of atoms**, and the editor is made for
-  that way of drawing rather than for keys to learn: there are no keyboard
-  shortcuts for building structures (agreed 2026-09-27).
+  that way of drawing rather than for keys to learn: no keyboard shortcut
+  builds a structure (agreed 2026-09-27); the bond keys only set a bond's
+  kind (*Bond keys*, below; 2026-11-02).
   - A drag on an atom moves it; it snaps as it goes, and dropped on another
     atom it becomes that atom.
   - A double-click on an atom draws one bond where there is room; a
