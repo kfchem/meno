@@ -187,10 +187,15 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
 /** Whether a value says no solvation, its own or any part a program worked out: one side's matched the other's as not stated, never silently. */
 const unstated = (p: Property): boolean => (p.parts ? p.parts.some((q) => q.at && q.at.solvent == null) : p.at?.solvent == null);
 
-/** The level and conditions a barrier is of, in a few words: "G at GFN2-xTB, 298.15 K" - of a sum, its parts. */
+/** A value's level in a few words, its method and basis: "B3LYP/def2-TZVP"; none said, "". */
+const levelWords = (by: Property["by"]): string => (by?.method ? [by.method, by.basis].filter(Boolean).join("/") : "");
+
+/** The level and conditions a barrier is of, in a few words: "G at GFN2-xTB, 298.15 K" - of a sum, its parts, each at its
+ * own level where one is said: "G = energy at B3LYP/def2-TZVP + thermo.g-correction at GFN2-xTB + standard state". */
 function ofWords(p: Property, energy: BarrierEnergy, free: string): string {
-  const level = p.by?.method ? [p.by.method, p.by.basis].filter(Boolean).join("/") : free;
-  const of = energy === "E" ? `E at ${level}` : p.parts ? `G = ${p.parts.map((q) => q.property).join(" + ")}` : `G at ${level}`;
+  const level = levelWords(p.by) || free;
+  const part = (q: NonNullable<Property["parts"]>[number]) => (levelWords(q.by) ? `${q.property} at ${levelWords(q.by)}` : q.property);
+  const of = energy === "E" ? `E at ${level}` : p.parts ? `G = ${p.parts.map(part).join(" + ")}` : `G at ${level}`;
   return [of, p.at?.kelvin != null && energy !== "E" ? `${p.at.kelvin} K` : ""].filter(Boolean).join(", ");
 }
 

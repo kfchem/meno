@@ -157,7 +157,7 @@ describe("a Barrier step", () => {
     const start = sum(minimum(), -56.52, 0.025, true);
     const o = run([ts], [start], { free: "G" });
     expect(barrier(o).value as number).toBeCloseTo((-56.5 + 0.02 - (-56.52 + 0.025)) * 627.5094740630558, 9);
-    expect(kept(o).said).toBe("ΔG‡ 9.41 kcal/mol (G = energy + thermo.g-correction + standard state, 298.15 K)");
+    expect(kept(o).said).toBe("ΔG‡ 9.41 kcal/mol (G = energy at B3LYP/def2-TZVP + thermo.g-correction at GFN2-xTB + standard state, 298.15 K)");
     expect(why(run([ts], [sum(minimum(), -56.52, 0.025, false)], { free: "G" }))).toBe(
       "a #1: G of the saddle point is energy + thermo.g-correction + standard state, of its start a #1 energy + thermo.g-correction: not summed of the same parts",
     );
