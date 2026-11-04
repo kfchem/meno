@@ -499,16 +499,19 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     larger ring it is no bridge but the way round it, as each sugar of a
     cyclodextrin lies on its macrocycle. A ring is held flat where every
     atom of it is aromatic under Meno's rule (`lib/chem/aromaticity.ts`):
-    Hückel's 4n + 2, of each ring of the smallest set and of each pair of
-    rings fused at a bond - a benzene's 6, azulene's 10 round its two
-    rings, each six-ring of pyrene or coronene - each atom giving one from
-    a double bond within its ring system (however drawn), none from a
+    Hückel's 4n + 2, n from 0 to 5 (22 at most, as far as the rule is
+    generally held to go), of each ring of the smallest set and of each
+    pair of rings fused at a bond - a benzene's 6, azulene's 10 round its
+    two rings, each six-ring of pyrene or coronene, not [26]annulene -
+    each atom giving one from a double bond within its ring system
+    (however drawn), none from a
     carbon with a C=O, C=N, C=S, C=Se or C=Te out of it or a carbocation,
     two from a lone pair (pyrrole's N, furan's O, a carbanion), and a ring
     with any other atom (a CH2, a fulvene's C=CH2) none. So a
     fluoranthene's five-ring, aromatic in none of its own, is held flat,
-    every atom of it lying on an aromatic six-ring; and so is a ring bound
-    to a metal through all its atoms (a metallocene's). Cyclopentadiene's
+    every atom of it lying on an aromatic six-ring; and so, whatever its
+    count, is a ring drawn with aromatic bonds or bound to a metal through
+    all its atoms (a metallocene's). Cyclopentadiene's
     CH2 and cyclooctatetraene's eight pi electrons leave theirs free to
     pucker.
   - **a molecule that cannot change shape is worth ten**, the number

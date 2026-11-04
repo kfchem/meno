@@ -52,6 +52,19 @@ describe("aromatic rings, by each ring and each pair of rings fused at a bond", 
     expect(read("C1=CC=CC=CC=C1").aromatic).toEqual([]);
   });
 
+  it("take an annulene of 4n + 2 as aromatic up to n = 5: [18] and [22], not [26] or [30]", () => {
+    const annulene = (n: number) => `C1${"=CC".repeat((n - 2) / 2)}=C1`;
+    expect(read(annulene(18)).not).toEqual([]);
+    expect(read(annulene(22)).not).toEqual([]);
+    expect(read(annulene(26)).aromatic).toEqual([]);
+    expect(read(annulene(30)).aromatic).toEqual([]);
+  });
+
+  it("leave porphine's rings as before: its inner ring and its pyrroles with an N-H aromatic (18 and 6), the other two pyrroles' outer carbons not", () => {
+    const { not } = read("c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3");
+    expect(not).toHaveLength(4);
+  });
+
   it("take indolizine whole: its six-ring through the N's lone pair with its five-ring, 10", () => {
     expect(read("c1ccn2cccc2c1").not).toEqual([]);
   });

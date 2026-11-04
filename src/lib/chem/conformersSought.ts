@@ -222,8 +222,9 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
  * aromaticity: Hückel's 4n + 2, of each ring and each pair of rings fused
  * at a bond) - a benzene's, a pyrrole's, a tropone's, azulene's two, and a
  * fluoranthene's five-ring, which is not aromatic itself but every atom of
- * which lies on an aromatic ring. So is one every bond of which is drawn
- * aromatic, and one every atom of which is bound to one metal (a
+ * which lies on an aromatic ring (the rule's 22 electrons at most is the
+ * rule's alone). So, whatever its count, is one every bond of which is
+ * drawn aromatic, and one every atom of which is bound to one metal (a
  * ferrocene's, eta) - by a bond each, or through a star at its centre
  * (`held`: each such bond's atoms) - as its metal holds it.
  */

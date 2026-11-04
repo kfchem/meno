@@ -4,19 +4,26 @@
  * lib/chem/conformersSought (which rings a conformer search holds flat)
  * both take.
  *
- * Hückel's count of pi electrons, 4n + 2 for an aromatic ring (E. Hückel,
- * Z. Phys. 70, 204, 1931; IUPAC's Gold Book entry for the rule, H02867, to
- * check before it is cited here), is applied to each ring of the smallest set and
- * to each pair of those rings fused at a bond - their outer ring, as
- * azulene's ten electrons run round its five- and seven-ring together. An
- * atom is aromatic where it lies on such a ring or pair. That is Meno's
- * extension of the count, stated so: Hückel's rule is of one ring, and a
- * fused system counted whole fails where it plainly holds - pyrene's 16,
- * coronene's 24 and perylene's 20 are 4n, though each of their six-rings is
- * a benzene's 6. Counted so, a fluoranthene's or an acenaphthylene's
- * five-ring (5 electrons, alone or with a six-ring) is not aromatic, as
- * chemists hold it is not; biphenylene's four-ring (4) is not, and its
- * six-rings are.
+ * IUPAC defines aromatic compounds as those that, in accordance with
+ * Hückel's theory, "have a cyclic, delocalized (4n+2) π-electron system",
+ * heteroaromatic ones (a thiophene, a pyridine) taken in (Moss, Smith and
+ * Tavernier, Pure Appl. Chem. 67, 1307, 1995, p. 1319). Hückel's rule
+ * itself is stated of monocyclic planar or almost planar systems of
+ * trigonal atoms, 4n + 2 aromatic and 4n antiaromatic (Müller, Pure Appl.
+ * Chem. 66, 1077, 1994, p. 1122; E. Hückel, Z. Phys. 70, 204, 1931). Meno
+ * extends it to fused rings, and that extension is Meno's rule, stated so:
+ * the count is applied to each ring of the smallest set, and to each pair
+ * of those rings fused at a bond - their outer ring, as azulene's ten
+ * electrons run round its five- and seven-ring together. An atom is
+ * aromatic where it lies on such a ring or pair of 4n + 2, n from 0 to 5
+ * (`MOST_PI`, 22) - as far as the rule is generally held to go (Müller,
+ * p. 1122): a larger annulene is not taken for aromatic, and a conformer
+ * search lets it find its own shape. A fused system counted whole fails where the definition
+ * plainly holds - pyrene's 16, coronene's 24 and perylene's 20 are 4n,
+ * though each of their six-rings is a benzene's 6. Counted so, a
+ * fluoranthene's or an acenaphthylene's five-ring (5 electrons, alone or
+ * with a six-ring) is not aromatic, as chemists hold it is not;
+ * biphenylene's four-ring (4) is not, and its six-rings are.
  *
  * An atom's pi electrons in a ring (`piElectrons`):
  * - one where it has a double bond within its ring system (the rings fused
@@ -35,6 +42,9 @@
  *   polarity runs the other way, so the dipolar form gives no basis - and
  *   a ring with an atom not known is not aromatic.
  */
+
+/** The most pi electrons a ring or pair is taken as aromatic with: 4n + 2 for n = 5, as far as Hückel's rule is generally held to go (Müller, Pure Appl. Chem. 66, 1077, 1994, p. 1122). */
+export const MOST_PI = 22;
 
 /** The elements whose atom, with no double bond in its ring system, gives the ring a lone pair: two electrons. */
 const LONE_PAIR = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
@@ -69,7 +79,8 @@ export function piElectrons(s: PiState): number | null {
 /**
  * The atoms that lie on an aromatic ring (above), by index: of `rings` (the
  * smallest set) each, and each two that share a bond, whose atoms'
- * electrons (`electrons`, null where not known) add up to 4n + 2.
+ * electrons (`electrons`, null where not known) add up to 4n + 2, at most
+ * `MOST_PI`.
  */
 export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: (atom: number) => number | null): Set<number> {
   const out = new Set<number>();
@@ -80,7 +91,7 @@ export function aromaticAtoms(rings: readonly (readonly number[])[], electrons: 
       if (e == null) return false;
       sum += e;
     }
-    return sum % 4 === 2;
+    return sum % 4 === 2 && sum <= MOST_PI;
   };
   const edges = rings.map((r) => new Set(r.map((x, k) => pairKey(x, r[(k + 1) % r.length]))));
   rings.forEach((r, i) => {
