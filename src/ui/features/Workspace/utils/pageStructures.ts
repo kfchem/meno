@@ -458,6 +458,15 @@ export function labelText(text: string): string | null {
   return t.replace(/^\(|\)$/g, "").replace(/\u2032/g, "'");
 }
 
+/** How far a box lies from a structure's ink - its bonds, its atoms and its labels. */
+function inkTo(st: PageStructure, b: Box): number {
+  return Math.min(Infinity, ...st.bonds.map(([p, q]) => segmentToBox(p, q, b)), ...st.atoms.map((a) => toBox(a, b)), ...st.labels.map((l) => boxToBox(l, b)));
+}
+
+/** How far apart a word's glyphs may be set and be one word, and how far apart their middles may be and be one line: fractions of a glyph's height. */
+const GLYPHS_APART = 0.2;
+const LINE_SAME = 0.3;
+
 /**
  * A figure's own words on its page as words: letters set apart - a PDF may
  * set each glyph as a thing of its own - joined where they stand on one line
@@ -465,15 +474,16 @@ export function labelText(text: string): string | null {
  * figure's drawing holds words there already (its own read first).
  */
 export function wordsJoined(own: readonly PageWord[], drawn: readonly PageWord[]): PageWord[] {
-  const free = own.filter((o) => o.text.trim() && !drawn.some((d) => boxToBox(d.box, o.box) === 0)).sort((p, q) => p.box[1] - q.box[1] || p.box[0] - q.box[0]);
+  // (left to right, each glyph onto a word of its line that ends just before it)
+  const free = own.filter((o) => o.text.trim() && !drawn.some((d) => boxToBox(d.box, o.box) === 0)).sort((p, q) => p.box[0] - q.box[0] || p.box[1] - q.box[1]);
   const out: PageWord[] = [];
   for (const w of free) {
-    const last = out[out.length - 1];
     const h = w.box[3] - w.box[1];
-    const sameLine = last && Math.abs((last.box[1] + last.box[3]) / 2 - (w.box[1] + w.box[3]) / 2) <= 0.3 * h;
-    if (last && sameLine && w.box[0] - last.box[2] <= 0.2 * h && w.box[0] >= last.box[0]) {
-      last.text += w.text;
-      last.box = [last.box[0], Math.min(last.box[1], w.box[1]), Math.max(last.box[2], w.box[2]), Math.max(last.box[3], w.box[3])];
+    const mid = (w.box[1] + w.box[3]) / 2;
+    const word = out.find((o) => Math.abs((o.box[1] + o.box[3]) / 2 - mid) <= LINE_SAME * h && w.box[0] - o.box[2] <= GLYPHS_APART * h && w.box[0] - o.box[2] >= -GLYPHS_APART * h);
+    if (word) {
+      word.text += w.text;
+      word.box = [word.box[0], Math.min(word.box[1], w.box[1]), Math.max(word.box[2], w.box[2]), Math.max(word.box[3], w.box[3])];
     } else out.push({ text: w.text, box: [...w.box] as Box });
   }
   return out;
@@ -495,11 +505,15 @@ export function compoundLabelsOf(structures: readonly PageStructure[], words: re
     const label = labelText(w.text);
     if (!label || w.box[3] - w.box[1] < SUPERSCRIPT * usual) continue;
     const mid = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
+    // (the nearest box; where two are as near - the word within both, a ring's within a macrocycle's - the one whose ink is nearer)
     let best: PageStructure | null = null;
     let near = Infinity;
+    let ink = Infinity;
     for (const st of structures) {
       const d = boxToBox(st.box, w.box);
-      if (d < near) [best, near] = [st, d];
+      if (d > near) continue;
+      const i: number = inkTo(st, w.box);
+      if (d < near || i < ink) [best, near, ink] = [st, d, i];
     }
     if (!best || "none" in best.read || near > LABEL_REACH * (best.reach / REACH)) continue;
     const under = mid.x >= best.box[0] && mid.x <= best.box[2];

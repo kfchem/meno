@@ -1630,9 +1630,13 @@ next.
   `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
   round all of it, as a number is set under a structure as a whole, however
   its lowest bonds lie - under or over it (its middle within the
-  structure's breadth) or beside it (within its height). The page's own
-  words in the figure are joined where a PDF sets each glyph apart on one
-  line, the figure's drawn words first. It is the nearest structure's, and none where an arrow or a
+  structure's breadth) or beside it (within its height); where two
+  structures' boxes are as near - the word within both, a ring's within a
+  macrocycle's - the one whose bonds or labels are nearer. The page's own
+  words in the figure are joined where a PDF sets each glyph apart: on one
+  line (their middles within 0.3 of a glyph's height), left to right, no
+  more than 0.2 of a glyph's height between them; the figure's drawn words
+  first. It is the nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
   height: a superscript, a footnote's mark) is none, and a structure not

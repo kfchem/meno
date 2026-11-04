@@ -65,6 +65,16 @@ describe("the compounds' numbers of a figure", () => {
     expect(compoundLabelsOf([hook], [w], NONE).map((l) => l.label)).toEqual(["13"]);
   });
 
+  it("are, where two structures' boxes hold the word alike - a ring within a macrocycle's box - the one whose bonds are nearer", () => {
+    const big: PageStructure = { ...zigzag("0:0", 100), box: [60, 260, 260, 360] };
+    // (the ring's box reaching under its bonds - a label's, say - the word within it and within the big one's)
+    const zz = zigzag("0:1", 140, 300);
+    const ring: PageStructure = { ...zz, box: [zz.box[0], zz.box[1], zz.box[2], zz.box[3] + 16] };
+    const w = word("7", mid(ring) - 2.5, zz.box[3] + 4);
+    expect(compoundLabelsOf([big, ring], [w], NONE).map((l) => l.key)).toEqual(["0:1"]);
+    expect(compoundLabelsOf([ring, big], [w], NONE).map((l) => l.key)).toEqual(["0:1"]);
+  });
+
   it("are none off a corner even within a bond: beyond the structure's breadth and its height both", () => {
     const corner = word("2", a.box[2] + 2, a.box[3] + 2);
     expect(compoundLabelsOf([a], [corner], NONE)).toEqual([]);
@@ -103,6 +113,33 @@ describe("a figure's own words on its page", () => {
     expect(wordsJoined([glyph("1", 100), glyph("2", 105, 320)], []).map((w) => w.text)).toEqual(["1", "2"]);
     expect(wordsJoined([glyph("1", 100), glyph("2", 105)], [{ text: "12", box: [100, 300, 110, 308] }])).toEqual([]);
   });
+
+  it("join glyphs no more than a fifth of their height apart - 0.15 of it, not 0.3", () => {
+    const glyph = (c: string, x: number) => ({ text: c, box: [x, 300, x + 5, 308] as B });
+    expect(wordsJoined([glyph("1", 100), glyph("2", 105 + 0.15 * 8)], []).map((w) => w.text)).toEqual(["12"]);
+    expect(wordsJoined([glyph("1", 100), glyph("2", 105 + 0.3 * 8)], []).map((w) => w.text)).toEqual(["1", "2"]);
+  });
+
+  it("join glyphs on one line - middles 0.2 of their height apart, not 0.5 - the joined box over the raised one's top", () => {
+    const glyph = (c: string, x: number, y: number) => ({ text: c, box: [x, y, x + 5, y + 8] as B });
+    const raised = wordsJoined([glyph("1", 100, 300), glyph("2", 105, 300 - 0.2 * 8)], []);
+    // (the 2 raised a little, as a PDF may set it: one word still, its box over the 2's top)
+    expect(raised).toHaveLength(1);
+    expect(raised[0].box[1]).toBeCloseTo(300 - 0.2 * 8, 9);
+    expect(raised[0].box[3]).toBe(308);
+    expect(wordsJoined([glyph("1", 100, 300), glyph("2", 105, 300 + 0.5 * 8)], [])).toHaveLength(2);
+  });
+
+  it("are not bridged by a blank glyph, and never take a glyph to the left of the last", () => {
+    const glyph = (c: string, x: number, y = 300) => ({ text: c, box: [x, y, x + 5, y + 8] as B });
+    expect(wordsJoined([glyph("1", 100), glyph(" ", 105), glyph("2", 110)], []).map((w) => w.text)).toEqual(["1", "2"]);
+    // (taken left to right: a glyph set before another, whatever their order on the page, reads first - never "21")
+    expect(wordsJoined([glyph("2", 105, 299.5), glyph("1", 100, 300)], []).map((w) => w.text)).toEqual(["12"]);
+    // (and one overlapping the word's start, to its left, is no part of it)
+    expect(wordsJoined([glyph("1", 100), glyph("2", 105), glyph("3", 98, 314)], []).map((w) => w.text)).toEqual(["3", "12"]);
+    // (a glyph set over another - a bold faked by striking twice - is not read as two: "1", not "11")
+    expect(wordsJoined([glyph("1", 100), glyph("1", 100.6)], []).map((w) => w.text)).toEqual(["1", "1"]);
+  });
 });
 
 describe("the compounds' numbers on a page drawn as Meno draws one", () => {
@@ -131,6 +168,17 @@ describe("the compounds' numbers on a page drawn as Meno draws one", () => {
       ["1", 1],
       ["2", 2],
     ]);
+  });
+
+  it("are read from the page's glyphs set one by one, joined: \"1\" and \"2\" apart on the page, \"12\" its number", () => {
+    const drawn: FigureDrawn = { paths: [zig(100)], letters: [], pictures: [] };
+    const x = 100 + 2 * L * ALONG - 5;
+    const one: B = [x, 300 + 1.4 * L - 3.6, x + 5, 300 + 1.4 * L + 3.6];
+    const two: B = [x + 5, one[1], x + 10, one[3]];
+    const objects: PageObject[] = [{ kind: "path", box: [100, 300, 100 + 4 * L * ALONG, 300 + L * 0.5] }, { kind: "text", box: one }, { kind: "text", box: two }];
+    const figures: B[] = [[98, 298, 104 + 4 * L * ALONG, one[3] + 2]];
+    const read = pageStructuresOf({ objects, wordsIn: (b) => (b === one ? "1" : b === two ? "2" : "") }, figures, () => drawn, "pdf", 0);
+    expect(read.labels.map((l) => l.label)).toEqual(["12"]);
   });
 
   it("are read from the page's own words too, where the figure's drawing holds no letters of them", () => {
