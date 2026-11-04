@@ -78,10 +78,11 @@ function morphOf(model: Model, from: Map<number, { x: number; y: number }>, to: 
 
 /**
  * Stacks of drawings going over from one record to the next (utils/stacks,
- * EditorState `recordSwaps`): the one let go of growing a little as it
- * fades, the next coming up from smaller into view - each drawn here, in
- * the drawing's style, apart from the drawing, which draws the next once it
- * is there. Gone through quickly, a stack draws the last two it let go of
+ * EditorState `recordSwaps`): atom for atom where the two are one
+ * structure (`morphOf`), else the one let go of fading where it stands as
+ * the next comes in where it will stand, neither growing nor shrinking -
+ * each drawn here, in the drawing's style, apart from the drawing, which
+ * draws the next once it is there. Gone through quickly, a stack draws the last two it let go of
  * as they go, no more; one let go of before it had all come into view goes
  * from as far as it had come.
  */
