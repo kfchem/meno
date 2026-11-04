@@ -239,7 +239,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     // prepared by the plugin with what came in, its job started - with the cores it takes
-    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
+    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number), {});
     expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
@@ -271,6 +271,76 @@ describe("a step that runs a plugin's program", () => {
     doc.undo();
     expect(st().molecules3d).toHaveLength(1);
     expect(st().steps.find((s) => s.id === step)!.running).toBeUndefined();
+  });
+
+  it("passes a lone atom through as it came where its plugin's program takes none - never sent, said on its line and on it - and sends one where it takes one", async () => {
+    useReaders.setState({ state: { xtb: "added", crest: "added" }, problem: {} });
+    // (water and a sodium ion, the ion of a salt drawn as ions, in one set)
+    const page = (kind: "optimise" | "conformers", by: string, water = true) => {
+      const made = editor();
+      if (!water) made.doc.edit("ion", (d) => ({ ...d, molecules3d: [] }));
+      made.doc.edit("ion", (d) => addMolecule3d(d, { atoms: [{ el: "Na", x: 0.5, y: 0.5, z: 0, charge: 1 }], bonds: [], at: { x: 1, y: 1 } }));
+      const step = made.st().addStep(kind, by, 20, 0);
+      made.st().connect({ set: made.st().sets[0].id }, step);
+      return { ...made, step };
+    };
+    const ion = (st: () => ReturnType<ReturnType<typeof editor>["st"]>, step: number) =>
+      setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!)
+        .molecules.map((id) => st().molecules3d.find((m) => m.id === id)!)
+        .find((m) => m.atoms.length === 1)!;
+
+    // CREST's Optimise: the water sent, the ion not - where it was, no energy, no calculation, said so
+    {
+      const { st, step } = page("optimise", "crest");
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ atoms: [expect.objectContaining({ el: "O" }), expect.anything(), expect.anything()] })], expect.anything(), expect.any(Number), {});
+      const running = st().steps.find((s) => s.id === step)!.running!;
+      expect(running.passed).toHaveLength(1);
+      // (kept with the workspace: opened again, the ion still comes in when the job ends)
+      expect(readWorkflow({ sets: st().sets, steps: st().steps, wires: st().wires })?.steps.find((s) => s.id === step)!.running).toEqual(running);
+      end(1);
+      await st().lookAtJobs();
+      await ran;
+      const after = st().steps.find((s) => s.id === step)!;
+      expect(after.ran).toMatchObject({ ok: true, said: expect.stringContaining("one atom: nothing to optimise, no energy") });
+      const na = ion(st, step);
+      expect(na.atoms[0]).toMatchObject({ el: "Na", x: 0.5, y: 0.5, z: 0 });
+      expect(na.energies).toBeUndefined();
+      expect(na.calc).toBeUndefined();
+      expect(na.made?.how).toEqual([{ label: "Optimise", text: "one atom: nothing to optimise, no energy" }]);
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    asked.started = [];
+    next = 1;
+
+    // the ion alone: nothing asked of its plugin, no job - its only conformer, at once
+    {
+      const { st, step } = page("conformers", "crest", false);
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(asked.started).toEqual([]);
+      const after = st().steps.find((s) => s.id === step)!;
+      expect(after.running).toBeUndefined();
+      expect(after.ran).toMatchObject({ ok: true, said: expect.stringContaining("one atom: its only conformer") });
+      expect(ion(st, step).made?.how).toEqual([{ label: "Conformers", text: "one atom: its only conformer" }]);
+    }
+
+    // xTB's Optimise, whose program takes one: the ion sent with the water, as before
+    {
+      const { st, step } = page("optimise", "xtb");
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const sent = worker.prepare.mock.lastCall![1] as { atoms: { el: string }[] }[];
+      expect(sent.map((e) => e.atoms.length).sort()).toEqual([1, 3]);
+      expect(st().steps.find((s) => s.id === step)!.running!.passed).toBeUndefined();
+      for (const j of [...jobs.keys()]) Object.assign(jobs.get(j)!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+      await st().lookAtJobs();
+      await ran;
+    }
   });
 
   it("ends on what came in when it started - its wire undone while it runs - and is changed once its results are in", async () => {
@@ -407,6 +477,36 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
+  it("runs a job on the fewer cores its plugin says it takes - ORCA with no MPI, one - and says why once, on the step's line", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    const calculations = useAppSettings.getState().calculations;
+    useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
+    try {
+      const NO_MPI = "run on one core: no MPI on this computer";
+      const one = { program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [], cores: 1 };
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }], note: NO_MPI }) as never);
+      worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+      const { st } = editor();
+      const step = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, step);
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      // (its plugin told where ORCA was found: its jobs' PATH begins with that folder, where it looks for MPI's launcher)
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[4]).toEqual({ orca: "/Applications/orca_6/orca" });
+      // (Settings give each job 8: this one is asked for, and counted by the queue, at 1)
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 1 });
+      Object.assign(jobs.get(idOf(asked.started.length))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output" });
+      await st().lookAtJobs();
+      await ran;
+      const said = st().steps.find((s) => s.id === step)!.ran!.said!;
+      expect(said.split(NO_MPI).length - 1).toBe(1);
+    } finally {
+      useAppSettings.setState({ calculations });
+    }
+  });
+
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     installedAt.orca = "/Applications/orca_6/orca";
@@ -430,7 +530,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
   });
 
-  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so", async () => {
+  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so - the plugin otherwise running as it does", async () => {
     installedAt.orca = "/Applications/orca_6/orca";
     const needing = async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 Opt\n" }], reads: [], needs: ["xtb"] }] }) as never;
     // (the xTB plugin not added: refused before any job is made)
@@ -441,7 +541,7 @@ describe("a step that runs a plugin's program", () => {
     first.st().connect({ set: first.st().sets[0].id }, step);
     await first.st().runStep(step);
     expect(asked.started).toEqual([]);
-    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "The xTB plugin is needed for this: add it in Settings, Plugins" });
+    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Needs xTB, which is not added." });
     // (added: the job asks for it, by the plugin's id)
     useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
     worker.prepare.mockImplementationOnce(needing);
@@ -675,6 +775,35 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await all;
     expect(st().steps.find((s) => s.id === merge)!.ran).toMatchObject({ ok: true });
+  });
+
+  it("runs, of a step of two inputs, the side not done - never again the side done, nearer though it is: no job asked for anew", async () => {
+    const { st, step: a } = editor();
+    const ran = (id: number) => st().steps.find((s) => s.id === id)!.ran;
+    // (the optimisation run, its job done)
+    const first = st().runStep(a);
+    for (let k = 0; k < 4; k++) await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await first;
+    const done = ran(a);
+    expect(done).toMatchObject({ ok: true });
+    // (the other side: two Filters, neither run - the first further back than the optimisation - then Merge of both)
+    const filter = (from: number, x: number) => {
+      const f = st().addStep("filter", "meno", x, 20);
+      st().updateStep(f, { options: { conditions: "number ≥ 1", match: "all" } });
+      st().connect({ set: from }, f);
+      return f;
+    };
+    const p = filter(st().sets[0].id, 10);
+    const q = filter(resultOf(st(), p)!.id, 20);
+    const merge = st().addStep("merge", "meno", 30, 0);
+    expect(st().connect({ set: resultOf(st(), a)!.id }, merge, "first")).toBe(true);
+    expect(st().connect({ set: resultOf(st(), q)!.id }, merge, "second")).toBe(true);
+    await st().runAll();
+    expect(asked.started).toHaveLength(1);
+    expect(ran(a)).toBe(done);
+    expect([p, q, merge].map((id) => ran(id)?.ok)).toEqual([true, true, true]);
   });
 
   it("ends a step a branch gave nothing this time ok, its exits empty, saying which input came empty - through rounds whose last holds none, to a Merge of what they gave and one of the rests with them", async () => {
@@ -1683,41 +1812,19 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(m.frames).toHaveLength(1);
   });
 
-  it("sets aside what a plugin's Duplicates says is alike, at once", async () => {
+  it("says a step of Meno's own kind a plugin was said to do is Meno's, to be added again, before it asks it anything (a workspace's step from before)", async () => {
     const { doc, st } = editor();
-    // (a second water in the set: two entries)
     doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
     const set = st().sets[0].id;
+    // (RDKit's Duplicates, as a workspace saved before RDKit plugin 0.1.16 has it)
     const step = st().addStep("duplicates", "rdkit", 10, 20);
     st().connect({ set }, step);
+    worker.run.mockClear();
     await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { mirrors: "apart" }, "molecules");
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
-    // (the one set aside, in the step's second exit's set)
-    expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
-    // (compounds it took atom against atom, too many ways onto themselves to try: said, a duplicate of one could be missed)
-    worker.run.mockImplementationOnce(async () => ({ kept: [0, 1], capped: 1 }) as never);
-    await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "2 of 2 kept \u00b7 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Duplicates is Meno's own step: add it again" });
+    expect(worker.run).not.toHaveBeenCalled();
   });
 
-  it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {
-    const { doc, st } = editor();
-    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
-    const set = st().sets[0].id;
-    const step = st().addStep("duplicates", "rdkit", 10, 20);
-    st().updateStep(step, { options: { mirrors: "counted" } });
-    st().connect({ set }, step);
-    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 2, 1] }] }) as never);
-    await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept \u00b7 1 mirror image counted in (degeneracy 2)" });
-    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
-    expect(setEntries(out, "molecules").map((e) => [e.degeneracy, e.mirror])).toEqual([[2, [0, 2, 1]]]);
-    // (one not as said - not a permutation of its atoms: none taken)
-    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 0, 1] }] }) as never);
-    await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "1 of 2 kept" });
-  });
 });
 
 describe("Render as a step", () => {

@@ -11,10 +11,10 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type NeedDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
-import type { GuideStep, Suggestion } from "../plugins/guide";
+import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type PresetsDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
+import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl, type InterfaceDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
 import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "../io/kinds";
@@ -34,14 +34,19 @@ type Described = {
 type ReaderBase = Described & {
   /** The kinds it reads, by id. */
   reads: readonly string[];
+  /** Of those, the kinds one of its own programs writes (its manifest's `writtenBy`): its own program's output, which it reads unless another is chosen. */
+  ownKinds?: readonly string[];
 };
-/** What any plugin may bring besides what it runs: a guide, shown once; the plugins it suggests; the kinds of file it names, and the plugins it suggests for each (lib/plugins/guide). */
+/** What any plugin says besides what it runs: the systems it can be added on, the plugins it uses, the interfaces it declares and what it brings through another's. */
 type Brings = {
   /** The systems it can be added on; none, every one. */
   systems: readonly System[];
-  guide: readonly GuideStep[];
-  suggests: readonly Suggestion[];
-  files: readonly CatalogueFile[];
+  /** The other plugins it uses, where it declares any: each by id, with the versions it works with and the programs and interfaces of it it uses (lib/plugins/depends). */
+  depends?: readonly DependDecl[];
+  /** The interfaces it declares, for other plugins to use it through. */
+  interfaces?: readonly InterfaceDecl[];
+  /** What it brings another plugin through that one's interface (lib/plugins/manifest `PresetsDecl`). */
+  presets?: PresetsDecl;
 };
 /** A plugin that runs something: what it reads and writes, the roles it fills besides, and what it runs - a worker in a Python environment of its own. */
 export type PythonPlugin = ReaderBase &
@@ -53,12 +58,16 @@ export type PythonPlugin = ReaderBase &
     writes: readonly WriteDecl[];
     /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
+    /** The roles whose search takes how many to try, which Meno sends (the conformers role's: lib/chem/conformersSought). */
+    roleTries: readonly RoleId[];
     /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The motions it makes of a film for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleMotions: Partial<Record<RoleId, readonly MotionDecl[]>>;
     /** The programs it runs for a role, by role, where it runs one as a job (Render). */
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
+    /** The confidence of its model's below which what it reads for a role is unsure, by role, where it declares one (Structures read from pictures). */
+    roleUnsure: Partial<Record<RoleId, number>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
     steps: readonly StepDecl[];
     /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
@@ -67,8 +76,6 @@ export type PythonPlugin = ReaderBase &
     downloads: readonly DownloadDecl[];
     /** About how much room its environment takes once set up, in bytes, as measured (its manifest's `setUpBytes`). */
     setUpBytes?: number;
-    /** Programs of other plugins its jobs may need, where it declares any (lib/plugins/manifest `NeedDecl`). */
-    needs?: readonly NeedDecl[];
     /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
     profile: `plugin-${string}`;
     lock: string;
@@ -76,7 +83,7 @@ export type PythonPlugin = ReaderBase &
     /** What makes its environment: uv from PyPI (unsaid), or pixi - its lock a pixi.lock - where it needs conda-forge. */
     env?: "pixi";
   };
-/** A plugin that runs nothing: what it brings is data - a guide, a catalogue - shown by Meno. Nothing to download, nothing to start; added or taken away at once. */
+/** A plugin that runs nothing: what it brings is data, used by Meno. Nothing to download, nothing to start; added or taken away at once. */
 export type DataPlugin = Described & Brings & { builtin?: undefined; data: true };
 /** A plugin, whether it runs something or not. */
 export type Plugin = PythonPlugin | DataPlugin;
@@ -89,7 +96,12 @@ export const runs = (p: Plugin): p is PythonPlugin => !("data" in p);
 
 const MENO_IDS: ReadonlySet<string> = new Set(Object.values(MENO_KINDS).map((k) => k.id));
 
-const brings = (m: Manifest): Brings => ({ systems: m.systems, guide: m.guide, suggests: m.suggests, files: m.files });
+const brings = (m: Manifest): Brings => ({
+  systems: m.systems,
+  ...(m.depends ? { depends: m.depends } : {}),
+  ...(m.interfaces ? { interfaces: m.interfaces } : {}),
+  ...(m.presets ? { presets: m.presets } : {}),
+});
 
 /** A plugin, from its manifest. */
 export const pluginOf = (m: Manifest): Plugin => {
@@ -100,17 +112,20 @@ export const pluginOf = (m: Manifest): Plugin => {
     ...brings(m),
     // (its own kinds, and Meno's: never another plugin's, which it does not know)
     reads: m.reads.filter((id) => MENO_IDS.has(id) || m.kinds.some((k) => k.id === id)),
+    // (of those, its own program's output: a kind one of its programs writes)
+    ownKinds: m.reads.filter((id) => m.kinds.some((k) => k.id === id && k.writtenBy)),
     roles: m.roles.map((r) => r.role),
     writes: m.writes.filter((w) => !MENO_IDS.has(w.id)),
     steps: m.steps,
     installed: m.installed,
     downloads: m.downloads,
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
-    ...(m.needs ? { needs: m.needs } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
+    roleTries: m.roles.filter((r) => r.tries).map((r) => r.role),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
+    roleUnsure: Object.fromEntries(m.roles.filter((r) => r.unsure).map((r) => [r.role, r.unsure!.below])),
     profile: `plugin-${m.id}`,
     lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,
     worker: `${PLUGINS_ROOT}/${m.id}/${WORKER}`,
@@ -118,8 +133,19 @@ export const pluginOf = (m: Manifest): Plugin => {
   };
 };
 
+/**
+ * The plugins Meno carries refused for the plugins they use, each with why
+ * (lib/plugins/depends `dependsRefused`): one that uses a plugin Meno does
+ * not know, or a program it does not declare, and every one of a circle.
+ * Not offered.
+ */
+export const DEPENDS_REFUSED: ReadonlyMap<string, string> = new Map([
+  ...filesRefused(MANIFESTS, new Set(Object.values(MENO_KINDS).map((k) => k.id as string))),
+  ...dependsRefused(MANIFESTS),
+]);
+
 /** Every plugin Meno knows of, in Meno's order: those that run something, and those that bring data alone. */
-export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.map(pluginOf);
+export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id)).map(pluginOf);
 
 /** The plugins Meno knows of that run something, in Meno's order: each that reads or writes something, or fills a role or a kind of step. */
 export const PLUGINS: readonly PythonPlugin[] = ALL_PLUGINS.filter(runs).filter((p) => p.reads.length || p.roles.length || p.writes.length || p.steps.length);
@@ -135,6 +161,82 @@ export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.fin
 
 /** The plugin of that id. */
 export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find((p) => p.id === id);
+
+/** The manifests of the plugins offered: what the use of plugins is worked out from. */
+const OFFERED = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id));
+
+/** The plugins a plugin uses, and those they use in turn, in the order they are set up - each before any that uses it. */
+export const pluginsUsedBy = (id: string): Plugin[] => dependencyOrder(id, OFFERED).flatMap((m) => anyPluginById(m.id) ?? []);
+
+/** The plugins that use a plugin, and those that use them in turn, in the order they are taken away - each before the one it uses. */
+export const pluginsUsing = (id: string): Plugin[] => dependentsOf(id, OFFERED).flatMap((m) => anyPluginById(m.id) ?? []);
+
+/** The version of a plugin's interface, by the plugin's id and the interface's, as that plugin declares it; none, where it declares none. */
+const interfaceVersion = (plugin: string, id: string) => anyPluginById(plugin)?.interfaces?.find((i) => i.id === id)?.version;
+
+/**
+ * Why a plugin added is stopped - a plugin it uses not added, or added of a
+ * version it does not work with - in words; none, where it may run. `added`:
+ * the plugins added, by id.
+ */
+export function stoppedOf(p: Plugin, added: ReadonlySet<string>): string | null {
+  const m = manifestOf(p.id);
+  if (!m) return null;
+  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id, interfaceVersion);
+}
+
+/** What an added plugin brings another through its interface: by whom, and what. */
+export type Offered = { from: Plugin; presets: PresetsDecl };
+
+/**
+ * What the plugins added bring plugin `p` through its interfaces (docs/PLUGINS.md, *Presets*): each one's presets - only of a
+ * plugin added, not stopped, whose presets are for `p`, through an interface `p` declares - in Meno's order. `added`: the
+ * plugins added, by id.
+ */
+export function presetsFor(p: Plugin, added: ReadonlySet<string>): Offered[] {
+  if (!added.has(p.id) || stoppedOf(p, added)) return [];
+  return ALL_PLUGINS.flatMap((q) => {
+    const pre = q.presets;
+    if (!pre || pre.for !== p.id || !added.has(q.id) || !p.interfaces?.some((i) => i.id === pre.interface) || stoppedOf(q, added)) return [];
+    return [{ from: q, presets: pre }];
+  });
+}
+
+/**
+ * Why a plugin a job of `p` needs (by id) is not there - not added, or not of
+ * a version `p` works with - in words; none, where it is. One `p` does not
+ * say it uses, or uses for no program, said so.
+ */
+export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string>): string | null {
+  const d = p.depends?.find((x) => x.plugin === id);
+  if (!d || !d.programs.length) return `${p.name} asked for ${id}'s program, which it does not say it uses`;
+  return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), (x) => anyPluginById(x)?.name ?? x);
+}
+
+/**
+ * The kinds of file a step of `p` of kind `kind` takes besides what comes in (its `files`), as it may be given them now: of
+ * another plugin's kinds it uses, only while that plugin is added, of a version it works with (`added`: the plugins added).
+ */
+export function stepFiles(p: PythonPlugin, kind: string, added: ReadonlySet<string>): string[] {
+  const files = p.steps.find((s) => s.kind === kind)?.files ?? [];
+  const m = manifestOf(p.id);
+  return m ? filesTaken(m, files, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id) : files;
+}
+
+/**
+ * Why a kind of file of another plugin's that a step of `p` uses (its `depends`' `kinds`) is not taken now, that plugin added
+ * but of a version `p` does not work with - each a line, as Settings says it on `p` ("Gaussian formatted checkpoint is not
+ * taken: Needs Gaussian interface from 0.4.0 to before 1.0.0; 1.2.0 is added"). One not added says nothing here: `p`'s line
+ * of the plugins it uses says it is taken where that one is added.
+ */
+export function kindsNotTaken(p: Plugin, added: ReadonlySet<string>): string[] {
+  const version = (id: string) => (added.has(id) ? anyPluginById(id)?.version : undefined);
+  return (manifestOf(p.id)?.depends ?? []).flatMap((d) => {
+    if (!d.kinds?.length || !added.has(d.plugin)) return [];
+    const why = missingWhy(d, version, (id) => anyPluginById(id)?.name ?? id);
+    return why ? d.kinds.map((k) => `${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k} is not taken: ${why}`) : [];
+  });
+}
 
 /** The plugins that fill a role, in Meno's order. */
 export const pluginsFilling = (role: RoleId): PythonPlugin[] => PLUGINS.filter((p) => p.roles.includes(role));
@@ -203,8 +305,12 @@ export type FileChoices = {
 
 /**
  * The reader of a kind: the one chosen for it, where it is added and reads
- * it; else Meno, where Meno reads it - Meno keeps its kinds; else the first
- * added that reads it, in Meno's order. None, where nothing added reads it.
+ * it; else Meno, where Meno reads it - Meno keeps its kinds; else the plugin
+ * added whose own program writes it (`ownKinds`) - a program's output is read
+ * by that program's plugin before a reader of many programs'; else the one
+ * added that reads it. None, where nothing added reads it - or where several
+ * do and nothing says which (`readersUndecided`): the chemist chooses, in
+ * Settings, Files, never the first by its name (the maintainer, 2026-11-02).
  */
 export function readerFor(
   kind: string,
@@ -213,7 +319,13 @@ export function readerFor(
   readers: readonly ReaderPlugin[] = READERS,
 ): ReaderPlugin | null {
   const can = readersOf(kind, readers).filter((p) => p.builtin || added.has(p.id));
-  return can.find((p) => p.id === choices.read[kind]) ?? can.find((p) => p.builtin) ?? can[0] ?? null;
+  return can.find((p) => p.id === choices.read[kind]) ?? can.find((p) => p.builtin) ?? can.find((p) => p.ownKinds?.includes(kind)) ?? (can.length === 1 ? can[0] : null);
+}
+
+/** The plugins added that read a kind where several do and nothing says which reads it - none chosen, none Meno, none its program's own: for the chemist to choose among. None, where it is decided. */
+export function readersUndecided(kind: string, added: ReadonlySet<string>, choices: FileChoices, readers: readonly ReaderPlugin[] = READERS): ReaderPlugin[] {
+  const can = readersOf(kind, readers).filter((p) => p.builtin || added.has(p.id));
+  return can.length > 1 && !readerFor(kind, added, choices, readers) ? can : [];
 }
 
 /** The readers that read a kind as well as its reader, as chosen: each added, each reading it, the reader itself not again. */

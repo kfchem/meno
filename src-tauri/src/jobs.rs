@@ -108,8 +108,8 @@ pub struct JobSpec {
     pub name: String,
     pub program: String,
     pub args: Vec<String>,
-    /// A file in its folder that it reads as its input (its standard input) -
-    /// Gaussian's, run as `g16 <input`; none, it reads nothing.
+    /// A file in its folder that it reads as its input (its standard input:
+    /// `program <input`); none, it reads nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stdin: Option<String>,
     /// What it is given beside the environment its runner was started in.
@@ -118,7 +118,7 @@ pub struct JobSpec {
     /// that runs as processes (`processes`) is given them as its processes, each told one thread.
     #[serde(default = "one_core")]
     pub cores: u32,
-    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI: ORCA's `%pal`) - as its
+    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI) - as its
     /// plugin declares it (`installed[].parallel`): each counted by the queue as a whole core, not one of its threads.
     #[serde(default, skip_serializing_if = "is_false")]
     pub processes: bool,
@@ -134,7 +134,7 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
-    /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
+    /// well - ORCA's orca_2aim, writing its orbitals as a WFX file - each
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
@@ -142,6 +142,10 @@ pub struct JobSpec {
     /// runner works out again from the plugins themselves (`needs_given`), never from here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub needs: Vec<String>,
+    /// Preset plugins whose files it was handed, by id (`presets_given`): copied into its work folder, each in
+    /// `presets/<id>/`, never listed among its files - what each is, its runner works out again from the plugins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub presets: Vec<String>,
     /// The files it was given, by their paths in its work folder (`make_job` writes them): what is kept of it where what
     /// its program made is taken out (`trim_made`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -380,6 +384,12 @@ fn physical_cores() -> Option<u32> {
 
 fn read_spec(dir: &Path) -> Option<JobSpec> {
     serde_json::from_str(&fs::read_to_string(dir.join(SPEC)).ok()?).ok()
+}
+
+/// The folders in a job's work folder that hold what preset plugins handed it (`presets_given`), one for each its spec
+/// names (`presets/<id>/`): never its own files - never kept, nor saved in a workspace.
+pub fn handed_folders(dir: &Path) -> Vec<String> {
+    read_spec(dir).map(|spec| spec.presets.iter().map(|p| format!("{PRESET_DIR}/{p}/")).collect()).unwrap_or_default()
 }
 
 /// Whether a job's runner is there: it holds its lock for as long as it is,
@@ -965,8 +975,9 @@ pub fn inside_name(name: &str) -> bool {
 
 /// Whether the arguments `args` of a program installed separately - or of
 /// one beside it - name no file but those written for its job (`written`),
-/// or one of them by its name without its extension, as ORCA's orca_2mkl
-/// takes `input` for `input.gbw`. Besides those, an argument may be an
+/// or one of them by its name without its extension - the stem a program
+/// takes for files it writes itself beside them, as ORCA's orca_2aim takes
+/// `input` for `input.gbw` (any program alike, and only a file of its job). Besides those, an argument may be an
 /// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
 pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
     let option = |a: &str| {
@@ -1016,8 +1027,8 @@ pub struct Found {
 /// plugin's environment in Meno's data folder `data`: one its manifest
 /// names, never a shell, found in its environment's own folders - and, where
 /// it is Python, running a script of the plugin's. Or, where its manifest
-/// says Meno fetches it as the plugin is set up (`downloads[].provides`:
-/// Blender), Meno's own copy of it, in the plugin's files.
+/// says Meno fetches it as the plugin is set up (`downloads[].provides`),
+/// Meno's own copy of it, in the plugin's files.
 pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args: &[String]) -> Result<Found, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
@@ -1113,9 +1124,9 @@ pub struct Installed {
     pub version: Option<VersionRule>,
     /// Programs installed with it, in its folder, that a job may run after it
     /// (`beside`): each by its name and its file on this system - ORCA's
-    /// orca_2mkl.
+    /// orca_2aim.
     pub beside: Vec<(String, String)>,
-    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI, ORCA's `%pal`), each process a core
+    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI), each process a core
     /// and a thread; else, "threads" or unsaid, as threads of one process.
     pub processes: bool,
 }
@@ -1484,7 +1495,7 @@ fn runnable(p: &Path) -> bool {
 
 /// Every copy of a program installed separately there is, in order: where
 /// the chemist located it, where that is still a program of its file's name -
-/// or a macOS app that holds it (`Blender.app`: its `Contents/MacOS`) - that
+/// or a macOS app that holds it (`Name.app`: its `Contents/MacOS`) - that
 /// alone, `exact`; then each of its file's name where the system finds
 /// programs (`path_var`: PATH, as Meno was given it); then in the folders it
 /// is usually installed in, the newest first.
@@ -1700,16 +1711,31 @@ pub fn link_needed(dir: &Path, needed: &[(String, PathBuf)]) -> Result<(), Strin
     Ok(())
 }
 
-/// A job made (`make_job`) and given each program it needs (`link_needed`) -
-/// or, where one cannot be given it, no job at all: its folder taken away
-/// again, never left as one to run without what it needs.
-pub fn make_needing_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
+/// A job made (`make_job`), given each program it needs (`link_needed`)
+/// and each file a preset plugin hands it, copied into its work folder where
+/// it goes (`presets_given`) - or, where one cannot be given it, no job at
+/// all: its folder taken away again, never left as one to run without what
+/// it needs.
+pub fn make_handed_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)], handed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
     let (id, dir) = make_job(root, spec, files)?;
-    if let Err(e) = link_needed(&dir, needed) {
+    let given = link_needed(&dir, needed).and_then(|()| copy_handed(&dir, handed));
+    if let Err(e) = given {
         let _ = fs::remove_dir_all(&dir);
         return Err(e);
     }
     Ok((id, dir))
+}
+
+/// Each file a preset plugin hands a job (`presets_given`) copied into its work folder, where it goes.
+fn copy_handed(dir: &Path, handed: &[(String, PathBuf)]) -> Result<(), String> {
+    for (rel, from) in handed {
+        let to = dir.join(WORK).join(rel);
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("{rel}: {e}"))?;
+        }
+        fs::copy(from, &to).map_err(|e| format!("{rel} could not be given to the job: {e}"))?;
+    }
+    Ok(())
 }
 
 /// What a job's log says from byte `from` on - at most `most` bytes, never
@@ -1943,6 +1969,8 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
         return Err(format!("{} given what Meno does not give it", spec.name));
     }
     let _ = needed;
+    // (and, where preset plugins handed it files, those plugins as they must be - worked out again here, from the plugins)
+    presets_given(&manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.presets, &|p| Ok(plugins.join(p)))?;
     Ok(())
 }
 
@@ -2232,42 +2260,102 @@ pub struct JobAsk {
     /// Other plugins whose programs it needs, by id: each one its plugin's manifest declares (`needs`).
     #[serde(default)]
     pub needs: Vec<String>,
+    /// Preset plugins whose files it is handed, by id (`JobSpec::presets`).
+    #[serde(default)]
+    pub presets: Vec<String>,
 }
 
 /// A program of another plugin a plugin's jobs may need, as its manifest
-/// declares it (`needs`): that plugin, its program by the name its manifest
-/// gives it, and the variable the job is told where it is in.
+/// declares it (`depends`, docs/PLUGINS.md *Depends*): that plugin, the
+/// versions of it it works with, its program by the name that plugin's
+/// manifest gives it, and the variable the job is told where it is in.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Need {
     pub plugin: String,
+    pub versions: String,
     pub program: String,
     pub env: String,
 }
 
-/// What a manifest declares its jobs may need of other plugins' programs - all as they must be, or none.
+/// A version as numbers - "0.1.4", [0, 1, 4]; none, where it is not one (as lib/plugins/depends `versionParts`).
+fn version_parts(v: &str) -> Option<Vec<u64>> {
+    let parts: Vec<&str> = v.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 || parts.iter().any(|p| p.is_empty() || p.len() > 6 || !p.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    Some(parts.iter().map(|p| p.parse().unwrap_or(0)).collect())
+}
+
+/// Which of two versions comes first ("1.2" is "1.2.0").
+fn version_order(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
+    (0..a.len().max(b.len())).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal)
+}
+
+/// Versions as a manifest writes them - `>=A`, or `>=A <B`, each of three numbers, B after A - read (as lib/plugins/depends `rangeOf`).
+fn range_of(text: &str) -> Option<(Vec<u64>, Option<Vec<u64>>)> {
+    let semver = |v: &str| version_parts(v).filter(|p| p.len() == 3);
+    let rest = text.trim().strip_prefix(">=")?;
+    let mut words = rest.split(' ');
+    let from = semver(words.next()?)?;
+    let before = match words.next() {
+        None => None,
+        Some(w) => Some(semver(w.strip_prefix('<')?)?),
+    };
+    if words.next().is_some() || before.as_ref().is_some_and(|b| version_order(&from, b).is_ge()) {
+        return None;
+    }
+    Some((from, before))
+}
+
+/// Whether versions as a manifest writes them are bounded above (`>=A <B`), as every range a manifest gives must be.
+fn bounded(versions: &str) -> bool {
+    range_of(versions).is_some_and(|(_, before)| before.is_some())
+}
+
+/// Whether a plugin of `version` is one a range of versions takes; one that is no version is in none.
+pub fn in_versions(version: &str, versions: &str) -> bool {
+    let (Some(v), Some((from, before))) = (version_parts(version), range_of(versions)) else { return false };
+    version_order(&v, &from).is_ge() && before.is_none_or(|b| version_order(&v, &b).is_lt())
+}
+
+/// What a manifest declares its jobs may need of other plugins' programs, from the plugins it uses (`depends`) - all as they must be, or none.
 pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need>, String> {
-    let Some(list) = manifest.get("needs") else { return Ok(Vec::new()) };
-    let list = list.as_array().ok_or_else(|| format!("{id}'s needs are not a list"))?;
+    let Some(list) = manifest.get("depends") else { return Ok(Vec::new()) };
+    let list = list.as_array().ok_or_else(|| format!("{id}'s plugins it uses are not a list"))?;
     let mut out: Vec<Need> = Vec::new();
-    for n in list {
-        let field = |k: &str| n.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        let need = Need { plugin: field("plugin"), program: field("program"), env: field("env") };
-        let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
-        if !plugin_id(&need.plugin) || need.plugin == id || !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.plugin == need.plugin) {
-            return Err(format!("{id} declares a need Meno cannot give: {n}"));
+    let mut plugins: Vec<String> = Vec::new();
+    for d in list {
+        let field = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+        let (plugin, versions) = (field(d, "plugin"), field(d, "versions"));
+        let optional_ok = d.get("optional").is_none_or(|o| o.is_boolean());
+        // (versions bounded above, always, as lib/plugins/manifest `dependOf` reads them)
+        if !plugin_id(&plugin) || plugin == id || !bounded(&versions) || plugins.contains(&plugin) || !optional_ok {
+            return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
         }
-        out.push(need);
+        plugins.push(plugin.clone());
+        let programs = match d.get("programs") {
+            None => Vec::new(),
+            Some(p) => p.as_array().ok_or_else(|| format!("{id} declares a plugin it uses that Meno cannot give: {d}"))?.clone(),
+        };
+        for p in programs {
+            let need = Need { plugin: plugin.clone(), versions: versions.clone(), program: field(&p, "program"), env: field(&p, "env") };
+            let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
+            if !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.env == need.env) {
+                return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
+            }
+            out.push(need);
+        }
     }
     Ok(out)
 }
 
 /// What a job's variable for a program it needs (`Need`) is set to, the
 /// program found at `found`: on macOS and Linux, a link to it put in the
-/// job's work folder - where the job runs - by its own name (`./xtb`), for a
-/// path with a space in it is never given, and a program may take one as two
-/// words (ORCA 6.1.1 on macOS takes "~/Library/Application Support/..." as
-/// no file); on Windows, where no link is made, its path, refused where it
-/// has a space, never quoted.
+/// job's work folder - where the job runs - by its own name (`./tool`), for
+/// a path with a space in it is never given: a program may take it as two
+/// words, and Meno's data folder has one on macOS ("Application Support");
+/// on Windows, where no link is made, its path, refused where it has a
+/// space, never quoted.
 pub fn need_value(found: &Path, windows: bool) -> Result<String, String> {
     if windows {
         // (one separator throughout: an environment's folders may be given with "/", as pixi's activation gives Library/bin)
@@ -2300,18 +2388,128 @@ pub fn needs_given(data: &Path, manifest: &serde_json::Value, id: &str, needs: &
     }
     let declared = needs_declared(manifest, id)?;
     for other in needs {
-        let need = declared.iter().find(|n| &n.plugin == other).ok_or_else(|| format!("{id} declares no need of {other}"))?;
+        let of: Vec<&Need> = declared.iter().filter(|n| &n.plugin == other).collect();
+        if of.is_empty() {
+            return Err(format!("{id} declares no program of {other} that it uses"));
+        }
         if needs.iter().filter(|n| *n == other).count() > 1 {
             return Err(format!("{id} needs {other} twice"));
         }
-        let other_dir = dir_of(&need.plugin)?;
-        let name = manifest_of(&other_dir, &need.plugin).ok().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| need.plugin.clone());
-        let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
-        let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
-        env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
-        links.push((file, found.program));
+        let other_dir = dir_of(other)?;
+        let other_manifest = manifest_of(&other_dir, other).ok();
+        let name = other_manifest.as_ref().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| other.clone());
+        // (of a version it works with, as its manifest says - read from that plugin's own folder, never from the spec)
+        let version = other_manifest.as_ref().and_then(|m| m.get("version").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_default();
+        if !in_versions(&version, &of[0].versions) {
+            return Err(format!("{id} needs {name} {}; {} is here", of[0].versions, if version.is_empty() { "no version of it" } else { &version }));
+        }
+        for need in of {
+            let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
+            let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+            env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
+            links.push((file, found.program));
+        }
     }
     Ok((env, links))
+}
+
+/// The folder in a job's work folder the files preset plugins hand it go in, each plugin's in one of its own (`presets/<id>/`).
+pub const PRESET_DIR: &str = "presets";
+/// The most files preset plugins may hand a job, all told, and the most bytes.
+const PRESET_FILES_MOST: usize = 64;
+const PRESET_BYTES_MOST: u64 = 16 * 1024 * 1024;
+
+/// Whether a job's own files are clear of the folder preset plugins' files go in, where it names any (`presets`): none
+/// of them in `presets/`, whatever is handed - else what it is given there is hidden as theirs (`handed_folders`).
+pub fn clear_of_presets(files: &[JobFile], presets: &[String]) -> Result<(), String> {
+    if presets.is_empty() {
+        return Ok(());
+    }
+    match files.iter().find(|f| Path::new(&f.name).components().next().is_some_and(|c| c.as_os_str() == PRESET_DIR)) {
+        Some(f) => Err(format!("a job's file is in {PRESET_DIR}, where the presets it is handed go: {}", f.name)),
+        None => Ok(()),
+    }
+}
+
+/// Whether `f` is a file a preset may name (docs/PLUGINS.md, *Presets*): a file's name in its plugin's folder - plain, no
+/// folder, as Meno carries only the files of a plugin's folder itself - and neither the manifest nor the worker Meno reads
+/// (as lib/plugins/manifest `presetFileOk`).
+pub fn preset_file_ok(f: &str) -> bool {
+    let b = f.as_bytes();
+    let plain = !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(c));
+    // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
+    let lower = f.to_ascii_lowercase();
+    plain && lower != "manifest.json" && lower != "worker.py"
+}
+
+/// The files a job of plugin `id` (its manifest `manifest`) is handed by the preset plugins `presets`, by their ids
+/// (docs/PLUGINS.md, *Presets*): each one a plugin that uses `id` through an interface `id` declares, and brings its
+/// presets through it - `id` and that interface of versions it works with, each read from its own folder (`dir_of`),
+/// never from a job's spec; every file its presets name, a file in its folder and by no link, with where it goes in the
+/// job's work folder (`presets/<its id>/<file>`). Worked out the same way as the job is made and as its runner checks it.
+/// One not so, why.
+pub fn presets_given(manifest: &serde_json::Value, id: &str, presets: &[String], dir_of: &dyn Fn(&str) -> Result<PathBuf, String>) -> Result<Vec<(String, PathBuf)>, String> {
+    let text = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+    let listed = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_array()).cloned().unwrap_or_default();
+    let version = text(manifest, "version");
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    let mut bytes = 0u64;
+    for (i, from) in presets.iter().enumerate() {
+        if !plugin_id(from) || from == id || presets[..i].contains(from) {
+            return Err(format!("not a plugin that brings {id} presets: {from}"));
+        }
+        let dir = dir_of(from)?;
+        let theirs = manifest_of(&dir, from)?;
+        let name = theirs.get("name").and_then(|v| v.as_str()).unwrap_or(from).to_string();
+        let presets_decl = theirs.get("presets").filter(|p| p.is_object()).ok_or_else(|| format!("{name} brings no presets"))?;
+        let interface = text(presets_decl, "interface");
+        // (of `id`, through an interface it declares - each of a version the preset plugin works with)
+        let uses = listed(&theirs, "depends").into_iter().find(|d| text(d, "plugin") == id).ok_or_else(|| format!("{name} does not use {id}"))?;
+        if !bounded(&text(&uses, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id} it works with"));
+        }
+        if !in_versions(&version, &text(&uses, "versions")) {
+            return Err(format!("{name} works with {id} {}; {} is here", text(&uses, "versions"), if version.is_empty() { "no version of it" } else { &version }));
+        }
+        let wanted = listed(&uses, "interfaces").into_iter().find(|x| text(x, "id") == interface).ok_or_else(|| format!("{name} does not use {id}'s {interface} interface"))?;
+        if !bounded(&text(&wanted, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id}'s {interface} interface it works with"));
+        }
+        let has = listed(manifest, "interfaces").into_iter().find(|x| text(x, "id") == interface).map(|x| text(&x, "version"));
+        match has {
+            Some(v) if in_versions(&v, &text(&wanted, "versions")) => {}
+            Some(v) => return Err(format!("{name} works with {id}'s {interface} interface {}; {v} is here", text(&wanted, "versions"))),
+            None => return Err(format!("{id} declares no {interface} interface")),
+        }
+        // (every file its presets name, once: each a path inside its folder, by no link, a file)
+        let mut files: Vec<String> = ["looks", "studios", "motions"].iter().flat_map(|k| listed(presets_decl, k)).map(|x| text(&x, "file")).collect();
+        files.extend(listed(presets_decl, "files").iter().map(|f| f.as_str().unwrap_or_default().to_string()));
+        files.sort();
+        files.dedup();
+        for f in files {
+            if !preset_file_ok(&f) {
+                return Err(format!("{name} names a file it cannot hand over: {f}"));
+            }
+            let mut at = dir.clone();
+            for part in f.split('/') {
+                at.push(part);
+                let meta = fs::symlink_metadata(&at).map_err(|_| format!("{f} of {name} is not there"))?;
+                if meta.file_type().is_symlink() {
+                    return Err(format!("{f} of {name} is a link, which it cannot hand over"));
+                }
+            }
+            let meta = fs::metadata(&at).map_err(|e| format!("{f} of {name}: {e}"))?;
+            if !meta.is_file() {
+                return Err(format!("{f} of {name} is not a file"));
+            }
+            bytes += meta.len();
+            out.push((format!("{PRESET_DIR}/{from}/{f}"), at));
+        }
+    }
+    if out.len() > PRESET_FILES_MOST || bytes > PRESET_BYTES_MOST {
+        return Err(format!("the presets hand over more than a job takes: {} files, {} MB", out.len(), bytes.div_ceil(1 << 20)));
+    }
+    Ok(out)
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -2359,6 +2557,12 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     if let Some((name, _)) = needed.iter().find(|(name, _)| payload.files.iter().any(|f| &f.name == name)) {
         return Err(format!("a job's file is named {name}, as the program it needs is"));
     }
+    // (the files preset plugins hand it: each of a plugin that uses it through an interface it declares, copied into its
+    //  work folder unread - in a folder of their own, which none of its own files may be in)
+    let handed = presets_given(&manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.presets, &|p| {
+        crate::resource_path(&app, &Path::new("resources/plugins").join(p))
+    })?;
+    clear_of_presets(&payload.files, &payload.presets)?;
     // (one asking for more than the computer has never starts: refused, saying so)
     if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
         return Err(format!("It cannot run on this computer: {why}"));
@@ -2379,10 +2583,11 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
         needs: payload.needs.clone(),
+        presets: payload.presets.clone(),
         given: vec![],
     };
     // (each program it needs, linked in its work folder: a link there is never listed, kept or saved - keptjobs `kept_files`)
-    let (id, dir) = make_needing_job(&jobs_root(&app)?, &spec, &payload.files, &needed)?;
+    let (id, dir) = make_handed_job(&jobs_root(&app)?, &spec, &payload.files, &needed, &handed)?;
     // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
     let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
     let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
@@ -2769,6 +2974,7 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
@@ -2960,13 +3166,13 @@ mod tests {
         let root = temp();
         let (program, _) = shell_program();
         let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside, processes: false };
-        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into(), "-molden".into()] };
-        let there = found(vec![("orca_2mkl".into(), PathBuf::from(&program))]);
-        assert_eq!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap(), vec![Then { name: "orca_2mkl".into(), program: program.clone(), args: vec!["input".into(), "-molden".into()] }]);
-        assert!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap_err().contains("no orca_2aim beside it"));
-        let gone = found(vec![("orca_2mkl".into(), root.join("orca_2mkl"))]);
-        assert!(then_of(&gone, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("not found beside orca"));
-        assert!(then_of(&there, "orca", &vec![ask("orca_2mkl"); 5]).is_err());
+        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into()] };
+        let there = found(vec![("orca_2aim".into(), PathBuf::from(&program))]);
+        assert_eq!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap(), vec![Then { name: "orca_2aim".into(), program: program.clone(), args: vec!["input".into()] }]);
+        assert!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("no orca_2mkl beside it"));
+        let gone = found(vec![("orca_2aim".into(), root.join("orca_2aim"))]);
+        assert!(then_of(&gone, "orca", &[ask("orca_2aim")]).unwrap_err().contains("not found beside orca"));
+        assert!(then_of(&there, "orca", &vec![ask("orca_2aim"); 5]).is_err());
         assert_eq!(then_of(&there, "orca", &[]).unwrap(), vec![]);
         let _ = fs::remove_dir_all(root);
     }
@@ -2974,10 +3180,10 @@ mod tests {
     #[test]
     fn reads_the_programs_installed_beside_one_for_this_system() {
         let m = |beside: serde_json::Value| serde_json::json!({"installed": [{"name": "orca", "files": {"macos": "orca", "windows": "orca.exe"}, "beside": beside}]});
-        let orca = installed_named(&m(serde_json::json!({"orca_2mkl": {"macos": "orca_2mkl", "windows": "orca_2mkl.exe"}})), "orca", "windows").unwrap().unwrap();
-        assert_eq!(orca.beside, vec![("orca_2mkl".to_string(), "orca_2mkl.exe".to_string())]);
+        let orca = installed_named(&m(serde_json::json!({"orca_2aim": {"macos": "orca_2aim", "windows": "orca_2aim.exe"}})), "orca", "windows").unwrap().unwrap();
+        assert_eq!(orca.beside, vec![("orca_2aim".to_string(), "orca_2aim.exe".to_string())]);
         // (one not made for this system: none here)
-        assert_eq!(installed_named(&m(serde_json::json!({"orca_2mkl": {"windows": "orca_2mkl.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
+        assert_eq!(installed_named(&m(serde_json::json!({"orca_2aim": {"windows": "orca_2aim.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
         // (never a path, a shell, or a name that is not one)
         for bad in [serde_json::json!({"x": {"macos": "../x"}}), serde_json::json!({"x": {"macos": "sh"}}), serde_json::json!({"../x": {"macos": "x"}}), serde_json::json!(["x"]), serde_json::json!({"x": "x"})] {
             assert!(installed_named(&m(bad.clone()), "orca", "macos").is_err(), "{bad}");
@@ -3702,6 +3908,7 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         }
     }
@@ -3803,8 +4010,9 @@ mod tests {
     fn a_program_installed_separately_is_given_its_job_s_files_options_and_numbers_alone() {
         let written = ["input.inp".to_string(), "wavefunction.molden".to_string(), "nci.txt".to_string()];
         let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written);
-        // ORCA, orca_2mkl, Multiwfn, Gaussian, as their plugins ask
+        // ORCA, orca_2aim, Multiwfn, Gaussian, as their plugins ask
         assert_eq!(ok(&["input.inp"]), Ok(()));
+        assert_eq!(ok(&["input"]), Ok(()));
         assert_eq!(ok(&["input", "-molden"]), Ok(()));
         assert_eq!(ok(&["wavefunction.molden", "-nt", "4", "-silent"]), Ok(()));
         assert_eq!(ok(&[]), Ok(()));
@@ -3823,15 +4031,15 @@ mod tests {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let manifest = serde_json::json!({
             "id": "demo",
-            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2mkl": {system(): exe("orca_2mkl")}}}],
+            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2aim": {system(): exe("orca_2aim")}}}],
             "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
         });
         fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
         let orca = program_file(&base.join("orca_6"), &exe("orca"));
-        program_file(&base.join("orca_6"), &exe("orca_2mkl"));
+        program_file(&base.join("orca_6"), &exe("orca_2aim"));
         let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
         let mut good = spec_for("demo", "orca", &found, &["input.inp"]);
-        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2mkl".into(), args: vec!["input".into()] }]).unwrap();
+        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2aim".into(), args: vec!["input".into()] }]).unwrap();
         let data = base.join("data");
         let written = vec!["input.inp".to_string()];
         assert_eq!(spec_allowed(&data, &plugins, &good, &written), Ok(()));
@@ -4265,20 +4473,45 @@ mod tests {
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
         // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
         let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
-        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
+        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
         assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
-        // (its own program, a shell, a path, a variable that finds or loads programs, one plugin twice: none of them)
+        // (one used only for some of its work: its programs needed by the jobs that say so, as any)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        // (a plugin used for no program: none of its programs needed)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0"}]}), "orca").unwrap(), vec![]);
+        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
+        // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
-            serde_json::json!([{"plugin": "orca", "program": "orca", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "sh", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "bin/xtb", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "PATH"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "DYLD_INSERT_LIBRARIES"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "A"}, {"plugin": "xtb", "program": "xtb", "env": "B"}]),
+            serde_json::json!([{"plugin": "orca", "versions": ">=0.1.0", "programs": [{"program": "orca", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": "^0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "xtb", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([uses("sh", "X")]),
+            serde_json::json!([uses("bin/xtb", "X")]),
+            serde_json::json!([uses("xtb", "PATH")]),
+            serde_json::json!([uses("xtb", "DYLD_INSERT_LIBRARIES")]),
+            serde_json::json!([uses("xtb", "A"), uses("xtb", "B")]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
             serde_json::json!({"plugin": "xtb"}),
+            // (versions with no bound above)
+            serde_json::json!([{"plugin": "xtb", "versions": ">=1.0.0"}]),
         ] {
-            assert!(needs_declared(&serde_json::json!({ "needs": bad }), "orca").is_err(), "{bad}");
+            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn takes_a_plugins_version_only_within_the_versions_a_plugin_that_uses_it_works_with() {
+        assert!(in_versions("0.1.4", ">=0.1.4 <0.2.0"));
+        assert!(in_versions("0.1.10", ">=0.1.4 <0.2.0"));
+        assert!(!in_versions("0.2.0", ">=0.1.4 <0.2.0"));
+        assert!(!in_versions("0.1.3", ">=0.1.4 <0.2.0"));
+        assert!(in_versions("3.0.0", ">=0.1.4"));
+        assert!(in_versions("1.2", ">=1.2.0 <1.3.0"));
+        assert!(!in_versions("", ">=0.1.0"));
+        assert!(!in_versions("one", ">=0.1.0"));
+        assert!(!in_versions("0.1.5", ">=0.1"));
     }
 
     #[test]
@@ -4318,6 +4551,7 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         let (_, dir) = make_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap();
@@ -4350,14 +4584,15 @@ mod tests {
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         // (a file of its own under the needed program's name: the link cannot be made)
-        let err = make_needing_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())]).unwrap_err();
+        let err = make_handed_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())], &[]).unwrap_err();
         assert!(err.contains("tool could not be given to the job"), "{err}");
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
         // (where it can be, a job, with its link)
-        let (_, dir) = make_needing_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())]).unwrap();
+        let (_, dir) = make_handed_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())], &[]).unwrap();
         assert!(fs::symlink_metadata(dir.join(WORK).join("tool")).unwrap().file_type().is_symlink());
         let _ = fs::remove_dir_all(&root);
     }
@@ -4379,16 +4614,28 @@ mod tests {
         fs::create_dir_all(plugins.join("asker")).unwrap();
         fs::write(
             plugins.join("asker").join("manifest.json"),
-            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "needs": [{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]}"#,
+            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "depends": [{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]}"#,
         )
         .unwrap();
         fs::create_dir_all(plugins.join("helper")).unwrap();
-        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "1.2.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
         script(&data.join("uv/plugin-asker/venv/bin/main"), "#!/bin/sh\necho main ran\n\"$TOOLEXE\"\n");
         if helper_set_up {
             script(&data.join("uv/plugin-helper/venv/bin/tool"), "#!/bin/sh\necho the tool ran\n");
         }
         (base, data, plugins)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gives_no_program_of_a_plugin_of_a_version_the_plugin_that_uses_it_does_not_work_with() {
+        let (base, data, plugins) = needing(true);
+        let asker = manifest_of(&plugins.join("asker"), "asker").unwrap();
+        assert!(needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| Ok(plugins.join(p))).is_ok());
+        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "2.0.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        let err = needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| Ok(plugins.join(p))).unwrap_err();
+        assert_eq!(err, "asker needs Helper >=1.0.0 <2.0.0; 2.0.0 is here");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[cfg(unix)]
@@ -4416,7 +4663,7 @@ mod tests {
             assert!(spec_allowed(&data, &plugins, &bad, &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
         }
         // (a need its plugin does not declare, or twice)
-        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no need of other"));
+        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no program of other that it uses"));
         assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[]).is_err());
         // (the needed plugin not set up: refused, saying so)
         let (gone, gone_data, gone_plugins) = needing(false);
@@ -4473,11 +4720,11 @@ mod tests {
         let ranked = plugins.join("ranked");
         fs::create_dir_all(&ranked).unwrap();
         let declare = |parallel: &str| {
-            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]) };
+            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]) };
             let manifest = serde_json::json!({
                 "id": "ranked",
                 "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "parallel": parallel}],
-                "needs": needed,
+                "depends": needed,
                 "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
             });
             fs::write(ranked.join("manifest.json"), manifest.to_string()).unwrap();
@@ -4511,6 +4758,9 @@ mod tests {
         // (the queue: each process a whole physical core - two of its cores, where the computer runs two threads on each)
         assert_eq!(taken(&spec, Resources { cores: 32, physical: 16, memory: 0 }), 32);
         assert_eq!(taken(&spec, Resources { cores: 10, physical: 10, memory: 0 }), 16);
+        // (one process - ORCA with no MPI to run more, its plugin asking one core: one physical core, ten such side by side)
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 10, physical: 10, memory: 0 }), 1);
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 2);
         assert_eq!(taken(&JobSpec { processes: false, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 16);
 
         // the same program declared to run as threads: told its 16 cores, and counted as told
@@ -4544,4 +4794,160 @@ mod tests {
         assert_eq!(need_value(Path::new(r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library/bin\xtb.exe"), true).unwrap(), r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library\bin\xtb.exe");
     }
 
+    /// A renderer, `render` 0.7.0, declaring its `preset` interface 1.0.0, and a preset plugin, `looks`, that uses it through
+    /// that interface and brings a look, a motion and a file they share - each a file in its folder: in a plugins' folder.
+    fn presetting(render: serde_json::Value, looks: serde_json::Value) -> PathBuf {
+        let plugins = temp();
+        for (id, m) in [("render", render), ("looks", looks)] {
+            fs::create_dir_all(plugins.join(id)).unwrap();
+            fs::write(plugins.join(id).join("manifest.json"), m.to_string()).unwrap();
+        }
+        for f in ["gold.py", "spin.py", "shared.py"] {
+            fs::write(plugins.join("looks").join(f), format!("# {f}\n")).unwrap();
+        }
+        plugins
+    }
+
+    fn renderer() -> serde_json::Value {
+        serde_json::json!({"id": "render", "name": "Render", "version": "0.7.0", "interfaces": [{"id": "preset", "version": "1.0.0"}]})
+    }
+
+    fn preset_plugin() -> serde_json::Value {
+        serde_json::json!({
+            "id": "looks", "name": "Looks", "version": "1.0.0",
+            "depends": [{"plugin": "render", "versions": ">=0.7.0 <0.8.0", "interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]}],
+            "presets": {"interface": "preset", "looks": [{"id": "gold", "label": "Gold", "file": "gold.py"}], "motions": [{"id": "spin", "label": "Spin", "file": "spin.py"}], "files": ["shared.py"]}
+        })
+    }
+
+    #[test]
+    fn hands_a_job_every_file_a_preset_plugin_names_copied_into_a_folder_of_its_own_and_never_keeps_one() {
+        let plugins = presetting(renderer(), preset_plugin());
+        let dir_of = |p: &str| Ok(plugins.join(p));
+        let handed = presets_given(&renderer(), "render", &["looks".into()], &dir_of).unwrap();
+        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["presets/looks/gold.py", "presets/looks/shared.py", "presets/looks/spin.py"]);
+        // (none handed, none asked for)
+        assert!(presets_given(&renderer(), "render", &[], &dir_of).unwrap().is_empty());
+        // (copied into its work folder, unread; listed nowhere it keeps)
+        let root = temp();
+        let spec = JobSpec {
+            plugin: "render".into(),
+            name: "shell".into(),
+            program: "/bin/sh".into(),
+            args: vec![],
+            stdin: None,
+            env: BTreeMap::new(),
+            cores: 1,
+            processes: false,
+            memory: 0,
+            created: now_ms(),
+            label: None,
+            key: None,
+            then: vec![],
+            needs: vec![],
+            presets: vec!["looks".into()],
+            given: vec![],
+        };
+        let (_, dir) = make_handed_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }], &[], &handed).unwrap();
+        assert_eq!(fs::read_to_string(dir.join(WORK).join("presets/looks/gold.py")).unwrap(), "# gold.py\n");
+        let kept: Vec<String> = crate::keptjobs::kept_files(&dir).into_iter().map(|f| f.name).collect();
+        assert_eq!(kept, ["work/input.txt"]);
+        // (one that cannot be copied - gone since - leaves no folder)
+        let away = temp();
+        let gone = vec![("presets/looks/none.py".to_string(), plugins.join("looks").join("none.py"))];
+        assert!(make_handed_job(&away, &spec, &[], &[], &gone).unwrap_err().contains("could not be given to the job"));
+        assert_eq!(fs::read_dir(&away).unwrap().count(), 0);
+        for d in [plugins, root, away] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn hands_over_nothing_of_a_plugin_that_is_not_a_preset_plugin_of_the_job_s_as_it_must_be() {
+        let refused = |render: serde_json::Value, looks: serde_json::Value, asked: &[&str], why: &str| {
+            let plugins = presetting(render.clone(), looks);
+            let asked: Vec<String> = asked.iter().map(|a| a.to_string()).collect();
+            let err = presets_given(&render, "render", &asked, &|p: &str| Ok(plugins.join(p))).unwrap_err();
+            assert!(err.contains(why), "{err} - {why}");
+            let _ = fs::remove_dir_all(plugins);
+        };
+        let with = |k: &str, v: serde_json::Value| {
+            let mut m = preset_plugin();
+            m[k] = v;
+            m
+        };
+        let presets = |k: &str, v: serde_json::Value| {
+            let mut m = preset_plugin();
+            m["presets"][k] = v;
+            m
+        };
+        // (the renderer of a version it does not work with, its interface of another, or none)
+        refused(serde_json::json!({"id": "render", "version": "0.8.0", "interfaces": [{"id": "preset", "version": "1.0.0"}]}), preset_plugin(), &["looks"], "works with render >=0.7.0 <0.8.0; 0.8.0 is here");
+        refused(serde_json::json!({"id": "render", "version": "0.7.1", "interfaces": [{"id": "preset", "version": "2.0.0"}]}), preset_plugin(), &["looks"], "preset interface >=1.0.0 <2.0.0; 2.0.0 is here");
+        refused(serde_json::json!({"id": "render", "version": "0.7.0"}), preset_plugin(), &["looks"], "render declares no preset interface");
+        // (one that does not use it, or not through that interface, or brings none)
+        refused(renderer(), with("depends", serde_json::json!([])), &["looks"], "Looks does not use render");
+        refused(renderer(), presets("interface", serde_json::json!("other")), &["looks"], "does not use render's other interface");
+        refused(renderer(), with("presets", serde_json::json!(null)), &["looks"], "Looks brings no presets");
+        // (versions with no bound above: of the plugin, or of its interface)
+        let open = |plugin: &str, interface: &str| with("depends", serde_json::json!([{"plugin": "render", "versions": plugin, "interfaces": [{"id": "preset", "versions": interface}]}]));
+        refused(renderer(), open(">=0.7.0", ">=1.0.0 <2.0.0"), &["looks"], "no bound above to the versions of render it works with");
+        refused(renderer(), open(">=0.7.0 <0.8.0", ">=1.0.0"), &["looks"], "no bound above to the versions of render's preset interface");
+        // (a file not inside its folder, the manifest, one not there, a folder - asked for twice, or itself, or no plugin)
+        refused(renderer(), presets("files", serde_json::json!(["../render/manifest.json"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["manifest.json"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["/etc/hosts"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["none.py"])), &["looks"], "none.py of Looks is not there");
+        refused(renderer(), presets("files", serde_json::json!(["sub/shared.py"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), preset_plugin(), &["looks", "looks"], "not a plugin that brings render presets");
+        refused(renderer(), preset_plugin(), &["render"], "not a plugin that brings render presets");
+        refused(renderer(), preset_plugin(), &["../looks"], "not a plugin that brings render presets");
+        // (a folder by a file's name)
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(["folder.py"])));
+        fs::create_dir(plugins.join("looks").join("folder.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("folder.py of Looks is not a file"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+        // (too many files, all told)
+        let many: Vec<String> = (0..70).map(|i| format!("f{i}.py")).collect();
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(many)));
+        for f in &many {
+            fs::write(plugins.join("looks").join(f), "").unwrap();
+        }
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("more than a job takes"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hands_over_no_file_a_preset_plugin_names_by_a_link() {
+        let plugins = presetting(renderer(), preset_plugin());
+        fs::remove_file(plugins.join("looks").join("shared.py")).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", plugins.join("looks").join("shared.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("is a link"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+    }
+
+    #[test]
+    fn keeps_a_job_s_own_files_out_of_the_presets_folder_where_it_names_any_preset_plugin() {
+        let file = |name: &str| JobFile { name: name.into(), text: String::new() };
+        let looks = ["looks".to_string()];
+        assert!(clear_of_presets(&[file("render.json"), file("presetsfile.txt")], &looks).is_ok());
+        assert!(clear_of_presets(&[file("presets/looks/mine.py")], &looks).unwrap_err().contains("presets/looks/mine.py"));
+        assert!(clear_of_presets(&[file("presets/other.py")], &looks).is_err());
+        // (one that names none: its files as they are)
+        assert!(clear_of_presets(&[file("presets/other.py")], &[]).is_ok());
+    }
+
+    #[test]
+    fn takes_a_file_a_preset_names_only_as_a_plain_path_inside_its_folder() {
+        for good in ["a.py", "look_gold.py", "Studio_1.blend"] {
+            assert!(preset_file_ok(good), "{good}");
+        }
+        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "looks/gold.py", "manifest.json", "worker.py", "Manifest.json", "WORKER.PY", "a b.py", "a\\b.py", &"x".repeat(65)] {
+            assert!(!preset_file_ok(bad), "{bad}");
+        }
+    }
 }

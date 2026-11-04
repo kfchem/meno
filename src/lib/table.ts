@@ -28,7 +28,7 @@ export type TableColumn = (
 ) & {
   /**
    * What its head says, where that is other than its name ("Product" for
-   * "reaction.product"): its name stays its key - what rows are matched
+   * "map.entry"): its name stays its key - what rows are matched
    * on, what a condition names - and is never changed for its look.
    */
   label?: string;

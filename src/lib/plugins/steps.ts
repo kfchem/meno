@@ -10,6 +10,7 @@ export const STEP_KINDS = [
   "generate",
   "conformers",
   "optimise",
+  "minimise",
   "energy",
   "frequencies",
   "nci",
@@ -42,19 +43,60 @@ export const STEP_KINDS = [
   "torsion-restraints",
   "number",
   "add",
-  "reaction",
+  "atom-map",
   "reaction-path",
   "saddle-point",
+  "barrier",
   "ensemble",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
 /**
- * The kinds only Meno does, by a rule of its own that runs no program
- * (docs/WORKFLOWS-FOUNDATION.md, *Enumerate is Meno's own*): a manifest's
- * step of one is left out, as one of a kind not here is.
+ * The kinds only Meno does: its judgements, and rules of its own that run no
+ * program (docs/WORKFLOWS-FOUNDATION.md, *Enumerate is Meno's own*; the plugin
+ * boundary, 2026-10-31 - a plugin runs its program and converts what it made,
+ * and fills only kinds that run one). A manifest's step of one is left out, as
+ * one of a kind not here is. *Check structures* is Meno's on what the plugin
+ * that does the checks makes of each structure (workflow/checkStructures).
  */
-export const MENO_ONLY: readonly StepKind[] = ["enumerate", "tag", "species", "combine", "measure", "merge", "rebond", "compare-bonding", "take-frames", "displace", "reaction", "number", "add", "restraints", "torsion-restraints", "join", "rank", "ensemble"];
+export const MENO_ONLY: readonly StepKind[] = [
+  "energy-window",
+  "duplicates",
+  "populations",
+  "as-conformers",
+  "choose",
+  "filter",
+  "chart",
+  "energy-diagram",
+  "check-structures",
+  "enumerate",
+  "tag",
+  "species",
+  "combine",
+  "measure",
+  "merge",
+  "rebond",
+  "compare-bonding",
+  "take-frames",
+  "displace",
+  "atom-map",
+  "number",
+  "add",
+  "restraints",
+  "torsion-restraints",
+  "join",
+  "rank",
+  "ensemble",
+  "barrier",
+];
+
+/**
+ * The kinds of step through which a lone atom - the ion of a salt drawn as
+ * ions - passes as it came, where its plugin says its program takes none
+ * (`StepDecl.noLoneAtom`): it has no conformers to find, and nothing to
+ * optimise. Through any other kind, it goes to the plugin as any entry does.
+ */
+export const LONE_ATOM_PASSES: readonly StepKind[] = ["conformers", "optimise"];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;

@@ -1,6 +1,6 @@
 # Research talks from the workspace
 
-A specification of what lane L8 adds to the workspace so that a research
+A specification of what is added to the workspace so that a research
 talk can be given from it: slides on the page and a talk given from them,
 text boxes strong enough for a talk's words, basic shapes, guides that
 line things up as they are moved, and handwriting - on the page and on a
@@ -246,8 +246,8 @@ words, a width they break into lines at, and how their lines lie.
   other widths, 1.5 and 3 points, are kept whatever the style.
 - **Smoothed as it is written**, so that nothing jumps when the pen is
   lifted; as thick as the pen is pressed where the system says, else even,
-  its ends tapered - a pen that tells no pressure (the same throughout)
-  written as the mouse writes.
+  its ends tapered - a pen without pressure, or one whose pressure reads
+  the same throughout, writes as the mouse does.
 - **A stroke is kept whole**: it ends where the pen was lifted. The page
   takes no pan or zoom gesture of the system's own from a pen or a touch,
   which would take a stroke back as it is written. A pressure read as 0
@@ -282,7 +282,7 @@ words, a width they break into lines at, and how their lines lie.
 
 ## As built
 
-### Slides and talks (lane L8, first part, 2026-10-11)
+### Slides and talks (first part, 2026-10-11)
 
 - `store/types.ts` `Slide` and `Presenting`; `document.ts` `addSlide`,
   `updateSlide`, `orderSlide`, `removeSlides`, and `MarkPlaces.slides`
@@ -310,9 +310,8 @@ words, a width they break into lines at, and how their lines lie.
   view - wry's, the one WKWebView in it - into a borderless window of the
   talk's own (`MenoTalkWindow`, one that can take the keys) over the whole
   screen, and back as the talk ends: the main window's look is never
-  touched, since taking a window's title bar away and giving it back (as
-  macOS's simple full screen does) left the page deaf to the pointer's
-  moves until it had left the window and come back. It tells the talk the
+  touched, so the page follows the pointer from the talk's first moment
+  to its last. It tells the talk the
   screen's top inset (the notch's band), which the slide is laid below
   (`slideFit`). Molecules switched to their other look in a talk are the
   view's (`talkLooks`), let go as it ends.
@@ -324,13 +323,13 @@ words, a width they break into lines at, and how their lines lie.
   cards of what ran during it, `ui/notices.ts` holds notices given
   meanwhile, ConsentDialog and UpdateNotice wait.
 
-### Text boxes (lane L8, second part, 2026-10-11)
+### Text boxes (second part, 2026-10-11)
 
 As built, in docs/EDITOR-2D.md, *Text*: a size of their own, letters
 marked, lists and a box's top. A list's next item is started by
 Shift+Enter, since Enter keeps the words, as it did before.
 
-### Shapes (lane L8, third part, 2026-10-11)
+### Shapes (third part, 2026-10-11)
 
 - `lib/chem/shapes.ts`, the same for the canvas, SVG and EMF: the line a
   shape follows (a rounded box's corners at most 9 points round, a callout's
@@ -409,7 +408,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points), regular as the bonds'. A pen's thin width (0.75 points) opens
   as the bonds'; its others as they were.
 
-### Guides (lane L8, fourth part, 2026-10-11)
+### Guides (fourth part, 2026-10-11)
 
 - `presenting/guides.ts`: where something moved by so much goes as it
   lines up - its left, middle or right with another's, its top, middle or
@@ -444,7 +443,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   colour (#cd4560, `COLORS.attention`), one
   pixel on the screen at any zoom, coming and going in a short ease.
 
-### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
+### Handwriting on the page (fifth part, first half, 2026-10-12)
 
 - `lib/chem/ink.ts`, the same for the canvas, SVG and EMF: a stroke's
   outline - as thick as the pen was pressed (from 0.35 to 1.65 of its
@@ -487,14 +486,14 @@ Shift+Enter, since Enter keeps the words, as it did before.
   SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
   everything.
 
-### Handwriting on PDFs and in a talk (lane L8, fifth part, second half, 2026-10-12)
+### Handwriting on PDFs and in a talk (fifth part, second half, 2026-10-12)
 
 - A stroke begun on a PDF's page - the top one of a stack, or one spread,
   not an icon - is that page's (`utils/pdfInk.ts` `pageUnder`): kept with
   the PDF (`PdfItem.inks`, each piece on its page, its points the page's,
   from its top left), and drawn with the page (`pdfPictures` `Page`, at
   0.00245 - over its pictures, under the marks a search or a box puts on it
-  and a ring round an atom read from a figure, as agreed with lane L12) -
+  and a ring round an atom read from a figure, as agreed for PDFs) -
   so it goes wherever the page goes: stacked, spread, put in a place of its
   own, made an icon and back, and read in the column. A stroke joins a
   piece on the same page only. The eraser rubs out what is written on the

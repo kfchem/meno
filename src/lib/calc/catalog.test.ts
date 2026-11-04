@@ -16,6 +16,9 @@ import {
   readerIdOfLine,
   readerNameOf,
   readersOf,
+  kindsNotTaken,
+  readersUndecided,
+  stepFiles,
   type PythonPlugin,
   type ReaderPlugin,
 } from "./catalog";
@@ -24,13 +27,14 @@ const none = { read: {}, also: {} };
 
 describe("the readers Meno knows of", () => {
   it("are Meno's own, then each plugin from its manifest in its folder", () => {
-    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "pyscf", "wfx"]);
-    // (the structure files Meno reads on the page, and the cube, under the readers' contract)
-    expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
-    const [cclib, pyscf] = READER_PLUGINS;
+    expect(READERS.map((r) => r.id)).toEqual(["meno", "cclib", "gaussian", "orca", "pyscf", "xtb"]);
+    // (the structure files Meno reads on the page, and the cube and the WFX file, under the readers' contract - the Molden file
+    // told by Meno, read by a plugin that reads it)
+    expect(MENO.reads).toEqual(["meno-workspace", "rxn", "mol", "sdf", "xyz", "pdb", "cube", "wfx"]);
+    const [cclib, gaussian, , pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
-      version: "0.1.5",
+      version: "0.2.1",
       uses: [{ name: "cclib", version: "1.9rc1" }],
       profile: "plugin-cclib",
       lock: "resources/plugins/cclib/requirements.lock",
@@ -40,22 +44,28 @@ describe("the readers Meno knows of", () => {
     // (every program cclib reads, each a kind it brings itself)
     expect(cclib.reads).toEqual(expect.arrayContaining(["orca", "gaussian", "gaussian-fchk", "xtb", "nwchem", "psi4", "qchem", "gamess", "molpro"]));
     expect(cclib.reads.length).toBeGreaterThan(15);
+    // (a program's own plugin reads its outputs: Gaussian's, the kinds it declares itself)
+    expect(gaussian).toMatchObject({ name: "Gaussian interface", reads: ["gaussian", "gaussian-fchk"], worker: "resources/plugins/gaussian/worker.py" });
     expect(pyscf).toMatchObject({
       name: "PySCF",
       profile: "plugin-pyscf",
       lock: "resources/plugins/pyscf/pixi.lock",
       worker: "resources/plugins/pyscf/worker.py",
       env: "pixi",
-      reads: ["orca", "gaussian", "gaussian-fchk", "molden"],
+      reads: ["molden"],
     });
+    // (a program's plugin that reads its own program's output, the kind its manifest declares)
+    expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb", "xtb-g98"], ownKinds: ["xtb", "xtb-g98"], env: "pixi", worker: "resources/plugins/xtb/worker.py" });
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
-    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf", "wfx"]);
+    expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "xtb"]);
+    // (ORCA's own output read by the plugin whose program writes it: its own kind, by its manifest's writtenBy)
+    expect(READER_PLUGINS.find((p) => p.id === "orca")).toMatchObject({ reads: ["orca"], ownKinds: ["orca"] });
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);
     // (two that read structures from pictures, each standing alone: the chemist chooses, in Settings, Chemistry)
@@ -63,13 +73,16 @@ describe("the readers Meno knows of", () => {
     for (const id of ["molnextr", "molscribe"]) {
       const p = PLUGINS.find((q) => q.id === id)!;
       expect(p).toMatchObject({ roles: ["pictures"], systems: ["macos", "windows"], lock: `resources/plugins/${id}/requirements.lock` });
+      // (the confidence its model's reading is unsure below, as it declares it)
+      expect(p.roleUnsure.pictures).toBeGreaterThan(0);
+      expect(p.roleUnsure.pictures).toBeLessThan(1);
       // (its trained model downloaded besides, from where its makers keep it, pinned to a revision, checked by its hash)
       expect(p.downloads).toHaveLength(1);
       expect(p.downloads[0].url).toMatch(/^https:\/\/huggingface\.co\/.+\/resolve\/[0-9a-f]{40}\//);
     }
     // (and those that write files: Gaussian's input, its plugin set up as any is)
     expect(WRITER_PLUGINS.map((p) => p.id)).toEqual(["gaussian"]);
-    expect(WRITER_PLUGINS[0]).toMatchObject({ reads: [], roles: [], profile: "plugin-gaussian", worker: "resources/plugins/gaussian/worker.py" });
+    expect(WRITER_PLUGINS[0]).toMatchObject({ reads: ["gaussian", "gaussian-fchk"], roles: [], profile: "plugin-gaussian", worker: "resources/plugins/gaussian/worker.py" });
     // (and those that run a program installed separately: ORCA, and Gaussian besides writing its input - never fetched, found)
     const orca = PLUGINS.find((p) => p.id === "orca")!;
     expect(orca.steps.map((d) => [d.kind, d.programs])).toEqual([
@@ -88,27 +101,26 @@ describe("the readers Meno knows of", () => {
         path: ["{folder}"],
         env: {},
         places: {},
-        beside: { orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } },
+        beside: { orca_2aim: { macos: "orca_2aim", linux: "orca_2aim", windows: "orca_2aim.exe" } },
         parallel: "processes",
       },
     ]);
     expect(WRITER_PLUGINS[0].installed).toEqual([{ name: "g16", label: "Gaussian 16", files: { macos: "g16", linux: "g16" }, path: ["{folder}"], env: { g16root: ["{parent}"], GAUSS_EXEDIR: ["{folder}"] }, places: {} }]);
     expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies", "saddle-point"]);
-    // (and those that fill kinds of step: xTB, made by pixi - and RDKit, a 3D structure besides its roles)
+    // (and those that fill kinds of step: xTB, made by pixi, which reads its own program's output too - and RDKit, a 3D structure besides its roles)
     const xtb = PLUGINS.find((p) => p.id === "xtb")!;
-    expect(xtb).toMatchObject({ reads: [], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
+    expect(xtb).toMatchObject({ reads: ["xtb", "xtb-g98"], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
     expect(xtb.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     const crest = PLUGINS.find((p) => p.id === "crest")!;
     expect(crest).toMatchObject({ profile: "plugin-crest", env: "pixi", systems: ["macos", "linux"] });
-    // (and xtb, beside it in its environment: a lone atom's energy)
-    expect(crest.steps.map((d) => [d.kind, d.programs, d.takes])).toEqual([
-      ["conformers", ["crest", "xtb"], ["molecules", "conformers"]],
-      ["optimise", ["crest", "xtb"], undefined],
+    // (CREST alone - the xtb beside it in its environment is CREST's - and no lone atom: its program stops on one)
+    expect(crest.steps.map((d) => [d.kind, d.programs, d.takes, d.noLoneAtom])).toEqual([
+      ["conformers", ["crest"], ["molecules", "conformers"], true],
+      ["optimise", ["crest"], undefined, true],
     ]);
     expect(rdkit.steps.map((d) => [d.kind, d.programs])).toEqual([
       ["conformers", ["python"]],
-      ["duplicates", []],
-      ["check-structures", []],
+      ["minimise", ["python"]],
       ["stereoisomers", []],
       ["descriptors", []],
     ]);
@@ -126,7 +138,16 @@ describe("the readers Meno knows of", () => {
     expect(nciplot.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["nciplot"], undefined]]);
     expect(nciplot.installed[0]).toMatchObject({ name: "nciplot", env: { NCIPLOT_HOME: ["{parent}"] } });
     const multiwfn = PLUGINS.find((p) => p.id === "multiwfn")!;
-    expect(multiwfn.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["multiwfn"], ["molden", "gaussian-fchk", "wfn", "wfx"]]]);
+    expect(multiwfn.steps.map((d) => [d.kind, d.programs, d.files])).toEqual([["nci", ["multiwfn"], ["molden", "gaussian-fchk", "wfx"]]]);
+    // (Meno's own kinds, and the Gaussian interface's formatted checkpoint, which it says it uses - taken only while that plugin is added)
+    expect(multiwfn.depends?.map((d) => [d.plugin, d.kinds, d.optional])).toEqual([["gaussian", ["gaussian-fchk"], true]]);
+    expect(stepFiles(multiwfn, "nci", new Set(["multiwfn"]))).toEqual(["molden", "wfx"]);
+    expect(stepFiles(multiwfn, "nci", new Set(["multiwfn", "gaussian"]))).toEqual(["molden", "gaussian-fchk", "wfx"]);
+    // (Gaussian's of a version it does not work with: not taken, said so - and nothing stopped)
+    expect(kindsNotTaken(multiwfn, new Set(["multiwfn", "gaussian"]))).toEqual([]);
+    const gaussian = PLUGINS.find((p) => p.id === "gaussian")!;
+    expect(multiwfn.depends?.[0].range).toEqual({ from: "0.4.0", before: "1.0.0" });
+    expect(gaussian.version.startsWith("0.")).toBe(true);
     expect(multiwfn.installed[0]).toMatchObject({ name: "multiwfn", env: { Multiwfnpath: ["{folder}"] } });
   });
 
@@ -149,9 +170,6 @@ describe("the readers Meno knows of", () => {
       writes: [],
       xyzEnergies: [],
       xyzSteps: [],
-      guide: [],
-      suggests: [],
-      files: [],
       kinds: [{ id: "nbo-47", name: "NBO input", program: "NBO", extensions: [".47"], marks: [{ text: "$GENNBO" }], lines: [] }],
     });
     expect(nbo).toMatchObject({ reads: ["nbo-47", "xyz"], lock: "resources/plugins/nbo/requirements.lock", worker: "resources/plugins/nbo/worker.py" });
@@ -161,7 +179,7 @@ describe("the readers Meno knows of", () => {
       for (const id of p.reads) expect(anyKindById(id), `${p.id} reads ${id}`).toBeDefined();
     }
     registerKinds([]);
-    // (no mark of the plugins Meno carries - their kinds', their catalogues' - claims a file of Meno's own)
+    // (no mark of the plugins Meno carries claims a file of Meno's own)
     expect(REFUSED).toEqual([]);
   });
 
@@ -180,22 +198,40 @@ describe("who reads a kind", () => {
   const readers = [...READERS, other];
 
   it("is any reader that reads it, in Meno's order: Meno first, where it reads it", () => {
-    expect(readersOf("orca", readers).map((p) => p.id)).toEqual(["cclib", "pyscf", "orca-own"]);
+    expect(readersOf("orca", readers).map((p) => p.id)).toEqual(["cclib", "orca", "orca-own"]);
     expect(readersOf("molden", readers).map((p) => p.id)).toEqual(["pyscf"]);
     expect(readersOf("cube", readers).map((p) => p.id)).toEqual(["meno", "orca-own"]);
   });
 
-  it("is the one chosen, where it is added; else Meno, where it reads it; else the first added", () => {
+  it("is the one chosen, where it is added; else Meno, where it reads it; else the one added - and, of several, none: the chemist chooses, never the first by its name", () => {
     const both = new Set(["cclib", "orca-own"]);
-    expect(readerFor("orca", both, none, readers)?.id).toBe("cclib");
+    expect(readerFor("orca", both, none, readers)).toBeNull();
+    expect(readersUndecided("orca", both, none, readers).map((p) => p.id)).toEqual(["cclib", "orca-own"]);
     expect(readerFor("orca", both, { read: { orca: "orca-own" }, also: {} }, readers)?.id).toBe("orca-own");
-    // (chosen, but taken out again: the first added reads it)
+    expect(readersUndecided("orca", both, { read: { orca: "orca-own" }, also: {} }, readers)).toEqual([]);
+    // (chosen, but taken out again: the one added reads it)
     expect(readerFor("orca", new Set(["cclib"]), { read: { orca: "orca-own" }, also: {} }, readers)?.id).toBe("cclib");
-    // (a choice for one kind is no choice for another)
+    // (a choice for one kind is no choice for another: Gaussian's output, read by cclib alone of the two)
     expect(readerFor("gaussian", both, { read: { orca: "orca-own" }, also: {} }, readers)?.id).toBe("cclib");
     // (Meno keeps its kinds, a plugin that reads it too added - unless the plugin is chosen)
     expect(readerFor("cube", both, none, readers)?.id).toBe("meno");
     expect(readerFor("cube", both, { read: { cube: "orca-own" }, also: {} }, readers)?.id).toBe("orca-own");
+  });
+
+  it("is, where none is chosen and Meno does not read it, the plugin whose own program writes it, before a reader of many programs' outputs", () => {
+    // (a plugin that runs the program whose output it is, and says so in its manifest: `writtenBy`, one of its own programs)
+    const own: ReaderPlugin = { ...other, id: "program-own", name: "The program's plugin", reads: ["orca"], ownKinds: ["orca"], profile: "plugin-program-own" };
+    const withOwn = [...READERS, own];
+    const all = new Set(["cclib", "pyscf", "program-own"]);
+    expect(readerFor("orca", all, none, withOwn)?.id).toBe("program-own");
+    // (chosen, another reads it: the chemist's choice stands)
+    expect(readerFor("orca", all, { read: { orca: "cclib" }, also: {} }, withOwn)?.id).toBe("cclib");
+    // (not added: the one added that reads it)
+    expect(readerFor("orca", new Set(["cclib", "pyscf"]), none, withOwn)?.id).toBe("cclib");
+    // (a kind it does not write is read as before)
+    expect(readerFor("gaussian", all, none, withOwn)?.id).toBe("cclib");
+    // (and it reads it as well, where chosen to, as any reader)
+    expect(alsoReadersFor("orca", all, { read: {}, also: { orca: ["cclib"] } }, withOwn).map((p) => p.id)).toEqual(["cclib"]);
   });
 
   it("is none where nothing added reads it", () => {
@@ -206,8 +242,9 @@ describe("who reads a kind", () => {
   it("reads it alone, unless others are chosen to read it as well - each added, each reading it, the reader not twice", () => {
     const all = new Set(["cclib", "pyscf", "orca-own"]);
     expect(alsoReadersFor("orca", all, none, readers)).toEqual([]);
-    const also = { read: {}, also: { orca: ["pyscf", "cclib", "orca-own"], gaussian: ["orca-own"] } };
-    expect(alsoReadersFor("orca", all, also, readers).map((p) => p.id)).toEqual(["pyscf", "orca-own"]);
+    const also = { read: { orca: "cclib" }, also: { orca: ["pyscf", "cclib", "orca-own"], gaussian: ["orca-own"] } };
+    // (PySCF, chosen, does not read ORCA's output; cclib is its reader)
+    expect(alsoReadersFor("orca", all, also, readers).map((p) => p.id)).toEqual(["orca-own"]);
     expect(alsoReadersFor("orca", new Set(["cclib"]), also, readers)).toEqual([]);
     // (orca-own does not read Gaussian's output)
     expect(alsoReadersFor("gaussian", all, also, readers)).toEqual([]);

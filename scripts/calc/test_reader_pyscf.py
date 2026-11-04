@@ -1,16 +1,15 @@
 """Tests for the PySCF plugin's worker (src-tauri/resources/plugins/pyscf/worker.py).
 
-They need PySCF and cclib, so they run in an environment pixi makes from the
+They need PySCF, so they run in an environment pixi makes from the
 plugin's lock:
 
     cp src-tauri/resources/plugins/pyscf/pixi.* /tmp/pyscf-env/
     pixi install --frozen --manifest-path /tmp/pyscf-env/pixi.toml
     /tmp/pyscf-env/.pixi/envs/default/bin/python -m unittest scripts/calc/test_reader_pyscf.py
 
-The outputs they read are not in the repository (docs/WORKSPACE.md, stage
-3): cclib's samples in calc-samples/ (as for the cclib reader's tests), and
-water.molden in calc-samples/cube/, written by PySCF itself. Those tests are
-skipped where the files are not there.
+The file they read is not in the repository (docs/WORKSPACE.md, stage 3):
+water.molden in calc-samples/cube/, written by PySCF itself. Those tests
+are skipped where it is not there.
 """
 
 import base64
@@ -28,6 +27,10 @@ spec = importlib.util.spec_from_file_location("reader_pyscf", WORKER)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 ANGSTROM_PER_BOHR = 0.529177210903
+
+
+# a grid as Meno's request gives one (lib/calc/grids `gridAbout`): about water's atoms, 4 Å past them, 0.2 Å apart (ångströms)
+GRID = {"origin": [-4.0, -4.76, -3.88], "axes": [[0.2, 0, 0], [0, 0.2, 0], [0, 0, 0.2]], "counts": [41, 49, 44]}
 
 
 def ask(op, path, **more):
@@ -74,62 +77,65 @@ class Molden(unittest.TestCase):
         r = ask("read", sample("cube/water.molden"))
         self.assertEqual(r["atoms"], ["O", "H", "H"])
         self.assertEqual(len(r["frames"]), 1)
-        orbitals = result(r, "orbitals")
-        names = [row["cells"][0] for row in orbitals["rows"]]
-        self.assertEqual(names[orbitals["focus"]], "LUMO")
-        self.assertTrue(all(row["surface"]["ask"].startswith("orbital:0:") for row in orbitals["rows"]))
+        # (every orbital, in Meno's general form - Meno names and lists them)
+        orbitals = r["orbitals"]
+        self.assertIsNone(result(r, "orbitals"))
+        self.assertTrue(all(o["spin"] == "both" for o in orbitals))
+        self.assertEqual([o["occupation"] for o in orbitals[:6]], [2, 2, 2, 2, 2, 0])
+        self.assertLess(orbitals[4]["energy"], orbitals[5]["energy"])
+        self.assertEqual([o["surface"]["ask"] for o in orbitals[:2]], ["orbital:0:0", "orbital:0:1"])
         self.assertEqual(result(r, "densities")["rows"][0]["surface"], {"ask": "density:total"})
 
     def test_an_orbital_asked_for_is_on_a_grid_its_whole_square_one(self):
         r = ask("read", sample("cube/water.molden"))
-        homo = next(row for row in result(r, "orbitals")["rows"] if row["cells"][0] == "HOMO")
-        g = ask("ask", sample("cube/water.molden"), key=homo["surface"]["ask"])
+        homo = r["orbitals"][4]
+        g = ask("ask", sample("cube/water.molden"), key=homo["surface"]["ask"], grid=GRID)
         self.assertTrue(g["signed"])
-        self.assertEqual(g["iso"], 0.05)
-        self.assertTrue(all(c <= worker.SIDE_MOST for c in g["counts"]))
+        self.assertEqual(g["quantity"], "orbital")
+        self.assertNotIn("iso", g)
+        # (on the grid Meno gave, as it gave it)
+        self.assertEqual(g["counts"], GRID["counts"])
+        self.assertEqual([round(v, 9) for v in g["origin"]], GRID["origin"])
+        self.assertEqual([round(a[k], 9) for k, a in enumerate(g["axes"])], [0.2, 0.2, 0.2])
         self.assertAlmostEqual(integral(g, lambda v: v * v), 1.0, delta=0.02)
+
+    def test_says_where_meno_gives_no_grid_it_can_work_on(self):
+        a = worker.answer(json.dumps({"id": 2, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8")}))
+        self.assertEqual((a["ok"], a["error"]), (False, "Meno's request gives no grid to work the values out on"))
+        skew = {**GRID, "axes": [[0.2, 0.1, 0], [0, 0.2, 0], [0, 0, 0.2]]}
+        b = worker.answer(json.dumps({"id": 3, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8"), "grid": skew}))
+        self.assertEqual((b["ok"], b["error"]), (False, "Meno's request gives a grid whose axes do not run along x, y and z"))
+        big = {**GRID, "counts": [91, 90, 90]}
+        c = worker.answer(json.dumps({"id": 4, "op": "ask", "key": "orbital:0:0", "name": "x.molden", "text": sample("cube/water.molden").read_text(encoding="utf-8"), "grid": big}))
+        self.assertEqual((c["ok"], c["error"]), (False, f"Meno's request gives a grid of more points than {90 ** 3}"))
 
     def test_the_density_asked_for_is_its_occupied_orbitals_squared_point_by_point(self):
         path = sample("cube/water.molden")
-        g = ask("ask", path, key="density:total")
+        g = ask("ask", path, key="density:total", grid=GRID)
         self.assertNotIn("signed", g)
-        self.assertEqual(g["iso"], 0.002)
+        self.assertEqual(g["quantity"], "density")
         density = numpy.frombuffer(base64.b64decode(g["values"]), dtype="<f4")
         # (water: five orbitals, two electrons each - on the same grid)
         squares = sum(
-            2 * numpy.frombuffer(base64.b64decode(ask("ask", path, key=f"orbital:0:{i}")["values"]), dtype="<f4").astype(float) ** 2
+            2 * numpy.frombuffer(base64.b64decode(ask("ask", path, key=f"orbital:0:{i}", grid=GRID)["values"]), dtype="<f4").astype(float) ** 2
             for i in range(5)
         )
         self.assertLess(float(numpy.abs(density - squares).max()), 1e-3 * float(density.max()))
 
 
-class Outputs(unittest.TestCase):
-    def test_gaussian_with_its_basis_its_orbitals_drawn(self):
-        path = sample("Gaussian/dvb_sp.out")
-        r = ask("read", path)
-        self.assertEqual(len(r["atoms"]), 20)
-        self.assertEqual(r["program"], "Gaussian")
-        # (what the calculation was, as the program names it)
-        self.assertEqual((r["method"], r["basis"]), ("B3LYP", "STO-3G"))
-        # (only what it is for: no charges or vibrations - the cclib reader's)
-        self.assertEqual({x["id"] for x in r["results"]}, {"orbitals", "densities"})
-        homo = next(row for row in result(r, "orbitals")["rows"] if row["cells"][0] == "HOMO")
-        self.assertAlmostEqual(integral(ask("ask", path, key=homo["surface"]["ask"]), lambda v: v * v), 1.0, delta=0.02)
+class Species(unittest.TestCase):
+    def test_a_molden_file_says_no_charge_or_multiplicity_the_format_holds_neither(self):
+        r = ask("read", sample("cube/water.molden"))
+        self.assertNotIn("charge", r)
+        self.assertNotIn("multiplicity", r)
 
-    def test_orca_its_p_functions_put_in_molden_order_and_drawn(self):
-        path = sample("ORCA/dvb_sp_hf.out")
-        r = ask("read", path)
-        homo = next(row for row in result(r, "orbitals")["rows"] if row["cells"][0] == "HOMO")
-        self.assertAlmostEqual(integral(ask("ask", path, key=homo["surface"]["ask"]), lambda v: v * v), 1.0, delta=0.02)
-        # (the valence's share of the density, away from the nuclei, as the grid has it: some, and no more than every electron)
-        self.assertTrue(0 < integral(ask("ask", path, key="density:total"), lambda v: numpy.minimum(v, 1.0)) < 70.0)
 
-    def test_an_output_without_its_basis_says_to_open_a_molden_file(self):
-        r = ask("read", sample("ORCA/dvb_gopt.out"))
-        self.assertEqual(r["method"], "DFT")
-        self.assertGreater(len(r["frames"]), 1)
-        self.assertIsNone(result(r, "orbitals"))
-        self.assertEqual(result(r, "surfaces")["value"], "open a Molden file the program wrote")
+class OnlyMolden(unittest.TestCase):
+    def test_a_file_that_is_no_molden_file_is_not_read(self):
+        # (a Molden file's sections, but not its first line; and text of no file of its kind)
+        for text in ("[Atoms] AU\nO 1 8 0.0 0.0 0.0\n", "nothing\n"):
+            a = worker.answer(json.dumps({"id": 6, "op": "read", "name": "job.out", "text": text}))
+            self.assertEqual((a["ok"], a["error"]), (False, "not a Molden file"))
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ import { readerById, readerIdOfLine, type ReaderPlugin } from "./catalog";
 import { kindOf } from "../io/kinds";
 import { textOf } from "../io/text";
 import type { Reader } from "./client";
+import type { GridPlace } from "./grids";
 import type { CalcInfo, CalcSource } from "./output";
 import { isAsk, resultKey, resultsOn, type ListResult } from "./results";
 import { readerClient } from "./workers";
@@ -183,11 +184,13 @@ export function askFor(
   readerOf: (p: ReaderPlugin) => Promise<Reader> = readerClient,
   /** How an output is read again where it was (tests hand in their own). */
   read: ReadAt = readAt,
+  /** The grid Meno lays the molecule's values on, where the promise may be some (./grids `gridAbout`). */
+  grid?: GridPlace,
 ): Promise<unknown> {
   const k = askKey(calc.source, from, key);
   if (given.has(k)) return Promise.resolve(given.get(k));
   // (asked for twice while it is worked out: worked out once)
-  if (!underWay.has(k)) underWay.set(k, ask(calc, from, key, k, readerOf, read).finally(() => underWay.delete(k)));
+  if (!underWay.has(k)) underWay.set(k, ask(calc, from, key, k, readerOf, read, grid).finally(() => underWay.delete(k)));
   return underWay.get(k)!;
 }
 
@@ -198,6 +201,7 @@ async function ask(
   k: string,
   readerOf: (p: ReaderPlugin) => Promise<Reader>,
   read: ReadAt,
+  grid: GridPlace | undefined,
 ): Promise<unknown> {
   const output = calc.source ? await outputOf(calc.source, read) : undefined;
   if (!calc.source || !output) {
@@ -216,7 +220,7 @@ async function ask(
   }
   setState(k, "asking");
   try {
-    const value = await (await readerOf(plugin)).ask(kind, key, output.name, output.text);
+    const value = await (await readerOf(plugin)).ask(kind, key, output.name, output.text, grid);
     given.set(k, value);
     setState(k, "given");
     return value;

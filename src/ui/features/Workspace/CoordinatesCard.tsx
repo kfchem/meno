@@ -12,8 +12,8 @@ import Checkbox from "../../controls/Checkbox";
  * Ask3D is. Atoms mixed with another column's cannot be ticked. Text
  * pasted on the page may go there as words instead (`onText`).
  */
-/** A structure not to be placed: its atoms mixed with another column's, or a line among them that does not read. */
-const placeless = (s: CoordinateStructure) => !!s.mixed || !!s.broken?.length;
+/** A structure not to be placed: its atoms mixed with another column's, a line among them that does not read, or a table only a plugin not added reads. */
+const placeless = (s: CoordinateStructure) => !!s.mixed || !!s.broken?.length || !!s.unread;
 
 export default function CoordinatesCard({
   structures,

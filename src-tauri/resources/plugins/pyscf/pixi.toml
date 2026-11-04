@@ -1,8 +1,7 @@
 # The PySCF plugin's environment, made by pixi from the lock beside this
 # file - every package pinned by its hash - when the plugin is added in
 # Settings, Plugins (docs/PLUGINS.md). PySCF and its
-# libraries come from conda-forge, which has them for Windows too; cclib,
-# which reads the programs' output for it, from PyPI.
+# libraries come from conda-forge, which has them for Windows too.
 [workspace]
 name = "meno-reader-pyscf"
 channels = ["conda-forge"]
@@ -13,6 +12,3 @@ python = "3.12.*"
 pyscf = "==2.14.0"
 numpy = ">=1.26"
 scipy = "*"
-
-[pypi-dependencies]
-cclib = "==1.9rc1"

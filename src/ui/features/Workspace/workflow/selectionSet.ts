@@ -8,10 +8,11 @@
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { labelBox, labelSetOf, pxToWorld, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
 import type { Model, Molecule3D, Turn3D } from "../store/types";
-import { lookOf, poseOf, seenBounds, sharesOf, solidOf } from "../utils/molecule3d";
-import { framesOf, inside, placesOf, structuresOf, type Frame, type Page } from "./entries";
+import { chipMarks, lookOf, poseOf, seenBounds, sharesOf, solidOf } from "../utils/molecule3d";
+import { framesOf, inside, placesOf, refinedFrame, structuresOf, type Frame, type Page } from "./entries";
 import { SET_PAD, SET_TOP, CHIP, CHIP_CHAR, CHIP_SIDES } from "./look";
 import { greatest, least } from "../../../../lib/chem/lists";
+import { aboveSaid, barsAbove } from "../utils/barsAbove";
 
 /** Whether a molecule in 3D shows a frames chip below it (Molecule3DView): it has frames, or a calculation it was read from. */
 export const hasChip = (m: Pick<Molecule3D, "frames" | "calc"> & Partial<Pick<Molecule3D, "title" | "stack" | "failed" | "conformerSet">>) => setShown(m) || !!m.calc || named3d(m) || !!m.failed?.some(Boolean);
@@ -31,14 +32,22 @@ export const named3d = (m: Partial<Pick<Molecule3D, "title" | "stack">>) => !!m.
  * geometry's shows only while it is pointed at, over what is beside it:
  * none.
  */
-export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>): number {
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies" | "failed" | "imaginary" | "calc" | "marksUnread">>): number {
   const n = framesOf(m);
   // (a single geometry called by its name: its name, and its energy where it has one)
   if (!setShown(m)) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
   const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
-  const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
   const shares = sharesOf(m) ? " · 100%" : "";
-  return `${numbered}${n} / ${n}${energies}${shares}`.length * CHIP_CHAR + CHIP_SIDES;
+  // (each frame's energy as it says it - its height above the lowest, or why it has none - and what it says of the frame after
+  //  that: why it failed, its imaginary frequencies, its warnings. The widest, as any frame may be the one shown)
+  const bars = m.energies?.length === n ? barsAbove(m.energies, m.failed, m.marksUnread) : null;
+  // (a path whose highest point was refined says each frame's energy from its start, as Molecule3DView tells its chip)
+  const fromStart = refinedFrame(m) != null;
+  const said = Math.max(0, greatest(Array.from({ length: n }, (_, k) => {
+    const marks = chipMarks({ imaginary: m.imaginary, calc: m.calc, failed: m.failed }, k, n);
+    return (bars ? 3 + aboveSaid(bars, k, fromStart).length : 0) + (marks ? 3 + marks.length : 0);
+  })));
+  return (`${numbered}${n} / ${n}${shares}`.length + said) * CHIP_CHAR + CHIP_SIDES;
 }
 
 

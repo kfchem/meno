@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aboveText, bySource, chipLine, grouped, isMarked, numberText, pairValue, readResults, resultKey, resultsOn, valueText, type PairsResult } from "./results";
+import { ABOUT_FOCUS, aboveText, bySource, chipLine, grouped, isMarked, numberText, pairValue, readResults, resultKey, resultsOn, symmetryText, valueText, type ListResult, type MoleculeResult, type PairsResult } from "./results";
 import { cardGroupsOf, readerNameOf, titled } from "./sources";
 
 describe("a calculation's results, as a plugin gives them", () => {
@@ -231,3 +231,45 @@ describe("a number, wherever Meno writes one", () => {
     expect(aboveText(0)).toBe("0.00 kcal/mol");
   });
 });
+
+describe("results in Meno's own forms", () => {
+  it("keep a vector value's components and the point it was taken about, as given - three numbers each, or none", () => {
+    const given = [
+      { id: "dipole", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", value: 2.1, vector: [0, 0, -2.1], origin: [0, 0, 0.06] },
+      { id: "dipole2", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", value: 2.1, vector: [0, 1], origin: "here" },
+    ];
+    const [a, b] = readResults(given, 3, 1) as MoleculeResult[];
+    expect([a.vector, a.origin]).toEqual([[0, 0, -2.1], [0, 0, 0.06]]);
+    expect([b.vector, b.origin]).toEqual([undefined, undefined]);
+  });
+
+  it("keep, of a list that opens on a row, the rows about it: as many up to it, it among them, and after - an orbitals' list given in full", () => {
+    // (fifty orbitals, highest first, opening on the LUMO: row 30)
+    const rows = Array.from({ length: 50 }, (_, i) => ({ cells: [`orbital ${i}`, -i] }));
+    const [list] = readResults([{ id: "orbitals", on: "list", group: "Orbitals", label: "Molecular orbitals", columns: [{ label: "Orbital" }, { label: "Energy", unit: "eV" }], rows, focus: 30, shown: 31 }], 3, 1) as ListResult[];
+    expect(list.rows.map((r) => r.cells[0])).toEqual(Array.from({ length: 2 * ABOUT_FOCUS }, (_, i) => `orbital ${30 - ABOUT_FOCUS + 1 + i}`));
+    expect([list.rows[list.focus!].cells[0], list.rows[list.shown!].cells[0]]).toEqual(["orbital 30", "orbital 31"]);
+    // (and says which rows it keeps, counted from 1, of how many)
+    expect(list.trimmed).toEqual({ from: 22, to: 41, of: 50 });
+    // (read again - a workspace kept - as it was: neither trimmed again nor its count changed)
+    const again = readResults([list], 3, 1)[0] as ListResult;
+    expect([again.rows, again.focus, again.shown, again.trimmed]).toEqual([list.rows, list.focus, list.shown, list.trimmed]);
+    // (a count that does not fit its rows is not taken)
+    expect((readResults([{ ...list, trimmed: { from: 1, to: 5, of: 50 } }], 3, 1)[0] as ListResult).trimmed).toBeUndefined();
+    // (one that says it keeps all it has is no list kept so: core's rule trims it all the same)
+    const all = readResults([{ id: "orbitals", on: "list", group: "Orbitals", label: "Molecular orbitals", columns: [{ label: "Orbital" }, { label: "Energy", unit: "eV" }], rows, focus: 30, trimmed: { from: 1, to: 50, of: 50 } }], 3, 1)[0] as ListResult;
+    expect([all.rows.length, all.trimmed]).toEqual([20, { from: 22, to: 41, of: 50 }]);
+    // (one given as Meno keeps it - twenty about its focus - as it was, nothing said; one that opens on no row, whole)
+    const kept = readResults([{ ...list, trimmed: undefined, focus: 9 }], 3, 1)[0] as ListResult;
+    expect([kept.rows.length, kept.trimmed]).toEqual([20, undefined]);
+    const whole = readResults([{ id: "v", on: "list", group: "V", label: "V", columns: [{ label: "x" }], rows: rows.map((r) => ({ cells: [r.cells[0]] })) }], 3, 1)[0] as ListResult;
+    expect(whole.rows).toHaveLength(50);
+  });
+
+  it("write a point group or a Mulliken symbol with its first letter upper and the rest lower, however it was printed", () => {
+    expect(["c2v", "C2V", "C2v", " d3h ", "TD", "bu", "AU", "B1G", "A'", "E''", "C∞v", "Σg"].map(symmetryText)).toEqual(["C2v", "C2v", "C2v", "D3h", "Td", "Bu", "Au", "B1g", "A'", "E''", "C∞v", "Σg"]);
+    // (a number before it - an orbital's, numbered within its symmetry - as it is)
+    expect(["1A1", "2b2", "1a'", "10E''", "3B1", "(A1)", "(a1)", "B1G"].map(symmetryText)).toEqual(["1A1", "2B2", "1A'", "10E''", "3B1", "(A1)", "(A1)", "B1g"]);
+  });
+});
+

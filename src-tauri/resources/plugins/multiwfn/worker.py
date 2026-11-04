@@ -58,14 +58,14 @@ import math
 import re
 import sys
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 PROGRAM = "multiwfn"
 STREAM = "nci.txt"
 GEOMETRY = "molecule.xyz"
 SIGN_RHO = "func1.cub"
 RDG = "func2.cub"
 # what each kind of wavefunction's file is called, for Multiwfn to tell it by
-EXTENSIONS = {"molden": ".molden", "gaussian-fchk": ".fch", "wfn": ".wfn", "wfx": ".wfx"}
+EXTENSIONS = {"molden": ".molden", "gaussian-fchk": ".fch", "wfx": ".wfx"}
 GRIDS = {"low": "1", "medium": "2", "high": "3"}
 # the density each entry's NCI is of: the wavefunction's where it has one, else promolecular; or promolecular for all
 DENSITIES = ("wavefunction", "promolecular")

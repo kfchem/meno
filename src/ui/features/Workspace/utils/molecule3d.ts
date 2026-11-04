@@ -283,6 +283,23 @@ export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imagin
   return null;
 }
 
+/** The imaginary frequencies a molecule's frames chip says of each frame (Frames3D): the frames' own, or its calculation's, of the frame it is of - the last; none where neither says. */
+export const imaginaryShown = (m: Pick<Molecule3D, "imaginary" | "calc">, n: number): (number[] | null)[] | undefined =>
+  m.imaginary?.length === n ? m.imaginary : m.calc?.imaginary ? [...new Array<null>(n - 1).fill(null), m.calc.imaginary] : undefined;
+
+/**
+ * What a molecule's frames chip writes after its numbers of frame `k`, as
+ * Frames3D writes it, in the same words: why it failed, its imaginary
+ * frequencies, how many warnings its calculation gave - none where it has
+ * none of them.
+ */
+export function chipMarks(m: Pick<Molecule3D, "imaginary" | "calc"> & Partial<Pick<Molecule3D, "failed">>, k: number, n: number): string {
+  const failure = m.failed?.length === n ? m.failed[k] : undefined;
+  const saddle = imaginaryShown(m, n)?.[k];
+  const warnings = m.calc?.warnings?.length ?? 0;
+  return [failure ? FAILURE_WORDS[failure.kind] : "", saddle?.length ? imaginaryWords(saddle) : "", warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+}
+
 /** How a molecule in 3D is drawn: in the 3D style's primary look, or its secondary. */
 export type Look = Role3D;
 

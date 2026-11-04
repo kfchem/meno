@@ -5,8 +5,8 @@ import { speciesOf } from "./io/writers";
 const water = (dx = 0) => [0 + dx, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
 
 describe("the entry record", () => {
-  it("is of version 1", () => {
-    expect(ENTRY_SCHEMA).toBe(1);
+  it("is of version 2", () => {
+    expect(ENTRY_SCHEMA).toBe(2);
   });
 
   it("keys a geometry by its places: the same places the same key, another's another", () => {
@@ -134,6 +134,10 @@ describe("restraints read back from a file", () => {
     ] };
     const p = propertyIn({ value, unit: "none", status: "computed" });
     expect(p).toEqual({ value, unit: "none", status: "computed" });
+    // (and where a minimisation first held them)
+    const started = { ...value, start: [0, 0, 0, 1.5, 0, 0, 3, 0, 0, 4.5, 0, 0] };
+    expect(propertyIn({ value: started, unit: "none", status: "computed" })?.value).toEqual(started);
+    expect(propertyIn({ value: { ...value, start: [0, "x"] }, unit: "none", status: "computed" })).toBeUndefined();
     // (a row of no kind, a distance with no strength, atoms fixed with a value, an atom not a whole number: none read - nothing held in part)
     for (const bad of [
       { kind: "angle", atoms: [0, 1, 2], value: 90, strength: 1 },

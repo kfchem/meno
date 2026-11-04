@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { swallowPress } from "../Workspace/utils/press";
-import { clipboardHasText, runTextMenu, structuresIn, textMenuItems, useTextMenu } from "./textMenu";
+import { clipboardHasText, outputIn, runTextMenu, structuresIn, textMenuItems, useTextMenu } from "./textMenu";
 
 export default function TextMenuHost() {
   const at = useTextMenu((s) => s.at);
@@ -64,6 +64,9 @@ function TextMenu({ x, y, target }: NonNullable<ReturnType<typeof useTextMenu.ge
   // (3D Structures, on a column's text holding coordinates, where the workspace takes them)
   const take = useTextMenu((s) => s.structures);
   const [found] = useState(() => (take ? structuresIn(target) : []));
+  // (a calculation's output: read as one opened is, by its reader - never in part as coordinates)
+  const takeOutput = useTextMenu((s) => s.output);
+  const [output] = useState(() => (takeOutput ? outputIn(target) : null));
   return (
     <motion.div
       ref={ref}
@@ -92,7 +95,7 @@ function TextMenu({ x, y, target }: NonNullable<ReturnType<typeof useTextMenu.ge
           <kbd className={`font-sans text-xs ${item.enabled ? "text-gh-gray" : "text-gh-line"}`}>{item.keys}</kbd>
         </button>
       ))}
-      {take && found.length > 0 && target.text && (
+      {((take && found.length > 0) || (takeOutput && output != null)) && target.text && (
         <>
           {/* (a rule only between it and what is above it: none at the top) */}
           {items.length > 0 && <div className="my-1 border-t border-gh-line" role="separator" />}
@@ -101,7 +104,8 @@ function TextMenu({ x, y, target }: NonNullable<ReturnType<typeof useTextMenu.ge
             tabIndex={-1}
             onClick={() => {
               close();
-              take(found, target.text!.name);
+              if (output != null) takeOutput!(output, target.text!.name);
+              else take!(found, target.text!.name);
             }}
             className="w-full h-8 px-3 flex items-center text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base outline-none"
           >

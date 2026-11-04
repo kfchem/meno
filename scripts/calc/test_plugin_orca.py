@@ -14,14 +14,33 @@ run is kept.
 import importlib.util
 import json
 import pathlib
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKER = ROOT / "src-tauri/resources/plugins/orca/worker.py"
 MANIFEST = ROOT / "src-tauri/resources/plugins/orca/manifest.json"
-spec = importlib.util.spec_from_file_location("plugin_orca", WORKER)
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
+
+
+
+def load_worker(path, name):
+    """A plugin's worker, loaded as its process runs it: its folder on the path, for the reader beside it - and that
+    reader let go of after, so that another plugin's worker loaded in the same tests finds its own."""
+    sys.path.insert(0, str(path.parent))
+    sys.modules.pop("reader", None)
+    try:
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(str(path.parent))
+        sys.modules.pop("reader", None)
+
+
+worker = load_worker(WORKER, "plugin_orca")
+# (MPI's launcher taken to be there, whatever this computer has: each test that says otherwise says so)
+worker.which = lambda name, path=None: f"/usr/local/bin/{name}"
 
 WATER = {
     "name": "water",
@@ -54,9 +73,9 @@ class Prepare(unittest.TestCase):
         jobs = ask("prepare", step="optimise", entries=[WATER, {**WATER, "charge": -1, "multiplicity": 2}], options=defaults("optimise"), cores=4)["jobs"]
         self.assertEqual(len(jobs), 2)
         job = jobs[0]
-        self.assertEqual((job["entries"], job["program"], job["args"], job["reads"]), ([0], "orca", ["input.inp"], ["input.molden.input"]))
-        # (then orca_2mkl, beside ORCA, writing its orbitals as a Molden file, as the manual's "orca_2mkl BaseName -molden")
-        self.assertEqual(job["then"], [{"program": "orca_2mkl", "args": ["input", "-molden"]}])
+        self.assertEqual((job["entries"], job["program"], job["args"], job["reads"]), ([0], "orca", ["input.inp"], ["input.wfx"]))
+        # (then orca_2aim, beside ORCA, writing its orbitals as a WFX file, as the manual's "orca_2aim BaseName")
+        self.assertEqual(job["then"], [{"program": "orca_2aim", "args": ["input"]}])
         self.assertEqual(job["files"][0]["name"], "input.inp")
         lines = job["files"][0]["text"].splitlines()
         # a simple input line; the processes; the coordinates between * xyz charge multiplicity and *
@@ -81,6 +100,102 @@ class Prepare(unittest.TestCase):
         lines = freq["files"][0]["text"].splitlines()
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")
         self.assertEqual(lines[1], "* xyz 0 1")
+
+    def test_with_no_mpi_to_run_its_processes_each_job_runs_on_one_core_said_once_never_failed_at_its_start(self):
+        from unittest import mock
+        found = mock.patch.object(worker, "which", lambda name, path=None: f"/usr/local/bin/{name}")
+        missing = mock.patch.object(worker, "which", lambda name, path=None: None)
+        opts = {**defaults("energy"), "maxcore": 2000}
+        # (MPI there: its processes, as before - no fewer cores asked, nothing said)
+        with found:
+            there = ask("prepare", step="energy", entries=[WATER, WATER], options=opts, cores=4)
+        self.assertIn("%pal nprocs 4 end", there["jobs"][0]["files"][0]["text"])
+        self.assertNotIn("cores", there["jobs"][0])
+        self.assertNotIn("note", there)
+        self.assertEqual(there["jobs"][0]["memory"], 8000)
+        # (none: one core, each job - no %pal, one core asked for the queue to count, its memory for one - said once, on the step)
+        with missing:
+            alone = ask("prepare", step="energy", entries=[WATER, WATER], options=opts, cores=4)
+        for job in alone["jobs"]:
+            self.assertNotIn("%pal", job["files"][0]["text"])
+            self.assertEqual(job["cores"], 1)
+            self.assertEqual(job["memory"], 2000)
+        self.assertEqual(alone["note"], "run on one core: no MPI on this computer")
+        # (one core given - Settings set so, or a computer of one - nothing to say, nothing changed)
+        with missing:
+            one = ask("prepare", step="energy", entries=[WATER], options=opts, cores=1)
+        self.assertNotIn("note", one)
+        self.assertNotIn("cores", one["jobs"][0])
+        # (said beside what else the step says: frequencies at ORCA's own xTB, computed numerically)
+        with missing:
+            numeric = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": ""}, cores=4)
+        self.assertEqual(numeric["note"], "frequencies computed numerically; run on one core: no MPI on this computer")
+        # (a path search too)
+        with missing:
+            path = ask("prepare", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), cores=4)
+        self.assertNotIn("%pal", path["jobs"][0]["files"][0]["text"])
+        self.assertEqual(path["jobs"][0]["cores"], 1)
+
+    @unittest.skipIf(sys.platform == "win32", "a launcher made runnable as macOS and Linux run one")
+    def test_the_launcher_looked_for_on_the_path_its_jobs_are_given_not_this_workers(self):
+        import os
+        import shutil
+        import stat
+        import tempfile
+        from unittest import mock
+        base = tempfile.mkdtemp()
+        try:
+            def program(folder, name):
+                os.makedirs(folder, exist_ok=True)
+                path = os.path.join(folder, name)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n")
+                os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                return path
+            orca = program(os.path.join(base, "orca_6"), "orca")
+            own = os.path.join(base, "env")
+            program(os.path.join(own, "bin"), worker.LAUNCHER)
+            plain = os.path.join(base, "usr", "bin")
+            os.makedirs(plain)
+            with mock.patch.object(worker, "which", shutil.which), mock.patch.object(worker.sys, "prefix", own), \
+                    mock.patch.dict(os.environ, {"PATH": os.pathsep.join([os.path.join(own, "bin"), plain])}):
+                # (in this worker's own environment alone: no job is given it - not found)
+                self.assertFalse(worker.launcher_found(programs={"orca": orca}))
+                # (beside ORCA, where it was found: its jobs' PATH begins there - found)
+                program(os.path.join(base, "orca_6"), worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs={"orca": orca}))
+                # (on the PATH Meno was started with: found, ORCA's folder given or not)
+                os.remove(os.path.join(base, "orca_6", worker.LAUNCHER))
+                program(plain, worker.LAUNCHER)
+                self.assertTrue(worker.launcher_found(programs=None))
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+    def test_the_mpi_launcher_looked_for_is_each_systems(self):
+        import importlib.util
+        from unittest import mock
+        for platform, name in (("darwin", "mpirun"), ("linux", "mpirun"), ("win32", "mpiexec")):
+            with mock.patch.object(sys, "platform", platform):
+                fresh = load_worker(WORKER, f"orca_worker_{platform}")
+            self.assertEqual(fresh.LAUNCHER, name)
+            asked = []
+            self.assertFalse(fresh.launcher_found(lambda n, path=None: asked.append(n)))
+            self.assertEqual(asked, [name])
+
+    def test_frequencies_treat_low_vibrations_as_orca_does_unless_asked_harmonic(self):
+        # (ORCA's own, its default: nothing written - Grimme's quasi-RRHO, as ORCA 6.1.1 prints "Quasi RRHO ... True")
+        own = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"), cores=1)["jobs"][0]["files"][0]["text"]
+        self.assertNotIn("%freq", own)
+        self.assertEqual(defaults("frequencies")["vibrations"], "none")
+        # (harmonic: the rigid-rotor harmonic oscillator alone, ORCA's %freq QuasiRRHO false - checked against ORCA 6.1.1)
+        rrho = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "rrho", "maxcore": 2000}, cores=1)["jobs"][0]["files"][0]["text"].splitlines()
+        self.assertEqual(rrho[0], "! B3LYP def2-SVP D3BJ FREQ")
+        self.assertEqual(rrho[1:3], ["%maxcore 2000", "%freq QuasiRRHO false end"])
+        # (a frequency job's alone: an optimisation has no such option, and writes nothing of it)
+        self.assertNotIn("%freq", ask("prepare", step="optimise", entries=[WATER], options={**defaults("optimise"), "vibrations": "rrho"}, cores=1)["jobs"][0]["files"][0]["text"])
+        # (a treatment it does not know: refused)
+        with self.assertRaises(Exception):
+            ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "mrrho"})
 
     def test_frequencies_at_orcas_own_xtb_are_asked_for_numerically_and_said_to_be(self):
         # (ORCA 6.1.1 has no analytic Hessian for its own xTB, and stops a FREQ run of one: NUMFREQ it runs)
@@ -147,7 +262,7 @@ class Prepare(unittest.TestCase):
             self.assertNotIn("needs", job, method)
         # (what it asks for, its manifest declares)
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        self.assertEqual(manifest["needs"], [{"plugin": "xtb", "program": "xtb", "env": "XTBEXE"}])
+        self.assertEqual(manifest["depends"], [{"plugin": "xtb", "versions": ">=0.1.4 <0.2.0", "optional": True, "programs": [{"program": "xtb", "env": "XTBEXE"}]}])
 
     def test_refuses_what_it_does_not_know(self):
         for options in ({"wavefunction": "yes"}, {"dispersion": "D9"}, {"solvation": "COSMO"}, {"solvation": "SMD", "solvent": "lava"}, {"method": ""}, {"keywords": "TightSCF # x"}, {"method": "B3LYP\n%pal nprocs 64 end"}, {"maxcore": -1}):
@@ -417,9 +532,9 @@ class Collect(unittest.TestCase):
     def test_what_orca_printed_is_its_output_for_meno_s_readers(self):
         said = ask("collect", step="optimise", entries=[WATER, {**WATER, "name": ""}], options={}, files={}, log=ENDED, ended="done")
         self.assertEqual(said, {"read": [{"kind": "orca", "log": True, "name": "water.out"}, {"kind": "orca", "log": True, "name": "orca.out"}]})
-        # (with the wavefunction orca_2mkl wrote, kept with the molecule)
-        said = ask("collect", step="optimise", entries=[WATER], options={}, files={"input.molden.input": "[Molden Format]"}, log=ENDED, ended="done")
-        self.assertEqual(said["read"][0]["wavefunction"], {"kind": "molden", "file": "input.molden.input", "name": "water.molden"})
+        # (with the wavefunction orca_2aim wrote, kept with the molecule)
+        said = ask("collect", step="optimise", entries=[WATER], options={}, files={"input.wfx": "<Title>\n water\n</Title>"}, log=ENDED, ended="done")
+        self.assertEqual(said["read"][0]["wavefunction"], {"kind": "wfx", "file": "input.wfx", "name": "water.wfx"})
 
     def test_says_why_a_job_failed(self):
         log = "\n ... \nORCA finished by error termination in SCF\nCalling Command: orca_scf input.gbw b input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
@@ -428,7 +543,8 @@ class Collect(unittest.TestCase):
         # (one brought down under way says no error: not its settings' "Startup error" line, but where it got to)
         down = "   Startup error        DIISStart       ....  0.200000\n ... \n               ***  Starting incremental Fock matrix formation  ***\n"
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=down, ended="failed"), {"why": "ORCA stopped without saying why, after: ***  Starting incremental Fock matrix formation  ***"})
-        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.strip())
+        # (its error's own message, the words after "Error (ORCA_LEANSCF):", as its output is read: reader `why_of`)
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.split("): ", 1)[1].strip())
         # (a line that begins ERROR - ORCA 6.1.1's programs print such, "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY" one - or
         #  FATAL ERROR is its own words, before any other line that says error)
         unitary = "   Startup error        DIISStart       ....  0.200000\nERROR IN SCHMIDT-MATRIX IS NOT UNITARY\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"

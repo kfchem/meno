@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { BOHR, formulaOf, readCoordinates, textOfPages, type PlacedPage, type PlacedWord } from "./coordinates";
+import { BOHR, formulaOf, readCoordinates, textOfPages, type PlacedPage, type PlacedWord, type QuotedTables } from "./coordinates";
+import { MANIFESTS } from "../plugins/known";
+
+/** The tables of atoms the plugins Meno carries declare (lib/plugins/manifest `quotedTables`), each with its plugin's name. */
+const DECLARED = MANIFESTS.flatMap((m) => (m.quotedTables ?? []).map((t) => ({ ...t, plugin: m.name })));
 
 // Coordinates made up for these tests - water, methane, ethanol, set out as a
 // supporting information's pages set them - none taken from any paper.
@@ -39,22 +43,51 @@ describe("coordinates in a text", () => {
     expect([s.charge, s.multiplicity]).toEqual([0, 1]);
   });
 
-  it("reads Gaussian's table of an orientation: centre, atomic number, type, x y z", () => {
+  describe("a table of atoms a program prints in a form of its own, as its plugin declares it", () => {
     const rule = "---------------------------------------------------------------------";
+    // (made up: a water, in the form Gaussian prints its orientation - centre, atomic number, type, x y z - under a name)
     const text = lines(
+      "TS1",
       "Standard orientation:",
       rule,
-      "Center Atomic Atomic Coordinates (Angstroms)",
-      "Number Number Type X Y Z",
+      "Center     Atomic      Atomic             Coordinates (Angstroms)",
+      "Number     Number       Type             X           Y           Z",
       rule,
       "1 8 0 0.000000 0.000000 0.117300",
       "2 1 0 0.000000 0.757200 -0.469200",
       "3 1 0 0.000000 -0.757200 -0.469200",
       rule,
     );
-    const [s] = read(text);
-    expect(formulaOf(s.atoms)).toBe("H2O");
-    expect(s.atoms[1].y).toBeCloseTo(0.7572);
+
+    it("is read where its plugin is added - its heading and heads none of its name", () => {
+      const [s, ...rest] = readCoordinates(text, { added: DECLARED, offered: [] });
+      expect(rest).toEqual([]);
+      expect(s.name).toBe("TS1");
+      expect(formulaOf(s.atoms)).toBe("H2O");
+      expect(s.atoms[1].y).toBeCloseTo(0.7572);
+      expect(s.warnings).toEqual([]);
+    });
+
+    it("is none of it read where only a plugin not added declares it: said to be that plugin's, by its name, and not to be placed", () => {
+      const quoted: QuotedTables = { added: [], offered: DECLARED };
+      const ss = readCoordinates(text, quoted);
+      expect(ss).toHaveLength(1);
+      expect(ss[0]).toMatchObject({ name: "Standard orientation:", atoms: [], unread: true });
+      expect(ss[0].warnings).toEqual([`A table as its program prints it: the ${DECLARED[0].plugin} plugin reads it, once added in Settings, Plugins.`]);
+      // (a structure written as tables of atoms are, beside it, read as ever)
+      const both = readCoordinates(lines(text, "Water", ...WATER), quoted);
+      expect(both.map((s) => [s.name, s.atoms.length, !!s.unread])).toEqual([
+        ["Water", 3, false],
+        ["Standard orientation:", 0, true],
+      ]);
+    });
+
+    it("reads its rows only as it is declared: a row of another form is no atom of it", () => {
+      expect(DECLARED.map((t) => [t.plugin, t.columns.join(" ")])).toEqual([["Gaussian interface", "centre atomic-number type x y z"]]);
+      // (an atomic number, then a whole number between, then where it stands: tables of atoms in a paper's own form)
+      const [s] = read(lines("Water", "8 0 0.000000 0.000000 0.117300", "1 0 0.000000 0.757200 -0.469200", "1 0 0.000000 -0.757200 -0.469200"));
+      expect(formulaOf(s.atoms)).toBe("H2O");
+    });
   });
 
   it("reads numbered atoms, and atomic numbers for symbols, and a count begun again as a new structure", () => {

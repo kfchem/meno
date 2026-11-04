@@ -149,6 +149,12 @@ export default function CalcList3D({
     >
       <div className="flex items-center justify-between gap-3 pl-3 pr-1.5 h-6 text-[11px] text-gh-gray">
         <span className="truncate">{title ?? result.label}</span>
+        {/* (a list that keeps only the rows about its focus says which, of how many) */}
+        {result.trimmed && (
+          <span className="ml-auto shrink-0 tabular-nums">
+            rows {result.trimmed.from}–{result.trimmed.to} of {result.trimmed.of}
+          </span>
+        )}
         <button
           aria-label={`Close ${title ?? result.label}`}
           onClick={onClose}

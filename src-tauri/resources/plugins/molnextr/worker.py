@@ -17,13 +17,15 @@ a minute, the first time a computer loads them, as it looks them over:
 
     {"event": "ready", "version": "1.0.0+6f6502b"}
 
-A structure read is its atoms - each where the picture has it, in its
-pixels from its top left, and an element with its charge, or a label as
-drawn (a group's: OTBS) - and its bonds by index: single, double or triple,
-or in a ring MolNexTR reads as aromatic; a wedge or a hash as which end
-lies nearer (`up`: `b` nearer than `a`), which is all MolNexTR tells, and
-which end the picture draws narrow (`narrow`), where its ink tells.
-What MolNexTR is less sure of than `UNSURE_BELOW` is said to be unsure.
+A structure read is its atoms - each where MolNexTR places it, as it gives
+it: across the picture as it cropped it, with `pad` pixels of white round
+what is drawn, or across the structure itself - and an element with its
+charge and isotope, or a label as drawn (a group's: OTBS); and its bonds
+by index: single, double or triple, or in a ring MolNexTR reads as
+aromatic; a wedge or a hash as which end lies nearer (`up`: `b` nearer
+than `a`), which is all MolNexTR tells; and MolNexTR's confidence in each.
+Meno lays it on the picture and says what is unsure (docs/PDF.md, *A
+picture read*).
 """
 
 import base64
@@ -38,9 +40,6 @@ import sys
 WEIGHTS = "molnextr_best.pth"
 # The white MolNexTR keeps round what is drawn, in pixels, as it crops a picture (its CropWhite).
 PAD = 50
-# Below this, an atom or a bond is said to be unsure (its own confidence; set on pictures made for the purpose, so that a
-# right reading's atoms rarely fall below it).
-UNSURE_BELOW = 0.45
 VERSION = "1.0.0+6f6502b"
 
 FILES = sys.argv[1] if len(sys.argv) > 1 else None
@@ -91,8 +90,8 @@ ELEMENTS = set(
 
 
 def atom_of(symbol):
-    """An atom's symbol as MolNexTR gives it, as Meno takes it: an element with its charge - unsure where it names an
-    isotope, which a drawing seldom does - or a label as drawn (Ph, OTBS)."""
+    """An atom's symbol as MolNexTR gives it, as Meno takes it: an element with its charge, and its isotope's mass number
+    where it names one; or a label as drawn (Ph, OTBS); or nothing, where it gives no symbol."""
     s = symbol.strip()
     m = BRACKET.match(s)
     if m:
@@ -108,109 +107,13 @@ def atom_of(symbol):
             if charge:
                 out["charge"] = charge
             if m.group(1):
-                out["unsure"] = True
+                out["isotope"] = int(m.group(1))
             return out
     plain = s[0].upper() + s[1:] if s.islower() and len(s) <= 2 else s
     if plain in ELEMENTS:
         return {"el": plain}
     label = s[1:-1] if s.startswith("[") and s.endswith("]") else s
-    return {"label": label} if label else {"el": "C", "unsure": True}
-
-
-def fitted(rgb, xy, bonds):
-    """Where the atoms lie in the picture, in its pixels: MolNexTR's places - across the picture as it cropped it, or
-    across the structure itself, each way, as it may give them - stretched and moved, each way, until its bonds lie on
-    the picture's lines and its atoms on what is drawn."""
-    import numpy as np
-    from scipy import ndimage
-
-    dark = rgb.mean(axis=2) < 160
-    h, w = dark.shape
-    if not dark.any():
-        return xy
-    far = ndimage.distance_transform_edt(~dark)
-    ys, xs = np.nonzero(dark)
-    left, top, right, bottom = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
-    P = np.asarray(xy, float)
-    E = np.asarray(bonds, int).reshape(-1, 2)
-    along = np.linspace(0.3, 0.7, 7)
-
-    def off(m):
-        sx, tx, sy, ty = m
-        Q = np.stack([P[:, 0] * sx + tx, P[:, 1] * sy + ty], axis=1)
-        pts = Q[E[:, 0]][:, None, :] * (1 - along)[None, :, None] + Q[E[:, 1]][:, None, :] * along[None, :, None]
-        pts = np.concatenate([pts.reshape(-1, 2), Q])
-        out = (pts[:, 0] < 0) | (pts[:, 0] >= w) | (pts[:, 1] < 0) | (pts[:, 1] >= h)
-        xi = np.clip(np.round(pts[:, 0]).astype(int), 0, w - 1)
-        yi = np.clip(np.round(pts[:, 1]).astype(int), 0, h - 1)
-        return np.where(out, 20.0, np.minimum(far[yi, xi], 20.0)).mean()
-
-    span = lambda v: max(float(v.max() - v.min()), 1e-6)
-    cw, ch = right - left, bottom - top
-    # (as the model cropped the picture; and the structure's extent over the ink's, a label's room in from its edges or not)
-    starts = [(cw + 2 * PAD, left - PAD, ch + 2 * PAD, top - PAD)]
-    for inset in (0.0, 0.04, 0.08):
-        sx = cw * (1 - 2 * inset) / span(P[:, 0])
-        sy = ch * (1 - 2 * inset) / span(P[:, 1])
-        starts.append((sx, left + cw * inset - P[:, 0].min() * sx, sy, top + ch * inset - P[:, 1].min() * sy))
-    m = np.array(min(starts, key=off), float)
-    best = off(m)
-    middle = P.mean(axis=0)
-    step = 0.04 * np.array([abs(m[0]), abs(m[0]), abs(m[2]), abs(m[2])])
-    for _ in range(80):
-        moved = False
-        for i in range(4):
-            for sign in (1, -1):
-                n = m.copy()
-                n[i] += sign * step[i]
-                if i in (0, 2):
-                    # (stretched about the structure's middle)
-                    n[i + 1] -= sign * step[i] * middle[i // 2]
-                c = off(n)
-                if c < best - 1e-9:
-                    m, best, moved = n, c, True
-        if not moved:
-            step = step / 2
-            if step.max() < 0.05:
-                break
-    return [(float(x * m[0] + m[1]), float(y * m[2] + m[3])) for x, y in P]
-
-
-def narrow_end(dark, pa, pb):
-    """Which end of a wedge or a hash the picture draws narrow - "a" or "b" - by how far its ink reaches to each side of
-    the bond, near each end but clear of the atoms; None where the two are too alike to tell."""
-    import numpy as np
-
-    h, w = dark.shape
-    a, b = np.asarray(pa, float), np.asarray(pb, float)
-    length = float(np.hypot(*(b - a)))
-    if length < 6:
-        return None
-    u = (b - a) / length
-    n = np.array([-u[1], u[0]])
-    reach = np.arange(0.0, 0.15 * length, 0.5)
-
-    def across(c):
-        out = 0.0
-        for side in (1, -1):
-            pts = c[None, :] + side * reach[:, None] * n[None, :]
-            xi = np.round(pts[:, 0]).astype(int)
-            yi = np.round(pts[:, 1]).astype(int)
-            inside = (xi >= 0) & (xi < w) & (yi >= 0) & (yi < h)
-            on = np.zeros(len(reach), bool)
-            on[inside] = dark[yi[inside], xi[inside]]
-            out += reach[on].max() if on.any() else 0.0
-        return out
-
-    def width(t):
-        # (the widest within a short stretch of the bond: a hash's strokes have gaps between them)
-        return max(across(a + (b - a) * (t + s)) for s in np.linspace(-0.04, 0.04, 9))
-
-    near_a = np.mean([width(t) for t in np.linspace(0.27, 0.43, 5)])
-    near_b = np.mean([width(t) for t in np.linspace(0.57, 0.73, 5)])
-    if max(near_a, near_b) < 1.5 or abs(near_a - near_b) < 0.25 * max(near_a, near_b):
-        return None
-    return "a" if near_a < near_b else "b"
+    return {"label": label} if label else {}
 
 
 # MolNexTR's bond types: order, and for a wedge which end lies nearer - its edges[i][j] 5 a wedge begun at i (j nearer),
@@ -231,15 +134,12 @@ def op_read_picture(m):
     ]
     if not atoms or not bonds:
         return {"atoms": [], "bonds": []}
-    xy = fitted(rgb, [(a["x"], a["y"]) for a in atoms], [b["endpoint_atoms"] for b in bonds])
     out_atoms = []
-    for a, (x, y) in zip(atoms, xy):
-        atom = {"x": round(x, 2), "y": round(y, 2), **atom_of(a["atom_symbol"])}
-        if a.get("confidence") is not None and float(a["confidence"]) < UNSURE_BELOW:
-            atom["unsure"] = True
+    for a in atoms:
+        atom = {"x": float(a["x"]), "y": float(a["y"]), **atom_of(a["atom_symbol"])}
+        if a.get("confidence") is not None:
+            atom["confidence"] = float(a["confidence"])
         out_atoms.append(atom)
-    # (a hash's lines faint in a blurred picture: any ink at all)
-    inked = rgb.mean(axis=2) < 210
     out_bonds = []
     for b in bonds:
         order, stereo = BONDS[b["bond_type"]]
@@ -249,13 +149,10 @@ def op_read_picture(m):
             bond["aromatic"] = True
         if stereo:
             bond["stereo"] = stereo
-            narrow = narrow_end(inked, xy[i], xy[j])
-            if narrow:
-                bond["narrow"] = narrow
-        if b.get("confidence") is not None and float(b["confidence"]) < UNSURE_BELOW:
-            bond["unsure"] = True
+        if b.get("confidence") is not None:
+            bond["confidence"] = float(b["confidence"])
         out_bonds.append(bond)
-    return {"atoms": out_atoms, "bonds": out_bonds}
+    return {"atoms": out_atoms, "bonds": out_bonds, "pad": PAD}
 
 
 OPS = {"read_picture": op_read_picture}

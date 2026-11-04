@@ -173,8 +173,8 @@ describe("Generate: a step that takes nothing in", () => {
     expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("ready");
     run.mockResolvedValueOnce({
       outputs: [
-        { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, seed_smiles: { value: "CO", unit: "none" } }, seed: 0 },
-        { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, seed_smiles: { value: "CN", unit: "none" } }, seed: 1 },
+        { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, change: { value: "[H][*:1]>>C[*:1]", unit: "none" } }, seed: 0 },
+        { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, change: { value: "[H][*:1]>>N[*:1]", unit: "none" } }, seed: 1 },
       ],
       seeds: [
         { place: 0, made: 1 },
@@ -190,12 +190,12 @@ describe("Generate: a step that takes nothing in", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1) · 2 made" });
     const held = setMembers(st(), resultOf(st(), step)!);
     // (the first seed's: what it came from, its values as that one's - never which of how many it was - beside the model's own)
-    expect(held.records[0]).toMatchObject({ from: ["molecule:7"], properties: { "made_from.nll": nll, frequency: expect.objectContaining({ value: 120 }), seed_smiles: expect.objectContaining({ value: "CO" }) } });
+    expect(held.records[0]).toMatchObject({ from: ["molecule:7"], properties: { "made_from.nll": nll, frequency: expect.objectContaining({ value: 120 }), change: expect.objectContaining({ value: "[H][*:1]>>C[*:1]" }) } });
     expect(held.records[0]!.properties!.nll).toBeUndefined();
     expect(held.records[0]!.properties!["made_from.made"]).toBeUndefined();
     // (the second seed had no record: nothing of it carried but what the plugin said of it)
     expect(held.records[1]!.from).toBeUndefined();
-    expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["frequency", "seed_smiles", "smiles"]);
+    expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["change", "frequency", "smiles"]);
     // (another seed wired in: another run)
     const before = inputKey(st(), st().steps.find((s) => s.id === step)!, "crem");
     doc.edit("move", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 6 ? { ...b, order: 2 } : b)) } }));

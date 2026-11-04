@@ -6,11 +6,12 @@ needs Python alone runs anywhere, and CI runs it:
 
     python3 -m unittest scripts/calc/test_plugin_pictures.py
 
-How atoms are put where a picture has them, and which end of a wedge it
-draws narrow, need numpy and SciPy - the plugins' environments have them -
-and are skipped where they are not installed. The models themselves are
-not run here: their trained models are a gigabyte each, downloaded only
-when a plugin is added.
+A picture's pixels need numpy and Pillow - the plugins' environments have
+them - and are skipped where they are not installed. The models themselves
+are not run here: their trained models are a gigabyte each, downloaded only
+when a plugin is added. Where a reading's atoms lie in the picture, which
+end of a wedge it draws narrow and what is unsure are Meno's
+(src/lib/figure/inkFit.ts), not the workers'.
 """
 
 import base64
@@ -34,12 +35,12 @@ def load(plugin):
 WORKERS = {p: load(p) for p in ("molscribe", "molnextr")}
 
 try:
-    import numpy as np
-    import scipy  # noqa: F401
+    import numpy  # noqa: F401
+    import PIL  # noqa: F401
 
-    SCIENCE = True
+    PIXELS = True
 except ImportError:
-    SCIENCE = False
+    PIXELS = False
 
 
 class Atoms(unittest.TestCase):
@@ -60,12 +61,15 @@ class Atoms(unittest.TestCase):
                 # (aromatic, as SMILES writes it)
                 self.assertEqual(w.atom_of("n"), {"el": "N"})
                 self.assertEqual(w.atom_of("[nH]"), {"el": "N"})
-                # (an isotope is seldom drawn: likely misread, so unsure)
-                self.assertEqual(w.atom_of("[2H]"), {"el": "H", "unsure": True})
+                # (an isotope, with its mass number)
+                self.assertEqual(w.atom_of("[2H]"), {"el": "H", "isotope": 2})
+                self.assertEqual(w.atom_of("[13CH3]"), {"el": "C", "isotope": 13})
                 # (a group's name, as drawn: Meno reads it as it reads a label typed)
                 self.assertEqual(w.atom_of("[OTBS]"), {"label": "OTBS"})
                 self.assertEqual(w.atom_of("CO2Me"), {"label": "CO2Me"})
                 self.assertEqual(w.atom_of("Ph"), {"label": "Ph"})
+                # (no symbol: nothing said of it)
+                self.assertEqual(w.atom_of(""), {})
 
     def test_a_wedge_is_said_by_which_end_lies_nearer(self):
         for name, w in WORKERS.items():
@@ -133,7 +137,7 @@ class Answers(unittest.TestCase):
                 smiles, molfiles, _ = w.graphs_unwritten([[(0, 0)], [(1, 1)]], [["C"], ["N"]], [[[0]], [[0]]], images=[None, None])
                 self.assertEqual((smiles, molfiles), (["", ""], ["", ""]))
 
-    @unittest.skipUnless(SCIENCE, "needs numpy and SciPy")
+    @unittest.skipUnless(PIXELS, "needs numpy and Pillow")
     def test_a_see_through_picture_is_read_on_white(self):
         from PIL import Image
         import io
@@ -150,68 +154,70 @@ class Answers(unittest.TestCase):
                 self.assertEqual(tuple(rgb[1, 1]), (0, 0, 0))
 
 
-def drawn(size, lines, width=2):
-    """A white picture with black lines drawn on it, each from one point to another, `width` pixels thick."""
-    h, w = size
-    rgb = np.full((h, w, 3), 255, np.uint8)
-    yy, xx = np.mgrid[0:h, 0:w]
-    for (x0, y0), (x1, y1), *wide in lines:
-        p, q = np.array([x0, y0], float), np.array([x1, y1], float)
-        d = q - p
-        t = np.clip(((xx - p[0]) * d[0] + (yy - p[1]) * d[1]) / (d @ d), 0, 1)
-        dist = np.hypot(xx - (p[0] + t * d[0]), yy - (p[1] + t * d[1]))
-        # (a wedge: from nothing at its start to `wide` at its end)
-        half = (wide[0] * t / 2) if wide else width / 2
-        rgb[dist <= np.maximum(half, width / 2)] = 0
-    return rgb
+class Reading(unittest.TestCase):
+    """What a worker answers for a picture: its model's reading as the model gives it."""
 
+    PREDICTED = {
+        # (MolScribe's keys, and MolNexTR's: the same reading)
+        "molscribe": {
+            "atoms": [
+                {"atom_symbol": "C", "x": 0.1, "y": 0.2, "confidence": 0.98},
+                {"atom_symbol": "[2H]", "x": 0.5, "y": 0.9, "confidence": 0.4},
+                {"atom_symbol": "[OTBS]", "x": 0.9, "y": 0.1},
+            ],
+            "bonds": [
+                {"bond_type": "solid wedge", "endpoint_atoms": [0, 1], "confidence": 0.99},
+                {"bond_type": "aromatic", "endpoint_atoms": [0, 2], "confidence": 0.7},
+                {"bond_type": "dative", "endpoint_atoms": [1, 2]},
+            ],
+        },
+        "molnextr": {
+            "atom_sets": [
+                {"atom_symbol": "C", "coords": [0.1, 0.2], "confidence": 0.98},
+                {"atom_symbol": "[2H]", "coords": [0.5, 0.9], "confidence": 0.4},
+                {"atom_symbol": "[OTBS]", "coords": [0.9, 0.1]},
+            ],
+            "bond_sets": [
+                {"bond_type": "solid wedge", "endpoints": [0, 1], "confidence": 0.99},
+                {"bond_type": "aromatic", "endpoints": [0, 2], "confidence": 0.7},
+                {"bond_type": "dative", "endpoints": [1, 2]},
+            ],
+        },
+    }
 
-@unittest.skipUnless(SCIENCE, "needs numpy and SciPy")
-class Places(unittest.TestCase):
-    # a zigzag of four carbons, 40 pixels a bond, as the picture draws it
-    PTS = [(40, 80), (75, 60), (110, 80), (145, 60)]
-    BONDS = [(0, 1), (1, 2), (2, 3)]
+    def test_gives_the_models_places_symbols_bonds_and_confidence_as_it_gives_them(self):
+        class Model:
+            def __init__(self, p):
+                self.p = p
 
-    def picture(self):
-        return drawn((140, 190), [(self.PTS[a], self.PTS[b]) for a, b in self.BONDS])
+            def predict_image(self, *a, **k):
+                return self.p
 
-    def test_puts_atoms_given_across_the_structure_where_the_picture_has_them(self):
-        xs = [p[0] for p in self.PTS]
-        ys = [p[1] for p in self.PTS]
-        # (as a model may give them: 0 to 1 across the structure's own extent, each way)
-        given = [((x - min(xs)) / (max(xs) - min(xs)), (y - min(ys)) / (max(ys) - min(ys))) for x, y in self.PTS]
         for name, w in WORKERS.items():
             with self.subTest(name):
-                got = w.fitted(self.picture(), given, self.BONDS)
-                for (x, y), (tx, ty) in zip(got, self.PTS):
-                    self.assertLess(np.hypot(x - tx, y - ty), 3, (name, got))
-
-    def test_puts_atoms_given_across_the_cropped_picture_where_the_picture_has_them(self):
-        rgb = self.picture()
-        dark = rgb.mean(axis=2) < 160
-        ys, xs = np.nonzero(dark)
-        for name, w in WORKERS.items():
-            with self.subTest(name):
-                # (as a model may give them: 0 to 1 across the picture as it cropped it, its white round it)
-                left, top = xs.min() - w.PAD, ys.min() - w.PAD
-                cw, ch = xs.max() + 1 + w.PAD - left, ys.max() + 1 + w.PAD - top
-                given = [((x - left) / cw, (y - top) / ch) for x, y in self.PTS]
-                got = w.fitted(rgb, given, self.BONDS)
-                for (x, y), (tx, ty) in zip(got, self.PTS):
-                    self.assertLess(np.hypot(x - tx, y - ty), 3, (name, got))
-
-    def test_tells_which_end_of_a_wedge_is_drawn_narrow(self):
-        a, b = (40, 60), (100, 60)
-        wedge = drawn((120, 140), [(a, b, 12)]) < 128
-        hashed = drawn((120, 140), [((x, 60 - 6 * (x - 40) / 60), (x, 60 + 6 * (x - 40) / 60)) for x in range(44, 101, 7)], width=1.5) < 128
-        line = drawn((120, 140), [(a, b)]) < 128
-        for name, w in WORKERS.items():
-            with self.subTest(name):
-                self.assertEqual(w.narrow_end(wedge.any(axis=2), a, b), "a")
-                self.assertEqual(w.narrow_end(wedge.any(axis=2), b, a), "b")
-                self.assertEqual(w.narrow_end(hashed.any(axis=2), a, b), "a")
-                # (as wide all along: not told)
-                self.assertIsNone(w.narrow_end(line.any(axis=2), a, b))
+                w._model["it"] = Model(self.PREDICTED[name])
+                picture_of, w.picture_of = w.picture_of, lambda picture: None
+                try:
+                    got = w.op_read_picture({"picture": ""})
+                finally:
+                    w._model.clear()
+                    w.picture_of = picture_of
+                self.assertEqual(
+                    got,
+                    {
+                        "atoms": [
+                            {"x": 0.1, "y": 0.2, "el": "C", "confidence": 0.98},
+                            {"x": 0.5, "y": 0.9, "el": "H", "isotope": 2, "confidence": 0.4},
+                            {"x": 0.9, "y": 0.1, "label": "OTBS"},
+                        ],
+                        # (a bond of a type it does not know, left out)
+                        "bonds": [
+                            {"a": 0, "b": 1, "order": 1, "stereo": "up", "confidence": 0.99},
+                            {"a": 0, "b": 2, "order": 1, "aromatic": True, "confidence": 0.7},
+                        ],
+                        "pad": w.PAD,
+                    },
+                )
 
 
 if __name__ == "__main__":

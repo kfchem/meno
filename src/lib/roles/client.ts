@@ -9,6 +9,7 @@
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
 import type { OptionValues } from "../options";
+import type { SmilesRead } from "../chem/smilesWhy";
 import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
@@ -17,8 +18,12 @@ export type ChemRequests = {
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
   from_smiles: { args: { smiles: string }; result: { molblock: string } };
+  /** What the toolkit makes of a SMILES, as facts - whether it reads, whether it parses at all, the problems its own check finds (lib/chem/smilesWhy): Meno says why in words. */
+  smiles_read: { args: { smiles: string }; result: SmilesRead };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
   analyse: { args: { molblock: string }; result: Analysis };
+  /** What the toolkit makes of each structure drawn, its parts as MOL blocks, as facts (`StructureFacts`) for Meno's *Check structures* to decide on. */
+  structure_facts: { args: { structures: { molblocks: string[] }[] }; result: { structures: StructureFacts[] } };
   /**
    * The stereocentres and double bonds left open, by index, and how many
    * stereoisomers they make - but for those `like` gives a configuration.
@@ -43,7 +48,7 @@ export type ChemRequests = {
     /**
      * `options`: those the plugin declares for the role (its manifest's
      * roleOptions), as chosen in Settings. `onPage`: made for Meno's own page
-     * (each conformer once, laid over the first, alike atoms in like places -
+     * (of two enantiomers, one made as the other's mirror image -
      * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
      */
     args: { molblock: string; isomers?: "one" | "all"; count?: number; like?: Like; options?: OptionValues; onPage?: true };
@@ -73,18 +78,21 @@ export type ChemRequests = {
 
 /**
  * The structure drawn in a picture, as the plugin that reads pictures reads
- * it: its atoms where the picture has them, in its pixels from its top
- * left - each an element, with its charge, or a label as it is drawn (a
- * group's: OTBS); its bonds, by index; and what the plugin is unsure of, by
- * no number. A wedge or a hash says which end lies nearer - `up`, `b`
- * nearer than `a`; `down`, farther - and, where the plugin can tell, which
- * end the picture draws narrow (`narrow`): a picture's reader may know
- * only the first, a wedge narrow at one end being a hash narrow at the
- * other. No structure found: no atoms.
+ * it - its model's reading, as the model gives it: its atoms' places, as
+ * the model gives them, across the picture as it cropped it - `pad`, the
+ * white it keeps round what is drawn, in pixels - or across the structure
+ * itself; each atom an element, with its charge and, where the model gives
+ * one, its isotope's mass number, or a label as it is drawn (a group's:
+ * OTBS) - neither, where the model gives no symbol; its bonds, by index -
+ * a wedge or a hash saying which end lies nearer (`up`, `b` nearer than
+ * `a`; `down`, farther), which is all a model tells; and the model's
+ * confidence in each, from 0 to 1, where it gives one. No structure found:
+ * no atoms. Meno lays it on the picture (lib/figure/inkFit).
  */
 export type PictureRead = {
-  atoms: { x: number; y: number; el?: string; charge?: number; label?: string; unsure?: true }[];
-  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; narrow?: "a" | "b"; unsure?: true }[];
+  atoms: { x: number; y: number; el?: string; charge?: number; isotope?: number; label?: string; confidence?: number }[];
+  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; confidence?: number }[];
+  pad?: number;
 };
 
 /**
@@ -109,19 +117,27 @@ export type Like = Record<number, [number, number, number]>;
 
 /**
  * One stereoisomer's conformers: its atoms - those of the block in their
- * order, then the hydrogens made for them - its bonds by index, each
- * conformer's coordinates in angstroms, laid over the first, and its energy
- * in hartrees, lowest first - none where no force field had parameters for a
- * metal in it, and the conformers are not ranked; the force field's name
- * ("none" where none was used); and the CIP label of
- * every stereocentre and double bond, and of those that were left open and
- * chosen, by the block's atom and bond index.
+ * order, then the hydrogens made for them - its bonds by index, and every
+ * conformer the search made, in the order it made them: its coordinates in
+ * angstroms and its energy in hartrees - none where no force field had
+ * parameters for a metal in it, and then those of the model it was optimised
+ * in, where it gives them (`modelEnergies`); the force field's name ("none"
+ * where none was used); and the CIP label of every stereocentre and double
+ * bond, and of those that were left open and chosen, by the block's atom and
+ * bond index. The page keeps each conformer once and lays them over each
+ * other (Workspace/chem/pageConformers).
  */
 export type Conformers = {
   atoms: { el: string; charge: number }[];
   bonds: { a1: number; a2: number; order: 1 | 2 | 3 }[];
   frames: number[][];
   energies?: number[];
+  /**
+   * The energies of the model the conformers were optimised in, in hartrees,
+   * where that is not the molecule - a lighter metal of its group standing
+   * in, eta rings held - and `energies` are not given: for their order alone.
+   */
+  modelEnergies?: number[];
   /** The stars at the centres of the rings or chains bound to a metal through all their atoms (V3000 ENDPTS), by atom: placed at each one's centre, and no atoms of the molecule. */
   stars?: number[];
   field: string;
@@ -133,6 +149,17 @@ export type Conformers = {
   chosen: { atoms: Record<string, string>; bonds: Record<string, string> };
   smiles: string;
 };
+
+/**
+ * One atom of a structure drawn as the toolkit makes it: its element, atomic
+ * number and charge; the valence it gives it, and the most it could be where
+ * the toolkit knows (`most`: by the element's valences, or a charged atom's
+ * by those of the element it then has the electrons of); its unpaired
+ * electrons; and which part of the structure it is in, by number.
+ */
+export type FactAtom = { el: string; z: number; charge: number; valence: number; most?: number; radicals: number; part: number };
+/** A structure drawn as the toolkit makes it: each atom (`FactAtom`), and what it could not make sense of, in its words (`problem`) - or not read at all. */
+export type StructureFacts = { read: false } | { read: true; atoms: FactAtom[]; problem?: string };
 
 export type ChemOp = keyof ChemRequests;
 

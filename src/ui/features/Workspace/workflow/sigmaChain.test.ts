@@ -56,7 +56,8 @@ describe("the symmetry a free energy was worked out with, from Frequencies throu
     // (-> Energy at DFT: its single point carries the frequencies' G correction, with its sigma)
     const spOut = { schema: 1, program: "ORCA", method: "B3LYP", basis: "def2-TZVP", solvation: "none", atoms: ["O", "H", "H"], frames: [f.xyz], energies: [-76.4] } as unknown as ReaderOutput;
     const sp = worked(workedOf("energy", f, spOut, ["cclib 1.9rc1"]));
-    expect(sp.properties?.["thermo.g-correction"]?.by).toMatchObject({ method: "GFN2-xTB", pointGroup: "c2v", symmetryNumber: 2 });
+    // (its point group as Meno writes one, whatever case it was printed in: results `symmetryText`)
+    expect(sp.properties?.["thermo.g-correction"]?.by).toMatchObject({ method: "GFN2-xTB", pointGroup: "C2v", symmetryNumber: 2 });
     // (-> Add: energy + thermo.g-correction, each part as it was - its sigma in its by)
     const [m] = resultsOf({ ok: true, holds: "molecules", kept: [sp], aside: [], said: "" }, "energy").molecules;
     let doc = addMolecule3d(emptyWorkspaceDocument(), { ...m, at: { x: 0, y: 0 } } as never);
@@ -68,11 +69,11 @@ describe("the symmetry a free energy was worked out with, from Frequencies throu
     const g = setMolecules(done, resultOf(done, add)!)[0].properties![0].G;
     expect(g.value as number).toBeCloseTo(-76.4 + 0.02, 9);
     const correction = g.parts?.find((p) => p.property === "thermo.g-correction");
-    expect(correction?.by).toMatchObject({ method: "GFN2-xTB", pointGroup: "c2v", symmetryNumber: 2 });
+    expect(correction?.by).toMatchObject({ method: "GFN2-xTB", pointGroup: "C2v", symmetryNumber: 2 });
     // (the electronic energy's part has none: it counts no rotation)
     expect(g.parts?.find((p) => p.property === "energy")?.by).not.toHaveProperty("symmetryNumber");
     // (and through the workspace's file and back)
     const back = propertyIn(JSON.parse(JSON.stringify(g)));
-    expect(back?.parts?.find((p) => p.property === "thermo.g-correction")?.by).toMatchObject({ pointGroup: "c2v", symmetryNumber: 2 });
+    expect(back?.parts?.find((p) => p.property === "thermo.g-correction")?.by).toMatchObject({ pointGroup: "C2v", symmetryNumber: 2 });
   });
 });

@@ -33,17 +33,19 @@ jobs:
       # A plugin's worker that needs Python alone is tested here; those that
       # need their packages, in the job "plugins" below.
       - run: python3 -m unittest scripts/calc/test_plugin_gaussian.py
+      - run: python3 -m unittest scripts/calc/test_reader_gaussian.py
       - run: python3 -m unittest scripts/calc/test_plugin_orca.py
+      - run: python3 -m unittest scripts/calc/test_reader_orca.py
       - run: python3 -m unittest scripts/calc/test_plugin_xtb.py
+      - run: python3 -m unittest scripts/calc/test_reader_xtb.py
       - run: python3 -m unittest scripts/calc/test_plugin_crest.py
       - run: python3 -m unittest scripts/calc/test_plugin_blender.py
+      - run: python3 -m unittest scripts/calc/test_plugin_blender_presets.py
       - run: python3 -m unittest scripts/calc/test_plugin_nci.py
       - run: python3 -m unittest scripts/calc/test_plugin_pictures.py
-      - run: python3 -m unittest scripts/calc/test_plugin_wfx.py
       - run: python3 -m unittest scripts/calc/test_plugin_reinvent.py
       - run: python3 -m unittest scripts/calc/test_plugin_crem.py
       - run: python3 -m unittest scripts/calc/test_charge_multiplicity.py
-      - run: python3 -m unittest scripts/calc/test_reader_pyscf_species.py
 
   frontend-windows:
     name: Frontend tests on Windows

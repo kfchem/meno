@@ -118,7 +118,7 @@ describe("a set holding a table", () => {
 describe("a table's heads, and its frame", () => {
   const changes: Table = {
     columns: [
-      { name: "reaction.product", kind: "text", label: "Product" },
+      { name: "map.entry", kind: "text", label: "Product" },
       { name: "atom 1", kind: "number", unit: "none" },
       { name: "distance", kind: "number", unit: "Å" },
     ],
@@ -129,7 +129,7 @@ describe("a table's heads, and its frame", () => {
 
   it("heads a column with its label where it has one - its name kept as its key, said on hover - and a number's head over its numbers, at the right", () => {
     const html = renderToString(<TableBody table={changes} />);
-    expect(html).toMatch(/<th[^>]*title="Product · reaction.product"[^>]*>Product<\/th>/);
+    expect(html).toMatch(/<th[^>]*title="Product · map.entry"[^>]*>Product<\/th>/);
     expect(html).not.toMatch(/>reaction\.product</);
     expect(html).toMatch(/<th class="[^"]*text-right[^"]*"[^>]*title="distance \(Å\)"/);
     expect(html).toMatch(/<th class="[^"]*text-left[^"]*"[^>]*title="Product/);
@@ -167,8 +167,8 @@ describe("a table's heads, and its frame", () => {
   it("keeps a column's label in the file, and reads one that does not read as none, the column kept", () => {
     const lost = () => {};
     expect(tableIn(JSON.parse(JSON.stringify(changes)), lost)).toEqual(changes);
-    const bad = tableIn({ ...changes, columns: [{ name: "reaction.product", kind: "text", label: 7 }, ...changes.columns.slice(1)] }, lost)!;
-    expect(bad.columns[0]).toEqual({ name: "reaction.product", kind: "text" });
+    const bad = tableIn({ ...changes, columns: [{ name: "map.entry", kind: "text", label: 7 }, ...changes.columns.slice(1)] }, lost)!;
+    expect(bad.columns[0]).toEqual({ name: "map.entry", kind: "text" });
   });
 
   it("is as tall as the rows it shows, its line under them: no taller", () => {

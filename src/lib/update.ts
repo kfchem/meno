@@ -17,7 +17,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
 import { askToConnect, useNetwork, type ConsentRequest, type NetTask } from "./net/network";
 import { useAppSettings } from "./settings/appSettings";
-import { useGuide } from "./plugins/guides";
+import { useGuide } from "./guide/guide";
 import { afterFirstAction } from "./firstAction";
 
 /** The purpose Meno's network knows updating by. */
@@ -68,11 +68,11 @@ const UPDATE_HOSTS = ["github.com", "release-assets.githubusercontent.com"];
 export const UPDATE_CONSENT: ConsentRequest = {
   purpose: UPDATE_PURPOSE,
   title: "Keep Meno up to date?",
+  // (that each connection is shown and recorded, that none is made offline, and that a yes can be taken back: the
+  //  dialog's small print, said once for every question - ui/network/ConsentDialog)
   detail:
     "Meno looks on GitHub for a newer version shortly after it starts and once a day while it runs, " +
-    "downloads it in the background (about 20 MB), and installs it when you quit. Every " +
-    "connection is shown as it is made, and nothing goes out while Meno works offline. " +
-    "You can take this back in Settings, under Network.",
+    "downloads it in the background (about 20 MB), and installs it when you quit.",
   sources: UPDATE_HOSTS,
   // (and the hosts the look may reach: those alone - src-tauri/src/net.rs)
   hosts: UPDATE_HOSTS,
@@ -229,7 +229,7 @@ export function startUpdates(): () => void {
     let pressed = false;
     const ask = afterFirstAction(
       askNow,
-      () => pressed || !!useGuide.getState().open,
+      () => pressed || useGuide.getState().open != null,
       (changed) => {
         const down = () => {
           pressed = true;

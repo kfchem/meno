@@ -29,6 +29,7 @@ import importlib.util
 import json
 import pathlib
 import random
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -36,9 +37,18 @@ PLUGINS = ROOT / "src-tauri/resources/plugins"
 
 
 def load(plugin):
-    spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # (a worker imports the modules beside it - its reader - from its own folder, as Python started on it has that folder on its
+    #  path; each plugin's own, so that one's is never another's taken from those already imported)
+    folder = str(PLUGINS / plugin)
+    sys.path.insert(0, folder)
+    sys.modules.pop("reader", None)
+    try:
+        spec = importlib.util.spec_from_file_location(f"plugin_{plugin}", PLUGINS / plugin / "worker.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(folder)
+        sys.modules.pop("reader", None)
     return module
 
 
@@ -133,6 +143,14 @@ def xmol(e, comment):
     return "\n".join([str(len(e["atoms"])), comment] + [f"{a['el']}  {a['x']:.6f} {a['y']:.6f} {a['z']:.6f}" for a in e["atoms"]]) + "\n"
 
 
+def xtb_log(e):
+    """An xtb run's log of an entry, as xtb 6.7.1 prints its parts the worker reads: the table of its atoms (each
+    on a row of its own), its total energy, and its end - the charge and unpaired electrons of its setup left out,
+    so that what is read back is the entry's."""
+    rows = "".join(f"    {k + 1}    {xtb.reader.ELEMENTS.index(a['el'])} {a['el']:<2}     {k + 1}\n" for k, a in enumerate(e["atoms"]))
+    return f"   ID    Z sym.   atoms\n{rows}\n          | TOTAL ENERGY               -5.070000000000 Eh   |\n * finished run on 2026/01/01 at 12:00:01.000\n"
+
+
 def flag(args, name):
     """The value given after a flag on a command line, where it is there once."""
     at = [i for i, a in enumerate(args) if a == name]
@@ -162,16 +180,12 @@ class Xtb(unittest.TestCase):
                     self.assertEqual(written(job), {}, "a .CHRG or .UHF file besides the command line")
 
     def test_what_it_reads_back_keeps_each_entry_s_own(self):
-        dump = json.dumps({"total energy": -5.07})
         for given in sets():
             for kind in ("optimise", "energy", "frequencies"):
                 for e in given:
-                    files = {"xtbout.json": dump, **({"xtbopt.log": xmol(e, " energy: -5.06 gnorm: 0.1") + xmol(e, " energy: -5.07 gnorm: 0.0001"), ".xtboptok": ""} if kind == "optimise" else {})}
-                    out = ask(xtb, "collect", step=kind, entries=[e], options=defaults("xtb", kind), files=files, log="", ended="done")["outputs"]
+                    files = {"xtbopt.log": xmol(e, " energy: -5.06 gnorm: 0.1") + xmol(e, " energy: -5.07 gnorm: 0.0001")} if kind == "optimise" else {}
+                    out = ask(xtb, "collect", step=kind, entries=[e], options=defaults("xtb", kind), files=files, log=xtb_log(e), ended="done")["outputs"]
                     self.assertEqual([state(o) for o in out], [state(e)], e["name"])
-            # (several read back at once: each its own, never another's)
-            out = ask(xtb, "collect", step="energy", entries=given, options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"]
-            self.assertEqual([state(o) for o in out], [state(e) for e in given])
 
 
 class Crest(unittest.TestCase):
@@ -310,19 +324,6 @@ class Rdkit(unittest.TestCase):
                 self.assertEqual(marks(molecule["atoms"]), marks(given[i]["atoms"]), given[i]["name"])
                 # (and the molecule RDKit makes of them has the entry's charge)
                 self.assertEqual(rdkit.Chem.GetFormalCharge(rdkit.mol_of(molecule)), given[i]["charge"], given[i]["name"])
-
-    def test_duplicates_never_sets_aside_one_of_another_charge_or_spin(self):
-        # (singlet and triplet methylene, in the very same shape: different species, both kept)
-        atoms = [{"el": "C", "x": 0.0, "y": 0.0, "z": 0.0}, {"el": "H", "x": 1.1, "y": 0.0, "z": 0.0}, {"el": "H", "x": -0.4, "y": 1.0, "z": 0.0}]
-        bonds = [{"a1": 0, "a2": 1, "order": 1}, {"a1": 0, "a2": 2, "order": 1}]
-        singlet = {"name": "singlet", "atoms": atoms, "bonds": bonds, "charge": 0, "multiplicity": 1, "compound": 0}
-        triplet = {"name": "triplet", "atoms": [dict(a, radical=3) if a["el"] == "C" else a for a in atoms], "bonds": bonds, "charge": 0, "multiplicity": 3, "compound": 0}
-        for holds in ("molecules", "conformers"):
-            kept = ask(rdkit, "run", step="duplicates", entries=[singlet, triplet], options={}, holds=holds)["kept"]
-            self.assertEqual(kept, [0, 1], holds)
-        # (and two of one species in that shape: one set aside)
-        kept = ask(rdkit, "run", step="duplicates", entries=[singlet, dict(singlet, name="again")], options={}, holds="molecules")["kept"]
-        self.assertEqual(kept, [0])
 
     def test_what_it_reads_back_says_no_charge_or_multiplicity(self):
         e = entries_of(7, 1)[0]

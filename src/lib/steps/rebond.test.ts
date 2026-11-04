@@ -23,7 +23,7 @@ describe("Re-bond", () => {
   const reactant = da.reactants[0];
   const mapped = mapReaction({ reactants: [reactant], products: [da.product] });
   if ("error" in mapped) throw new Error(mapped.message);
-  // the product in the reactants' numbering, as the Reaction step gives it
+  // the product in the reactants' numbering, as the Atom map step gives it
   const product = mapped.productsInReactantNumbering[0];
 
   it("gives the reactant's geometry the product's bonds - the known Diels-Alder ring - in the reactants' numbering", () => {

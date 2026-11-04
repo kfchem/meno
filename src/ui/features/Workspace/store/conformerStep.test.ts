@@ -11,8 +11,8 @@ import { stereoOpenOf } from "../chem/fromSmiles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 
-/** What RDKit's worker was asked: each structure's molblock, and the options it was given. */
-const asked: { molblock: string; options: Record<string, unknown> }[] = [];
+/** What RDKit's worker was asked: each structure's molblock, how many to try, and the options it was given. */
+const asked: { molblock: string; count?: number; options: Record<string, unknown> }[] = [];
 /**
  * How many times RDKit's worker was taken; whether it makes none of methanol, saying nothing of why; whether it
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
@@ -86,6 +86,7 @@ import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
+import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
 import { setMembers } from "../workflow/entries";
 import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
@@ -383,14 +384,25 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
   });
 
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {
-    useAppSettings.setState((s) => ({ ...s, options: { ...s.options, "role:conformers": { count: 12, field: "UFF" } } }));
+    useAppSettings.setState((s) => ({ ...s, chemistry: { ...s.chemistry, sought3d: "fixed", count3d: 12 }, options: { ...s.options, "role:conformers": { field: "UFF" } } }));
     await searched();
-    expect(asked[0].options).toMatchObject({ sought: "needed", count: 12, field: "UFF", iters: 2000, seed: 19781 });
-    // (offered on the step's card as its own, those chosen in Settings its defaults - how many sought among
-    //  them: as many as the molecule needs, or a number, which is shown only when a number is asked for)
+    expect(asked[0].options).toMatchObject({ field: "UFF", iters: 2000, seed: 19781 });
+    // (how many to try, Meno's: sent beside the plugin's options)
+    expect(asked.map((a) => a.count)).toEqual([12, 12, 12]);
+    // (offered on the step's card - how many sought, Meno's, first: as many as the molecule needs, or a number,
+    //  shown only when a number is asked for - then the plugin's, those chosen in Settings their defaults)
     const offered = optionsFor("conformers", "rdkit");
     expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
+    // (a plugin whose search takes no number of tries is offered none)
+    expect(optionsFor("conformers", "crest").map((o) => o.id)).not.toContain("sought");
+  });
+
+  it("tries as many as each molecule needs, where the chemist asks for no number", async () => {
+    useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings } }));
+    await searched();
+    // (water, ethane and methanol: nothing in any of them turns - lib/chem/conformersSought)
+    expect(asked.map((a) => a.count)).toEqual([FEW_CONFORMERS, FEW_CONFORMERS, FEW_CONFORMERS]);
   });
 
   it("leaves a step whose plugin declares options of its own for it as it was", () => {

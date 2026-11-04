@@ -6,14 +6,14 @@
  * readers chosen to read it as well, whose results join it as they come,
  * so that a slow one never holds the file up. Every reader's results are
  * kept, each its own; Meno's own forms - the geometries, what the
- * calculation was - are the reader's. What nothing added reads says what
- * would, as the catalogues of the plugins added suggest.
+ * calculation was - are the reader's. What nothing added reads says which
+ * plugins not added would, as each says it reads (lib/io/kinds `offeredKinds`).
  */
 import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
-import { alsoReadersFor, anyPluginById, READERS, readerFor, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
+import { alsoReadersFor, anyPluginById, READERS, readerFor, readersUndecided, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
 import { forThisSystem } from "../plugins/here";
-import { frameReads, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
+import { frameReads, givenResults, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
 import { readResults, type Result } from "./results";
 import { addedReaders, readerClient, useReaders } from "./workers";
 import { publishReading } from "./readings";
@@ -21,8 +21,8 @@ import { checkedStructures, type StructureRead } from "../io/structures";
 
 /**
  * Why a file is not read: no plugin added reads it. `suggest` holds the
- * plugins a catalogue of a plugin added suggests for it, by id - those
- * Meno has and that are made for this system - each to add.
+ * plugins not added that read it, by id - those Meno has and that are made
+ * for this system - each to add.
  */
 export class NotRead extends Error {
   constructor(
@@ -35,9 +35,9 @@ export class NotRead extends Error {
 
 /**
  * Who reads a file of `kind`: its reader, and those that read it as well;
- * or why no one can - no reader added reads it - with the plugins the
- * catalogues of the plugins added suggest for it (`kind.suggest`). Meno
- * itself names none.
+ * or why no one can - no reader added reads it - with the plugins not
+ * added that read it (`kind.suggest`, as each says it reads). Meno itself
+ * names none.
  */
 export function whoReads(
   kind: Kind,
@@ -48,6 +48,9 @@ export function whoReads(
 ): { reader: ReaderPlugin; also: ReaderPlugin[] } | NotRead {
   const reader = readerFor(kind.id, added, choices, readers);
   if (reader) return { reader, also: alsoReadersFor(kind.id, added, choices, readers) };
+  // (several added read it, and nothing says which: the chemist chooses - never the first by its name)
+  const undecided = readersUndecided(kind.id, added, choices, readers);
+  if (undecided.length) return new NotRead(`${name} (${kind.name}): ${undecided.map((p) => p.name).join(" and ")} each read it - choose which in Settings, Files.`);
   const could = (kind.suggest ?? []).map(anyPluginById).filter((p): p is Plugin => !!p && !added.has(p.id) && forThisSystem(p));
   return could.length
     ? new NotRead(`${name} (${kind.name}): ${could.map((p) => p.name).join(" or ")} would read it.`, could.map((p) => p.id))
@@ -103,7 +106,7 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
   // read, each its own mark: one that does not read left out with its mark, never all marks with it)
   const marking = taken.find((f) => sameFrames(f.output) && marksOf(f.output));
   const marks = marking ? marksOf(marking.output) : null;
-  const results: Result[] = taken.flatMap((f) => readResults(f.output.results, atoms.length, sameFrames(f.output) ? frames.length : 0, f.from));
+  const results: Result[] = taken.flatMap((f) => readResults(givenResults(f.output), atoms.length, sameFrames(f.output) ? frames.length : 0, f.from));
   const perFrame = <K extends "populations" | "degeneracies">(pick: (o: ReaderOutput) => ReaderOutput[K], key: K) => {
     const v = first((o) => {
       const got = pick(o);
@@ -113,6 +116,7 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
   };
   const imaginary = taken.find((f) => sameFrames(f.output) && Array.isArray(f.output.imaginary))?.output.imaginary;
   const warnings = first((o) => (Array.isArray(o.warnings) && o.warnings.length ? o.warnings : null));
+  const masses = first((o) => (Array.isArray(o.masses) && o.masses.length === atoms.length ? o.masses : null));
   return {
     output: {
       schema: OUTPUT_SCHEMA,
@@ -125,6 +129,8 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       multiplicity: first((o) => o.multiplicity),
       optimised: first((o) => o.optimised),
       atoms,
+      // (each atom's mass as the program used it, from the first that gives one to each)
+      ...(masses ? { masses } : {}),
       frames,
       energies: first((o) => (sameFrames(o) && o.energies?.length === frames.length ? o.energies : null)),
       // (each geometry's population and degeneracy, where a reader gives them - of these geometries, as energies are)

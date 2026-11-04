@@ -1,4 +1,6 @@
 import { chemWorker } from "../../../../lib/roles/worker";
+import type { ChemClient } from "../../../../lib/roles/client";
+import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
 import { laidOut } from "./cleanUp";
@@ -12,13 +14,27 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
  */
 export async function structureFromSmiles(smiles: string, style?: DrawingStyle): Promise<Model & { stereoOpen?: StereoOpen; asCame?: string }> {
   const c = await chemWorker("smiles");
-  const { molblock } = await c.request("from_smiles", { smiles });
+  const molblock = await molblockOfSmiles(c, smiles);
   // (and how many of its stereocentres and double bonds the SMILES leaves without a configuration - asked of the same
   //  plugin, by the one definition a step refusing a structure for it uses (`stereo_left_open`), while it is drawn:
   //  none said where it cannot be asked, or does not answer in time - the structure comes all the same)
   const [open, drawn] = await Promise.all([withinTime(c.request("stereo_left_open", { molblock }), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style)]);
   const stereoOpen = stereoOpenOf(open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
+}
+
+/**
+ * A SMILES read by the plugin that fills the SMILES role, as its MOL block. Where it cannot be read, why is said in
+ * Meno's words (lib/chem/smilesWhy), from the SMILES itself and what the plugin says its toolkit made of it
+ * (`smiles_read`); any other refusal is passed on as it came.
+ */
+export async function molblockOfSmiles(c: ChemClient, smiles: string): Promise<string> {
+  try {
+    return (await c.request("from_smiles", { smiles })).molblock;
+  } catch (e) {
+    if (!(e instanceof Error) || e.message.trim() !== NOT_READ) throw e;
+    throw new Error(await notReadSaid(smiles, (s) => c.request("smiles_read", { smiles: s })));
+  }
 }
 
 /** How long the stereo a SMILES leaves open is waited for, in ms: no longer than a paste should wait for what it says. */

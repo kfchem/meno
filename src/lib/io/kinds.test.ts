@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { extensionOf, kindOf, kinds, probeCandidates, registerKinds, registered } from "./kinds";
+import { extensionOf, kindOf, kinds, offeredKinds, probeCandidates, quotedEnergies, quotedTables, registerKinds, registered } from "./kinds";
 import { acceptManifest, type Manifest } from "../plugins/manifest";
 import { MANIFESTS } from "../plugins/known";
+import { pluginOf, readerFor, type ReaderPlugin } from "../calc/catalog";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../samples/diels-alder.rxn?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
@@ -72,10 +73,15 @@ describe("what a file is", () => {
   });
 
   it("is no program's output where no plugin added brings its kind: Meno knows no program", () => {
-    expect(kinds().map((k) => k.id)).toEqual(["meno-workspace", "meno-record", "rxn", "mol", "sdf", "xyz", "pdb", "cube"]);
+    expect(kinds().map((k) => k.id)).toEqual(["meno-workspace", "meno-record", "rxn", "mol", "sdf", "xyz", "pdb", "cube", "wfx", "molden"]);
     expect(id("job.out", ORCA)).toBeNull();
     expect(id("run.log", GAUSSIAN)).toBeNull();
-    expect(id("", "[Molden Format]\n")).toBeNull();
+  });
+
+  it("is a WFX file or a Molden file by what starts its sections, any case: kinds programs of every kind write, which Meno knows itself", () => {
+    expect(id("water.wfx", "<Title>\n water\n</Title>\n<number of primitives>\n 7\n</Number of Primitives>\n")).toBe("wfx");
+    expect(id("", "[Molden Format]\n[Atoms] AU\n")).toBe("molden");
+    expect(id("orbitals.input", "[MOLDEN FORMAT]\n")).toBe("molden");
   });
 
   it("is the program's whose banner comes first, where an output holds another's too", () => {
@@ -171,6 +177,36 @@ describe("kinds a plugin registers", () => {
     expect(kindOf("x", ORCA, all)?.id).toBe("orca");
   });
 
+  it("are coloured by the grammar of the plugin whose own program writes them, else by the first's", () => {
+    const grammar = { file: "orca-output.grammar", tones: { Landmark: "landmark" } };
+    const own = (writtenBy?: string, id = "program-own") =>
+      acceptManifest({
+        id,
+        name: "The program's plugin",
+        version: "1",
+        environment: "uv",
+        reads: ["orca"],
+        kinds: [{ id: "orca", name: "ORCA output", program: "ORCA", extensions: [".out"], marks: [{ text: "* O R C A *" }], grammar, ...(writtenBy ? { writtenBy } : {}) }],
+        steps: [{ kinds: ["energy"], programs: ["orca"] }],
+      })!;
+    // (a plugin that brings the kind and its grammar, and says nothing of who writes it)
+    const first = own(undefined, "first");
+    const orcaOf = (ms: Manifest[]) => registered(ms).kinds.find((x) => x.id === "orca")!;
+    // (its own program's plugin's, whichever comes first)
+    expect(orcaOf([first, own("orca")]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([own("orca"), first]).grammar?.plugin).toBe("program-own");
+    // (no plugin says its program writes it: the first's, as before)
+    expect(orcaOf([first, own()]).grammar?.plugin).toBe("first");
+    // (two say so: the first's, in Meno's order - the plugin that reads it by default)
+    const second = own("orca", "program-other");
+    expect(orcaOf([first, own("orca"), second]).grammar?.plugin).toBe("program-own");
+    expect(orcaOf([second, own("orca")]).grammar?.plugin).toBe("program-other");
+    const both = new Set(["program-own", "program-other"]);
+    const asReader = (p: Manifest) => pluginOf(p) as ReaderPlugin;
+    expect(readerFor("orca", both, { read: {}, also: {} }, [asReader(own("orca")), asReader(second)])?.id).toBe("program-own");
+    expect(readerFor("orca", both, { read: {}, also: {} }, [asReader(second), asReader(own("orca"))])?.id).toBe("program-other");
+  });
+
   it("are Meno's, where a plugin brings a kind of the id of one of Meno's", () => {
     const { kinds: all } = registered([nbo([{ id: "xyz", name: "NBO's XYZ", program: "NBO", extensions: [".nboxyz"], marks: [{ text: "NBO XYZ FRAME" }] }])]);
     expect(all.filter((x) => x.id === "xyz")).toEqual([{ id: "xyz", name: "XYZ file", extensions: [".xyz"] }]);
@@ -210,31 +246,52 @@ describe("kinds a plugin registers", () => {
   });
 });
 
-describe("kinds a plugin's catalogue names", () => {
-  const guide = (id: string, files: unknown[]): Manifest => acceptManifest({ id, name: id, version: "1", guide: [{ title: "Hi", text: "Hello." }], files })!;
+describe("kinds only plugins not added read", () => {
+  // (a made-up plugin that reads one kind: Meno knows none of these names)
+  // (its program, run by a step: the one whose output a kind of it may say it is, `writtenBy`)
+  const reader = (id: string, kind: unknown): Manifest => acceptManifest({ id, name: id, version: "1", environment: "uv", reads: [(kind as { id: string }).id], kinds: [kind], steps: [{ kinds: ["energy"], programs: [id] }] })!;
+  const out = { id: "nbo-out", name: "NBO output", extensions: [".nbo"], marks: [{ text: "N A T U R A L   A T O M I C" }] };
 
-  it("are told by their own marks, each with the plugins suggested to read it - two catalogues' of one id one kind", () => {
-    const { catalogued, kinds: brought } = registered([
-      guide("a", [{ id: "nbo-out", name: "NBO output", extensions: [".nbo"], marks: [{ text: "N A T U R A L   A T O M I C" }], suggest: ["nbo"] }]),
-      guide("b", [{ id: "nbo-out", name: "NBO's", extensions: [".47"], marks: [{ text: "$GENNBO NATOMS" }], suggest: ["nbo", "nbo-lite"] }]),
+  it("are told by their own marks, each with the plugins not added that read it - the one its program's own first - worked out from what each says it reads", () => {
+    const offered = [reader("lite", out), reader("nbo", { ...out, writtenBy: "nbo" }), reader("other", { id: "other-out", name: "Other", extensions: [".o"], marks: [{ text: "O T H E R   P R O G" }] })];
+    const kinds = offeredKinds(offered, []);
+    expect(kinds.map((k) => [k.id, k.suggest])).toEqual([
+      ["nbo-out", ["nbo", "lite"]],
+      ["other-out", ["other"]],
     ]);
-    expect(catalogued).toEqual([
-      {
-        id: "nbo-out",
-        name: "NBO output",
-        extensions: [".nbo", ".47"],
-        output: {},
-        marks: [{ text: "N A T U R A L   A T O M I C" }, { text: "$GENNBO NATOMS" }],
-        suggest: ["nbo", "nbo-lite"],
-      },
-    ]);
-    // (registered for no reader: Meno reads them with none)
-    expect(brought.map((k) => k.id)).not.toContain("nbo-out");
+    // (one a plugin added reads is no longer to be suggested for: that plugin reads it)
+    expect(offeredKinds(offered, [offered[2]]).map((k) => k.id)).toEqual(["nbo-out"]);
+    expect(offeredKinds(offered, [offered[0]]).map((k) => k.id)).toEqual(["other-out"]);
   });
 
-  it("may not take one of Meno's own files for theirs, as a plugin's kinds may not", () => {
-    const { catalogued, refused } = registered([guide("a", [{ id: "greedy", name: "Greedy", extensions: [], marks: [{ text: "RDKit 2D" }], suggest: ["x"] }])]);
-    expect(catalogued).toEqual([]);
-    expect(refused).toEqual([{ plugin: "a", kind: "greedy", mark: "RDKit 2D" }]);
+  it("are none told by asking alone - no plugin not added is asked - nor any that would take one of Meno's own files", () => {
+    const asked = reader("asks", { id: "asked", name: "Asked", extensions: [".a"], marks: [], probe: true });
+    const greedy = reader("greedy", { id: "greedy", name: "Greedy", extensions: [], marks: [{ text: "RDKit 2D" }] });
+    expect(offeredKinds([asked, greedy], [])).toEqual([]);
+  });
+
+  it("of the plugins Meno carries, name for each output a plugin added does not read the plugins that read it", () => {
+    registerKinds([], MANIFESTS);
+    const orca = offeredKinds(MANIFESTS, []).find((k) => k.id === "orca");
+    expect(orca?.suggest?.length).toBeGreaterThan(0);
+    for (const id of orca!.suggest!) expect(MANIFESTS.find((m) => m.id === id)?.reads).toContain("orca");
+    registerKinds([]);
+  });
+});
+
+describe("a program's lines and tables of atoms, as papers quote them", () => {
+  it("are those of the plugins added, read; and of those only offered, each with its plugin's name - to say whose a table is", () => {
+    const gaussian = MANIFESTS.find((m) => m.id === "gaussian")!;
+    const orca = MANIFESTS.find((m) => m.id === "orca")!;
+    registerKinds([orca], [gaussian, orca]);
+    expect(quotedEnergies().map((q) => q.id)).toEqual(["final-single-point"]);
+    expect(quotedTables().added).toEqual([]);
+    expect(quotedTables().offered.map((t) => [t.id, t.plugin])).toEqual([["orientation", gaussian.name]]);
+    registerKinds([gaussian, orca], [gaussian, orca]);
+    expect(quotedEnergies().map((q) => q.id)).toEqual(["scf-done", "final-single-point"]);
+    expect(quotedTables().added.map((t) => t.plugin)).toEqual([gaussian.name]);
+    expect(quotedTables().offered).toEqual([]);
+    registerKinds([]);
+    expect([quotedEnergies(), quotedTables()]).toEqual([[], { added: [], offered: [] }]);
   });
 });

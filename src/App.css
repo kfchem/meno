@@ -228,11 +228,11 @@ body {
 .meno-barred ::placeholder {
   color: transparent !important;
 }
-/* A workflow's port, however small it is drawn - zoomed out, with the page (workflow/look `portSize`) - taken hold of over at least 12 hairlines about its middle. */
+/* A workflow's port, however small it is drawn - zoomed out, with the page (workflow/look `portSize`) - taken hold of over at least 12 px about its middle (it is laid out in the screen's pixels). */
 .meno-port::after {
   content: "";
   position: absolute;
-  inset: min(0px, calc((var(--port) - var(--hair, 1px) * 12) / 2));
+  inset: min(0px, calc((var(--port) - 12px) / 2));
   border-radius: 9999px;
 }
 /* A style's card carried (StyleEditor/StylePicker3D): the hand's pointer all the way, over whatever it passes. */

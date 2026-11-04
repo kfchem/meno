@@ -1105,7 +1105,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   }
   // (a radical's electron: a small round dot by an atom, alone - two side by side for a pair - not a letter's, a hash's, nor a
   // line's round end or joint: a dot is drawn half as wide again as a line, or more, and lies at no line's end. Round: curved, or
-  // a polygon of a dozen corners or more, as RDKit draws one)
+  // a polygon of a dozen corners or more, as some drawings have one)
   const lineWidths = shapes.strokes.map((s) => s.w).sort((a, b) => a - b);
   const lineWidth = lineWidths.length ? lineWidths[Math.floor(lineWidths.length / 2)] : 0;
   const lineEnds = shapes.strokes.flatMap((s) => [s.a, s.b]);

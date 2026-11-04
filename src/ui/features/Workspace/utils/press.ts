@@ -57,8 +57,7 @@ export function joinedBy(held: number, buttons: number): boolean {
  * `held` buttons - a second button's press comes as a move of the pointer
  * with more buttons, not as a press of its own - and returns the end of
  * the listening. A long press so joined is no press at all: no structure
- * selected, no click on release, no drag (the maintainer's command centre,
- * 2026-10-14) - the chord does nothing, rather than half of one, as the
+ * selected, no click on release, no drag (2026-10-14) - the chord does nothing, rather than half of one, as the
  * menu opens none for it (`chordedPress`).
  */
 export function onChord(held: number, chord: () => void): () => void {

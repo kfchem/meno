@@ -36,9 +36,6 @@ const NUMBER = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eEdD][-+]?\d+|[-+]\d{3}(?![\d.]))?/g
 const valueOf = (t: string) => Number(t.replace(/[dD]/, "e").replace(/(\d)([-+]\d{3})$/, "$1e$2"));
 /** A value above which, in both directions, a grid is two-signed: an orbital's two phases. */
 const SIGNED_LEAST = 1e-6;
-/** The value a surface is drawn at, at first: an orbital's, and a density's (atomic units). */
-const ISO_ORBITAL = 0.05;
-const ISO_DENSITY = 0.002;
 
 type Header = {
   comments: [string, string];
@@ -185,6 +182,7 @@ export function cubeGrid(name: string, text: string, key: string): Grid {
     counts: h.counts,
     values: floatsText(values),
     ...(signed ? { signed: true } : {}),
-    iso: signed || h.orbitals ? ISO_ORBITAL : ISO_DENSITY,
+    // (orbitals, where the file lists them: drawn as an orbital is, at first (./grids `isoOf`))
+    ...(h.orbitals ? { quantity: "orbital" as const } : {}),
   };
 }

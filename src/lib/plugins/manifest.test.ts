@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { acceptManifest, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
 import { MANIFESTS } from "./known";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const good = {
   id: "nbo",
@@ -21,16 +23,13 @@ const good = {
   systems: [],
   installed: [],
   downloads: [],
-  guide: [],
-  suggests: [],
-  files: [],
 };
 
 describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
     const declared = acceptManifest({
@@ -73,7 +72,7 @@ describe("a plugin's manifest", () => {
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "blender-presets", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -89,8 +88,23 @@ describe("a plugin's manifest", () => {
     expect(kinds([{ ...coloured, probe: true }], ["nbo-in"]).reads).toEqual(["nbo-in"]);
     // (ORCA's input, as Meno carries it: a text it colours, told among .inp files by what its lines begin with)
     const orca = MANIFESTS.find((m) => m.id === "orca")!;
-    expect(orca.kinds.map((k) => [k.id, k.lines])).toEqual([["orca-input", ["!", "%", "*"]]]);
-    expect(orca.reads).toEqual([]);
+    expect(orca.kinds.map((k) => [k.id, k.lines])).toEqual([["orca-input", ["!", "%", "*"]], ["orca", []]]);
+    // (and ORCA's output, which its program writes: the kind it reads)
+    expect(orca.reads).toEqual(["orca"]);
+    expect(orca.kinds.find((k) => k.id === "orca")?.writtenBy).toBe("orca");
+  });
+
+  it("says which of its own programs writes a kind it reads - one its steps run, by name - and no other", () => {
+    const output = { id: "nbo-out", name: "NBO output", program: "NBO", extensions: [".out"], marks: [{ text: "N A T U R A L   A T O M I C" }] };
+    const runs = (writtenBy: unknown, steps: unknown[] = [{ kinds: ["energy"], programs: ["nbo"] }]) =>
+      acceptManifest({ ...good, kinds: [{ ...output, writtenBy }], reads: ["nbo-out"], steps })!.kinds[0].writtenBy;
+    expect(runs("nbo")).toBe("nbo");
+    // (a program it does not run - another plugin's, or none of its steps' - is not its own: unsaid)
+    expect(runs("orca")).toBeUndefined();
+    expect(runs("nbo", [])).toBeUndefined();
+    // (a name, never a path)
+    expect(runs("../bin/nbo", [{ kinds: ["energy"], programs: ["../bin/nbo"] }])).toBeUndefined();
+    expect(runs(3)).toBeUndefined();
   });
 
   it("may write kinds of its own: each one of its kinds, named and with its files' names as the kind says, its options as data", () => {
@@ -129,6 +143,13 @@ describe("a plugin's manifest", () => {
       { role: "conformers", programs: [], options: [{ id: "count", label: "Conformers sought", type: "number", default: 30, min: 1 }] },
       { role: "smiles", programs: [], options: [] },
     ]);
+    // (a conformer search that takes how many to try: said on the conformers role alone, as true - Meno sends the number)
+    const tries = [{ role: "conformers", tries: true }, { role: "smiles", tries: true }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: tries })?.roles).toEqual([
+      { role: "conformers", programs: [], options: [], tries: true },
+      { role: "smiles", programs: [], options: [] },
+    ]);
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", tries: "yes" }] })?.roles).toEqual([{ role: "conformers", programs: [], options: [] }]);
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
@@ -145,12 +166,25 @@ describe("a plugin's manifest", () => {
     // (motions, each declared in full: an id - none of Meno's own -, a label, a description; what is not understood left out)
     const motions = [{ id: "ripple", label: "Ripple", description: "A ripple." }, { id: "turn", label: "Meno's own" }, { id: "No Id", label: "Bad" }, { id: "plain" }, { id: "ripple", label: "Twice" }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions }] })?.roles[0].motions).toEqual([{ id: "ripple", label: "Ripple", description: "A ripple." }]);
+    // (how short each can be, in seconds - a whole film's, a Loop's, each change's - what is not a number of seconds left out; and
+    // the choices each is always made with, each an id, a value and why)
+    const timed = [
+      { id: "melt", label: "Melt", shortest: { film: 2, change: 6, loop: "long" }, fixed: [{ id: "engine", value: "cycles", why: "Light traced" }, { id: "engine", value: "eevee", why: "Twice" }, { id: "x", value: "y" }] },
+      { id: "spin", label: "Spin", shortest: { film: -1, change: 9999 } },
+    ];
+    const role = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions: timed }] })?.roles[0];
+    expect(role?.motions).toEqual([{ id: "melt", label: "Melt", shortest: { film: 2, change: 6 }, fixed: [{ id: "engine", value: "cycles", why: "Light traced" }] }, { id: "spin", label: "Spin" }]);
+    // (the confidence below which a model's reading is unsure, and on what it was set - only where the role takes one, between 0 and 1, its basis said)
+    const unsure = (u: unknown, role = "pictures") => acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role, unsure: u }] })?.roles[0].unsure;
+    expect(unsure({ below: 0.6, basis: " Set on pictures drawn for it. " })).toEqual({ below: 0.6, basis: "Set on pictures drawn for it." });
+    for (const u of [{ below: 0.6 }, { below: 0.6, basis: " " }, { below: 1, basis: "b" }, { below: 0, basis: "b" }, { below: "0.6", basis: "b" }, 0.6]) expect(unsure(u)).toBeUndefined();
+    expect(unsure({ below: 0.6, basis: "b" }, "smiles")).toBeUndefined();
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
-    // (how many are sought is the molecule's to say unless a number is asked for: the number is shown only then)
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.find((o) => o.id === "count")?.when).toEqual({ id: "sought", in: ["fixed"] });
+    // (how many to try is Meno's - the role says its search takes a number, and Meno sends it - the rest the plugin's)
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["field", "iters", "seed"]);
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.tries).toBe(true);
   });
 
   it("fills kinds of step: several in one with what they share, each Meno's and once, its programs by name - never a path - its options as data", () => {
@@ -164,8 +198,11 @@ describe("a plugin's manifest", () => {
         { kinds: ["optimise"], programs: ["other"] },
         { kinds: ["Not A Kind", "frequencies"], programs: ["xtb"] },
         { kinds: ["conformers"], takes: ["molecules", "drawings", "conformers", "chart"] },
+        // (Meno's judgements - which are the same, which kept, how many, how weighted - never a plugin's: the plugin
+        //  boundary, 2026-10-31. A plugin fills only kinds that run its program)
         { kinds: ["duplicates"], takes: [] },
-        { kinds: ["energy-window"], takes: ["table", "number"] },
+        { kinds: ["energy-window", "filter", "rank", "choose"], takes: ["table", "number"] },
+        { kinds: ["populations", "ensemble", "barrier", "as-conformers"] },
         { kind: "populations" },
       ],
     };
@@ -176,9 +213,6 @@ describe("a plugin's manifest", () => {
       { kind: "frequencies", programs: ["xtb"], options: [] },
       // (what it takes, of what flows: none said, all its kind takes)
       { kind: "conformers", programs: [], options: [], takes: ["molecules", "conformers"] },
-      { kind: "duplicates", programs: [], options: [] },
-      // (a table and a number flow too - a chart, Meno's alone, none says)
-      { kind: "energy-window", programs: [], options: [], takes: ["table", "number"] },
     ]);
     // (xTB's and ORCA's, as Meno carries them)
     const xtb = MANIFESTS.find((m) => m.id === "xtb")!;
@@ -194,6 +228,42 @@ describe("a plugin's manifest", () => {
     expect(nci?.steps).toEqual([{ kind: "nci", programs: ["multiwfn"], options: [], files: ["molden", "gaussian-fchk"] }]);
   });
 
+  it("may declare its program's energy lines and tables of atoms as papers quote them - each as it must be, or left out", () => {
+    const energy = { id: "scf", pattern: "^\\s*SCF Done:\\s*E\\((?<method>[^)]+)\\)\\s*=\\s*(?<value>-?\\d+\\.\\d+)", name: "E", unit: "hartree" };
+    const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
+    const read = acceptManifest({ ...good, quotedEnergies: [energy, { ...energy, id: "no-value", pattern: "E = (-?\\d+\\.\\d+)" }, { ...energy, id: "unnamed", name: " " }, { ...energy, id: "broken", pattern: "(?<value>" }], quotedTables: [table, { ...table, id: "no-z", columns: ["element", "x", "y"] }, { ...table, id: "twice", columns: ["element", "x", "x", "y", "z"] }, { ...table, id: "both", columns: ["element", "atomic-number", "x", "y", "z"] }, { ...table, id: "unheaded", headings: [] }, { ...table, id: "odd", columns: ["element", "x", "y", "z", "mass"] }] })!;
+    expect(read.quotedEnergies).toEqual([energy]);
+    expect(read.quotedTables).toEqual([table]);
+    // (none said: none, as a plugin that quotes no line of its program's)
+    expect(acceptManifest(good)!.quotedEnergies).toBeUndefined();
+    // (Gaussian's and ORCA's, as Meno carries them)
+    expect(MANIFESTS.filter((m) => m.quotedEnergies || m.quotedTables).map((m) => [m.id, (m.quotedEnergies ?? []).map((q) => q.id), (m.quotedTables ?? []).map((t) => t.id)])).toEqual([
+      ["gaussian", ["scf-done"], ["orientation"]],
+      ["orca", ["final-single-point"], []],
+    ]);
+  });
+
+  it("may say its program takes no lone atom - of a kind a lone atom passes through, as it came, alone: of another, it is its to refuse", () => {
+    const read = acceptManifest({
+      ...good,
+      reads: [],
+      kinds: [],
+      steps: [
+        { kinds: ["conformers", "optimise", "energy"], programs: ["crest"], noLoneAtom: true },
+        { kinds: ["frequencies"], programs: ["crest"], noLoneAtom: "yes" },
+      ],
+    })!;
+    expect(read.steps.map((d) => [d.kind, d.noLoneAtom])).toEqual([
+      ["conformers", true],
+      ["optimise", true],
+      ["energy", undefined],
+      ["frequencies", undefined],
+    ]);
+    // (CREST's, as Meno carries it - which stops on one atom - and no other plugin's: the others run theirs on one)
+    expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.noLoneAtom).map((d) => `${m.id} ${d.kind}`))).toEqual(["crest conformers", "crest optimise"]);
+    expect(MANIFESTS.find((m) => m.id === "crest")!.steps.map((d) => d.programs)).toEqual([["crest"], ["crest"]]);
+  });
+
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {
     const opts = [{ id: "count", label: "Conformers sought", type: "number", default: 30 }];
     const read = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", options: opts }], steps: [{ kinds: ["conformers"], programs: ["python"] }, { kinds: ["optimise"], options: [] }] })!;
@@ -206,17 +276,102 @@ describe("a plugin's manifest", () => {
     expect(rdkit.steps.find((d) => d.kind === "conformers")?.options).toEqual(rdkit.roles.find((r) => r.role === "conformers")?.options);
   });
 
-  it("may declare another plugin's program its jobs may need - a plugin, a program it runs, a variable to name it in - all as they must be, or none", () => {
+  it("may declare the plugins it uses - each by id, with the versions it works with and the programs of it its jobs may run - all as they must be, or the plugin is none", () => {
     const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
-    const need = { plugin: "xtb", program: "xtb", env: "XTBEXE" };
-    expect(acceptManifest({ ...steps, needs: [need] })?.needs).toEqual([need]);
-    expect(acceptManifest(steps)?.needs).toBeUndefined();
-    // (its own plugin, a shell, a path, a variable that finds programs, one plugin twice: none taken)
-    for (const bad of [{ ...need, plugin: good.id }, { ...need, program: "sh" }, { ...need, program: "bin/xtb" }, { ...need, env: "PATH" }, { ...need, env: "1X" }])
-      expect(acceptManifest({ ...steps, needs: [bad] })?.needs, JSON.stringify(bad)).toBeUndefined();
-    expect(acceptManifest({ ...steps, needs: [need, { ...need, env: "OTHER" }] })?.needs).toBeUndefined();
-    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.needs).toEqual([need]);
+    const uses = { plugin: "xtb", versions: ">=0.1.4 <0.2.0", programs: [{ program: "xtb", env: "XTBEXE" }] };
+    expect(acceptManifest({ ...steps, depends: [uses] })?.depends).toEqual([{ ...uses, range: { from: "0.1.4", before: "0.2.0" } }]);
+    expect(acceptManifest(steps)?.depends).toBeUndefined();
+    // (one used only for some of its work)
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: true }] })?.depends?.[0].optional).toBe(true);
+    expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: false }] })?.depends?.[0].optional).toBeUndefined();
+    // (one whose kinds of file a step takes: each an id, once)
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0", kinds: ["xtb-out"] }] })?.depends?.[0].kinds).toEqual(["xtb-out"]);
+    for (const kinds of [["Bad Kind"], ["a", "a"], "a"]) expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0", kinds }] }), JSON.stringify(kinds)).toBeNull();
+    // (one used for no program: its presence and version alone)
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0" }] })?.depends?.[0].programs).toEqual([]);
+    // (itself, versions not as they must be, a shell, a path, a variable that finds programs, one plugin twice, one variable twice: no plugin)
+    const program = (p: object) => ({ ...uses, programs: [{ ...uses.programs[0], ...p }] });
+    for (const bad of [
+      [{ ...uses, plugin: good.id }],
+      [{ ...uses, versions: "^0.1.4" }],
+      [{ ...uses, versions: undefined }],
+      [program({ program: "sh" })],
+      [program({ program: "bin/xtb" })],
+      [program({ env: "PATH" })],
+      [program({ env: "1X" })],
+      [uses, { ...uses, programs: [] }],
+      [uses, { plugin: "other", versions: ">=1.0.0 <2.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [{ ...uses, versions: ">=0.1.4" }],
+      [{ ...uses, optional: "yes" }],
+      "xtb",
+    ])
+      expect(acceptManifest({ ...steps, depends: bad }), JSON.stringify(bad)).toBeNull();
+    // (ORCA's, as Meno carries it: the xTB plugin's xtb, in XTBEXE - for its xTB methods alone)
+    expect(MANIFESTS.find((m) => m.id === "orca")?.depends?.map((d) => [d.plugin, d.versions, d.programs, d.optional])).toEqual([["xtb", ">=0.1.4 <0.2.0", [{ program: "xtb", env: "XTBEXE" }], true]]);
+  });
+
+  it("may declare interfaces for other plugins to use it through, and use another's - each by id with its version or versions - all as they must be, or the plugin is none", () => {
+    const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
+    expect(acceptManifest({ ...steps, interfaces: [{ id: "styling", version: "1.2.0" }] })?.interfaces).toEqual([{ id: "styling", version: "1.2.0" }]);
+    expect(acceptManifest(steps)?.interfaces).toBeUndefined();
+    const through = { plugin: "tool", versions: ">=1.0.0 <2.0.0", interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] };
+    expect(acceptManifest({ ...steps, depends: [through] })?.depends?.[0].interfaces).toEqual([{ id: "styling", versions: ">=1.0.0 <2.0.0", range: { from: "1.0.0", before: "2.0.0" } }]);
+    for (const bad of [
+      { interfaces: [{ id: "styling", version: "1.2" }] },
+      { interfaces: [{ id: "Styling", version: "1.2.0" }] },
+      { interfaces: [{ id: "styling", version: "1.0.0" }, { id: "styling", version: "2.0.0" }] },
+      { interfaces: { id: "styling", version: "1.0.0" } },
+      { depends: [{ ...through, interfaces: [{ id: "styling", versions: "^1.0.0" }] }] },
+      { depends: [{ ...through, interfaces: [{ id: "styling", versions: ">=1.0.0" }] }] },
+      { depends: [{ ...through, interfaces: [through.interfaces[0], through.interfaces[0]] }] },
+      { depends: [{ ...through, interfaces: "styling" }] },
+    ])
+      expect(acceptManifest({ ...steps, ...bad }), JSON.stringify(bad)).toBeNull();
+  });
+
+  it("may bring another plugin presets through that one's interface - running nothing itself - each as a render role declares its own, with a file in its folder", () => {
+    const presets = {
+      interface: "styling",
+      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "look_chalk.py" }],
+      studios: [{ id: "attic", label: "Attic", file: "attic.py" }],
+      motions: [{ id: "wobble", label: "Wobble", shortest: { film: 3 }, file: "wobble.py" }],
+      files: ["shared.py"],
+      options: [{ id: "grain", label: "Grain", type: "choice", choices: [{ value: "fine", label: "Fine" }], default: "fine", section: "look", when: { id: "look", in: ["chalk"] } }],
+    };
+    const preset = { id: "tool-looks", name: "Tool looks", version: "1.0.0", depends: [{ plugin: "tool", versions: ">=1.0.0 <2.0.0", interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] }], presets };
+    const read = acceptManifest(preset);
+    expect(read?.environment).toBeUndefined();
+    expect(read?.presets).toEqual({
+      interface: "styling",
+      for: "tool",
+      looks: [{ id: "chalk", label: "Chalk", description: "Dusty.", parts: { molecules: "matte" }, file: "look_chalk.py" }],
+      studios: [{ id: "attic", label: "Attic", file: "attic.py" }],
+      motions: [{ id: "wobble", label: "Wobble", shortest: { film: 3 }, file: "wobble.py" }],
+      files: ["shared.py"],
+      options: [expect.objectContaining({ id: "grain", section: "look", when: { id: "look", in: ["chalk"] } })],
+    });
+    // (one with its looks alone; and a plugin that brings nothing and does nothing is none)
+    expect(acceptManifest({ ...preset, presets: { interface: "styling", looks: presets.looks } })?.presets?.studios).toEqual([]);
+    expect(acceptManifest({ ...preset, presets: undefined })).toBeNull();
+    // (through an interface it does not use, an item without a file or one not as it must be, a file outside its folder, the plain studio's id, nothing at all, too many files: none)
+    const many = Array.from({ length: 64 }, (_, i) => `f${i}.py`);
+    for (const bad of [
+      { interface: "other" },
+      { looks: [{ id: "chalk", label: "Chalk" }] },
+      { looks: [...presets.looks, { id: "Bad Id", label: "Bad", file: "bad.py" }] },
+      { looks: [{ ...presets.looks[0], file: "../tool/manifest.json" }] },
+      { looks: [{ ...presets.looks[0], file: "/etc/hosts" }] },
+      { files: ["manifest.json"] },
+      { files: ["Manifest.JSON"] },
+      { files: ["Worker.py"] },
+      { files: ["looks/chalk.py"] },
+      { files: ["shared.py", "shared.py"] },
+      { studios: [{ id: "asked", label: "As asked", file: "asked.py" }] },
+      { looks: [], studios: [], motions: [] },
+      { files: many },
+    ])
+      expect(acceptManifest({ ...preset, presets: { ...presets, ...bad } }), JSON.stringify(bad).slice(0, 80)).toBeNull();
+    expect(acceptManifest({ ...preset, depends: [{ plugin: "tool", versions: ">=1.0.0" }] })).toBeNull();
   });
 
   it("may say the systems it can be added on - those Meno knows of; none said, every one", () => {
@@ -277,7 +432,7 @@ describe("a plugin's manifest", () => {
     // (never a shell or Python beside it, as the backend refuses one)
     for (const bad of [{ x: { macos: "sh" } }, { x: { windows: "cmd.exe" } }, { x: { linux: "python3" } }]) expect(orca(bad)).toEqual([]);
     // (ORCA's, as Meno carries it)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
+    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2aim: { macos: "orca_2aim", linux: "orca_2aim", windows: "orca_2aim.exe" } });
   });
 
   it("may say how a program installed separately runs in parallel - as threads, or as processes, each a core - as the backend reads it", () => {
@@ -380,7 +535,8 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest({ ...good, downloads: weights })).toBeNull();
     // (a plugin that runs nothing uses none)
     const { environment: _e, reads: _r, kinds: _k, ...data } = good;
-    expect(acceptManifest({ ...data, guide: [{ title: "Hello", text: "Hello." }], downloads: [weights] })?.downloads).toEqual([]);
+    const coloured = [{ id: "nbo-in", name: "NBO input", extensions: [".nbo"], grammar: { file: "nbo.grammar", tones: { Word: "keyword" } } }];
+    expect(acceptManifest({ ...data, kinds: coloured, downloads: [weights] })?.downloads).toEqual([]);
   });
 
   it("may say how a program installed separately says its version, and the least Meno takes - as the backend reads it", () => {
@@ -394,11 +550,11 @@ describe("a plugin's manifest", () => {
       expect(blender(bad)).toEqual([]);
   });
 
-  it("runs nothing where it says no environment: then it brings data alone - and a plugin that does nothing is none", () => {
+  it("runs nothing where it says no environment: then it brings texts it colours alone - and a plugin that does nothing is none", () => {
     const data = { ...good, environment: undefined };
     expect(acceptManifest(data)).toBeNull();
-    const guide = [{ title: "Welcome", text: "Double-click on empty space." }];
-    expect(acceptManifest({ ...data, guide })).toMatchObject({ reads: [], writes: [], roles: [], steps: [], guide });
+    const coloured = [{ id: "nbo-in", name: "NBO input", extensions: [".nbo"], grammar: { file: "nbo.grammar", tones: { Word: "keyword" } } }];
+    expect(acceptManifest({ ...data, kinds: coloured })).toMatchObject({ reads: [], writes: [], roles: [], steps: [] });
     expect(acceptManifest({ ...data, roles: [{ role: "smiles" }], steps: [{ kinds: ["energy"], programs: ["x"] }] })).toBeNull();
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [], writes: [] })).toBeNull();
   });
@@ -427,32 +583,13 @@ describe("a plugin's manifest", () => {
     expect(acceptManifest({ ...good, kinds: [anyProgram] })?.kinds).toEqual([anyProgram]);
   });
 
-  it("may bring a guide: steps of plain text, each pointing at a part Meno names and waiting for what Meno names", () => {
-    const steps = [
-      { title: "Welcome", text: "Double-click on empty space.", at: "page", until: "quick-add" },
-      { title: "Odd", text: "Points at what Meno does not name.", at: "#save-button", until: "clicked" },
-      { title: "Plugins", text: "These are a good start.", suggest: ["rdkit", "Not An Id", "cclib"] },
-      { title: "", text: "No title." },
-      { title: "Long", text: "x".repeat(301) },
-    ];
-    expect(acceptManifest({ ...good, guide: steps })?.guide).toEqual([
-      { title: "Welcome", text: "Double-click on empty space.", at: "page", until: "quick-add" },
-      { title: "Odd", text: "Points at what Meno does not name." },
-      { title: "Plugins", text: "These are a good start.", suggest: ["rdkit", "cclib"] },
-    ]);
-    expect(acceptManifest({ ...good, guide: Array.from({ length: 20 }, (_, i) => ({ title: `Step ${i}`, text: "Go on." })) })?.guide).toHaveLength(12);
-  });
-
-  it("may bring a catalogue: the plugins it suggests, and kinds of file told by its own marks with the plugins it suggests for each", () => {
-    const suggests = [{ plugin: "cclib", for: "Reads outputs" }, { plugin: "cclib", for: "Again" }, { plugin: "nbo", for: "Itself" }, { plugin: "pyscf" }];
-    const files = [
-      { id: "orca", name: "ORCA output", extensions: [".out"], marks: [{ text: "O   R   C   A", anyCase: true }], suggest: ["cclib", "pyscf"] },
-      { id: "short", name: "Short", extensions: [".s"], marks: [{ text: "S" }], suggest: ["cclib"] },
-      { id: "nobody", name: "Nobody", extensions: [".n"], marks: [{ text: "N O B O D Y" }], suggest: [] },
-    ];
-    const read = acceptManifest({ ...good, suggests, files })!;
-    expect(read.suggests).toEqual([{ plugin: "cclib", for: "Reads outputs" }]);
-    expect(read.files).toEqual([{ id: "orca", name: "ORCA output", extensions: [".out"], marks: [{ text: "O   R   C   A", anyCase: true }], suggest: ["cclib", "pyscf"] }]);
+  it("brings no guide and names no other plugin: a guide, plugins suggested and a catalogue of files are not read - and are no plugin alone", () => {
+    const extra = { guide: [{ title: "Welcome", text: "Hi." }], suggests: [{ plugin: "cclib", for: "Reads outputs" }], files: [{ id: "orca", name: "ORCA output", extensions: [".out"], marks: [{ text: "O   R   C   A" }], suggest: ["cclib"] }] };
+    const read = acceptManifest({ ...good, ...extra })!;
+    expect(Object.keys(read)).not.toContain("guide");
+    expect(Object.keys(read)).not.toContain("suggests");
+    expect(Object.keys(read)).not.toContain("files");
+    expect(acceptManifest({ id: "only-words", name: "Only words", version: "1", ...extra })).toBeNull();
   });
 });
 
@@ -471,5 +608,22 @@ describe("a mark", () => {
     expect(markAt(head, { text: "* O R C A *" })).toBe(head.indexOf("*"));
     expect(markAt(head, { text: "[Molden Format]", at: "line-start" })).toBe(head.indexOf(" [Molden"));
     expect(markAt(head, { text: "NWChem" })).toBe(-1);
+  });
+});
+
+// (a bundled plugin whose manifest does not read is none: never left to vanish unsaid)
+describe("the plugins Meno carries", () => {
+  const root = join(__dirname, "../../../src-tauri/resources/plugins");
+  const folders = readdirSync(root).filter((f) => statSync(join(root, f)).isDirectory());
+
+  it("each read, by its folder's name - none of them refused", () => {
+    expect(MANIFESTS.map((m) => m.id)).toEqual([...folders].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it("each with every file its presets name there, in its folder itself - what Meno carries of it", () => {
+    for (const m of MANIFESTS.filter((x) => x.presets)) {
+      const p = m.presets!;
+      for (const f of [...p.looks, ...p.studios, ...p.motions].map((x) => x.file).concat(p.files)) expect(existsSync(join(root, m.id, f)), `${m.id}: ${f}`).toBe(true);
+    }
   });
 });

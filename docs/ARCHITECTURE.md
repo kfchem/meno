@@ -52,9 +52,9 @@ src/
   lib/roles/              the roles' workers (RDKit's, for now): client, sidecar, the MOL blocks they are asked about
   lib/calc/               readers of calculation output: the catalog, reading, promises, Meno's own reading
   lib/plugins/            plugins' manifests (data), read and checked; the plugins Meno carries, found in their folders;
-                          the roles and kinds of step Meno defines; each plugin's one worker (process.ts); guides
-                          and catalogues (guide.ts, guides.ts)
-  ui/guide/               a plugin's guide, shown in Meno's own card beside the part it points at (GuideCard)
+                          the roles and kinds of step Meno defines; each plugin's one worker (process.ts)
+  lib/guide/              Meno's first steps (steps.ts) and the one shown (guide.ts)
+  ui/guide/               the first steps, shown in Meno's own card beside the part each points at (GuideCard)
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
   lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
@@ -131,10 +131,9 @@ site/                     the website, kfchem.github.io/meno: plain HTML, CSS an
   (`ui/layouts/inFront`), which `Deck` gives each tab: one left open in a
   tab behind waits, unanswered, the keys the tab's in front, Escape too,
   until its own tab comes back.
-- Because every live canvas holds a WebGL context and browsers keep only about
-  16, `lib/core/limits.ts` budgets them: a workspace costs one, and opening
-  past the limit is refused with a notice rather than silently blanking the
-  oldest view.
+- Every live canvas holds a WebGL context, and `lib/core/limits.ts`
+  budgets them, 16 in all: a workspace costs one, and opening past the
+  limit is refused with a notice.
 - Meno starts on a workspace, and "+" makes another: the canvas is
   the workspace (docs/WORKSPACE.md), so there is no start page.
 - **Open** (Ctrl/Cmd+O, or the menu) reads the files picked in the system's
@@ -202,7 +201,7 @@ fiber passes an error inside its `<Canvas>` out to the tree round it) and
 the canvas's own HTML by the canvas's; the panel beside the canvas and
 Settings by their tab's; the title bar and the notices by the
 window's. Errors thrown in event handlers, timers, promises and `useFrame`
-are not React's to catch and do not blank the window; they are not shown.
+reach no boundary and do not blank the window; they are not shown.
 
 Nothing a part shows lives in the part, so a part made again shows the same:
 
@@ -256,8 +255,7 @@ start. On Windows the window's own placement is kept as it is
 with the window still hidden (`SetWindowPlacement`, `SW_HIDE`: the system's
 own caption is never seen), maximized hidden where it was, and then shown by
 Tauri as elsewhere, so that the frame it goes back to as it is unmaximized
-round-trips exactly - the size set and read back is not the same measure
-there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
+round-trips exactly. Elsewhere the inner size is kept. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log
@@ -361,8 +359,7 @@ moves together, in the same time and the same way.
 ## Pointers
 
 Meno draws its own pointers wherever it shows one other than the plain
-arrow (asked for by the maintainer, 2026-10-07: the system's hands looked
-poor, and on a Windows machine the dragging hand showed white). Each says
+arrow (asked for by the maintainer, 2026-10-07). Each says
 what a drag there does, not what grabs it, and none is a hand:
 
 | Pointer | Where | The system's behind it |
@@ -611,8 +608,12 @@ not taken from either.
   order, and a part's layer covered the parts on the layers below it.
   Lines are a hair on the screen at any zoom: the layer's `--hair` is set
   each frame from the zoom, and wires are made as wide on the screen for
-  it. Colours, cards and icons are Meno's own (WORKFLOWS.md, *How it
-  looks*): its palette, its cards' hairline borders, Heroicons' outline
+  it. The layer is laid out in its own pixels, which Chromium rounds to
+  before it scales them: ports are laid out in the screen's, the layer's
+  `--scale` undone on them, and the cards' and sets' hairlines are inset
+  shadows, not borders (WORKFLOWS.md, *Laid out in the screen's pixels*).
+  Colours, cards and icons are Meno's own (WORKFLOWS.md, *How it
+  looks*): its palette, its cards' hairlines, Heroicons' outline
   icons (`workflow/icons.tsx`).
 - **Who does a step** (`workflow/doers.ts`): a step is a plugin's - or
   Meno's, which stands among them for the steps on entries alone - and
@@ -632,7 +633,7 @@ not taken from either.
   (RDKit's, through the roles' `conformers`, with the step's options); a
   plugin's step on entries alone at once, `run`
   asked of its worker and the entries it kept brought in, the rest set
-  aside (RDKit's *Duplicates*); a plugin's
+  aside (none of the bundled plugins does one); a plugin's
   program as jobs: `prepare` asked of its worker, a job started for each
   (lib/jobs), the run kept in the document as `running` - amended in, so
   that undo does not take a run back, but the workspace is unsaved until
@@ -804,15 +805,17 @@ reading (`MENO`) first. Meno's core knows no program (the maintainer,
 2026-10-06): `lib/io/kinds.ts` knows Meno's own kinds only, and registers
 the kinds of the plugins added - while they are added (`lib/calc/workers.ts`)
 - refusing a mark that one of Meno's own sample files holds. A plugin not
-added is never looked at: a file no plugin added reads is told only by the
-kinds the catalogues of the plugins added name (`catalogued`, Getting
-started's), to say which plugin would read it (`lib/calc/probe.ts`
-`kindOfFile`, `lib/calc/read.ts` `whoReads`).
+added is never started or asked: a file no plugin added reads is told by
+the kinds the plugins Meno carries but not added say they read, by their
+own marks (`offeredKinds`, `catalogued`), to say which plugins would read
+it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
 - A plugin is added in Settings, *Plugins*: `ensurePyEnv`, with the
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.
 - *Files* in Settings says who reads each kind: one reader (`readerFor`:
-  the one chosen, else Meno where Meno reads it, else the first added), and
+  the one chosen, else Meno where Meno reads it, else the plugin added whose
+  own program writes it - its manifest's `writtenBy` - else the first
+  added), and
   the readers chosen to read it as well (`alsoReadersFor`), kept as
   `files` in the settings.
 - `lib/calc/workers.ts` starts a reader's worker the first time it is asked
@@ -895,82 +898,50 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   chosen waits for the one moving to come to rest. The atom that moves most
   goes 0.3 Å, once every 1.2 s, whatever the frequency. No arrows and no
   spectrum (the maintainer).
-- The first reader is cclib's (`resources/plugins/cclib/worker.py`), cclib
-  used as a library, its version pinned in its folder's
-  `requirements.lock` (1.9rc1: 1.8.1 does not read ORCA 6). Its manifest
-  brings every program cclib reads, each told by its own banner as cclib
-  tells it. Its tests read sample outputs from `calc-samples/`, which
-  git ignores - no program's output is committed - and run by hand
-  (`scripts/calc/test_reader_cclib.py`); the app's side is tested with the
-  plain data written by hand.
-- It reads an output as the program left it (2026-10-13). Gaussian's,
-  ORCA's and xtb's say how the run went, in their own words. One that
-  stopped on an error is read as far as it went, with "Run: ended with an
-  error" first in the chip's line and the program's reason among the
-  results. One with no end written is read the same way, with "Run: did
-  not come to its end" - cut short, or still running. An SCF that did not
-  converge gives no energy ("SCF: not converged"), and where the run
-  stopped, the geometries after the last it worked out an energy for are
-  left out. Where cclib cannot read an output as it is, it is read again
-  with a number that overflowed its field (asterisks) taken as not known,
-  and then as far as it reads - its last lines left off, more each time;
-  where the run itself came to its end, the chip says "Read: only in
-  part".
-  Ghost atoms - Gaussian's "-Bq", ORCA's colon after the element - are
-  not atoms of the molecule and are left out; ORCA's point charges ("Q")
-  are taken out before cclib reads it, and so is the dipole moment ORCA
-  prints as its total alone after an xTB run through the xtb program,
-  which cclib cannot read: that total is given as printed, with its
-  magnitude as printed, and the run's energies are ORCA's final
-  single-point ones, one to each geometry, as for any ORCA output. Where
-  ORCA wrote no geometry at all - as for frequencies such a run works out
-  - its input's one "* xyz" block is taken as the geometry it worked at,
-  in Angstrom or Bohrs as its simple keywords say, and only where the run
-  is surely one of a single geometry; otherwise nothing is taken, and the
-  output is not read. A tight-binding method an ORCA input names is
-  given as the xtb program names it (XTB2 and NATIVE-XTB2 alike are
-  GFN2-xTB), saying which ran it, the xtb program or ORCA itself
-  (`scripts/calc/test_reader_cclib_orca_xtb.py`). An
-  answer never holds a number that is not one (JSON has none). Tested,
-  with cclib, by hand (`scripts/calc/test_reader_cclib_runs.py`).
+- A program's output is read by that program's own plugin, where it is
+  added (PLUGINS.md, *Several plugins, one role*): ORCA's by the ORCA
+  plugin, Gaussian's by the Gaussian plugin and xtb's by the xTB plugin
+  (each its `reader.py`; FILE-IO.md) - each written from its program's
+  manual and its own outputs - and a job's output and a file opened by
+  hand alike.
+- The cclib plugin (`resources/plugins/cclib/worker.py`) gives cclib's
+  reading of many programs' outputs, as a reading of its own: chosen in
+  Settings, *Files*, never the default where the program's own plugin is
+  added. cclib is used as a library, its version pinned in its folder's
+  `requirements.lock`, its manifest bringing every program cclib reads,
+  each told by its own banner. It is an adapter, and no more
+  (2026-10-31): the output is given to cclib as it
+  is, and what cclib returns is mapped into Meno's form - the atoms, each
+  geometry, each one's energy, what the calculation was, each atom's mass,
+  and its results in the general form - with nothing read from the text
+  besides, and nothing cclib returns changed but the vibrations: the
+  translations and rotations an output lists among them, at a frequency
+  of naught (under 1 cm-1), are left out and the rest numbered from one,
+  as the ORCA and xTB plugins' readers do. Its tests read sample outputs
+  from `calc-samples/`, which git ignores - no program's output is
+  committed - and run by hand (`scripts/calc/test_reader_cclib.py`); the
+  app's side is tested with the plain data written by hand. An answer
+  never holds a number that is not one (JSON has none).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
-  environment: PySCF from conda-forge, which has it for Windows; cclib
-  from PyPI) is a plugin of its own, sharing no code with another
-  (the maintainer, 2026-10-06). It gives the molecule - read with cclib as
-  a library, or a Molden file with PySCF - and its orbitals and densities;
-  charges, vibrations and the like it leaves to other readers. A Molden
-  file gives no charge or multiplicity, so they are worked out from its
-  own sections (`species_of`, 2026-10-14), each left unsaid where the file
-  does not settle it. The charge is the nuclei's - each atom's atomic
-  number in [Atoms], or the charge its pseudopotential leaves it where
-  [Pseudo] gives one, as ORCA's orca_2mkl writes it - less the electrons
-  its [MO] occupations hold; with no [Pseudo], unsaid where an atom past
-  neon is there (its inner orbitals cannot be told from another's 1s), or,
-  from lithium to neon, other than one occupied orbital below -2 hartree
-  for each such atom (its 1s; two where alpha and beta are listed apart);
-  unsaid past 8 either way,
-  where the occupations come to no whole number, or where a restricted
-  file has no orbital of 2. A centre named as one with no nucleus (X, Bq,
-  Gh) adds none. The multiplicity is one more than
-  the alpha occupations' excess over the beta's; with no Spin= said, a
-  singlet or a doublet where every occupation is 0, 1 or 2 and at most one
-  is 1, and unsaid otherwise (natural orbitals; two of 1, which a triplet
-  and a singlet diradical share; Spin= given for some orbitals only). A
-  file that breaks the format - an occupation that is not a number, [MO]
-  given twice - gives neither, and never fails the read. It is tested alone
-  (`scripts/calc/test_reader_pyscf_species.py`, in CI).
-  Where an output
-  holds the basis set and the orbitals' coefficients, cclib writes them as
-  a Molden file (each p shell's functions put in x, y, z order, as ORCA's
-  are not) for PySCF to read back, and the orbitals are checked
-  orthonormal in their basis before any surface is promised - where they
-  are not, it says to open a Molden file the program wrote. Its lists'
-  rows promise each orbital's surface and the densities' (`orbital:<spin>:
-  <index>`, `density:total`, `density:spin`); asked for, it works the grid
-  out from the file sent again: 4 Å past the atoms, points 0.2 Å apart (at
-  most 90 to a side), the basis functions' values a chunk of points at a
-  time. Its tests (`scripts/calc/test_reader_pyscf.py`) run by hand in an
-  environment made from its lock.
+  environment: PySCF from conda-forge, which has it for Windows) is a
+  plugin of its own, sharing no code with another (the maintainer,
+  2026-10-06). It reads a Molden file with PySCF's own reader
+  (`pyscf.tools.molden.load`) and gives its molecule - its atoms and their
+  places, as PySCF reads them - and its orbitals and densities. The format
+  holds no charge or multiplicity, so it says neither. The orbitals are
+  checked orthonormal in their basis, as PySCF reads them, before any
+  surface is promised - where they are not, it says to open a Molden file
+  the program wrote. It gives every orbital in Meno's general form (each
+  its spin, energy in hartrees, occupation and symmetry; Meno names and
+  lists them, `lib/calc/orbitals.ts`), each promising its surface, and a
+  list of the densities, each promising its own (`orbital:<spin>:<index>`,
+  `density:total`, `density:spin`); asked for, it works the values out
+  from the file sent again on the grid Meno's request gives (`grid`,
+  `lib/calc/grids.ts`), the basis functions' values a chunk of points at
+  a time, and says whether each grid is an orbital or a density - the
+  value it is drawn at first is Meno's. Its tests
+  (`scripts/calc/test_reader_pyscf.py`) run by hand in an environment made
+  from its lock.
 - Meno's own reading under the same contract (`MENO` in the catalog,
   `lib/calc/menoReads.ts`, the one list of what it reads so) is asked as a
   plugin's worker is - the same `Reader`: what it makes of a file, and a
@@ -1033,9 +1004,7 @@ valence problems, R/S and E/Z - which `ChemMarks2D` lays over the drawing
 as HTML, outside the drawing and so outside any export; they run only
 while RDKit is set up (`pyEnvReady`), so drawing never starts a download.
 `analyse` makes sense of each fragment on its own only where something is
-wrong somewhere; otherwise of the whole at once, which comes out the same:
-RDKit takes fragments out of a molecule by removing atoms one at a time,
-and for a thousand records that ran on for most of an hour.
+wrong somewhere; otherwise of the whole at once, which comes out the same.
 `clean` lays each fragment out afresh and then over the drawing - turned,
 turned over, and its chains turned over their single bonds, whichever
 lies closest - keeping the drawn wedges when they still say the same
@@ -1047,13 +1016,16 @@ docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in, ordering them, and
-no energies given; a ring bound through all its atoms, written as a
-multi-centre bond by `chem/etaBound.ts`, held over its metal; the same
-conformer twice kept once (PLUGINS.md, *The same conformer*);
-lowest first, each laid over the first, with every centre's CIP label; of
-two enantiomers, the one whose SMILES comes first is made and the other is
-its mirror image). Both take `like`, a molecule in 3D made before from the
+type for it, a lighter metal of its group standing in, its energies given
+as the model's and none as the molecule's; a ring bound through all its
+atoms, written as a multi-centre bond by `chem/etaBound.ts`, held over its
+metal; every conformer as made, in the order made, with every centre's CIP
+label; of two enantiomers, the one whose SMILES comes first is made and the
+other is its mirror image), and the page keeps each once, lowest first,
+laid over the first, equivalent atoms in the first's places
+(`chem/pageConformers`, in a worker of its own: `chem/shownConformers`;
+WORKSPACE.md, *The page's conformers*). Both take
+`like`, a molecule in 3D made before from the
 drawing - where it has the block's atoms - so that what the drawing leaves
 open is made as it was (*Make again*). The molecule in 3D that comes of it
 keeps which drawing atom each of its atoms is and what the drawing was (`drawnFrom`, `drawnAs`;
@@ -1066,17 +1038,22 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
-molecule now saying how many conformers are sought; Stop, while a 3D
+they take (`CONFORMERS_MS`, fifteen minutes at most, as many conformers
+being tried as the molecule needs, or the chemist asks - Meno works the
+number out and sends it: `lib/chem/conformersSought`; Stop, while a 3D
 structure is being made, stops the worker and lets the question go at
 once). What the worker lays out
-in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
-structure with a ring of 34 atoms or more, or 25 rings or more, which
-RDKit's own depictor lays out: for those, CoordGen's layout took from
-seconds to over 20 s here (`lay_out_2d` in the worker). A SMILES whose
-CoordGen layout does not read back as the SMILES - (E)-cyclooctene's
-double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
-lays both drawings out again with its own engine; only their
+in 2D (`from_smiles`, `drawing_of`) it lays out by Meno's rule for which of
+RDKit's two depictors runs (`lay_out_2d` in the worker): CoordGen, except
+for a structure with a ring of 34 atoms or more, or 25 rings or more, which
+RDKit's own depictor lays out. The rule is by how long CoordGen takes:
+measured on 2026-11-01 (RDKit 2026.03.6, Apple M4), its time grows unevenly
+past some 25 rings or a ring of some 30 atoms - 9.0 s for a chain of 35
+para-linked benzene rings, 18.9 s for a ring of 37 carbons - where RDKit's
+own took 0.01 s at most; the bounds are those set on 2026-10-11. A SMILES
+whose CoordGen layout does not read back as the SMILES - (E)-cyclooctene's,
+its double bond drawn cis - is laid out by RDKit's own depictor instead.
+Meno lays both drawings out again with its own engine; only their
 stereochemistry and scale come from these coordinates.
 
 The venv lives under the local app data dir at `uv/<profile>/venv`; a stamp
@@ -1171,7 +1148,7 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   - opens a PDF from the cache when first asked about it, and answers a
   line of JSON at a time on its standard output: a frame of JSON, then
   bytes. Meno starts it when a PDF is first wanted and again if it has
-  gone, so that a PDF that breaks PDFium breaks it alone.
+  gone, so that a PDF that stops the reader stops that process alone.
 - **Parts of pages drawn** (`pdf_render`) come back as PNGs - a page is
   mostly white, so a 512-pixel tile is a quarter of its pixels or less, and
   carrying bytes is what takes the time - and are taken apart off the main
@@ -1463,9 +1440,8 @@ path it is given:
   be `python-env:<name>` - never a purpose that needs no asking.
 - Every Python Meno starts - a sidecar, or a job's program - reads and writes UTF-8
   (`python_in_utf8`: `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`), whatever the
-  system's code page: on Windows that is the ANSI one otherwise, in which a request
-  naming a file in Japanese stopped a worker (English Windows) or came back garbled
-  (Japanese Windows). What a sidecar or a setup says is read a line at a time,
+  system's code page, so that a request naming a file in Japanese reaches a worker
+  whole, and comes back so, on a Windows in any language. What a sidecar or a setup says is read a line at a time,
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
@@ -1488,7 +1464,7 @@ path it is given:
   `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder. A program
   installed separately, and each program beside it, is given as arguments
   only the files written for its job (or one by its name without its
-  extension, as orca_2mkl takes `input`), options (`-nt`) and numbers
+  extension, as orca_2aim takes `input`), options (`-nt`) and numbers
   (`names_only_written`). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
@@ -1545,8 +1521,8 @@ to be able to work with nothing going out at all.
   put on the record (`securitypolicyviolation`). A letter no typeface of
   Meno's has - an emoji - is drawn on the canvas as a white square, and
   measured as one (`lib/chem/labelFonts` `STAND_IN`), so that the canvas's
-  text renderer never looks for it on its CDN - which it may not reach,
-  and which left the whole text the letter was in undrawn.
+  text renderer never looks for it on the network, which the window does
+  not reach.
 - **Everything else goes through the app's proxy** (`src-tauri/src/net.rs`),
   on the loopback address. A child process that may use the network - uv
   or pixi setting up a plugin's environment - is begun as a *task* with a
@@ -1656,9 +1632,10 @@ that every kind of these is in this table, by its id, and no other.
 | PDB file | `pdb` | `.pdb` | its records (`RECORD_NAMES`), an atom's coordinates in their columns | Meno, in its worker (`lib/chem/pdb.ts`) | Export: molecules in 3D as HETATM and CONECT records, a MODEL for each frame where asked | a molecule in 3D: every atom, MODELs as frames, bonds from CONECT and distances (FILE-IO.md, *As step 7 was built*) |
 | Cube file | `cube` | `.cube`, `.cub` | its layout (`CUBE_MARK`) | Meno, under the readers' contract, in its worker (`lib/calc/cube.ts`) | never | a molecule in 3D, its grids promises drawn as surfaces |
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |
-| Calculation programs' outputs (cclib's) | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as cclib's manifest brings it | cclib (plugin, uv); `orca`, `gaussian` and `gaussian-fchk` also PySCF | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
-| Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]`, as PySCF's manifest brings it | PySCF (plugin, pixi) | never | a molecule in 3D, its orbitals and densities promises |
-| AIM extended wavefunction | `wfx` | `.wfx` | `<Number of Primitives>` at a line's start, as the WFX reader's manifest brings it | the WFX reader (plugin, uv: Python, with NumPy for the orbitals' values), as the format's specification has it | never | a molecule in 3D, its energy, charge and spin, its virial ratio, its orbitals' energies and occupations, each orbital's surface on asking (its values on a grid, worked out from the file's primitives); given to Multiwfn's NCI as its wavefunction |
+| Calculation programs' outputs | `adf`, `cfour`, `dalton`, `gamess`, `gamess-uk`, `gaussian`, `gaussian-fchk`, `jaguar`, `molcas`, `molpro`, `mopac`, `nwchem`, `orca`, `psi4`, `qchem`, `turbomole`, `xtb` | each its own: `.out`, `.log`, `.fchk`... | each program's banner, as the manifest of each plugin that reads it brings it | each program's own plugin, where one is added, by default - the ORCA interface for `orca`, the Gaussian interface for `gaussian` and `gaussian-fchk` (plugin, uv), the xTB plugin for `xtb` (plugin, pixi); cclib (plugin, uv) for every kind listed, as a reading of its own where chosen | never | a molecule in 3D, each geometry a frame - its bonds by distance, frame by frame - and what the calculation found |
+| xTB's frequencies in Gaussian's form | `xtb-g98` | `.out` (xtb's `g98.out`) | "frequency output generated by the xtb code", as the xTB plugin's manifest brings it | the xTB plugin (pixi) | never | a molecule in 3D, its vibrations and their motions |
+| Molden file | `molden` | `.molden`, `.mld` | `[Molden Format]` at a line's start, any case, its first line (the Molden format's page) | PySCF (plugin, pixi); Meno tells it | never | a molecule in 3D, its orbitals and densities promises |
+| WFX file | `wfx` | `.wfx` | `<Number of Primitives>` at a line's start, any case, a section the WFX specification requires | Meno, under the readers' contract, in its worker (`lib/calc/wfx.ts`), as the specification (1.0.4c) has it | never | a molecule in 3D, its energy, charge and spin where the file gives them, its virial ratio and RMS gradient, its orbitals (Meno's general form, listed by Meno), each orbital's surface on asking (its values on Meno's grid, worked out from the file's primitives); given to Multiwfn's NCI as its wavefunction |
 | Gaussian input | `gaussian-input` | `.gjf`, `.com` | - | never | Export, by the Gaussian plugin (uv, Python alone) | - |
 | ORCA input | `orca-input` | `.inp` | its name, and what its lines begin with (`!`, `%`, `*`), as the ORCA interface's manifest brings it | the workspace, as text coloured by the plugin's grammar, while it is added | never | a text in the workspace's column |
 | KET | - | `.ket` | - | not read | never | Open does not offer it; one dropped says "not supported yet" |

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import type { Grid, ListResult } from "../../../../lib/calc/results";
 import type { Carried3D } from "../store/types";
-import { colourSurface, frameCentre, pictureSurface, shownSurface, SURFACE_ISO, SURFACE_OPACITY, surfaceGeometry, surfaceOpacity } from "./surfaceMesh";
+import { colourSurface, frameCentre, pictureSurface, shownSurface, SURFACE_OPACITY, surfaceGeometry, surfaceOpacity } from "./surfaceMesh";
+import { ISO_ORBITAL } from "../../../../lib/calc/grids";
 
 /** A grid of f over a cube of side 6 Å about the origin, n points a side, as a result carries it. */
 function gridOf(f: (x: number, y: number, z: number) => number, n: number, signed = false): Grid {
@@ -33,7 +34,8 @@ describe("a surface as a picture draws it", () => {
 
   it("is the one its open list's chosen row shows, once given, at the list's value", () => {
     expect(shownSurface(carrying(p, 0, 0.1))).toEqual({ grid: expect.objectContaining({ counts: [25, 25, 25] }), iso: 0.1 });
-    expect(shownSurface(carrying(p, 0))?.iso).toBe(SURFACE_ISO);
+    // (a two-signed grid that says no value of its own: drawn as an orbital is, at first)
+    expect(shownSurface(carrying(p, 0))?.iso).toBe(ISO_ORBITAL);
     expect(shownSurface(carrying(p, null))).toBeNull();
     expect(shownSurface(carrying({ ask: "grid:0" }, 0))).toBeNull();
   });

@@ -299,11 +299,11 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       }
     }
   }
-  // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
-  // one - is that line's, not a line of its own)
+  // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as some drawings
+  // have one - is that line's, not a line of its own)
   out.strokes = withoutDrawnOver(out.strokes);
-  // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as RDKit
-  // draws one by default - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
+  // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as a
+  // drawing in element colours has one - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
   // widening on the same way)
   out.wedges = out.wedges.map((w) => {
     const l = dist(w.tip, w.base);
@@ -345,7 +345,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     out.wedges.push({ tip: at[0], base: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, w: dist(p, q), outline: b.pts, ...(b.ink ? { ink: b.ink } : {}) });
     return false;
   });
-  // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
+  // (a wedge's edges stroked round it - filled, then outlined, as some drawings have one - its own, no lines: each end at a corner of it)
   const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
   out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
   // (and a line drawn down a wedge, within it - its middle line, under the fill or over it, as some programs draw one - its own: else
@@ -361,8 +361,8 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   out.strokes = out.strokes.filter(
     (s) => !out.wedges.some((w) => dist(w.tip, w.base) > 0 && dist(s.a, s.b) > 0.5 * dist(w.tip, w.base) && inWedge(s.a, w, Math.max(0.5, 2 * s.w)) && inWedge(s.b, w, Math.max(0.5, 2 * s.w))),
   );
-  // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
-  // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
+  // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as a drawing in element
+  // colours has one - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
   // (once: a line so joined is a bond whole - an sp carbon's single bond going straight on into its triple bond's middle line is
   // another)
   const twoTone = new Set<Stroke>();

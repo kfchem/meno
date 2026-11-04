@@ -15,7 +15,7 @@ const headOf = (c: TableColumn) => {
   const shown = c.label ?? c.name;
   return c.kind === "number" && c.unit !== "none" ? `${shown} (${c.unit})` : shown;
 };
-/** What a column's head says on hover: its head, and the name it is matched on where a label stands for it ("Product · reaction.product"). */
+/** What a column's head says on hover: its head, and the name it is matched on where a label stands for it ("Product · map.entry"). */
 const headTitle = (c: TableColumn) => (c.label && c.label !== c.name ? `${headOf(c)} \u00b7 ${c.name}` : headOf(c));
 
 /** A cell as its frame shows it: a number as Meno writes numbers, true or false, text as it is, none as a dash. */
@@ -23,7 +23,7 @@ const cellText = (v: string | number | boolean | null, decimals?: number) => (v 
 /**
  * How many decimals a number column's numbers are written with, one count
  * for the column, so that their points line up - "0.00" over "0.37": an
- * energy in kcal/mol as a molecule's chip writes it (calc/results
+ * energy in kcal/mol as a molecule's chip writes one under ten (calc/results
  * `aboveText`, two), so that the same value reads the same in both; any
  * other as many as the one of those shown that needs most (`numberText`).
  */

@@ -16,7 +16,14 @@ type OptionBase = {
   when?: { id: string; in: readonly (string | number | boolean)[] };
   /** Shown folded, under this name, with those beside it that say the same: a choice's parts, which it fills in (`sets`). */
   group?: string;
+  /** Where on a card of several parts it is shown (Render's: docs/RENDER.md, *The card*); none said, with its plugin's own. */
+  section?: OptionSection;
+  /** What bounds it or fixes it, said under it, where the label alone does not say it - Meno's own options' alone. */
+  note?: string;
 };
+/** The parts of Render's card, in its order: what the molecules look like, how it is rendered, the scene round them, a film's motion. */
+export const OPTION_SECTIONS = ["look", "render", "scene", "motion"] as const;
+export type OptionSection = (typeof OPTION_SECTIONS)[number];
 /**
  * What Meno knows of what is written, which an option may start from rather
  * than from its default - the charge of the molecule written, say: given
@@ -32,7 +39,16 @@ export type ChoiceOption = OptionBase & {
   default: string;
 };
 /** `unset`: the value that sets nothing - what is left to the program ("0 leaves it to ORCA"): not said on a step's line. */
-export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known; unset?: number };
+export type NumberOption = OptionBase & {
+  type: "number";
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  from?: Known;
+  unset?: number;
+};
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
 /**
@@ -46,8 +62,6 @@ export type LinesOption = OptionBase & {
   default: string;
   rows?: number;
   readAs?: (text: string) => readonly LineRead[];
-  /** How a line is written, said under the box, where the label alone does not say it. */
-  note?: string;
 };
 /**
  * Atoms of the structure that comes in, chosen on its drawing - Meno's own
@@ -144,6 +158,7 @@ export function acceptOptions(raw: unknown): Option[] {
     const whenIn = Array.isArray(whenRaw?.in) ? (whenRaw!.in as unknown[]).filter((v): v is string | number | boolean => ["string", "number", "boolean"].includes(typeof v)).slice(0, 40) : [];
     const when = whenId && whenIn.length ? { when: { id: whenId, in: whenIn } } : {};
     const group = label(r.group, 60) ? { group: label(r.group, 60)! } : {};
+    const section = (OPTION_SECTIONS as readonly unknown[]).includes(r.section) ? { section: r.section as OptionSection } : {};
     let o: Option | null = null;
     if (r.type === "choice" && Array.isArray(r.choices)) {
       const choices = (r.choices as Record<string, unknown>[])
@@ -169,7 +184,7 @@ export function acceptOptions(raw: unknown): Option[] {
       o = { id, label: name, type: "text", default: typeof r.default === "string" ? r.default.slice(0, 200) : "", ...(from ? { from } : {}) };
     } else if (r.type === "switch") o = { id, label: name, type: "switch", default: r.default === true };
     // (its default, one it takes: else it is none)
-    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group });
+    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section });
   }
   return out;
 }

@@ -9,7 +9,7 @@ import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recor
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, optionsOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
-import { byOf, doerStamp, inputsFor, optionsFor, takesBy, takesNothingBy } from "./doers";
+import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, takesBy, takesNothingBy } from "./doers";
 
 export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -221,7 +221,9 @@ function keyTexts(m: Molecule3D): readonly string[] {
 
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
-  const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
+  const values = optionsOf(optionsFor(step.kind, by), step.options);
+  // (and, a Render's, the plugins its look and studio are of, by version)
+  const options = JSON.stringify(values) + presetsStamp(step.kind, by, values);
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
@@ -286,19 +288,36 @@ export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
 }
 
 /**
- * The steps to run to run `id`, in order: the furthest back before it
- * that has not run, has changed, failed, stopped or is running - however many done
- * lie between - and every step from it to `id`, which take anew what it
- * gives.
+ * The steps to run to run `id`, in order: each before it that has not run,
+ * has changed, failed, stopped or is running, and every step on a way from
+ * one of those to `id` - done or not, it takes anew what they give - then
+ * `id`. A step done that lies on no such way is not run, however near: a
+ * step of two inputs runs the side not done, never the other. Each comes
+ * after every one it takes from.
  */
 export function chainTo(doc: Flow, id: number): number[] {
   const back = stepsBefore(doc, id).slice(0, 200);
-  let far = -1;
-  back.forEach((sid, k) => {
+  const before = new Set(back);
+  const stale = back.filter((sid) => {
     const s = stepOf(doc, sid);
-    if (s && (s.running || stateOf(doc, s, byOf(s)) !== "done")) far = k;
+    return !!s && (s.running || stateOf(doc, s, byOf(s)) !== "done");
   });
-  return [...back.slice(0, far + 1).reverse(), id];
+  const runs = new Set(stale);
+  for (const sid of stale) for (const after of stepsAfter(doc, sid)) if (before.has(after)) runs.add(after);
+  // (the furthest first: by the longest way from each to `id`, longer than that of any step it gives to)
+  const longest = new Map<number, number>([[id, 0]]);
+  const wayFrom = (sid: number): number => {
+    const known = longest.get(sid);
+    if (known != null) return known;
+    longest.set(sid, 0);
+    const made = new Set((doc.sets ?? []).filter((b) => b.made?.step === sid).map((b) => b.id));
+    const next = (doc.wires ?? []).filter((w) => made.has(w.from.set) && (w.to.step === id || before.has(w.to.step))).map((w) => w.to.step);
+    const way = Math.max(0, ...next.map((n) => wayFrom(n) + 1));
+    longest.set(sid, way);
+    return way;
+  };
+  const order = back.filter((sid) => runs.has(sid));
+  return [...order.sort((a, b) => wayFrom(b) - wayFrom(a) || back.indexOf(b) - back.indexOf(a)), id];
 }
 
 /** The steps after a step: those that take what it gives, and those after them. */

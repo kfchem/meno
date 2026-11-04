@@ -47,6 +47,7 @@ DIMER = {
         {"el": "H", "x": 1.680398, "y": -0.373741, "z": 0.758561},
     ],
     "bonds": [{"a1": 0, "a2": 1, "order": 1}, {"a1": 0, "a2": 2, "order": 1}, {"a1": 3, "a2": 4, "order": 1}, {"a1": 3, "a2": 5, "order": 1}],
+    "fragments": [[0, 1, 2], [3, 4, 5]],
     "charge": 0,
     "multiplicity": 1,
 }
@@ -84,8 +85,23 @@ class Nciplot(unittest.TestCase):
         self.assertEqual(files["input.nci"].splitlines(), ["2", "molecule1.xyz", "molecule2.xyz", "ONAME NCI", "OUTPUT 2", "FINE", "INTERMOLECULAR", "CUTPLOT 0.07 0.4"])
         self.assertEqual(files["molecule1.xyz"].splitlines()[0], "3")
         # (one molecule has none to be between)
-        one = {**DIMER, "atoms": DIMER["atoms"][:3], "bonds": DIMER["bonds"][:2]}
+        one = {**DIMER, "atoms": DIMER["atoms"][:3], "bonds": DIMER["bonds"][:2], "fragments": [[0, 1, 2]]}
         self.assertFalse(ask(nciplot, "prepare", entries=[one], options={"between": True})["ok"])
+
+    def test_writes_the_fragments_it_is_given_and_works_out_none(self):
+        # (its fragments as given, not as its bonds would make them: each fragment's atoms, in its file, in order)
+        given = {**DIMER, "fragments": [[0, 2], [1, 3, 4, 5]]}
+        files = {f["name"]: f["text"] for f in ask(nciplot, "prepare", entries=[given], options={"between": True})["result"]["jobs"][0]["files"]}
+        self.assertEqual([files[n].splitlines()[0] for n in ("molecule1.xyz", "molecule2.xyz")], ["2", "4"])
+        self.assertEqual([line.split()[0] for line in files["molecule1.xyz"].splitlines()[2:]], ["O", "H"])
+        # (none given, or not each atom once: refused in words)
+        for fragments in [None, [], [[0, 1, 2]], [[0, 1, 2], [2, 3, 4, 5]], [[0, 1, 2], [3, 4, 5, 6]], [[0, 1, 2], []], [[0, 1, 2], [3, 4, True]]]:
+            entry = {k: v for k, v in DIMER.items() if k != "fragments"} if fragments is None else {**DIMER, "fragments": fragments}
+            said = ask(nciplot, "prepare", entries=[entry], options={"between": True})
+            self.assertFalse(said["ok"], fragments)
+            self.assertTrue(said["error"].startswith("NCIPLOT: "), said)
+        # (not asked for between: one file, the fragments not looked at)
+        self.assertTrue(ask(nciplot, "prepare", entries=[{**DIMER, "fragments": None}], options={})["ok"])
 
     def test_says_which_cube_is_the_surface_and_which_colours_it(self):
         said = ask(nciplot, "collect", entries=[DIMER], options={"range": 0.05}, files={}, log="", ended="done")
@@ -127,9 +143,12 @@ class Multiwfn(unittest.TestCase):
         self.assertEqual(files["nci.txt"].splitlines(), ["20", "1", "3", "3", "0", "0", "q"])
         self.assertEqual(job["reads"], ["nci.txt"])
         # (each kind under the extension Multiwfn tells it by)
-        for kind, ext in [("gaussian-fchk", ".fch"), ("wfn", ".wfn"), ("wfx", ".wfx")]:
+        for kind, ext in [("gaussian-fchk", ".fch"), ("wfx", ".wfx")]:
             entry = {**DIMER, "files": [{"kind": kind, "name": "x", "text": "x"}]}
             self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "wavefunction" + ext)
+        # (a kind it does not name - no plugin declares one - is no wavefunction of its: from the geometry alone)
+        entry = {**DIMER, "files": [{"kind": "wfn", "name": "x", "text": "x"}]}
+        self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "molecule.xyz")
 
     def test_works_from_the_geometry_alone_where_there_is_no_wavefunction_or_promolecular_is_asked_for(self):
         orca = {**DIMER, "files": [{"kind": "orca", "name": "x.out", "text": "x"}]}
@@ -168,10 +187,10 @@ class Multiwfn(unittest.TestCase):
         self.assertIn("why", ask(multiwfn, "collect", entries=[self.WFN], options={}, files={}, log=" Error: cannot read\n", ended="failed")["result"])
         self.assertFalse(ask(multiwfn, "collect", entries=[self.WFN], options={"from": 0.01, "to": 0.0}, files={}, log="", ended="done")["ok"])
 
-    @unittest.skipUnless(os.environ.get("MULTIWFN_BIN") and os.environ.get("MULTIWFN_WFN"), "Multiwfn is not named here")
+    @unittest.skipUnless(os.environ.get("MULTIWFN_BIN") and os.environ.get("MULTIWFN_WFX"), "Multiwfn is not named here")
     def test_multiwfn_writes_the_cubes_it_says(self):
-        text = pathlib.Path(os.environ["MULTIWFN_WFN"]).read_text(encoding="utf-8")
-        entry = {**DIMER, "files": [{"kind": "wfn", "name": "x.wfn", "text": text}]}
+        text = pathlib.Path(os.environ["MULTIWFN_WFX"]).read_text(encoding="utf-8")
+        entry = {**DIMER, "files": [{"kind": "wfx", "name": "x.wfx", "text": text}]}
         job = ask(multiwfn, "prepare", entries=[entry], options={"grid": "low"}, cores=2)["result"]["jobs"][0]
         done, files = run(job, os.environ["MULTIWFN_BIN"], {"Multiwfnpath": str(pathlib.Path(os.environ["MULTIWFN_BIN"]).parent)})
         self.assertEqual(done.returncode, 0, done.stdout[-2000:])

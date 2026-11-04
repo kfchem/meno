@@ -9,7 +9,7 @@ import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
 import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
-import { guideNotice } from "../../../lib/plugins/guides";
+import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 
 /**

@@ -2,7 +2,7 @@ import { useEffect, useMemo, type RefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import type * as THREE from "three";
 import { useEditor } from "../store";
-import { useGuide, shownStep } from "../../../../lib/plugins/guides";
+import { useGuide, shownStep } from "../../../../lib/guide/guide";
 import { structureAtoms } from "../utils/guided";
 
 /** The room kept round a structure a guide points at, in CSS pixels. */

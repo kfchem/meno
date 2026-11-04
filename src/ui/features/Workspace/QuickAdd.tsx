@@ -4,12 +4,14 @@ import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
-import { guideNotice } from "../../../lib/plugins/guides";
+import { labelWidth } from "./quickAddLabel";
+import { guideNotice } from "../../../lib/guide/guide";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
-import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import type { CoordinateStructure } from "../../../lib/io/coordinates";
+import { pastedAs } from "./quickAddPaste";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -23,8 +25,6 @@ const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
 const GAP = 2;
-/** How wide the name of who does a row of steps stands, beside its kinds: "Gaussian 16" and "Procedures" whole. */
-const LABEL_W = 84;
 /** How tall the SMILES field stands below the row, its rule above it and room for its focus ring below, in px; and the row of shapes. */
 const SMILES_H = 32 + 9 + 2;
 const SHAPES_H = 36 + 9;
@@ -170,6 +170,7 @@ export default function QuickAdd({
   onSmiles,
   onNamed,
   onCoordinates,
+  onOutput,
   onStep,
   onProcedure,
   onClose,
@@ -196,6 +197,8 @@ export default function QuickAdd({
   onNamed?: (label: string) => void;
   /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
   onCoordinates?: (structures: CoordinateStructure[]) => void;
+  /** A calculation's output pasted whole in the SMILES field (lib/calc/probe `outputKindIn`): read as one opened is, put down where Quick Add was opened. */
+  onOutput?: (text: string) => void;
   onStep: (kind: StepKind, by: string) => void;
   onProcedure?: (id: string) => void;
   onClose: () => void;
@@ -233,7 +236,8 @@ export default function QuickAdd({
   // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
   const offered = wired ? [] : procedures;
   const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
-  const calcWidth = LABEL_W + most * SIZE + 8;
+  const labelW = useMemo(() => labelWidth([...steps.map((g) => g.name), ...(offered.length ? ["Procedures"] : [])]), [steps, offered.length]);
+  const calcWidth = labelW + most * SIZE + 8;
   // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
@@ -331,7 +335,7 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
           <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} />
+            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
@@ -365,7 +369,7 @@ export default function QuickAdd({
             {steps.length ? (
               steps.map((g) => (
                 <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: LABEL_W }}>
+                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }} title={g.name}>
                     {g.name}
                   </span>
                   {g.steps.map((k) => (
@@ -387,7 +391,7 @@ export default function QuickAdd({
             )}
             {offered.length > 0 && (
               <div role="group" aria-label="Procedures" className="flex items-center">
-                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: LABEL_W }}>
+                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
                   Procedures
                 </span>
                 {offered.map((p) => (
@@ -429,12 +433,14 @@ function SmilesField({
   onSmiles,
   onNamed,
   onCoordinates,
+  onOutput,
 }: {
   width: number;
   open: boolean;
   onSmiles: (smiles: string) => Promise<void>;
   onNamed?: (label: string) => void;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
+  onOutput?: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -489,12 +495,11 @@ function SmilesField({
           setChoice((at + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
         }}
         onPaste={(e) => {
-          const pasted = e.clipboardData.getData("text/plain");
-          // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
-          const structures = onCoordinates ? readCoordinates(pasted) : [];
-          if (!structures.length) return;
+          const as = pastedAs(e.clipboardData.getData("text/plain"), { output: !!onOutput, coordinates: !!onCoordinates });
+          if (!as) return;
           e.preventDefault();
-          onCoordinates!(structures);
+          if ("output" in as) onOutput!(as.output);
+          else onCoordinates!(as.structures);
         }}
         placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
         aria-label="SMILES"

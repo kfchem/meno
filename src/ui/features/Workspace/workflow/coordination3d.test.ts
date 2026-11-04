@@ -68,6 +68,8 @@ describe("a coordination bond", () => {
     // (never a covalent single unmarked: docs/PLUGINS.md, *The entry a plugin is given*)
     expect(pluginEntry(e).bonds[0]).toEqual({ a1: 0, a2: 1, order: 1, coordination: true });
     expect(pluginEntry(e).bonds[1]).toEqual({ a1: 1, a2: 2, order: 1 });
+    // (the metal and its ligands one fragment: a coordination bond joins as any bond)
+    expect(pluginEntry(e).fragments).toEqual([e.atoms.map((_, i) => i)]);
   });
 
   it("is kept through a workspace saved and opened again", () => {

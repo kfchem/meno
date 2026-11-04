@@ -27,7 +27,8 @@
 import { create } from "zustand";
 import { CUBE_MARK } from "../calc/cube";
 import { recordName, RECORD_NAMES } from "../chem/pdb";
-import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type XyzEnergyDecl, type XyzStepsDecl } from "../plugins/manifest";
+import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type QuotedEnergyDecl, type XyzEnergyDecl, type XyzStepsDecl } from "../plugins/manifest";
+import type { QuotedTables } from "./coordinates";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
 import sampleRxn from "../../samples/diels-alder.rxn?raw";
@@ -53,7 +54,7 @@ export type Kind = {
   probe?: true;
   /** How a text of it is coloured: the first of its plugins' grammars, and whose it is (lib/text/colouring). */
   grammar?: PluginGrammar;
-  /** A kind only a plugin's catalogue names: the plugins it suggests to read it, by id - none of them added (lib/plugins/guide). */
+  /** A kind only plugins not added read: those plugins, by id, to suggest for it - the one its program's own first (`offeredKinds`). */
   suggest?: readonly string[];
 };
 
@@ -68,7 +69,15 @@ export type PluginGrammar = { plugin: string; decl: GrammarDecl };
  */
 export type TextKind = { id: string; extensions: readonly string[]; marks: readonly Mark[]; grammar: PluginGrammar };
 
-/** The kinds Meno knows: its own. Each but the cube read on the page; the cube, which programs of every kind write, by Meno under the readers' contract. */
+/**
+ * The kinds Meno knows: its own. Each but the cube and the WFX file read on
+ * the page; those two, which programs of every kind write, by Meno under the
+ * readers' contract; and the Molden file, which programs of every kind write
+ * too, told by Meno and read by a plugin that reads it, Meno not reading it
+ * yet. A WFX file is told by its required section of its primitives' count
+ * (the WFX specification, 1.0.4c), a Molden file by its first line (the
+ * Molden format's page): each at a line's start, in any case.
+ */
 export const MENO_KINDS = {
   workspace: { id: "meno-workspace", name: "Meno workspace", extensions: [".meno"] },
   record: { id: "meno-record", name: "Meno structure", extensions: [] },
@@ -78,6 +87,8 @@ export const MENO_KINDS = {
   xyz: { id: "xyz", name: "XYZ file", extensions: [".xyz"] },
   pdb: { id: "pdb", name: "PDB file", extensions: [".pdb"] },
   cube: { id: "cube", name: "Cube file", extensions: [".cube", ".cub"], output: {}, layout: CUBE_MARK },
+  wfx: { id: "wfx", name: "WFX file", extensions: [".wfx"], output: {}, marks: [{ text: "<Number of Primitives>", at: "line-start", anyCase: true }] },
+  molden: { id: "molden", name: "Molden file", extensions: [".molden", ".mld"], output: {}, marks: [{ text: "[Molden Format]", at: "line-start", anyCase: true }] },
 } as const satisfies Record<string, Kind>;
 
 /** The kinds Meno writes itself: the workspace by Save, the rest by Export (Workspace/fileActions). */
@@ -103,10 +114,12 @@ export type Refused = { plugin: string; kind: string; mark: string };
  * that would claim one of Meno's samples are refused, and said; a kind left
  * with no way to be told is left out.
  */
-export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; refused: Refused[]; texts: TextKind[]; catalogued: Kind[] } {
+export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; refused: Refused[]; texts: TextKind[] } {
   const samples = MENO_SAMPLES.map(headOf);
   const refused: Refused[] = [];
   const brought = new Map<string, Kind>();
+  // (the kinds coloured by their own program's plugin's grammar already: the first such, in Meno's order, as it is the first that reads it)
+  const ownGrammar = new Set<string>();
   const own = new Set(Object.values(MENO_KINDS).map((k) => k.id as string));
   for (const m of manifests) {
     // (the kinds it reads: one it only colours or writes is no file Meno takes in by it)
@@ -127,11 +140,13 @@ export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; ref
               extensions: [...new Set([...was.extensions, ...k.extensions])],
               marks: [...(was.marks ?? []), ...marks.filter((x) => !was.marks?.some((y) => y.text === x.text && y.at === x.at))],
               ...(k.probe || was.probe ? { probe: true as const } : {}),
-              // (coloured by the first's grammar that has one)
-              ...(was.grammar ? { grammar: was.grammar } : k.grammar ? { grammar: { plugin: m.id, decl: k.grammar } } : {}),
+              // (coloured by its own program's plugin's grammar - the first that says its program writes it (`writtenBy`), the
+              //  plugin that reads it by default (lib/calc/catalog `readerFor`) - else by the first's that has one)
+              ...(k.grammar && k.writtenBy && !ownGrammar.has(k.id) ? { grammar: { plugin: m.id, decl: k.grammar } } : was.grammar ? { grammar: was.grammar } : k.grammar ? { grammar: { plugin: m.id, decl: k.grammar } } : {}),
             }
           : kindFrom(k, marks, m.id),
       );
+      if (k.grammar && k.writtenBy) ownGrammar.add(k.id);
     }
   }
   // (the kinds it knows but does not read - those it writes, inputs to its program written by hand - as texts it colours)
@@ -142,29 +157,28 @@ export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; ref
         : [],
     ),
   );
-  // (the kinds of file catalogues name, told by their own marks - those that would claim Meno's own files refused, as a plugin's are)
-  const catalogued = new Map<string, Kind>();
-  for (const m of manifests) {
-    for (const f of m.files) {
-      if (own.has(f.id)) continue;
-      const marks = f.marks.filter((mark) => {
-        const claims = samples.some((s) => holdsMark(s, mark));
-        if (claims) refused.push({ plugin: m.id, kind: f.id, mark: mark.text });
-        return !claims;
-      });
-      if (!marks.length) continue;
-      const was = catalogued.get(f.id);
-      catalogued.set(f.id, {
-        id: f.id,
-        name: was?.name ?? f.name,
-        extensions: [...new Set([...(was?.extensions ?? []), ...f.extensions])],
-        output: {},
-        marks: [...(was?.marks ?? []), ...marks],
-        suggest: [...new Set([...(was?.suggest ?? []), ...f.suggest])],
-      });
-    }
-  }
-  return { kinds: [...Object.values(MENO_KINDS), ...brought.values()], refused, texts, catalogued: [...catalogued.values()] };
+  return { kinds: [...Object.values(MENO_KINDS), ...brought.values()], refused, texts };
+}
+
+/**
+ * The kinds of file the plugins offered but not added read, told by their
+ * own marks - none of Meno's, nor one a plugin added reads - each with those
+ * plugins, by id: what a file no plugin added reads is told as, to name the
+ * plugins that would. Worked out from what each plugin says it reads, never
+ * from a list of plugins: the one whose program writes the kind (`writtenBy`)
+ * first, then the others in Meno's order.
+ */
+export function offeredKinds(offered: readonly Manifest[], added: readonly Manifest[]): Kind[] {
+  const addedIds = new Set(added.map((m) => m.id));
+  const others = offered.filter((m) => !addedIds.has(m.id));
+  const known = new Set(registered(added).kinds.map((k) => k.id));
+  const writes = (m: Manifest, id: string) => !!m.kinds.find((k) => k.id === id)?.writtenBy;
+  return registered(others)
+    .kinds.filter((k) => !known.has(k.id) && k.marks?.length)
+    .map((k) => {
+      const readers = others.filter((m) => m.reads.includes(k.id));
+      return { ...k, suggest: [...readers.filter((m) => writes(m, k.id)), ...readers.filter((m) => !writes(m, k.id))].map((m) => m.id) };
+    });
 }
 
 const kindFrom = (k: KindDecl, marks: Mark[], plugin: string): Kind => ({
@@ -185,23 +199,48 @@ export function headOf(text: string): string {
 /**
  * The kinds registered: Meno's own, and those the plugins added bring
  * (lib/calc/workers registers them as plugins are added and taken away) -
- * and those the catalogues of the plugins added name, each with the
- * plugins it suggests to read it.
+ * and those only plugins not added read, each with those plugins
+ * (`offeredKinds`).
  */
-export const useKinds = create<{ kinds: readonly Kind[]; texts: readonly TextKind[]; catalogued: readonly Kind[]; xyzEnergies: readonly XyzEnergyDecl[]; xyzSteps: readonly XyzStepsDecl[] }>(() => ({
+export const useKinds = create<{
+  kinds: readonly Kind[];
+  texts: readonly TextKind[];
+  catalogued: readonly Kind[];
+  xyzEnergies: readonly XyzEnergyDecl[];
+  xyzSteps: readonly XyzStepsDecl[];
+  quotedEnergies: readonly QuotedEnergyDecl[];
+  quotedTables: QuotedTables;
+}>(() => ({
   kinds: registered([]).kinds,
   texts: [],
   catalogued: [],
   xyzEnergies: [],
   xyzSteps: [],
+  quotedEnergies: [],
+  quotedTables: { added: [], offered: [] },
 }));
 
-/** Registers the kinds `manifests` - the plugins added - bring and name, with Meno's own, in place of those registered before. */
-export function registerKinds(manifests: readonly Manifest[]): void {
-  const { kinds, texts, catalogued } = registered(manifests);
+/** Registers the kinds `manifests` - the plugins added - bring, with Meno's own, in place of those registered before; and those only the plugins `offered` but not added read (`offeredKinds`). */
+export function registerKinds(manifests: readonly Manifest[], offered: readonly Manifest[] = []): void {
+  const { kinds, texts } = registered(manifests);
+  const catalogued = offeredKinds(offered, manifests);
   // (and how the programs of the plugins added write an XYZ frame's energy, in the order the plugins are - and
   // which of their XYZ files are an optimisation's steps)
-  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []), xyzSteps: manifests.flatMap((m) => m.xyzSteps ?? []) });
+  // (and their programs' lines and tables of atoms as papers quote them - and those of the plugins only offered, to say whose
+  // a table is that none added reads)
+  const tablesOf = (ms: readonly Manifest[]) => ms.flatMap((m) => (m.quotedTables ?? []).map((t) => ({ ...t, plugin: m.name })));
+  const quotedTables = { added: tablesOf(manifests), offered: tablesOf(offered.filter((o) => !manifests.some((m) => m.id === o.id))) };
+  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []), xyzSteps: manifests.flatMap((m) => m.xyzSteps ?? []), quotedEnergies: manifests.flatMap((m) => m.quotedEnergies ?? []), quotedTables });
+}
+
+/** The energy lines the programs of the plugins added print, as papers quote them: none, where none is added. */
+export function quotedEnergies(): readonly QuotedEnergyDecl[] {
+  return useKinds.getState().quotedEnergies;
+}
+
+/** The tables of atoms the programs of the plugins added print, as papers quote them - and those only plugins not added declare, each with its plugin's name. */
+export function quotedTables(): QuotedTables {
+  return useKinds.getState().quotedTables;
 }
 
 /** The XYZ files the programs of the plugins added write whose frames are an optimisation's steps: none, where none is added. */
@@ -214,7 +253,7 @@ export function xyzEnergies(): readonly XyzEnergyDecl[] {
   return useKinds.getState().xyzEnergies;
 }
 
-/** The kinds only the catalogues of the plugins added name: what a file no plugin added reads is told as, to suggest a plugin that would. */
+/** The kinds only plugins not added read, each with those plugins (`offeredKinds`): what a file no plugin added reads is told as, to suggest a plugin that would. */
 export function cataloguedKinds(): readonly Kind[] {
   return useKinds.getState().catalogued;
 }

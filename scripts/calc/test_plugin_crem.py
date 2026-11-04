@@ -108,7 +108,8 @@ class Generate(unittest.TestCase):
         self.assertEqual(set(out), {"smiles", "properties", "seed"})
         self.assertEqual(out["seed"], 0)
         self.assertEqual(out["properties"]["change"], {"value": "[H][*:1]>>C[*:1]", "unit": "none"})
-        self.assertEqual(out["properties"]["seed_smiles"], {"value": "CC(=O)Nc1ccc(O)cc1", "unit": "none"})
+        # (only what CReM gives: no value of the seed's made here)
+        self.assertEqual(set(out["properties"]), {"change", "frequency"})
         self.assertEqual(got["seeds"], [{"place": 0, "made": 8}])
         self.assertIsInstance(out["properties"]["frequency"]["value"], int)
         self.assertEqual(got["by"]["program"], "CReM")
@@ -140,9 +141,11 @@ class Generate(unittest.TestCase):
                 self.worker.op_run({"step": "generate", "entries": [self.seed], "options": options})
             self.assertEqual(str(e.exception), said)
 
-    def test_never_more_than_a_run_makes(self):
-        with self.assertRaisesRegex(ValueError, "At most 1000 in one run"):
-            self.worker.op_run({"step": "generate", "entries": [self.seed] * 11, "options": {"count": 100}})
+    def test_cuts_nothing_and_refuses_no_run_for_its_size(self):
+        # (Meno takes no more of a run than it takes of any - workflow/programs: none of it, said - so the plugin keeps no cap of its own)
+        self.assertFalse(hasattr(self.worker, "MOST"))
+        got = self.made("grow", [self.seed] * 3, count=8)
+        self.assertEqual(len(got["outputs"]), sum(s["made"] for s in got["seeds"]))
 
 
 #: What CReM made of the seed (count 8, seed 7), as it gave each - measured on its own environment and database.

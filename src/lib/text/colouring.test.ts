@@ -260,8 +260,27 @@ describe("a plugin's grammar", () => {
     expect(registered([m]).texts.map((t) => t.id)).toEqual(["demo-in2"]);
   });
 
-  it("is the first of two plugins' that bring a kind: cclib's before PySCF's", () => {
-    expect(carried.kinds.find((k) => k.id === "orca")?.grammar).toMatchObject({ plugin: "cclib", decl: { file: "orca-output.grammar" } });
+  it("is the first of plugins' that bring a kind, unless one says its own program writes it", () => {
+    const out = { id: "demo-out", name: "Demo output", extensions: [".out"], marks: [{ text: "D E M O program" }] };
+    const bringing = (id: string, writtenBy?: string) =>
+      acceptManifest({
+        id,
+        name: id,
+        version: "1",
+        environment: "uv",
+        reads: ["demo-out"],
+        kinds: [{ ...out, writtenBy, grammar: { file: `${id}.grammar`, tones: { Word: "value" } } }],
+        steps: writtenBy ? [{ kinds: ["energy"], programs: [writtenBy] }] : [],
+      })!;
+    const grammarOf = (ms: ReturnType<typeof bringing>[]) => registered(ms).kinds.find((k) => k.id === "demo-out")?.grammar?.plugin;
+    expect(grammarOf([bringing("first"), bringing("second")])).toBe("first");
+    expect(grammarOf([bringing("first"), bringing("second", "demo")])).toBe("second");
+  });
+
+  it("is the plugin's whose own program writes the kind", () => {
+    // (ORCA's output and Gaussian's: each its own program's plugin's, which says its program writes it)
+    expect(carried.kinds.find((k) => k.id === "orca")?.grammar).toMatchObject({ plugin: "orca", decl: { file: "orca-output.grammar" } });
+    expect(carried.kinds.find((k) => k.id === "gaussian")?.grammar).toMatchObject({ plugin: "gaussian", decl: { file: "gaussian-output.grammar" } });
     expect(carried.texts.map((t) => [t.id, t.grammar.plugin])).toEqual([
       ["gaussian-input", "gaussian"],
       ["orca-input", "orca"],

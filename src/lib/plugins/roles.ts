@@ -13,12 +13,14 @@ export type Role = {
   where: "chemistry" | "molecules3d";
   /** Whether it takes options - the plugin's that fills it, drawn in Settings where it is chosen and sent with each request. */
   options?: true;
+  /** Whether a plugin that fills it declares, as data, below what confidence of its model's a reading is unsure (`RoleDecl.unsure`): models' confidences are not on one scale. */
+  unsure?: true;
 };
 
 export const ROLES = {
   smiles: { name: "SMILES to a structure, and back", where: "chemistry" },
   checks: { name: "Hydrogens, valence, aromatic rings, R and S, E and Z", where: "chemistry" },
-  pictures: { name: "Structures read from pictures", where: "chemistry" },
+  pictures: { name: "Structures read from pictures", where: "chemistry", unsure: true },
   stereoisomers: { name: "Stereoisomers of what is drawn without a configuration", where: "molecules3d" },
   configurations: { name: "Which stereoisomer each molecule in 3D is", where: "molecules3d" },
   conformers: { name: "Structures in 3D, and their conformers", where: "molecules3d", options: true },

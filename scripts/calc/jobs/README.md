@@ -1,4 +1,4 @@
-# Inputs of several jobs, for the cclib reader's tests
+# Inputs of several jobs, for the readers' tests
 
 Two inputs written after the programs' own manuals, each of two jobs: an
 HF/STO-3G optimisation of water, then an HF/3-21G single point.
@@ -10,9 +10,9 @@ HF/STO-3G optimisation of water, then an HF/3-21G single point.
 - `multi.inp`: ORCA, the second job after a `$new_job` line (ORCA's
   manual on running several jobs from one input).
 
-Their outputs are not kept here (docs/WORKSPACE.md, stage 3). To run
-`scripts/calc/test_reader_cclib_jobs.py` on them, run each in
-`calc-samples/jobs/`, where git ignores what is written:
+Their outputs are not kept here (docs/WORKSPACE.md, stage 3). To read
+them in a reader's tests, run each in `calc-samples/jobs/`, where git
+ignores what is written:
 
     g16 < link1.gjf > link1.log
     orca multi.inp > multi.out

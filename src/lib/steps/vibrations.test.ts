@@ -8,7 +8,7 @@ import { displaced, displacedEntry, imaginaryVibration } from "./vibrations";
 describe("imaginaryVibration", () => {
   it("takes the one of negative frequency; of several the most negative, and says so; of none, fails", () => {
     expect(imaginaryVibration([-512.3, 30, 1700])).toEqual({ index: 0 });
-    expect(imaginaryVibration([45, -60.2, -1203.4, 900])).toEqual({ index: 2, said: "It has 2 imaginary vibrations; the most negative, -1203.4 cm-1, is taken." });
+    expect(imaginaryVibration([45, -60.2, -1203.4, 900])).toEqual({ index: 2, said: "It has 2 imaginary vibrations; the most negative, -1203.4 cm⁻¹, is taken." });
     expect(imaginaryVibration([12, 400])).toEqual({ failed: "It has no imaginary vibration." });
   });
 });

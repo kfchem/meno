@@ -59,6 +59,8 @@ export type JobAsk = {
   reads?: string[];
   /** Other plugins whose programs it needs, by id - each its plugin's manifest declares (`needs`): found as their own jobs would find them, and named in its folder. */
   needs?: string[];
+  /** Preset plugins whose files it is handed, by id - each a plugin that uses its plugin through an interface that one declares (docs/PLUGINS.md, *Presets*): copied unread into its folder, `presets/<id>/`, never kept. */
+  presets?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */
@@ -175,8 +177,24 @@ export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, co
 }
 
 /**
+ * How Settings' cores are counted, in plain words, where it matters: on a
+ * computer that runs more than one thread on each physical core, as its
+ * threads - and a program running as processes takes one physical core,
+ * that many of them, for each process (lib/jobs `processesOf`; the queue's
+ * `taken`). None where each core runs one thread, or its physical cores
+ * cannot be told.
+ */
+export function coresCountedSaid(c: { cores: number; physical?: number }): string | null {
+  if (!c.physical || c.physical < 1 || c.cores <= c.physical) return null;
+  // (what a process takes, as the queue counts it - jobs.rs `taken`: rounded up - and its threads said as even only where they are)
+  const per = Math.ceil(c.cores / c.physical);
+  const has = c.cores === per * c.physical ? `${c.physical} physical cores with ${per} threads each, ${c.cores} in all` : `${c.physical} physical cores and ${c.cores} threads`;
+  return `Cores here are logical: this computer has ${has}. A program that runs as separate processes uses ${per} of them for each process.`;
+}
+
+/**
  * How many processes a job of a program running as processes takes (a
- * manifest's `installed[].parallel`: MPI, ORCA's `%pal`): the cores Settings
+ * manifest's `installed[].parallel`: MPI): the cores Settings
  * gives it, one process to each - never more than the computer's physical
  * cores, each process a whole one.
  */

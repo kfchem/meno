@@ -58,13 +58,14 @@ describe("openedAs", () => {
     expect(openedTexts([{ name: "", text: "" }])).toEqual({ kind: "workspace", label: "Untitled.txt", data: { texts: [{ name: "", text: "" }] } });
   });
 
-  it("offers chemical files, calculations' output - of the plugins added, and those their catalogues name - and text to Open, and no kind nothing reads", () => {
+  it("offers chemical files, calculations' output - of the plugins added, and those only plugins not added read - and text to Open, and no kind nothing reads", () => {
     registerKinds([]);
     for (const ext of [".meno", ".mol", ".sdf", ".rxn", ".xyz", ".pdb", ".cube", ".log", ".txt", ".py"]) expect(openable()).toContain(ext);
-    // (nothing added that reads, writes or names them: no calculation's files)
+    // (nothing added or offered that reads or writes them: no calculation's files)
     expect(openable()).not.toContain(".out");
     expect(openable()).not.toContain(".gjf");
-    registerKinds(MANIFESTS.filter((m) => m.id === "getting-started"));
+    // (none added, all offered: what they read, to name one to add)
+    registerKinds([], MANIFESTS);
     expect(openable()).toEqual(expect.arrayContaining([".out", ".fchk", ".molden"]));
     // (what a plugin added writes, a calculation's input, as text to change)
     registerKinds(MANIFESTS.filter((m) => m.id === "gaussian"));

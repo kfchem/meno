@@ -3,7 +3,7 @@
  * one entry's geometry with another's bonds and charges - a conformer of the
  * reactant given the product's bonding, as the start of a restrained
  * minimisation towards the product. The two must hold the same atoms in one
- * numbering (a *Reaction* step writes its products in the reactants'), atom
+ * numbering (an *Atom map* step writes its products in the reactants'), atom
  * by atom; where they do not, nothing is made, and the first atom that
  * differs is said.
  *
@@ -44,7 +44,7 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
   const i = ga.findIndex((a, k) => a.el !== ba[k].el);
   if (i >= 0)
     return {
-      failed: `Atom ${i + 1} is ${ga[i].el} in the geometry and ${ba[i].el} in the bonding: both must hold the same atoms in one numbering (a Reaction step writes its products in the reactants').`,
+      failed: `Atom ${i + 1} is ${ga[i].el} in the geometry and ${ba[i].el} in the bonding: both must hold the same atoms in one numbering (an Atom map step writes its products in the reactants').`,
     };
   // (the bonding a skeleton, its hydrogens not there: no charge or spin to give the entry, as Combine says of a part)
   const said = bonding.species ? [] : ["The bonding has no hydrogens, so the entry's charge and spin are not known either."];

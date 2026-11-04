@@ -1,7 +1,7 @@
 {
   "id": "crest",
   "name": "CREST",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "uses": [{"name": "CREST", "version": "2.12"}, {"name": "xtb", "version": "6.7.1"}],
   "description": "Searches for a molecule's conformers in 3D, by metadynamics with the GFN methods of xtb, from the Grimme group.",
   "licence": "LGPL-3.0-or-later",
@@ -13,7 +13,8 @@
     {
       "kinds": ["conformers"],
       "takes": ["molecules", "conformers"],
-      "programs": ["crest", "xtb"],
+      "noLoneAtom": true,
+      "programs": ["crest"],
       "options": [
         {"id": "method", "label": "Method", "type": "choice", "choices": [
           {"value": "gfn2", "label": "GFN2-xTB"},
@@ -54,12 +55,13 @@
           {"value": "squick", "label": "Quicker"},
           {"value": "mquick", "label": "Quickest"}
         ], "default": "full"},
-        {"id": "ewin", "label": "Energy window", "type": "number", "default": 6, "min": 0.1, "max": 100, "step": 0.5, "unit": "kcal/mol"}
+        {"id": "ewin", "label": "Energy window", "type": "number", "default": 6, "min": 0.1, "step": 0.5, "unit": "kcal/mol"}
       ]
     },
     {
       "kinds": ["optimise"],
-      "programs": ["crest", "xtb"],
+      "noLoneAtom": true,
+      "programs": ["crest"],
       "options": [
         {"id": "method", "label": "Method", "type": "choice", "choices": [{"value": "gfn2", "label": "GFN2-xTB"}, {"value": "gfn1", "label": "GFN1-xTB"}, {"value": "gfnff", "label": "GFN-FF"}], "default": "gfn2"},
         {"id": "solvent", "label": "Solvent (ALPB)", "type": "choice", "choices": [

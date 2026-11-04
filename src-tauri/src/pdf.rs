@@ -821,7 +821,7 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
 mod tests {
     use super::*;
 
-    // (L8's review of #318: a write waiting for room in the pipe of a reader
+    // (the review of #318: a write waiting for room in the pipe of a reader
     // that had stopped reading held Meno's hold on the reader, which its stop
     // needed - PDFs were dead until Meno was started again)
     #[cfg(unix)]

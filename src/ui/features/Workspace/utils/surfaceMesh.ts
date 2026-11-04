@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import { isAsk, readGrid, resultKey, resultsOn, type Grid } from "../../../../lib/calc/results";
 import { givenValue } from "../../../../lib/calc/asks";
+import { isoOf } from "../../../../lib/calc/grids";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { Carried3D, Molecule3D } from "../store/types";
 import type { Mesh, Vec3 } from "./isosurface";
@@ -24,8 +25,6 @@ export const COLOURED_OPACITY = 1;
 export const surfaceOpacity = (coloured: boolean) => (coloured ? COLOURED_OPACITY : SURFACE_OPACITY);
 /** Its finish. */
 export const SURFACE_FINISH = { roughness: 0.55, metalness: 0 };
-/** The value a surface is drawn at where its grid says none. */
-export const SURFACE_ISO = 0.05;
 
 /** A surface's two phases as one mesh - the positive's triangles, then the negative's - and where the negative's begin, by point; `coloured`, its points coloured already, by another grid (the positive's own colours, kept). */
 export function surfaceGeometry(plus: Mesh, minus: Mesh | null): { geometry: THREE.BufferGeometry; split: number; coloured: boolean } {
@@ -106,7 +105,7 @@ export function shownSurface(m: Pick<Carried3D, "calc" | "list">): { grid: Grid;
   if (!grid) return null;
   const by = row?.colour ? (isAsk(row.colour.by) ? givenValue(m.calc.source, list?.from, row.colour.by.ask) : row.colour.by) : undefined;
   const colourGrid = by && typeof by === "object" ? once(by) : null;
-  return { grid, iso: open.iso ?? grid.iso ?? SURFACE_ISO, ...(colourGrid && row?.colour ? { colour: { grid: colourGrid, from: row.colour.from, to: row.colour.to } } : {}) };
+  return { grid, iso: open.iso ?? isoOf(grid), ...(colourGrid && row?.colour ? { colour: { grid: colourGrid, from: row.colour.from, to: row.colour.to } } : {}) };
 }
 const read = new WeakMap<object, Grid | null>();
 

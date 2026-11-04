@@ -139,7 +139,7 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
 ## What has gone wrong before
 
 - **A tie decided by rounding** (2026-10-14). Cyclotetracosane, nothing
-  on it, came out a triangle of zigzags, as tall as wide (hunter B): its
+  on it, came out a triangle of zigzags, as tall as wide: its
   five shapes all read 0 on the measure, but the sums differed in the
   fourteenth place, and the smallest was the fifth shape, the triangle.
   Shapes alike on the measure now keep the order they are offered in, the
@@ -178,9 +178,9 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
 - **A drawing that says nothing reads by luck.** A cage's bond out,
   drawn straight out from the cage's bonds, is where neither of its
   corners is: which it read as turned on how the view fell. Palytoxin's
-  ketals read right under node and wrong in the app, whose JavaScript
-  engine (WebKit's) came to another view from the last bits of the same
-  sums. Such a bond now goes along its corner. A test turns every bond
+  ketals read right under node and wrong in the app, where the last bits
+  of the same sums came out otherwise. Such a bond now goes along its
+  corner. A test turns every bond
   out of a cage 15 degrees each way and asks for the same reading.
 - **A ring fused flat onto a cage can stand on the wrong face.** The cage
   is drawn in perspective and the rings fused to it laid flat beside the
@@ -233,8 +233,7 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   solid are weighed by, not the one views are ranked by). Kept apart
   always, adamantane's bonds came out uneven - its back CH2 0.62 from a
   front bridgehead is how it is drawn - and tetrodotoxin's C4 mark moved
-  onto a ring bond. Taken wherever `viewCost` alone fell (hunter B's
-  review), every bicyclo[2.2.2] view counted as crowded - its back bridge
+  onto a ring bond. Taken wherever `viewCost` alone fell, every bicyclo[2.2.2] view counted as crowded - its back bridge
   0.52 from the back bridgehead, eased only to 0.54 with its bonds uneven -
   and of 1230 bridged molecules 37 read worse by more than 0.5 (a
   chlorobicyclo[2.2.2]octanol 4.3 to 8.4, a 3-aryl nortropane 2.4 to 7.5).
@@ -263,8 +262,7 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   fewer cis. Meno's SMILES reader keeps a double bond's cis or trans from
   its / and \ marks for that. A chain drawn round a block of rings had
   its double bonds' cis or trans checked only as its turns were chosen,
-  which leaves out those at its two ends and the last two (hunter B,
-  2026-10-13: an E bond beside a naphthalene drawn cis), and easing it to
+  which leaves out those at its two ends and the last two (2026-10-13: an E bond beside a naphthalene drawn cis), and easing it to
   close moved the last chain atom across a ring atom's bond. Every one is
   checked on the whole chain now, and the chain kept as found where easing
   would turn one.
@@ -426,10 +424,10 @@ and the held-out list takes new ones. What it showed, by kind:
 
 ## Open
 
-- **Two double bonds in a ring of ten or twelve** (hunter B's sweep of
+- **Two double bonds in a ring of ten or twelve** (a sweep of
   cycloalkadienes, 2026-10-13): one of them still comes out the other way
   round in 12 of the 126 rings of 8 to 16 atoms - four of eight atoms
-  (drawn regular; hunter B's 8-ring dent is a PR of its own), and eight of
+  (drawn regular; the 8-ring dent is a PR of its own), and eight of
   10 and 12, where the lattice has one shape or none that holds both (a
   twelve has a single shape with no dents, and no dented one without a
   turn of five). Rings of 11, 14 and 16 take a shape from further down
@@ -479,7 +477,7 @@ and the held-out list takes new ones. What it showed, by kind:
 - **Clearing an H** may draw a bond up to 45% longer (taxol's benzoate).
 - **POPC's glycerol carbon** has no configuration in its graph
   (`baselines.py` leaves it out), so `stereo.py` reports it unread.
-- **C60 from SMILES** (Quick Add, seen by hunter B, 2026-10-13) comes out
+- **C60 from SMILES** (Quick Add, 2026-10-13) comes out
   a tangled flat projection, bonds crossing and the second lines of its
   double bonds floating inside its faces.
 - **Ginkgolide B** (2026-10-13). No two of its rings share three atoms,

@@ -1,4 +1,5 @@
 import type { Failure, FailureKind } from "../workflow/failures";
+import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
@@ -436,6 +437,12 @@ export type Molecule3D = {
    */
   failed?: (Failure | null)[];
   /**
+   * Where a run ended converged, frame by frame (workflow/converged; null,
+   * a frame none did): an optimisation, a saddle point's, a path's highest
+   * point refined - each of its frame's geometry, by its key.
+   */
+  converged?: (Converged | null)[];
+  /**
    * A conformer set's: the imaginary frequencies each conformer's
    * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame
    * by frame - null, none. A single geometry's are its calculation's own.
@@ -574,7 +581,7 @@ export type Molecule3D = {
   numbers?: number[];
   /** Each frame's share of its compound, as a *Populations* step worked it out; unset, by Boltzmann at room temperature where it is a conformer set. */
   shares?: number[];
-  /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
+  /** Each frame's degeneracy - how many forms of it its conformer search found alike (its rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
   /**
    * Each frame's properties by name, as lib/entry has them - each with its
@@ -870,7 +877,7 @@ export type RunKeptResults = {
   unread?: number;
   restUnread?: number;
   drawn?: { made: DrawnModel[]; rest: DrawnModel[]; core?: SeriesCore };
-  /** The tables its later exits hold, by exit (a Reaction's bond changes). */
+  /** The tables its later exits hold, by exit (an Atom map's bond changes). */
   tables?: Record<string, Table>;
 };
 /**
@@ -913,6 +920,8 @@ export type StepRunning = {
   paired?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
+  /** The lone atoms it passed through as they came, its plugin's program taking none (workflow/programs `passesAsLone`): each by its place among those that came in - out of its Done exit when it ends, never sent. */
+  passed?: number[];
 };
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {

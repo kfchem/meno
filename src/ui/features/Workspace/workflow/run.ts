@@ -19,14 +19,15 @@ import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, 
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
 import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
-import { VALUE_KINDS } from "../../../../lib/plugins/steps";
-import { inputsFor, takesBy, takesNothingBy } from "./doers";
+import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
+import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
+import { pluginById } from "../../../../lib/calc/catalog";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
 export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
-import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type Outcome, type Outcome3D } from "./meno";
+import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
 import { measuredSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -119,7 +120,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const outcome =
     input.holds === "structures"
       ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
-      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules));
+      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules), energyLevels(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
 
@@ -227,6 +228,11 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
+  // (a plugin Meno knows of that fills no such kind - a step a workspace kept from before it stopped doing it: said so, before it is asked
+  //  anything - and where the kind is Meno's own, what to do: add it again, as Meno's)
+  const plugin = by !== MENO.id ? pluginById(by) : undefined;
+  if (plugin && MENO_ONLY.includes(step.kind)) return `${kindInfo(step.kind).name} is Meno's own step: add it again`;
+  if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
   // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
   //  and each wired one taking what comes into it; Merge's second of the kind its first is)
   const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
@@ -369,6 +375,16 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
   const c = molecules.find((m) => m.energies?.length && (m.calc?.program || m.calc?.method))?.calc;
   if (!c) return undefined;
   return [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ");
+}
+
+/** Each molecule's energies' program and level, by its id, where its calculation said either: how Duplicates tells energies of two levels apart across molecules. */
+export function energyLevels(molecules: readonly Pick<Molecule3D, "id" | "calc">[]): Map<number, CalcLevel> {
+  return new Map(
+    molecules.flatMap((m) => {
+      const c = m.calc;
+      return c && (c.program || levelOf(c)) ? [[m.id, { program: c.program, method: c.method, basis: c.basis, solvation: c.solvation }] as const] : [];
+    }),
+  );
 }
 
 /** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
@@ -571,7 +587,7 @@ export function withResults(
 }
 
 /** The kinds of step whose results are what came in, worked out: each laid over what it was worked out from as it is put down (`laidOver`). */
-export const LAID_OVER: readonly StepKind[] = ["optimise", "energy", "frequencies", "nci"];
+export const LAID_OVER: readonly StepKind[] = ["optimise", "minimise", "energy", "frequencies", "nci"];
 
 /**
  * How each molecule a step gave is first turned, where it is what came in
@@ -632,14 +648,14 @@ export function placeResults(
   // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
   if (aside && results.drawn?.rest.length) doc = fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
   else if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
-  // (a table it gave at a later exit - a Reaction's bond changes - in that exit's set: under the others as they have grown)
+  // (a table it gave at a later exit - an Atom map's bond changes - in that exit's set: under the others as they have grown)
   const tables = Object.entries(results.tables ?? {});
   for (const [exit, table] of tables) doc = fillTable(doc, step, exit, table);
   return tables.length ? keepExitsUnder(doc, step) : doc;
 }
 
 /**
- * `doc` with an exit's set holding `table`, a step's (a Reaction's bond
+ * `doc` with an exit's set holding `table`, a step's (an Atom map's bond
  * changes): the set that exit made, what it held gone, as large as a table
  * set is put down - in its place, or made now.
  */
@@ -1030,6 +1046,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
         ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
+        // (where a run ended converged at it: of its own frame alone - a path's frames before and after it, none)
+        ...(e.converged ? { converged: [...(path ?? []).map(() => null), e.converged, ...after.map(() => null)] } : {}),
         ...e.keep,
       };
     });
@@ -1073,6 +1091,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       ...keptKnown(first),
       // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
       ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
+      // (where a run ended converged at each conformer: its own)
+      ...(g.some((e) => e.converged) ? { converged: g.map((e) => e.converged ?? null) } : {}),
       ...(alike ? keptAlike(g) : {}),
     };
   });

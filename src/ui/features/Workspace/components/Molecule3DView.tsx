@@ -14,7 +14,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { NOTES_SCALE, pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
 import { LONG_PRESS_SHOW_MS } from "../constants";
@@ -37,6 +37,7 @@ import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAt
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
+import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
@@ -270,8 +271,6 @@ export type Molecule3DViewProps = {
  * another look, its place on an undo, its coming and going.
  */
 /** The imaginary frequencies each of a molecule's `n` frames was judged to have: a conformer set's, frame by frame; a single geometry's, its calculation's, of its last. */
-const imaginaryShown = (m: Pick<Molecule3D, "imaginary" | "calc">, n: number): (number[] | null)[] | undefined =>
-  m.imaginary?.length === n ? m.imaginary : m.calc?.imaginary ? [...new Array<null>(n - 1).fill(null), m.calc.imaginary] : undefined;
 
 export default function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
@@ -1960,7 +1959,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         <Surface3D
           grid={props.surface ?? null}
           centre={centre}
-          iso={props.surfaceIso ?? props.surface?.iso ?? 0.05}
+          iso={props.surfaceIso ?? (props.surface ? isoOf(props.surface) : ISO_ORBITAL)}
           plus={style.surfacePlus}
           minus={style.surfaceMinus}
           colour={props.surfaceColour ?? null}

@@ -38,9 +38,6 @@ METHANOL = {
     "multiplicity": 1,
 }
 
-# a lone atom, as the ion of a salt is
-SODIUM = {"name": "sodium", "atoms": [{"el": "Na", "x": 1.0, "y": 2.0, "z": 3.0}], "bonds": [], "charge": 1, "multiplicity": 1}
-
 # (after "Coordinate Files", ensemble files: Xmol frames in angstroms, each comment line an energy in hartrees, lowest first)
 # (after "Command Line Keywords": CREST echoing the options it was given as it starts)
 ECHO_THF = """ Command line input:
@@ -131,30 +128,37 @@ class Prepare(unittest.TestCase):
         # (two Xmol frames, one after the other)
         self.assertEqual([ensemble[0], ensemble[8]], ["6", "6"])
 
-    def test_a_lone_atom_has_its_energy_worked_out_by_xtb_not_crest(self):
-        # (CREST stops on one atom: xtb's single point instead, as xtb's "Commandline Usage" has it)
-        jobs = ask("prepare", step="conformers", entries=[METHANOL, SODIUM], options={**defaults(), "solvent": "water"}, cores=4)["jobs"]
-        self.assertEqual([j["program"] for j in jobs], ["crest", "xtb"])
-        lone = jobs[1]
-        self.assertEqual(lone["entries"], [1])
-        self.assertEqual(lone["args"], ["input.xyz", "--gfn", "2", "--chrg", "1", "--uhf", "0", "--alpb", "water", "-P", "4", "-I", "xcontrol"])
-        files = {f["name"]: f["text"] for f in lone["files"]}
-        self.assertEqual(files["xcontrol"].split(), ["$write", "json=true", "$end"])
-        self.assertEqual(files["input.xyz"].splitlines()[2].split(), ["Na", "1.0000000000", "2.0000000000", "3.0000000000"])
-        self.assertEqual(lone["reads"], ["xtbout.json"])
-        # (a two-level search's finer method; an ensemble's lone atoms one job, as other molecules')
-        self.assertEqual(ask("prepare", step="conformers", entries=[SODIUM], options={"method": "gfn2//gfnff"})["jobs"][0]["args"][1:3], ["--gfn", "2"])
-        jobs = ask("prepare", step="optimise", entries=[SODIUM, METHANOL, {**SODIUM, "atoms": [{"el": "Na", "x": 0, "y": 0, "z": 0}]}], options={"method": "gfnff"})["jobs"]
-        self.assertEqual([(j["program"], j["entries"]) for j in jobs], [("xtb", [0, 2]), ("crest", [1])])
-        self.assertEqual(jobs[0]["args"][1], "--gfnff")
-        # (refused as CREST would refuse it)
-        said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "conformers", "entries": [SODIUM], "options": {"ewin": 0}}))
-        self.assertFalse(said["ok"])
+    def test_an_ensemble_holds_one_constitution_though_another_has_its_atoms_in_the_same_order(self):
+        # (the same atoms in the same order, one H bonded to O in one and to C in the other: two molecules, two ensembles)
+        other = {**METHANOL, "bonds": [b if b["a2"] != 5 else {**b, "a1": 1} for b in METHANOL["bonds"]]}
+        self.assertNotEqual(other["bonds"], METHANOL["bonds"])
+        jobs = ask("prepare", step="optimise", entries=[METHANOL, other, METHANOL], options={"method": "gfn2"})["jobs"]
+        self.assertEqual([j["entries"] for j in jobs], [[0, 2], [1]])
+        # (the bonds of one molecule, written in another order or either way round, or with other orders - a ring drawn
+        #  as another Kekule structure - are the same molecule's)
+        turned = {**METHANOL, "bonds": [{**b, "a1": b["a2"], "a2": b["a1"]} for b in reversed(METHANOL["bonds"])]}
+        kekule = {**METHANOL, "bonds": [{**b, "order": 2} if i == 0 else b for i, b in enumerate(METHANOL["bonds"])]}
+        jobs = ask("prepare", step="optimise", entries=[METHANOL, turned, kekule], options={"method": "gfn2"})["jobs"]
+        self.assertEqual([j["entries"] for j in jobs], [[0, 1, 2]])
+
+    def test_any_energy_window_above_nought(self):
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        ewin = next(o for s in manifest["steps"] for o in s["options"] if o["id"] == "ewin")
+        self.assertNotIn("max", ewin)
+        self.assertIn("--ewin", ask("prepare", step="conformers", entries=[METHANOL], options={**defaults(), "ewin": 150})["jobs"][0]["args"])
 
     def test_the_programs_its_jobs_run_are_those_its_manifest_names(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         for step in manifest["steps"]:
-            self.assertEqual(set(step["programs"]), {"crest", "xtb"})
+            # (CREST alone: the xtb in its environment is CREST's, run by CREST)
+            self.assertEqual(step["programs"], ["crest"])
+
+    def test_it_says_its_program_takes_no_lone_atom_and_runs_none(self):
+        # (CREST stops on one atom: Meno passes one through as it came, never sending it - nothing here runs another program for it)
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual([s.get("noLoneAtom") for s in manifest["steps"]], [True, True])
+        for name in ("lone", "lone_job", "lone_of", "XTB"):
+            self.assertFalse(hasattr(worker, name), name)
 
     def test_every_option_offered_is_one_it_takes(self):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -191,9 +195,8 @@ class Collect(unittest.TestCase):
         self.assertEqual(worker.solvation_of(ECHO_THF), "ALPB(thf)")
         self.assertEqual(worker.solvation_of(ECHO_THF.replace(" --alpb thf", "").replace("  --alpb thf : implicit solvation\n", "")), "none")
         self.assertIsNone(worker.solvation_of(""))
-        # (a lone atom's: as its xtb printed it in its setup)
-        xtb = "      * Solvation model:               ALPB\n        Solvent                        water\n        Reference state                gsolv [1 M gas/solution]\n"
-        self.assertEqual(worker.solvation_of(xtb), "ALPB(water), reference state gsolv [1 M gas/solution]")
+        # (CREST's own words alone: another program's setup is not read)
+        self.assertIsNone(worker.solvation_of("      * Solvation model:               ALPB\n        Solvent                        water\n"))
         # (not what was asked: refused)
         for asked in ("none", "water"):
             said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "conformers", "entries": [METHANOL], "options": {"solvent": asked}, "files": {"crest_conformers.xyz": ENSEMBLE}, "log": ECHO_THF, "ended": "done"}))
@@ -251,22 +254,6 @@ T /K                                  :   298.15
         self.assertEqual([len(o["frames"]) for o in out], [1, 1])
         self.assertEqual(out[1]["method"], "GFN2-xTB")
         said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "optimise", "entries": [METHANOL], "options": {}, "files": {"crest_ensemble.xyz": ENSEMBLE}, "log": "", "ended": "done"}))
-        self.assertFalse(said["ok"])
-
-    def test_a_lone_atom_comes_back_where_it_was_with_xtb_s_energy(self):
-        dump = json.dumps({"total energy": 0.195485566667, "xtb version": "6.7.1 (abc)"})
-        out = ask("collect", step="conformers", entries=[SODIUM], options={"method": "gfn2//gfnff", "solvent": "water"}, files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]
-        self.assertEqual((out["program"], out["version"], out["method"]), ("xtb", "6.7.1", "GFN2-xTB"))
-        self.assertEqual((out["atoms"], out["frames"], out["energies"], out["populations"]), (["Na"], [[1.0, 2.0, 3.0]], [0.195485566667], [1.0]))
-        self.assertEqual((out["charge"], out["multiplicity"]), (1, 1))
-        # (each atom of an ensemble where it was, with the one energy)
-        there = {**SODIUM, "atoms": [{"el": "Na", "x": 0, "y": 0, "z": 0}]}
-        outs = ask("collect", step="optimise", entries=[SODIUM, there], options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"]
-        self.assertEqual([o["frames"] for o in outs], [[[1.0, 2.0, 3.0]], [[0.0, 0.0, 0.0]]])
-        self.assertNotIn("populations", outs[0])
-        # (no dump: why, as xtb said)
-        self.assertEqual(ask("collect", step="conformers", entries=[SODIUM], options={}, files={}, log="a\n[ERROR] it failed\n", ended="failed")["why"], "[ERROR] it failed")
-        said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "conformers", "entries": [SODIUM], "options": {}, "files": {"xtbout.json": "{}"}, "log": "", "ended": "done"}))
         self.assertFalse(said["ok"])
 
     def test_conformers_of_another_molecule_are_not_taken(self):

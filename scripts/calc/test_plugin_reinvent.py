@@ -107,12 +107,32 @@ class Generate(unittest.TestCase):
             },
         )
 
-    def test_keeps_how_many_to_what_it_may_be(self):
-        made = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 0, "seed": 7}})
-        self.assertTrue(made["said"].startswith("1 sampled"), made["said"])
-        self.assertEqual(self.worker.number({"count": 500}, "count", 20, 1, self.worker.MOST), 100)
+    def test_refuses_an_option_outside_what_it_may_be_never_running_another(self):
+        # (a seed of 0 among them: REINVENT 4 sets none for it, so the run would not sample the same way again)
+        for options, said in [
+            ({"count": 0, "seed": 7}, "How many is 0: it takes a whole number from 1 to 100"),
+            ({"count": 500}, "How many is 500: it takes a whole number from 1 to 100"),
+            ({"count": 2.5}, "How many is 2.5: it takes a whole number from 1 to 100"),
+            ({"seed": 0}, "Random seed is 0: it takes a whole number from 1 to 2147483647"),
+            ({"seed": "7"}, "Random seed is 7: it takes a whole number from 1 to 2147483647"),
+        ]:
+            with self.assertRaises(ValueError) as e:
+                self.worker.op_run({"step": "generate", "entries": [], "options": options})
+            self.assertEqual(str(e.exception), said)
         with self.assertRaises(ValueError):
             self.worker.op_run({"step": "optimise", "entries": [], "options": {}})
+
+
+class Options(unittest.TestCase):
+    """What the step offers, as the manifest says it and the worker takes it - needing nothing of REINVENT 4."""
+
+    def test_the_seed_starts_at_one_and_every_one_is_kept(self):
+        manifest = json.loads((ROOT / "src-tauri/resources/plugins/reinvent/manifest.json").read_text(encoding="utf-8"))
+        seed = next(o for o in manifest["steps"][0]["options"] if o["id"] == "seed")
+        self.assertEqual((seed["min"], seed["default"]), (1, 1))
+        text = WORKER.read_text(encoding="utf-8")
+        self.assertIn("unique_molecules = false", text)
+        self.assertNotIn("randomize_smiles", text)
 
 
 if __name__ == "__main__":

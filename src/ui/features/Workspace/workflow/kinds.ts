@@ -4,6 +4,7 @@
  * options where Meno does it. Plugins fill kinds; they bring none of their
  * own.
  */
+import { CHECK_OPTIONS } from "./checkStructures";
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
@@ -12,6 +13,7 @@ import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps
 import { renderOptions } from "../render/renderOptions";
 import { keptNames, takeFramesHow, type Which } from "./takeFrames";
 import { joinHow, joinNeeds } from "./joinStep";
+import { barrierHow, barrierNeeds, FREE_ENERGY } from "./barrierStep";
 import { addHow, addNeeds, numberHow, numberNeeds } from "./addStep";
 import { ensembleHow, ensembleNeeds } from "./ensembleStep";
 import { conditionsIn, conditionText, filterNeeds } from "../../../../lib/nodes/filter";
@@ -20,7 +22,7 @@ import { measurementName, measurementsTyped } from "../../../../lib/steps/measur
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
 import { BOND_REACH, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
-import type { RestraintsAsked } from "../../../../lib/steps/restraints";
+import { DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
@@ -47,8 +49,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "reaction" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "ensemble";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -98,7 +100,7 @@ export function laterPortsNeed(ports: readonly StepPort[], isWired: (id: string)
  * marks the exit for what a step set aside or could not do, drawn with its
  * count: nothing is hidden, and it can be wired on. A kind has at most one
  * such exit; its other exits each give something of their own (a
- * Reaction's bond changes, a table).
+ * Atom map's bond changes, a table).
  */
 export type StepExit = { id: string; name: string; gives: ValueKind | "chart" | "same" | "pictures"; of?: "rest" | "failed" };
 
@@ -174,6 +176,8 @@ export const KINDS: readonly KindInfo[] = [
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
+  // (each entry minimised in a force field with its restraints held - Restraints', Torsion restraints' - as its plugin holds them: docs/PLUGINS.md)
+  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
   { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
@@ -224,12 +228,28 @@ export const KINDS: readonly KindInfo[] = [
     kind: "energy-window",
     name: "Energy window",
     icon: "band",
-    takes: ["conformers"],
-    gives: "conformers",
+    takes: ["conformers", "molecules"],
+    gives: "same",
     runs: "entries",
     made: "Within {window} kcal/mol",
     others: [{ id: "rest", name: "Outside it", gives: "same", of: "rest" }],
-    options: [{ id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" }],
+    options: [
+      { id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" },
+      // (of each compound's lowest, as it was; or of the lowest of those with one value of a property - a path, a product: never grouped by guess)
+      {
+        id: "within",
+        label: "From the lowest in",
+        type: "choice",
+        choices: [
+          { value: "each compound", label: "Each compound" },
+          { value: "each value", label: "Each value of a property" },
+        ],
+        default: "each compound",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
+    ],
+    how: (v) => energyWindowHow(v),
+    needs: (v) => energyWindowNeeds(v),
   },
   {
     kind: "duplicates",
@@ -256,7 +276,21 @@ export const KINDS: readonly KindInfo[] = [
         ],
         default: "apart",
       },
+      // (each compound's conformers, or a compound set's same structures, as it was; or those with one value of a property - a product, a path - across compounds: never grouped by guess)
+      {
+        id: "within",
+        label: "Compared within",
+        type: "choice",
+        choices: [
+          { value: "each compound", label: "Each compound" },
+          { value: "each value", label: "Each value of a property" },
+        ],
+        default: "each compound",
+      },
+      { id: "groupBy", label: "The property", type: "text", default: "", when: { id: "within", in: ["each value"] } },
     ],
+    how: (v) => duplicatesHow(v),
+    needs: (v) => (v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined),
     perceives: "configurations",
     perceivesWith: (v) => v.mirrors === "counted",
   },
@@ -391,16 +425,18 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
   },
-  // (structures drawn looked over as they are, each kept as drawn or set aside saying why: never one changed - a plugin's, its options its own)
+  // (structures drawn looked over as they are, each kept as drawn or set aside saying why: never one changed - Meno's, on what the plugin
+  //  that does the checks makes of each: workflow/checkStructures)
   {
     kind: "check-structures",
     name: "Check structures",
     icon: "check",
     takes: ["structures"],
     gives: "structures",
-    runs: "program",
+    runs: "entries",
     made: "Checked",
     others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
+    options: CHECK_OPTIONS,
   },
   // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside: a plugin's, its options its own)
   {
@@ -579,7 +615,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Measured",
-    // (the atoms typed, or each row's of a table wired in where wanted - a Reaction's bond changes - its columns saying how they count them)
+    // (the atoms typed, or each row's of a table wired in where wanted - an Atom map's bond changes - its columns saying how they count them)
     inputs: [
       { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
       { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
@@ -731,6 +767,48 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => joinNeeds(v),
   },
   {
+    // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs, a conformer set's each conformer one: those it cannot have one out of Failed, each saying why)
+    kind: "barrier",
+    name: "Barrier",
+    icon: "height",
+    takes: ["molecules", "conformers"],
+    gives: "molecules",
+    runs: "entries",
+    made: "With barriers",
+    inputs: [
+      { id: "saddles", name: "Saddle points", takes: ["molecules", "conformers"] },
+      { id: "starts", name: "Starts", takes: ["molecules", "conformers"] },
+    ],
+    others: [FAILED],
+    options: [
+      {
+        id: "energy",
+        label: "Of",
+        type: "choice",
+        choices: [
+          { value: "G", label: "Free energy G" },
+          { value: "E", label: "Electronic energy E" },
+        ],
+        default: "G",
+      },
+      { id: "free", label: "G is", type: "text", default: FREE_ENERGY, when: { id: "energy", in: ["G"] } },
+      {
+        id: "symmetry",
+        label: "Rotational symmetry",
+        type: "choice",
+        choices: [
+          { value: "as-read", label: "As each program read it" },
+          { value: "left-out", label: "Left out (σ = 1 on both sides)" },
+        ],
+        default: "as-read",
+        when: { id: "energy", in: ["G"] },
+      },
+      ...PAIRS_OWN,
+    ],
+    how: (v) => barrierHow(v),
+    needs: (v) => barrierNeeds(v),
+  },
+  {
     // (each entry's restraints from itself: its coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - those it cannot have out of Failed, saying why)
     kind: "restraints",
     name: "Restraints",
@@ -745,7 +823,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "factor", label: "Kept at \u00d7 the sum of their van der Waals radii (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
       { id: "distances", label: "Pairs kept at their distance, atoms from 1 (3-7, 1-12)", type: "text", default: "" },
       { id: "fixed", label: "Atoms fixed, from 1 (1, 4-6)", type: "text", default: "" },
-      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: "" },
+      { id: "strength", label: "Strength of each distance, kcal/mol/\u00c5\u00b2", type: "text", default: String(DISTANCE_STRENGTH) },
     ],
     how: (v) => restraintsHow(v),
     needs: (v) => restraintsNeeds(v),
@@ -776,7 +854,7 @@ export const KINDS: readonly KindInfo[] = [
         default: "one",
       },
       { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
-      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: "" },
+      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP) },
     ],
     how: (v) => torsionsHow(v),
     needs: (v) => torsionsNeeds(v),
@@ -832,23 +910,66 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => addNeeds(v),
   },
   {
-    // (each product mapped onto the one reactant structure, atom for atom, hydrogens too, and written in its numbering - with the bonds each map forms, breaks or changes, as a table; a product that does not map, aside with why)
-    kind: "reaction",
-    name: "Reaction",
-    icon: "reaction",
+    // (each entry mapped onto its reference, atom for atom, hydrogens too, and written in its numbering - a reaction's products onto its reactants, a species' conformers onto it - with the bonds each map forms, breaks or changes, as a table; an entry that does not map, aside with why)
+    kind: "atom-map",
+    name: "Atom map",
+    icon: "mapped",
     takes: ["molecules", "conformers"],
-    gives: "molecules",
+    gives: "same",
     runs: "entries",
-    made: "Mapped products",
+    made: "Mapped",
     inputs: [
-      { id: "reactants", name: "Reactants", takes: ["molecules", "conformers"] },
-      { id: "products", name: "Products", takes: ["molecules", "conformers"] },
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
     ],
     others: [
       { id: "rest", name: "Not mapped", gives: "same", of: "rest" },
       { id: "changes", name: "Bond changes", gives: "table" },
     ],
     options: [
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "one", label: "The one reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "one",
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      {
+        // (no default: whether an input's entries are each a side of its own, or one side together, is the chemist's - a reaction's products, or its reactants)
+        id: "moleculesAre",
+        label: "Molecules",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each its own" },
+          { value: "together", label: "One side together" },
+        ],
+        default: "",
+      },
+      {
+        id: "referenceIs",
+        label: "Reference",
+        type: "choice",
+        choices: [
+          { value: "each", label: "Each its own" },
+          { value: "together", label: "One side together" },
+        ],
+        default: "",
+      },
+      {
+        // (no default: whether its bonds may change is what the chemist maps for - a reaction, or conformers of one species)
+        id: "bonds",
+        label: "Bonds",
+        type: "choice",
+        choices: [
+          { value: "change", label: "May change (a reaction)" },
+          { value: "same", label: "Stay the same (conformers)" },
+        ],
+        default: "",
+      },
       {
         id: "maps",
         label: "Maps",
@@ -860,7 +981,8 @@ export const KINDS: readonly KindInfo[] = [
         default: "first",
       },
     ],
-    how: (v) => (v.maps === "every" ? "every map of each product" : "each product's first map"),
+    how: (v) => atomMapHow(v),
+    needs: (v) => atomMapNeeds(v),
   },
   {
     // (each geometry moved along a vibration - its imaginary one, or one chosen - by an amplitude, the atom moving most by exactly that; one that cannot be, aside with why)
@@ -942,7 +1064,7 @@ export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked } | {
   const fixed = atomsFromOne(String(v.fixed ?? ""));
   if ("why" in fixed) return { why: fixed.why };
   if (!coordination && !typed.atoms.length && !fixed.length) return { why: "Nothing to hold yet" };
-  const strength = aboveZero(String(v.strength ?? ""), "The strength");
+  const strength = aboveZero(String(v.strength ?? DISTANCE_STRENGTH), "The strength");
   if ((coordination || typed.atoms.length) && strength == null) return { why: "Set the strength" };
   if (strength && typeof strength === "object") return { why: strength.why };
   return {
@@ -971,13 +1093,14 @@ export function restraintsHow(v: OptionValues): string {
     distances?.length ? `${distances.length} ${distances.length === 1 ? "pair" : "pairs"} at their distance` : "",
     fixed?.length ? `${fixed.length} ${fixed.length === 1 ? "atom" : "atoms"} fixed` : "",
   ].filter(Boolean);
-  return `${said.join("; ")}${strength != null ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
+  // (the strength where it is not the default: what was chosen, said)
+  return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
 }
 
 /** What a Torsion restraints step still needs of its options. */
 export function torsionsNeeds(v: OptionValues): string | undefined {
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
-  const step = aboveZero(String(v.step ?? ""), "The strength added");
+  const step = aboveZero(String(v.step ?? TORSION_STEP), "The strength added");
   if (step == null) return "Set the strength added";
   return typeof step === "object" ? step.why : undefined;
 }
@@ -989,7 +1112,32 @@ export function torsionsHow(v: OptionValues): string {
   // (the one reference is the default: left unsaid)
   const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
   // (the + says it adds each time - the option's own label says it whole)
-  return `held at 180\u00b0, +${String(v.step).trim()} kcal/mol/rad\u00b2${matched}`;
+  return `held at 180\u00b0, +${String(v.step ?? TORSION_STEP).trim()} kcal/mol/rad\u00b2${matched}`;
+}
+
+/** What an Atom map step still needs of its options. */
+export function atomMapNeeds(v: OptionValues): string | undefined {
+  const side = (x: unknown) => x === "each" || x === "together";
+  if (!side(v.moleculesAre)) return "Choose how the molecules are taken";
+  if (!side(v.referenceIs)) return "Choose how the reference is taken";
+  if (v.reference === "property" && (v.moleculesAre === "together" || v.referenceIs === "together")) return "Matched on a property takes each entry on its own: set both inputs to each its own";
+  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
+  if (v.bonds !== "change" && v.bonds !== "same") return "Choose whether bonds may change";
+  return undefined;
+}
+
+/** An Atom map step's line: what was chosen - an input taken as one side, whether bonds may change, every map, the property matched on - an input taken each its own, and the defaults, unsaid. */
+export function atomMapHow(v: OptionValues): string {
+  const needs = atomMapNeeds(v);
+  if (needs) return needs;
+  // (an input taken each its own, the plain reading, unsaid - one taken as one side said; whether bonds may change, always)
+  return [
+    ...(v.moleculesAre === "together" ? ["molecules as one side"] : []),
+    ...(v.referenceIs === "together" ? ["reference as one side"] : []),
+    v.bonds === "same" ? "bonds stay the same" : "bonds may change",
+    ...(v.maps === "every" ? ["every map"] : []),
+    ...(v.reference === "property" ? [`matched on ${String(v.property).trim()}`] : []),
+  ].join(", ");
 }
 
 /** *Displace*'s options as read: its amplitude (Å, not 0), and the vibration (from 0) where one is chosen by number - or what it still needs. */
@@ -1067,6 +1215,25 @@ export function rankNeeds(v: Record<string, string | number | boolean>): string 
   if (!String(v.property ?? "").trim()) return "Name the property to rank by";
   if (v.within === "each value" && !String(v.groupBy ?? "").trim()) return "Name the property whose values are the groups";
   return undefined;
+}
+
+/** How a Duplicates step does its work, in a line: only what is not its default - "compared within each product", "mirror images counted as one" - and nothing at all where all is (the card says "Duplicates"). */
+export function duplicatesHow(v: Record<string, string | number | boolean>): string {
+  const by = String(v.groupBy ?? "").trim();
+  if (v.within === "each value" && !by) return "Name the property whose values are the groups";
+  return [...(v.mirrors === "counted" ? ["mirror images counted as one"] : []), ...(v.within === "each value" ? [`compared within each ${by}`] : [])].join(" · ");
+}
+
+/** What an Energy window still needs before it can run: the property, where its groups are a property's values. */
+export function energyWindowNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  return v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined;
+}
+
+/** How an Energy window does its work, in a line: "within 3 kcal/mol of each compound's lowest", "within 10 kcal/mol of each path's lowest" - which energy, G or E, its line says once it has run. */
+export function energyWindowHow(v: Record<string, string | number | boolean>): string {
+  const needs = energyWindowNeeds(v);
+  if (needs) return needs;
+  return `within ${Number(v.window)} kcal/mol of each ${v.within === "each value" ? String(v.groupBy).trim() : "compound"}'s lowest`;
 }
 
 /** How a Rank step does its work, in a line: "the lowest 1 by energy in each group" - or what it still needs. */

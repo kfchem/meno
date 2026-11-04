@@ -2,7 +2,7 @@
 
 Pictures and films of molecules in 3D, rendered by a plugin: Blender, the
 first to fill the role *Render*. Written on 2026-10-11 with the
-maintainer (lane L7); what is decided is under *Decided*.
+maintainer; what is decided is under *Decided*.
 
 ## What it is for
 
@@ -11,8 +11,8 @@ Meno's canvas draws molecules in 3D for working with them: quickly, in the
 film of a molecule turning or moving in a vibration for a talk - lit as a
 real scene is, with true shadows, the light round the scene reaching into
 every crevice, and materials such as glass and metal. It is made by a
-program that does nothing else so well, apart from Meno, and comes back
-onto the page beside the molecules it shows.
+program apart from Meno, and comes back onto the page beside the
+molecules it shows.
 
 ## How it is asked for
 
@@ -38,13 +38,14 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     shape exactly, grown, never cut;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
-    outlined. **The looks are the renderer's**: the card offers the
-    canvas's own look, *as the canvas draws them*, which every renderer is
-    asked to make, and then those the renderer's manifest declares (a
-    label, a description, and its parts or that it makes it with materials
-    and light of its own - docs/PLUGINS.md, *Looks*), in its order;
-    Meno keeps no list of them, and a look is added by the plugin alone
-    (2026-10-15). Folded under it, *Adjust this
+    outlined. The card offers the canvas's own look, *as the canvas
+    draws them*; then **Meno's own looks, each made of Meno's parts
+    alone** - *Lacquered*, *Flat*, *Crystal*, *Anodised*, *Cartoon* and
+    *Line art* - which any renderer that makes the parts makes, and of
+    which a renderer is told only the parts (the boundary, 2026-10-31);
+    and then those the renderer's manifest declares, made with materials
+    and light of its own (a label, a description, docs/PLUGINS.md,
+    *Looks*), in its order, Meno keeping no list of them. Folded under it, *Adjust this
     look* shows its parts, filled in from it, each the chemist's to change
     for this render alone: the molecules' material (as the 3D style draws
     them, glossy, metal, glass, matte, clay, white); where a surface is
@@ -59,6 +60,22 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     declares the looks it can make (`looks`, PLUGINS.md).
 - The plugin's options, as its manifest declares them (the Blender
   plugin's below).
+
+**The card's parts** (the maintainer, 2026-10-29): one model for a picture
+and a film alike, in four parts, in this order - **Look** (the look, its own
+choices just under it, *Adjust this look* folded), **Render** (the
+renderer, its samples, noise, where it renders, its colours, the width and
+shape, a film's quality), **Scene** (the background, the lights) and, for
+a film, **Motion** (the motion, *Once or Loop*, the length and the frames a
+second). Meno's own choices each have their part; a plugin's option says
+which part it belongs to (`section`, docs/PLUGINS.md), and one that says
+none is shown last, under the plugin's name. *Once or Loop* is Meno's, for
+every motion that can come back to its start - turning, and those a
+renderer makes: *turning once round* Once eases in and comes to rest where
+it began, as the canvas's *Turn once* does; as a Loop it turns at one speed,
+seamlessly. A choice a motion is always made with - the Blender plugin's
+motions are made with light traced, in Cycles - is said as text in its
+row, with no control, and why beneath it, whatever was chosen (`fixed`, docs/PLUGINS.md, *Motions*).
 
 Each is remembered: Meno's for a picture and a film apart, the plugin's as
 the role's options, which Settings, *Chemistry*, shows as well, on its *3D* card.
@@ -128,8 +145,7 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   large as the molecules are drawn there.
 - **The key light** as the canvas has it: directional
   (`KHR_lights_punctual`), from the same side, as strong. The light all
-  round the canvas has, for which glTF has no word, is said in the scene's
-  `extras` (`meno.ambientLight`), with the picture's size and frames.
+  round the canvas has is said in the scene's `extras` (`meno.ambientLight`), with the picture's size and frames.
 - **A film's motion** as one animation (3.11): a key for each of its
   frames, every one worked out by Meno - the turn of each molecule, or the
   place of each atom and stick - so that the film is what Meno meant, not
@@ -155,9 +171,60 @@ plugin declares the motions it makes in its role's `motions`, each an id,
 a label and a description (docs/PLUGINS.md, *Motions*); Meno keeps no list
 of them. The card's *Moving* offers Meno's own motions the molecules can
 make, then the declared ones; chosen, the entry says the motion's id
-(`motion`), and Meno writes the scene still, with the molecules' atoms and
-bonds in its extras. The options that adjust a motion are the role's,
-each `when` it is chosen - Once or Loop among them.
+(`motion`), and Meno writes the scene still, and *Once or Loop* (`mode`:
+`once` or `loop`). In every scene Meno writes, each molecule's node, each
+atom's ball and each bond's sticks are tagged in their extras (`meno`):
+the molecule's node with which molecule it is and its bonds - the atoms at
+their ends, their order, and a stick to a ring's centre that ring's atoms;
+a ball with its atom and element; a stick with its bond. A renderer finds
+the molecules there as Meno drew them, and keeps no copy of its own. The
+options that adjust a motion are the role's, each `when` it is chosen.
+
+### How long a film can be
+
+A film is never asked shorter than its motion can be read in (the
+maintainer, 2026-10-28): each motion says its shortest - Meno's own
+(turning once round 3 s; through its frames, or in a vibration, 2 s), a
+renderer's in its manifest (`shortest`, docs/PLUGINS.md, *Motions*). A
+motion that changes one molecule into the next says each change's
+shortest, and Meno multiplies it by the changes - one fewer than the
+molecules, or as many where the film loops back to the first (*Once or
+Loop*). The card's *Length* is bounded by it, and says so
+under it ("At least 12 s for 3 molecules"); a length chosen before that is
+shorter is raised to it, and the card says that instead. The longest it
+asks is 60 s, or the shortest where that is longer. However a film is
+asked for - the card, a saved or written ask - Meno refuses one shorter
+before anything is rendered, saying how long it needs to be ("This film
+needs at least 6 s for 3 molecules"): the rule is Meno's, and no renderer
+keeps a copy of it (the boundary, 2026-10-31).
+
+## Presets
+
+A renderer may take looks, studios and motions from plugins of their own
+(2026-11-01; docs/PLUGINS.md, *Presets*): each such plugin uses the
+renderer through an interface the renderer declares, runs nothing, and
+says in its manifest what it brings, each with the file the renderer runs
+for it. While it is added, not stopped, and the renderer chosen is the one
+it brings them to, the card offers its looks after Meno's and the
+renderer's own, its motions after Meno's and the renderer's, and its
+studios as a choice of the Scene part, *Studio* - "As asked", the scene as
+the render asks it, first. An id offered already is not offered again. Its
+options are shown only while one of its looks, studios or motions is
+chosen, each in the part it says, each `when` it says. A preset motion's
+shortest length counts as a renderer's does.
+
+Chosen, the render's entry hands the renderer, for each plugin whose
+presets are chosen, its interface, its id, each chosen one's id and file,
+and its options' values (`presets`); a preset look or motion is said there
+alone, the entry's own look the canvas's and no motion of its own, *Once
+or Loop* still the entry's. Meno copies every file the plugin names into
+the job, unread, in `presets/<its id>/`; never keeps one; and never runs
+one: the renderer does, as its interface says.
+
+A look, studio or motion chosen last that nothing added brings now is said
+on the card in a line - its name, its plugin, and that the plugin is not
+added, or is stopped and why - and the first is used for that render. A
+Render step set to one is refused before it runs.
 
 ## Render as a step
 
@@ -297,7 +364,7 @@ uv, no package), and the script Blender runs, `render.py`.
   the background asked for - after the colours are transformed, so that
   white is white - writing a PNG, or an MP4 (H.264) through Blender's own
   video writer.
-- **Its options**: the renderer (Cycles, light traced, or EEVEE, fast),
+- **Its options**: the renderer (Cycles, light traced, or EEVEE, drawn in real time),
   samples for each pixel, noise removal, where it renders (the faster of
   the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender
   can use one - and the processor, or either), the background
@@ -313,110 +380,15 @@ uv, no package), and the script Blender runs, `render.py`.
   Outlines: Freestyle's silhouettes, borders and creases for the thin
   line, one pixel; and for the outer edge, the picture's own silhouette
   grown by the width, in the colour, under the picture - one edge round
-  the molecule however its shapes overlap, which Freestyle's own external
-  contour (each shape's) is not. Meno's looks keep the picture's place
+  the molecule however its shapes overlap. Meno's looks keep the picture's place
   and size.
-- **Looks with materials and light of their own** (`looks.py`, beside
-  `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
-  wood, marble, terracotta (the look `clay`), porcelain, slime, neon,
-  X-ray and fur are not a colour and a gloss: each is a
-  material of Blender's own shader nodes, put on the molecules by their
-  shapes' names (`ball #909090`, `stick #000000`: the element's colour is
-  read from the name, so each element keeps its own, a shared material
-  being the one thing the colours must not come to). A ribbon, one mesh
-  whose points carry their colours, is first cut into a shape of each
-  colour it has (`ribbon #c84a5e`), so that the look colours its parts as
-  the canvas does; the lines on balls and a measurement's marks keep their
-  own. Each look brings **its own
-  lighting world**, which the camera never sees. The metals and the bubble
-  reflect, so they have a studio: a world that is dim above and a darker
-  band below, and three soft rectangular light panels (one wide at the
-  upper left, one tall at the right, one narrow above) that give the
-  reflections shapes. The matte looks have the same panels dim, a diffuse
-  surface being over-exposed by the metals' strength. What is behind is
-  still transparent, and is put under the picture as the Background choice
-  asks. These looks are made by Cycles, with noise removal using the
-  albedo and normal passes, the glossy and total bounces capped, and
-  adaptive sampling; the key light and the light all round are the look's,
-  not the canvas's. Their choices appear only under their look: silver's
-  finish (mirror or satin), copper's (brushed or tarnished), the wood's
-  species (oak, walnut, cherry, maple, ebony, or each element its own), terracotta's
-  colour (one colour, terracotta, or the element colours), porcelain's
-  finish (porcelain, or pearl: a cream white with a soft pink and green
-  orient), fur's pile (long, or short and dense as velvet - a hair's length is a
-  fixed fraction of its own part's radius and every ball and stick has the
-  same number of hairs, whatever scale the shape has in the scene), and
-  marble's pattern (Carrara, long veins laid in the molecule's own space so
-  that they run on across atoms and sticks, or swirls on each atom). The
-  metals' reflectances are the published F0 values of Hoffman's table of
-  metals ("Physically Based Shading", SIGGRAPH 2010 course): gold 1.00
-  0.71 0.29, silver 0.95 0.93 0.88 and copper 0.95 0.64 0.54, linear;
-  copper is deepened by the scene - panels of a warm tone, fewer of them
-  - not by its F0. A surface drawn from an orbital keeps the colours Meno
-  gave it.
-- **Its motions** (2026-10-17, for 0.1.14): Reveal, Pulse, Assemble, Scan
-  and Dissolve - the motions the maintainer approved from the previews of
-  2026-10-16 and 10-17 - each a script (`motion_<id>.py`) made in one
-  studio they share (`studio.py`), both copied into the job's folder with
-  render.py. The studio builds the molecules the scene's extras hold, at
-  4 cm an ångström - a product on a table - as the canvas shows them, in
-  the motions' own finish (each element's colour under a clear coat;
-  carbon near black): a perspective camera with an 85 mm lens and depth of
-  field - its sensor across the frame's width, a portrait film's too, so
-  that a tall molecule is framed whole - motion blur, a finishing compositor. The Look and its parts are
-  not used for them: a motion has its own. The Background choice picks
-  the studio: **White** (or Transparent, a film having none) the white
-  studio - a paper sweep the camera sees, lit only by a soft source above
-  it, so that the molecule's contact shadow is its own, the molecule's
-  lights lighting it alone, its colours by Khronos PBR Neutral, effects
-  carried by colour and shadow rather than glow - **Black** or **Grey**
-  the dark studio: a pool of light on a dark cyclorama, coloured rims,
-  bloom. Each motion has its own tuning on each. *Once or Loop* (the
-  option `mode`): Once eases in and holds a composed last frame; Loop
-  repeats seamlessly - Pulse and Scan, and Reveal in the dark studio, loop
-  of themselves (three waves a period; a sheet up and down as the molecule
-  turns once; the rims circling); the others loop as a cycle, played
-  forward and then back from frames rendered once, both ends held still,
-  so the seam does not show. Each motion is timed in a length of its own
-  (Reveal 7 s, Pulse 6, Assemble 8, Scan 7, Dissolve 7) and a film of
-  another length plays it all, faster or slower; a loop is timed in the
-  film's length. A motion chooses where it renders as a picture does
-  (*Where it renders*): on Automatic, the faster here, as timed once and
-  kept - never the graphics processor only for being there, which on a
-  computer whose graphics processor is slower than its processor (an
-  integrated one, say) renders slower.
-- **Its changes of molecules** (2026-10-26; the films lane's patterns,
-  each approved by the maintainer from its films of 2026-10-19 to 10-23):
-  a film of two molecules or more rendered together, each becoming the
-  next in turn, in the order Meno wrote them - Once to the last, Loop back
-  to the first. One film keeps one change throughout (the maintainer,
-  2026-10-19). With one molecule, the render says it needs two.
-  - **Ring** (`change-ring`): A's bonds let go; its atoms rise into one
-    evenly spaced ring about the molecule (hydrogens just inside), which
-    turns and lets them fall, in a sweep round it, into B's places - the
-    nearest by the least travel in all, the same element preferred
-    (Hungarian assignment); each keeps its colour until it lands, as B's
-    element, with a squash. Where B has more atoms, one buds on the ring
-    beside its source; where fewer, the spare ones fall into a neighbour.
-  - **Scan** (`change-scan`): a sheet of light with a cobalt hoop at its
-    rim passes down to the paper; below it A, its cut edge lit; just above
-    it B, a rim of light seen through, solid a little higher.
-  - **Shatter** (`change-shatter`): A breaks into shards of its own
-    spheres and sticks (a Voronoi fracture made in the script, Bullet
-    rigid bodies, the floor), and the shards gather into B's atoms, which
-    fuse in a wave up from the paper.
-  - Each piece is made in a Blender of its own - the studio, the part the
-    changes share (`change.py`) and the change's script - after the one
-    before. Every molecule stands on the same floor, turned as the canvas
-    shows it; the camera is one move through the whole film - turning one
-    way (Once) or swinging and back (Loop) - so one piece's last frame is
-    the next one's first. The film is put together in the sequencer as
-    runs of frames, one image strip for each run from one piece's folder
-    (every piece's files have the same names). Shaders that glow are not sampled as lights,
-    which would change how a molecule at rest is rendered between pieces.
-  - Each change is timed in a length of its own (Ring, Scan and Shatter
-    5 s), and the film's length is shared out among the pieces, each played
-    faster or slower to fit.
+- **Looks, studios and motions of Blender's own** come from preset plugins
+  that use the renderer through its interface `preset` (docs/plugins/
+  blender-presets.md); the renderer itself has none. Meno carries one,
+  **Blender looks and motions** (`blender-presets`), described below. The
+  renderer runs a preset's chosen file inside its Blender, after it has
+  built Meno's scene, against what the interface hands it: the request,
+  and Meno's molecules as the scene's tags give them.
 - **Where it renders** (2026-10-16, the maintainer): a three-way choice,
   *Render on*: **Automatic (the faster one)**, the default; **Graphics
   processor**; **Processor**. Automatic times the two once on this
@@ -429,7 +401,7 @@ uv, no package), and the script Blender runs, `render.py`.
   is kept. The step's line says *Checking which is
   faster...* while it times, and, after, **Rendered on the processor**,
   in small words, where the render was on the processor - by the choice,
-  by the timing, or because Blender has no graphics processor it can use
+  by the timing, or because there is no graphics processor Blender can use
   (nothing is shown where it rendered on the graphics processor). The
   job's log (*Show log* on the step's menu) says which in each case, and
   the two times - it is not in `meno.log`. The old on/off switch's
@@ -441,11 +413,12 @@ uv, no package), and the script Blender runs, `render.py`.
   the render says it). A film's line says it in hundredths of its length,
   *Rendering 37%...*.
 - **Why one failed** is what the render script said as it stopped
-  (`render.py: ...`) or what Python raised, as its traceback ends
+  (`render.py: ...`, said without the script's name, which means nothing
+  to the person) or what Python raised, as its traceback ends
   (`TypeError: ...`) - all of it, a message of several lines as one, up
   to what Blender says next (its progress, its own last words); else Blender's last line that says error; else its
-  last. Never Blender's own last words, which say only that a script
-  failed or what memory it did not free as it quit (`worker.py` `why_of`).
+  last. Never Blender's own last words as it quits, "Error: script failed"
+  and "Error: Not freed memory blocks" (`worker.py` `why_of`).
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer
@@ -454,6 +427,86 @@ uv, no package), and the script Blender runs, `render.py`.
   the lighter drawing of very many atoms (`Scene3D.largeDrawings`) - none
   is written in the glTF. Blender finds its own shadows and hollows as it
   lights the scene; the shadows' softness is the plugin's own option.
+
+### Blender looks and motions
+
+A preset plugin of Meno's, for the Blender plugin (it uses Blender from 0.7.0 to before 0.8.0, its interface `preset` from
+1.0.0 to before 2.0.0). It runs nothing of its own: Meno puts its files in the render job, and Blender runs the chosen ones.
+Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.py`, `motion_<id>.py`).
+
+- **Its looks** (2026-10-15): gold, silver, copper, a soap bubble, wood,
+  marble, terracotta (the look `clay`), porcelain, slime, neon, X-ray and
+  fur - not a colour and a gloss: each is a material of Blender's own
+  shader nodes, put on each of Meno's balls and sticks in the colour Meno
+  drew it (`looks_shared.py`). Each brings its own lighting world, which
+  the camera never sees: the metals and the bubble a studio of three soft
+  rectangular panels that give the reflections shapes, the matte looks the
+  same panels dim. These looks are made by Cycles, with noise removal using
+  the albedo and normal passes, the glossy and total bounces capped, and
+  adaptive sampling. Their choices appear only under their look: silver's
+  finish (mirror or satin), copper's (brushed or tarnished), the wood's
+  species (oak, walnut, cherry, maple, ebony, or each element its own),
+  terracotta's colour (one colour, or the element colours), porcelain's
+  finish (porcelain, or pearl), fur's pile (long, or short and dense as
+  velvet) and marble's pattern (Carrara, long veins across the molecule, or
+  swirls on each atom). The metals' reflectances are the published F0
+  values of Hoffman's table of metals ("Physically Based Shading",
+  SIGGRAPH 2010 course): gold 1.00 0.71 0.29, silver 0.95 0.93 0.88 and
+  copper 0.95 0.64 0.54, linear.
+- **Its studios**: the Scene's *Studio* choice offers them after *As
+  asked*, the plain scene. **Paper sweep**: a floor curving up into a wall
+  behind, in the background's colour, big soft lights and a soft source
+  overhead pooling light on the floor; where Meno's camera looks level, the
+  floor lies below what it frames. **Dark cyclorama**: a wall far behind,
+  lit as a pool by its own light and seen by the camera alone, a key, a
+  fill, a top light and two coloured rims. A studio is the backdrop chosen:
+  on a transparent background the paper is white, and the cyclorama's
+  wall dark.
+  Each is built round Meno's molecules at their own size, its lights as
+  strong as the key light asked for, and as soft as the shadows' softness;
+  a molecule in either reads as bright as Meno lights it with no studio.
+- **Its motions** (2026-10-17): Reveal, Pulse, Assemble, Scan and
+  Dissolve - the motions the maintainer approved from the previews of
+  2026-10-16 and 10-17. Each keys Meno's own molecule - its balls and
+  sticks, their elements, places, radii and colours as Meno drew them -
+  staged at 4 cm an ångström, a product on a table (`motionkit.py`): a
+  perspective camera with an 85 mm lens and depth of field, its sensor
+  across the frame's width, motion blur, a light rig of the motion's own
+  and a finishing compositor; the motion lays a clear coat over Meno's
+  colours. A studio chosen is the motion's backdrop; with none, the
+  background is put under the film as asked. Each is made by Cycles
+  (`fixed`). *Once or Loop* (Meno's choice): Once eases in and holds a
+  composed last frame; Loop repeats seamlessly - Pulse and Scan, and Reveal
+  on a dark background, loop of themselves; the others loop as a cycle,
+  played forward and then back, both ends held still. Each motion is timed
+  in a length of its own (Reveal 7 s, Pulse 6, Assemble 8, Scan 7,
+  Dissolve 7) and a film of another length plays it all, faster or
+  slower.
+- **Its changes of molecules** (2026-10-26, each approved by the
+  maintainer from its films of 2026-10-19 to 10-23): a film of two
+  molecules or more rendered together, each becoming the next in turn, in
+  the order Meno wrote them - Once to the last, Loop back to the first.
+  With one molecule, the render says it needs two.
+  - **Ring** (`change-ring`): A's bonds let go; its atoms rise into one
+    ring about the molecule, which turns and lets them fall, in a sweep
+    round it, into B's places - which atom flies to which place chosen by
+    the least travel in all, the same element preferred: the change's
+    choreography, never a mapping of the molecules. Each keeps its colour
+    until it lands, with B's. Where B has more atoms, one buds on the ring;
+    where fewer, the spare ones fall into a neighbour.
+  - **Scan** (`change-scan`): a sheet of light passes down; below it A,
+    its cut edge lit; just above it B, a rim of light seen through, solid a
+    little higher.
+  - **Shatter** (`change-shatter`): A breaks into shards of its own balls
+    and sticks (a Voronoi fracture made in the script, Bullet rigid
+    bodies), and the shards gather into B's atoms.
+  - Each piece is keyed in a scene of its own - A, one of Meno's
+    molecules, and B, the next, given as its atoms and bonds with Meno's
+    colours and radii (`change.py`) - after the one before. Every molecule
+    stands on the same floor, turned as the canvas shows it; the camera is
+    one move through the whole film, so one piece's last frame is the
+    next one's first. Each change is timed in a length of its own (5 s),
+    and the film's length is shared out among the pieces.
 
 ## Licences
 
@@ -503,7 +556,7 @@ one starts from its first choice.
 ## Not yet
 - The words the canvas puts on molecules in 3D - atom numbers, R and S,
   E and Z, a measurement's value - are not in the scene yet: they are
-  words, which glTF has no word for, so they would be written as shapes.
+  words, which would be written in the scene as shapes.
 - Films with a transparent background (a video kind that keeps it, which
   every system's web view plays, is wanted first).
 - A render is not picked up again as a workflow's job is: its workspace's

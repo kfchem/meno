@@ -735,8 +735,8 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   sulfonium's S, a phosphine's P, an arsine's As - is drawn as one with its
   H left out: one wedge, the lone pair the fourth, undrawn group, and read
   back from it so (`readStereo`). A selenoxide's Se, a telluride's Te or a
-  stibine's Sb is not read from its wedge, as no reader reads one, so
-  Clean-up leaves such a drawing as it is (2026-10-29).
+  stibine's Sb is not read from its wedge, so Clean-up leaves such a
+  drawing as it is (2026-10-29).
 - A cage drawn in perspective shows its stereochemistry by the drawing
   itself, with no wedges; what it shows is read back from the solid the
   cage is drawn from, fitted to where its atoms are and how deep, and the

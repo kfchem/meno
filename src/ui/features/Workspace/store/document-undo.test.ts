@@ -686,7 +686,7 @@ describe("a workspace's history, held to about 100 MB (the maintainer, 2026-10-1
   });
 });
 
-describe("a haptic bond's endpoints, held to the ring it binds (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a haptic bond's endpoints, held to the ring it binds (a document fuzzer, 2026-10-13)", () => {
   /** FeCp2 written out on a carbon: its metal, its stars and their haptic bonds to the Cp rings. */
   const ferrocene = () => {
     const ed = editor();
@@ -756,7 +756,7 @@ describe("a haptic bond's endpoints, held to the ring it binds (the command cent
   });
 });
 
-describe("a complex written out inside a workflow set (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a complex written out inside a workflow set (a document fuzzer, 2026-10-13)", () => {
   it("leaves the set's frame finite, and a part without its ring measurable - a NaN frame was dropped with its set on saving", async () => {
     const { drawnBox } = await import("../../../../utils/importers");
     const { structuresOf } = await import("../workflow/entries");
@@ -783,7 +783,7 @@ describe("a complex written out inside a workflow set (the command centre's docu
   });
 });
 
-describe("electron-pushing arrows over a merge (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("electron-pushing arrows over a merge (a document fuzzer, 2026-10-13)", () => {
   it("go with the atom dragged onto another, and those on a bond that collapsed go - none left on what is gone", () => {
     const { doc, state } = editor();
     const a = state().addAtom(0, 0, "C");
@@ -810,7 +810,7 @@ describe("electron-pushing arrows over a merge (the command centre's document fu
   });
 });
 
-describe("a charge's mark dragged far from its atom (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a charge's mark dragged far from its atom (a document fuzzer, 2026-10-13)", () => {
   it("goes no farther than a mark is read back from a file or a copy, so it is not put back on reopening", async () => {
     const { MARK_REACH } = await import("../document");
     const { doc, state } = editor();
@@ -827,7 +827,7 @@ describe("a charge's mark dragged far from its atom (the command centre's docume
   });
 });
 
-describe("a bond's stereo and its order (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a bond's stereo and its order (a document fuzzer, 2026-10-13)", () => {
   it("lets a double or triple bond carry no wedge, hashes or wavy line, made so or given one", () => {
     const { doc, state } = editor();
     const a = state().addAtom(0, 0, "C");

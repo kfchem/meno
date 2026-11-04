@@ -37,6 +37,7 @@ import { magnificationWithin } from "./magnified";
 import { isSkeleton } from "./completeness";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
+import { convergedIn, type Converged } from "../workflow/converged";
 import { anyLeftOut, leftOut, noting, readEach } from "./readNotes";
 
 type Pt = { x: number; y: number };
@@ -833,6 +834,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(imaginary ? { imaginary } : {}),
     ...(marksUnread ? { marksUnread: true as const } : {}),
     ...(() => {
+      // (where a run ended converged, frame by frame: a record that does not read is none - said - never one assumed)
+      const read = convergedFrames(m.converged, keep);
+      if (read === null) leftOut("frameMarks");
+      return read ? { converged: read } : {};
+    })(),
+    ...(() => {
       const mirrors = mirrorsOf(m.mirrors, keep, n);
       return mirrors ? { mirrors } : {};
     })(),
@@ -840,6 +847,16 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** Where a run ended converged, frame by frame (workflow/converged): of the frames kept, those left out with theirs; none where none is marked; null where the records do not read - not one for each frame, or one that is neither a record nor null. */
+function convergedFrames(given: unknown, keep: boolean[]): (Converged | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((c) => (c === null ? null : (convergedIn(c) ?? undefined)));
+  if (read.some((c) => c === undefined)) return null;
+  const out = (read as (Converged | null)[]).filter((_, i) => keep[i]);
+  return out.some(Boolean) ? out : undefined;
 }
 
 /** A conformer set's mirror images counted in, frame by frame: each a permutation of its `atoms` atoms, or null; of the frames kept, those left out with theirs. */

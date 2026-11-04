@@ -9,10 +9,12 @@ each way, as every plugin's:
 
     {"id": 4, "op": "prepare", "step": "optimise", "entries": [...], "options": {...}, "cores": 4}
     {"id": 4, "ok": true, "result": {"jobs": [{"entries": [0], "program": "orca", "args": ["input.inp"], "files": [...],
-        "then": [{"program": "orca_2mkl", "args": ["input", "-molden"]}], "reads": ["input.molden.input"]}]}}
+        "then": [{"program": "orca_2aim", "args": ["input"]}], "reads": ["input.wfx"]}]}}
     {"id": 5, "op": "collect", "step": "optimise", "entries": [...], "options": {...}, "files": {...}, "log": "...", "ended": "done"}
     {"id": 5, "ok": true, "result": {"read": [{"kind": "orca", "log": true, "name": "water.out",
-        "wavefunction": {"kind": "molden", "file": "input.molden.input", "name": "water.molden"}}]}}
+        "wavefunction": {"kind": "wfx", "file": "input.wfx", "name": "water.wfx"}}]}}
+    {"id": 6, "op": "read", "kind": "orca", "name": "water.out", "text": "..."}
+    {"id": 6, "ok": true, "result": {"schema": 1, "program": "ORCA", "atoms": [...], "frames": [...], ...}}
 
 It fills three kinds of step - Optimise, Energy, Frequencies - and runs
 nothing itself: `prepare` writes each job's input and says the command
@@ -52,26 +54,32 @@ and stops with no energy. It comes back where it was, with its energy.
 
 ORCA is run as the manual says: by its full path, given the input file,
 printing its output. To keep the wavefunction, the job then runs
-orca_2mkl, installed beside ORCA, as the manual's "orca_2mkl" has it:
-`orca_2mkl BaseName -molden`, writing ORCA's orbitals (BaseName.gbw) in
-Molden's format - which it names BaseName.molden.input.
+orca_2aim, installed beside ORCA, as the manual's "orca_2aim" has it
+(9.2.9): `orca_2aim BaseName`, which reads ORCA's orbitals (BaseName.gbw)
+and writes BaseName.wfx - the WFX format, for closed and open shells -
+and BaseName.wfn. The job keeps the WFX.
 
 It keeps nothing between requests, and reaches no network.
 """
 
 import json
 import math
+import os
 import re
+import shutil
 import sys
+
+# (its reading of ORCA's output, beside it: a job's and a file's opened alike)
+import reader
 
 VERSION = "0.2.0"
 PROGRAM = "orca"
 INPUT = "input.inp"
-# the wavefunction a job keeps: orca_2mkl, beside ORCA, writing its orbitals as a Molden file
+# the wavefunction a job keeps: orca_2aim, beside ORCA, writing its orbitals as a WFX file
 BASE = "input"
-TO_MOLDEN = {"program": "orca_2mkl", "args": [BASE, "-molden"]}
-WAVEFUNCTION = f"{BASE}.molden.input"
-WAVEFUNCTION_KIND = "molden"
+TO_WFX = {"program": "orca_2aim", "args": [BASE]}
+WAVEFUNCTION = f"{BASE}.wfx"
+WAVEFUNCTION_KIND = "wfx"
 # what ORCA's output is, as Meno's readers know it (their manifests' kinds)
 KIND = "orca"
 
@@ -175,6 +183,13 @@ def mass_of(el, atom):
     return f"  M = {mass:.15g}"
 
 
+#: How a frequency job's thermochemistry treats the low-frequency vibrations (its *Low-frequency vibrations* option):
+#: ORCA's own, nothing asked ("none") - Grimme's quasi-RRHO for their entropy, ORCA 6.1.1's default, "Quasi RRHO ...
+#: True" - or the harmonic oscillator alone, the rigid-rotor harmonic oscillator a program with no low-mode treatment
+#: gives: ORCA's %freq QuasiRRHO false. ("none" is the value a step's line leaves unsaid: its default.)
+LOW_VIBRATIONS = {"none": "", "rrho": "%freq QuasiRRHO false end"}
+
+
 def orca_input(step, entry, options, cores):
     """An entry's input, as ORCA's manual lays it out."""
     run = RUNS.get(step)
@@ -208,6 +223,9 @@ def orca_input(step, entry, options, cores):
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity", 1)
     maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)
+    vibrations = LOW_VIBRATIONS.get(options.get("vibrations", "none")) if step == "frequencies" else ""
+    if vibrations is None:
+        raise Refused(f"no treatment of low vibrations is called {options.get('vibrations')!r}")
 
     keywords = [method, basis, dispersion, run, f"{solvation}({solvent})" if solvation != "none" else "", more]
     lines = ["! " + " ".join(k for k in keywords if k)]
@@ -215,6 +233,8 @@ def orca_input(step, entry, options, cores):
         lines.append(f"%pal nprocs {int(cores)} end")
     if maxcore:
         lines.append(f"%maxcore {maxcore}")
+    if vibrations:
+        lines.append(vibrations)
     # (a reaction path's steps each way, where said: ORCA's own else - the manual's 4.4.2 states none, ORCA 6.1.1 prints 20)
     steps = whole(options.get("maxiter", 0), "The steps each way", 0) if step == "reaction-path" else 0
     if steps:
@@ -271,11 +291,6 @@ PATH_RUN = "NEB-TS"
 #: end in one PATH SUMMARY FOR NEB-TS (ORCA 6.1.1).
 PATH_RUNS = ("NEB-TS", "ZOOM-NEB-TS")
 END = "end.xyz"
-MEP = f"{BASE}_MEP_trj.xyz"
-REFINED = f"{BASE}_NEB-TS_converged.xyz"
-#: What each of a path's frames is, as the step says it on each: Meno judges none of them.
-PATH_FRAME = "path.frame"
-REFINED_SAID = "highest point refined"
 
 
 def xyz_block(entry):
@@ -375,59 +390,41 @@ def path_input(entry, options, cores):
 #: point given - the manual's default direction - in one job. Its file, as ORCA 6.1.1 writes it for an input named
 #: input.inp: the whole path, one end to the other, each frame with its energy; its IRC PATH SUMMARY marks the point it
 #: started from ("<= TS").
-IRC_FULL = f"{BASE}_IRC_Full_trj.xyz"
-#: What each frame of a reaction path is, as the step says it: Meno judges none of them.
-IRC_STARTED_SAID = "the point it started from"
-#: What ORCA says where a side stopped at its iteration cap, before its end.
-IRC_CAPPED = "MAXIMUM NUMBER OF ITERATIONS REACHED"
+#: The program ORCA starts its processes with, where it runs more than one (the ORCA 6.1 manual, 2.5.2.1): Open MPI's
+#: mpirun on macOS and Linux, Microsoft MPI's mpiexec on Windows - looked for where ORCA's jobs look for it, on the PATH.
+LAUNCHER = "mpiexec" if sys.platform == "win32" else "mpirun"
+#: Said once on the step's line where it is not there: each job then runs on one core, whatever the cores each job is
+#: given - they apply to the other programs, which need no launcher - never refused, never failed at ORCA's start-up.
+NO_LAUNCHER_SAID = "run on one core: no MPI on this computer"
 
 
-def capped_said(capped):
-    """Which sides of a reaction path stopped, in words: "The forward side", "The forward and backward sides" - or "A
-    side" where ORCA said one did and which cannot be told."""
-    if capped == ["one"]:
-        return "A side"
-    return f"The {' and '.join(capped)} {'side' if len(capped) == 1 else 'sides'}"
+#: How a program is looked for on a PATH: the standard library's (its tests give their own).
+which = shutil.which
 
 
-def irc_output(entry, files, log, options):
-    """A reaction path's output, in Meno's form: its frames one end to the other, as ORCA wrote them, each with its
-    energy and what it is, the point it started from marked as the run's converged geometry; its level, as given; and,
-    where a side stopped at ORCA's iteration cap before its end, that said, the output then no converged one."""
-    n = len(entry["atoms"])
-    frames = xyz_frames(files.get(IRC_FULL, ""), n)
-    at = log.rfind("IRC PATH SUMMARY")
-    rows = re.findall(r"^\s*(\d+)\s+-?\d+\.\d+.*?(<= TS)?\s*$", log[at:], re.M) if at >= 0 else []
-    starts = [int(r) - 1 for r, ts in rows if ts]
-    if not frames or len(rows) != len(frames) or len(starts) != 1:
-        return {"why": "ORCA wrote no reaction path that can be read", "kind": "no-geometry"}
-    k = starts[0]
-    said = [f"backward, step {k - i} of {k}" if i < k else IRC_STARTED_SAID if i == k else f"forward, step {i - k} of {len(frames) - 1 - k}" for i in range(len(frames))]
-    # (each side as ORCA ran it - the forward first, then the backward - and whether it stopped at its cap)
-    fwd, back = log.find("FORWARD IRC"), log.find("BACKWARD IRC")
-    sides = {"forward": log[fwd:back] if 0 <= fwd < back else "", "backward": log[back:at] if 0 <= back < at else ""}
-    capped = [side for side, text in sides.items() if IRC_CAPPED in text]
-    # (ORCA said a side stopped, but which cannot be told from where it said it: a side, never read as complete)
-    if not capped and IRC_CAPPED in log:
-        capped = ["one"]
-    method, basis = path_level(options)
-    return {
-        "schema": 1,
-        "program": "ORCA",
-        **({"method": method} if method else {}),
-        **({"basis": basis} if basis else {}),
-        "atoms": elements_of(entry),
-        "frames": [places for places, _ in frames],
-        "energies": [energy for _, energy in frames],
-        "converged": [i == k for i in range(len(frames))],
-        **({"optimised": False, "warnings": [{"kind": "other", "text": f"{capped_said(capped)} stopped at ORCA's iteration cap before reaching an end (\"{IRC_CAPPED}\"): {'its end is' if len(capped) == 1 else 'their ends are'} no minimum"}]} if capped else {}),
-        "results": [{"id": PATH_FRAME, "on": "frames", "group": "Path", "label": "What it is", "values": said}],
-    }
+def job_path(programs):
+    """The PATH ORCA's job is given (jobs.rs `installed_env`): ORCA's own folder, where it was found, before the PATH Meno
+    was started with - this worker's, less its own environment's folders, which no job is given."""
+    own = os.path.realpath(sys.prefix)
+    rest = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p and not os.path.realpath(p).startswith(own + os.sep)]
+    found = (programs or {}).get(PROGRAM)
+    return os.pathsep.join(([os.path.dirname(found)] if isinstance(found, str) and found else []) + rest)
+
+
+def launcher_found(look=None, programs=None):
+    """Whether the program ORCA starts its processes with is there (`LAUNCHER`), on the PATH its jobs are given."""
+    return (look or which)(LAUNCHER, path=job_path(programs)) is not None
 
 
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
+    # (more than one core, and no MPI to run ORCA's processes with: one core each job, said - never a job ORCA ends at its
+    #  start-up, as every one would, "mpirun: command not found")
+    given = whole(m.get("cores"), "The cores", 1) if m.get("cores") else 1
+    alone = given > 1 and not launcher_found(programs=m.get("programs"))
+    if alone:
+        m = {**m, "cores": 1}
     # (a reaction path's step offers no wavefunction kept: none written)
     # (a saddle point's step offers no wavefunction kept: none written)
     keep = keeps_wavefunction(options) and step != "reaction-path" and step != "saddle-point"
@@ -441,29 +438,30 @@ def op_prepare(m):
                 "program": PROGRAM,
                 "args": [INPUT],
                 "files": [{"name": INPUT, "text": text}, {"name": END, "text": end}],
-                "reads": [MEP, REFINED],
+                "reads": [reader.MEP, reader.REFINED],
                 **({"memory": memory} if memory else {}),
                 **({"needs": ["xtb"]} if needs_xtb(options) else {}),
             })
         if not jobs:
             raise Refused("nothing came in")
-        return {"jobs": jobs}
+        return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": NO_LAUNCHER_SAID} if alone else {})}
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
             "entries": [i],
             "program": PROGRAM,
             "args": [INPUT],
             "files": [{"name": INPUT, "text": orca_input(step, entry, options, m.get("cores"))}],
-            **({"then": [TO_MOLDEN]} if keep else {}),
-            "reads": [IRC_FULL] if step == "reaction-path" else [WAVEFUNCTION] if keep else [],
+            **({"then": [TO_WFX]} if keep else {}),
+            "reads": [reader.IRC_FULL] if step == "reaction-path" else [WAVEFUNCTION] if keep else [],
             **({"memory": memory} if memory else {}),
             # (the xTB plugin's xtb, where an xTB method runs through it: Meno gives it as manifest.json's `needs` says)
             **({"needs": ["xtb"]} if needs_xtb(options) else {}),
         })
     if not jobs:
         raise Refused("nothing came in")
-    note = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
-    return {"jobs": jobs, **({"note": note} if note else {})}
+    said = NUMERICAL_SAID if numerical(step, options) else NUMERICAL_HESSIAN_SAID if numerical_hessian(step, options) else None
+    note = "; ".join(n for n in (said, NO_LAUNCHER_SAID if alone else None) if n)
+    return {"jobs": [{**j, "cores": 1} for j in jobs] if alone else jobs, **({"note": note} if note else {})}
 
 
 def output_name(entry):
@@ -472,24 +470,12 @@ def output_name(entry):
     return f"{stem or 'orca'}.out"
 
 
-def why_of(log):
-    """Why ORCA stopped, as it says: the line it says it ended by an error on, else the first that begins "ERROR" or
-    "FATAL ERROR", else the first of its other error words ("Error (ORCA_LEANSCF): ...", "INPUT ERROR", "... aborting
-    the run"); else - where it stopped with no word of an error, as a run brought down does - the last thing it said.
-    Not every line with "error" in it: its SCF settings print one ("Startup error   DIISStart   ....  0.200000")."""
-    lines = [line.strip() for line in log.splitlines() if line.strip()]
-    for pick in (r"(?i:error termination)", r"^(?:FATAL )?ERROR\b", r"(?i:\berror\s*[(:]|\binput error\b|error return|\baborting\b)"):
-        for line in lines:
-            if re.search(pick, line):
-                return line
-    return f"ORCA stopped without saying why, after: {lines[-1]}" if lines else "ORCA said nothing"
-
-
 def ended_well(log):
-    """Whether ORCA says it ended well: "ORCA TERMINATED NORMALLY", and nowhere "error termination". Its exit code is no
-    word on it: ORCA 6.1.1 exits 0 where it stopped at its start-up with "ORCA finished by error termination in Startup"
-    (a parallel run, its MPI not there) - read as done, it would hand on as worked out what it never touched."""
-    return "ORCA TERMINATED NORMALLY" in log and not re.search(r"error termination", log, re.I)
+    """Whether ORCA says it ended well, as its output is read (reader `run_of`): "ORCA TERMINATED NORMALLY", and nowhere
+    "error termination". Its exit code is no word on it: ORCA 6.1.1 exits 0 where it stopped at its start-up with "ORCA
+    finished by error termination in Startup" (a parallel run, its MPI not there) - read as done, it would hand on as
+    worked out what it never touched."""
+    return reader.run_of(log)[0] == "normal"
 
 
 #: What a parallel run says where Open MPI's mpirun is not there to start it: ORCA's error at its start-up, the shell's
@@ -508,124 +494,19 @@ def not_ended_why(log, ended):
     if re.search(r"error termination in Startup", log, re.I) and NO_MPI.search(log):
         return NO_MPI_SAID
     if ended != "done" or re.search(r"error termination", log, re.I):
-        return why_of(log)
+        return reader.why_of(log)
     lines = [line.strip() for line in log.splitlines() if line.strip()]
     return "ORCA's log does not say it ended normally" + (f"; it last said: {lines[-1]}" if lines else "")
 
 
-def xyz_frames(text, n):
-    """An XYZ file's frames, each its places and the energy its comment line gives ("... E -4.426151532280"), as ORCA
-    writes a path's images and the point it refines; none where it does not read as frames of `n` atoms."""
-    lines = text.splitlines()
-    frames = []
-    i = 0
-    while i < len(lines):
-        if not lines[i].strip():
-            i += 1
-            continue
-        if lines[i].strip() != str(n) or i + 2 + n > len(lines):
-            return None
-        said = re.search(r"\bE\s+(-?\d+\.\d+)", lines[i + 1])
-        places = []
-        for line in lines[i + 2:i + 2 + n]:
-            parts = line.split()
-            if len(parts) < 4:
-                return None
-            places += [float(v) for v in parts[1:4]]
-        if len(places) != 3 * n or not said:
-            return None
-        frames.append((places, float(said.group(1))))
-        i += 2 + n
-    return frames or None
-
-
-def summary_order(log):
-    """The rows of ORCA's PATH SUMMARY FOR NEB-TS, in its order: each image's number, and "TS" for the point it
-    refined; none where the log has none."""
-    at = log.rfind("PATH SUMMARY FOR NEB-TS")
-    if at < 0:
-        return None
-    rows = []
-    for line in log[at:].splitlines()[1:]:
-        m = re.match(r"\s*(\d+|TS)\s+-?\d+\.\d+\s", line)
-        if m:
-            rows.append(m.group(1))
-        elif rows and not line.strip():
-            break
-        elif rows and line.strip().startswith("-"):
-            break
-    return rows if "TS" in rows else None
-
-
-def frequencies_of(log):
-    """The vibrations ORCA listed last, in cm-1 as it prints them - an imaginary one negative - its zeros (the molecule's
-    translations and rotations) left out; none where it worked out no frequencies (Freq off)."""
-    at = log.rfind("VIBRATIONAL FREQUENCIES")
-    if at < 0:
-        return None
-    found = []
-    for line in log[at:].splitlines()[1:]:
-        if "NORMAL MODES" in line:
-            break
-        m = re.match(r"\s*\d+:\s+(-?\d+\.\d+)\s+cm\*\*-1", line)
-        if m and float(m.group(1)) != 0.0:
-            found.append(float(m.group(1)))
-    return found
-
-
-def imaginary_of(log):
-    """The frequencies ORCA marked imaginary in its last list of them, each negative as it prints it; none where it
-    worked out no frequencies (Freq off)."""
-    at = log.rfind("VIBRATIONAL FREQUENCIES")
-    if at < 0:
-        return None
-    found = []
-    for line in log[at:].splitlines()[1:]:
-        if "NORMAL MODES" in line:
-            break
-        m = re.match(r"\s*\d+:\s+(-?\d+\.\d+)\s+cm\*\*-1\s*\*\*\*imaginary mode\*\*\*", line)
-        if m:
-            found.append(float(m.group(1)))
-    return found
-
-
 #: What ORCA says where its band did not converge in the iterations it allows ("NEB not converged. Skipping NEB-TS run
-#: here."), and where an image's SCF did not ("Error (ORCA_LEANSCF): unfortunately, the SCF has not converged. ..."),
-#: after which it carries on with the band.
+#: here.").
 NEB_NOT_CONVERGED = "NEB not converged"
-IMAGE_SCF_FAILED = re.compile(r"^.*\bSCF has not converged\b.*$", re.M)
-
-
-def path_iterations(log):
-    """How many iterations each part of a NEB-TS run took, as ORCA's STATISTICS counts them ("NEB ... 5", "TS
-    optimization ... 4"), in its order; none where it gives none."""
-    at = log.rfind("Number of iterations:")
-    if at < 0:
-        return []
-    parts = []
-    for line in log[at:].splitlines()[1:]:
-        m = re.match(r"\s+(\S.*?)\s+\.\.\.\s+(\d+)\b", line)
-        if not m:
-            break
-        parts.append((m.group(1), int(m.group(2))))
-    return parts
-
-
-def iterations_said(parts):
-    """A run's iterations in words: "NEB 5 · TS optimization 4"."""
-    return " \u00b7 ".join(f"{name} {n}" for name, n in parts)
-
-
-def cycles_of(log):
-    """How many cycles an optimisation took, as ORCA numbers them ("GEOMETRY OPTIMIZATION CYCLE   12"): the last; none
-    where it numbers none."""
-    found = re.findall(r"GEOMETRY OPTIMIZATION CYCLE\s+(\d+)", log)
-    return int(found[-1]) if found else None
 
 
 def optimisation_not_converged(log):
     """Why an optimisation is not read, where ORCA took the most cycles it allows: plainly, with how many."""
-    n = cycles_of(log)
+    n = reader.cycles_of(log)
     went = f" in {n} cycles" if n is not None else ""
     return (f"The optimisation did not converge{went}, the most it was allowed (\"{MAX_CYCLES_SAID}\"): "
             "run it again to go on from the geometry it reached")
@@ -634,7 +515,7 @@ def optimisation_not_converged(log):
 def path_refining_not_converged(log):
     """Why a path search is not read, where its band converged but refining its highest point took the most steps ORCA
     allows: plainly, with how far each went, and what to change."""
-    parts = dict(path_iterations(log))
+    parts = dict(reader.path_iterations(log))
     neb, ts = parts.get("NEB"), parts.get("TS optimization")
     band = f"Its band converged in {neb} iterations" if neb is not None else "Its band converged"
     went = f" in {ts} steps" if ts is not None else ""
@@ -644,59 +525,10 @@ def path_refining_not_converged(log):
 
 def path_not_converged(log):
     """Why a path search's band is not read, where ORCA says it did not converge: plainly, with how far it went."""
-    parts = path_iterations(log)
+    parts = reader.path_iterations(log)
     neb = next((n for name, n in parts if name == "NEB"), None)
     went = f" in {neb} iterations" if neb is not None else ""
     return f"Its band did not converge{went}: ORCA stopped before refining a highest point (\"{NEB_NOT_CONVERGED}\")"
-
-
-def path_output(entry, files, log, method=None, basis=None):
-    """A path search's output, in Meno's form: its frames in the order of ORCA's PATH SUMMARY - the images, and the
-    point it refined where the summary has it - each with its energy and what it is, the refined one marked as the
-    run's converged geometry; its level, as given (`path_level`); and that point's imaginary frequencies, where ORCA
-    worked out frequencies (asked for among the keywords)."""
-    n = len(entry["atoms"])
-    images = xyz_frames(files.get(MEP, ""), n)
-    refined = xyz_frames(files.get(REFINED, ""), n)
-    order = summary_order(log)
-    if not images or not refined or not order:
-        return {"why": "ORCA wrote no path and point refined that can be read", "kind": "no-geometry"}
-    numbered = [r for r in order if r != "TS"]
-    if numbered != [str(k) for k in range(len(images))]:
-        return {"why": "ORCA's path summary does not list the images it wrote", "kind": "failed"}
-    frames, energies, said, converged = [], [], [], []
-    for r in order:
-        places, energy = refined[-1] if r == "TS" else images[int(r)]
-        frames.append(places)
-        energies.append(energy)
-        said.append(REFINED_SAID if r == "TS" else f"NEB image {int(r) + 1} of {len(images)}")
-        converged.append(r == "TS")
-    imaginary = imaginary_of(log)
-    parts = path_iterations(log)
-    failed = IMAGE_SCF_FAILED.findall(log)
-    vibrations = frequencies_of(log)
-    # (the point refined's vibrations, where they were worked out: what Meno counts its imaginary ones from - none among them is none)
-    listed = [{"id": "vibrations", "on": "list", "group": "Vibrations", "label": "Vibrations", "columns": [{"label": "Frequency", "quantity": "wavenumber"}],
-               "rows": [{"cells": [f]} for f in vibrations]}] if vibrations is not None else []
-    return {
-        "schema": 1,
-        "program": "ORCA",
-        **({"method": method} if method else {}),
-        **({"basis": basis} if basis else {}),
-        "atoms": elements_of(entry),
-        "frames": frames,
-        "energies": energies,
-        "converged": converged,
-        **({"imaginary": imaginary} if imaginary is not None else {}),
-        "results": [
-            {"id": PATH_FRAME, "on": "frames", "group": "Path", "label": "What it is", "values": said},
-            # (how far each part went, as ORCA counts it: its band converged, and the point refined - else it is not read)
-            *([{"id": "path.iterations", "on": "molecule", "group": "Path", "label": "Converged, iterations", "value": iterations_said(parts)}] if parts else []),
-            *listed,
-        ],
-        # (an image whose SCF did not converge, ORCA carrying on with the band: said, in its words - it moves nothing)
-        **({"warnings": [{"kind": "other", "text": f"{len(failed)} of the band's SCF calculations did not converge, ORCA carrying on: {failed[0].strip()}"}]} if failed else {}),
-    }
 
 
 def op_collect(m):
@@ -714,7 +546,7 @@ def op_collect(m):
         if m.get("ended") != "done" or not ended_well(log):
             return {"why": not_ended_why(log, m.get("ended"))}
         method, basis = path_level(m.get("options") or {})
-        return {"outputs": [path_output(e, m.get("files") or {}, log, method, basis) for e in m.get("entries") or []]}
+        return {"outputs": [reader.path_output(elements_of(e), m.get("files") or {}, log, method, basis) for e in m.get("entries") or []]}
     if step not in RUNS:
         raise Refused(f"this plugin does no {step!r}")
     log = m.get("log") or ""
@@ -730,18 +562,26 @@ def op_collect(m):
         partial = [{"kind": KIND, "log": True, "name": output_name(e)} for e in m.get("entries") or []] if step in PARTIAL_STEPS and OPTIMISING in log else []
         return {"why": not_ended_why(log, m.get("ended")), **({"partial": partial} if partial else {})}
     if step == "reaction-path":
-        return {"outputs": [irc_output(e, m.get("files") or {}, log, m.get("options") or {}) for e in m.get("entries") or []]}
-    # (its wavefunction, where orca_2mkl wrote one: read back by Meno, kept with the molecule)
+        method, basis = path_level(m.get("options") or {})
+        return {"outputs": [reader.irc_output(elements_of(e), m.get("files") or {}, log, method, basis) for e in m.get("entries") or []]}
+    # (its wavefunction, where orca_2aim wrote one: read back by Meno, kept with the molecule)
     wrote = WAVEFUNCTION in (m.get("files") or {})
     return {"read": [{"kind": KIND, "log": True, "name": output_name(e), **({"wavefunction": wavefunction_of(e)} if wrote else {})} for e in m.get("entries") or []]}
 
 
 def wavefunction_of(entry):
     """The wavefunction an entry's job wrote, as Meno keeps it: its kind, its file, and the name it goes by, after the entry."""
-    return {"kind": WAVEFUNCTION_KIND, "file": WAVEFUNCTION, "name": output_name(entry)[: -len(".out")] + ".molden"}
+    return {"kind": WAVEFUNCTION_KIND, "file": WAVEFUNCTION, "name": output_name(entry)[: -len(".out")] + ".wfx"}
 
 
-OPS = {"prepare": op_prepare, "collect": op_collect}
+def op_read(m):
+    """An ORCA output, read into Meno's form (reader `read_jobs`): a job's own, which `collect` hands Meno to read, or a
+    file opened by hand - one reading for both; every number one, a value not printed not given."""
+    name = os.path.basename(str(m.get("name") or "output"))
+    return reader.finite(reader.read_jobs(name, m.get("text")))
+
+
+OPS = {"prepare": op_prepare, "collect": op_collect, "read": op_read}
 
 
 def answer(line):

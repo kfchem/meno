@@ -10,8 +10,8 @@ import pyramid from "./fixtures/nh3-pyramid-read.json";
 
 /**
  * A program's verdict on imaginary frequencies, from its output to a step
- * after it - read (the cclib plugin's answers, as it gave them for ORCA
- * 6.1.1's outputs), put together (`combine`), worked (`workedOf`), the
+ * after it - read (a reader's answers for ORCA 6.1.1's outputs, in Meno's
+ * form), put together (`combine`), worked (`workedOf`), the
  * molecule a step's entry becomes, and the entries the next step reads of
  * it (`setEntries`). Ammonia at GFN2-xTB, ORCA's own (NATIVE-XTB2 NumFreq):
  * planar - "* xyz 0 1", N at the origin, three H 1.0 Å from it in its plane
@@ -55,7 +55,7 @@ describe("a program's verdict on imaginary frequencies, from its output to the s
   });
 
   it("is refused by Populations and Duplicates, as a saddle point among conformers is", () => {
-    const said = "a #1 has 1 imaginary frequency, 928.0i cm-1: it is no minimum - take it out first";
+    const said = "a #1 has 1 imaginary frequency, 928.0i cm⁻¹: it is no minimum - take it out first";
     expect(runMeno("populations", [minimum, saddle], "molecules", {})).toEqual({ ok: false, said });
     expect(runMeno("duplicates", [minimum, saddle], "molecules", {})).toEqual({ ok: false, said });
   });
