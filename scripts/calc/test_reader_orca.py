@@ -289,7 +289,7 @@ class Properties(unittest.TestCase):
         self.assertEqual(d["value"], 2.0334)
         self.assertAlmostEqual(d["vector"][2], -2.0334, 12)
         self.assertAlmostEqual(d["origin"][2], 0.1 * reader.BOHR, 12)
-        # (the other form ORCA 6.1.1 prints it in: three numbers, no brackets)
+        # (its other printed form: three numbers, no brackets)
         plain = self.DIPOLE.replace("(  0.0000,  0.0000,  0.1000) ", "    0.000000    0.000000    0.100000")
         self.assertAlmostEqual(reader.dipole_of(plain)[0]["origin"][2], 0.1 * reader.BOHR, 12)
 
