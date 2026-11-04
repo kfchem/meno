@@ -16,6 +16,13 @@ put on the page. Its words stay in the conversation. Nothing it does runs
 a calculation, fetches anything or changes a setting: those stay the
 person's clicks.
 
+**A reply is plain text**, shown as text and never as a page: no HTML is
+drawn, and no picture is loaded and no link opened from it. A web address
+in it is shown as words, and opened only where the person clicks it, on
+their own decision. A picture or link in a reply is the usual way data
+leaves - fetching it sends what its address holds - so none is fetched.
+The same holds for the exchange as it is saved and opened again.
+
 ## The Conversation object
 
 - **A card on the page, inside a frame.** It opens in the right column, as
@@ -47,7 +54,8 @@ person's clicks.
   exist: *There is no such object*. Nothing is learnt of what lies
   outside, and nothing of it is put into anything sent.
 - What a model is given to read - a text, the words of a PDF's page, a
-  name - may hold words aimed at it. It is data, never instructions. The
+  name - may hold words aimed at it. It is data, never instructions, and a
+  tool's answer gives it marked as data, apart from what Meno says. The
   tools are the line: the most such words can do is propose changes
   inside the frame, held for the person to keep or discard. No tool
   reaches a file, a folder, the network, Settings or a run.
@@ -79,6 +87,7 @@ Listings first, and a thing in full only when asked for.
   - A step's kind is changed only among those its doer fills.
   - Options are checked as the step's card checks them, and what its manifest refuses is refused in words: choices, least and most, types.
   - A step that is running is removed only on the person's yes.
+  - A tool never changes who does a step. A procedure it puts down has the fields left to the person (below) at their defaults, or empty.
 - Left to the person, never set by a tool:
   - cores and memory: a cost for the whole machine;
   - a program's free-text keyword fields, which can change the method, how it runs in parallel or the files it writes. The tool shows what it would type, for the person to type;
@@ -116,14 +125,17 @@ outside Meno that connects to it. Its frame bounds both alike.
 - **A model plugin**, of a new kind of role, *language model* (PLUGINS.md,
   *Roles*).
   - Core holds the conversation, the tools, the scope, the rights, the send log and the history.
-  - The plugin only calls its service and converts: Meno's messages and tools in, the reply's words and tool calls out. It names its service as a plugin names its program; core names none.
+  - The plugin only converts: Meno's messages and tools into a request for its service, and the reply back into words and tool calls. It names its service and its hosts as a plugin names its program; core names none.
   - Its connections go through the app's network gate under a purpose of their own. The consent names its hosts, and every connection is in the network's record.
-  - The key is the person's own, typed by them in Settings. It is kept in the system's keychain (the Keychain on macOS, the Credential Manager on Windows), by the `keyring` crate, and handed to the worker in memory for each request. It is never in the .meno, a log, the send log or a job folder.
+  - **Core makes the request, and the key never reaches the plugin.** The plugin's worker builds a request's body from Meno's messages and reads the reply; core sends it, over https, to a host the consent names, and puts the key in it itself. A worker never sees the key, and never connects anywhere of its own: a model plugin's worker is given no network.
+  - The key is the person's own, typed by them in Settings. It is kept in the system's keychain (the Keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux), by the `keyring` crate. It is never in the .meno, a log, the send log, a job folder, a worker or a file Meno writes. Where the system has no keychain, a model plugin is not run, saying why; the key is never kept in a file instead.
 - **A program outside Meno**, connecting by the model-tool protocol, reaches
   the same tools by another entrance.
-  - Meno starts a local server for one Conversation object, on the person's click, with a token of that object's own. It listens on a local socket only (a Unix socket; a named pipe on Windows), never on TCP.
+  - Meno starts a local server for one Conversation object, on the person's click. It listens on a local socket only, never on TCP: a Unix socket in a folder of the person's own, readable and writable by them alone (mode 0600); on Windows, a named pipe whose access is the person's alone.
+  - **Its token.** Random, from the system's generator, at least 128 bits; one per object; compared in constant time; dead once the object's server stops. It is never put in a program's arguments, which other people on the machine can see. The person is shown it only on their click, and the bridge reads it from its environment or from a file only they can read.
   - Most such programs start their tools as a command over standard input and output. Meno ships a small bridge command: the program starts it, and it connects to the object's socket with the token.
   - It sees that object's frame and nothing else. It stops when the object is closed or deleted, or when the person stops it.
+  - The card says so plainly: any program of the person's own that can read the token can drive that conversation, within its rights.
   - Each call is in the send log.
 - **A scripted test model**: a plugin of the same kind whose worker plays
   back a script of replies and tool calls. It is for tests alone, never
@@ -133,15 +145,26 @@ outside Meno that connects to it. Its frame bounds both alike.
 
 Each conversation has two rights, shown on its card: *may read* what lies
 inside, and *may propose changes*. A conversation with neither only talks.
+A new one may read, and may not propose changes until the person turns
+that on.
 In stage 1, running is no right a conversation can have. A right to run,
 given by the person for one conversation, is a question for stage 2: not
 ruled out, and not built now.
+
+## Limits
+
+Each message the person sends has a limit to how many replies and tool
+calls follow it, so that a loop never spends what the person pays for
+their key without end. The card shows it, and *Stop* is always there; a
+turn that reaches the limit stops and says so.
 
 ## The send log
 
 - For each turn the log records what was sent: each thing by kind and id,
   how much of it, and how many characters. It also records where it went
-  (the connection and its host, or the outside program) and when.
+  (the connection and its host, or the outside program) and when. The
+  words sent are in the exchange, not the log; *Clear* empties both
+  together.
 - The card lists it. It says plainly that what was sent cannot be recalled,
   and that a thing moved out of the frame is not sent again but is not
   unsent.
@@ -151,7 +174,9 @@ ruled out, and not built now.
 
 A conversation's exchange, send log and rights are saved in the .meno with
 its object, by default. *Clear* on the card empties the exchange and the
-send log. A .meno shared carries them, so *Save as* warns of that once.
+send log. A .meno shared carries them, so *Save as* warns of that once, saying what
+the file will hold: what was said, the model's words, and where they
+were sent.
 Deleting the object deletes them. Its connection is saved by name, never
 with its key.
 
@@ -175,7 +200,9 @@ with its key.
     - one undo of its change set while one of its steps runs asks the person;
     - it asks to run or stop a step, or to change the cores, and each is refused;
   - the send log lists what each turn sent and where;
-  - a key typed is in the keychain and in no file Meno writes: the workspace, the logs and the settings file are searched for it.
+  - a key typed is in the keychain and in no file Meno writes: the workspace, the logs and the settings file are searched for it; nor is it in anything a worker is given;
+  - a reply holding HTML, a picture or a link is shown as text, and nothing is fetched for it;
+  - a turn that reaches its limit stops and says so.
 
 ## Stage 1, as pull requests
 
@@ -189,11 +216,11 @@ Each is independent, from main, with its tests and its part of this file.
 | 4 | Search: the same compound, and a substructure by Meno's own matcher. |
 | 5 | Changes: structures, arrows and texts placed inside the frame; steps built under the rules above; *Keep* and *Discard*; what will run again, said. |
 | 6 | The Conversation object: its frame and card, the right column, the whole-page flag, saved in the .meno, *Clear* and the warning on *Save as*. |
-| 7 | The *language model* kind of role: its manifest, its worker, its network purpose and hosts, the key in the keychain. |
+| 7 | The *language model* kind of role: its manifest, its worker with no network of its own, core's request to the hosts its consent names, the key in the keychain. |
 | 8 | A first model plugin, checked live by the maintainer with their own key. |
 | 9 | The outside entrance: the local server for one object, its token, start and stop, the bridge command, every call in the send log. |
 
-Stage 2, from December: a model run on the person's own machine;
+Stage 2: a model run on the person's own machine;
 confirming each change; structures read from PDFs; similarity and searches
 in 3D; SMARTS; notes kept across conversations; the question of a right to
 run.

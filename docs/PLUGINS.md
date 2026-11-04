@@ -390,8 +390,9 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   coloured by another grid as a general form, a step's `files`, and the
   NCIPLOT and Multiwfn interfaces: [`NCI.md`](./NCI.md).
 - **A language model** (designed 2026-11-04): a new kind of role, for
-  a conversation on the page. The plugin calls its service and converts;
-  the conversation, its tools, its scope and its key are core's:
+  a conversation on the page. The plugin converts, to its service's
+  requests and back; the requests themselves, the conversation, its
+  tools, its scope and its key are core's:
   [`CONVERSATIONS.md`](./CONVERSATIONS.md).
 
 ## Several plugins, one role
