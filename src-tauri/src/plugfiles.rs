@@ -14,7 +14,7 @@
 //! taken up where it stopped, where the server allows it.
 //!
 //! One may instead be a program the plugin runs, Meno's own copy of it
-//! (`provides`: Blender, its official build for this system and processor;
+//! (`provides`: its official build for this system and processor;
 //! docs/PLUGINS.md, *A program Meno fetches*) - fetched as the rest are, as
 //! the plugin is set up. It is an archive, unpacked into the plugin's
 //! `files` once its SHA-256 is checked - a disk image mounted read-only and
