@@ -1272,7 +1272,15 @@ export function madeName(kind: StepKind, options: readonly Option[], own: Record
   return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }
 
-/** How a step does its work, in a line: each option that applies (`shownOptions`) by its value, a number with its unit, a choice by its name - one of none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it). */
+/** What a step's line calls an option: its `brief`, else its label without what it says in brackets. */
+export const briefOf = (o: Option) => o.brief ?? o.label.replace(/\s*\([^)]*\)/g, "").trim();
+
+/**
+ * How a step does its work, in a line: each option that applies (`shownOptions`) - a number by its value with its unit, a
+ * switch on by its label, a choice by its name and what is chosen ("Method: GFN2-xTB"), so that two choices alike never
+ * read as one twice; several choices with one value said once, the options after it ("Set aside: parts, radicals"). One of
+ * none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it).
+ */
 export function howOf(
   options: readonly Option[],
   own: Record<string, string | number | boolean> | undefined,
@@ -1280,11 +1288,30 @@ export function howOf(
 ): string {
   const values = optionsOf(options, own);
   if (said) return said(values);
-  return shownOptions(options, values)
+  const shown = shownOptions(options, values);
+  // (each choice's value as said, and how many choices say it)
+  const chosen = (o: Option) => (o.type === "choice" && values[o.id] !== "none" ? (o.choices.find((c) => c.value === values[o.id])?.label ?? String(values[o.id])) : null);
+  const alike = new Map<string, Option[]>();
+  for (const o of shown) {
+    const c = chosen(o);
+    if (c != null) alike.set(c, [...(alike.get(c) ?? []), o]);
+  }
+  const said2 = new Set<string>();
+  return shown
     .flatMap((o) => {
       const v = values[o.id];
       if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
-      if (o.type === "choice") return v === "none" ? [] : [o.choices.find((c) => c.value === v)?.label ?? String(v)];
+      if (o.type === "choice") {
+        const c = chosen(o);
+        if (c == null) return [];
+        const all = alike.get(c)!;
+        if (all.length < 2) return [`${briefOf(o)}: ${c}`];
+        if (said2.has(c)) return [];
+        said2.add(c);
+        // (each name as a word in a list: "Radicals" as "radicals", "SMILES" as it is)
+        const lowered = (t: string) => (/^[A-Z][a-z]/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t);
+        return [`${c}: ${all.map((x) => lowered(briefOf(x))).join(", ")}`];
+      }
       if (o.type === "switch") return v ? [o.label] : [];
       return v ? [String(v)] : [];
     })
