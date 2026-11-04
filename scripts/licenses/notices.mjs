@@ -494,7 +494,7 @@ export function compose(npm, { crates, leftOut }) {
     ...groups.map((g) => `  ${g.name.padEnd(20)}${g.what}`),
     ...ungrouped.map((n) => `  ${n}`),
     "",
-    "The own scripts of the Blender plugin and of the Blender looks and motions",
+    "The own scripts of the Blender plugin and of the Film looks and motions",
     "plugin are licensed under the GNU General Public License, version 3 or",
     "later; the licence's text (LICENSE) is in each one's folder,",
     "resources/plugins/blender and resources/plugins/blender-presets.",
