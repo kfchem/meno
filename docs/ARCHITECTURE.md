@@ -1457,12 +1457,16 @@ page reads anything of them (`catalogue.rs`):
   the entry's; then they are unpacked into `.staging/<stage>`, and their
   manifest's SHA-256 must be the entry's too. Anything not so refuses the
   whole, and what was unpacked is taken away, all before it answers. The
-  entry the stage was got for is kept beside it (`<stage>.for`).
+  entry the stage was got for is kept beside it (`<stage>.for`). A stage
+  left by a Meno stopped mid-way is no plugin; as a plugin is next got,
+  each stage a day old or more, or with no entry beside it, is taken away.
 - **The archive** is the plugin's folder as a `.tar.gz`: its contents at the
   top - `manifest.json` there - with no folder around them. Regular files
   and folders alone: a link, a path that is absolute or goes up, a name
-  with a colon or a backslash in it, a file named twice, more than 10,000
-  files or more than 1 GB unpacked refuses it.
+  with a colon in it, a file named twice, more than 10,000 files or more
+  than 1 GB unpacked refuses it. A backslash is read as the system reads
+  it: on Windows it parts a path, so `..\x` is refused as going up, and
+  `a\b` is unpacked as `a/b`; elsewhere it is in a name, which is refused.
 - **Taken into use** (`plugin_commit`): the stage becomes
   `<id>/<version>` by its manifest's id and version - which must be those
   of the entry it was got for, or it is thrown away - and `<id>/current`,

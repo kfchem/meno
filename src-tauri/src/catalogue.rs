@@ -291,7 +291,8 @@ fn unpack_all(archive: &[u8], dir: &Path) -> Result<(), String> {
         let mut rel = PathBuf::new();
         for part in path.components() {
             match part {
-                // (a name, and no more: a colon - a drive, or another stream of a file on Windows - or a backslash refused)
+                // (a name, and no more: a colon - a drive, or another stream of a file on Windows - or a backslash
+                //  refused; on Windows a backslash parts a path, so there it never comes here, and `..\x` goes up)
                 Component::Normal(p) if !p.to_string_lossy().contains([':', '\\']) => rel.push(p),
                 Component::CurDir => {}
                 _ => return Err(format!("its archive holds a path Meno does not take: {}", path.display())),
@@ -369,6 +370,25 @@ fn throw_away(dir: &Path) {
     let _ = std::fs::remove_file(for_of(dir));
 }
 
+/// How long a stage may lie before it is taken for one left by a Meno stopped mid-way.
+const STAGE_STALE: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
+/// Stages left by a Meno stopped mid-way - no plugin, never read as one - taken away as a plugin is next
+/// got: each whose entry beside it was written a day or more before `now`, or that has none.
+fn clear_stale(root: &Path, now: std::time::SystemTime) {
+    let Ok(stages) = std::fs::read_dir(root.join(".staging")) else { return };
+    for stage in stages.flatten() {
+        let path = stage.path();
+        if path.extension().is_some_and(|e| e == "for") || stage_dir(root, &stage.file_name().to_string_lossy()).is_err() {
+            continue;
+        }
+        let written = std::fs::metadata(for_of(&path)).and_then(|m| m.modified()).ok();
+        if written.is_none_or(|t| now.duration_since(t).is_ok_and(|age| age >= STAGE_STALE)) {
+            throw_away(&path);
+        }
+    }
+}
+
 /// The hosts a task of the plugins online is kept to.
 fn hosts() -> Vec<String> {
     HOSTS.iter().map(|h| h.to_string()).collect()
@@ -396,6 +416,7 @@ fn archive_most(source: &Source) -> u64 {
 pub async fn plugin_stage(app: AppHandle, net: State<'_, net::Net>, id: String, version: String) -> Result<Staged, String> {
     let root = root(&app)?;
     let source = entry_for(&root, KEYS, &id, &version)?;
+    clear_stale(&root, std::time::SystemTime::now());
     let task = net.begin(PURPOSE, &format!("Getting the plugin {id} {version}"), Some(hosts()))?;
     let proxy = task.proxy_url().ok_or("the network is not ready")?;
     let archive = match tools::download(&source.url, &proxy, archive_most(&source)).await {
@@ -439,12 +460,16 @@ fn commit_stage(root: &Path, stage: &str) -> Result<(), String> {
         return Err("its manifest is not the plugin it was got as".to_string());
     }
     let target = root.join(id).join(version);
-    let _ = std::fs::remove_file(for_of(&dir));
     if target.exists() {
-        let _ = std::fs::remove_dir_all(&dir);
+        throw_away(&dir);
     } else {
-        std::fs::create_dir_all(root.join(id)).map_err(|e| format!("making {id}: {e}"))?;
-        std::fs::rename(&dir, &target).map_err(|e| format!("putting {id} {version} in place: {e}"))?;
+        let placed = std::fs::create_dir_all(root.join(id)).and_then(|_| std::fs::rename(&dir, &target));
+        // (not put in place: the stage thrown away, never left with no entry beside it)
+        if let Err(e) = placed {
+            throw_away(&dir);
+            return Err(format!("putting {id} {version} in place: {e}"));
+        }
+        let _ = std::fs::remove_file(for_of(&dir));
     }
     set_current(root, id, version)
 }
@@ -646,13 +671,42 @@ mod tests {
             (archive(&[("manifest.json", MANIFEST), ("/abs.txt", b"x")], None), "an absolute path"),
             (archive(&[("manifest.json", MANIFEST), ("manifest.json", b"{}")], None), "a file twice"),
             (archive(&[("manifest.json", MANIFEST), ("a:b.txt", b"x")], None), "a colon: a drive, or another stream of a file"),
-            (archive(&[("manifest.json", MANIFEST), ("a\\b.txt", b"x")], None), "a backslash"),
-        ] {
+        ]
+        .into_iter()
+        .chain(odd_paths())
+        {
             let dir = scratch("unpack");
             assert!(unpack_into(&a, &dir).is_err(), "{what}");
             assert!(!dir.exists(), "{what}: what was unpacked taken away");
             assert!(!dir.parent().unwrap().join("up.txt").exists());
         }
+    }
+
+    /// Names whose backslash is read as each system reads it: on Windows a separator - so one that goes up
+    /// is refused by its part that goes up - elsewhere part of a name, refused for it.
+    fn odd_paths() -> Vec<(Vec<u8>, &'static str)> {
+        if cfg!(windows) {
+            vec![(archive(&[("manifest.json", MANIFEST), ("..\\up.txt", b"x")], None), "a path that goes up, by a backslash")]
+        } else {
+            vec![(archive(&[("manifest.json", MANIFEST), ("a\\b.txt", b"x")], None), "a backslash in a name")]
+        }
+    }
+
+    #[test]
+    fn a_stage_left_a_day_or_more_or_with_no_entry_is_taken_away_as_a_plugin_is_next_got() {
+        let root = scratch("stale");
+        let now = std::time::SystemTime::now();
+        let fresh = staged(&root, "{}", "sketch\n0.3.0");
+        let old = staged(&root, "{}", "sketch\n0.3.0");
+        let old_dir = root.join(".staging").join(&old);
+        std::fs::OpenOptions::new().write(true).open(for_of(&old_dir)).unwrap().set_modified(now - STAGE_STALE).unwrap();
+        let bare = staged(&root, "{}", "");
+        std::fs::remove_file(for_of(&root.join(".staging").join(&bare))).unwrap();
+        clear_stale(&root, now);
+        assert!(root.join(".staging").join(&fresh).exists());
+        assert!(!old_dir.exists() && !for_of(&old_dir).exists());
+        assert!(!root.join(".staging").join(&bare).exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
