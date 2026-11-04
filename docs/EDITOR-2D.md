@@ -53,7 +53,9 @@ and in particular:
     Linux) draws the one bond a double-click would, where there is room
     (`bondOut`, utils/geometry `newBondFrom`). Each click is its own step,
     never the first of a double-click, so clicking along a chain draws it a
-    bond at a time; a drag with the key held moves the atom as without it.
+    bond at a time; a drag with the key held moves the atom as without it,
+    and a press with it held is never a long press: made slowly, it does
+    not select the structure instead (the maintainer's ruling).
     While the key is held and the pointer is on an atom, a thin line in the
     highlight's colour shows where the bond would go, easing in, and out as
     the key is let go (`ClickBondPreview2D`). On Windows, Alt let go on its

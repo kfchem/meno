@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { longPressMs } from "../longPress";
+import { atomLongPressMs } from "../longPress";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef } from "react";
 import { useThree, type ThreeEvent } from "@react-three/fiber";
@@ -443,8 +443,10 @@ export function Atoms2D() {
       // the whole structure, the selection spreading out from the atom as
       // it is held (HoldProgress2D); a drag from there moves it.
       let held = false;
-      store.getState().setPressHold({ atomId: a.id, start: now });
-      const hold = window.setTimeout(() => {
+      // (with Option or Alt held, no long press: the press is the bond's - longPress `atomLongPressMs`)
+      const holdMs = atomLongPressMs(native);
+      if (holdMs != null) store.getState().setPressHold({ atomId: a.id, start: now });
+      const hold = holdMs == null ? undefined : window.setTimeout(() => {
         // (nor where the view has moved under the press: viewGoal)
         if (!cand.current.active || cand.current.started || pressMovedUnder(camera)) return;
         held = true;
@@ -453,7 +455,7 @@ export function Atoms2D() {
         store.getState().clearSel();
         store.getState().selectStructure(a.id);
         store.getState().setPressHold(null);
-      }, longPressMs());
+      }, holdMs);
       // (another button pressed with it: no press at all - utils/press#onChord)
       let chorded = false;
       const offChord = onChord(1, () => {
