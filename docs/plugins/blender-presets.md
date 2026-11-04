@@ -71,9 +71,14 @@ And the helpers version 1 guarantees:
   to the balls and sticks themselves (hair, say).
 
 **A studio** (`studios[].file`): `setup(ctx)`, which builds the backdrop
-and its lights from `ctx.request`: in the background's colour, the lights
-as strong as asked. A studio of a transparent background builds no
-backdrop.
+and its lights from `ctx.request`, the lights as strong as asked. A studio
+is the backdrop chosen, so it draws its backdrop whatever the background
+asked: the renderer has no rule against a studio and a transparent
+background, nor does Meno, which knows no plugin's studios. Where the
+studio is itself the background, its manifest says so (`fixed` on the
+renderer's `background`, as a motion fixes its renderer), and the card
+shows the background as the studio sets it, said and not to be changed,
+so that what the card says is what the picture is.
 
 **A motion** (`motions[].file`):
 
