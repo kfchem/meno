@@ -216,9 +216,13 @@ const det = (a: V3, b: V3, c: V3) =>
  * all lie within 180 degrees of each other - a drawing can come to that -
  * could say one thing with two of them and the wedge, and the opposite
  * with the other two. With three drawn and the H left out, the angles as
- * drawn are read: the two bonds in the page, the shorter way round - and
- * where those two lie straight across the centre from each other, a T,
- * the H is read as a bond in the page in the widest gap, as RDKit reads it.
+ * drawn are read: the two bonds in the page, the shorter way round - but
+ * where those two lie straight across the centre from each other, a T, it
+ * says nothing: two plain bonds 180 degrees apart with a wedge between
+ * them depict a T-shaped configuration, not a tetrahedral one (IUPAC 2006,
+ * Brecher, Pure Appl. Chem. 78, 1897, ST-1.2.12), as lib/layout/drawn
+ * reads a drawing. Before 2026-11-04 the H was taken in the widest gap,
+ * and the T read as RDKit reads it.
  */
 export function drawnVolume(
   at: Point,
@@ -241,21 +245,6 @@ export function drawnVolume(
   if (v[0] && v[1] && v[3]) {
     const d = -det(v[0], v[1], v[3]);
     if (Math.abs(d) > 1e-6) return Math.sign(d);
-  }
-  const h = neighbours.indexOf(null);
-  if (drawn.length === 3 && neighbours.length === 4 && h >= 0) {
-    // (a T: the H in the widest gap, in the page)
-    let widest = 0;
-    let across = 0;
-    drawn.forEach((p, k) => {
-      const next = k + 1 < drawn.length ? drawn[k + 1].angle : drawn[0].angle + 2 * Math.PI;
-      if (next - p.angle > widest) {
-        widest = next - p.angle;
-        across = p.angle + widest / 2;
-      }
-    });
-    const withH = neighbours.map((p, i) => (i === h ? { x: at.x + Math.cos(across), y: at.y + Math.sin(across) } : p));
-    return drawnVolume(at, withH, lift);
   }
   return 0;
 }
