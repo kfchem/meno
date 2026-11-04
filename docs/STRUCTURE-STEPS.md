@@ -528,6 +528,16 @@ written on it is for a *Filter* to choose on.
   length of its Cartesian displacement as the program gives it, not
   mass-weighted, so its scale makes no difference - the one moving most
   first, atoms moving alike in the order of their numbers.
+- **Whose vectors are displacements.** Ranks of mass-weighted normal
+  coordinates could differ, a hydrogen against a heavy atom. So each
+  reader's vectors were checked on real outputs, not kept here
+  (2026-11-04): Gaussian's and xTB's (its `g98.out`) are Cartesian
+  displacements - each mode's printed reduced mass is what its
+  displacements give, the sum of each atom's mass times its normalised
+  displacement squared, within a percent - and ORCA's are too, as its
+  output says of them. A reader of another program is to be checked so
+  before its vibrations are ranked. The window and the allowance stay the
+  chemist's either way.
 - **Written on each entry**, each naming the vibration it is of (`by`):
   - `mode.window`: the reacting atoms' count and the reach more ranks;
   - `mode.ranks`: each reacting atom by its element and number, with its

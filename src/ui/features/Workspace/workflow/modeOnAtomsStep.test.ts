@@ -60,6 +60,12 @@ describe("Atom map's bond changes into Mode on atoms, on the page", () => {
       [5, 4],
     ]);
     expect(entries[0].properties?.["mode.ranks"]?.value).toBe("C1 1, C4 2, C11 3, C12 4");
+    // (the atoms typed, a table wired into Atoms all the same: the table not read, said so)
+    const typed = ran.nextWorkflowId!;
+    let doc2 = addStep(ran, "mode-on-atoms", 100, 20, { reach: "1", from: "typed", atoms: "1, 4" });
+    doc2 = connect(connect(doc2, { set: t }, typed), { set: resultOf(doc2, reaction, "changes")!.id }, typed, "atoms");
+    const said = runStep(doc2, typed, W).steps!.find((s) => s.id === typed)!.ran;
+    expect(said).toMatchObject({ ok: true, said: "2 entries, 1 with reacting atoms outside the window · the table wired into Atoms not read: atoms typed" });
   });
 
   it("will not run without a reach - none is given without a basis - and says the atoms typed, where they are", () => {
