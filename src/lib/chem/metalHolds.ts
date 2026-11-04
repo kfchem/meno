@@ -7,9 +7,10 @@
  * its atoms (eta) held over its metal; which four-coordinate metals are
  * square planar, by their d electrons; a bridging halide's angle and a
  * square-planar metal's trans pairs held as embedded; a lighter metal of the
- * group standing in where the force field has none, where the chemist
- * allows it. And, after, which conformers are set aside: one whose ligands
- * came out closer at a metal than the floor allows (`underFloor`).
+ * group standing in where the force field has none. And, after, which
+ * conformers are set aside (`keptMade`): one whose ligands came out closer
+ * at a metal than the floor allows, with two atoms run into one another, or
+ * with a bond to a metal lost.
  */
 import { readMolfile } from "./ctfile";
 import { elementOf, vdwRadius } from "./elements";
@@ -24,7 +25,13 @@ export type HoldsAtom = { el: string; charge: number; radical?: Radical; hydroge
  */
 export type HoldsBond = { a: number; b: number; order: number; dative?: boolean; endpoints?: number[] };
 
-/** How far a metal's bond may be from its covalent length while embedding (Å). */
+/**
+ * How far a metal's bond may be from its covalent length while embedding
+ * (Å). Meno's own: embedding takes each bond as a range, not one length, and
+ * this keeps that range about two per cent of a metal's bond (2 to 2.5 Å),
+ * well inside the 15 per cent a bond may come out off before its conformer
+ * is set aside (`METAL_BOND_OFF`).
+ */
 export const METAL_BOND_SLACK = 0.05;
 
 /**
@@ -57,8 +64,9 @@ export const FLOORS: readonly (readonly [number, number])[] = [
 
 /**
  * How far under its floor a conformer may come out and be kept (degrees).
- * The floor is held by bounds while embedding and a restraint while
- * optimising, neither of them exact: measured at three seeds each, [ZrF7]3-,
+ * Meno's own, from what the holds were seen to give. The floor is held by
+ * bounds while embedding and a restraint while optimising, neither of them
+ * exact: measured at three seeds each, [ZrF7]3-,
  * [NbF7]2- and OsCl4Br4, pressed against the 60 degree floor, came out up to
  * 2.0 degrees under it; over 1230 embeddings of [OsCl6]2-, PdCl2(PPh3)2 and
  * OsCl4(PEt3)2 none came within 4 degrees of the 75 degree floor but the one
@@ -75,22 +83,37 @@ export const FLOOR_SLACK = 5;
  * against about 2.05, 2.19, 2.14 and 2.50 measured.
  */
 export const ETA_EXTRA = 0.15;
-/** How near an atom of an eta system and another ligand's donor of the same metal may come (Å). */
+/**
+ * How near an atom of an eta system and another ligand's donor of the same
+ * metal may come (Å). Meno's own: a floor, not a length - 0.72 of a carbon's
+ * and a chlorine's van der Waals contact (1.77 + 1.82 = 3.59 Å, Alvarez's
+ * radii, lib/chem/elements), so that a donor is kept off the ring's atoms
+ * but never pushed out past where it sits beside the ring.
+ */
 export const ETA_CLEAR = 2.6;
 /**
- * How near two atoms of two eta systems of one metal may come (Å): about the
- * nearest two carbons of two rings come in a bent metallocene, so that the
- * rings do not overlap.
+ * How near two atoms of two eta systems of one metal may come (Å). Meno's
+ * own: a floor, 0.82 of two carbons' van der Waals contact (2 x 1.77 = 3.54
+ * Å), so that two rings on one metal do not overlap, while a bent
+ * metallocene's rings may still come as near as their tilt brings them.
  */
 export const ETA_APART = 2.9;
-/** How near its metal an atom bonded to an eta system's atom may come (Å): a ring's hydrogens and substituents lean towards it. */
+/**
+ * How near its metal an atom bonded to an eta system's atom may come (Å): a
+ * ring's hydrogens and substituents lean towards it. Meno's own: about a
+ * metal's own bond (2 to 2.5 Å), so that such an atom may lean in but never
+ * takes a donor's place.
+ */
 export const ETA_NEAR = 2.5;
 
 /**
  * A square-planar metal's angles while it is optimised (degrees): its two
  * trans pairs - those of its ligands furthest apart as each conformer was
  * embedded, so that cis and trans isomers both come out of a search - near
- * 180, the rest near 90.
+ * 180, the rest near 90, a square's own angles. The give, 8 and 5 degrees,
+ * is Meno's own: enough that the force field's other terms (a chelate's
+ * bite) are not fought, too little for the square to fold towards a
+ * tetrahedron.
  */
 export const TRANS_AT_METAL: readonly [number, number] = [172, 180];
 export const CIS_AT_METAL: readonly [number, number] = [85, 95];
@@ -98,15 +121,17 @@ export const CIS_AT_METAL: readonly [number, number] = [85, 95];
 /**
  * A halogen bridging two metals (a mu-halide, as in [Pd(allyl)Cl]2): its
  * angle between them held as each conformer was embedded, this many degrees
- * either way (its bonds held at their lengths).
+ * either way (its bonds held at their lengths). Meno's own: the force field
+ * is given the halide's linear form, which pulls the angle open; ten degrees
+ * holds it near the shape embedded while its ring may still relax.
  */
 export const BRIDGE_SLACK = 10;
 
 /**
  * A metal the force field may have no type for, and the lighter one of its
- * group that stands in for it - where the chemist allows it: its angle terms
- * shape the metal, its bonds held at the metal's own lengths, and its
- * energies are the model's, never the molecule's.
+ * group that stands in for it: its angle terms shape the metal, its bonds
+ * held at the metal's own lengths, and its energies are the model's, never
+ * the molecule's.
  */
 export const STAND_IN: Readonly<Record<string, string>> = { Ru: "Fe", Os: "Fe", Rh: "Co", Ir: "Co", W: "Mo", Zr: "Ti", Hf: "Ti", Y: "Sc" };
 
@@ -437,7 +462,9 @@ export function holdsGraphOf3d(atoms: readonly { el: string; charge?: number }[]
  * hydrogen-bonded, metal complexes - were a ruthenium benzylidene's Ru and
  * an ortho carbon (0.73), a bicyclo[2.2.2]octane's bridgeheads (0.735) and
  * cubane's opposite corners (0.75). Between heavy atoms alone: a hydrogen
- * bond brings its hydrogen nearer its acceptor than that.
+ * bond brings its hydrogen nearer its acceptor than that. Meno's own: under
+ * the nearest seen in a normal molecule (0.69) with room to spare, over the
+ * 0.54 and 0.32 of those complexes run into one another.
  */
 export const CONTACT_FLOOR = 0.65;
 
@@ -449,7 +476,8 @@ export const CONTACT_FLOOR = 0.65;
  * - a phosphine pulled off, or into the metal - and of PdCl2(PPh3)2, 36; of
  * [Cp2ZrCl2] made 300 times, a Zr-Cl at 1.21. The rest, and every conformer
  * of Ru, Os, Co, Zr and Pd complexes otherwise, kept theirs within 0.92 to
- * 1.07.
+ * 1.07. Meno's own: twice the 0.07 every held bond kept within, so that none
+ * of those is set aside.
  */
 export const METAL_BOND_OFF = 0.15;
 
@@ -529,23 +557,32 @@ export function tornFrom(frame: readonly number[], held: MadeChecks["held"]): { 
 /** A metal's symbol, by atom, in what a search made. */
 type MadeAtoms = readonly { el: string }[];
 
+/** Of the frames a search made, what its checks find in each: under a floor, two atoms run into one another, a bond to a metal lost - the first that holds - and whether it is kept. */
+function judged(frames: readonly number[][], checks: MadeChecks) {
+  const under = frames.map((f) => (checks.floors.length ? underFloor(f, checks.floors) : null));
+  const clashed = frames.map((f, k) => (under[k] ? null : runInto(f, checks.contacts)));
+  const torn = frames.map((f, k) => (under[k] || clashed[k] ? null : tornFrom(f, checks.held)));
+  return { under, clashed, torn, keep: frames.map((_, k) => !under[k] && !clashed[k] && !torn[k]) };
+}
+
+/** Which of the frames a search made its checks keep (`keptMade`), by index: all where there are no checks. */
+export function keptFrames(frames: readonly number[][], checks: MadeChecks | null): number[] {
+  const keep = checks ? judged(frames, checks).keep : frames.map(() => true);
+  return keep.flatMap((k, i) => (k ? [i] : []));
+}
+
 /**
  * Of the conformers a search made, those its checks let stand (`MadeChecks`):
  * none under its floors (`underFloor`), none with two atoms run into one
  * another (`runInto`), none with a bond to a metal it lost (`tornFrom`) -
- * their energies with them; and, where any was set aside, the search's rows
- * saying so - how many and why, the worst of each - and how many were kept of
- * those embedded (its *Kept* row). Where the search set some aside itself
- * and says so (a *Dropped* row, and a *Kept* row of fewer than it embedded),
- * those are added to, not said twice. Refused, saying why, where none is
- * left.
+ * their energies with them; and, where any was set aside, a row of Meno's
+ * own after the search's (*Set aside*) - how many of those that came, and
+ * why, the worst of each. The search's own rows are left as it wrote them.
+ * Refused, saying why, where none is left.
  */
 export function keptMade<T extends { atoms: MadeAtoms; frames: number[][]; energies?: number[]; modelEnergies?: number[]; how?: { label: string; text: string }[] }>(c: T, checks: MadeChecks | null): T {
   if (!checks) return c;
-  const under = c.frames.map((f) => (checks.floors.length ? underFloor(f, checks.floors) : null));
-  const clashed = c.frames.map((f, k) => (under[k] ? null : runInto(f, checks.contacts)));
-  const torn = c.frames.map((f, k) => (under[k] || clashed[k] ? null : tornFrom(f, checks.held)));
-  const keep = c.frames.map((_, k) => !under[k] && !clashed[k] && !torn[k]);
+  const { under, clashed, torn, keep } = judged(c.frames, checks);
   if (keep.every(Boolean)) return c;
   const el = (i: number) => c.atoms[i].el;
   if (!keep.some(Boolean)) {
@@ -575,25 +612,13 @@ export function keptMade<T extends { atoms: MadeAtoms; frames: number[][]; energ
   const dropped = keep.filter((k) => !k).length;
   // (under floors alone, each metal's said as it is; with more than one kind of reason, how many each)
   const said = !hits.length && !offs.length ? parts.map(([, words]) => words).join("; ") : parts.length === 1 ? parts[0][1] : parts.map(([n, words]) => `${n} with ${words}`).join("; ");
-  // (the search's own, where it set some aside itself: how many it dropped and why, and how many it embedded)
-  const before = c.how?.find((r) => r.label === "Dropped")?.text.match(/^(\d+): (.+)$/);
-  const how = (c.how ?? []).flatMap((r) => {
-    if (r.label === "Dropped") return [];
-    if (r.label !== "Kept") return [r];
-    const sought = r.text.match(/\(\d+ sought\)$/)?.[0];
-    const embedded = Number(r.text.match(/ of (\d+) embedded/)?.[1] ?? c.frames.length);
-    return [
-      { label: "Dropped", text: before ? `${Number(before[1]) + dropped}: ${before[2]}; ${said}` : `${dropped}: ${said}` },
-      { label: "Kept", text: `${c.frames.length - dropped} of ${embedded} embedded${sought ? ` ${sought}` : ""}` },
-    ];
-  });
   const pick = <V,>(xs: V[] | undefined) => xs && xs.filter((_, i) => keep[i]);
   return {
     ...c,
     frames: pick(c.frames)!,
     ...(c.energies ? { energies: pick(c.energies) } : {}),
     ...(c.modelEnergies ? { modelEnergies: pick(c.modelEnergies) } : {}),
-    ...(c.how ? { how } : {}),
+    how: [...(c.how ?? []), { label: "Set aside", text: `${dropped} of ${c.frames.length}: ${said}` }],
   };
 }
 

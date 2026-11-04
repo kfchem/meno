@@ -8,6 +8,7 @@ import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
 import { RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, pageCount, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
@@ -431,6 +432,48 @@ describe("conformers made for the page", () => {
     asked.length = 0;
     await conformersOf(chem, stereo, block, "one", {}, 40);
     expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {}, onPage: true });
+  });
+
+  it("sends a metal complex's holds, and sets aside what Meno's checks find in what came back, saying so after the plugin's rows", async () => {
+    // (Cl-Pd-P drawn; the plugin's answer its three atoms then the P's two H: a conformer at the bonds' lengths, then one with its P at 1.3)
+    const pdModel: Model = {
+      atoms: [
+        { id: 31, x: 0, y: 0, r: 0.9, el: "Cl" },
+        { id: 32, x: 1.5, y: 0, r: 0.9, el: "Pd" },
+        { id: 33, x: 3, y: 0, r: 0.9, el: "P" },
+      ],
+      bonds: [
+        { id: 41, a: 31, b: 32, order: 1 },
+        { id: 42, a: 32, b: 33, order: 1 },
+      ],
+    };
+    const [pdCl, pdP] = [covalentLength("Pd", "Cl", 1)!, covalentLength("Pd", "P", 1)!];
+    const frame = (p: number) => [-pdCl, 0, 0, 0, 0, 0, p * pdP, 0, 0, p * pdP + 0.8, 1.1, 0, p * pdP + 0.8, -1.1, 0];
+    const answer: Omit<Conformers, "chosen"> = {
+      atoms: ["Cl", "Pd", "P", "H", "H"].map((el) => ({ el, charge: 0 })),
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+        { a1: 2, a2: 3, order: 1 },
+        { a1: 2, a2: 4, order: 1 },
+      ],
+      frames: [frame(1), frame(1.3)],
+      energies: [-0.01, -0.005],
+      field: "UFF",
+      how: [{ label: "Kept", text: "2 of 2 embedded (2 sought)" }],
+      cip: { atoms: {}, bonds: {} },
+      smiles: "P[Pd]Cl",
+    };
+    const asked: Record<string, unknown>[] = [];
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => (asked.push(args), { isomers: [answer] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(pdModel, [32]);
+    const [made] = await conformersOf(chem, stereo, block, "one", {});
+    expect(asked[0].holds).toMatchObject({ bonds: [{ i: 0, j: 1 }, { i: 1, j: 2 }] });
+    expect(made.frames).toHaveLength(1);
+    // (the plugin's own row as it wrote it; Meno's after it)
+    expect(made.how?.filter((r) => r.label === "Kept")).toEqual([{ label: "Kept", text: "2 of 2 embedded (2 sought)" }]);
+    expect(made.how?.filter((r) => r.label === "Set aside")).toEqual([{ label: "Set aside", text: expect.stringMatching(/^1 of 2: a bond to a metal far from its length \(the worst: Pd-P at /) }]);
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {

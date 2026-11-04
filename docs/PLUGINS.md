@@ -658,7 +658,8 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
 - **Which of what was made are kept is Meno's** (`keptMade`, lib/chem/
   metalHolds), on the page, in a *Conformers* step on structures drawn,
   and in a search Meno tells how many to try: a conformer is set aside,
-  and counted on its *Dropped* row with the worst of each reason, where
+  and counted on a row of Meno's own, *Set aside*, after the search's
+  rows, with the worst of each reason, where
   - two ligands came out closer than its floor by more than five degrees
     (`FLOOR_SLACK`) - the holds give up to two, measured on complexes
     pressed against the 60° floor: it sat in a well of the force field the
@@ -673,10 +674,13 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     from it (`METAL_BOND_OFF`) - a bond the hold lost: of Pd(PPh3)4 made
     300 times, 47 had a phosphine pulled off or into the metal.
 
-  Where none is left, it is refused, saying which. Where the search set
-  some aside itself and says so (the RDKit plugin, those under a floor,
-  until it takes Meno's holds), its *Dropped* row is added to, and its
-  *Kept* row counts all it embedded.
+  Where none is left, it is refused, saying which. The search's own rows
+  are left as it wrote them - the RDKit plugin's *Dropped* row for those
+  it drops under a floor itself, until it takes Meno's holds - and none of
+  their words are read. In a workflow's step, Meno's row goes with each
+  conformer kept, in how it was made; a program's populations are of all
+  it made, so where Meno set any aside they are not carried, and each
+  kept conformer's degeneracy is.
 - **Four-coordinate metals are square planar, or not, by their d
   electrons** (`metalGeometries`): the d count is the metal's group less
   its oxidation state - its charge and one for each anionic donor (a
