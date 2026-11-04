@@ -914,6 +914,31 @@ known answers are (#507):
 
 RDKit is in the script and the fixture only, never in core.
 
+#### Whether one structure holds another (2026-11-04)
+
+Meno's own substructure search (`src/lib/chem/substructure.ts`,
+`holdsSubstructure`), for a conversation's search of the page and, later,
+for queries written as SMARTS. It finds each atom of the structure asked
+for (the query) among the atoms of the other (the target), one to one,
+with every bond between query atoms a bond between their matches. A
+target's further atoms and bonds are no matter: it is not an induced match.
+
+Its rules are identity's where the two meet:
+- an atom matches one of its element, its charge, its mass number where it
+  says one, and its unpaired electrons;
+- a bond matches one of its order, with aromatic rings in one form
+  (`aromaticForm`, above), however either structure was drawn of its Kekulé
+  structures - a phenyl drawn one way is found in a toluene drawn the
+  other, and never in a cyclohexene;
+- a query's hydrogens are no condition, but for a hydrogen drawn as an
+  atom: that asks for a hydrogen on its atom's match, drawn there or not. A
+  methyl drawn as "C" is found in any carbon, a quaternary one too;
+- configurations are not compared: a query is a constitution.
+
+It says where it found it: each query atom, other than a hydrogen drawn,
+with its match. A search that has tried a million placements stops and
+says it did not finish, never a "not found" it did not show.
+
 #### Valence, and stereocentres left open
 
 **The rule cannot break a valence.** No template atom's bonds change, and
