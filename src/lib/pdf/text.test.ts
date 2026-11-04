@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, findIn, letterAt, letterInBand, letterNear, lineAt, linesOf, marksBetween, pageTextFrom, pageTextOf, placeAt, searchable, textBetween, wordAt, wordBoxesBetween, wordsBetween, type PageText } from "./text";
+import { blockOf, findIn, letterAt, letterInBand, letterNear, lineAt, linesOf, marksBetween, pageTextFrom, pageTextOf, placeAt, searchable, setBold, textBetween, wordAt, wordBoxesBetween, wordsBetween, type PageText } from "./text";
 
 /** A page of lines as PDFium reads them: each letter 6 points wide, each line 12 tall, 14 apart, starting where it is given (72, else); its ends "\r\n" with no box. */
 function page(lines: (string | [string, number])[]): PageText {
@@ -22,15 +22,29 @@ function page(lines: (string | [string, number])[]): PageText {
 const p = page(["Rotational barriers of the hy-", "droxyl group were confor\u0002", "mational, as found."]);
 
 describe("a PDF page's words", () => {
-  it("are read from the reader's answer: a letter and its box in 20 bytes", () => {
-    const buf = new ArrayBuffer(40);
+  it("are read from the reader's answer: a letter, its box and how it is set in 24 bytes", () => {
+    const buf = new ArrayBuffer(48);
     const v = new DataView(buf);
     v.setUint32(0, 65, true);
     [1, 2, 3, 4].forEach((n, k) => v.setFloat32(4 + k * 4, n, true));
-    v.setUint32(20, 0x3042, true);
+    v.setUint32(20, 1, true);
+    v.setUint32(24, 0x3042, true);
     const t = pageTextOf(buf);
     expect([...t.codes]).toEqual([65, 0x3042]);
     expect([...t.boxes.slice(0, 4)]).toEqual([1, 2, 3, 4]);
+    expect([...t.bold]).toEqual([1, 0]);
+  });
+
+  it("say which words are set bold: every letter of them, a space PDFium put there itself aside", () => {
+    // ("see 12 here", its 12 bold)
+    const text = "see 12 here";
+    const t = pageTextFrom(text, [...text].map((c, k) => (c === " " ? null : ([72 + 6 * k, 100, 78 + 6 * k, 112] as const))), [...text].map((_, k) => k === 4 || k === 5));
+    expect(setBold(t, 4, 6)).toBe(true);
+    expect(setBold(t, 3, 6)).toBe(true);
+    expect(setBold(t, 0, 3)).toBe(false);
+    expect(setBold(t, 4, 8)).toBe(false);
+    // (nothing but spaces: none)
+    expect(setBold(t, 3, 4)).toBe(false);
   });
 
   it("lie in lines, each with the box round its letters", () => {

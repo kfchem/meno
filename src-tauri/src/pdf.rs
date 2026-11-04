@@ -44,6 +44,26 @@ pub(crate) fn library_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("pdfium").join(system)
 }
 
+/// Whether a letter is set in a bold face: its font's weight 600 or more
+/// (semibold and heavier), as the font says it - or, where it says none, or
+/// may say it wrong (pdfium-render's note, of built-in fonts), its font's
+/// name saying so, after a subset's six-letter tag ("ABCDEF+Arial-BoldMT",
+/// "Helvetica-Bold", "MinionPro-Semibold").
+fn set_bold(c: &PdfPageTextChar) -> bool {
+    let heavy = match c.font_weight() {
+        Some(PdfFontWeight::Weight600 | PdfFontWeight::Weight700Bold | PdfFontWeight::Weight800 | PdfFontWeight::Weight900) => true,
+        Some(PdfFontWeight::Custom(w)) => (600..=1000).contains(&w),
+        _ => false,
+    };
+    heavy || bold_named(&c.font_name())
+}
+
+/// Whether a font's name says it is bold: Bold, Semibold, Demibold, Black, Heavy - in any case, after its subset's tag.
+fn bold_named(name: &str) -> bool {
+    let face = name.rsplit('+').next().unwrap_or(name).to_lowercase();
+    ["bold", "black", "heavy"].iter().any(|w| face.contains(w))
+}
+
 /// Meno started as the PDF reader: that, and nothing else.
 pub fn pdf_mode() -> Option<i32> {
     let mut args = std::env::args_os().skip(1);
@@ -307,7 +327,7 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
             let text = page.text().map_err(|e| e.to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let chars = text.chars();
-            let mut bytes = Vec::with_capacity(chars.len() * 20);
+            let mut bytes = Vec::with_capacity(chars.len() * 24);
             for c in chars.iter() {
                 // (a letter PDFium put there itself - a space, a line's end - has no box of its own)
                 let b = c
@@ -320,8 +340,11 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                 for v in b {
                     bytes.extend_from_slice(&v.to_le_bytes());
                 }
+                // (what it is set in: bold, bit 0 - none for a letter PDFium put there itself)
+                let generated = c.is_generated().unwrap_or(false);
+                bytes.extend_from_slice(&u32::from(!generated && set_bold(&c)).to_le_bytes());
             }
-            Ok((json!({"n": bytes.len() / 20, "ms": ms(t)}), bytes))
+            Ok((json!({"n": bytes.len() / 24, "ms": ms(t)}), bytes))
         }
         // what the page is made of, each thing where it lies - 20 bytes each:
         // what it is (1 text, 2 a path, 3 a picture, 4 a shading, 5 a form
@@ -790,10 +813,11 @@ pub async fn pdf_links(app: tauri::AppHandle, sha: String, page: u32) -> Result<
     Ok(head["links"].clone())
 }
 
-/// A page's letters, as PDFium reads them: for each, 20 bytes - its
-/// character (u32), and its box (four f32s: left, top, right, bottom, in
+/// A page's letters, as PDFium reads them: for each, 24 bytes - its
+/// character (u32); its box (four f32s: left, top, right, bottom, in
 /// points from the page's top left as it is drawn; all naught for one
-/// PDFium put there itself, a space or a line's end).
+/// PDFium put there itself, a space or a line's end); and how it is set
+/// (u32: bit 0, bold - `set_bold`).
 #[tauri::command]
 pub async fn pdf_text(app: tauri::AppHandle, sha: String, page: u32) -> Result<tauri::ipc::Response, String> {
     let (_, bytes) = ask(&app, json!({"op": "text", "sha": sha, "page": page})).await?;
@@ -934,6 +958,50 @@ mod tests {
     }
 
     #[test]
+    fn a_fonts_name_says_bold_after_its_subsets_tag() {
+        for name in ["Helvetica-Bold", "ABCDEF+Arial-BoldMT", "MinionPro-Semibold", "TimesNewRomanPS-BoldItalicMT", "Myriad-Black", "QWERTY+Gotham-Heavy"] {
+            assert!(bold_named(name), "{name}");
+        }
+        for name in ["Helvetica", "ABCDEF+Arial-ItalicMT", "BOLDXY+Times-Roman", "Symbol", ""] {
+            assert!(!bold_named(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_letter_set_bold_is_said_so() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-bold-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        // "see 12 here": "12" in Helvetica-Bold, the rest in Helvetica
+        let c = "BT /F1 12 Tf 72 700 Td (see ) Tj /F2 12 Tf (12) Tj /F1 12 Tf ( here) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len())),
+        ]);
+        let sha = "d".repeat(64);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "text", "sha": sha, "page": 0})).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let code = |i: usize| char::from_u32(u32::from_le_bytes(bytes[i * 24..i * 24 + 4].try_into().unwrap())).unwrap();
+        let bold = |i: usize| u32::from_le_bytes(bytes[i * 24 + 20..i * 24 + 24].try_into().unwrap()) & 1 == 1;
+        let text: String = (0..n).map(code).collect();
+        let bold_text: String = (0..n).filter(|&i| bold(i)).map(code).collect();
+        assert_eq!(text.trim(), "see 12 here");
+        assert_eq!(bold_text, "12");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
     fn a_pages_links_are_read_where_they_lie_and_where_they_go() {
         // (PDFium as the build fetched it: scripts/fetch-pdfium.mjs)
         let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
@@ -962,15 +1030,17 @@ mod tests {
         // its letters, each where it lies: "To page three", in Helvetica at 14 points from (72, 700)
         let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "text", "sha": sha, "page": 0})).unwrap();
         let n = head["n"].as_u64().unwrap() as usize;
-        assert_eq!(bytes.len(), n * 20);
+        assert_eq!(bytes.len(), n * 24);
         let letter = |i: usize| {
-            let f = |k: usize| f32::from_le_bytes(bytes[i * 20 + 4 + k * 4..i * 20 + 8 + k * 4].try_into().unwrap());
-            (char::from_u32(u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).unwrap(), [f(0), f(1), f(2), f(3)])
+            let f = |k: usize| f32::from_le_bytes(bytes[i * 24 + 4 + k * 4..i * 24 + 8 + k * 4].try_into().unwrap());
+            (char::from_u32(u32::from_le_bytes(bytes[i * 24..i * 24 + 4].try_into().unwrap())).unwrap(), [f(0), f(1), f(2), f(3)])
         };
         let text: String = (0..n).map(|i| letter(i).0).collect();
         assert_eq!(text, "To page three");
         let (t, b) = letter(0);
         assert_eq!(t, 'T');
+        // (set in Helvetica: none of it bold)
+        assert!((0..n).all(|i| u32::from_le_bytes(bytes[i * 24 + 20..i * 24 + 24].try_into().unwrap()) == 0));
         assert!((b[0] - 72.0).abs() < 1.0, "{b:?}");
         // (its baseline 142 points from the top: the box above it, and a little below)
         assert!(b[1] < 842.0 - 700.0 && b[3] > 842.0 - 700.0, "{b:?}");
