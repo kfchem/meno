@@ -19,9 +19,10 @@ These notices come with Meno in files of their own, beside this one:
   Arimo-OFL.txt       Arimo, which the outlines of Arial labels are worked out from
   ACCeL-MIT.txt       ACCeL, which Meno's reaction atom mapper is ported from
 
-The Blender plugin's own scripts are licensed under the GNU General Public
-License, version 3 or later; its licence's text (LICENSE) is in its folder,
-resources/plugins/blender.
+The own scripts of the Blender plugin and of the Blender looks and motions
+plugin are licensed under the GNU General Public License, version 3 or
+later; the licence's text (LICENSE) is in each one's folder,
+resources/plugins/blender and resources/plugins/blender-presets.
 
 Written by scripts/licenses/notices.mjs (npm run notices) from a build of
 Meno and its lock files.
@@ -257,7 +258,33 @@ Repository: https://github.com/pmndrs/react-three-fiber
 --------------------------------------------------------------------------------
 Its build carries React's reconciler (react-reconciler), copyright Meta Platforms, Inc. and affiliates, under the MIT License: the text given for react in Part 1.
 
-No licence file comes with this package. Its package.json gives its licence as: MIT.
+No licence file comes with this package. Its licence's text is given as its repository holds it at the commit 9.8.1 was published from (53ec672ac4a7189711766b87ece18889abbb32d4), read on 2026-11-04: https://raw.githubusercontent.com/pmndrs/react-three-fiber/53ec672ac4a7189711766b87ece18889abbb32d4/LICENSE
+
+Its authors, as its package.json names them: Paul Henschel.
+
+react-three-fiber-9.8.1.LICENSE:
+
+MIT License
+
+Copyright (c) 2019-2025 Poimandres
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ================================================================================
 @tauri-apps/api 2.12.1
@@ -726,8 +753,36 @@ motion-utils 14.0.0
 License: MIT
 Repository: https://github.com/motiondivision/motion
 --------------------------------------------------------------------------------
+Its cubic Bézier easing (dist/es/easing/cubic-bezier.mjs) is modified from Gaëtan Renaudeau's bezier-easing, as a comment in it says, which is under the MIT License: its text is given below.
+
+bezier-easing's licence, the file its comment links to, as its repository holds it (b2ef4763387f54f4108506772f09a5ed6833b496; the text unchanged since 2014). Read on 2026-11-04: https://raw.githubusercontent.com/gre/bezier-easing/b2ef4763387f54f4108506772f09a5ed6833b496/LICENSE
 
 LICENSE.md: the same text as for motion 14.0.0 (LICENSE.md), above.
+
+bezier-easing.LICENSE:
+
+Copyright (c) 2014 Gaëtan Renaudeau
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
 opentype.js 2.0.0
@@ -802,29 +857,7 @@ License: MIT
 Repository: https://github.com/pmndrs/react-use-measure
 --------------------------------------------------------------------------------
 
-LICENSE:
-
-MIT License
-
-Copyright (c) 2019-2025 Poimandres
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+LICENSE: the same text as for @react-three/fiber 9.8.1 (react-three-fiber-9.8.1.LICENSE), above.
 
 ================================================================================
 rolldown 1.2.12
@@ -941,6 +974,15 @@ troika-three-text 0.52.5
 License: MIT
 Repository: https://github.com/protectwise/troika
 --------------------------------------------------------------------------------
+Its build (dist/) carries others' code, as built into its libs/, each named in a comment there with its licence: Typr.ts (libs/typr.factory.js), under the MIT License; woff2otf, under the Apache License 2.0, with fflate, under the MIT License (libs/woff2otf.factory.js); and @unicode-font-resolver/client 1.0.2 (libs/unicode-font-resolver-client.factory.js), under the MIT License. Their texts are given below, after its own.
+
+Typr.ts's licence, as its repository holds it at the commit @lojjic/typr 0.3.8-lojjic1 was published from (a6d43bacc0cc1fce913023f9ccb8622c2ceb1c00): the build of Typr.ts its package.json names for libs/typr.factory.js. Read on 2026-11-04: https://raw.githubusercontent.com/fredli74/Typr.ts/a6d43bacc0cc1fce913023f9ccb8622c2ceb1c00/LICENSE
+
+woff2otf's licence, the Apache License 2.0, as the opening comment of its source in this package (src/woff2otf.js) gives it: copyright 2012 Steffen Hanikel, modified by Artemy Tregubenko (2014) and by Jason Johnston (2019).
+
+fflate's licence, as its repository holds it at v0.7.0 (20795bce8a87db5ac377fde7e4753bcb14f85f4a): libs/woff2otf.factory.js was last built on 2021-06-02, from fflate ^0.7.0, and the text is the same at every 0.7 release. Read on 2026-11-04: https://raw.githubusercontent.com/101arrowz/fflate/20795bce8a87db5ac377fde7e4753bcb14f85f4a/LICENSE
+
+@unicode-font-resolver/client's licence, as its repository holds it at the commit 1.0.2 was published from (974383af089e544f4ac4b0ba96b5f98891688e17). Read on 2026-11-04: https://raw.githubusercontent.com/lojjic/unicode-font-resolver/974383af089e544f4ac4b0ba96b5f98891688e17/packages/client/LICENSE
 
 LICENSE:
 
@@ -948,6 +990,80 @@ MIT License
 
 Copyright (c) 2019 ProtectWise
 Copyright (c) 2021 Jason Johnston
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+lojjic-typr-0.3.8-lojjic1.LICENSE:
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Photopea
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+The Apache-2.0 text: the same text as for @tauri-apps/api 2.12.1 (LICENSE-APACHE-2.0), above.
+
+fflate-0.7.0.LICENSE:
+
+MIT License
+
+Copyright (c) 2020 Arjun Barrett
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+unicode-font-resolver-client-1.0.2.LICENSE:
+
+MIT License
+
+Copyright (c) 2023 Jason Johnston
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

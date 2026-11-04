@@ -2,11 +2,14 @@
 // system, fetched from bblanchon/pdfium-binaries at a pinned release, checked
 // against its SHA-256, and put in src-tauri/pdfium/<system>/ with its
 // licences - where the build carries it from. Nothing here is kept in git.
+// Every licence that comes with it must be among the notices Meno carries
+// (src-tauri/resources/licenses/PDFium-<its name>), saying the same, on each
+// system: one missing there, or saying otherwise, stops it.
 //
 //   node scripts/fetch-pdfium.mjs
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync, copyFileSync, cpSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, copyFileSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,6 +38,24 @@ const archive = join(work, pin.asset);
 writeFileSync(archive, bytes);
 // (tar run in the folder, on a name with no drive in it: Git Bash's GNU tar takes "C:" for a host)
 execFileSync("tar", ["-xzf", pin.asset], { cwd: work });
+
+// (its licences, each against the notice Meno carries for it - their line ends aside, as a checkout or an archive may
+// give either - and the archive's own LICENSE, pdfium-binaries', as PDFium-pdfium-binaries.txt)
+const notices = join(root, "src-tauri", "resources", "licenses");
+const lf = (path) => readFileSync(path, "utf8").replace(/\r\n?/g, "\n");
+const behind = [];
+const licences = readdirSync(join(work, "licenses"), { withFileTypes: true }).map((e) => ({ name: e.name, file: e.isFile(), path: join(work, "licenses", e.name) }));
+for (const l of [...licences, { name: "pdfium-binaries.txt", file: true, path: join(work, "LICENSE") }]) {
+  const ours = join(notices, `PDFium-${l.name}`);
+  if (!l.file) behind.push(`licenses/${l.name}: not a file - its notices are to be checked by hand`);
+  else if (!existsSync(ours)) behind.push(`${l.name}: not among the notices (src-tauri/resources/licenses/PDFium-${l.name})`);
+  else if (lf(l.path) !== lf(ours)) behind.push(`${l.name}: not what src-tauri/resources/licenses/PDFium-${l.name} says`);
+}
+if (behind.length) {
+  rmSync(work, { recursive: true, force: true });
+  throw new Error(`PDFium ${RELEASE} for ${system}: its licences and Meno's notices of them differ - bring the notices up to date:\n  ${behind.join("\n  ")}`);
+}
+
 mkdirSync(out, { recursive: true });
 copyFileSync(join(work, pin.lib), join(out, pin.lib.split("/").pop()));
 cpSync(join(work, "licenses"), join(out, "licenses"), { recursive: true });

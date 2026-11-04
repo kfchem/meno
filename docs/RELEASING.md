@@ -108,7 +108,11 @@ Meno carries the licences of the software by others it is built with, in
 `src-tauri/resources/licenses/`, and shows them in Settings (General,
 *Licences*). Most are files of their own, written by hand: PDFium's and
 those of what it is built with (`PDFium-*`, docs/PDF.md), pdfium-render's,
-the typefaces' (IBM Plex, Arimo) and ACCeL's. The rest are in one file,
+the typefaces' (IBM Plex, Arimo) and ACCeL's. Every licence that comes
+with PDFium's archive must be among the `PDFium-*` files, saying the same:
+`scripts/fetch-pdfium.mjs` stops where one is missing there or says
+otherwise, on each system it fetches the archive for (the CI's and the
+release's, Windows among them). The rest are in one file,
 `THIRD-PARTY-NOTICES.txt`, which `npm run notices`
 (`scripts/licenses/notices.mjs`) writes - offline, from what is on this
 computer:
@@ -136,17 +140,24 @@ cssparser, selectors and others) also says where: its repository, and its
 version on crates.io. A crate with no licence file of its own is given its
 licence's standard text only where it comes with another crate here and
 names no one (the Apache License 2.0's, the MPL 2.0's), and says where it
-was taken from. One under a licence whose text carries its authors' own
-copyright line (MIT, BSD) is given the text its repository holds, read
-from its published page at the commit its version was published from (the
-crate's `.cargo_vcs_info.json`) - a text read as documentation is, never a
-package or archive fetched - kept in `scripts/licenses/upstream/` and named,
-with where and when it was read, in `scripts/licenses/upstream.json`; so is
-the licence of what such a crate carries without its licence (Microsoft's
-WebView2 SDK, whose loader webview2-com-sys links in on Windows). The
-script lists what it gave as it runs, with every licence that asks more
-than a notice; the test fails while any crate has no text, or a text read
-is for a version no longer built in.
+was taken from. A crate or an npm package with no licence file, under a
+licence whose text carries its authors' own copyright line (MIT, BSD), is
+given the text its repository holds, read from its published page at the
+commit its version was published from (a crate's `.cargo_vcs_info.json`,
+an npm package's `gitHead` in its registry entry) - a text read as
+documentation is, never a package or archive fetched - kept in
+`scripts/licenses/upstream/` and named, with where and when it was read, in
+`scripts/licenses/upstream.json`; so is the licence of what such a crate
+carries without its licence (Microsoft's WebView2 SDK, whose loader
+webview2-com-sys links in on Windows), and, under `carried`, the licence of
+others' code that an npm package carries in its own files without it, read
+from where that code is kept (troika-three-text's builds of Typr.ts,
+woff2otf, fflate and @unicode-font-resolver/client; motion-utils' easing,
+modified from bezier-easing). The script lists what it gave as it runs,
+with every licence that asks more than a notice; the test fails while any
+crate or npm package has no text, a text read is for a version no longer
+built in, or a plugin whose own code has a licence of its own (a `LICENSE`
+in its folder) is not named in the notices' head.
 
 Run it when a dependency changes, and before each release. Beside the
 notices it writes `scripts/licenses/bundled.json` - each package's name,
@@ -166,8 +177,9 @@ features or of systems brings into the program or takes out of it, with
 the lock unchanged (Cargo's graph is not worked out in the test, as the
 frontend job has neither Cargo nor the crates' sources); and code by others
 copied into Meno's own sources or carried in a package's files without its
-own licence file, which the notices' head and `NOTES` in the script give
-by hand.
+own licence file, which the notices' head and `NOTES` in the script name
+by hand - each found by reading the package's files that go into the
+window - with their texts in `upstream.json`.
 
 ## The Windows installer
 
