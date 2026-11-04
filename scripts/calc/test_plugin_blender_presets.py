@@ -1,4 +1,4 @@
-"""Tests for the Blender looks and motions plugin (src-tauri/resources/plugins/blender-presets), run by the Blender plugin
+"""Tests for the Film looks and motions plugin (src-tauri/resources/plugins/blender-presets), run by the Blender plugin
 through the interface `preset` (docs/plugins/blender-presets.md).
 
     python3 -m unittest scripts/calc/test_plugin_blender_presets.py

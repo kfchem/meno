@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The part Blender looks and motions' changes of molecules share: the molecule a piece ends as, who goes where, and the
+# The part Film looks and motions' changes of molecules share: the molecule a piece ends as, who goes where, and the
 # camera that runs on through every piece of the film.
 #
 # Copyright (C) 2026 Meno contributors

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "change-scan" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "change-scan" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Scan: a sheet of light passes down through A and leaves B. Below the sheet A stands as it was, its cut edge lit; just
 above it B is a hologram - a rim of light, seen through - that turns solid a little higher; the sheet goes on to the
