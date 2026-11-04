@@ -218,6 +218,18 @@ class Manifests(unittest.TestCase):
             self.assertEqual({o["id"] for o in m["steps"][0]["options"]}, ids, name)
             self.assertEqual(m["steps"][0]["kinds"], ["nci"])
 
+    def test_the_density_cut_the_card_offers_is_the_one_the_worker_takes(self):
+        # (its default the worker's own, its ends taken and a step past each refused: a card offers nothing it refuses)
+        m = json.loads((ROOT / "src-tauri/resources/plugins/nciplot/manifest.json").read_text(encoding="utf-8"))
+        cut = next(o for o in m["steps"][0]["options"] if o["id"] == "density-cut")
+        self.assertEqual(cut["default"], nciplot.RHO_CUT)
+        for v in (cut["min"], cut["max"]):
+            said = ask(nciplot, "prepare", entries=[DIMER], options={"density-cut": v})
+            self.assertTrue(said["ok"], said)
+            self.assertEqual({f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}["input.nci"].splitlines()[-1], f"CUTPLOT {float(v)} 0.3")
+        for v in (round(cut["min"] - cut["step"], 10), round(cut["max"] + cut["step"], 10)):
+            self.assertFalse(ask(nciplot, "prepare", entries=[DIMER], options={"density-cut": v})["ok"], v)
+
 
 if __name__ == "__main__":
     unittest.main()
