@@ -284,8 +284,11 @@ describe("a plugin's manifest", () => {
     // (one used only for some of its work)
     expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: true }] })?.depends?.[0].optional).toBe(true);
     expect(acceptManifest({ ...steps, depends: [{ ...uses, optional: false }] })?.depends?.[0].optional).toBeUndefined();
+    // (one whose kinds of file a step takes: each an id, once)
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0", kinds: ["xtb-out"] }] })?.depends?.[0].kinds).toEqual(["xtb-out"]);
+    for (const kinds of [["Bad Kind"], ["a", "a"], "a"]) expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0", kinds }] }), JSON.stringify(kinds)).toBeNull();
     // (one used for no program: its presence and version alone)
-    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0" }] })?.depends?.[0].programs).toEqual([]);
+    expect(acceptManifest({ ...steps, depends: [{ plugin: "xtb", versions: ">=1.0.0 <2.0.0" }] })?.depends?.[0].programs).toEqual([]);
     // (itself, versions not as they must be, a shell, a path, a variable that finds programs, one plugin twice, one variable twice: no plugin)
     const program = (p: object) => ({ ...uses, programs: [{ ...uses.programs[0], ...p }] });
     for (const bad of [
@@ -297,7 +300,8 @@ describe("a plugin's manifest", () => {
       [program({ env: "PATH" })],
       [program({ env: "1X" })],
       [uses, { ...uses, programs: [] }],
-      [uses, { plugin: "other", versions: ">=1.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [uses, { plugin: "other", versions: ">=1.0.0 <2.0.0", programs: [{ program: "tool", env: "XTBEXE" }] }],
+      [{ ...uses, versions: ">=0.1.4" }],
       [{ ...uses, optional: "yes" }],
       "xtb",
     ])
@@ -310,7 +314,7 @@ describe("a plugin's manifest", () => {
     const steps = { ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["orca"] }] };
     expect(acceptManifest({ ...steps, interfaces: [{ id: "styling", version: "1.2.0" }] })?.interfaces).toEqual([{ id: "styling", version: "1.2.0" }]);
     expect(acceptManifest(steps)?.interfaces).toBeUndefined();
-    const through = { plugin: "tool", versions: ">=1.0.0", interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] };
+    const through = { plugin: "tool", versions: ">=1.0.0 <2.0.0", interfaces: [{ id: "styling", versions: ">=1.0.0 <2.0.0" }] };
     expect(acceptManifest({ ...steps, depends: [through] })?.depends?.[0].interfaces).toEqual([{ id: "styling", versions: ">=1.0.0 <2.0.0", range: { from: "1.0.0", before: "2.0.0" } }]);
     for (const bad of [
       { interfaces: [{ id: "styling", version: "1.2" }] },
@@ -318,6 +322,7 @@ describe("a plugin's manifest", () => {
       { interfaces: [{ id: "styling", version: "1.0.0" }, { id: "styling", version: "2.0.0" }] },
       { interfaces: { id: "styling", version: "1.0.0" } },
       { depends: [{ ...through, interfaces: [{ id: "styling", versions: "^1.0.0" }] }] },
+      { depends: [{ ...through, interfaces: [{ id: "styling", versions: ">=1.0.0" }] }] },
       { depends: [{ ...through, interfaces: [through.interfaces[0], through.interfaces[0]] }] },
       { depends: [{ ...through, interfaces: "styling" }] },
     ])
@@ -427,7 +432,7 @@ describe("a plugin's manifest", () => {
     // (never a shell or Python beside it, as the backend refuses one)
     for (const bad of [{ x: { macos: "sh" } }, { x: { windows: "cmd.exe" } }, { x: { linux: "python3" } }]) expect(orca(bad)).toEqual([]);
     // (ORCA's, as Meno carries it)
-    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2mkl: { macos: "orca_2mkl", linux: "orca_2mkl", windows: "orca_2mkl.exe" } });
+    expect(MANIFESTS.find((m) => m.id === "orca")?.installed[0].beside).toEqual({ orca_2aim: { macos: "orca_2aim", linux: "orca_2aim", windows: "orca_2aim.exe" } });
   });
 
   it("may say how a program installed separately runs in parallel - as threads, or as processes, each a core - as the backend reads it", () => {

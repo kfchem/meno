@@ -194,7 +194,7 @@ export function coresCountedSaid(c: { cores: number; physical?: number }): strin
 
 /**
  * How many processes a job of a program running as processes takes (a
- * manifest's `installed[].parallel`: MPI, ORCA's `%pal`): the cores Settings
+ * manifest's `installed[].parallel`: MPI): the cores Settings
  * gives it, one process to each - never more than the computer's physical
  * cores, each process a whole one.
  */

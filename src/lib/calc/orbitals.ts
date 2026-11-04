@@ -11,8 +11,16 @@
 import { askOf, type Ask } from "./results";
 import { ELECTRONVOLT_J, HARTREE_J } from "../units";
 
-/** One orbital as a reader gives it: of both spins (a restricted calculation's), or of one; its energy in hartrees; how many electrons are in it; its symmetry as the program prints it. */
-export type Orbital = { spin: "both" | "alpha" | "beta"; energy: number | null; occupation: number | null; symmetry?: string | null; surface?: Ask };
+/**
+ * One orbital as a reader gives it: of both spins (a restricted
+ * calculation's), or of one; its energy in hartrees; how many electrons are
+ * in it; its symmetry as the program prints it; and, where the program
+ * prints only some of a spin's orbitals - those about the frontier, the
+ * rest left out between them - its number as the program counts them, from
+ * 1, so that each is named from the HOMO by its number, never by its place
+ * among those given, and none left out is made up.
+ */
+export type Orbital = { spin: "both" | "alpha" | "beta"; energy: number | null; occupation: number | null; symmetry?: string | null; number?: number; surface?: Ask };
 
 /** The electronvolts in a hartree, from their joules (lib/units). */
 const EV_PER_HARTREE = HARTREE_J / ELECTRONVOLT_J;
@@ -38,7 +46,9 @@ export function orbitalsOf(v: unknown): Orbital[] | undefined {
     if (energy === undefined || occupation === undefined) return undefined;
     const symmetry = typeof o.symmetry === "string" && o.symmetry.trim() ? o.symmetry.trim().slice(0, 24) : null;
     const surface = askOf(o.surface);
-    out.push({ spin: o.spin as Orbital["spin"], energy, occupation, ...(symmetry ? { symmetry } : {}), ...(surface ? { surface } : {}) });
+    const number = Number.isInteger(o.number) && (o.number as number) >= 1 ? (o.number as number) : undefined;
+    if (o.number != null && number === undefined) return undefined;
+    out.push({ spin: o.spin as Orbital["spin"], energy, occupation, ...(symmetry ? { symmetry } : {}), ...(number != null ? { number } : {}), ...(surface ? { surface } : {}) });
   }
   // (of both spins, or of each apart: never the two ways at once)
   const both = out.some((o) => o.spin === "both");
@@ -75,7 +85,7 @@ function inOrder(orbitals: readonly Orbital[]): Orbital[] {
     .map(({ o }) => o);
 }
 
-/** An orbital's name from its place and the HOMO's: "HOMO", "HOMO−2", "LUMO", "LUMO+1". */
+/** An orbital's name from its place and the HOMO's - or its number and the HOMO's: "HOMO", "HOMO−2", "LUMO", "LUMO+1". */
 export function orbitalName(i: number, homo: number): string {
   if (i <= homo) return i === homo ? "HOMO" : `HOMO−${homo - i}`;
   return i === homo + 1 ? "LUMO" : `LUMO+${i - homo - 1}`;
@@ -96,6 +106,9 @@ export function orbitalResults(orbitals: readonly Orbital[]): unknown[] {
   for (const list of spins) {
     const homo = homoOf(list);
     const named = homo != null;
+    // (each counted by its number where the program gave every one's - some left out between them - else by its place)
+    const numbered = list.every((o) => o.number != null);
+    const count = (i: number) => (numbered ? list[i].number! : i + 1);
     // (no more than a list holds: those about the frontier, where there are more)
     let first = 0;
     let last = list.length - 1;
@@ -115,7 +128,7 @@ export function orbitalResults(orbitals: readonly Orbital[]): unknown[] {
     for (let i = last; i >= first; i--) {
       const o = list[i];
       rows.push({
-        cells: [named ? orbitalName(i, homo) : i + 1, ...(symmetry ? [o.symmetry ?? null] : []), o.energy == null ? null : o.energy * EV_PER_HARTREE, ...(named ? [] : [o.occupation])],
+        cells: [named ? orbitalName(count(i), count(homo)) : count(i), ...(symmetry ? [o.symmetry ?? null] : []), o.energy == null ? null : o.energy * EV_PER_HARTREE, ...(named ? [] : [o.occupation])],
         ...(o.surface ? { surface: o.surface } : {}),
       });
     }
@@ -131,7 +144,8 @@ export function orbitalResults(orbitals: readonly Orbital[]): unknown[] {
       // (opening on the frontier: the LUMO, the HOMO under it - the HOMO where no LUMO is given)
       ...(named ? { focus: homo + 1 <= last ? last - homo - 1 : last - homo } : {}),
     });
-    if (one && named && spin === "both" && homo + 1 < list.length) {
+    // (the gap of the LUMO the program gave: the one after the HOMO, by number where they are numbered)
+    if (one && named && spin === "both" && homo + 1 < list.length && count(homo + 1) === count(homo) + 1) {
       out.push({
         id: "homo-lumo-gap",
         on: "molecule",

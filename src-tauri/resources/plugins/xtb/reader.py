@@ -88,8 +88,6 @@ NET_CHARGE = re.compile(r"^\s*:\s*net charge\s+(-?\d+)\s*:", re.M)
 UNPAIRED = re.compile(r"^\s*:\s*unpaired electrons\s+(\d+)\s*:", re.M)
 # the SUMMARY: ":: total charge               0.000000000000 e     ::"
 TOTAL_CHARGE = re.compile(r"::\s*total charge\s+(" + FLOAT + r")\s+e\s*::")
-# ":  # electrons                         0          :"
-ELECTRONS = re.compile(r"^\s*:\s*# electrons\s+(\d+)\s*:", re.M)
 
 
 def version_of(text):
@@ -197,8 +195,6 @@ def final_structure(text, elements):
 # the closing summary: "| TOTAL ENERGY               -5.070250039539 Eh   |"; its SUMMARY's ":: total energy  -5.07 Eh ::"
 TOTAL = re.compile(r"\|\s*TOTAL ENERGY\s+(" + FLOAT + r")\s+Eh\s*\|")
 SUMMARY_TOTAL = re.compile(r"::\s*total energy\s+(" + FLOAT + r")\s+Eh\s*::")
-# its SUMMARY: ":: HOMO-LUMO gap             14.427375165557 eV    ::"
-GAP = re.compile(r"::\s*HOMO-LUMO gap\s+(" + FLOAT + r")\s+eV\s*::")
 
 
 def total_energy(text):
@@ -304,57 +300,28 @@ def solvation_of(text):
 
 
 def orbitals_of(text):
-    """The orbitals xtb printed about the frontier, as a list - each named by its place from the HOMO, its
-    occupation and its energy (eV) - from the last "Orbital Energies and Occupations" table:
-    "         4        2.0000           -0.4475113             -12.1774 (HOMO)"."""
+    """The orbitals xtb printed, in Meno's general form (src/lib/calc/orbitals.ts): each of both spins, its energy in
+    hartrees, its occupation - none printed, none in it - and its number as xtb counts them, in xtb's order, from the
+    last "Orbital Energies and Occupations" table: "         4        2.0000           -0.4475113             -12.1774
+    (HOMO)". xtb prints those about the frontier and leaves the rest out between them ("...") - those it printed alone,
+    by their numbers, none made up. Meno names them and works out the gap; none where it printed none."""
     at = text.rfind("Orbital Energies and Occupations")
     if at < 0:
         return []
-    rows, homo = [], None
+    out = []
     for line in text[at:].splitlines()[3:]:
-        if set(line.strip()) <= {"-"} and rows:
+        if set(line.strip()) <= {"-"} and out:
             break
         # (the orbitals it leaves out, far from the frontier: "       ...           ...                  ...")
         if line.strip() and set(line.split()) == {"..."}:
             continue
         m = re.match(r"^\s*(\d+)\s+(?:(" + FLOAT + r")\s+)?(" + FLOAT + r")\s+(" + FLOAT + r")(?:\s+\((HOMO|LUMO)\))?\s*$", line)
         if not m:
-            if rows:
+            if out:
                 break
             continue
-        k = int(m.group(1))
-        rows.append((k, number(m.group(2)) if m.group(2) else 0.0, number(m.group(4))))
-        if m.group(5) == "HOMO":
-            homo = k
-    if not rows or homo is None:
-        return []
-
-    def name(k):
-        if k <= homo:
-            return "HOMO" if k == homo else f"HOMO−{homo - k}"
-        return "LUMO" if k == homo + 1 else f"LUMO+{k - homo - 1}"
-
-    ordered = sorted(rows, key=lambda r: -r[0])
-    return [{
-        "id": "orbitals", "on": "list", "group": "Orbitals", "label": "Molecular orbitals",
-        "columns": [{"label": "Orbital"}, {"label": "Occupation", "digits": 4}, {"label": "Energy", "unit": "eV", "digits": 3}],
-        "rows": [{"cells": [name(k), occ, e]} for k, occ, e in ordered],
-        # (opening on the frontier: the LUMO, the HOMO under it)
-        "focus": max(0, sum(1 for k, _, _ in ordered if k > homo + 1)),
-    }]
-
-
-def gap_of(text):
-    """The HOMO-LUMO gap (eV) of the SUMMARY: none where xtb counts no electrons - an ion of no valence electrons,
-    Na+ in GFN2-xTB, whose LUMO's energy it gives as the gap."""
-    m = last(GAP, text)
-    electrons = last(ELECTRONS, text)
-    if not m or (electrons and int(electrons.group(1)) == 0):
-        return []
-    gap = number(m.group(1))
-    if not math.isfinite(gap):
-        return []
-    return [{"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO–LUMO gap", "value": gap, "unit": "eV", "digits": 2}]
+        out.append({"spin": "both", "energy": number(m.group(3)), "occupation": number(m.group(2)) if m.group(2) else 0.0, "number": int(m.group(1))})
+    return out
 
 
 # GFN2-xTB's property printout: "     #   Z          covCN         q      C6AA      α(0)" over rows "     1   8 O        1.610    -0.562    24.294     6.652"
@@ -645,9 +612,10 @@ def read(name, text, followed=False):
         + dipole_of(text)
         + charges_of(text, len(atoms))
         + vibrations_of(text)
-        + gap_of(text)
-        + orbitals_of(text)
     )
+    orbitals = orbitals_of(text)
+    if orbitals:
+        out["orbitals"] = orbitals
     if frequencies is not None:
         out["imaginary"] = imaginary_of(text, frequencies)
     warnings = warnings_of(text)

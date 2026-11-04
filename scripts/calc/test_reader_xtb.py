@@ -200,16 +200,21 @@ class Results(unittest.TestCase):
     def results(self, text):
         return {r["id"]: r for r in reader.read("run.out", BEGUN + text + ENDED)["results"]}
 
-    def test_the_gap_and_the_orbitals_about_the_frontier(self):
-        r = self.results(PRINTOUT)
-        self.assertEqual(r["homo-lumo-gap"]["value"], 5.3)
-        orbitals = r["orbitals"]
-        self.assertEqual([row["cells"][0] for row in orbitals["rows"]], ["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−11"])
-        self.assertEqual(orbitals["rows"][2]["cells"], ["HOMO", 2.0, -4.1])
-        self.assertEqual(orbitals["focus"], 1)
-        # (no electrons xtb counts: the gap it gives is the LUMO's energy, and is left out)
-        none = BEGUN.replace("# electrons                        24", "# electrons                         0")
-        self.assertNotIn("homo-lumo-gap", {x["id"] for x in reader.read("run.out", none + ENDED)["results"]})
+    def test_the_orbitals_about_the_frontier_as_data_with_their_numbers(self):
+        # (those xtb printed alone, in its order, each by its number - the ones it left out between them none made up;
+        #  Meno names them, lists them and works out the gap: src/lib/calc/orbitals.ts)
+        out = reader.read("run.out", BEGUN + PRINTOUT + ENDED)
+        self.assertEqual(out["orbitals"], [
+            {"spin": "both", "energy": -0.6, "occupation": 2.0, "number": 1},
+            {"spin": "both", "energy": -0.16, "occupation": 2.0, "number": 11},
+            {"spin": "both", "energy": -0.15, "occupation": 2.0, "number": 12},
+            {"spin": "both", "energy": 0.04, "occupation": 0.0, "number": 13},
+            {"spin": "both", "energy": 0.3, "occupation": 0.0, "number": 14},
+        ])
+        ids = {r["id"] for r in out["results"]}
+        self.assertFalse(ids & {"orbitals", "homo-lumo-gap"})
+        # (none printed: none given)
+        self.assertNotIn("orbitals", reader.read("run.out", BEGUN + ENDED))
 
     def test_each_atom_s_charge_as_printed(self):
         self.assertEqual(self.results(PRINTOUT)["charges"]["values"], [-0.1, 0.4, -0.6, -0.6, -0.03, -0.035, -0.035])

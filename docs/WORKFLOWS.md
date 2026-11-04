@@ -305,7 +305,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit, or another of its properties ("its product"); all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number, in the order the step before gave them (a conformer search's, as its program made them; a *Rank* step's, as it ranked them); the rest out of its second exit, *The rest* - a conformer set |
-| Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
+| Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it. Meno's, on what the plugin that does the checks makes of each structure (PLUGINS.md, `structure_facts`): what that toolkit alone could not read or make sense of is said in its name and words ("RDKit could not read it (SANITIZE_KEKULIZE)") |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
 | Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
@@ -327,8 +327,10 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
 The first six run a program; the next six work on a set's entries
-alone (*Who does a step*); the three after them are a plugin's (RDKit's), done
-at once in its worker on structures drawn (PLUGINS.md, *steps on
+alone (*Who does a step*); of the three after them, *Check structures* is
+Meno's, on the facts the plugin that does the checks gives of each
+structure, and *Stereoisomers* and *Descriptors* are a plugin's (RDKit's),
+done at once in its worker on structures drawn (PLUGINS.md, *steps on
 structures drawn*), each with its own options: they change no atom or
 bond of a structure they keep, and choose nothing for one. Those from Tag on
 are Meno's own on structures (STRUCTURE-STEPS.md), on a set's entries
@@ -1558,8 +1560,9 @@ Decided while building it, for the maintainer to confirm:
   its standard input, which (`stdin`; added with the real runs of
   2026-10-09, for Gaussian) - and the programs installed beside its own
   run after it, in turn, where it ended well (`then`; added 2026-10-11,
-  for ORCA's orca_2mkl: what they print kept apart from the job's log,
-  which is its program's output; one that fails leaves the job done);
+  for the program ORCA's job runs beside it - its orca_2aim: what they
+  print kept apart from the job's log, which is its program's output; one
+  that fails leaves the job done);
   **`collect {step, entries, options, files, log,
   ended}`** gives an output for each entry in the readers' output form
   (lib/calc/output) - or, for a job that did not end done, why, in the
@@ -1821,8 +1824,13 @@ Decided while building it, for the maintainer to confirm:
 - **The wavefunction is kept** (2026-10-11) with each molecule a step
   gives, as the output is - kept in the workspace's file, and given to a
   later step that takes it (a step's `files`: Multiwfn's NCI). ORCA's: its
-  job then runs orca_2mkl, installed beside ORCA, as its manual has it -
-  `orca_2mkl input -molden`, writing `input.molden.input`, a Molden file.
+  job then runs orca_2aim, installed beside ORCA, as its manual has it
+  (9.2.9) - `orca_2aim input`, writing `input.wfx`, a WFX file (a kind
+  Meno reads itself: FILE-IO.md), at the job's last geometry. What it holds
+  to draw: the occupied orbitals alone - no LUMO's surface comes from it,
+  though the orbital list, from ORCA's output, has every orbital's energy -
+  and, where an atom has an ECP, no core: a density from it lacks the
+  ECP's electrons.
   Gaussian's: `Output=WFX` in the route, and the file's name on a line of
   its own after the molecule ("read from the input stream, on a separate
   line", gaussian.com, *Output*): a WFX file, at the last geometry, in

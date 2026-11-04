@@ -8,6 +8,35 @@ const EV = HARTREE_J / ELECTRONVOLT_J;
 const closed = (occupied: number, virtual: number, extra: Partial<Orbital> = {}): Orbital[] =>
   Array.from({ length: occupied + virtual }, (_, i) => ({ spin: "both" as const, energy: -1 + 0.1 * i, occupation: i < occupied ? 2 : 0, ...extra }));
 
+describe("orbitals a program printed only about the frontier, each by its number", () => {
+  // (as xtb prints them: the first, then those about the frontier, the rest left out between them)
+  const printed: Orbital[] = [1, 11, 12, 13, 14].map((number, i) => ({ spin: "both", energy: [-0.6, -0.16, -0.15, 0.04, 0.3][i], occupation: number <= 12 ? 2 : 0, number }));
+
+  it("are taken with their numbers, whole and from 1 - one that is not, none of them", () => {
+    expect(orbitalsOf(printed)).toEqual(printed);
+    expect(orbitalsOf([{ spin: "both", energy: 0, occupation: 2, number: 0 }])).toBeUndefined();
+    expect(orbitalsOf([{ spin: "both", energy: 0, occupation: 2, number: 1.5 }])).toBeUndefined();
+  });
+
+  it("are named from the HOMO by their numbers, never by their places among those given - none left out made up", () => {
+    const [list, gap] = orbitalResults(printed) as { rows: { cells: unknown[] }[]; focus: number; value: number }[];
+    expect(list.rows.map((r) => r.cells[0])).toEqual(["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−11"]);
+    expect(list.focus).toBe(1);
+    expect(gap.value).toBeCloseTo(0.19 * EV, 9);
+  });
+
+  it("give no gap where the orbital after the HOMO by number was not printed", () => {
+    const skipped = printed.map((o) => (o.number === 13 ? { ...o, number: 15 } : o.number === 14 ? { ...o, number: 16 } : o));
+    expect((orbitalResults(skipped) as { id: string }[]).map((r) => r.id)).toEqual(["orbitals"]);
+  });
+
+  it("are listed by their numbers where no HOMO can be named", () => {
+    const empty: Orbital[] = [1, 2, 3].map((number) => ({ spin: "both", energy: -0.6 + 0.1 * number, occupation: 0, number }));
+    const [list] = orbitalResults(empty) as { rows: { cells: unknown[] }[] }[];
+    expect(list.rows.map((r) => r.cells[0])).toEqual([3, 2, 1]);
+  });
+});
+
 describe("orbitals as a reader gives them", () => {
   it("are taken where each is as the form says: a spin, an energy or none, an occupation from 0 to 2 or none", () => {
     expect(orbitalsOf([{ spin: "both", energy: -0.5, occupation: 2, symmetry: " A1 " }, { spin: "both", energy: null, occupation: null, surface: { ask: "orbital:1" } }])).toEqual([

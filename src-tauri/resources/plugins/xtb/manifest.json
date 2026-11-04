@@ -1,7 +1,7 @@
 {
   "id": "xtb",
   "name": "xTB",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "uses": [{"name": "xtb", "version": "6.7.1"}],
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with the semiempirical GFN methods of the Grimme group; reads xtb's outputs.",
   "licence": "LGPL-3.0-or-later",

@@ -305,17 +305,28 @@ class Properties(unittest.TestCase):
         self.assertEqual(got["charges.hirshfeld"], [-0.03, 0.015, 0.015])
         self.assertEqual(got["spins.hirshfeld"], [1.9, 0.05, 0.05])
 
-    def test_the_orbitals_all_printed_opening_on_the_lumo(self):
+    def test_the_orbitals_all_printed_in_meno_s_form_each_its_energy_in_hartrees(self):
         text = (
             "----------------\nORBITAL ENERGIES\n----------------\n\n  NO   OCC          E(Eh)            E(eV) \n"
             "   0   2.0000     -19.200000      -522.4500 \n   1   2.0000      -0.400000       -10.8800 \n"
             "   2   0.0000       0.170000         4.6300 \n   3   0.0000       0.250000         6.8000 \n"
         )
-        lists = reader.orbitals_of(text)
-        orbitals = next(x for x in lists if x["id"] == "orbitals")
-        self.assertEqual([r["cells"][0] for r in orbitals["rows"]], ["LUMO+1", "LUMO", "HOMO", "HOMO−1"])
-        self.assertEqual(orbitals["rows"][orbitals["focus"]]["cells"][0], "LUMO")
-        self.assertAlmostEqual(next(x for x in lists if x["id"] == "homo-lumo-gap")["value"], 4.63 + 10.88, 9)
+        # (in ORCA's order, as printed: Meno names and lists them)
+        self.assertEqual(reader.orbitals_of(text), [
+            {"spin": "both", "energy": -19.2, "occupation": 2.0},
+            {"spin": "both", "energy": -0.4, "occupation": 2.0},
+            {"spin": "both", "energy": 0.17, "occupation": 0.0},
+            {"spin": "both", "energy": 0.25, "occupation": 0.0},
+        ])
+        # (an open shell's: alpha, then beta; with symmetry where ORCA printed it)
+        uks = (
+            "----------------\nORBITAL ENERGIES\n----------------\n                 SPIN UP ORBITALS\n  NO   OCC          E(Eh)            E(eV)    Irrep \n"
+            "   0   1.0000     -10.221371      -278.1376    1-A1\n   1   0.0000       0.083582         2.2744    1-B1\n\n"
+            "                 SPIN DOWN ORBITALS\n  NO   OCC          E(Eh)            E(eV)    Irrep \n"
+            "   0   1.0000     -10.190000      -277.2840    1-A1\n   1   0.0000       0.100000         2.7211    1-B1\n"
+        )
+        self.assertEqual([(o["spin"], o["occupation"], o.get("symmetry")) for o in reader.orbitals_of(uks)], [("alpha", 1.0, "A1"), ("alpha", 0.0, "B1"), ("beta", 1.0, "A1"), ("beta", 0.0, "B1")])
+        self.assertIsNone(reader.orbitals_of("no orbitals here"))
 
 
 class Jobs(unittest.TestCase):
@@ -340,8 +351,11 @@ class WholeOutputs(unittest.TestCase):
         self.assertEqual((r["atoms"], len(r["frames"]), len(r["energies"])), (["O", "H", "H"], 1, 1))
         self.assertEqual(r["masses"], [15.999, 1.008, 1.008])
         self.assertIsNone(r["optimised"])
-        for id_ in ("dipole", "charges.mulliken", "charges.lowdin", "orbitals", "homo-lumo-gap", "energy.what"):
+        for id_ in ("dipole", "charges.mulliken", "charges.lowdin", "energy.what"):
             self.assertIsNotNone(result(r, id_), id_)
+        # (water: five occupied of both spins, in Meno's form; no list of the reader's own)
+        self.assertEqual(sum(1 for o in r["orbitals"] if o["occupation"] == 2.0 and o["spin"] == "both"), 5)
+        self.assertIsNone(result(r, "orbitals"))
 
     def test_an_optimisation_and_its_frequencies(self):
         r = read("w.out", sample("water_wb97xd3_optfreq.out"))
@@ -392,8 +406,8 @@ class WholeOutputs(unittest.TestCase):
         r = read("w.out", sample("methylene_triplet_uks.out"))
         self.assertEqual(r["multiplicity"], 3)
         self.assertIsNotNone(result(r, "spins.mulliken"))
-        self.assertIsNotNone(result(r, "orbitals.a"))
-        self.assertIsNotNone(result(r, "orbitals.b"))
+        self.assertEqual({o["spin"] for o in r["orbitals"]}, {"alpha", "beta"})
+        self.assertEqual(sum(o["occupation"] for o in r["orbitals"]), 8)
 
     def test_an_excited_state_followed(self):
         r = read("w.out", sample("formaldehyde_tddft_opt.out"))

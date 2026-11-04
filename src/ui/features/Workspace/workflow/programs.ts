@@ -88,7 +88,7 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     // (a coordination bond single and marked, as the entry record holds one: docs/PLUGINS.md, *The entry a plugin is given*)
     bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order })),
   };
-  // (an isotope's mass with it, where NIST gives a measured one: what a program's input takes - ORCA's "M =")
+  // (an isotope's mass with it, where NIST gives a measured one: what a program's input may take for an atom)
   const atoms = molecule.atoms.map((a) => {
     const mass = a.isotope ? isotopeMass(a.el, a.isotope) : undefined;
     return mass != null ? { ...a, mass } : a;
@@ -122,7 +122,7 @@ export function pluginEntry(e: SetEntry): PluginEntry {
  * program, by name; its arguments; its input files, and the one of them its
  * program reads as its input, where it reads one (Gaussian's, run as
  * `g16 <input`); the programs installed beside its own run after it, each
- * by its name and with its arguments (ORCA's orca_2mkl: its manifest's
+ * by its name and with its arguments (ORCA's orca_2aim: its manifest's
  * `installed[].beside`); and the files it reads back.
  */
 export type Prepared = {
@@ -133,11 +133,11 @@ export type Prepared = {
   stdin?: string;
   then?: Then[];
   reads: string[];
-  /** The memory it takes, in MiB, as its plugin declares it (ORCA's, Gaussian's, from what they are given): counted against what jobs may use. */
+  /** The memory it takes, in MiB, as its plugin declares it, from what it is given: counted against what jobs may use. */
   memory?: number;
-  /** The other plugins whose programs it needs, by id - each one its plugin's manifest declares (`needs`): ORCA's xTB methods, the xTB plugin's xtb. */
+  /** The other plugins whose programs it needs, by id - each one its plugin's manifest declares (`needs`): one whose methods run another plugin's program, say. */
   needs?: string[];
-  /** The cores it takes, where its plugin says fewer than it was given (ORCA with no MPI to run its processes with: one): never more. */
+  /** The cores it takes, where its plugin says fewer than it was given (a program that runs as processes, with no MPI to run them with: one): never more. */
   cores?: number;
 };
 

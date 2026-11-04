@@ -796,14 +796,6 @@ def of_state(results, state):
     return [{**r, "label": f"{r['label']}, {state}"} for r in results] if state else []
 
 
-def gap_of_state(results, state):
-    """The orbitals and their gap, of a job with excited states: the gap said to be the ground state's - the orbitals are
-    always its own, the SCF's."""
-    if state is None:
-        return results
-    return [{**r, "label": f"{r['label']}, ground state"} if r.get("id") == "homo-lumo-gap" else r for r in results]
-
-
 def dipole_of(text):
     """The last dipole moment ORCA printed, as it printed it: its magnitude in debye, its components in debye (its total
     in atomic units, by ORCA's own ratio of the magnitudes it printed in each), and the point it was taken about, in
@@ -901,62 +893,45 @@ def charges_of(text, n, ghosts):
 ORBITAL_ROW = re.compile(r"^\s*(\d+)\s+(\d+\.\d+)\s+(\S+)\s+(\S+)(?:\s+\d+-(\S+))?\s*$")
 
 
-def orbital_name(i, homo):
-    if i <= homo:
-        return "HOMO" if i == homo else f"HOMO−{homo - i}"
-    return "LUMO" if i == homo + 1 else f"LUMO+{i - homo - 1}"
-
-
 def orbital_rows(lines):
-    """The rows of one list of orbitals, from its first: each orbital's occupation and energy in eV, up to the first line
-    that is none."""
+    """The rows of one list of orbitals, from its first: each orbital's occupation, energy in hartrees and symmetry (none
+    where ORCA printed none), up to the first line that is none."""
     rows, started = [], False
     for line in lines:
         m = ORBITAL_ROW.match(line)
         if m:
             started = True
-            rows.append((float(m.group(2)), number(m.group(4)), m.group(5)))
+            rows.append((float(m.group(2)), number(m.group(3)), m.group(5)))
         elif started:
             break
     return rows
 
 
 def orbitals_of(text):
-    """The orbitals ORCA printed last, by their energies (eV), as a list each - highest first, opening on the LUMO - all
-    it printed; and, of a closed shell, the HOMO-LUMO gap."""
+    """The orbitals ORCA printed last, in Meno's general form: each its spin (of both, for a restricted calculation; else
+    alpha, then beta), its energy in hartrees, its occupation and its symmetry where ORCA printed one - every one, in
+    ORCA's order. Meno lists them itself (src/lib/calc/orbitals.ts); none where ORCA printed none, or not as a list it
+    reads whole. Of a job with excited states, they are the SCF's, the ground state's."""
     text = text or ""
     at = text.rfind("ORBITAL ENERGIES")
     if at < 0:
-        return []
+        return None
     lines = text[at:].split("\n")[1:]
     up = next((k for k, line in enumerate(lines[:6]) if "SPIN UP ORBITALS" in line), None)
     if up is None:
-        spins = [orbital_rows(lines)]
+        spins = [("both", orbital_rows(lines))]
     else:
         down = next((k for k, line in enumerate(lines) if "SPIN DOWN ORBITALS" in line), None)
-        spins = [orbital_rows(lines[up + 1:])] + ([orbital_rows(lines[down + 1:])] if down is not None else [])
-    if not all(spins) or len(spins) != (1 if up is None else 2):
-        return []
-    out = []
-    labels = ["Molecular orbitals"] if len(spins) == 1 else ["\u03b1 orbitals", "\u03b2 orbitals"]
-    for k, (s, label) in enumerate(zip(spins, labels)):
-        occupied = [i for i, (occ, _, _) in enumerate(s) if occ > 0]
-        if not occupied or any(e is None for _, e, _ in s):
-            continue
-        homo = occupied[-1]
-        sym = all(irrep for _, _, irrep in s)
-        rows = [{"cells": [orbital_name(i, homo)] + ([s[i][2]] if sym else []) + [s[i][1]]} for i in range(len(s) - 1, -1, -1)]
-        out.append({
-            "id": "orbitals" if len(spins) == 1 else f"orbitals.{'ab'[k]}",
-            "on": "list", "group": "Orbitals", "label": label,
-            "columns": [{"label": "Orbital"}] + ([{"label": "Symmetry", "quantity": "symmetry"}] if sym else []) + [{"label": "Energy", "unit": "eV", "digits": 3}],
-            "rows": rows,
-            # (opening on the frontier: the LUMO, the HOMO under it)
-            "focus": max(0, len(s) - 1 - homo - 1),
-        })
-        if len(spins) == 1 and homo + 1 < len(s):
-            out.append({"id": "homo-lumo-gap", "on": "molecule", "group": "Orbitals", "label": "HOMO\u2013LUMO gap", "value": s[homo + 1][1] - s[homo][1], "unit": "eV", "digits": 2})
-    return out
+        spins = [("alpha", orbital_rows(lines[up + 1:]))] + ([("beta", orbital_rows(lines[down + 1:]))] if down is not None else [])
+    if not all(rows for _, rows in spins) or len(spins) != (1 if up is None else 2):
+        return None
+    if any(e is None for _, rows in spins for _, e, _ in rows):
+        return None
+    return [
+        {"spin": spin, "energy": e, "occupation": occ, **({"symmetry": irrep} if irrep else {})}
+        for spin, rows in spins
+        for occ, e, irrep in rows
+    ]
 
 
 #: Each optimisation cycle's gradient, its components by atom ("CARTESIAN GRADIENT", rows "   1   O   :   -0.000000000    0.000000000    0.012345678").
@@ -1058,9 +1033,11 @@ def read(name, text, followed=False):
             + gradients_of(text, geos)
             + of_state(charges_of(text, n, ghosts), charges_state)
             + vibrations_of(text, n, ghosts)
-            + gap_of_state(orbitals_of(text), dipole_state)
         ),
     }
+    orbitals = orbitals_of(text)
+    if orbitals:
+        result["orbitals"] = orbitals
     if marks is not None:
         result["converged"] = [False] * len(frames) if unmarked else marks[: len(frames)]
     if unmarked:

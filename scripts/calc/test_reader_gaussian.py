@@ -322,14 +322,15 @@ class AnOptFreq(unittest.TestCase):
         d = r["dipole"]
         self.assertEqual((d["value"], d["vector"], d["origin"]), (2.0, [0.0, 0.0, -2.0], [0.0, 0.0, 0.0]))
 
-    def test_every_orbital_opening_on_the_frontier(self):
+    def test_every_orbital_in_meno_s_form_each_its_energy_in_hartrees(self):
+        # (Meno names them and lists them: no list or gap of the reader's own)
         r = results(self.out)
-        o = r["orbitals"]
-        self.assertEqual([row["cells"][0] for row in o["rows"]], ["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−2", "HOMO−3", "HOMO−4"])
-        self.assertEqual(o["rows"][1]["cells"][1], "A1")
-        self.assertAlmostEqual(o["rows"][1]["cells"][2], 0.06 * reader.EV_PER_HARTREE)
-        self.assertEqual(o["focus"], 1)
-        self.assertAlmostEqual(r["homo-lumo-gap"]["value"], (0.06 + 0.29) * reader.EV_PER_HARTREE)
+        self.assertNotIn("orbitals", r)
+        self.assertNotIn("homo-lumo-gap", r)
+        o = self.out["orbitals"]
+        self.assertEqual([(x["spin"], x["occupation"]) for x in o], [("both", 2.0)] * 5 + [("both", 0.0)] * 2)
+        self.assertEqual([x["energy"] for x in o[3:6]], [-0.36, -0.29, 0.06])
+        self.assertEqual(o[5]["symmetry"], "A1")
 
 
 class Geometries(unittest.TestCase):
@@ -421,9 +422,10 @@ class OpenShell(unittest.TestCase):
         r = results(reader.read("w.log", text))
         self.assertEqual(r["spins.mulliken"]["values"], [1.9, 0.05, 0.05])
         self.assertEqual(r["charges.mulliken"]["values"], [-0.3, 0.15, 0.15])
-        self.assertEqual(len(r["orbitals.a"]["rows"]), 5)
-        self.assertEqual(r["orbitals.b"]["rows"][2]["cells"][0], "HOMO")
-        self.assertNotIn("homo-lumo-gap", r)
+        o = reader.read("w.log", text)["orbitals"]
+        self.assertEqual([(x["spin"], x["occupation"]) for x in o], [("alpha", 1.0)] * 4 + [("alpha", 0.0)] + [("beta", 1.0)] * 2 + [("beta", 0.0)] * 2)
+        self.assertEqual(o[-2]["energy"], -0.1)
+        self.assertNotIn("orbitals.a", r)
 
 
 class OtherCharges(unittest.TestCase):
@@ -499,7 +501,8 @@ class Paths(unittest.TestCase):
         # (its charges and dipole of a density the output does not say is the ground state's: left out)
         self.assertNotIn("charges.mulliken", r)
         self.assertNotIn("dipole", r)
-        self.assertEqual(r["orbitals"]["label"], "Molecular orbitals")
+        # (its orbitals, the SCF's, given as any job's are)
+        self.assertTrue(o["orbitals"])
 
 
 class SymmetryLabels(unittest.TestCase):
@@ -597,8 +600,11 @@ class AFormattedCheckpoint(unittest.TestCase):
         self.assertEqual(r["charges.mulliken"]["values"], [-0.8, 0.4, 0.4])
         self.assertAlmostEqual(r["dipole"]["value"], 0.8 * reader.DEBYE_PER_E_BOHR)
         self.assertEqual(r["dipole"]["origin"], [0.0, 0.0, 0.0])
-        self.assertEqual([row["cells"][0] for row in r["orbitals"]["rows"]][:3], ["LUMO+1", "LUMO", "HOMO"])
-        self.assertAlmostEqual(r["homo-lumo-gap"]["value"], 0.35 * reader.EV_PER_HARTREE)
+        # (its orbitals in Meno's form: as many occupied, of both spins, as its electrons of each)
+        o = self.out["orbitals"]
+        self.assertEqual({x["spin"] for x in o}, {"both"})
+        self.assertEqual(sum(x["occupation"] for x in o), 10)
+        self.assertNotIn("orbitals", r)
 
 
 class TheWorker(unittest.TestCase):
@@ -703,7 +709,7 @@ class WholeOutputs(unittest.TestCase):
         r = results(o)
         self.assertEqual(o["multiplicity"], 3)
         self.assertAlmostEqual(sum(r["spins.mulliken"]["values"]), 2.0, places=3)
-        self.assertIn("orbitals.b", r)
+        self.assertEqual({x["spin"] for x in o["orbitals"]}, {"alpha", "beta"})
 
     def test_natural_hirshfeld_cm5_and_chelpg_charges(self):
         self.assertIn("charges.natural", results(self.sample("11_water_pop_nbo.log")))

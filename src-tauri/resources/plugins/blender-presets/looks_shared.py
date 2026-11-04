@@ -468,7 +468,6 @@ def fur_on(objects, colours, pile):
         hair = hairs.get(ob.data.name)
         if hair is None:
             hair = bpy.data.materials.new("Meno hair")
-            hair.use_nodes = True
             nt = hair.node_tree
             nt.nodes.clear()
             hb = node(nt, "ShaderNodeBsdfHairPrincipled", parametrization="COLOR", Color=colour, Roughness=0.6)
@@ -589,7 +588,6 @@ def studio(scene, camera, look, meshes, dark_background):
         bpy.data.objects.remove(o)
     w = bpy.data.worlds.new("Meno studio")
     scene.world = w
-    w.use_nodes = True
     nt = w.node_tree
     nt.nodes.clear()
     tc = nt.nodes.new("ShaderNodeTexCoord")
@@ -659,7 +657,6 @@ def apply(scene, camera, look, options, background):
         if ob.data.name in made:  # (shapes sharing one mesh share one material)
             continue
         m = bpy.data.materials.new(f"Meno {look}")
-        m.use_nodes = True
         nt = m.node_tree
         nt.nodes.clear()
         out = nt.nodes.new("ShaderNodeOutputMaterial")
@@ -732,7 +729,6 @@ def material(ctx, look, part):
     o["_size"] = getattr(ctx, "look_size", 1.0)
     build = xray_of(ctx.request.get("background") == "white") if look == "xray" else BUILD[look]
     m = bpy.data.materials.new(f"Meno {look}")
-    m.use_nodes = True
     nt = m.node_tree
     nt.nodes.clear()
     out = nt.nodes.new("ShaderNodeOutputMaterial")

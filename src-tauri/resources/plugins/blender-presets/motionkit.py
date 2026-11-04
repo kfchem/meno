@@ -275,7 +275,7 @@ def time_value(nt):
     return v.outputs[0]
 
 def new_material(name):
-    m = bpy.data.materials.new(name); m.use_nodes = True
+    m = bpy.data.materials.new(name)
     nt = m.node_tree
     for n in list(nt.nodes):
         if n.type != "OUTPUT_MATERIAL": nt.nodes.remove(n)
@@ -386,7 +386,7 @@ def studio(dark=True, key=1.0, rim=1.0):
     backdrop or None)."""
     for o in [o for o in sc.objects if o.type == "LIGHT"]:
         bpy.data.objects.remove(o)
-    w = bpy.data.worlds.new("w"); sc.world = w; w.use_nodes = True
+    w = bpy.data.worlds.new("w"); sc.world = w
     bg = w.node_tree.nodes["Background"]
     if WHITE:
         bg.inputs["Color"].default_value = (0.55, 0.57, 0.6, 1); bg.inputs["Strength"].default_value = CFG.get("ambient", 0.12)
