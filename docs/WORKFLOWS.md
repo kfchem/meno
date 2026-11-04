@@ -633,10 +633,10 @@ one of the kinds of calculation it does (decided: 16):
 
 ![Quick Add with one button for calculations](workflows/2-quick-add.svg)
 
-- **Quick Add keeps its ten** - bond, chain, SMILES, text, reaction
-  arrow, "+", electron-pushing arrow, slide, pen, shapes (`QuickAdd.tsx`)
-  - and gains **one button**: *Calculations*, a small graph of two joined
-  sets, after a thin rule.
+- **Quick Add keeps its first row** - bond, chain, SMILES, text, reaction
+  arrow, and the two groups *Scheme* and *Marks on the page* (`QuickAdd.tsx`;
+  docs/EDITOR-2D.md) - and gains **one button**: *Calculations*, a small
+  graph of two joined sets, after a thin rule.
 - **Pressed, it opens** a panel below the row, a line for each plugin
   added that does steps - those that run a program first - then Meno:
   its name, and the kinds of calculation it does, each an icon, named on
