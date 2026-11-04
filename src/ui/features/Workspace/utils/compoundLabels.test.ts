@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn } from "../../../../lib/figure/drawn";
 import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
-import { compoundLabelsOf, labelText, pageStructuresOf, type PageMarks, type PageStructure } from "./pageStructures";
+import { compoundLabelsOf, labelText, pageStructuresOf, wordsJoined, type PageMarks, type PageStructure } from "./pageStructures";
 
 type P = { x: number; y: number };
 /** cos 30°: a zigzag's step along its length, in bonds. */
@@ -55,6 +55,16 @@ describe("the compounds' numbers of a figure", () => {
     expect(compoundLabelsOf([a], [title, ...usual, word("1", mid(a) - 2.5, a.box[3] + 6)], NONE).map((l) => l.label)).toEqual(["1"]);
   });
 
+  it("are a structure's centred under it as a whole, though its lowest bond lies off to one side, more than a bond from the number", () => {
+    // (a hook: across the top, then down the right side - nothing at the foot's middle)
+    const L = 14.4;
+    const atoms: P[] = [0, 1, 2, 3, 4].map((i) => ({ x: 100 + i * L, y: 300 })).concat([{ x: 100 + 4 * L, y: 300 + L }, { x: 100 + 4 * L, y: 300 + 2 * L }]);
+    const hook: PageStructure = { ...zigzag("0:0", 100), atoms, bonds: atoms.slice(1).map((q, i): [P, P] => [atoms[i], q]), box: [100, 300, 100 + 4 * L, 300 + 2 * L] };
+    // (its middle under the box's, 8 points below it: two bonds from the nearest bond, the hook's corner)
+    const w = word("13", 100 + 2 * L - 5, 300 + 2 * L + 8);
+    expect(compoundLabelsOf([hook], [w], NONE).map((l) => l.label)).toEqual(["13"]);
+  });
+
   it("are none off a corner even within a bond: beyond the structure's breadth and its height both", () => {
     const corner = word("2", a.box[2] + 2, a.box[3] + 2);
     expect(compoundLabelsOf([a], [corner], NONE)).toEqual([]);
@@ -82,6 +92,16 @@ describe("the compounds' numbers of a figure", () => {
   it("are each a structure's once, set by the drawing and by the page's words alike", () => {
     const w = word("12", mid(a) - 5, a.box[3] + 6);
     expect(compoundLabelsOf([a], [w, { ...w }], NONE)).toHaveLength(1);
+  });
+});
+
+describe("a figure's own words on its page", () => {
+  it("are joined where a PDF sets each glyph apart on one line, and left out where the drawing holds words there already", () => {
+    const glyph = (c: string, x: number, y = 300) => ({ text: c, box: [x, y, x + 5, y + 8] as B });
+    expect(wordsJoined([glyph("2", 105), glyph("1", 100), glyph("7", 140)], []).map((w) => w.text)).toEqual(["12", "7"]);
+    // (on the next line: apart)
+    expect(wordsJoined([glyph("1", 100), glyph("2", 105, 320)], []).map((w) => w.text)).toEqual(["1", "2"]);
+    expect(wordsJoined([glyph("1", 100), glyph("2", 105)], [{ text: "12", box: [100, 300, 110, 308] }])).toEqual([]);
   });
 });
 

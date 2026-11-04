@@ -1627,9 +1627,12 @@ next.
 - **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
   word of a figure - drawn in it, or the page's own words within it - of a
   compound number's shape (12, 3a, 12b, 7', in parentheses or not:
-  `COMPOUND_NUMBER`), lying within a bond of a structure's ink, under or
-  over it (its middle within the structure's breadth) or beside it (within
-  its height). It is the nearest structure's, and none where an arrow or a
+  `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
+  round all of it, as a number is set under a structure as a whole, however
+  its lowest bonds lie - under or over it (its middle within the
+  structure's breadth) or beside it (within its height). The page's own
+  words in the figure are joined where a PDF sets each glyph apart on one
+  line, the figure's drawn words first. It is the nearest structure's, and none where an arrow or a
   "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
   much shorter than the figure's other words (under 0.7 of their usual
   height: a superscript, a footnote's mark) is none, and a structure not
