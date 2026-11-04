@@ -781,7 +781,7 @@ Not yet, and where it comes:
 ### Step 3: text and search (2026-10-09)
 
 Built:
-- **Each page's letters, as PDFium reads them** (`pdf_text`). Each comes with its box, in points from the page's top left as it is drawn; the letters PDFium adds itself (a space, a line's end) have none. Each says too whether it is set bold (2026-11-04, for a compound's number, which most journals set bold): its font's weight 600 or more, as the font says it, or its font's name saying Bold, Black or Heavy (Semibold and Demibold among them) after a subset's tag - the name for a font whose weight is not given, or not given right, as pdfium-render warns of built-in fonts (`set_bold`). `lib/pdf/text` keeps them a page at a time and works out:
+- **Each page's letters, as PDFium reads them** (`pdf_text`). Each comes with its box, in points from the page's top left as it is drawn; the letters PDFium adds itself (a space, a line's end) have none. Each says too whether it is set bold (2026-11-04, for a compound's number, which most journals set bold) - as its font says of itself, nothing measured from the glyphs: its font's weight 600 or more, as the font says it, or its font's name saying Bold, Black or Heavy (Semibold and Demibold among them) after a subset's tag - the name for a font whose weight is not given, or not given right, as pdfium-render warns of built-in fonts (`set_bold`). `lib/pdf/text` keeps them a page at a time and works out:
   - the place between letters nearest the pointer;
   - a word, and a line;
   - the boxes that mark a selection;

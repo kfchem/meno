@@ -58,9 +58,10 @@ fn set_bold(c: &PdfPageTextChar) -> bool {
     heavy || bold_named(&c.font_name())
 }
 
-/// Whether a font's name says it is bold: Bold, Semibold, Demibold, Black, Heavy - in any case, after its subset's tag.
+/// Whether a font's name says it is bold: Bold, Semibold, Demibold, Black, Heavy - in any case, after its subset's tag; a
+/// Blackletter face (an Old English one, its name a style, not a weight) none.
 fn bold_named(name: &str) -> bool {
-    let face = name.rsplit('+').next().unwrap_or(name).to_lowercase();
+    let face = name.rsplit('+').next().unwrap_or(name).to_lowercase().replace("blackletter", "");
     ["bold", "black", "heavy"].iter().any(|w| face.contains(w))
 }
 
@@ -962,7 +963,7 @@ mod tests {
         for name in ["Helvetica-Bold", "ABCDEF+Arial-BoldMT", "MinionPro-Semibold", "TimesNewRomanPS-BoldItalicMT", "Myriad-Black", "QWERTY+Gotham-Heavy"] {
             assert!(bold_named(name), "{name}");
         }
-        for name in ["Helvetica", "ABCDEF+Arial-ItalicMT", "BOLDXY+Times-Roman", "Symbol", ""] {
+        for name in ["Helvetica", "ABCDEF+Arial-ItalicMT", "BOLDXY+Times-Roman", "Symbol", "", "UnifrakturBlackletter-Regular"] {
             assert!(!bold_named(name), "{name}");
         }
     }

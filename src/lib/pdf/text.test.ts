@@ -33,6 +33,12 @@ describe("a PDF page's words", () => {
     expect([...t.codes]).toEqual([65, 0x3042]);
     expect([...t.boxes.slice(0, 4)]).toEqual([1, 2, 3, 4]);
     expect([...t.bold]).toEqual([1, 0]);
+    // (bit 0 alone: a flag of another bit set is not bold)
+    v.setUint32(20, 3, true);
+    v.setUint32(44, 2, true);
+    expect([...pageTextOf(buf).bold]).toEqual([1, 0]);
+    // (as many letters as 24 bytes go into it)
+    expect(pageTextOf(new ArrayBuffer(24 * 5)).codes).toHaveLength(5);
   });
 
   it("say which words are set bold: every letter of them, a space PDFium put there itself aside", () => {
