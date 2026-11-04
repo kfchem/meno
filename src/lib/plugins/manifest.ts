@@ -197,7 +197,7 @@ export type PresetsDecl = {
   options: Option[];
 };
 
-/** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
+/** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job; and its options where the role takes them. */
 export type RoleDecl = {
   role: RoleId;
   programs: string[];
