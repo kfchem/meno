@@ -667,7 +667,8 @@ Taken on 2026-10-13:
   Drawn otherwise since - atoms, bonds or wedges, not where they are - the
   molecule stays as it is and says so under its frames, with *Make
   again*, made where it stood. What the drawing leaves open is made as
-  the molecule had it (so an (S) stays (S)), and Meno asks only about
+  the molecule had it (so an (S) stays (S), and an (E) (E): 2026-11-04,
+  before which a double bond came back as the first way it could go), and Meno asks only about
   stereo that is new. An undo brings the molecule back as it was turned.
   *Turn like the drawing* is in its menu.
   Pasted with its drawing, it is tied to the pasted drawing.
