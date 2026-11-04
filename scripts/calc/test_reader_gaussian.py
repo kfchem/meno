@@ -389,11 +389,12 @@ class CutShort(unittest.TestCase):
 
 class Energies(unittest.TestCase):
     def test_the_most_correlated_each_geometry_has_as_printed(self):
+        # (made-up numbers in the printed layout: an SCF of -74.96, its MP2 correction -0.04, a CCSD(T) a little lower)
         text = "\n".join(head("#p mp2/sto-3g") + orientation(WATER) + scf(-74.96, "RHF")
-                         + [" E2 =    -0.3795333610D-01 EUMP2 =    -0.75002282127454D+02"] + [" Normal termination of Gaussian 16"])
-        self.assertEqual(reader.read("w.log", text)["energies"], [-75.002282127454])
-        text = text.replace(" Normal", " CCSD(T)= -0.75012345678D+02\n Normal")
-        self.assertEqual(reader.read("w.log", text)["energies"], [-75.012345678])
+                         + [" E2 =    -0.4000000000D-01 EUMP2 =    -0.75000000000000D+02"] + [" Normal termination of Gaussian 16"])
+        self.assertEqual(reader.read("w.log", text)["energies"], [-75.0])
+        text = text.replace(" Normal", " CCSD(T)= -0.75010000000D+02\n Normal")
+        self.assertEqual(reader.read("w.log", text)["energies"], [-75.01])
 
     def test_a_field_too_narrow_for_its_number_is_not_known(self):
         self.assertIsNone(reader.number("**********"))
