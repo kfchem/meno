@@ -21,7 +21,9 @@
  *   sulfilimine's and a sulfite's S, its pyramid stable at ordinary
  *   temperatures (p. 412), and a sulfonium's, 25-29 kcal/mol (p. 414);
  * - Sb, Bi, Se and Te, by the review's trend: barriers rise down a group
- *   with atomic number (Sec. 4, p. 407) - none of them measured there;
+ *   with atomic number (Sec. 4, p. 407) - none of them measured there. A
+ *   stibole's Sb and a bismole's Bi are kept by that trend too: the review
+ *   gives no figure for them in an aromatic ring, as it does a phosphole's;
  * - N in a three-membered ring with a heteroatom beside it - a halogen, an
  *   O or an N on it (an N-chloro, an N-alkoxy, an N-amino aziridine's), or
  *   an O or an N next to it in the ring (an oxaziridine's, a
