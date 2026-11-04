@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStereo } from "../../../../lib/layout/drawn";
+import { readStereo, straightEnds } from "../../../../lib/layout/drawn";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -94,15 +94,68 @@ describe("a configuration the drawing does not state", () => {
     expect(stereoOf(double(175, 120)).cisTrans.size).toBe(0);
   });
 
-  it("stops Clean-up, which would draw it one way, moving nothing", async () => {
+  it("stops Clean-up at a centre, which it would draw one way, moving nothing", async () => {
     const t = canvas(modelOf(centre(90, 175, 0)));
     const tBefore = t.getState().model;
     await expect(cleanUp(t)).rejects.toThrow(/two of its bonds in line or on top of each other/);
     expect(t.getState().model).toBe(tBefore);
-    const d = canvas(modelOf(double(175, 120)));
-    const dBefore = d.getState().model;
-    await expect(cleanUp(d)).rejects.toThrow(/a configuration its drawing does not state/);
-    expect(d.getState().model).toBe(dBefore);
+  });
+
+  // (the angle at an atom between two of its neighbours, by atom index in the model, in degrees)
+  const angleAt = (m: Model, at: number, p: number, q: number) => {
+    const [o, u, v] = [m.atoms[at], m.atoms[p], m.atoms[q]];
+    const d = Math.abs(Math.atan2(u.y - o.y, u.x - o.x) - Math.atan2(v.y - o.y, v.x - o.x)) * (180 / Math.PI);
+    return d > 180 ? 360 - d : d;
+  };
+
+  it("finds the ends a double bond is drawn straight at, its configuration unsaid", () => {
+    const ends = (text: string) => {
+      const d = drawingOf(modelOf(text));
+      return [...straightEnds(d.atoms, d.bonds)];
+    };
+    expect(ends(double(175, 120))).toEqual([0]);
+    expect(ends(double(178, 176)).sort()).toEqual([0, 1]);
+    expect(ends(double(120, 120))).toEqual([]);
+    expect(ends(double(165, 120))).toEqual([]);
+  });
+
+  it("is kept unsaid by Clean-up, which keeps the straight end straight and lays out the rest (ST-4.4)", async () => {
+    for (const [onF, onCl, straight] of [
+      [175, 120, [0]],
+      [178, 176, [0, 1]],
+    ] as const) {
+      const d = canvas(modelOf(double(onF, onCl)));
+      await cleanUp(d);
+      const m = d.getState().model;
+      const r = drawingOf(m);
+      expect(readStereo(r.atoms, r.bonds).cisTrans.size, `${onF}/${onCl}`).toBe(0);
+      // (C1's group F straight on from the C=C, C2's Cl too where it was)
+      if ((straight as readonly number[]).includes(0)) expect(angleAt(m, 0, 1, 2)).toBeGreaterThan(170);
+      if ((straight as readonly number[]).includes(1)) expect(angleAt(m, 1, 0, 3)).toBeGreaterThan(170);
+    }
+  });
+
+  it("is kept unsaid at an end with two groups beside a straight one, and in a larger structure", async () => {
+    // (F-CH=C(CH3)Cl, the F straight on: the other end's two groups say nothing without one on this end)
+    const branched = molfile(
+      [["C", 0, 0], ["C", L, 0], ["F", -L, 0.02], ["Cl", ...([L + toward(-60)[0], toward(-60)[1]] as [number, number])], ["C", ...([L + toward(60)[0], toward(60)[1]] as [number, number])]],
+      [[1, 2, 2, 0], [1, 3, 1, 0], [2, 4, 1, 0], [2, 5, 1, 0]],
+    );
+    // (a phenyl on the far end of a C=C whose methyl end is drawn straight)
+    const ph = [0, 1, 2, 3, 4, 5].map((k) => [2 * L + L * Math.cos((k * Math.PI) / 3), L * Math.sin((k * Math.PI) / 3)] as [number, number]);
+    const styrene = molfile(
+      [["C", 0, 0], ["C", L, 0], ["C", -L, 0], ...ph.map((p) => ["C", p[0] + L, p[1]] as [string, number, number])],
+      [[1, 2, 2, 0], [1, 3, 1, 0], [2, 4, 1, 0], [4, 5, 2, 0], [5, 6, 1, 0], [6, 7, 2, 0], [7, 8, 1, 0], [8, 9, 2, 0], [9, 4, 1, 0]],
+    );
+    for (const text of [branched, styrene]) {
+      expect(stereoOf(text).cisTrans.size).toBe(0);
+      const d = canvas(modelOf(text));
+      await cleanUp(d);
+      const m = d.getState().model;
+      const r = drawingOf(m);
+      expect(readStereo(r.atoms, r.bonds).cisTrans.size).toBe(0);
+      expect(angleAt(m, 0, 1, 2)).toBeGreaterThan(170);
+    }
   });
 
   it("leaves Clean-up of a drawing that states its configuration as it was", async () => {

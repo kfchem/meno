@@ -345,7 +345,7 @@ function look(
  */
 function bondAngle(mol: Molecule, a: number): number {
   const orders = mol.neighbours[a].map((b) => orderOf(mol, a, b));
-  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2) return Math.PI;
+  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2 || mol.straight.has(a)) return Math.PI;
   if (orders.includes(2)) return (2 * Math.PI) / 3;
   const lonePair = (mol.el[a] === "N" || mol.el[a] === "O") && mol.neighbours[a].length <= 3;
   if (lonePair && mol.neighbours[a].some((b) => mol.neighbours[b].some((c) => orderOf(mol, b, c) === 2))) return (2 * Math.PI) / 3;

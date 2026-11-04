@@ -17,7 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
-import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
+import { readStereo, sameConfiguration, straightEnds } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
 import { allylCurve } from "../../../../lib/chem/allylArc";
@@ -93,6 +93,9 @@ export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const { tetra, cisTrans, axes } = stereo;
+  // (a double bond drawn straight at an end, its configuration not given: that end kept straight - IUPAC 2006 ST-4.4 - so that
+  //  what is laid out leaves it unsaid too, rather than saying one or the other)
+  const straight = straightEnds(drawing.atoms, drawing.bonds);
   const bondsOf = bondsAt(drawing.bonds);
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
@@ -140,6 +143,7 @@ export function layoutJob(part: Model): LayoutJob {
         hs: drawing.atoms[i].hs + (folded.get(at.get(i)!)?.length ?? 0),
         ...(t ? { tetra: t } : {}),
         ...(pi.has(i) ? { pi: pi.get(i)! } : {}),
+        ...(straight.has(i) ? { linear: true } : {}),
       };
     }),
     bonds: drawing.bonds.flatMap((b, k) => {

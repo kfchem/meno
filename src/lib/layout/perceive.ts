@@ -24,6 +24,14 @@ export type LayoutAtom = {
    * all its atoms (a haptic bond): the system's atoms.
    */
   pi?: readonly number[];
+  /**
+   * Drawn straight through, its two bonds in one line: an end of a double
+   * bond whose configuration is not given, its one group kept straight on
+   * from it - IUPAC 2006 (Brecher, Pure Appl. Chem. 78, 1897), ST-4.4, the
+   * linear depiction of a double bond of unspecified configuration. Taken
+   * only by an atom with two bonds.
+   */
+  linear?: boolean;
 };
 export type LayoutBond = { a: number; b: number; order: number; stereo?: CisTrans };
 export type LayoutInput = {
@@ -61,6 +69,8 @@ export type Molecule = {
   pieces: number[][];
   /** Each stereocentre's configuration, as given. */
   tetra: Map<number, Tetrahedral>;
+  /** The atoms asked to be drawn straight through (`LayoutAtom.linear`), each with two bonds. */
+  straight: Set<number>;
   /**
    * The rings bound face-on to a metal through all their atoms (η⁵-Cp,
    * η⁶-arene): each one's star - at its centre, a member of its ring
@@ -350,6 +360,7 @@ export function perceive(input: LayoutInput): Molecule {
     tetra: new Map(
       input.atoms.flatMap((a, i): [number, Tetrahedral][] => (a.tetra ? [[i, a.tetra]] : [])),
     ),
+    straight: new Set(input.atoms.flatMap((a, i) => (a.linear && neighbours[i].length === 2 ? [i] : []))),
     eta,
     units,
     dienes,
@@ -553,6 +564,18 @@ function cycleOf(atoms: readonly number[], neighbours: number[][]): number[] | n
 }
 
 /** The order of the bond between two atoms, or 0. */
+/**
+ * Whether an atom is drawn straight through, its two bonds in one line: by a
+ * triple bond, between two double ones (an allene's middle, a ketene's,
+ * CO2's), or as asked (`LayoutAtom.linear`).
+ */
+export function straightThrough(mol: Molecule, a: number): boolean {
+  if (mol.neighbours[a].length !== 2) return false;
+  if (mol.straight.has(a)) return true;
+  const orders = mol.neighbours[a].map((v) => orderOf(mol, a, v));
+  return orders.includes(3) || orders.every((o) => o === 2);
+}
+
 export function orderOf(mol: Molecule, a: number, b: number): number {
   const i = mol.bondIndex.get(key(a, b));
   return i == null ? 0 : mol.bonds[i].order;

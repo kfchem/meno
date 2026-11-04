@@ -1568,11 +1568,16 @@ lipids each have their own way of being drawn, which it should know.
      centre with three bonds and its H left out whose two bonds are in
      line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
      with a group straight on from it (ST-4.4, the linear drawing of a
-     double bond whose configuration is not given). Clean-up would draw
-     one or the other configuration there, so it refuses: a wedge on such
-     a centre as a wedge it cannot carry, and a double bond so drawn
-     because the new drawing would state a configuration the old one did
-     not (`lib/layout/drawn.ts#IN_LINE`). A structure not yet drawn - its
+     double bond whose configuration is not given). At such a centre
+     Clean-up would draw one or the other configuration, so it refuses, a
+     wedge on it as a wedge it cannot carry (`lib/layout/drawn.ts#IN_LINE`).
+     A double bond so drawn it lays out keeping the straight end straight -
+     its one group straight on from it, as ST-4.4 draws a double bond of
+     unspecified configuration - and the rest around it, so the new drawing
+     leaves it unsaid as the old one did (the maintainer, 2026-10-27; built
+     2026-11-05: `straightEnds`, `LayoutAtom.linear`). An end with two
+     groups is not one of these: its other group states the bond. A
+     structure not yet drawn - its
      atoms all on one point, as a SMILES's are before it is laid out - is
      not held to this: it is laid out as before, a double bond whose
      configuration the SMILES does not give drawn one way or the other.
