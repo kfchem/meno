@@ -84,6 +84,15 @@ describe("Meno's own number field", () => {
     expect(rangeSaid({ whole: true })).toBe("A whole number");
   });
 
+  it("leaves a number that is not whole as it was: Settings' memory jobs may use, in half gigabytes", () => {
+    // (as JobSettings gives it: from 0.5 GB, in steps of 0.5, not whole)
+    const memory: NumberRange = { min: 0.5, max: 16, step: 0.5 };
+    expect(after(12, [{ kind: "typed", text: "2.5" }, { kind: "commit" }], memory)).toEqual({ text: "2.5", value: 2.5, refused: false });
+    expect(after(2.5, [{ kind: "step", by: 1 }], memory).value).toBe(3);
+    expect(after(12, [{ kind: "typed", text: "2.75" }, { kind: "step", by: 1 }], memory).value).toBe(3.25);
+    expect(rangeSaid(memory)).toBe("From 0.5 to 16");
+  });
+
   it("takes a whole number alone where it is one, refusing one with a fraction as one out of range - never cutting it", () => {
     const whole: NumberRange = { min: 1, max: 5000, step: 1, whole: true };
     for (const text of ["12.5", "0.5", "12,5"]) expect(after(200, [{ kind: "typed", text }, { kind: "commit" }], whole)).toEqual({ text: "200", value: 200, refused: true });
@@ -100,6 +109,10 @@ describe("Meno's own number field", () => {
     expect(after(2000, [{ kind: "typed", text: "2005.5" }, { kind: "step", by: 1 }], steps10).value).toBe(2010);
     expect(after(2000, [{ kind: "typed", text: "2005.5" }, { kind: "step", by: -1 }], steps10).value).toBe(2000);
     expect(after(2000, [{ kind: "typed", text: "2005" }, { kind: "step", by: 1 }], steps10).value).toBe(2010);
+    // (a grid from its least, not from nought: 5, 15, 25 ...)
+    const from5: NumberRange = { min: 5, max: 100, step: 10, whole: true };
+    expect(after(25, [{ kind: "typed", text: "12.5" }, { kind: "step", by: 1 }], from5).value).toBe(15);
+    expect(after(25, [{ kind: "typed", text: "12.5" }, { kind: "step", by: -1 }], from5).value).toBe(5);
     expect(after(2000, [{ kind: "typed", text: "2000" }, { kind: "step", by: -1 }], steps10).value).toBe(1990);
     // (a field that takes fractions keeps them: a temperature)
     expect(after(298, [{ kind: "typed", text: "298.15" }, { kind: "commit" }], { min: 1, step: 1 }).value).toBe(298.15);
