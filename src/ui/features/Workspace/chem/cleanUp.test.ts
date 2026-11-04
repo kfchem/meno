@@ -433,7 +433,13 @@ describe("cleanUp", () => {
     const shown = stereo(drawn);
     expect(shown.size).toBe(given.atoms.filter((a) => a.tetra).length);
     // (each centre the drawing shows by its depth alone, told the plugin by a wedge in the block - before, none of them was)
-    const { told } = toldTo3d(drawn);
+    const { block, told } = toldTo3d(drawn);
+    // (the H a wedge needed, added to the block after every atom of the drawing: the places the drawing's atoms and bonds
+    //  hold in the block - those the block names - are its own, as many as it has, the H none of them)
+    const count = Number(/M {2}V30 COUNTS (\d+)/.exec(block.molblock)?.[1] ?? block.molblock.split("\n")[3].slice(0, 3).trim());
+    expect(count).toBeGreaterThan(drawn.atoms.length);
+    expect(block.atoms).toEqual(drawn.atoms.map((a) => a.id));
+    expect(block.bonds).toHaveLength(drawn.bonds.length);
     for (const [c, t] of shown) {
       expect(told.get(c), `centre ${c}`).toBeDefined();
       expect(sameConfiguration(t, told.get(c)!), `centre ${c}`).toBe(true);
