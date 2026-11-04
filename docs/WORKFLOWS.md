@@ -2856,7 +2856,9 @@ structure and its geometry, in 2D, so the record holds the rest
   template's - a template a step gave; one drawn on the page has no id, so
   its products name none. Each also carries the values of the one it was
   made from as that one's (`made_from.nll`), never as its own, so that a
-  Filter on a parent's value reaches what was made from it.
+  Filter on a parent's value reaches what was made from it. *Conformers*
+  gives each conformer it makes of the structure the same entries, as its
+  lineage in 3D (*Lineage in 3D*, below).
 - `properties`: by name, each a `Property` as lib/entry has it, with its
   value, its unit from Meno's units table or "none", its status, and what
   worked it out. Enumerate's `number` and `made.how` are kept here, and so
@@ -2915,6 +2917,40 @@ All of it is optional. A structure the chemist drew has none.
   entry it came from that is no text. Each one left out is counted and
   said as the file opens (FILE-IO.md, *What does not read*). A record left
   with nothing is none.
+
+### Lineage in 3D (2026-11-05)
+
+A step's entry in 3D (`SetEntry`, workflow/entries) has two fields that
+look alike and mean different things:
+
+- `from` is the molecule in 3D it is a frame of, by id, with `frame`:
+  where the entry is, so that what a step makes of it is laid over it.
+  It is not lineage.
+- `madeOf` is its lineage: the entries it was made from, by id, as a
+  structure drawn's record keeps them (`DrawnRecord.from`). *Conformers*
+  gives each conformer it makes of a structure drawn that structure's:
+  the conformers are that structure, in 3D.
+
+Its entry record (lib/entry `Entry.from`, `entryOfSet`) takes `madeOf`
+where it has one, else names the molecule and frame it is
+("molecule:3#2"). Lineage is a record: no step matches entries by it,
+and it does not say the entry is still the structure it was made from.
+
+- **Its molecule keeps it** (`Molecule3D.madeOf`), so that the steps
+  after see it: a molecule a step makes of one entry, that entry's; a
+  compound's conformers, theirs where all have the same, else none. So
+  do the frames a set's table takes of a molecule.
+- **A step that works an entry out gives it back with it.** A program
+  step (*Optimise*, *Energy*) does, at whatever geometry it came to. So
+  does a step of Meno's that gives an entry back as it was (*Tag*), or
+  makes another of that one entry (another geometry, another charge):
+  that one's lineage, at a remove, as an Enumerate product names its
+  template's. One made of several entries at once (*Re-bond*, parts
+  *Combine*d) has none.
+- **In the file** it is written with the molecule, on the page or held
+  by a large result set, and read back as data: an id that is no text is
+  left out, counted and said as the file opens (FILE-IO.md, *What does
+  not read*).
 
 
 ### A structures set as a table (2026-10-23)

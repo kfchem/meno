@@ -1028,6 +1028,13 @@ work.meno (zip)
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.
+- **What a molecule in 3D was made from** is written with it, on the
+  page or in a large result set's collection, and read back
+  (`Molecule3D.madeOf`): the entries it was made from, by id - its
+  lineage (WORKFLOWS.md, *Lineage in 3D*). It is not the molecule a
+  step's entry is a frame of (`SetEntry.from`), which is where the entry
+  is, not what it came from. An entry record's lineage (lib/entry
+  `Entry.from`) is `madeOf` where there is one.
 - **What does not read is left out, counted and said - never silently.**
   A workspace's file, or Meno's own record of a copy, can hold something
   that does not read: damaged, or written by hand. Only an atom or a bond
@@ -1045,7 +1052,8 @@ work.meno (zip)
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
     results and its notes of what could not be read, and each property of
-    a frame (`Molecule3D.properties`) that does not read. Within a
+    a frame (`Molecule3D.properties`) that does not read, and each entry
+    it was made from that is no text. Within a
     structure a step gave a set: each property of its record, and each
     entry it was made from. Within a set holding a table:
     a column that does not read (with its cells), a row not of the table's

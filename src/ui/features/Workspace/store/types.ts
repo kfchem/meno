@@ -547,6 +547,14 @@ export type Molecule3D = {
    * name, as it said it.
    */
   made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
+  /**
+   * The entries it was made from, by id: its lineage, as each of its
+   * frames' entries gives it (workflow/entries `SetEntry.madeOf`) - where
+   * a *Conformers* step made it of a structure drawn whose record says
+   * what that was made from (`DrawnRecord.from`), the same: the one
+   * structure, in 3D. Not the molecule a step's entry is a frame of.
+   */
+  madeOf?: string[];
   /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
   said?: { label: string; text: string }[];
   /**

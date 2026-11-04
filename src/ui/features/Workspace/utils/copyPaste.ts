@@ -599,7 +599,7 @@ function pictureFromOf(v: unknown): PictureItem["from"] | null {
 }
 
 /** How a molecule was made, as a file carries it: rows of text, each read as data; otherwise none. */
-function madeOf(v: unknown): Carried3D["made"] {
+function howMade(v: unknown): Carried3D["made"] {
   const how = (v as { how?: unknown } | null | undefined)?.how;
   const method = (v as { method?: unknown } | null | undefined)?.method;
   const rows = (Array.isArray(how) ? how : [])
@@ -814,7 +814,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
     })(),
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
     ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
-    ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
+    ...(howMade(m.made) ? { made: howMade(m.made) } : {}),
+    // (what it was made from, by id: each that is no text left out, and counted)
+    ...(() => {
+      const madeOf = readEach(m.madeOf, (id) => (typeof id === "string" ? id : null), "madeFrom");
+      return madeOf.length ? { madeOf } : {};
+    })(),
     ...(() => {
       const said = saidOf(m.said);
       return said ? { said } : {};

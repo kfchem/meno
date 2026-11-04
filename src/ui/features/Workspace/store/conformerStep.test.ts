@@ -107,7 +107,8 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
 import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
-import { setMembers } from "../workflow/entries";
+import { entryOfSet, setEntries, setMembers } from "../workflow/entries";
+import { readWorkspace, workspaceText } from "../utils/workspace";
 import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
@@ -197,6 +198,19 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
       [[1, "g/mol"]],
       [[3, "g/mol"]],
     ]);
+  });
+
+  it("carries what each structure drawn was made from onto each of its conformers - their lineage, as their entries give it - and keeps it in the workspace's file", async () => {
+    const { st } = await searched(undefined, [{ from: ["a#1"] }, { from: ["b#1"] }, { from: ["c#2", "d#1"] }]);
+    const made = st().molecules3d.filter((m) => m.conformerSet);
+    // (water and methanol made - ethane cannot be here - each with its own structure's)
+    expect(made.map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    expect(setEntries(made, "conformers").map((e) => entryOfSet(e, "x").from)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    const again = createWorkspaceDocument();
+    const opened = createEditorStore(again);
+    connectStoreToDocument(opened, again);
+    opened.getState().openWorkspace(readWorkspace(workspaceText(st()))!, true);
+    expect(opened.getState().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
   });
 
   it("writes what was worked out of each structure drawn into an SD file with each of its conformers, as its record says it", async () => {

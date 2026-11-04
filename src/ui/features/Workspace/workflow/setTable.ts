@@ -189,6 +189,7 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n, calcFrame(m, n)) } : {}),
     ...(m.made ? { made: m.made } : {}),
     ...(m.name ? { name: m.name } : {}),
+    ...(m.madeOf?.length ? { madeOf: m.madeOf } : {}),
     ...(m.drawnFrom ? { drawnFrom: m.drawnFrom } : {}),
     ...(m.drawnAs ? { drawnAs: m.drawnAs } : {}),
     ...(m.stereo ? { stereo: m.stereo } : {}),

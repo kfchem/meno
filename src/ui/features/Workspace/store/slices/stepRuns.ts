@@ -784,6 +784,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (what was worked out of the structure drawn - a model's values, its descriptors, its SMILES - is of each of its
         //  conformers too, the same structure: carried on with them, for a Filter or a table to read)
         const properties = record?.properties && Object.keys(record.properties).length ? record.properties : undefined;
+        // (and what it was made from, by id: the lineage of each of its conformers, the same structure)
+        const madeOf = record?.from?.length ? record.from : undefined;
         for (let f = 0; f < framesOf(m); f++) {
           worked.push({
             compound: compounds,
@@ -793,6 +795,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             xyz: frameXyz(m, f),
             ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
             ...(properties ? { properties } : {}),
+            ...(madeOf ? { madeOf: [...madeOf] } : {}),
             calc,
             keep,
           });

@@ -632,7 +632,15 @@ export type SetEntry = {
   sides?: { reactant: SetEntry; product: SetEntry };
   /** How it was paired with its end, in words (workflow/pairs): "in order, by place: start a #2 with end b #2", "each with each", "matched on pc". */
   paired?: string;
-  /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
+  /**
+   * The entries it was made from, by id: its lineage, which its entry
+   * record gives as its own (`entryOfSet`, lib/entry `Entry.from`). A
+   * *Conformers* step gives each conformer its structure drawn's
+   * (`DrawnRecord.from`), the one structure in 3D; its molecule keeps it
+   * (`Molecule3D.madeOf`). Not `from`.
+   */
+  madeOf?: string[];
+  /** The molecule in 3D it is a frame of, by id - not its lineage (`madeOf`); which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
   last?: boolean;
@@ -865,6 +873,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
         ...(m.marksUnread ? { marksUnread: true as const } : {}),
+        ...(m.madeOf?.length ? { madeOf: m.madeOf } : {}),
         keep,
         from: m.id,
         frame: f,
@@ -1162,8 +1171,9 @@ const ALWAYS_MENO: readonly string[] = ["converged"];
  * its geometry, its species by Meno's one rule, and what has been found of
  * it as properties - its energy (in hartrees, at its geometry, by what
  * worked it out), its calculation's thermochemistry and vibrations, its
- * degeneracy, its compound as its group, its number, its name - and the
- * molecule it was a frame of as its lineage.
+ * degeneracy, its compound as its group, its number, its name - and as
+ * its lineage the entries it was made from (`madeOf`), else the molecule
+ * it was a frame of.
  */
 export function entryOfSet(e: SetEntry, id: string): Entry {
   const atoms: EntryAtom[] = e.atoms.map((a) => ({
@@ -1177,7 +1187,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [], ...(e.skeleton ? { skeleton: true } : {}) };
   return {
     id,
-    from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
+    from: e.madeOf?.length ? [...e.madeOf] : e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
     // (a coordination bond - the CTfile's type, as a molecule in 3D holds it - as the record marks one: single, so marked)
     structure: { atoms, bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1 as const, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
     geometry: { kind: "3d", xyz: [...e.xyz] },
@@ -1201,8 +1211,9 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
  * old ones goes - its calculation, its energy, its marks of failed or not
  * a minimum, its degeneracy, mirror image and stereo - never carried onto
  * another structure or geometry; the molecule it is a frame of (`from`,
- * `frame`) stays. None where it has no single 3D geometry: a step's entry
- * is one frame in 3D.
+ * `frame`) stays, and so does what that entry was made from (`madeOf`), as
+ * a program step's entry keeps it: its lineage, at a remove. None where it
+ * has no single 3D geometry: a step's entry is one frame in 3D.
  */
 export function setEntryOfEntry(e: Entry, place: { compound: number; number: number }, was?: SetEntry): SetEntry | null {
   if (e.geometry.kind !== "3d") return null;
@@ -1235,6 +1246,7 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     ...(was?.from != null ? { from: was.from } : {}),
     ...(was?.frame != null ? { frame: was.frame } : {}),
     ...(was?.last != null ? { last: was.last } : {}),
+    ...(was?.madeOf?.length ? { madeOf: was.madeOf } : {}),
   };
   if (!was || !sameAs(was, made)) return made;
   // (that entry still: all it held, its properties as the step left them - and its charge and spin given, where the step gave the ones it had)
