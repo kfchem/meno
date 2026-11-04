@@ -305,6 +305,27 @@ pub fn described(root: &Path) -> Vec<InstalledPlugin> {
         .collect()
 }
 
+/// The plugins whose environments were set up on this computer, by id, in order: each environment's stamp
+/// (`uv/stamps/plugin-<id>.json`, `pixi/stamps/plugin-<id>.json` in Meno's local data folder `data`, as
+/// lib/pyEnv writes it once set up, and takes away with the environment). Whether each is in place is not
+/// asked here: a Meno that carried its plugins set them up from among its own, and kept none in this folder.
+pub fn set_up_before(data: &Path) -> Vec<String> {
+    let mut ids: Vec<String> = ["uv", "pixi"]
+        .iter()
+        .filter_map(|host| fs::read_dir(data.join(host).join("stamps")).ok())
+        .flat_map(|entries| entries.flatten())
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| {
+            let name = e.file_name().to_str()?.to_string();
+            let id = name.strip_prefix("plugin-")?.strip_suffix(".json")?.to_string();
+            crate::plugin_id_ok(&id).then_some(id)
+        })
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -513,6 +534,23 @@ pub(crate) mod tests {
         assert_eq!(tidy(&root, &none), ["alpha 0.9.0: no longer in use, taken away", "alpha 1.1.0: no longer in use, taken away"]);
         assert!(dir(&root, "alpha").is_ok() && root.join("alpha").join("notes.txt").exists() && root.join(STAGING).join("x").exists());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_plugins_set_up_before_are_those_with_a_stamp() {
+        let data = temp("stamps");
+        assert!(set_up_before(&data).is_empty());
+        for (host, file) in [("uv", "plugin-sketchkit.json"), ("uv", "plugin-tightbind.json"), ("pixi", "plugin-wavecalc.json"), ("pixi", "plugin-sketchkit.json")] {
+            fs::create_dir_all(data.join(host).join("stamps")).unwrap();
+            fs::write(data.join(host).join("stamps").join(file), "{}").unwrap();
+        }
+        // (what is not a plugin's stamp: another profile's, a name Meno takes for no plugin, a folder, another file)
+        fs::write(data.join("uv/stamps/console.json"), "{}").unwrap();
+        fs::write(data.join("uv/stamps/plugin-Bad_Id.json"), "{}").unwrap();
+        fs::create_dir_all(data.join("uv/stamps/plugin-dir.json")).unwrap();
+        fs::write(data.join("uv/stamps/plugin-quanta.json.tmp"), "{}").unwrap();
+        assert_eq!(set_up_before(&data), ["sketchkit", "tightbind", "wavecalc"]);
+        let _ = fs::remove_dir_all(&data);
     }
 
     #[test]

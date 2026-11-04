@@ -1617,6 +1617,35 @@ comes in its own pull request.
   only where it was added and its environment is no longer the one it
   needs.
 
+### Plugins used before
+
+A Meno that carried its plugins set each up where it was asked for, and
+kept its environment's stamp (`uv/stamps/plugin-<id>.json`,
+`pixi/stamps/plugin-<id>.json`: `lib/pyEnv`). A Meno that carries none
+starts with none in place. As it first starts, it offers to get those again
+(`lib/plugins/usedBefore`):
+
+- **Which.** Each with a stamp (installed.rs `set_up_before`), none the
+  chemist took away in Settings, none in place already, and of those only
+  the ones the list online offers for this system and this Meno. A plugin
+  that sets up no environment of its own has no stamp, and is not among
+  them.
+- **Two questions at most.**
+  - Where the network is not allowed for the list yet: whether to look
+    them up online, naming them as they were set up. A no is said in the
+    corner of the window, and asked again as Meno next starts, unless the
+    chemist chooses *Don't ask again* there.
+  - With the list fetched: whether to get them, each by its name and the
+    size of its files. A no is kept.
+- **Got as Settings gets them**, one after another. An environment whose
+  lock is the one its stamp was made for is kept, and nothing of it is
+  fetched again. One whose lock changed is set up as any plugin's is,
+  asking first.
+- **Never asked again** once all are got, after a no to getting them, or
+  where there is nothing to get. Offline, where the list could not be
+  fetched, or where one could not be got, it says so and asks again as
+  Meno next starts, for those not in place.
+
 ## Decided
 
 By the maintainer, 2026-10-06:
