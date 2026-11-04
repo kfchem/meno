@@ -48,6 +48,15 @@ and in particular:
     degrees from a bond already there it snaps to that, and an arc grows
     out of the atom to tell it from the 30-degree grid. (Agreed 2026-09-28,
     after trying it: a plain drag drawing a bond was hard to get used to.)
+  - **A bond by one click** (users' wish, relayed by the maintainer on
+    2026-11-02): a click on an atom with Option held (Alt on Windows and
+    Linux) draws the one bond a double-click would, where there is room
+    (`bondOut`, utils/geometry `newBondFrom`). Each click is its own step,
+    never the first of a double-click, so clicking along a chain draws it a
+    bond at a time; a drag with the key held moves the atom as without it.
+    While the key is held and the pointer is on an atom, a thin line in the
+    highlight's colour shows where the bond would go, easing in, and out as
+    the key is let go (`ClickBondPreview2D`).
   - A click alone selects the atom, alone, at once: its shade spreads out
     from the atom in 160 ms (`SPREAD_MS`, eased). The second click of a
     double-click, within DOUBLE_CLICK_MS (half a second), takes it back -

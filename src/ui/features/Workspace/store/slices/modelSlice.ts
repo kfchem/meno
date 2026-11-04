@@ -10,6 +10,8 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKindPatch, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
+import { newBondFrom } from "../../utils/geometry";
+import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import { useReadings } from "../../../../../lib/calc/readings";
@@ -174,6 +176,16 @@ export const createModelSlice = (
     doc.edit("merge atoms", (d) =>
       ops.replaceDraggedAtomWith(d, movingId, targetId),
     );
+  },
+
+  bondOut: (id: number, toward: { x: number; y: number }) => {
+    const { model } = get();
+    const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
+    if (!end) return null;
+    // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
+    const near = get().findAtomNear(end.x, end.y, NOMINAL_BOND_LENGTH * 0.3, id);
+    if (near != null) return get().connectAtoms(id, near, 1) == null ? null : near;
+    return get().addAtomBonded(id, end.x, end.y, "C", 1);
   },
 
   findAtomNear: (

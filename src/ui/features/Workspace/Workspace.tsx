@@ -18,6 +18,7 @@ import {
   BondsPick2D,
   AtomsHoverRings2D,
   ExtendPreview2D,
+  ClickBondPreview2D,
   HoldProgress2D,
   ChainGuide2D,
   MovePreview2D,
@@ -2715,6 +2716,7 @@ function WorkspaceContent({
           <CaptionTyping2D />
           {/* Hover overlay */}
           <ExtendPreview2D />
+          <ClickBondPreview2D />
           {/* The 120-degree arc while a bond snaps to it */}
           <SnapArc2D />
           {/* Move preview */}

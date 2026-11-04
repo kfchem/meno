@@ -389,8 +389,12 @@ export function Atoms2D() {
         return;
       }
       const DBL_MS = DOUBLE_CLICK_MS;
+      // (Option or Alt held: a click draws one bond out of the atom where there is room, as a double-click does - each
+      //  click its own, never the first of a double-click; a drag moves it as ever - docs/EDITOR-2D.md, *A bond by one click*)
+      const bondByClick = !!native?.altKey;
+      if (bondByClick) native?.preventDefault();
       // (a third click is a click like the first: a double-click is two, and a press after it starts again)
-      const count = pressNumber(lastDown.current, a.id, now, DBL_MS);
+      const count = bondByClick ? 1 : pressNumber(lastDown.current, a.id, now, DBL_MS);
       const second = count === 2;
       cand.current = {
         active: true,
@@ -432,7 +436,8 @@ export function Atoms2D() {
         });
         return;
       }
-      lastDown.current = { t: now, id: a.id, x: cx, y: cy, count: 1 };
+      if (bondByClick) forgetPresses();
+      else lastDown.current = { t: now, id: a.id, x: cx, y: cy, count: 1 };
       // A drag moves the atom - or, the atom selected with others, the
       // selection; a click selects it. Held still, the press selects
       // the whole structure, the selection spreading out from the atom as
@@ -488,6 +493,12 @@ export function Atoms2D() {
         // (the view moved under the press: the atom is no longer under the pointer - no click)
         if (pressMovedUnder(camera)) {
           forgetPresses();
+          return;
+        }
+        // (Option or Alt held: the click's bond, out of the atom where there is room - toward the pointer where it has none)
+        if (bondByClick) {
+          store.getState().bondOut(a.id, toWorld(ev.clientX, ev.clientY));
+          suppressDoubleClick?.(DOUBLE_CLICK_MS);
           return;
         }
         // A click: the atom selected, alone, at once, its shade spreading
