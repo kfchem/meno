@@ -10,18 +10,28 @@
  * SIL Open Font License 1.1: src-tauri/resources/licenses/Arimo-OFL.txt),
  * as scripts/fonts/labelMetrics.ts works them out from Arimo-Regular.ttf.
  * Arimo's capitals stand a little lower than Arial's (0.688 em to 0.716),
- * so its outlines are raised to Arial's capital height (a published figure)
- * by one vertical scale: a label is set and cleared as Arial's letters
- * stand, ACS 1996's baseline being set by that height. Once the system's
- * Arial is read, its own outlines take over.
+ * and its lowercase a little higher (0.528 em to 0.519), so its outlines
+ * are brought to Arial's two heights its OS/2 table publishes, its capital
+ * height and its x-height: its capitals and digits by one vertical scale
+ * to the capital height; its lowercase by another to the x-height, and an
+ * ascender's run above that up to the capital height (Meno's choice: no
+ * height is published for Arial's ascenders). What lies below the
+ * baseline, and the rest - brackets, signs - stands as Arimo's does. A
+ * label is set and cleared by Arial's own heights, ACS 1996's baseline
+ * being set by its capitals. Once the system's Arial is read, its own
+ * outlines take over.
  */
 import { advanceIn, inkHullIn, type LabelFontMetrics } from "./labelFonts";
 
 export const UNITS_PER_EM = 2048;
 /** The height of Arial's capitals (0.716 em). */
 export const CAP_HEIGHT = 1467;
-/** The height of Arimo's capitals, whose outlines the table holds (0.688 em). */
+/** The height of Arial's lowercase x (0.519 em). */
+export const X_HEIGHT = 1062;
+/** The height of Arimo's capitals, whose outlines the table holds (0.688 em); of its lowercase x (0.528 em); of its ascenders (0.725 em). */
 const ARIMO_CAP_HEIGHT = 1409;
+const ARIMO_X_HEIGHT = 1082;
+const ARIMO_ASCENDER = 1484;
 
 /** Advance widths of the characters from U+0020 (space) to U+007E (~). */
 const ADVANCES = [
@@ -174,9 +184,17 @@ const ARIMO_HULLS: Record<string, number[]> = {
   "~": [844,553,988,572,1104,633,1104,782,355,807,213,786,92,723,92,580],
 };
 
-/** Arimo's outlines raised to Arial's capital height: each y scaled by the one ratio, x as it is. */
+/** Where a height of Arimo's character `ch` stands in Arial's: a capital's or digit's by one scale, a lowercase letter's by its x-height and, above that, its ascenders; the rest as it is. */
+export function arialHeight(ch: string, y: number): number {
+  if (/[A-Z0-9]/.test(ch)) return (y * CAP_HEIGHT) / ARIMO_CAP_HEIGHT;
+  if (!/[a-z]/.test(ch) || y <= 0) return y;
+  if (y <= ARIMO_X_HEIGHT) return (y * X_HEIGHT) / ARIMO_X_HEIGHT;
+  return X_HEIGHT + ((y - ARIMO_X_HEIGHT) * (CAP_HEIGHT - X_HEIGHT)) / (ARIMO_ASCENDER - ARIMO_X_HEIGHT);
+}
+
+/** Arimo's outlines brought to Arial's heights (`arialHeight`), x as it is. */
 const HULLS: Record<string, number[]> = Object.fromEntries(
-  Object.entries(ARIMO_HULLS).map(([ch, hull]) => [ch, hull.map((v, i) => (i % 2 ? Math.round((v * CAP_HEIGHT) / ARIMO_CAP_HEIGHT) : v))]),
+  Object.entries(ARIMO_HULLS).map(([ch, hull]) => [ch, hull.map((v, i) => (i % 2 ? Math.round(arialHeight(ch, v)) : v))]),
 );
 
 /** What a character outside the table is taken to be: a capital's box. */
