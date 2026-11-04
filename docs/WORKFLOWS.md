@@ -306,7 +306,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number, in the order the step before gave them (a conformer search's, as its program made them; a *Rank* step's, as it ranked them); the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it. Meno's, on what the plugin that does the checks makes of each structure (PLUGINS.md, `structure_facts`): what that toolkit alone could not read or make sense of is said in its name and words ("RDKit could not read it (SANITIZE_KEKULIZE)") |
-| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
+| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than *At most* stereoisomers (32 unless changed: whole, never some of them - counted only as far as one past it, saying the most its open stereo could give), one that takes longer than its *Time for one* to look at (30 s unless changed: alone, the rest as they are), or - as the option says - all that leave stereo open. Meno's, on what the plugin that finds stereoisomers perceives and makes (*Stereoisomers is Meno's*, below) |
 | Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
@@ -328,10 +328,11 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); of the three after them, *Check structures* is
 Meno's, on the facts the plugin that does the checks gives of each
-structure, and *Stereoisomers* and *Descriptors* are a plugin's (RDKit's),
-done at once in its worker on structures drawn (PLUGINS.md, *steps on
-structures drawn*), each with its own options: they change no atom or
-bond of a structure they keep, and choose nothing for one. Those from Tag on
+structure, *Stereoisomers* is Meno's, on what the plugin that finds
+stereoisomers perceives and makes, and *Descriptors* is a plugin's
+(RDKit's), done at once in its worker on structures drawn (PLUGINS.md,
+*steps on structures drawn*), each with its own options: they change no
+atom or bond of a structure they keep, and choose nothing for one. Those from Tag on
 are Meno's own on structures (STRUCTURE-STEPS.md), on a set's entries
 alone, and no plugin fills them. A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
@@ -2031,7 +2032,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
 - **A structure drawn whose stereo is left open is not made** by
   *Conformers* (2026-10-22), where what is open could go more than one
   way: a stereocentre or a double bond that could have a configuration and
-  is drawn without one (the roles' `open_stereo`), giving two or more
+  is drawn without one (Meno's rules on the roles' `stereo_elements`:
+  lib/chem/stereoOpen), giving two or more
   stereoisomers that can be made in 3D, or an allene's axis, whose
   stereoisomers RDKit does not count. The canvas's *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
@@ -2743,6 +2745,48 @@ step runs again, as a large set of molecules does. Held off the page,
 they are kept as the step drew them: a change of the workspace's style
 reaches them only once they are on the page.
 
+### Stereoisomers is Meno's (2026-11-04)
+
+What a structure leaves open, and what *Stereoisomers* does with it, are
+Meno's (lib/chem/stereoOpen, workflow/stereoisomers); the plugin that
+finds stereoisomers perceives and makes, as it is asked (PLUGINS.md,
+`stereo_elements` and `stereoisomers`). The same rules serve the page's
+*3D structure*, *Conformers* on structures drawn, *Enumerate*'s count of
+those left open, *Generate*'s, and a SMILES pasted.
+
+- **Left open**: a stereocentre or double bond the toolkit perceives as
+  one that could have a configuration, drawn without one or with one
+  drawn as not known (a wavy bond, a double bond of either) - but a C=N
+  whose E/Z is none of its own (below). An open double bond on an atom
+  of two double bonds is an allene's axis, and the bonds of a run are
+  one element: an allene's axis, of two or four; cis or trans, of three.
+- **At most** (an option, 32 unless changed): the most stereoisomers one
+  structure is made into, all at once - 2^5, five open stereocentres or
+  double bonds made whole, a set still to be looked over one by one; up
+  to 64, the most a step on structures drawn makes of one. One with more
+  is set aside whole, never some of them, counted only as far as one
+  past it. The page's *3D structure* and a *Conformers* step make the
+  first 32 of one, as before.
+- **Time for one** (an option, 30 s unless changed): how long one
+  structure's stereoisomers may be looked for, each tried in 3D, before
+  it is set aside alone - a camphor's take some 10 s, its bridgeheads
+  left open, so 30 s is three of those; up to ten minutes, the most a
+  step on structures drawn waits at once.
+- **Words**: one the toolkit could not read, or make sense of, is set
+  aside in its name and words, as *Check structures* says it ("RDKit
+  could not read it (SANITIZE_PROPERTIES)"; before, "RDKit cannot make
+  sense of it (...)").
+- **Made again from a drawing** (the page's *3D structure*, made anew):
+  what the drawing leaves open is given the configuration the molecule
+  made before has, read from its places by Meno - a centre's by the
+  sign of the volume its neighbours span, a double bond's by the side
+  its neighbours are on (lib/chem/stereoOpen `configuredFrom`) - where
+  it and every atom bonded to it are placed. Before, a double bond left
+  open came back as the first stereoisomer, whatever the molecule made
+  before had: of 236 such remakes of a 70-structure set, 185 came back
+  as they were - each of the 51 others but one of an inositol's missed
+  a double bond's - and now 236 do (2026-11-04).
+
 ### C=N double bonds whose E/Z is none of their own (2026-10-23)
 
 A guanidine a Generate made, CN=C(N)NCC(O)c1ccc(OC(F)F)cc1, came out of
@@ -2752,7 +2796,8 @@ other nitrogens moves to the imine nitrogen, and the double bond moves
 with it, so the two "isomers" interconvert. Its E/Z is no configuration
 of its own, and Meno never chooses one for it.
 
-- **Which C=N** (the RDKit plugin's `moving_cn`), as the InChI Technical
+- **Which C=N** (Meno's, lib/chem/stereoOpen `movingCN`, on its own
+  graph of the structure), as the InChI Technical
   Manual takes them (S. E. Stein, S. R. Heller, D. V. Tchekhovskoi,
   I. V. Pletnev, *InChI version 1, software version 1.04 (2011),
   Technical Manual*):
@@ -2774,10 +2819,11 @@ of its own, and Meno never chooses one for it.
   configuration at room temperature, or one Meno cannot rule out. Only a
   C=N in a localised double bond is looked at; one in a ring of seven
   atoms or fewer has none to give anyway.
-- **One definition, everywhere stereo is counted or made**: the plugin's
-  `open_stereo` leaves such a C=N out of what a structure leaves open,
-  and its enumeration holds it one way while the rest are tried in 3D
-  (the other way where nothing embeds so), then lets it go again. So
+- **One definition, everywhere stereo is counted or made**: Meno leaves
+  such a C=N out of what a structure leaves open (Workspace/chem/
+  openStereo), and names it to the plugin, whose enumeration holds it one
+  way while the rest are tried in 3D (the other way where nothing embeds
+  so), then lets it go again (`stereoisomers`, `notEnumerated`). So
   *Stereoisomers* gives the guanidine two, *Generate*'s count of those
   with stereo left open does not count it, *Conformers* does not refuse
   it for it, and *3D structure* does not ask about it. A C=N drawn with
@@ -2789,7 +2835,7 @@ of its own, and Meno never chooses one for it.
   of its own" - so that a table or a Filter can read it.
 - **A double bond of either configuration**, as Meno draws one a SMILES
   gives no E/Z for (CFG=2), and a stereocentre on a wavy bond, are left
-  open, as one drawn plain is. Before, `open_stereo` counted them as
+  open, as one drawn plain is. Before 2026-10-23, the plugin counted them as
   nothing open, though RDKit's enumeration gave each both ways the
   moment anything else was open: an N-methyl imine alone came out as
   drawn, beside a stereocentre as both, and *Conformers* chose one for
