@@ -5,6 +5,7 @@
  * own.
  */
 import { CHECK_OPTIONS } from "./checkStructures";
+import { STEREO_OPTIONS } from "./stereoisomers";
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
@@ -438,16 +439,18 @@ export const KINDS: readonly KindInfo[] = [
     others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
     options: CHECK_OPTIONS,
   },
-  // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside: a plugin's, its options its own)
+  // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside - Meno's, on what the plugin that finds
+  //  stereoisomers perceives and makes: workflow/stereoisomers)
   {
     kind: "stereoisomers",
     name: "Stereoisomers",
     icon: "twins",
     takes: ["structures"],
     gives: "structures",
-    runs: "program",
+    runs: "entries",
     made: "Stereoisomers",
     others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
+    options: STEREO_OPTIONS,
   },
   // (each structure drawn with numbers worked out of it as drawn - its molecular weight, logP and the like - on its record: a plugin's)
   {

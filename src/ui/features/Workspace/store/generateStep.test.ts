@@ -17,9 +17,9 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 }));
 
 /**
- * The roles' worker: a SMILES read as its own block (one it cannot read - "X" in it - refused, saying why, as RDKit's
- * is); and what a block leaves open - a centre for each "?" in the SMILES, here - only where it is, never its
- * stereoisomers tried ("open_stereo" is not asked); one with "!" in it cannot be asked.
+ * The roles' worker: a SMILES read as its own block - a carbon, the SMILES its title (one it cannot read - "X" in it -
+ * refused, saying why, as RDKit's is); and the elements a block leaves open - a centre for each "?" in the SMILES,
+ * here - only those, never its stereoisomers tried ("stereoisomers" is not asked); one with "!" in it cannot be asked.
  */
 const asked: { op: string; args: { smiles?: string; molblock?: string } }[] = [];
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
@@ -30,12 +30,13 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
       asked.push({ op, args });
       if (op === "from_smiles") {
         if (args.smiles!.includes("X")) throw new Error("This SMILES could not be read: X is no element.");
-        return { molblock: `block:${args.smiles}` };
+        return { molblock: `block:${args.smiles}\n  Meno\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 C   0  0\nM  END\n` };
       }
-      if (op === "stereo_left_open") {
-        if (args.molblock!.includes("!")) throw new Error("it could not be asked");
-        const open = (args.molblock!.match(/\?/g) ?? []).length;
-        return { atoms: Array.from({ length: open }, (_, i) => i), bonds: [] };
+      if (op === "stereo_elements") {
+        const block = (args as { molblocks: string[] }).molblocks[0];
+        if (block.includes("!")) throw new Error("it could not be asked");
+        const open = (block.match(/\?/g) ?? []).length;
+        return { read: true, elements: Array.from({ length: open }, (_, i) => ({ kind: "centre", at: i, state: "unspecified" })) };
       }
       throw new Error(`no ${op} here`);
     },
@@ -46,7 +47,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 vi.mock("../chem/fromSmiles", async (actual) => ({
   ...(await actual<typeof import("../chem/fromSmiles")>()),
   drawingOf: async (block: string): Promise<Model> => ({
-    atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
+    atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block.split("\n")[0] } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
     bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
   }),
 }));
@@ -99,7 +100,7 @@ describe("Generate: a step that takes nothing in", () => {
     const ran = st().steps.find((s) => s.id === step)!.ran!;
     expect(ran).toMatchObject({ ok: true, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read: o1cXc (X is no element)" });
     // (only where stereo is left open was asked, never each stereoisomer tried in 3D)
-    expect(asked.some((a) => a.op === "open_stereo")).toBe(false);
+    expect(asked.some((a) => a.op === "stereoisomers")).toBe(false);
     const out = resultOf(st(), step)!;
     expect(out.made!.holds).toBe("structures");
     const held = setMembers(st(), out);

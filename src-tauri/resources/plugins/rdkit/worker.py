@@ -420,11 +420,6 @@ def op_analyse(m):
 
 # --- 3D structures -----------------------------------------------------------
 
-#: The most stereoisomers a structure is made in, all at once.
-MOST_ISOMERS = 32
-#: How long *Stereoisomers* looks at one structure before it sets it aside, alone (seconds): its stereoisomers each
-#: tried in 3D, a camphor's in some 10 s.
-EXAMINE_S = 30
 #: The most conformers a search may be asked to try: the most Meno's *How many* gives (lib/chem/conformersSought
 #: `MOST_CONFORMERS`, where its basis is stated).
 MOST_CONFORMERS = 5000
@@ -466,85 +461,124 @@ def options_of(m):
 KCAL_PER_HARTREE = 627.509474
 
 
-#: What a stereocentre or double bond drawn without a configuration is to RDKit: none given, or one drawn as not
-#: known - a wavy bond, a double bond of either configuration (CFG=2, as Meno writes it) - both of which its
-#: enumeration gives each way.
-LEFT_OPEN = (Chem.StereoSpecified.Unspecified, Chem.StereoSpecified.Unknown)
-
-
-def open_stereo(mol):
-    """The stereocentres and double bonds a structure leaves open: those
-    that could have a configuration, and are drawn without one, or with one
-    not known (`LEFT_OPEN`) - but a C=N whose E/Z is none of its own
-    (`moving_cn`), which is never chosen."""
-    atoms, bonds = [], []
-    moving = moving_cn(mol)
-    for si in Chem.FindPotentialStereo(Chem.Mol(mol), cleanIt=True):
-        if si.specified not in LEFT_OPEN:
-            continue
-        if si.type == Chem.StereoType.Atom_Tetrahedral:
-            atoms.append(si.centeredOn)
-        elif si.type == Chem.StereoType.Bond_Double and si.centeredOn not in moving:
-            bonds.append(si.centeredOn)
-    return sorted(atoms), sorted(bonds)
-
-
-#: Why a C=N's E/Z is no configuration of its own, by what makes it so (`moving_cn`).
-MOVING_CN = {
-    "shift": "its double bond moves with a hydrogen on an N, O or S beside it (an amidine, a guanidine, an imidic acid)",
-    "nh": "its N carries a hydrogen",
-    "cation": "an amidinium or guanidinium bond, shared with the N beside it",
+#: How FindPotentialStereo says an element's configuration is drawn, as Meno's requests name it: given, not given, or
+#: drawn as not known - a wavy bond, a double bond of either configuration (CFG=2, as Meno writes it).
+STATES = {
+    Chem.StereoSpecified.Specified: "specified",
+    Chem.StereoSpecified.Unspecified: "unspecified",
+    Chem.StereoSpecified.Unknown: "unknown",
 }
 
 
-def moving_cn(mol):
-    """The C=N double bonds whose E/Z is no configuration of their own, by
-    index, each with why (`MOVING_CN`): never enumerated, never chosen,
-    nor counted as left open, wherever stereo is counted or made
-    (docs/WORKFLOWS.md, *C=N double bonds whose E/Z is none of their
-    own*). As the InChI Technical Manual (v1.04, 2011) takes them: a
-    hydrogen on an N, O or S bonded to the C=N's carbon moves to its N,
-    and the double bond with it - the 1,3-shift of its mobile H (IV.b,
-    Table 6), a bond it presumes rotatable (Appendix 5b) - an amidine's,
-    a guanidine's, an N-acyl amidine's, an imidic acid's. And a C=N whose
-    N bears only a hydrogen (RDKit's enumeration gives it one way only
-    already), and an amidinium or guanidinium C=N+, its double bond
-    shared with the amino N beside it. An imine whose N bears a carbon,
-    an oxime and a hydrazone keep theirs."""
-    moving = {}
-    for bond in mol.GetBonds():
-        if bond.GetBondType() != Chem.BondType.DOUBLE:
-            continue
-        ends = (bond.GetBeginAtom(), bond.GetEndAtom())
-        if sorted(a.GetSymbol() for a in ends) != ["C", "N"]:
-            continue
-        c, n = ends if ends[0].GetSymbol() == "C" else ends[::-1]
-        others = [x for x in c.GetNeighbors() if x.GetIdx() != n.GetIdx()]
-        if any(x.GetSymbol() in ("N", "O", "S") and x.GetTotalNumHs(includeNeighbors=True) for x in others):
-            moving[bond.GetIdx()] = "shift"
-        elif n.GetTotalNumHs(includeNeighbors=True):
-            moving[bond.GetIdx()] = "nh"
-        elif n.GetFormalCharge() > 0 and any(x.GetSymbol() == "N" and x.GetFormalCharge() == 0 and not x.GetIsAromatic() for x in others):
-            moving[bond.GetIdx()] = "cation"
-    return moving
+def stereo_read(blocks):
+    """A structure drawn, its parts read as one (`drawing_of_parts`) and
+    sanitised, its stereo assigned from its wedges - or what kept it from
+    being: None where it cannot be read at all, else RDKit's sanitisation
+    problem by name."""
+    mol = drawing_of_parts(blocks)
+    if mol is None:
+        return None, None
+    problem = Chem.SanitizeMol(mol, catchErrors=True)
+    if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+        return None, str(problem).split(".")[-1]
+    Chem.AssignChiralTypesFromBondDirs(mol)
+    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+    return mol, None
 
 
-def moving_open(mol):
-    """Of the C=N bonds whose E/Z is none of their own (`moving_cn`), those drawn without one, by index: one drawn
-    with its E/Z keeps it."""
-    moving = moving_cn(mol)
+def blocks_of(m):
+    """The parts a request gives: `molblocks`, or one `molblock`."""
+    return m.get("molblocks") or [m["molblock"]]
+
+
+def op_stereo_elements(m):
+    """Every element of a structure that could be stereogenic, as RDKit's
+    FindPotentialStereo finds it: its kind (`STEREO_KINDS`), the atom or
+    bond it is centred on, by index - its parts' atoms and bonds in their
+    order, one after another - and how its configuration is drawn
+    (`STATES`). None left out: which are left open, and which never
+    chosen, are Meno's (lib/chem/stereoOpen). One that cannot be read:
+    `read` false; one RDKit cannot make sense of: its `problem`."""
+    mol, problem = stereo_read(blocks_of(m))
+    if mol is None:
+        return {"read": False} if problem is None else {"read": True, "problem": problem}
     found = Chem.FindPotentialStereo(Chem.Mol(mol), cleanIt=True)
-    return sorted(si.centeredOn for si in found if si.type == Chem.StereoType.Bond_Double and si.specified in LEFT_OPEN and si.centeredOn in moving)
+    return {
+        "read": True,
+        "elements": [
+            {"kind": STEREO_KINDS.get(str(si.type).split(".")[-1], "other"), "at": si.centeredOn, "state": STATES.get(si.specified, "unknown")}
+            for si in found
+        ],
+    }
 
 
-def moving_said(mol):
-    """What a structure's C=N bonds left open whose E/Z is none of their own are, in a line - else None."""
-    moving = moving_cn(mol)
-    left = [moving[i] for i in moving_open(mol)]
-    if not left:
-        return None
-    whys = "; ".join(MOVING_CN[w] for w in dict.fromkeys(left))
-    return f"E/Z of {len(left)} C=N not enumerated: {whys} - no configuration of its own"
+def neighbours_of(atom):
+    """An atom's neighbours, by index, in the order of its bonds: the order RDKit's chiral tags are read in."""
+    return [b.GetOtherAtomIdx(atom.GetIdx()) for b in atom.GetBonds()]
+
+
+def parity(named, order):
+    """+1 where `named` is an even permutation of `order`, -1 where odd."""
+    named, sign = list(named), 1
+    for i, want in enumerate(order):
+        j = named.index(want)
+        if j != i:
+            named[i], named[j] = named[j], named[i]
+            sign = -sign
+    return sign
+
+
+def configured(mol, given):
+    """`mol` with the configurations Meno gives (lib/chem/stereoOpen
+    `Configuration`) as RDKit's tags. A centre's: the sign of the volume its
+    first three neighbours span, in the order Meno names them - RDKit's
+    CHI_TETRAHEDRAL_CCW where that is positive for its neighbours in the
+    order of its bonds (measured on RDKit 2026.03.6, 2026-11-04, and held by
+    scripts/calc/test_plugin_rdkit.py), turned by the parity of Meno's order
+    against that one. A double bond's: cis or trans of the two atoms named."""
+    out = Chem.Mol(mol)
+    for c in (given or {}).get("centres") or []:
+        atom = out.GetAtomWithIdx(int(c["atom"]))
+        order, named = neighbours_of(atom), [int(n) for n in c["neighbours"]]
+        if sorted(order) != sorted(named):
+            raise ValueError(f"atom {c['atom']}'s neighbours are not {named}")
+        sense = int(c["sense"]) * parity(named, order)
+        atom.SetChiralTag(Chem.ChiralType.CHI_TETRAHEDRAL_CCW if sense > 0 else Chem.ChiralType.CHI_TETRAHEDRAL_CW)
+    for d in (given or {}).get("doubles") or []:
+        bond = out.GetBondWithIdx(int(d["bond"]))
+        bond.SetStereoAtoms(int(d["ends"][0]), int(d["ends"][1]))
+        bond.SetStereo(Chem.BondStereo.STEREOCIS if d["cis"] else Chem.BondStereo.STEREOTRANS)
+    if given and (given.get("centres") or given.get("doubles")):
+        # (written as RDKit writes the stereoisomer it is: the double bonds' cis and trans as their neighbours'
+        #  directions, which its perception reads, and then a tag on a centre the rest leave no stereocentre - a
+        #  ribitol's middle carbon, its ends alike - taken off, and a ring's as its canonical form has it. Each of
+        #  the 250 stereoisomers of a 70-structure set made again so is the one enumerated: 2026-11-04)
+        Chem.SetDoubleBondNeighborDirections(out)
+        Chem.AssignStereochemistry(out, cleanIt=True, force=True)
+    return out
+
+
+def configuration_of_isomer(mol, atoms, bonds):
+    """What `configured` gives, read back from a stereoisomer: the
+    configuration of each of the centres `atoms` and double bonds `bonds`
+    (by index) it has one for, in Meno's terms."""
+    centres, doubles = [], []
+    for i in atoms:
+        atom = mol.GetAtomWithIdx(i)
+        tag = atom.GetChiralTag()
+        if tag in (Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW):
+            centres.append({"atom": i, "neighbours": neighbours_of(atom), "sense": 1 if tag == Chem.ChiralType.CHI_TETRAHEDRAL_CCW else -1})
+    for i in bonds:
+        bond = mol.GetBondWithIdx(i)
+        stereo = bond.GetStereo()
+        if stereo not in (Chem.BondStereo.STEREOCIS, Chem.BondStereo.STEREOTRANS, Chem.BondStereo.STEREOE, Chem.BondStereo.STEREOZ):
+            continue
+        # (E and Z as RDKit's enumeration sets them: of the two stereo atoms it names, trans and cis)
+        ends = list(bond.GetStereoAtoms())
+        if len(ends) != 2:
+            continue
+        doubles.append({"bond": i, "ends": ends, "cis": stereo in (Chem.BondStereo.STEREOCIS, Chem.BondStereo.STEREOZ)})
+    return {"centres": centres, "doubles": doubles}
 
 
 def held_one_way(mol, moving, cis):
@@ -570,36 +604,31 @@ def let_go(mol, moving):
     return mol
 
 
-def isomers_of(mol):
-    """Each stereoisomer the open stereocentres and double bonds give that
-    can be made in 3D (RDKit's embedding tried, seeded by the isomer: the
-    same answer every time), the ones drawn kept as drawn - a bridgehead
-    left open gives only the one its rings allow; the structure itself when
-    none is open, or when none of them embeds with its stereo held
-    (`held_by_none`)."""
-    return embeddable(mol) or [mol]
-
-
 class TooLong(Exception):
     """A structure's stereoisomers not all tried by the time given (`embeddable`'s `deadline`)."""
 
 
-def embeddable(mol, deadline=None):
-    """The stereoisomers `isomers_of` gives, but none where no one of them embeds with its stereo held.
+def embeddable(mol, moving, most, in_3d=True, deadline=None):
+    """Each stereoisomer the stereo `mol` leaves unassigned gives - the ones
+    it gives kept as they are - at most `most`, and, `in_3d`, only those
+    that can be made in 3D (RDKit's embedding tried, seeded by the isomer:
+    the same answer every time): a bridgehead left open gives only the one
+    its rings allow. The C=N bonds `moving` are held one way while the rest
+    are given (`held_one_way`) - the other way where none of them embeds so
+    - and let go again in each: never enumerated, never chosen.
 
-    Worked out once for each structure as it is asked about - its atoms, bonds and stereo as given, in their order
-    (`EMBEDDABLE`): a step asks `open_stereo` and then `conformers` of the same structure, and trying to embed each
-    stereoisomer is slow (a camphor some 10 s). The tries themselves are never cut short; but where a `deadline` is
-    given (time.monotonic()), TooLong is raised once it has passed, looked at as each stereoisomer embedded comes
-    back - between RDKit's tries, never within one - and nothing is kept of it. Each caller is given copies of its
-    own."""
-    key = Chem.MolToMolBlock(mol, includeStereo=True, kekulize=False)
+    Worked out once for each structure as it is asked about - its atoms,
+    bonds and stereo as given, in their order, and how (`EMBEDDABLE`): a
+    page asks what to make and then makes it, and trying to embed each
+    stereoisomer is slow (a camphor some 10 s). The tries themselves are
+    never cut short; but where a `deadline` is given (time.monotonic()),
+    TooLong is raised once it has passed, looked at as each stereoisomer
+    comes back - between RDKit's tries, never within one - and nothing is
+    kept of it. Each caller is given copies of its own."""
+    key = (Chem.MolToMolBlock(mol, includeStereo=True, kekulize=False), tuple(moving), most, in_3d)
     made = EMBEDDABLE.get(key)
     if made is None:
-        options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS, tryEmbedding=True)
-        # (a C=N whose E/Z is none of its own held one way while the rest are tried in 3D - the other way where none
-        #  of them embeds so - and let go again in each made: never enumerated, never chosen)
-        moving = moving_open(mol)
+        options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=most, tryEmbedding=in_3d)
         made = []
         for cis in ([False, True] if moving else [None]):
             for isomer in EnumerateStereoisomers(held_one_way(mol, moving, cis) if moving else mol, options=options):
@@ -621,118 +650,65 @@ def embeddable(mol, deadline=None):
     return [Chem.Mol(m) for m in made]
 
 
-#: What `embeddable` has worked out, by structure, the oldest first - as many as `EMBEDDABLE_KEPT`.
+#: What `embeddable` has worked out, by structure and how it was asked, the oldest first - as many as
+#: `EMBEDDABLE_KEPT`.
 EMBEDDABLE = {}
 EMBEDDABLE_KEPT = 64
 
 
-def held_by_none(mol):
-    """Whether a structure leaves stereo open that no stereoisomer of it can
-    hold in 3D: made, then, as RDKit's embedding places it, its stereo free."""
-    atoms, bonds = open_stereo(mol)
-    return bool(atoms or bonds) and not embeddable(mol)
-
-
-def open_cumulenes(mol, bonds):
-    """Of the double bonds left open (by index), those of cumulated double
-    bonds - an allene's: an axis RDKit's enumeration does not give, so that
-    their stereoisomers are never counted."""
-    def cumulated(b):
-        return any(sum(1 for x in a.GetBonds() if x.GetBondType() == Chem.BondType.DOUBLE) > 1 for a in (b.GetBeginAtom(), b.GetEndAtom()))
-    return [i for i in bonds if cumulated(mol.GetBondWithIdx(i))]
-
-
-def kept(mol, like):
-    """`mol` with the stereocentres and double bonds it leaves open given the
-    configuration they have in `like`: coordinates in 3D for some of its
-    atoms, by index - a molecule in 3D made from it before. Only where the
-    atom, or the double bond's two, and every atom bonded to them have
-    coordinates there; the rest are left open."""
-    places = {int(i): p for i, p in (like or {}).items()}
-    atoms, bonds = open_stereo(mol)
-    if not places or not (atoms or bonds):
-        return mol
-    placed = lambda a: a.GetIdx() in places and all(n.GetIdx() in places for n in a.GetNeighbors())
-    probe = Chem.Mol(mol)
-    conf = Chem.Conformer(probe.GetNumAtoms())
-    conf.Set3D(True)
-    for i, p in places.items():
-        if i < probe.GetNumAtoms():
-            conf.SetAtomPosition(i, Point3D(*p))
-    probe.RemoveAllConformers()
-    probe.AddConformer(conf, assignId=True)
-    Chem.AssignStereochemistryFrom3D(probe, replaceExistingTags=True)
-    out = Chem.Mol(mol)
-    turning = (Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW)
-    for i in atoms:
-        # (the same atoms, bonded in the same order: the tag means the same)
-        tag = probe.GetAtomWithIdx(i).GetChiralTag()
-        if placed(mol.GetAtomWithIdx(i)) and tag in turning:
-            out.GetAtomWithIdx(i).SetChiralTag(tag)
-    for i in bonds:
-        bond = mol.GetBondWithIdx(i)
-        a, b = bond.GetBeginAtom(), bond.GetEndAtom()
-        if not (placed(a) and placed(b)):
-            continue
-        na = next((n.GetIdx() for n in a.GetNeighbors() if n.GetIdx() != b.GetIdx()), None)
-        nb = next((n.GetIdx() for n in b.GetNeighbors() if n.GetIdx() != a.GetIdx()), None)
-        if na is None or nb is None:
-            continue
-        # (cis where the two neighbours are on the same side of the bond)
-        p = lambda k: conf.GetAtomPosition(k)
-        axis = p(b.GetIdx()) - p(a.GetIdx())
-        u, v = p(na) - p(a.GetIdx()), p(nb) - p(b.GetIdx())
-        side = axis.CrossProduct(u).DotProduct(axis.CrossProduct(v))
-        if abs(side) < 1e-6:
-            continue
-        mine = out.GetBondWithIdx(i)
-        mine.SetStereoAtoms(na, nb)
-        mine.SetStereo(Chem.BondStereo.STEREOCIS if side > 0 else Chem.BondStereo.STEREOTRANS)
-    return out
-
-
-def op_open_stereo(m):
-    """What a 3D structure would have to choose: the open stereocentres and
-    double bonds, and how many stereoisomers they make that can be made in
-    3D - none of those that `like` (see `kept`) gives a configuration. With
-    the open double bonds that are cumulated (`cumulenes`: an allene's
-    axis, whose stereoisomers are not counted) - and the runs they make
-    (`cumulated`, as `stereo_left_open` gives them) - and whether none of
-    the stereoisomers embeds with its stereo held (`free`)."""
-    mol = kept(read(m["molblock"]), m.get("like"))
-    atoms, bonds = open_stereo(mol)
-    if not (atoms or bonds):
-        return {"atoms": atoms, "bonds": bonds, "isomers": 1, "cumulenes": [], "cumulated": [], "free": False}
-    made = embeddable(mol)
-    cumulenes = open_cumulenes(mol, bonds)
-    return {"atoms": atoms, "bonds": bonds, "isomers": max(len(made), 1), "cumulenes": cumulenes, "cumulated": cumulated_runs(mol, cumulenes), "free": not made}
-
-
-def op_stereo_left_open(m):
-    """Only which stereocentres and double bonds a structure leaves open, by
-    index: none of `open_stereo`'s trying each stereoisomer in 3D - quick,
-    as a step that marks what is left open asks it of many (*Generate*).
-    With the open double bonds that run on into one another (`cumulated`,
-    each run by its bonds' indices): one element each - an allene's axis,
-    where the run is of two or four, and cis or trans, where of three -
-    never as many as its bonds."""
-    mol = read(m["molblock"])
-    atoms, bonds = open_stereo(mol)
-    return {"atoms": atoms, "bonds": bonds, "cumulated": cumulated_runs(mol, open_cumulenes(mol, bonds))}
-
-
-def cumulated_runs(mol, bonds):
-    """The double bonds `bonds` (by index, all cumulated) as the runs they make, each run's bonds in order of index:
-    two that share an atom are of one run."""
-    runs = []
-    for i in sorted(bonds):
-        b = mol.GetBondWithIdx(i)
-        ends = {b.GetBeginAtomIdx(), b.GetEndAtomIdx()}
-        joined = [r for r in runs if any(ends & {mol.GetBondWithIdx(j).GetBeginAtomIdx(), mol.GetBondWithIdx(j).GetEndAtomIdx()} for j in r)]
-        for r in joined:
-            runs.remove(r)
-        runs.append(sorted({i, *[j for r in joined for j in r]}))
-    return sorted(runs)
+def op_stereoisomers(m):
+    """A structure's stereoisomers, as Meno asks for them (Workspace/chem/
+    openStereo): the configurations `configured` gives made first, then
+    each stereoisomer the stereo still unassigned gives (`embeddable`) -
+    tried in 3D where `inThreeD` - the C=N bonds named in `notEnumerated`
+    passed by. At most `most`; where `whole`, one with more than that is
+    answered `tooMany`, none made - counted only as far as one past it,
+    never all (twenty double bonds left open give a million), with RDKit's
+    bound on how many there could be. Not done within `withinMs`, where it
+    is given: `tooLong`. Else each made, in the order RDKit gives them:
+    its configuration of the open elements Meno names (`open`, its centres
+    and double bonds), its SMILES and, with `drawings`, itself as a drawing
+    (`drawing_block`) - or why it cannot be one; and `free` where none was
+    made: none can be made in 3D with its stereo held."""
+    started = time.monotonic()
+    deadline = started + m["withinMs"] / 1000 if m.get("withinMs") else None
+    mol, problem = stereo_read(blocks_of(m))
+    if mol is None:
+        raise ValueError(f"cannot make sense of the structure ({problem})" if problem else "This structure could not be read.")
+    mol = configured(mol, m.get("configured"))
+    moving = sorted(int(i) for i in m.get("notEnumerated") or [])
+    most = int(m["most"])
+    if m.get("whole"):
+        # (how many the open elements could give at most, before any is made: over the most, counted only to one past
+        #  it, as unique - one past the most is reached at once, but where many of the bound are alike, a symmetric
+        #  structure with many left open: rare, and looked at no longer than any other. The C=N bonds passed by held
+        #  one way: not counted)
+        options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)
+        counted_of = held_one_way(mol, moving, False)
+        bound = GetStereoisomerCount(counted_of, options=options)
+        if bound > most:
+            for counted, _ in enumerate(EnumerateStereoisomers(counted_of, options=options), 1):
+                if counted > most:
+                    return {"tooMany": {"counted": counted, "bound": bound}}
+                if deadline is not None and time.monotonic() > deadline:
+                    return {"tooLong": True}
+    try:
+        made = embeddable(mol, moving, most, bool(m.get("inThreeD", True)), deadline)
+    except TooLong:
+        return {"tooLong": True}
+    atoms = [int(i) for i in (m.get("open") or {}).get("atoms") or []]
+    bonds = [int(i) for i in (m.get("open") or {}).get("bonds") or []]
+    isomers = []
+    for iso in made:
+        one = {"configured": configuration_of_isomer(iso, atoms, bonds), "smiles": Chem.MolToSmiles(iso)}
+        if m.get("drawings"):
+            try:
+                one["molblock"] = drawing_block(Chem.Mol(iso))
+            except ValueError as e:
+                # (an adduct's drawing that cannot be written back as drawn - `as_drawn`)
+                one["error"] = str(e)
+        isomers.append(one)
+    return {"isomers": isomers, "free": not made}
 
 
 # What FindPotentialStereo calls each kind of element, as Meno's configurations name them.
@@ -1660,35 +1636,27 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS, rows=())
 
 
 def op_conformers(m):
-    """Conformers of a structure drawn in 2D. With stereocentres or double
-    bonds left open, `isomers` says what to make: "one" (the first of its
-    stereoisomers) or "all" (each, up to MOST_ISOMERS). Each goes back with
-    the CIP label of every stereocentre and double bond (`cip`), and of the
-    ones that were left open (`chosen`), atom by atom and bond by bond. Those
-    `like` gives a configuration (see `kept`) are made so, and count as
-    chosen. Each is every conformer RDKit made, in the order it embedded
-    them (`conformers`). `onPage`, which Meno's own page sends and a
-    workflow's step never does, has an enantiomer made as the mirror image
-    of its twin (`conformers_of`); else each is made itself."""
+    """Conformers of a structure drawn in 2D: of each stereoisomer `isomers`
+    names, in its order - its configuration of what the drawing leaves
+    open, in Meno's terms (`configured`), which Meno chose (Workspace/chem/
+    openStereo) - or, none named, of the structure as drawn. Each goes back
+    with the CIP label of every stereocentre and double bond (`cip`), atom
+    by atom and bond by bond, and its SMILES. Each is every conformer RDKit
+    made, in the order it embedded them (`conformers`). `onPage`, which
+    Meno's own page sends and a workflow's step never does, has an
+    enantiomer made as the mirror image of its twin (`conformers_of`); else
+    each is made itself."""
     drawn = read(m["molblock"])
     as_ligand_anions(drawn, eta_systems(drawn))
-    atoms, bonds = open_stereo(drawn)
-    mol = kept(drawn, m.get("like"))
-    isomers = isomers_of(mol)
-    if m.get("isomers", "one") != "all":
-        isomers = isomers[:1]
     made, cache = [], {}
     how = options_of(m)
-    for iso in isomers:
+    for given in m.get("isomers") or [None]:
+        iso = configured(drawn, given)
         entry = dict(conformers_of(iso, how, cache, bool(m.get("onPage"))))
         rdCIPLabeler.AssignCIPLabels(iso)
         entry["cip"] = {
             "atoms": {str(a.GetIdx()): a.GetProp("_CIPCode") for a in iso.GetAtoms() if a.HasProp("_CIPCode")},
             "bonds": {str(b.GetIdx()): b.GetProp("_CIPCode") for b in iso.GetBonds() if b.HasProp("_CIPCode")},
-        }
-        entry["chosen"] = {
-            "atoms": {str(i): iso.GetAtomWithIdx(i).GetProp("_CIPCode") for i in atoms if iso.GetAtomWithIdx(i).HasProp("_CIPCode")},
-            "bonds": {str(i): iso.GetBondWithIdx(i).GetProp("_CIPCode") for i in bonds if iso.GetBondWithIdx(i).HasProp("_CIPCode")},
         }
         entry["smiles"] = Chem.MolToSmiles(iso)
         made.append(entry)
@@ -2142,76 +2110,6 @@ def op_structure_facts(m):
     return {"structures": out}
 
 
-def stereoisomers_one(blocks, aside):
-    """*Stereoisomers* on one structure: kept as drawn where nothing is left
-    open, or nothing it leaves open can go more than one way in 3D (a
-    bridgehead its rings fix; a strained cage none of whose forms holds);
-    else each stereoisomer that can be made in 3D, every open stereocentre
-    and double bond given, as a drawing - or, `aside`, set aside. An
-    allene's axis left open is always set aside (no stereoisomer of it is
-    given), and so is one with more than MOST_ISOMERS stereoisomers, whole:
-    never some of them. Those are counted only as far as one past the most,
-    never all: twenty double bonds left open give a million. One not looked
-    at within EXAMINE_S - its stereoisomers tried in 3D - is set aside
-    alone, the others as they are."""
-    started = time.monotonic()
-    too_long = {"aside": f"took more than {EXAMINE_S} s to examine", "kind": "too long"}
-    mol = drawing_of_parts(blocks)
-    if mol is None:
-        return {"aside": "it could not be read", "kind": "unreadable"}
-    problem = Chem.SanitizeMol(mol, catchErrors=True)
-    if problem != Chem.SanitizeFlags.SANITIZE_NONE:
-        return {"aside": f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "kind": "valence"}
-    Chem.AssignChiralTypesFromBondDirs(mol)
-    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
-    # (a C=N whose E/Z is none of its own: never enumerated, and said so on the record of each it gives)
-    said = moving_said(mol)
-    note = {"properties": {"stereo_not_enumerated": {"value": said, "unit": "none", "method": "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)"}}} if said else {}
-    atoms, bonds = open_stereo(mol)
-    if not (atoms or bonds):
-        return {"as": "drawn", **note}
-    if open_cumulenes(mol, bonds):
-        return {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"}
-    # (how many the open elements could give at most, before any is made: over the most, counted only to one
-    #  past it - all of them would be a million for twenty double bonds - and set aside whole, saying the most it
-    #  could be. Counted unique, one past the most is reached at once but where many of the bound are alike - a
-    #  symmetric structure with many open: rare, and looked at no longer than any other, below. A C=N whose E/Z is
-    #  none of its own is held one way, as `embeddable` holds it: not counted)
-    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)
-    counted_of = held_one_way(mol, moving_open(mol), False)
-    most = GetStereoisomerCount(counted_of, options=options)
-    if most > MOST_ISOMERS:
-        for counted, _ in enumerate(EnumerateStereoisomers(counted_of, options=options), 1):
-            if counted > MOST_ISOMERS:
-                return {"aside": f"more than the {MOST_ISOMERS} stereoisomers made of one (up to {most})", "kind": "too many"}
-            if time.monotonic() > started + EXAMINE_S:
-                return too_long
-    try:
-        made = embeddable(mol, started + EXAMINE_S)
-    except TooLong:
-        return too_long
-    if len(made) <= 1:
-        return {"as": "drawn", **note}
-    if aside:
-        return {"aside": f"stereo left open: {len(made)} stereoisomers", "kind": "stereo open"}
-    # (in a fixed order: by each one's SMILES - and each one's own SMILES given beside it)
-    made.sort(key=Chem.MolToSmiles)
-    try:
-        drawings = [drawing_block(Chem.Mol(x)) for x in made]
-    except ValueError as e:
-        # (an adduct's drawing that cannot be written back as drawn: set aside, saying so - `as_drawn`)
-        return {"aside": str(e), "kind": "drawing"}
-    return {"made": drawings, "smiles": [Chem.MolToSmiles(x) for x in made], **note}
-
-
-def step_stereoisomers(entries, options):
-    """*Stereoisomers*: each structure's stereoisomers where it leaves
-    stereo open (`stereoisomers_one`), or set aside where the option says
-    so."""
-    aside = options.get("open") == "aside"
-    return {"structures": [stereoisomers_one(e.get("molblocks") or [], aside) for e in entries]}
-
-
 #: The descriptors *Descriptors* gives each structure: its name, unit (Meno's units table, or "none"), how
 #: RDKit works it out, and the function. Each of the molecule as drawn, its hydrogens counted as its atoms have
 #: them.
@@ -2257,7 +2155,7 @@ UNDEFINED_ALONE = ("logp",)
 
 
 #: The steps on structures drawn, by kind.
-STRUCTURE_STEPS = {"stereoisomers": step_stereoisomers, "descriptors": step_descriptors}
+STRUCTURE_STEPS = {"descriptors": step_descriptors}
 
 
 OPS = {
@@ -2270,8 +2168,8 @@ OPS = {
     "smiles_read": op_smiles_read,
     "analyse": op_analyse,
     "structure_facts": op_structure_facts,
-    "open_stereo": op_open_stereo,
-    "stereo_left_open": op_stereo_left_open,
+    "stereo_elements": op_stereo_elements,
+    "stereoisomers": op_stereoisomers,
     "configurations": op_configurations,
     "conformers": op_conformers,
     "drawing_of": op_drawing_of,
