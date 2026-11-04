@@ -4,6 +4,7 @@ import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { forFillsOnly, setInUse } from "../../../lib/chem/palette";
+import { withTool } from "./utils/penTool";
 import { INK_WIDTHS_PT, markerColour } from "../../../lib/chem/ink";
 import type { InkMode } from "./store/types";
 import { useInFront } from "../../layouts/inFront";
@@ -76,8 +77,7 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
           aria-label={t.name}
           title={t.name}
           aria-pressed={mode.tool === t.tool}
-          // (the pen taken up with the marker's colour for fills alone: in its own instead)
-          onClick={() => onMode({ ...mode, tool: t.tool, ...(t.tool === "pen" && mode.color != null && forFillsOnly(set, mode.color) ? { color: null } : {}) })}
+          onClick={() => onMode(withTool(mode, t.tool, set))}
           className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${mode.tool === t.tool ? "bg-gh-base" : "hover:bg-gh-base"}`}
           style={{ width: SIZE, height: SIZE }}
         >

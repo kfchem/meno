@@ -5,6 +5,8 @@ import { OKABE_ITO_SET } from "../../../lib/chem/palette";
 import ColourCard from "./ColourCard";
 import PenCard from "./PenCard";
 import { EditorProvider } from "./store";
+import { addShape, createWorkspaceDocument } from "./document";
+import { withTool } from "./utils/penTool";
 
 // Vitest runs in Node, with no page to mount on: the cards as the server's
 // renderer writes them, as they first show.
@@ -52,5 +54,24 @@ describe("Okabe and Ito's yellow, for fills and highlights only", () => {
     expect(swatches(pen, "Colour").find((s) => s.label.startsWith(YELLOW))).toEqual({ label: `${YELLOW}, for the marker only`, disabled: true });
     const marker = renderToString(<PenCard mode={{ tool: "marker", color: null, width: 1 }} onMode={() => {}} onDone={() => {}} />);
     expect(swatches(marker, "Colour").find((s) => s.label === YELLOW)).toEqual({ label: YELLOW, disabled: false });
+  });
+
+  it("is struck through for a shape's line, and offered for a box's fill", () => {
+    const doc = createWorkspaceDocument();
+    doc.reset(addShape(doc.getState(), { kind: "rect", x0: 0, y0: 0, x1: 10, y1: 5 }));
+    const html = renderToString(
+      <EditorProvider tabId="colour-card-shape" document={doc}>
+        <ColourCard target={{ atoms: [], bonds: [], rings: [], shapes: [1] }} x={0} y={0} within={{ width: 800, height: 600 }} onClose={() => {}} />
+      </EditorProvider>,
+    );
+    expect(swatches(html, "Line").find((s) => s.label.startsWith(YELLOW))).toEqual({ label: `${YELLOW}, for fills and highlights only`, disabled: true });
+    expect(swatches(html, "Fill").find((s) => s.label === YELLOW)).toEqual({ label: YELLOW, disabled: false });
+  });
+
+  it("gives the pen its own colour when it is taken up with the marker's yellow, and keeps any other", () => {
+    expect(withTool({ tool: "marker", color: YELLOW, width: 1 }, "pen", OKABE_ITO_SET)).toEqual({ tool: "pen", color: null, width: 1 });
+    expect(withTool({ tool: "marker", color: "#0072b2", width: 1 }, "pen", OKABE_ITO_SET)).toEqual({ tool: "pen", color: "#0072b2", width: 1 });
+    expect(withTool({ tool: "pen", color: null, width: 1 }, "marker", OKABE_ITO_SET)).toEqual({ tool: "marker", color: null, width: 1 });
+    expect(withTool({ tool: "marker", color: YELLOW, width: 2 }, "eraser", OKABE_ITO_SET)).toEqual({ tool: "eraser", color: YELLOW, width: 2 });
   });
 });
