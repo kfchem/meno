@@ -37,7 +37,7 @@ export const CATALOGUE_REQUEST: ConsentRequest = {
   purpose: CATALOGUE_PURPOSE,
   title: "List the plugins online?",
   detail: "Meno fetches the list of the plugins it can get - each one's name, version, licence and size - and, when you add one, its files. Nothing is got until you add it.",
-  sources: ["The list and the plugins' files: github.com"],
+  sources: ["The list and the plugins' files: github.com, which hands them on to objects.githubusercontent.com or release-assets.githubusercontent.com"],
   hosts: CATALOGUE_HOSTS,
 };
 
