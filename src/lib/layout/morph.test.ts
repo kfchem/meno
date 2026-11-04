@@ -69,4 +69,61 @@ describe("two drawings of one structure, matched", () => {
     expect(side).toBeCloseTo(1);
     expect(Math.abs(Math.atan2(f.sin, f.cos))).toBeLessThanOrEqual(Math.PI);
   });
+
+  it("move a drawing that is not the other turned - a chain stretched, then curled - exactly from its places to its own, the turn half done half-way", () => {
+    const h = 1.299;
+    const stretched = [
+      { x: 0, y: 0 },
+      { x: 1.5, y: 0 },
+      { x: 2.25, y: h },
+      { x: 3.75, y: h },
+      { x: 4.5, y: 0 },
+    ];
+    // (curled, and turned 170 degrees as a whole: a turn the long way round would be 190)
+    const curl = [
+      { x: 0, y: 0 },
+      { x: 1.5, y: 0 },
+      { x: 2.25, y: h },
+      { x: 1.5, y: 2 * h },
+      { x: 2.25, y: 3 * h },
+    ];
+    const t170 = (170 * Math.PI) / 180;
+    const curled = curl.map((p) => ({ x: Math.cos(t170) * p.x - Math.sin(t170) * p.y + 7, y: Math.sin(t170) * p.x + Math.cos(t170) * p.y + 1 }));
+    const f = fitOnto(curled, stretched);
+    curled.forEach((p, i) => {
+      const start = morphAt(f, stretched[i], p, 0);
+      const end = morphAt(f, stretched[i], p, 1);
+      expect(start.x).toBeCloseTo(stretched[i].x, 9);
+      expect(start.y).toBeCloseTo(stretched[i].y, 9);
+      expect(end.x).toBeCloseTo(p.x, 9);
+      expect(end.y).toBeCloseTo(p.y, 9);
+    });
+    // (turned only - the stretched chain itself, 170 degrees round - half-way it has turned 85 degrees, the short way, not 95 the long)
+    const rigid = stretched.map((p) => ({ x: Math.cos(t170) * p.x - Math.sin(t170) * p.y + 7, y: Math.sin(t170) * p.x + Math.cos(t170) * p.y + 1 }));
+    const g = fitOnto(rigid, stretched);
+    const mid = rigid.map((p, i) => morphAt(g, stretched[i], p, 0.5));
+    const turn = (q: readonly { x: number; y: number }[]) => Math.atan2(q[1].y - q[0].y, q[1].x - q[0].x);
+    const by = Math.atan2(Math.sin(turn(mid) - turn(stretched)), Math.cos(turn(mid) - turn(stretched)));
+    expect(by).toBeCloseTo((85 * Math.PI) / 180, 6);
+  });
+
+  it("are matched up to as many atoms as the most - one more, and they are not", () => {
+    const chain = (n: number): MatchDrawing => ({
+      atoms: Array.from({ length: n }, (_, i) => ({ el: "C", x: i * 0.87, y: i % 2 ? 0.5 : 0 })),
+      bonds: Array.from({ length: n - 1 }, (_, i) => ({ a: i, b: i + 1, order: 1 })),
+    });
+    expect(sameAtoms(chain(MATCH_MOST_ATOMS), chain(MATCH_MOST_ATOMS))).not.toBeNull();
+    expect(sameAtoms(chain(MATCH_MOST_ATOMS + 1), chain(MATCH_MOST_ATOMS + 1))).toBeNull();
+  });
+
+  it("are fitted without a mirror where a mirror fits no better - a drawing as symmetric as its mirror", () => {
+    // (propane, C-C-C bent: its mirror across its own axis is itself - a tie, and the plain turn is taken)
+    const propane = [
+      { x: -0.87, y: 0 },
+      { x: 0, y: 0.5 },
+      { x: 0.87, y: 0 },
+    ];
+    const turned = propane.map((p) => ({ x: -p.y, y: p.x }));
+    expect(fitOnto(turned, propane, true)).toMatchObject({ mirror: 1 });
+  });
 });

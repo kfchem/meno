@@ -81,15 +81,18 @@ export function fitted(f: Fit, a: Point): Point {
  */
 export function sameAtoms(from: MatchDrawing, to: MatchDrawing): number[] | null {
   const n = from.atoms.length;
+  // (shortcuts only - the search below finds no way for these either: a different count of atoms or bonds, or another graph)
   if (!n || n !== to.atoms.length || n > MATCH_MOST_ATOMS || from.bonds.length !== to.bonds.length) return null;
   const a = input(from);
   const b = input(to);
   const all = [...Array(n).keys()];
   if (graphText(bareGraph(a, all)) !== graphText(bareGraph(b, all))) return null;
-  // (each way `to` is found in `from`: for each atom of `to`, its atom in `from` - the same element; its charge and label too)
+  // (each way `to` is found in `from`: for each atom of `to`, its atom in `from` - the same element; its charge and label
+  //  too, within the search, so a symmetric structure's ways kept are all ways that match those)
   const alike = (i: number, j: number) => (to.atoms[i].charge ?? 0) === (from.atoms[j].charge ?? 0) && (to.atoms[i].label ?? "") === (from.atoms[j].label ?? "");
-  const ways = coreMatches(b, a, MATCH_MOST_WAYS).filter((w) => w.every((j, i) => alike(i, j)));
-  // (how far its atoms go, their middles laid on each other but not turned: of a ring's ways, the one turned least)
+  const ways = coreMatches(b, a, MATCH_MOST_WAYS, alike);
+  // (how far its atoms go, their middles laid on each other but not turned: of a ring's ways, the one turned least - every
+  //  way pairs all the atoms, so laying the middles on each other changes every way's sum alike; it is done for clarity)
   const mid = (v: readonly Point[]) => ({ x: v.reduce((s, p) => s + p.x, 0) / n, y: v.reduce((s, p) => s + p.y, 0) / n });
   const p = mid(to.atoms);
   const q = mid(from.atoms);
