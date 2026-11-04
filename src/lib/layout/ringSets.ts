@@ -20,6 +20,7 @@ import { flatCost, isCage, smallestSets } from "./cage";
 import type { Point } from "./geometry";
 import type { Molecule, RingSystem } from "./perceive";
 import { misshapen, narrowGap } from "./ringSystem";
+import { schlegelFaces } from "./schlegel";
 
 /** At most this many smallest sets tried for one system; one with more tries those whose rings are least bridged. */
 export const MOST_SETS_TRIED = 8;
@@ -78,7 +79,8 @@ type Flat = { pos: Map<number, Point>; depth?: Map<number, number> };
 /**
  * The molecule with each of its ring systems that has more than one
  * smallest set of rings - and is no cage, drawn in perspective from its
- * solid whatever its set, nor bound face-on to a metal - given the set
+ * solid whatever its set, nor a closed surface seen through a face, nor
+ * bound face-on to a metal - given the set
  * its flat drawing (`layFlat`) reads best from. How well a drawing reads
  * is `flatCost` with the room for its bonds out, its rings' shapes and its
  * narrow gaps, as `layoutFlat` weighs them, each read the same whichever
@@ -88,7 +90,8 @@ export function drawnRingSets(mol: Molecule, layFlat: (mol: Molecule, sys: RingS
   const apart = new Set([...mol.eta.map((e) => e.system), ...mol.dienes.map((d) => d.system), ...mol.units.map((u) => u.system)]);
   let out = mol;
   mol.systems.forEach((sys, i) => {
-    if (apart.has(i) || sys.rings.length < 2) return;
+    // (nor a closed surface, drawn seen through a face whatever its set: schlegel.ts)
+    if (apart.has(i) || sys.rings.length < 2 || schlegelFaces(out, sys)) return;
     const sets = ringSetsToTry(out, sys);
     if (sets.length < 2 || isCage(out, sys)) return;
     const mols = sets.map((set) => withRingSet(out, sys, set));

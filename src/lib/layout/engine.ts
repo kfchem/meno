@@ -29,6 +29,7 @@ import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule
 import { extendRingSystem, metalHub, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { drawnRingSets, keptFlat } from "./ringSets";
+import { schlegel, schlegelFaces } from "./schlegel";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
@@ -1134,6 +1135,9 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
     const views = [cage, ...[1, 2].flatMap((rank) => projectCage(mol, sys, rank) ?? [])];
     return { ...cage, solid: true, views };
   }
+  // a closed surface too large for a cage - C60 - seen through one face (schlegel.ts)
+  const faces = schlegelFaces(mol, sys);
+  if (faces) return { pos: schlegel(mol, sys, faces) };
   const flat = layoutFlat(mol, sys);
   // (the room the system's bonds out of it have counted: a flat drawing that leaves a substituent none is not one without a fault)
   const flatFaults = flatCost(mol, sys, flat.pos, flat.depth, true);
