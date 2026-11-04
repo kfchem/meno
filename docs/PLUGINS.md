@@ -99,13 +99,26 @@ embed both.
 - **A centre of three bonds the plugin leaves unspecified is Meno's to
   read** (`lib/chem/lonePairsIn3d`). Of every element the plugin gives as a
   centre with no configuration, those of three bonds, a lone pair the
-  fourth group - a phosphine's P, an arsine's As, an aziridine's N, which
-  the toolkit does not fix from a geometry - are read from where their
-  atoms are: the sign of the volume their three neighbours span, none
-  where the four lie flat. Each read is specified, and the key is the
-  plugin's, then Meno's for those centres, so that two P-epimers are two
-  stereoisomers, and a phosphine is not taken for one whose configuration
-  is unspecified.
+  fourth group - a phosphine's P, an arsine's As, an N-chloro aziridine's
+  N, which the toolkit does not fix from a geometry - are taken by Meno's
+  rule on lone pairs (docs/EDITOR-2D.md, *Centres by a lone pair*), as a
+  drawing and a SMILES are:
+  - one the rule keeps is read from where its atoms are, by the sign of
+    the volume its three neighbours span. It is specified, and the key is
+    the plugin's, then Meno's for those centres, so that two P-epimers are
+    two stereoisomers, and a phosphine is not taken for one whose
+    configuration is unspecified;
+  - but only where its three bond angles add up to 350 degrees or less.
+    A pyramid inverts through the planar form, its three angles then 360
+    (Rauk, Allen and Mislow, Angew. Chem. Int. Ed. Engl. 9, 400, 1970,
+    Sec. 1): one within 10 degrees of flat is too close to it to have a
+    configuration. The bound is Meno's own, wider than a geometry's noise
+    or an N's conjugation flattening it short of 360, far narrower than any
+    pyramid that keeps its configuration. Such a centre stays unspecified,
+    as before, so *Populations* refuses its entry, naming the centre;
+  - one whose lone pair keeps no configuration - a plain N-alkyl
+    aziridine's N - is no centre: it goes from the elements, and its two
+    invertomers are one stereoisomer, as conformers are.
 - **Not perceived is not "no stereo".** Where nothing fills the role, or
   the plugin fails, the entry says so and why; a step that needs it does
   not go on as if there were none.

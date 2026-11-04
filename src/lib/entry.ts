@@ -170,9 +170,11 @@ export type PropertyPart = { property: string; value: number; unit: Unit | "none
  * An element of an entry that could be stereogenic: a centre (its atom), a
  * double bond, an axis or a cumulene (its two atoms), or another kind (a
  * metal's centre), by atom number from 0; and whether its configuration is
- * given - from a geometry in 3D, every element it fixes.
+ * given - from a geometry in 3D, every element it fixes. A centre of three
+ * bonds too close to flat to have a configuration (lib/chem/lonePairsIn3d)
+ * says so: the sum of its three bond angles, in degrees (`flat`).
  */
-export type StereoElement = { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean };
+export type StereoElement = { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean; flat?: number };
 
 /**
  * Which stereoisomer an entry is, as the plugin that perceives

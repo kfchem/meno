@@ -112,9 +112,35 @@ describe("a centre of three bonds the plugin leaves unspecified", () => {
     const xyz = [[0, 0, 0], ...round, [-1.6, 2.4, -0.3]].flatMap(([x, y, z]) => [x, y, mirror ? -z : z]);
     return placed([el, "C", "C", "Cl", "C"], [[0, 1], [0, 2], [0, 3], [2, 4]], xyz);
   };
-  const aziridine = (side: 1 | -1) =>
-    placed(["N", "C", "C", "Cl", "C"], [[0, 1], [0, 2], [1, 2], [0, 3], [1, 4]], [0, 0, 0, 1.47, 0, 0, 0.74, 1.27, 0, -0.9, -0.6, 1.3 * side, 2.2, -0.9, 0.9]);
+  const aziridine = (side: 1 | -1, on = "Cl") =>
+    placed(["N", "C", "C", on, "C"], [[0, 1], [0, 2], [1, 2], [0, 3], [1, 4]], [0, 0, 0, 1.47, 0, 0, 0.74, 1.27, 0, -0.9, -0.6, 1.3 * side, 2.2, -0.9, 0.9]);
+  /** The phosphine flattened: its three neighbours in the P's plane, 120 degrees apart. */
+  const flatP = () => {
+    const g = pyramidOf("P", 1.85, false);
+    const xyz = g.xyz.map((v, k) => (k % 3 === 2 && k < 12 ? 0 : v));
+    return placed(["P", "C", "C", "Cl", "C"], [[0, 1], [0, 2], [0, 3], [2, 4]], xyz);
+  };
   const unspecified = { elements: [{ kind: "centre" as const, atoms: [0], specified: false }], key: "CCP(C)Cl" };
+  /** Free energies at 298.15 K, `kcal` above -100 Eh, worked out alike: an entry of `g` in `group`, perceived as the plugin answers it. */
+  const entryOf = (g: ReturnType<typeof placed>, id: string, kcal: number, group: string): Entry => ({
+    id,
+    from: [],
+    structure: { atoms: g.atoms.map((a) => ({ el: a.el })), bonds: g.bonds.map((b) => ({ ...b, order: 1 as const })) },
+    geometry: { kind: "3d", xyz: g.xyz },
+    species: { charge: 0, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } },
+    properties: {
+      [PROPERTY.freeEnergy]: {
+        value: -100 + convert(kcal, "kcal/mol", "Eh"),
+        unit: "Eh",
+        at: { geometry: geometryKey(g.xyz), kelvin: 298.15, atm: 1 },
+        by: { program: "P", method: "M", basis: "B", treatment: "T" },
+        status: "computed",
+      },
+      group: { value: group, unit: "none", status: "computed" },
+    },
+    status: "done",
+    stereo: stereoKnown(g)!,
+  });
 
   it("is read from the geometry, specified, its configuration in the key: a phosphine's P-epimers, an arsine's, an N-chloro aziridine's told apart", () => {
     for (const [name, pair] of [
@@ -147,34 +173,67 @@ describe("a centre of three bonds the plugin leaves unspecified", () => {
     const pair = [pyramidOf("P", 1.85, false), pyramidOf("P", 1.85, true)];
     const { asker } = plugin(() => unspecified);
     await perceiveStereo(pair, asker);
-    const g = (kcal: number, xyz: number[]) => ({
-      value: -100 + convert(kcal, "kcal/mol", "Eh"),
-      unit: "Eh" as const,
-      at: { geometry: geometryKey(xyz), kelvin: 298.15, atm: 1 },
-      by: { program: "P", method: "M", basis: "B", treatment: "T" },
-      status: "computed" as const,
-    });
-    const entryOf = (k: number, group: string): Entry => ({
-      id: `p${k}`,
-      from: [],
-      structure: { atoms: pair[k].atoms.map((a) => ({ el: a.el })), bonds: pair[k].bonds.map((b) => ({ ...b, order: 1 as const })) },
-      geometry: { kind: "3d", xyz: pair[k].xyz },
-      species: { charge: 0, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } },
-      properties: { [PROPERTY.freeEnergy]: g(k, pair[k].xyz), group: { value: group, unit: "none", status: "computed" } },
-      status: "done",
-      stereo: stereoKnown(pair[k])!,
-    });
     // (each alone in its group: weighed, its configuration known)
-    const apart = populations([entryOf(0, "a"), entryOf(1, "b")], { kelvin: 298.15 });
+    const apart = populations([entryOf(pair[0], "p0", 0, "a"), entryOf(pair[1], "p1", 1, "b")], { kelvin: 298.15 });
     if (!apart.ok) throw new Error(apart.said);
     expect(apart.exits.done.map((e) => e.id)).toEqual(["p0", "p1"]);
     // (the two in one group: two configurations, not weighed in one sum)
-    const together = populations([entryOf(0, "a"), entryOf(1, "a")], { kelvin: 298.15 });
+    const together = populations([entryOf(pair[0], "p0", 0, "a"), entryOf(pair[1], "p1", 1, "a")], { kelvin: 298.15 });
     if (!together.ok) throw new Error(together.said);
     expect(together.exits.done).toEqual([]);
     expect(together.exits.failed.map((e) => e.status)).toEqual([
       { failed: expect.stringMatching(/holds 2 configurations/) },
       { failed: expect.stringMatching(/holds 2 configurations/) },
     ]);
+  });
+
+  it("stays unspecified where it is too close to flat to have a configuration, saying how flat, or where an atom is placed nowhere: the key the plugin's", () => {
+    const flat = withLonePairs(flatP(), unspecified);
+    expect(flat.elements).toEqual([{ kind: "centre", atoms: [0], specified: false, flat: expect.closeTo(360, 6) }]);
+    expect(flat.key).toBe(unspecified.key);
+    const nowhere = pyramidOf("P", 1.85, false);
+    expect(withLonePairs({ ...nowhere, xyz: nowhere.xyz.map((v, k) => (k === 3 ? Number.NaN : v)) }, unspecified)).toEqual(unspecified);
+  });
+
+  it("goes where its lone pair keeps no configuration: a plain N-methyl aziridine's N, its two invertomers then one stereoisomer", () => {
+    const answer = { elements: [{ kind: "centre" as const, atoms: [0], specified: false }], key: "CC1CN1C" };
+    const [one, other] = [aziridine(1, "C"), aziridine(-1, "C")].map((g) => withLonePairs(g, answer));
+    expect(one).toEqual({ elements: [], key: "CC1CN1C" });
+    expect(other).toEqual(one);
+  });
+
+  it("is asked only of a centre of one atom: an element of another kind at the same atom, or of two atoms, is as the plugin gave it", () => {
+    const g = pyramidOf("P", 1.85, false);
+    for (const elements of [
+      [{ kind: "other" as const, atoms: [0], specified: false }],
+      [{ kind: "centre" as const, atoms: [0, 1], specified: false }],
+      [{ kind: "double" as const, atoms: [0, 1], specified: false }],
+    ]) {
+      const answer = { elements, key: "CCP(C)Cl" };
+      expect(withLonePairs(g, answer)).toEqual(answer);
+    }
+  });
+
+  it("marks a centre the plugin gives twice specified twice, keyed as if given once", () => {
+    const g = pyramidOf("P", 1.85, false);
+    const twice = withLonePairs(g, { elements: [...unspecified.elements, ...unspecified.elements], key: unspecified.key });
+    expect(twice.elements).toEqual([
+      { kind: "centre", atoms: [0], specified: true },
+      { kind: "centre", atoms: [0], specified: true },
+    ]);
+    expect(twice.key).toBe(withLonePairs(g, unspecified).key);
+  });
+
+  it("lets Populations name a centre too close to flat to have a configuration, and weigh a plain N-methyl aziridine's two invertomers in one sum", async () => {
+    const p = flatP();
+    const invertomers = [aziridine(1, "C"), aziridine(-1, "C")];
+    await perceiveStereo([p], plugin(() => unspecified).asker);
+    await perceiveStereo(invertomers, plugin(() => ({ elements: [{ kind: "centre", atoms: [0], specified: false }], key: "CC1CN1C" })).asker);
+    const flat = populations([entryOf(p, "flat", 0, "a")], { kelvin: 298.15 });
+    if (!flat.ok) throw new Error(flat.said);
+    expect(flat.exits.failed.map((e) => e.status)).toEqual([{ failed: "P (atom 1) is too close to flat to have a configuration" }]);
+    const both = populations([entryOf(invertomers[0], "n0", 0, "a"), entryOf(invertomers[1], "n1", 0.5, "a")], { kelvin: 298.15 });
+    if (!both.ok) throw new Error(both.said);
+    expect(both.exits.done.map((e) => e.id)).toEqual(["n0", "n1"]);
   });
 });

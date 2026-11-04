@@ -41,18 +41,30 @@ const molblockOf = (e: Geometry) =>
 
 /**
  * What the plugin answered of an entry, with each centre of three bonds it
- * left unspecified read from the entry's geometry (lib/chem/lonePairsIn3d):
- * specified, and its configuration in the key - the plugin's key, then
- * Meno's for those centres - so that two stereoisomers that differ there
- * are told apart, and one is not taken for unspecified.
+ * left unspecified taken by Meno's rule on lone pairs and read from the
+ * entry's geometry (lib/chem/lonePairsIn3d): one read is specified, and its
+ * configuration is in the key - the plugin's key, then Meno's for those
+ * centres - so that two stereoisomers that differ there are told apart,
+ * and one is not taken for unspecified; one too close to flat stays
+ * unspecified, and says so (`flat`); one whose lone pair keeps no
+ * configuration (a plain N-alkyl aziridine's N) is no centre, and goes.
  */
 export function withLonePairs(e: Geometry, answer: { elements: StereoElement[]; key: string }): { elements: StereoElement[]; key: string } {
-  const open = answer.elements.flatMap((el) => (el.kind === "centre" && !el.specified && el.atoms.length === 1 ? el.atoms : []));
-  const read = open.length ? lonePairsIn3d(e.atoms, e.bonds, e.xyz, open) : null;
-  if (!read) return answer;
+  const one = (el: StereoElement) => el.kind === "centre" && !el.specified && el.atoms.length === 1;
+  const open = answer.elements.flatMap((el) => (one(el) ? el.atoms : []));
+  if (!open.length) return answer;
+  const { read, flat, none, key } = lonePairsIn3d(e.atoms, e.bonds, e.xyz, open);
+  if (!read.size && !flat.size && !none.size) return answer;
   return {
-    elements: answer.elements.map((el) => (el.kind === "centre" && el.atoms.length === 1 && read.read.has(el.atoms[0]) ? { ...el, specified: true } : el)),
-    key: `${answer.key}|${read.key}`,
+    elements: answer.elements.flatMap((el): StereoElement[] => {
+      if (!one(el)) return [el];
+      const c = el.atoms[0];
+      if (none.has(c)) return [];
+      if (read.has(c)) return [{ ...el, specified: true }];
+      if (flat.has(c)) return [{ ...el, flat: flat.get(c)! }];
+      return [el];
+    }),
+    key: key == null ? answer.key : `${answer.key}|${key}`,
   };
 }
 
