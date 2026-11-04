@@ -382,6 +382,20 @@ describe("a centre with a lone pair for its fourth group", () => {
     };
     expect(readStereo(crossed.atoms, crossed.bonds).tetra.has(0)).toBe(false);
     expect(unreadWhy(crossed.atoms, crossed.bonds, 0)).toBe("they are drawn crossed, saying neither way round");
+    // (a wavy bond at it: either, whatever else is drawn)
+    const wavy = sulfoxide("Se", "up");
+    wavy.bonds[2] = { ...wavy.bonds[2], either: true };
+    expect(unreadWhy(wavy.atoms, wavy.bonds, 0)).toBe("a wavy bond at it says it is either");
+    // (three bonds and an H: four groups, so not "no fourth group" - read as a centre where it can be, crossed here)
+    const nh: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "N", hs: 1 }, { ...at(90), el: "C", hs: 3 }, { ...at(270), el: "C", hs: 3 }, { ...at(0), el: "C", hs: 3 }],
+      bonds: [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo: "down" } },
+        { a: 0, b: 3, order: 1 },
+      ],
+    };
+    expect(unreadWhy(nh.atoms, nh.bonds, 0)).not.toContain("no fourth group");
   });
 
   it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, each way round", () => {
