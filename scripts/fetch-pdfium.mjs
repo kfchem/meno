@@ -3,8 +3,9 @@
 // against its SHA-256, and put in src-tauri/pdfium/<system>/ with its
 // licences - where the build carries it from. Nothing here is kept in git.
 // Every licence that comes with it must be among the notices Meno carries
-// (src-tauri/resources/licenses/PDFium-<its name>), saying the same, on each
-// system: one missing there, or saying otherwise, stops it.
+// (src-tauri/resources/licenses/PDFium-<its name>, or this system's own copy
+// where its archive words it otherwise, PDFium-<its name>-<system>), saying
+// the same, on each system: one missing there, or saying otherwise, stops it.
 //
 //   node scripts/fetch-pdfium.mjs
 import { createHash } from "node:crypto";
@@ -40,16 +41,21 @@ writeFileSync(archive, bytes);
 execFileSync("tar", ["-xzf", pin.asset], { cwd: work });
 
 // (its licences, each against the notice Meno carries for it - their line ends aside, as a checkout or an archive may
-// give either - and the archive's own LICENSE, pdfium-binaries', as PDFium-pdfium-binaries.txt)
+// give either - and the archive's own LICENSE, pdfium-binaries', as PDFium-pdfium-binaries.txt; where this system's
+// archive words one otherwise than the others' do - the macOS archive's pdfium.txt, its lines marked as comments - its
+// own copy, PDFium-<name>-<system>, which the app carries beside the other on every system)
 const notices = join(root, "src-tauri", "resources", "licenses");
 const lf = (path) => readFileSync(path, "utf8").replace(/\r\n?/g, "\n");
 const behind = [];
 const licences = readdirSync(join(work, "licenses"), { withFileTypes: true }).map((e) => ({ name: e.name, file: e.isFile(), path: join(work, "licenses", e.name) }));
 for (const l of [...licences, { name: "pdfium-binaries.txt", file: true, path: join(work, "LICENSE") }]) {
-  const ours = join(notices, `PDFium-${l.name}`);
+  const dot = l.name.lastIndexOf(".");
+  const own = dot > 0 ? `PDFium-${l.name.slice(0, dot)}-${system}${l.name.slice(dot)}` : `PDFium-${l.name}-${system}`;
+  const name = existsSync(join(notices, own)) ? own : `PDFium-${l.name}`;
+  const ours = join(notices, name);
   if (!l.file) behind.push(`licenses/${l.name}: not a file - its notices are to be checked by hand`);
-  else if (!existsSync(ours)) behind.push(`${l.name}: not among the notices (src-tauri/resources/licenses/PDFium-${l.name})`);
-  else if (lf(l.path) !== lf(ours)) behind.push(`${l.name}: not what src-tauri/resources/licenses/PDFium-${l.name} says`);
+  else if (!existsSync(ours)) behind.push(`${l.name}: not among the notices (src-tauri/resources/licenses/${name}, or ${own} for this system's own)`);
+  else if (lf(l.path) !== lf(ours)) behind.push(`${l.name}: not what src-tauri/resources/licenses/${name} says`);
 }
 if (behind.length) {
   rmSync(work, { recursive: true, force: true });

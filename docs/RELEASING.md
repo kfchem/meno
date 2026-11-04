@@ -112,7 +112,12 @@ the typefaces' (IBM Plex, Arimo) and ACCeL's. Every licence that comes
 with PDFium's archive must be among the `PDFium-*` files, saying the same:
 `scripts/fetch-pdfium.mjs` stops where one is missing there or says
 otherwise, on each system it fetches the archive for (the CI's and the
-release's, Windows among them). The rest are in one file,
+release's, Windows among them). Where one system's archive words a licence
+otherwise than the others', that system's copy is carried as well,
+`PDFium-<name>-<system>`: the macOS archive's PDFium licence has its lines
+marked as comments (`//`) and the Windows and Linux archives' has not, so
+`PDFium-pdfium-macos.txt` is the macOS archive's and `PDFium-pdfium.txt`
+the others'. The rest are in one file,
 `THIRD-PARTY-NOTICES.txt`, which `npm run notices`
 (`scripts/licenses/notices.mjs`) writes - offline, from what is on this
 computer:
