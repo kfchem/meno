@@ -13,7 +13,7 @@
 import { pdfBounds, pointOf } from "../../../../lib/pdf/layout";
 import type { WorkspaceDocument } from "../document";
 import { inside, lyingIn, type Frame } from "../workflow/entries";
-import { CARD_H, CARD_W } from "../workflow/look";
+import { setMiddle, stepMiddle } from "../workflow/parts";
 import { sheetMiddle } from "../utils/textSheets";
 
 /** A conversation's scope: its frame, or the whole page. */
@@ -33,9 +33,6 @@ export type SeenId = `${SeenKind}:${number}`;
 /** What a scope holds, by kind, each in the order it lies on the page where that is kept (structures, molecules, pictures), else the page's. */
 export type InScope = { [K in SeenKind]: number[] } & { structureAtoms: Map<number, number[]> };
 
-/** The middle of a set's frame, or of a step's card - whose top left it is kept by (store/types `WorkflowStep`). */
-const middle = (b: Frame) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 });
-
 /** What lies inside a scope, on the page as it is now. */
 export function inScope(d: WorkspaceDocument, scope: Scope): InScope {
   const all = "page" in scope;
@@ -50,13 +47,14 @@ export function inScope(d: WorkspaceDocument, scope: Scope): InScope {
     molecule: lying.molecules,
     picture: lying.pictures,
     text: (d.texts ?? []).flatMap((t) => (t.at && !t.of && within(sheetMiddle(t.at, t.text, t.name, pointOf(t))) ? [t.id] : [])),
-    pdf: (d.pdfs ?? []).flatMap((p) => (within(middle(pdfBounds(p))) ? [p.id] : [])),
+    pdf: (d.pdfs ?? []).flatMap((p) => (within(setMiddle(pdfBounds(p))) ? [p.id] : [])),
     arrow: d.arrows.flatMap((a) => (within(a) ? [a.id] : [])),
     plus: d.pluses.flatMap((p) => (within(p) ? [p.id] : [])),
     // (words that go with an arrow: the arrow's, seen with it)
     caption: (d.captions ?? []).flatMap((c) => (c.arrow == null && within(c) ? [c.id] : [])),
-    set: (d.sets ?? []).flatMap((s) => (within(middle(s)) ? [s.id] : [])),
-    step: (d.steps ?? []).flatMap((s) => (within({ x: s.x + CARD_W / 2, y: s.y - CARD_H / 2 }) ? [s.id] : [])),
+    // (a set by its frame's middle, a step by its card's - as a box takes them: workflow/parts)
+    set: (d.sets ?? []).flatMap((s) => (within(setMiddle(s)) ? [s.id] : [])),
+    step: (d.steps ?? []).flatMap((s) => (within(stepMiddle(s)) ? [s.id] : [])),
   };
 }
 

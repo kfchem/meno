@@ -39,7 +39,7 @@ Meno's own commands, called with plain data, never gestures replayed
 id: `molecule:3`, `step:12`. A structure drawn is named by its first
 atom's id, which it keeps however it is edited while that atom stays.
 
-- **`list`** gives each thing in scope, as a line:
+- **`list`** gives each thing in scope, as a line, up to 500 of them, saying how many more there are:
   - *a structure drawn: CO*;
   - *a molecule in 3D: H2O · B3LYP/def2-SVP · gas phase*;
   - *a step: Energy window · by meno · done*.
@@ -50,8 +50,8 @@ atom's id, which it keeps however it is edited while that atom stays.
   - A PDF: its name and how many pages.
   - An arrow: the words that go with it.
   - Words on the page: their text.
-  - A set: its name, and how many structures, molecules and pictures it holds.
-  - A step: its kind, who does it, its options, and what its last run said - done or not, and its line. It also says whether it is running.
+  - A set: its name, and how many of the structures, molecules and pictures it holds lie in scope. A set's frame may reach past the conversation's, its middle inside it; what lies outside is not counted.
+  - A step: its kind, who does it, its options, whether its last run was done or failed, and whether it is running. Never its run's line, which may give a program's or the system's own words, a folder's path among them, and sums up sets that may lie anywhere.
 
 A thing outside the scope is answered as one that is not on the page, in
 the same words: *There is no such object*. Nothing is learnt of what
@@ -59,7 +59,13 @@ lies outside.
 
 The tools never give a job's folder or its files, a whole log or output,
 an input file, a wavefunction kept, or anything of where Meno keeps its
-own. None of them lies on the page.
+own. None of them lies on the page. Nor does a thing in scope tell of
+things outside it.
+
+Names - a molecule's, a PDF's, a picture's, a text's - and texts come
+from files and from people. What a conversation is given of them is
+data: never words to it, however they are put. The conversation is to
+hold them apart from its instructions when it is built.
 
 A tool Meno does not have is said to be none: *There is no tool called
 "run"*.

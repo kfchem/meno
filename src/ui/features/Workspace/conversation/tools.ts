@@ -9,7 +9,14 @@
  *
  * Never given: a job's folder or its files, a whole log or output, an
  * input file, a wavefunction kept, or anything of where Meno keeps its
- * own - none of them lies on the page.
+ * own - none of them lies on the page. Nor what a thing in scope says of
+ * things outside it: a set's members are counted only where they are in
+ * scope too, and a step's run is given as done or not, never its line -
+ * which may say a program's or the system's own words, a folder's path
+ * among them, and sums up sets that may lie anywhere.
+ *
+ * Names - a molecule's, a PDF's, a text's - come from files and from
+ * people: data, never words to a conversation.
  */
 import { levelOf } from "../../../../lib/calc/output";
 import { formulaOf } from "../../../../lib/io/coordinates";
@@ -33,6 +40,8 @@ export const NO_SUCH = "There is no such object";
 export const ATOMS_MOST = 2000;
 /** How many characters of a text are given; past that, cut, and said to be. */
 export const TEXT_MOST = 100_000;
+/** How many things `list` gives; past that, how many more there are. */
+export const LIST_MOST = 500;
 
 /** A line of what a thing is, as `list` gives it. */
 export type Listed = { id: SeenId; kind: SeenKind; line: string };
@@ -130,9 +139,18 @@ export function readOne(d: WorkspaceDocument, s: InScope, kind: SeenKind, id: nu
     case "caption":
       return { text: d.captions!.find((x) => x.id === id)!.text };
     case "set": {
+      // (its members in scope alone: a set's frame may reach past the conversation's, its middle inside it)
       const b = d.sets!.find((x) => x.id === id)!;
       const members = setMembers({ model: d.model, molecules3d: d.molecules3d, pictures: d.pictures }, b);
-      return { ...(b.name ? { name: b.name } : {}), structures: members.structures.length, molecules: members.molecules.length, pictures: members.pictures.length };
+      const seenAtoms = new Set([...s.structureAtoms.values()].flat());
+      return {
+        ...(b.name ? { name: b.name } : {}),
+        inScope: {
+          structures: members.structures.filter((ids) => ids.some((a) => seenAtoms.has(a))).length,
+          molecules: members.molecules.filter((m) => s.molecule.includes(m)).length,
+          pictures: members.pictures.filter((p) => s.picture.includes(p)).length,
+        },
+      };
     }
     case "step": {
       const t = d.steps!.find((x) => x.id === id)!;
@@ -140,7 +158,7 @@ export function readOne(d: WorkspaceDocument, s: InScope, kind: SeenKind, id: nu
         kind: kindInfo(t.kind).name,
         by: t.by ?? "meno",
         options: { ...t.options },
-        ...(t.ran ? { ran: { ok: t.ran.ok, said: t.ran.said } } : {}),
+        ...(t.ran ? { ran: t.ran.ok ? "done" : "failed" } : {}),
         ...(t.running ? { running: true } : {}),
       };
     }
@@ -157,8 +175,10 @@ export const READ_TOOLS = {
 export function callTool(d: WorkspaceDocument, scope: Scope, call: ToolCall): ToolAnswer {
   const s = inScope(d, scope);
   switch (call.tool) {
-    case "list":
-      return { ok: true, value: listed(d, s) };
+    case "list": {
+      const all = listed(d, s);
+      return { ok: true, value: all.length > LIST_MOST ? { things: all.slice(0, LIST_MOST), more: all.length - LIST_MOST } : { things: all } };
+    }
     case "read": {
       const named = readSeenId(call.args?.id);
       if (!named) return { ok: false, why: `Give an id as list gives it ("molecule:3")` };
@@ -166,6 +186,6 @@ export function callTool(d: WorkspaceDocument, scope: Scope, call: ToolCall): To
       return value === undefined ? { ok: false, why: NO_SUCH } : { ok: true, value };
     }
     default:
-      return { ok: false, why: `There is no tool called ${JSON.stringify(call.tool).slice(0, 60)}` };
+      return { ok: false, why: `There is no tool called ${JSON.stringify(String(call.tool).slice(0, 40))}` };
   }
 }
