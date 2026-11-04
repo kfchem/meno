@@ -21,9 +21,13 @@
  * offers - of one spin: an unrestricted calculation's alpha and beta
  * orbitals are not orthogonal to each other, and Meno lists each spin's
  * apart - are as orbitals are: orthonormal (`blockStraying`), their overlaps
- * worked out from the primitives themselves. A reader whose conversion of
- * its program's basis is wrong - an order, a normalisation, a sign - gives
- * orbitals that are not, and none of them is drawn.
+ * worked out from the primitives themselves; where they are not, none is
+ * drawn. A conversion of a program's basis gone wrong - an order, a
+ * normalisation, a sign - is so caught in a molecule, where the atoms'
+ * functions overlap, but not always: a sign turned on every function of
+ * one l and m of a lone atom leaves C S Cᵀ as it was. What shows a
+ * reader's conversion right is its comparison with its program's own
+ * expansion of the same orbitals, where it writes one.
  */
 import { orbitalOn, type Wavefunction } from "./wfx";
 import { floatsText, type Grid } from "./results";

@@ -1235,21 +1235,25 @@ def fchk_orbitals(items):
 # Its basis and orbitals given whole, in Meno's general form of a wavefunction (src/lib/calc/expansion.ts): the nuclei
 # (bohr); the primitives - each one's centre, powers of x, y and z, and exponent, unnormalised, x^l y^m z^n e^(-a r^2);
 # each basis function's coefficients of them; each orbital's coefficients of the functions. Meno checks the orbitals
-# orthonormal over the primitives before it draws any, so a convention taken wrong here draws nothing.
+# orthonormal over the primitives before it draws any, which catches most conventions taken wrong here in a molecule,
+# though not all (a sign turned on every function of one l and m of a lone atom keeps them orthonormal); the comparison
+# with Gaussian 16's own WFX files, below, is what shows them right.
 #
 # From Gaussian's reference ("Interfacing to Gaussian 16" > "Structure of the Formatted Checkpoint File"): "Shell
 # types" (0 s, 1 p, -1 sp, 2 6d, -2 5d, 3 10f, -3 7f), "Number of primitives per shell", "Shell to atom map",
 # "Primitive exponents", the "Contraction coefficients" of each normalized primitive shell and, of an sp shell's p,
 # "P(S=P) Contraction coefficients"; and each shell's functions in its order: Cartesian S, X, Y, Z, XX, YY, ZZ, XY, XZ,
 # YZ, XXX, YYY, ZZZ, XYY, XXY, XXZ, XZZ, YZZ, YYZ, XYZ; pure d 3ZZ-RR, XZ, YZ, XX-YY, XY, f ZZZ-ZRR, XZZ-XRR, YZZ-YRR,
-# XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY. What the page leaves unsaid was settled on Gaussian 16's own WFX files of the same jobs
-# (Output=WFX: its own expansion of the same orbitals into primitives), and its Pop=Full labels of the functions:
+# XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY. What the page leaves unsaid - facts of the file format, the order and scale of a
+# shell's functions in it - was settled on Gaussian 16's own WFX files of the same jobs (Output=WFX: its own expansion
+# of the same orbitals into primitives), every orbital alike at random points:
 # - the orbitals' coefficients ("Alpha MO coefficients", "Beta MO coefficients") lie orbital by orbital, each its
 #   coefficient of every function;
 # - each Cartesian primitive is normalised on its own (xx and xy alike: each to one), and the function so contracted;
-# - a pure function is the real solid harmonic of its l and m, in the order m = 0, +1, -1, +2, -2, ... (the page's d and f
-#   polynomials are so; g "0, +1, -1, ..., -4" in its labels), each primitive of it normalised;
-# - g shells are 4 (15 Cartesian) and -4 (9 pure); the Cartesian g order is its labels' (CARTESIAN[4]);
+# - a pure shell's functions are the real solid harmonics of its l, in the order m = 0, +1, -1, +2, -2, ... (the page's
+#   d and f polynomials are in it; a pure g shell's nine follow it), each primitive normalised;
+# - g shells are 4 (15 Cartesian functions) and -4 (9 pure); a Cartesian g shell's functions are in the order of
+#   CARTESIAN[4]: x's power rising slowest, then y's (ZZZZ first, XXXX last);
 # - an unrestricted calculation has its beta orbitals' coefficients apart, a restricted open shell's none.
 # Shells past g (h and up) are not given: no Gaussian 16 output read here had them, so their order is not known.
 

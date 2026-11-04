@@ -1176,6 +1176,11 @@ The same for every plugin and for Meno's own parts:
   of one, S worked out from the primitives themselves, by Obara and
   Saika's recurrence), and only then works an orbital's values out on its
   grid and draws it; where they are not, none is drawn, and it says so.
+  The check catches a conversion gone wrong in a molecule, where the
+  atoms' functions overlap, but is no proof of one: a sign turned on
+  every function of one l and m of a lone atom leaves `C S Cᵀ` as it was.
+  A reader's conversion is shown right by comparing it with its program's
+  own expansion of the same orbitals (Gaussian's Output=WFX, say).
   A reader converts its program's own basis and coefficients so, and works
   out no values itself. The Gaussian plugin gives a formatted
   checkpoint's so.

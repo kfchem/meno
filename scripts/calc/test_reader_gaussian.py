@@ -617,15 +617,16 @@ def fchk_item(label, kind, values):
     return lines
 
 
-# (made up: two hydrogens 1.4 bohr apart; on the first an s shell of two primitives, an sp shell and a pure d shell of
-#  one each, on the second an s shell - 1 + 4 + 5 + 1 functions - and two orbitals of each spin)
+# (made up: two hydrogens 1.4 bohr apart; on the first an s shell and an sp shell of two primitives each - the sp
+#  shell's p coefficients not its s ones - and a pure d shell of one, on the second an s shell - 1 + 4 + 5 + 1
+#  functions - and two orbitals of each spin)
 BASIS = {
     "Shell types": ("I", [0, -1, -2, 0]),
-    "Number of primitives per shell": ("I", [2, 1, 1, 1]),
+    "Number of primitives per shell": ("I", [2, 2, 1, 1]),
     "Shell to atom map": ("I", [1, 1, 1, 2]),
-    "Primitive exponents": ("R", [3.4, 0.6, 0.8, 1.1, 0.6]),
-    "Contraction coefficients": ("R", [0.15, 0.9, 1.0, 1.0, 1.0]),
-    "P(S=P) Contraction coefficients": ("R", [0.0, 0.0, 1.0, 0.0, 0.0]),
+    "Primitive exponents": ("R", [3.4, 0.6, 0.8, 0.25, 1.1, 0.6]),
+    "Contraction coefficients": ("R", [0.15, 0.9, 0.3, 0.8, 1.0, 1.0]),
+    "P(S=P) Contraction coefficients": ("R", [0.0, 0.0, 0.6, 0.5, 0.0, 0.0]),
 }
 
 
@@ -663,15 +664,27 @@ class AFormattedCheckpointSWavefunction(unittest.TestCase):
     def test_its_primitives_functions_and_orbitals(self):
         e = reader.fchk_expansion(basis_fchk())
         self.assertEqual(e["nuclei"], [0.0, 0.0, 0.0, 0.0, 0.0, 1.4])
-        # (the s shell's two primitives; the sp shell's s, then its p, of one exponent; the d shell's six Cartesian ones)
-        self.assertEqual(e["centres"], [0] * 12 + [1])
-        self.assertEqual(e["powers"][:6], [[0, 0, 0], [0, 0, 0], [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        self.assertEqual(e["exponents"], [3.4, 0.6, 0.8, 0.8, 0.8, 0.8] + [1.1] * 6 + [0.6])
+        # (the s shell's two primitives; the sp shell's s of each of its exponents, then its p; the d shell's six Cartesian ones)
+        self.assertEqual(e["centres"], [0] * 16 + [1])
+        self.assertEqual(e["powers"][:10], [[0, 0, 0]] * 4 + [[1, 0, 0], [0, 1, 0], [0, 0, 1]] * 2)
+        self.assertEqual(e["exponents"], [3.4, 0.6, 0.8, 0.25] + [0.8] * 3 + [0.25] * 3 + [1.1] * 6 + [0.6])
         self.assertEqual(len(e["functions"]), 11)
         self.assertEqual(e["functions"][0]["primitives"], [0, 1])
-        self.assertEqual([f["primitives"] for f in e["functions"][1:5]], [[2], [3], [4], [5]])
+        self.assertEqual([f["primitives"] for f in e["functions"][1:5]], [[2, 3], [4, 7], [5, 8], [6, 9]])
         # (orbital by orbital, each its coefficient of every function)
         self.assertEqual(e["orbitals"], [[float(i) for i in range(11)], [float(i) for i in range(11, 22)]])
+
+    def test_each_primitive_normalised_times_its_coefficient_the_sp_shell_s_p_its_own(self):
+        e = reader.fchk_expansion(basis_fchk())
+        norm_s = lambda a: (2 * a / math.pi) ** 0.75
+        norm_p = lambda a: norm_s(a) * 2 * math.sqrt(a)
+        ratio = lambda f: f["coefficients"][0] / f["coefficients"][1]
+        # (the s shell: d1 N(a1) to d2 N(a2), whatever the function's own norm)
+        self.assertAlmostEqual(ratio(e["functions"][0]), 0.15 * norm_s(3.4) / (0.9 * norm_s(0.6)), places=12)
+        # (the sp shell: its s from the contraction coefficients, its p from the P(S=P) ones)
+        self.assertAlmostEqual(ratio(e["functions"][1]), 0.3 * norm_s(0.8) / (0.8 * norm_s(0.25)), places=12)
+        for f in e["functions"][2:5]:
+            self.assertAlmostEqual(ratio(f), 0.6 * norm_p(0.8) / (0.5 * norm_p(0.25)), places=12)
 
     def test_each_function_normalised_and_a_shell_s_pure_functions_orthogonal(self):
         e = reader.fchk_expansion(basis_fchk())
@@ -703,6 +716,44 @@ class AFormattedCheckpointSWavefunction(unittest.TestCase):
         # (g's last two: x^4 - 6x^2y^2 + y^4 and x^3y - xy^3, its labels' +4 and -4)
         self.assertEqual(by(4, 4, (4, 0, 0)), {(4, 0, 0): 1.0, (2, 2, 0): -6.0, (0, 4, 0): 1.0})
         self.assertEqual(by(4, -4, (3, 1, 0)), {(3, 1, 0): 1.0, (1, 3, 0): -1.0})
+
+    def test_a_pure_shell_s_functions_laid_out_in_the_format_s_order(self):
+        def shell_functions(t):
+            """The functions of one pure shell of type `t` on a lone atom, as the polynomial each is over the primitives'
+            powers: each coefficient over its largest."""
+            n = {-2: 5, -3: 7, -4: 9}[t]
+            text = "\n".join(["one shell", "SP        RHF                           made-up", "Number of atoms                            I                1",
+                              f"Number of basis functions                  I   {n:14d}", "Number of alpha electrons                  I                1",
+                              "Number of beta electrons                   I                1"]
+                             + fchk_item("Atomic numbers", "I", [1]) + fchk_item("Current cartesian coordinates", "R", [0.0, 0.0, 0.0])
+                             + fchk_item("Shell types", "I", [t]) + fchk_item("Number of primitives per shell", "I", [1])
+                             + fchk_item("Shell to atom map", "I", [1]) + fchk_item("Primitive exponents", "R", [0.7])
+                             + fchk_item("Contraction coefficients", "R", [1.0]) + fchk_item("Alpha Orbital Energies", "R", [0.0] * n)
+                             + fchk_item("Alpha MO coefficients", "R", [0.0] * n * n)) + "\n"
+            e = reader.fchk_expansion(text)
+            out = []
+            for f in e["functions"]:
+                terms = {tuple(e["powers"][i]): c for i, c in zip(f["primitives"], f["coefficients"])}
+                top = max(terms.values(), key=abs)
+                out.append({k: round(c / top, 9) for k, c in terms.items()})
+            return out
+        # (d: 3ZZ-RR, XZ, YZ, XX-YY, XY)
+        self.assertEqual(shell_functions(-2), [
+            {(0, 0, 2): 1.0, (2, 0, 0): -0.5, (0, 2, 0): -0.5}, {(1, 0, 1): 1.0}, {(0, 1, 1): 1.0}, {(2, 0, 0): 1.0, (0, 2, 0): -1.0}, {(1, 1, 0): 1.0}])
+        # (f: ZZZ-ZRR, XZZ-XRR, YZZ-YRR, XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY)
+        f = shell_functions(-3)
+        self.assertEqual([sorted(x) for x in f], [
+            [(0, 0, 3), (0, 2, 1), (2, 0, 1)], [(1, 0, 2), (1, 2, 0), (3, 0, 0)], [(0, 1, 2), (0, 3, 0), (2, 1, 0)],
+            [(0, 2, 1), (2, 0, 1)], [(1, 1, 1)], [(1, 2, 0), (3, 0, 0)], [(0, 3, 0), (2, 1, 0)]])
+        # (each over its largest coefficient, its sign with it: x^3 - 3xy^2 over its -3)
+        self.assertEqual((f[3][(2, 0, 1)], f[5][(3, 0, 0)], f[6][(2, 1, 0)]), (1.0, round(-1 / 3, 9), 1.0))
+        # (g: m = 0, +1, -1, ... +4, -4 - their powers of z falling, a cosine-like then a sine-like one each |m|)
+        g = shell_functions(-4)
+        self.assertEqual([max(k[2] for k in x) for x in g], [4, 3, 3, 2, 2, 1, 1, 0, 0])
+        self.assertEqual([all(k[1] % 2 == (i % 2 == 0 and i > 0) for k in x) for i, x in enumerate(g)], [True] * 9)
+        # (each over its largest coefficient, its sign with it: x^4 - 6x^2y^2 + y^4 over its -6)
+        self.assertEqual(g[7], {(4, 0, 0): round(-1 / 6, 9), (2, 2, 0): 1.0, (0, 4, 0): round(-1 / 6, 9)})
+        self.assertEqual(g[8], {(3, 1, 0): 1.0, (1, 3, 0): -1.0})
 
     def test_cartesian_functions_in_gaussian_s_order(self):
         names = lambda L: [("X" * p[0] + "Y" * p[1] + "Z" * p[2]) or "S" for p in reader.CARTESIAN[L]]
