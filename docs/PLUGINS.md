@@ -1618,8 +1618,8 @@ comes in its own pull request.
   needs.
 - **Offered where it is needed** (2026-11-05). Where a role is asked of -
   a SMILES drawn, a structure made in 3D - and no plugin here fills it,
-  the line that says so ("SMILES to a structure, and back needs a plugin,
-  and none here does it.") offers the plugins online that fill it, each to
+  the line that says so ("Needs a plugin: SMILES to a structure, and
+  back.") offers the plugins online that fill it, each to
   add: got, then set up as any plugin is, asking first. Where the list is
   not here yet, it offers to list them, asking first too; offline, it says
   the list needs the network. Nothing is fetched without the click, and no

@@ -34,7 +34,7 @@ export class NoPlugin extends Error {
 }
 
 /** What is said where a role is asked of and no plugin here fills it: what is needed, and that none here does it. */
-export const noPluginSaid = (role: RoleId) => `${ROLES[role].name} needs a plugin, and none here does it.`;
+export const noPluginSaid = (role: RoleId) => `Needs a plugin: ${ROLES[role].name}.`;
 
 /** The role last asked of that no plugin here fills: what the canvas offers plugins for, until it is let go. */
 export const useRoleOffer = create<{ role: RoleId | null }>(() => ({ role: null }));

@@ -11,7 +11,7 @@ describe("a role asked of that no plugin here fills", () => {
     const asked = chemWorker("smiles");
     await expect(asked).rejects.toBeInstanceOf(NoPlugin);
     await expect(asked).rejects.toThrow(noPluginSaid("smiles"));
-    expect(noPluginSaid("smiles")).toBe("SMILES to a structure, and back needs a plugin, and none here does it.");
+    expect(noPluginSaid("smiles")).toBe("Needs a plugin: SMILES to a structure, and back.");
     expect(useRoleOffer.getState().role).toBe("smiles");
   });
 });
