@@ -44,6 +44,14 @@ export type EditMeta = {
   coalesceKey?: string;
   /** Overrides {@link DEFAULT_COALESCE_MS} for this edit. */
   coalesceWithinMs?: number;
+  /**
+   * Who made the edit, in words, where it was not the person at the
+   * keyboard - "a conversation, by <its connection>". Kept with its step in
+   * the history (`HistoryInfo.undoBy`), and never merged into a step made
+   * by another, whatever its key: the person's edits and another's are
+   * always steps of their own.
+   */
+  by?: string;
 };
 
 /**
@@ -57,6 +65,16 @@ export function gestureStep(coalesceKey: string): EditMeta {
   return { coalesceKey, coalesceWithinMs: Infinity };
 }
 
+/**
+ * A change set: what one who is not the person changes at once - a turn of
+ * a conversation - one step to undo, however many edits make it, said as
+ * theirs (`by`). Its key names it alone, as a gesture's does
+ * (`DocumentStore.actAs`).
+ */
+export function changeSet(coalesceKey: string, by: string): EditMeta {
+  return { ...gestureStep(coalesceKey), by };
+}
+
 export type HistoryInfo = {
   undoDepth: number;
   redoDepth: number;
@@ -64,6 +82,10 @@ export type HistoryInfo = {
   undoLabel?: string;
   /** What redo would put back. */
   redoLabel?: string;
+  /** Who made the step undo would take back, where it was not the person (`EditMeta.by`). */
+  undoBy?: string;
+  /** Who made the step redo would put back, where it was not the person. */
+  redoBy?: string;
   dirty: boolean;
 };
 
@@ -76,6 +98,16 @@ export interface DocumentStore<T> {
    * updater returns the state unchanged (no step, no notification).
    */
   edit(label: string, updater: (state: T) => T, meta?: EditMeta): boolean;
+  /**
+   * Runs `act`, every edit it makes - whatever label and meta each is made
+   * with - taken as one step, `label`, made with `meta` (a `changeSet`): a
+   * turn of a conversation that places structures, wires steps and sets
+   * their options through the store's own calls is one step to undo, said
+   * as its. True where it made any. One within another is part of the
+   * outer one. Where `act` throws, what it made before stays one step, for
+   * the caller to take back (`drop`, with `meta`'s key).
+   */
+  actAs(label: string, meta: EditMeta, act: () => void): boolean;
   undo(): boolean;
   redo(): boolean;
   /**
@@ -126,6 +158,8 @@ type Entry<T> = {
   /** Describes the edit that produced this state. */
   label: string;
   coalesceKey?: string;
+  /** Who made it, where not the person (`EditMeta.by`). */
+  by?: string;
   at: number;
   /** What keeping it costs beyond the step before it (`DocumentOptions.cost`). */
   cost?: number;
@@ -179,6 +213,10 @@ export function createDocument<T>(
   let future: Entry<T>[] = [];
   let savedState: T = initial;
   let travelled = false;
+  // (a change set under way: every edit made in it is its, the first a step of its own - `actAs`)
+  let acting: { label: string; meta: EditMeta; made: boolean } | null = null;
+  let changeSets = 0;
+  let edits = 0;
 
   // (the history kept within what it may hold, where its steps say what
   // they cost: the oldest dropped first, down to one step to undo; the
@@ -215,6 +253,8 @@ export function createDocument<T>(
     },
 
     edit(label, updater, meta = {}) {
+      const first = acting != null && !acting.made;
+      if (acting) ({ label, meta } = acting);
       let next = updater(present.state);
       if (Object.is(next, present.state)) return false;
       if (options.settle) next = options.settle(next, present.state);
@@ -222,25 +262,46 @@ export function createDocument<T>(
       const at = now();
       const window = meta.coalesceWithinMs ?? DEFAULT_COALESCE_MS;
       const coalesce =
+        !first &&
         meta.coalesceKey != null &&
         present.coalesceKey === meta.coalesceKey &&
+        present.by === meta.by &&
         at - present.at <= window;
+      const by = meta.by != null ? { by: meta.by } : {};
 
       travelled = false;
       if (coalesce) {
         // Keep the step that is already on the stack and move its end point,
         // so undo jumps back to before the whole gesture.
-        present = { state: next, label, coalesceKey: meta.coalesceKey, at };
+        present = { state: next, label, coalesceKey: meta.coalesceKey, ...by, at };
         bound();
       } else {
         past.push(present);
         if (past.length > limit) past = past.slice(past.length - limit);
-        present = { state: next, label, coalesceKey: meta.coalesceKey, at };
+        present = { state: next, label, coalesceKey: meta.coalesceKey, ...by, at };
         bound();
       }
       future = [];
+      if (acting) acting.made = true;
+      edits++;
       notify();
       return true;
+    },
+
+    actAs(label, meta, act) {
+      const before = edits;
+      if (acting) {
+        act();
+        return edits > before;
+      }
+      // (its edits one step by a key of its own, where it was given none)
+      acting = { label, meta: { ...meta, coalesceKey: meta.coalesceKey ?? `change set ${++changeSets}`, coalesceWithinMs: Infinity }, made: false };
+      try {
+        act();
+      } finally {
+        acting = null;
+      }
+      return edits > before;
     },
 
     undo() {
@@ -337,6 +398,8 @@ export function createDocument<T>(
         // back the present one, redo puts back the first future one.
         undoLabel: past.length > 0 ? present.label : undefined,
         redoLabel: future.length > 0 ? future[0].label : undefined,
+        ...(past.length > 0 && present.by != null ? { undoBy: present.by } : {}),
+        ...(future.length > 0 && future[0].by != null ? { redoBy: future[0].by } : {}),
         dirty: !Object.is(present.state, savedState),
       };
     },

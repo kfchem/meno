@@ -171,6 +171,19 @@ immutable, so untouched parts are shared rather than copied. Each document has
 its own history (Ctrl+Z belongs to the active tab, not the whole app), edits
 sharing a `coalesceKey` inside a short window collapse into one step (a drag
 must not need one undo per frame), and the stack is capped.
+
+An edit may say who made it where it was not the person at the keyboard
+(`EditMeta.by`: "a conversation, by <its connection>"). The history keeps it
+with the step (`history().undoBy`, `redoBy`), and a step made by one is never
+merged into a step made by another, whatever their keys: the person's edits
+and another's are always steps of their own. `actAs(label, meta, act)` runs
+`act` as one **change set** (`changeSet(key, by)`): every edit it makes,
+through whatever store call and with whatever label and key it is made, is
+one step to undo, `label`, said as `by`'s - so a turn of a conversation that
+places a set, a step and a wire and sets the step's options is taken back by
+one undo (2026-11-04). Its first edit always begins a step of its own. Where
+`act` throws, what it made stays one step, for the caller to take back with
+`drop`.
 `subscribe` matches React's `useSyncExternalStore`; nothing in `lib/doc`
 imports React.
 
