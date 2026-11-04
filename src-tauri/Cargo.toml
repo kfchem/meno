@@ -43,6 +43,9 @@ tar = "0.4"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 png = "0.17"
 pdfium-render = { version = "0.9.4", default-features = false, features = ["pdfium_latest", "thread_safe"] }
+# The plugins online (src/catalogue.rs): the catalogue's signature checked against
+# Meno's own keys - the crate the updater already brings, pinned (MIT)
+minisign-verify = "=0.2.5"
 
 # A job's program, and what it starts, stopped as a process group (src/jobs.rs)
 [target.'cfg(unix)'.dependencies]

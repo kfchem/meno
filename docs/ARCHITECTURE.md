@@ -91,6 +91,8 @@ src-tauri/
   src/lib.rs              Tauri commands (see table below)
   src/fonts.rs            the system's typefaces
   src/net.rs              the network: tasks, the proxy, the record
+  src/catalogue.rs        the plugins online: the catalogue checked by its signature and kept; a plugin's
+                          files fetched, checked, staged and taken into use (see *The plugins online*)
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
   src/logfile.rs          Meno's log, `<app data>/logs/meno.log` (see *Meno's log*)
   src/pinch.rs            Windows: the main window made with WebView2's pinch let through, before its page loads
@@ -1322,6 +1324,9 @@ closing quits Meno once they have been asked to stop.
 | `py_env_setup_pixi` | `lib/pyEnv.ts` | Make a plugin's environment with pixi from its `pixi.toml` and `pixi.lock` - pixi itself first, where it is not here - and keep what activation sets (`pixienv.rs`). |
 | `py_env_remove` | `lib/pyEnv.ts` | A plugin's environment and its record of being set up taken away as it is removed in Settings, *Plugins* - and, with the last pixi made, pixi's cache and home. |
 | `plugin_files` | `lib/pyEnv.ts` | A plugin's files besides its environment (its manifest's `downloads`): where they stand, and - asked to - fetched under its setting-up purpose, checked by their SHA-256, kept in `files` beside its environment (`plugfiles.rs`; `plugin-files:progress` as they come). |
+| `catalogue_get` | `lib/plugins/online.ts` | The catalogue of the plugins online: fetched and checked (`fetch`), or the one kept; the one kept, saying why, where a fetch fails (`catalogue.rs`). |
+| `plugin_stage`, `plugin_commit`, `plugin_discard` | `lib/plugins/online.ts` | A plugin's files from the catalogue: fetched, checked and unpacked into a stage; taken into use as its version, `current` naming it; or thrown away (`catalogue.rs`). |
+| `plugin_files_remove` | - | A plugin's files taken away: `current` first, then its folder (`catalogue.rs`). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
 | `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
@@ -1424,6 +1429,49 @@ plugin says it is made so by `environment: "pixi"` in its manifest; its record o
 `pixi/stamps/<profile>.json`, and taking it away removes `pixi/<profile>` -
 and, with the last environment pixi made, its cache and home, which nothing
 else uses (pixi itself stays, in `tools/`).
+
+### The plugins online
+
+The catalogue of the plugins online (PLUGINS.md, *Plugins online*) and a
+plugin's files got from it are the backend's to fetch and check, before the
+page reads anything of them (`catalogue.rs`):
+
+- **The catalogue** is fetched with its signature from the newest release of
+  the plugins' repository, under the purpose `plugin-catalogue`, its task
+  kept to github.com and the two hosts its releases send files from
+  (`HOSTS`); the proxy follows it to those alone. It is checked against
+  Meno's own public keys (minisign, `minisign-verify`) - the one in use and
+  the next, so that a key is changed by a Meno that carries both first -
+  before it is parsed at all. Then its form, and its serial against the one
+  kept: a lower one is refused and the one kept stays, so that an older list
+  replayed never undoes a plugin taken off it. None but a list checked is
+  kept: `catalogue.json`, its `.minisig` and `catalogue-state.json` (its
+  serial, and when it was fetched), each written whole. The one kept is
+  checked again each time it is read. Until the maintainer gives the first
+  key, Meno has none, and takes no list.
+- **A plugin's files** (`plugin_stage`) are found by their id and version in
+  the catalogue kept - checked again, never as the page gives them - and
+  fetched under the same purpose: on https, at those hosts exactly, no
+  more than the entry's size nor than 512 MB. Their size and SHA-256 must be
+  the entry's; then they are unpacked into `.staging/<stage>`, and their
+  manifest's SHA-256 must be the entry's too. Anything not so refuses the
+  whole, and what was unpacked is taken away, all before it answers.
+- **The archive** is the plugin's folder as a `.tar.gz`: its contents at the
+  top - `manifest.json` there - with no folder around them. Regular files
+  and folders alone: a link, a path that is absolute or goes up, a file
+  named twice, more than 10,000 files or more than 1 GB unpacked refuses it.
+- **Taken into use** (`plugin_commit`): the stage becomes
+  `<id>/<version>` by its manifest's id and version, and `<id>/current`,
+  written whole, names it. A version once in place is never changed: got
+  again, the stage is thrown away and `current` names the one there. An
+  older version is left where it is; core takes it away as Meno starts,
+  where no job of it waits or runs.
+- **Taken away** (`plugin_files_remove`): `current` first, so that a folder
+  left half taken away is no plugin in use, then its folder.
+
+What is in the plugins' folder (`<local app data>/plugins`), and whose:
+`<id>/<version>/` and `<id>/current` are core's to read as the plugins in
+use; `.staging/` and the catalogue's files are `catalogue.rs`'s alone.
 
 ### What the backend accepts
 
