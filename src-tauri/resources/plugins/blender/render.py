@@ -524,6 +524,11 @@ def strip_runs(frames):
     return runs
 
 
+def even_up(n):
+    """`n`, or the even number just above it."""
+    return n + n % 2
+
+
 def assemble(frames, s, folder):
     """
     The frames rendered, put over the background asked for - in the
@@ -540,8 +545,11 @@ def assemble(frames, s, folder):
         os.replace(frames[0], out)
         return
     made = bpy.data.scenes.new("Assembled")
-    made.render.resolution_x = s["width"]
-    made.render.resolution_y = s["height"]
+    # (a film's video, H.264 in 4:2:0, keeps colour for each 2x2 pixels, and its encoder refuses an odd side: where a side
+    # Meno asked for is odd, the video is a pixel wider or taller, the frames at their own size in its corner and the
+    # background asked for in that pixel. A picture keeps its own size)
+    made.render.resolution_x = even_up(s["width"]) if s["film"] else s["width"]
+    made.render.resolution_y = even_up(s["height"]) if s["film"] else s["height"]
     made.render.resolution_percentage = 100
     made.render.fps = s["fps"]
     made.render.fps_base = 1.0
@@ -560,6 +568,11 @@ def assemble(frames, s, folder):
         for name in names[1:]:
             over.elements.append(name)
         over.blend_type = "ALPHA_OVER"
+        # (at their own size, never scaled to a padded video's: from its bottom left corner)
+        over.transform.filter = "NEAREST"
+        over.transform.scale_x = over.transform.scale_y = 1.0
+        over.transform.offset_x = -(made.render.resolution_x - s["width"]) / 2
+        over.transform.offset_y = -(made.render.resolution_y - s["height"]) / 2
     image = made.render.image_settings
     if s["film"]:
         image.media_type = "VIDEO"

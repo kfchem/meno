@@ -531,6 +531,20 @@ class Renders(unittest.TestCase):
             self.assertIn("Rendering on the processor", out)
             self.assertFalse(os.path.exists(cache))
 
+    def test_a_film_of_an_odd_side_is_a_video_a_pixel_more_its_frames_as_asked(self):
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
+            said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 3, "fps": 3, "width": 65, "height": 37}], options={"samples": 2, "background": "white", "device": "cpu"})
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=600)
+            self.assertEqual(run.returncode, 0, run.stdout[-2000:] + run.stderr[-2000:])
+            # (the video H.264 can carry: even sides, read back by Blender)
+            code = "import bpy,sys; c=bpy.data.movieclips.load(sys.argv[-1]); print('SIZE', c.size[0], c.size[1])"
+            size = subprocess.run([blender(), "-b", "--factory-startup", "--python-expr", code, "--", str(pathlib.Path(d) / "film.mp4")], capture_output=True, text=True, timeout=300)
+            self.assertIn("SIZE 66 38", size.stdout)
+
     def test_a_film_moves_its_progress_by_its_frames_samples_and_never_back(self):
         with tempfile.TemporaryDirectory() as d:
             (pathlib.Path(d) / "scene.gltf").write_text(json.dumps({**BALL, **ball_mesh()}), encoding="utf-8")
