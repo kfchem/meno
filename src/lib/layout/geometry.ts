@@ -221,8 +221,7 @@ const det = (a: V3, b: V3, c: V3) =>
  * says nothing: two plain bonds 180 degrees apart with a wedge between
  * them depict a T-shaped configuration, not a tetrahedral one (IUPAC 2006,
  * Brecher, Pure Appl. Chem. 78, 1897, ST-1.2.12), as lib/layout/drawn
- * reads a drawing. Before 2026-11-04 the H was taken in the widest gap,
- * and the T read as RDKit reads it.
+ * reads a drawing.
  */
 export function drawnVolume(
   at: Point,
