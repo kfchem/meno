@@ -36,6 +36,8 @@ mod truepath;
 mod update;
 mod windowstate;
 #[cfg(windows)]
+mod keymenu;
+#[cfg(windows)]
 mod ole;
 
 // uv-based Python env helpers
@@ -1098,6 +1100,9 @@ pub fn run() {
             // drags from other programs the webview cannot read (Windows)
             #[cfg(windows)]
             drop::start(app.handle());
+            // Alt let go alone kept from the window's menu, which left the page waiting (Windows)
+            #[cfg(windows)]
+            keymenu::start(app.handle());
             // structures in Office documents, opened here on a double-click
             #[cfg(windows)]
             ole::start(app.handle());
