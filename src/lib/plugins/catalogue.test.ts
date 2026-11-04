@@ -42,6 +42,7 @@ describe("a catalogue of plugins online, read", () => {
             roles: ["smiles"],
             kinds: ["energy"],
             reads: [],
+            fileKinds: [],
             source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 12_345 },
             manifestSha256: HEX,
             description: "Draws.",
@@ -73,6 +74,33 @@ describe("a catalogue of plugins online, read", () => {
       expect(why(catalogue([good, bad]))).toMatch(/^It holds /);
     }
     expect(why(catalogue([good, { ...good }]))).toBe("It offers sketch twice");
+  });
+
+  it("reads the kinds of file an entry reads as its manifest says them - their marks strictly - or refuses the whole list", () => {
+    const kind = { id: "sketch-out", name: "Sketch output", extensions: [".out", ".log"], marks: [{ text: "* S K E T C H *" }, { text: "Sketch version", at: "line-start", anyCase: true }], writtenBy: "sketch" };
+    const got = read(catalogue([entry({ reads: ["sketch-out"], fileKinds: [kind] })])) as { catalogue: Catalogue };
+    expect(got.catalogue.plugins[0].fileKinds).toEqual([kind]);
+    // (none said: none)
+    expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.plugins[0].fileKinds).toEqual([]);
+    const { writtenBy: _, ...notWritten } = kind;
+    expect((read(catalogue([entry({ fileKinds: [notWritten] })])) as { catalogue: Catalogue }).catalogue.plugins[0].fileKinds).toEqual([notWritten]);
+    for (const bad of [
+      {},
+      [{ ...kind, id: "Sketch Out" }],
+      [{ ...kind, name: "" }],
+      [{ ...kind, extensions: [".OUT"] }],
+      [{ ...kind, extensions: "out" }],
+      [{ ...kind, marks: [] }],
+      [{ ...kind, marks: [{ text: "abc" }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", at: null }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", anyCase: false }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", at: "anywhere" }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", pattern: ".*" }] }],
+      [{ ...kind, writtenBy: "a program" }],
+      [kind, kind],
+    ]) {
+      expect(why(catalogue([entry(), entry({ id: "other", fileKinds: bad })])), JSON.stringify(bad)).toMatch(/^It holds other: a kind of file/);
+    }
   });
 
   it("takes a plugin's files only on https, from where the plugins' releases are - nowhere else", () => {

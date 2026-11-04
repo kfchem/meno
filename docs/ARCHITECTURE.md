@@ -832,9 +832,9 @@ reading (`MENO`) first. Meno's core knows no program (the maintainer,
 the kinds of the plugins added - while they are added (`lib/calc/workers.ts`)
 - refusing a mark that one of Meno's own sample files holds. A plugin not
 added is never started or asked: a file no plugin added reads is told by
-the kinds the plugins Meno carries but not added say they read, by their
-own marks (`offeredKinds`, `catalogued`), to say which plugins would read
-it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
+the kinds the plugins here or on offer online (their catalogue entries'
+`fileKinds`) but not added say they read, by their own marks
+(`offeredKinds`, `catalogued`), to say which plugins would read it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
 - A plugin is added in Settings, *Plugins*: `ensurePyEnv`, with the
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.

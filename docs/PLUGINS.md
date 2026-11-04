@@ -309,6 +309,8 @@ A plugin brings no guide, suggests no plugin and names no other plugin's kinds o
 
 Which plugins to suggest for a file no plugin added reads is worked out from what each plugin Meno carries says it reads - its kinds, each told by its own marks, as a kind of a plugin added is (`lib/io/kinds` `offeredKinds`). Such a file is told as that kind, and Meno says which plugins would read it ("water.out (ORCA output): ORCA interface or cclib would read it."), each with Add, the file read again once one is added. The plugin whose program writes the kind (its `writtenBy`) is named first, the others in Meno's order. None of them is started or asked: only what its manifest says is looked at.
 
+The plugins on offer online that are not here count too (*Plugins online*), by the kinds their catalogue entries say they read (`fileKinds`) - only those made for this system and this Meno, the plugins here first. Add then gets one first, asking first, and adds it as any plugin is (`lib/calc/workers` `addOnline`). The list kept from before is read as Meno starts, nothing fetched, so these are told from the start. Where no list is here at all - the network never allowed for it - a file nothing tells opens as text, as it would; unless it is a plain text (a note, a table, code), Meno says in the corner that no plugin added reads it, with *List the plugins online*. Nothing is fetched until the chemist clicks it; once the list is here, a file one of its plugins tells is read as that, with Add.
+
 The plugins Meno carries come in its own folder, as trusted as Meno itself, so their manifests are read whether added or not (the maintainer, 2026-10-31); this replaces the rule of 2026-10-10 that only the catalogues of the plugins added were looked at. A plugin from anywhere else, once there is such a thing, is looked at only as it is added.
 
 ## Licences
@@ -1578,6 +1580,7 @@ comes in its own pull request.
   - its id, version (three numbers), name, licence, and - where its program asks - its terms and what to cite; a description and home page where it has them;
   - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
+  - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
 - **Read strictly, whole.** The backend checks the signature before
   anything of it is read, and its serial against the one kept: one lower
@@ -1599,7 +1602,9 @@ comes in its own pull request.
   for it, as Settings' *Plugins* opens, once a launch - the one kept from
   before after that. Where it was never allowed, nothing is fetched or
   shown until the chemist asks. Offline, or where a fetch fails, the one
-  kept from before is shown, saying it is.
+  kept from before is shown, saying it is. As Meno starts, the one kept is
+  read, nothing fetched or asked, for the kinds of file its plugins read
+  (*A plugin to suggest for a file*).
 - **What is offered** (`offersOf`): a plugin not here, *Add*; one here at
   an older version, *Update to x.y.z*; one here at that version or a
   newer one, nothing; one for another system or a newer Meno, why not.

@@ -549,9 +549,9 @@ How these behave:
 - **Open uses the system's dialog through Tauri**, so Meno has the file's
   path. It reads bytes, and decodes the text kinds. It offers `.meno`,
   text, and the kinds something reads: Meno, or a plugin added - and,
-  the kinds the plugins Meno carries but not added read (PLUGINS.md, *A
-  plugin to suggest for a file*). A file whose reader is not added says
-  which plugins would read it, with Add. What a plugin added
+  the kinds the plugins here or on offer online but not added read
+  (PLUGINS.md, *A plugin to suggest for a file*). A file whose reader is
+  not added says which plugins would read it, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
 - **A file's text is read as its bytes are written** (2026-10-13,

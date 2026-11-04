@@ -9,6 +9,7 @@ import { holdJobFilesOf, type OpenedFrom } from "../features/Workspace/workflow/
 import { isMenoFile, menoKindOf, NotMenoFile, readMenoFile, readStyleFile } from "../../lib/doc/menoFile";
 import { readStyleFileText, type StyleFile } from "../../lib/chem/styleFile";
 import { useNotices } from "../notices";
+import { listOnline, useOnline } from "../../lib/plugins/online";
 import type { OpenedText } from "./texts";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */
@@ -18,6 +19,39 @@ const EXT_TEXT = new Set([
   "txt", "md", "markdown", "json", "csv", "tsv", "yaml", "yml", "ini", "cfg", "log",
   "js", "ts", "tsx", "py", "c", "cpp", "css", "html",
 ]);
+
+/**
+ * Files nothing told, opened as texts while the plugins online are not
+ * listed (lib/plugins/online): one of them may read them. Said in the
+ * corner, once for those opened together, with the button that lists them
+ * - nothing fetched without it - and `again` given those of them a plugin
+ * on offer now tells, once they are listed, to be read as that. A text of a
+ * plain kind - a note, a table, code - is not said; a log is.
+ */
+export function sayNoneTold(names: readonly string[], again: (told: string[]) => void, tell: (name: string) => Promise<boolean>): void {
+  const said = names.filter((n) => !EXT_TEXT.has(n.split(".").pop()?.toLowerCase() ?? "") || /\.log$/i.test(n));
+  if (!said.length || useOnline.getState().state === "listed") return;
+  useNotices.getState().show({
+    id: "none-told",
+    title: "Opened as text",
+    text: `No plugin added reads ${said.join(", ")}.`,
+    stays: true,
+    action: {
+      label: "List the plugins online",
+      run: () =>
+        void listOnline(true).then(async () => {
+          const s = useOnline.getState();
+          if (s.state !== "listed") {
+            if (s.problem) useNotices.getState().show({ id: "none-told", title: "Plugins online", text: s.problem });
+            return;
+          }
+          const told: string[] = [];
+          for (const n of said) if (await tell(n)) told.push(n);
+          if (told.length) again(told);
+        }),
+    },
+  });
+}
 
 /**
  * The files Open offers, as it is asked: every kind Meno takes in

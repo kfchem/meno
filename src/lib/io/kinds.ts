@@ -28,6 +28,7 @@ import { create } from "zustand";
 import { CUBE_MARK } from "../calc/cube";
 import { recordName, RECORD_NAMES } from "../chem/pdb";
 import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type QuotedEnergyDecl, type XyzEnergyDecl, type XyzStepsDecl } from "../plugins/manifest";
+import type { CatalogueEntry } from "../plugins/catalogue";
 import type { QuotedTables } from "./coordinates";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
@@ -104,6 +105,12 @@ const MENO_SAMPLES: readonly string[] = [
   '{"format":"meno-structure","version":1,"atoms":[],"bonds":[]}',
 ];
 
+/** What of a plugin tells the kinds of file it reads: its manifest's, or - one on offer, not got - its catalogue entry's (`broughtBy`). */
+export type Brings = Pick<Manifest, "id" | "kinds" | "reads">;
+
+/** What a plugin on offer, not got, says of the kinds of file it reads: its entry's, as its manifest says them (lib/plugins/catalogue `FileKind`). */
+export const broughtBy = (entry: CatalogueEntry): Brings => ({ id: entry.id, reads: entry.reads, kinds: entry.fileKinds.map((k) => ({ ...k, lines: [] })) });
+
 /** A mark refused, and why: the plugin, the kind, the mark, and the kind of Meno's it would have claimed. */
 export type Refused = { plugin: string; kind: string; mark: string };
 
@@ -114,7 +121,7 @@ export type Refused = { plugin: string; kind: string; mark: string };
  * that would claim one of Meno's samples are refused, and said; a kind left
  * with no way to be told is left out.
  */
-export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; refused: Refused[]; texts: TextKind[] } {
+export function registered(manifests: readonly Brings[]): { kinds: Kind[]; refused: Refused[]; texts: TextKind[] } {
   const samples = MENO_SAMPLES.map(headOf);
   const refused: Refused[] = [];
   const brought = new Map<string, Kind>();
@@ -168,11 +175,11 @@ export function registered(manifests: readonly Manifest[]): { kinds: Kind[]; ref
  * from a list of plugins: the one whose program writes the kind (`writtenBy`)
  * first, then the others in Meno's order.
  */
-export function offeredKinds(offered: readonly Manifest[], added: readonly Manifest[]): Kind[] {
+export function offeredKinds(offered: readonly Brings[], added: readonly Brings[]): Kind[] {
   const addedIds = new Set(added.map((m) => m.id));
   const others = offered.filter((m) => !addedIds.has(m.id));
   const known = new Set(registered(added).kinds.map((k) => k.id));
-  const writes = (m: Manifest, id: string) => !!m.kinds.find((k) => k.id === id)?.writtenBy;
+  const writes = (m: Brings, id: string) => !!m.kinds.find((k) => k.id === id)?.writtenBy;
   return registered(others)
     .kinds.filter((k) => !known.has(k.id) && k.marks?.length)
     .map((k) => {
@@ -220,10 +227,15 @@ export const useKinds = create<{
   quotedTables: { added: [], offered: [] },
 }));
 
-/** Registers the kinds `manifests` - the plugins added - bring, with Meno's own, in place of those registered before; and those only the plugins `offered` but not added read (`offeredKinds`). */
-export function registerKinds(manifests: readonly Manifest[], offered: readonly Manifest[] = []): void {
+/**
+ * Registers the kinds `manifests` - the plugins added - bring, with Meno's
+ * own, in place of those registered before; and those only plugins not added
+ * read (`offeredKinds`): those here, `offered`, and those on offer online
+ * and not got, `online` - the plugins here first.
+ */
+export function registerKinds(manifests: readonly Manifest[], offered: readonly Manifest[] = [], online: readonly CatalogueEntry[] = []): void {
   const { kinds, texts } = registered(manifests);
-  const catalogued = offeredKinds(offered, manifests);
+  const catalogued = offeredKinds([...offered, ...online.filter((e) => !offered.some((m) => m.id === e.id)).map(broughtBy)], manifests);
   // (and how the programs of the plugins added write an XYZ frame's energy, in the order the plugins are - and
   // which of their XYZ files are an optimisation's steps)
   // (and their programs' lines and tables of atoms as papers quote them - and those of the plugins only offered, to say whose

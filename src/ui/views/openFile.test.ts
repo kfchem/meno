@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openable, openedAs, openedTexts, textsOf } from "./openFile";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openable, openedAs, openedTexts, sayNoneTold, textsOf } from "./openFile";
+import { useNotices } from "../notices";
+import { useOnline } from "../../lib/plugins/online";
 import { registerKinds } from "../../lib/io/kinds";
 import { MANIFESTS } from "../../lib/plugins/known";
 
@@ -90,5 +92,35 @@ describe("openedAs", () => {
 
   it("opens a calculation's output as text where no plugin added reads it: Meno knows no program", () => {
     expect(textsOf(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n"))).toHaveLength(1);
+  });
+});
+
+describe("texts nothing told, opened while the plugins online are not listed", () => {
+  afterEach(() => {
+    useNotices.setState({ notices: [] });
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+  });
+
+  it("are said once, with the button that lists them - a plain text not - and nothing at all once they are listed", () => {
+    sayNoneTold(["water.out", "notes.txt", "run.log"], () => {}, async () => false);
+    const [n] = useNotices.getState().notices;
+    expect([n.text, n.action?.label, n.stays]).toEqual(["No plugin added reads water.out, run.log.", "List the plugins online", true]);
+    useNotices.setState({ notices: [] });
+    sayNoneTold(["notes.txt", "table.csv"], () => {}, async () => false);
+    expect(useNotices.getState().notices).toEqual([]);
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } });
+    sayNoneTold(["water.out"], () => {}, async () => false);
+    expect(useNotices.getState().notices).toEqual([]);
+  });
+
+  it("listed, are read again - those a plugin on offer now tells", async () => {
+    const again = vi.fn();
+    sayNoneTold(["water.out", "other.out"], again, async (name) => name === "water.out");
+    // (the list, as the backend gives it once the person clicks)
+    const online = await import("../../lib/plugins/online");
+    const listed = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } }));
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(again).toHaveBeenCalledWith(["water.out"]));
+    listed.mockRestore();
   });
 });
