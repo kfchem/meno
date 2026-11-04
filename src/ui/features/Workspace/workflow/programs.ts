@@ -687,12 +687,16 @@ export function passedSaid(kind: StepKind, count: number): string | null {
  * The solvation a step's options ask for, in the words its program says
  * one it ran in (`SolvationDecl`): "none" where they ask for none, the
  * gas phase; else its `says` with each option's value put in - "ALPB(water)".
- * Unsaid where the step's manifest says no solvation.
+ * Unsaid where the step's manifest says no solvation, or where an option it
+ * names has no value - never words with a gap in them; the options as a run
+ * takes them have every value, their defaults filled in (kinds `optionsOf`).
  */
 export function solvationAsked(decl: SolvationDecl | undefined, options: OptionValues): string | undefined {
   if (!decl) return undefined;
   if (String(options[decl.none.id]) === decl.none.is) return "none";
-  return decl.says.replace(/\{([^{}]*)\}/g, (_, id: string) => String(options[id] ?? ""));
+  const named = [...decl.says.matchAll(/\{([^{}]*)\}/g)].map((m) => m[1]);
+  if (named.some((id) => options[id] == null)) return undefined;
+  return decl.says.replace(/\{([^{}]*)\}/g, (_, id: string) => String(options[id]));
 }
 
 /** A solvation in words: "none", the gas phase. */
@@ -704,8 +708,10 @@ const solvationSaid = (s: string) => (s === "none" ? "the gas phase" : s);
  * the solvation it ran in (`ReaderOutput.solvation`); that is as asked
  * where it is the same words, in any case, or begins with them and says
  * more after a comma - "ALPB(water), reference state gsolv [1 M
- * gas/solution]" is ALPB(water). An output that does not say its solvation
- * is not held to it: its calculation says it was not stated.
+ * gas/solution]" is ALPB(water); never more without the comma, which may
+ * be another solvent's name going on. The gas phase is "none" alone: there
+ * is nothing of a solvation to say more of. An output that does not say
+ * its solvation is not held to it: its calculation says it was not stated.
  */
 export function notAsAsked(asked: string | undefined, said: string | null | undefined): Failure | null {
   if (asked == null || said == null) return null;

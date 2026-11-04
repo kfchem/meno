@@ -441,6 +441,9 @@ describe("the solvation a step asked for", () => {
     expect(solvationAsked(ALPB, { solvent: "none" })).toBe("none");
     expect(solvationAsked({ says: "{solvation}({solvent})", none: { id: "solvation", is: "none" } }, { solvation: "SMD", solvent: "chloroform" })).toBe("SMD(chloroform)");
     expect(solvationAsked(undefined, { solvent: "water" })).toBeUndefined();
+    // (an option it names with no value: nothing asked, never "ALPB()")
+    expect(solvationAsked(ALPB, { method: "gfn2" })).toBeUndefined();
+    expect(solvationAsked({ says: "{solvation}({solvent})", none: { id: "solvation", is: "none" } }, { solvation: "SMD" })).toBeUndefined();
   });
 
   it("holds what an output says it ran in to it: the same words in any case, or those with more after a comma - else refused, saying both", () => {
@@ -451,6 +454,10 @@ describe("the solvation a step asked for", () => {
     expect(notAsAsked("ALPB(water)", "ALPB(acetone)")).toEqual({ kind: "refused", why: "It ran in ALPB(acetone), not in ALPB(water) as asked" });
     expect(notAsAsked("ALPB(water)", "none")).toEqual({ kind: "refused", why: "It ran in the gas phase, not in ALPB(water) as asked" });
     expect(notAsAsked("none", "ALPB(thf)")).toEqual({ kind: "refused", why: "It ran in ALPB(thf), not in the gas phase as asked" });
+    // (more words without a comma: another name going on, not as asked; the gas phase takes nothing after it)
+    expect(notAsAsked("ALPB(water)", "ALPB(water) reference")?.kind).toBe("refused");
+    expect(notAsAsked("ALPB(water)", "ALPB(water)x")?.kind).toBe("refused");
+    expect(notAsAsked("none", "none, something")?.kind).toBe("refused");
     // (another model, the same solvent: not as asked)
     expect(notAsAsked("ALPB(water)", "GBSA(water)")?.kind).toBe("refused");
     // (not said: not held to it - nor where the step asks nothing)
