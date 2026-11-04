@@ -11,6 +11,7 @@
 import type { OptionValues } from "../options";
 import type { SmilesRead } from "../chem/smilesWhy";
 import type { Configuration, IsomersMade, StereoElement } from "../chem/stereoOpen";
+import type { MetalHolds } from "../chem/metalHolds";
 import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
@@ -66,8 +67,9 @@ export type ChemRequests = {
    * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of each
    * stereoisomer `isomers` names - its configuration of what the drawing
    * leaves open, which Meno chose (Workspace/chem/openStereo) - or, none
-   * named, of the structure as drawn. On the page, of two enantiomers one is
-   * made as the other's mirror image.
+   * named, of the structure as drawn; a molecule with metals held as `holds`
+   * says (lib/chem/metalHolds). On the page, of two enantiomers one is made
+   * as the other's mirror image.
    */
   conformers: {
     /**
@@ -76,7 +78,7 @@ export type ChemRequests = {
      * (of two enantiomers, one made as the other's mirror image -
      * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; options?: OptionValues; onPage?: true };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; holds?: MetalHolds; options?: OptionValues; onPage?: true };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**

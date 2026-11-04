@@ -27,6 +27,9 @@ import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
 import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
+import { keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
+import { partsOf, partsSideBySide } from "../chem/partsApart";
+
 
 /**
  * An entry as a plugin is given it: Meno's plain data - its atoms, each its
@@ -693,12 +696,22 @@ export function passedSaid(kind: StepKind, count: number): string | null {
  * another's (`partOf`); each linked to the structure drawn as `workedOf`
  * keeps it (`keptAnew`).
  */
-export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | Failure {
+export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, checks?: MadeChecks): Worked[] | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
-  const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return { kind: "no-geometry", why: "It found no conformer" };
-  const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
+  const whole = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
+  if (!whole.length) return { kind: "no-geometry", why: "It found no conformer" };
+  const given = out.energies?.length === whole.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
+  // (those Meno's checks set aside, where it gives them: lib/chem/metalHolds `keptMade`)
+  let kept: { frames: number[][]; energies?: number[] };
+  try {
+    kept = keptMade({ atoms: entry.atoms, frames: whole, ...(given ? { energies: given } : {}) }, checks ?? null);
+    // (a structure of more than one part - a salt - its parts side by side, where Meno checks what the search made: chem/partsApart)
+    if (checks) kept = partsSideBySide({ atoms: entry.atoms, ...kept }, partsOf(entry.atoms, entry.bonds));
+  } catch (e) {
+    return { kind: "no-geometry", why: e instanceof Error ? e.message : String(e) };
+  }
+  const { frames, energies } = kept;
   // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
   const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
   const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
