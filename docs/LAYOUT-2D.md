@@ -337,9 +337,11 @@ they hang from.
   that face round the outside and every other inside it, no bond crossing
   another. Its faces are its smallest rings and the one they leave out: on
   a closed surface every bond lies in two faces, so the bonds in only one
-  ring go round that last face, which is no larger than the rest (a flat
-  system's edge round its rings is larger), every atom with three bonds or
-  more in it and Euler's count a sphere's. The largest face is set as a
+  ring go round that last face, no bond in three; and every atom has three
+  bonds or more in it, a polyhedron's corner - so no flat system, whose
+  edge round its rings has atoms of two, is one. (Euler's count, a
+  sphere's, then follows: a system's smallest rings are one fewer than its
+  faces.) The largest face is set as a
   regular polygon and every other atom at the mean of its neighbours
   (W. T. Tutte, *How to draw a graph*, Proc. London Math. Soc. 13, 743
   (1963)), which for a polyhedron's graph crosses no bond; then, Tutte's

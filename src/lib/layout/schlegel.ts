@@ -29,10 +29,10 @@ const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
 
 /**
  * The faces of a ring system that is a closed surface - every bond of it in
- * exactly two of its smallest rings, but the bonds round one face more
- * (`V - E + F = 2`) - each its atoms in order round it, the face the rings
- * leave out last; null where it is no such surface: a bond in three rings,
- * or in none; the left-out bonds no one ring, or one larger than every
+ * exactly two of its smallest rings, but the bonds round one face more -
+ * each its atoms in order round it, the face the rings leave out last;
+ * null where it is no such surface: a bond in three rings; the left-out
+ * bonds no one ring, or one larger than every
  * other face - a flat system's edge, as naphthalene's - or an atom with
  * fewer than three bonds in it, no polyhedron's corner. Bonds out of the
  * system, to what hangs from it, are no part of it.
@@ -42,20 +42,13 @@ export function closedFaces(mol: Molecule, sys: RingSystem): number[][] | null {
   const faces = sys.rings.map((r) => mol.rings[r]);
   const count = new Map<string, number>();
   for (const f of faces) f.forEach((a, i) => count.set(key(a, f[(i + 1) % f.length]), (count.get(key(a, f[(i + 1) % f.length])) ?? 0) + 1));
-  // (every bond between the system's atoms)
-  let edges = 0;
-  for (const a of sys.atoms) {
-    for (const b of mol.neighbours[a]) {
-      if (inside.has(b) && a < b) {
-        edges++;
-        const n = count.get(key(a, b)) ?? 0;
-        if (n < 1 || n > 2) return null;
-      }
-    }
-  }
+  // (every bond in two faces at most: none in three. Each is in one ring at
+  // least - a bond between atoms of one system closes a ring, which the
+  // smallest rings make up, so one of them holds it)
+  if ([...count.values()].some((n) => n > 2)) return null;
   // the bonds in one ring only: round the face left out, one ring of them
   const once = [...count].filter(([, n]) => n === 1).map(([k]) => k.split(",").map(Number) as [number, number]);
-  if (once.length < 3) return null;
+  if (!once.length) return null;
   const next = new Map<number, number[]>();
   for (const [a, b] of once) {
     next.set(a, [...(next.get(a) ?? []), b]);
@@ -70,13 +63,12 @@ export function closedFaces(mol: Molecule, sys: RingSystem): number[][] | null {
     [prev, at] = [at, step];
   }
   if (last.length !== once.length) return null;
-  // (a face as the others are, not a flat system's edge round them all -
-  // naphthalene's ten, which also leaves Euler's count as a sphere's -
-  // and every atom a polyhedron's corner, with three bonds or more in it)
-  if (last.length > Math.max(...faces.map((f) => f.length))) return null;
+  // (every atom a polyhedron's corner, with three bonds or more in it: so
+  // no flat system, whose edge round its rings - naphthalene's ten - has
+  // atoms of two)
   if (sys.atoms.some((a) => mol.neighbours[a].filter((b) => inside.has(b)).length < 3)) return null;
-  // (and Euler's count for a sphere)
-  if (sys.atoms.length - edges + faces.length + 1 !== 2) return null;
+  // (Euler's count for a sphere, V - E + F = 2, then holds of itself: a
+  // system's smallest rings number E - V + 1, and F is one more)
   return [...faces, last];
 }
 
@@ -84,9 +76,10 @@ export function closedFaces(mol: Molecule, sys: RingSystem): number[][] | null {
  * The Schlegel diagram of a closed surface, bonds about one long on
  * average: seen through its largest face (the first of those), that face a
  * regular polygon round the outside, every other atom at the mean of its
- * neighbours.
+ * neighbours - its distances from the middle then spread by whichever of
+ * `powers` reads best (as drawn, 1, always among them).
  */
-export function schlegel(mol: Molecule, sys: RingSystem, faces: readonly (readonly number[])[]): Map<number, Point> {
+export function schlegel(mol: Molecule, sys: RingSystem, faces: readonly (readonly number[])[], powers: readonly number[] = SPREADS): Map<number, Point> {
   const outer = faces.reduce((best, f) => (f.length > best.length ? f : best));
   const pos = new Map<number, Point>();
   const r = 1;
@@ -118,7 +111,7 @@ export function schlegel(mol: Molecule, sys: RingSystem, faces: readonly (readon
   for (const a of sys.atoms) for (const b of mol.neighbours[a]) if (a < b && pos.has(b)) bonds.push([a, b]);
   let best = pos;
   let bestSpread = Infinity;
-  for (const p of SPREADS) {
+  for (const p of powers) {
     const at = new Map([...pos].map(([a, q]) => {
       const d = Math.hypot(q.x, q.y);
       const k = d > 0 ? Math.pow(d / r, p) / (d / r) : 1;
