@@ -96,7 +96,9 @@ src-tauri/
   src/pinch.rs            Windows: the main window made with WebView2's pinch let through, before its page loads
                           (EDITOR-2D.md, *Touch and pinch*); elsewhere it is made from its config in setup
   capabilities/           permission sets for the main window
-  resources/plugins/<id>/ a plugin, a folder of its own: manifest.json, its worker, its lock
+  resources/plugins/<id>/ a plugin Meno carries, for now, put in place as it starts - each in
+                          place is <local app data>/plugins/<id>/<version>/ (src/installed.rs,
+                          PLUGINS.md *Where plugins are*): manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
                           Meno names none of them (docs/PLUGINS.md). uv and pixi are not
                           bundled but fetched the first time an environment needs one,
@@ -1431,8 +1433,8 @@ The webview is not trusted with process execution, so `lib.rs` validates every
 path it is given:
 
 - `py_env_*`: the webview names no tool - uv is the one `tools.rs` pins;
-  `lockPath` must be a plugin's own lock in its folder,
-  `resources/plugins/<id>/`: uv's `requirements.lock`, made in exactly
+  `lockPath` must be a plugin's own lock in the folder of its version in use,
+  `plugins/<id>/<version>/` in the local app data (installed.rs): uv's `requirements.lock`, made in exactly
   `<local app data>/uv/plugin-<id>/venv` (`venvHome`), or pixi's `pixi.lock`, made in
   `<local app data>/pixi/plugin-<id>` - Meno has no Python environment of its own
   (2026-10-13: the console's and the workflows' locks are gone); relative paths may not contain `..`, `.` or absolute/drive
@@ -1445,7 +1447,8 @@ path it is given:
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
   inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
-  absolute `.py` script that is a plugin's `worker.py` in `resources/plugins/<id>/`, in that
+  absolute `.py` script that is a plugin's `worker.py` in `<local app data>/plugins/<id>/<version>/`, of its
+  version in use, in that
   plugin's own environment (`SIDECAR_SCRIPTS`); later arguments go to the script unchanged.
 - A worker is pointed at the proxy with no task, so what it reaches for is
   refused and on the record. Every purpose waits on the user's yes: the

@@ -20,7 +20,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { resolveResource } from "@tauri-apps/api/path";
+import { appLocalDataDir, join } from "@tauri-apps/api/path";
 import { ensurePyEnv, pluginFilesFolder, pyEnvReady } from "../pyEnv";
 import type { PythonPlugin } from "../calc/catalog";
 import { counter, ReaderClient } from "../calc/client";
@@ -84,7 +84,8 @@ const ERR_LINES = 5;
 async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker> {
   if (!(await pyEnvReady(p.profile))) throw new Error(`${p.name} is not added: add it in Settings, Plugins.`);
   const python = await ensurePyEnv(p.profile);
-  const script = await resolveResource(p.worker);
+  // (its worker in the folder of its version in use, in Meno's local data folder: lib/plugins/known)
+  const script = await join(await appLocalDataDir(), p.worker);
   const files = await pluginFilesFolder(p);
   // (heard from before the worker's id is known, so that nothing it says
   // first is missed; kept to its own lines once it is)

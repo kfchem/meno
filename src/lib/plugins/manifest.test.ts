@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptManifest, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
+import { acceptManifest, CONTRACTS, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
 import { MANIFESTS } from "./known";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -8,6 +8,7 @@ const good = {
   id: "nbo",
   name: "NBO",
   version: "7.0",
+  contract: 1,
   uses: [],
   description: "Natural bond orbitals.",
   licence: "Commercial",
@@ -26,10 +27,17 @@ const good = {
 };
 
 describe("a plugin's manifest", () => {
+  it("is written to a plugin contract this Meno speaks: unsaid, the first; another, or none Meno takes, refused", () => {
+    expect(CONTRACTS).toEqual([1]);
+    expect(acceptManifest({ ...good, contract: undefined })?.contract).toBe(1);
+    expect(acceptManifest({ ...good, contract: 1 })?.contract).toBe(1);
+    for (const contract of [2, 0, "1", null, 1.5]) expect(acceptManifest({ ...good, contract }), String(contract)).toBeNull();
+  });
+
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, ...said } = good;
+    const { contract: _c, uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
     const declared = acceptManifest({
