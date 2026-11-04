@@ -780,7 +780,7 @@ A worker is a sidecar, started by `lib/roles/worker.ts` (`chemWorker(role)`:
 the plugin chosen for the role in Settings, else the first that fills it)
 and asked through `lib/roles/client.ts`: JSON lines, a fixed set of
 requests (to_smiles, rxn_to_smiles, from_smiles, analyse, read_picture, and for 3D
-open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
+stereo_elements, stereoisomers, conformers, drawing_of, orders_from_smiles and add_hydrogens;
 a render is a job, `render/renders.ts`; the worker says its version in its
 first line, ready), MOL blocks in (written by
 `lib/roles/molblock.ts`, a label that is not an element as `*`) and V3000
@@ -1012,7 +1012,9 @@ stereochemistry and otherwise giving RDKit's; the editor applies it as one
 undo step.
 
 A drawn structure made in 3D (`Workspace/chem/make3d.ts`, stage 2 of
-docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
+docs/WORKSPACE.md): what its drawing leaves open is Meno's to say
+(`chem/openStereo`, on the elements `stereo_elements` perceives - lib/chem/
+stereoOpen), and `stereoisomers` makes each way it can go in 3D, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no

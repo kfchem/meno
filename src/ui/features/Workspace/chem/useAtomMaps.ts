@@ -56,7 +56,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       chem ??= await chemWorker("conformers");
       const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
       const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
-      const [c] = await conformersOf(chem, block, "one", options, pageCount(block, useAppSettings.getState().chemistry));
+      const [c] = await conformersOf(chem, await chemWorker("stereoisomers"), block, "one", options, pageCount(block, useAppSettings.getState().chemistry));
       if (!c) throw new Error("A structure of the reaction has no 3D structure.");
       const m = moleculeOf(c, block);
       out.push({ molecule: { atoms: m.atoms, bonds: m.bonds }, drawnFrom: m.drawnFrom ?? [] });

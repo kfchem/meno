@@ -35,6 +35,7 @@ import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
+import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -174,12 +175,12 @@ export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
 /** What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, and how many stereoisomers they make. */
 export type Open = { atoms: number[]; bonds: number[]; isomers: number };
 
-/** What `open_stereo` answers for `block`, in the drawing's ids. */
-export function openIn(block: Block, answer: { atoms: number[]; bonds: number[]; isomers: number }): Open {
+/** What a block leaves open (chem/openStereo `isomersToMake`), in the drawing's ids. */
+export function openIn(block: Block, made: { open: OpenStereo; count: number }): Open {
   return {
-    atoms: answer.atoms.map((i) => block.atoms[i]).filter((id) => id != null),
-    bonds: answer.bonds.map((i) => block.bonds[i]).filter((id) => id != null),
-    isomers: answer.isomers,
+    atoms: made.open.left.atoms.map((i) => block.atoms[i]).filter((id) => id != null),
+    bonds: made.open.left.bonds.map((i) => block.bonds[i]).filter((id) => id != null),
+    isomers: made.count,
   };
 }
 
@@ -524,19 +525,28 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
 }
 
 /**
- * Each stereoisomer asked for, its conformers made for the page - `count`
- * tried (`pageCount`), with the options the plugin takes for the role, as
- * chosen in Settings - as the page shows them: lowest first, each once,
- * laid over the first, alike atoms in like places (`asThePageShows`, in a
- * worker of its own: `shownConformers`). `onPage` asks the plugin to make
- * one of two enantiomers as the other's mirror image (docs/PLUGINS.md); a
- * workflow's *Conformers* step never sends it, and is given the program's
- * own.
+ * Each stereoisomer asked for, its conformers made for the page - which
+ * ones, Meno's (chem/openStereo `isomersToMake`, asked of `stereo`, the
+ * plugin that finds stereoisomers): the first, or each - `count` tried
+ * (`pageCount`), with the options the plugin takes for the role, as chosen
+ * in Settings - as the page shows them: lowest first, each once, laid over
+ * the first, alike atoms in like places (`asThePageShows`, in a worker of
+ * its own: `shownConformers`). `onPage` asks the plugin to make one of two
+ * enantiomers as the other's mirror image (docs/PLUGINS.md); a workflow's
+ * *Conformers* step never sends it, and is given the program's own.
  */
-export async function conformersOf(chem: ChemClient, block: Block, isomers: "one" | "all", options: OptionValues = {}, count: number | null = null): Promise<Conformers[]> {
-  const like = block.like ? { like: block.like } : {};
+export async function conformersOf(
+  chem: ChemClient,
+  stereo: ChemClient,
+  block: Block,
+  which: "one" | "all",
+  options: OptionValues = {},
+  count: number | null = null,
+): Promise<Conformers[]> {
+  const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
-  return shownConformers((await chem.request("conformers", { molblock: block.molblock, isomers, ...like, ...tries, options, onPage: true }, CONFORMERS_MS)).isomers);
+  const got = await chem.request("conformers", { molblock: block.molblock, isomers: made.isomers, ...tries, options, onPage: true }, CONFORMERS_MS);
+  return shownConformers(got.isomers.map((c) => withChosen(c, made.open)));
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
