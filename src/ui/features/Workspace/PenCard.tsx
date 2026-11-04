@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { useAppSettings } from "../../../lib/settings/appSettings";
-import { setInUse } from "../../../lib/chem/palette";
+import { forFillsOnly, setInUse } from "../../../lib/chem/palette";
 import { INK_WIDTHS_PT, markerColour } from "../../../lib/chem/ink";
 import type { InkMode } from "./store/types";
 import { useInFront } from "../../layouts/inFront";
@@ -11,6 +11,8 @@ import { useInFront } from "../../layouts/inFront";
 /** Each button's square, in px; each swatch's. */
 const SIZE = 32;
 const SWATCH = 20;
+/** A swatch struck through: a colour not offered here (as the colour card's). */
+const STRUCK = "linear-gradient(145deg, transparent 46%, var(--color-gh-gray) 46%, var(--color-gh-gray) 54%, transparent 54%)";
 
 /** The pen, the marker and the eraser, each as Quick Add draws its icons. */
 const TOOLS: { tool: InkMode["tool"]; name: string; icon: React.ReactNode }[] = [
@@ -74,7 +76,8 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
           aria-label={t.name}
           title={t.name}
           aria-pressed={mode.tool === t.tool}
-          onClick={() => onMode({ ...mode, tool: t.tool })}
+          // (the pen taken up with the marker's colour for fills alone: in its own instead)
+          onClick={() => onMode({ ...mode, tool: t.tool, ...(t.tool === "pen" && mode.color != null && forFillsOnly(set, mode.color) ? { color: null } : {}) })}
           className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${mode.tool === t.tool ? "bg-gh-base" : "hover:bg-gh-base"}`}
           style={{ width: SIZE, height: SIZE }}
         >
@@ -85,16 +88,21 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
       ))}
       <div className="mx-1 h-6 border-l border-gh-line" role="separator" />
       <div role="group" aria-label="Colour" className={`flex items-center gap-1 transition-opacity duration-150 ease-meno ${writing ? "" : "opacity-35 pointer-events-none"}`}>
-        {swatches.map((c) => (
-          <button
-            key={c ?? "own"}
-            aria-label={c ?? (marker ? "The marker's own" : "The pen's own")}
-            title={c ?? (marker ? "The marker's own" : "The pen's own")}
-            onClick={() => onMode({ ...mode, color: c })}
-            className={`shrink-0 rounded-full transition-shadow duration-150 ease-meno ${mode.color === c || (c === null && mode.color === own) ? "ring-2 ring-offset-1 ring-gh-gray" : ""}`}
-            style={{ width: SWATCH, height: SWATCH, background: c ?? own }}
-          />
-        ))}
+        {swatches.map((c) => {
+          // (a colour for fills alone: a marker's, struck through for the pen's line - palette `fillsOnly`)
+          const struck = !marker && c != null && forFillsOnly(set, c);
+          return (
+            <button
+              key={c ?? "own"}
+              aria-label={c == null ? (marker ? "The marker's own" : "The pen's own") : struck ? `${c}, for the marker only` : c}
+              title={c == null ? (marker ? "The marker's own" : "The pen's own") : struck ? `${c}: for the marker only` : c}
+              disabled={struck}
+              onClick={() => onMode({ ...mode, color: c })}
+              className={`shrink-0 rounded-full transition-shadow duration-150 ease-meno ${struck ? "cursor-default" : ""} ${mode.color === c || (c === null && mode.color === own) ? "ring-2 ring-offset-1 ring-gh-gray" : ""}`}
+              style={{ width: SWATCH, height: SWATCH, backgroundColor: c ?? own, ...(struck ? { backgroundImage: STRUCK } : {}) }}
+            />
+          );
+        })}
       </div>
       <div className="mx-1 h-6 border-l border-gh-line" role="separator" />
       <div role="group" aria-label="Width" className={`flex items-center gap-0.5 transition-opacity duration-150 ease-meno ${writing ? "" : "opacity-35 pointer-events-none"}`}>

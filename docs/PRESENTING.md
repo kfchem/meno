@@ -475,7 +475,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points as the pointer gives them, kept whole (*A stroke is kept whole*).
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
   eraser, the colours of the set in use and the pen's own (a marker's own
-  being the set's first, shown once), three widths - a pen's first as
+  being the set's first, shown once; a colour for fills alone, Okabe and
+  Ito's yellow, the marker's only, struck through for the pen), three widths - a pen's first as
   wide as the drawing's bonds, following its style, then 1.5 and 3
   points (`lib/chem/ink` `INK_WIDTHS_PT`) - Done (or Escape).
   Quick Add's *Pen* opens it; the pointer is a cross while it is open.

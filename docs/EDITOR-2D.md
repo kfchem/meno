@@ -1147,7 +1147,12 @@ All hover-based, as above.
     highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
     look right as they are, as colour makes a drawing look cheap easily -
     and Okabe and Ito's, told apart by those who see colours otherwise,
-    are built in and kept as they are. The plus after the sets begins one
+    are built in and kept as they are. Okabe and Ito's yellow, #f0e442,
+    stands at 1.32 : 1 against white, too pale to read as a line or a
+    letter: it is offered for a highlight and a fill, and shown struck
+    through, not given, in a row that colours lines and letters (*Colour*,
+    a shape's *Line*) and for the pen - the set itself kept exactly theirs
+    (the maintainer's choice; `ColourSet.fillsOnly`). The plus after the sets begins one
     of the user's own; a set's menu (a right-click) duplicates it, and
     renames or deletes one of the user's own. The user's own set in use
     shows its colours: two clicks on one open the system's chooser beside
