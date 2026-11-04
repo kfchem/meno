@@ -144,6 +144,14 @@ export type Property = {
    * geometry (`at`) or on a label (a Tag's ID, restraints).
    */
   of?: string;
+  /**
+   * That it is a label - a Tag's ID - of neither a geometry nor a structure:
+   * it rides a change of bonding as it is. A property that says none of
+   * `at`, `of` or this, and is no restraints, is not known to be of the
+   * structure an entry has after such a change, and is marked not
+   * applicable there (lib/steps/restructure).
+   */
+  label?: true;
   by?: By;
   status: PropertyStatus;
   /**
@@ -369,7 +377,7 @@ function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] }
  * it was opened again.)
  */
 export function propertyIn(v: unknown): Property | undefined {
-  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown; parts?: unknown; ensemble?: unknown } | null;
+  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; label?: unknown; by?: unknown; status?: unknown; parts?: unknown; ensemble?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value: PropertyValue | undefined =
     (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean"
@@ -387,6 +395,7 @@ export function propertyIn(v: unknown): Property | undefined {
   const at = atIn(p.at);
   if (by === null || at === null) return undefined;
   if (p.of != null && typeof p.of !== "string") return undefined;
+  if (p.label != null && p.label !== true) return undefined;
   // (a sum's parts, or an ensemble's: each as it was, or none of them - one whose parts do not all read is not read without them)
   const parts = p.parts != null ? partsIn(p.parts, 1) : undefined;
   if (parts === null) return undefined;
@@ -396,7 +405,17 @@ export function propertyIn(v: unknown): Property | undefined {
     if (typeof of !== "number" || !Number.isInteger(of) || of < 1) return undefined;
     ensemble = { of };
   }
-  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status, ...(parts ? { parts } : {}), ...(ensemble ? { ensemble } : {}) };
+  return {
+    value,
+    unit: p.unit as Unit | "none",
+    ...(at ? { at } : {}),
+    ...(typeof p.of === "string" ? { of: p.of } : {}),
+    ...(p.label === true ? { label: true as const } : {}),
+    ...(by ? { by } : {}),
+    status,
+    ...(parts ? { parts } : {}),
+    ...(ensemble ? { ensemble } : {}),
+  };
 }
 
 /** A sum's or an ensemble's parts as a file gives them, read back: each as it was, with its own parts `deeper` levels down at most; null where any does not read, or there are none. */
