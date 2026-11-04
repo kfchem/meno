@@ -315,11 +315,12 @@ class Collect(unittest.TestCase):
         self.assertEqual(out["warnings"], [{"kind": "hessian-not-stationary", "text": "hessian_numhess: Hessian on incompletely optimized geometry!"}])
         self.assertNotIn("warnings", collect("frequencies", log_of(body=FREQUENCIES))["outputs"][0])
 
-    def test_a_run_whose_solvation_is_not_as_asked_is_refused(self):
-        for asked, body in (("none", SOLVATED), ("water", SOLVATED), ("thf", "")):
+    def test_says_the_solvation_it_ran_in_whatever_was_asked(self):
+        # (whether that is as asked is Meno's to say: the manifest's solvation)
+        for asked, body, solvation in (("none", SOLVATED, "ALPB(thf), reference state gsolv [1 M gas/solution]"), ("water", SOLVATED, "ALPB(thf), reference state gsolv [1 M gas/solution]"), ("thf", "", "none")):
             said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "energy", "entries": [ETHYNE], "options": {"solvent": asked}, "files": {}, "log": log_of(body=body), "ended": "done"}))
-            self.assertFalse(said["ok"], asked)
-            self.assertIn("not as asked", said["error"])
+            self.assertTrue(said["ok"], asked)
+            self.assertEqual(said["result"]["outputs"][0]["solvation"], solvation)
 
     def test_the_dipole_as_xtb_printed_it_with_the_point_it_took_it_about(self):
         # (where a charged molecule's is taken about is Meno's, not the reader's: as printed, with its origin)

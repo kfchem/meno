@@ -1125,6 +1125,29 @@ are. A molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the
 states an undo goes back to as well.
 
+### Solvation as asked
+
+A step's options may ask for a solvation - xTB's and CREST's solvent, say.
+What each of its jobs gives back says the solvation it ran in, as the
+program's output says it (PLUGINS.md, *What an energy was worked out
+in*). Meno holds the two together, whatever program ran the step: an
+entry whose output says it ran in another solvation than the one asked -
+in the gas phase where a solvent was asked, or in another solvent - goes
+out of the step's Failed exit, refused, saying both: *It ran in
+ALPB(acetone), not in ALPB(water) as asked*. An output that does not say
+its solvation is not held to it; its calculation says the solvation was
+not stated, as it does anywhere (2026-11-04; before, each plugin that
+read its solvation refused such a run itself, the whole job at once).
+
+Meno knows no program's options. A step's manifest says how they ask for
+a solvation, in the words its program says one it ran in (PLUGINS.md,
+`solvation`): xTB's and CREST's, `ALPB({solvent})`, none where the
+solvent is *None*. The two are the same where they are the same words,
+in any case, or where what the output says begins with what was asked and
+says more after a comma - xtb's *ALPB(water), reference state gsolv [1 M
+gas/solution]* is ALPB(water). A step whose manifest says no solvation
+is not held to one.
+
 ### Several at once
 
 - **Jobs run as many at once as their cores and memory fit** what this

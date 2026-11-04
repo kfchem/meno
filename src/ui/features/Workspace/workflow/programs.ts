@@ -5,7 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
-import { isId } from "../../../../lib/plugins/manifest";
+import { isId, type SolvationDecl } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA, geometryKey, type By, type Property, type Restraint } from "../../../../lib/entry";
@@ -681,6 +681,38 @@ export function passedSaid(kind: StepKind, count: number): string | null {
   const is = LONE_ATOM_IS[kind];
   if (!is || count < 1) return null;
   return count === 1 ? is : is.replace("one atom: its", "one atom: each its").replace("one atom:", `${count} lone atoms:`);
+}
+
+/**
+ * The solvation a step's options ask for, in the words its program says
+ * one it ran in (`SolvationDecl`): "none" where they ask for none, the
+ * gas phase; else its `says` with each option's value put in - "ALPB(water)".
+ * Unsaid where the step's manifest says no solvation.
+ */
+export function solvationAsked(decl: SolvationDecl | undefined, options: OptionValues): string | undefined {
+  if (!decl) return undefined;
+  if (String(options[decl.none.id]) === decl.none.is) return "none";
+  return decl.says.replace(/\{([^{}]*)\}/g, (_, id: string) => String(options[id] ?? ""));
+}
+
+/** A solvation in words: "none", the gas phase. */
+const solvationSaid = (s: string) => (s === "none" ? "the gas phase" : s);
+
+/**
+ * Why what a job gave is not of the solvation asked (docs/WORKFLOWS.md,
+ * *Solvation as asked*), whatever program ran it - or none. Its output says
+ * the solvation it ran in (`ReaderOutput.solvation`); that is as asked
+ * where it is the same words, in any case, or begins with them and says
+ * more after a comma - "ALPB(water), reference state gsolv [1 M
+ * gas/solution]" is ALPB(water). An output that does not say its solvation
+ * is not held to it: its calculation says it was not stated.
+ */
+export function notAsAsked(asked: string | undefined, said: string | null | undefined): Failure | null {
+  if (asked == null || said == null) return null;
+  const a = asked.trim().toLowerCase();
+  const s = said.trim().toLowerCase();
+  if (s === a || (a !== "none" && s.startsWith(`${a},`))) return null;
+  return { kind: "refused", why: `It ran in ${solvationSaid(said.trim())}, not in ${solvationSaid(asked)} as asked` };
 }
 
 /**
