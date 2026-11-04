@@ -296,8 +296,8 @@ nothing is no step (`bondKey`, utils/bondKinds `bondKeyPatch`). The key the
 hand pressed is read (`code`, the top row or the keypad), so a keyboard
 whose digits take Shift and an input method that is on set it all the same.
 None is taken with Ctrl, ⌘ or Alt held (⌘1 fits the view), held down and
-coming again, over an atom - digits never begin a label - or while a label
-or any field is typed in. A bond's menu says each beside *Single bond*,
+coming again, over an atom - digits never begin a label - while a button
+is held (a drag going on), or while a label or any field is typed in. A bond's menu says each beside *Single bond*,
 *Double bond* and *Triple bond*. They are the only keys that change a structure;
 ring templates and the like are still not keys.
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { bondKeyOf, bondKindOf, bondKindPatch, COMMON_BOND_KINDS, doubleClickPatch, OTHER_BOND_KINDS, singleClickPatch, type BondKindName } from "./bondKinds";
+import { bondKeyOf, bondKeyPatch, bondKindOf, bondKindPatch, COMMON_BOND_KINDS, doubleClickPatch, doubleSideAuto, OTHER_BOND_KINDS, singleClickPatch, type BondKindName } from "./bondKinds";
 
 const ALL: BondKindName[] = [...COMMON_BOND_KINDS, ...OTHER_BOND_KINDS];
 
@@ -99,6 +99,29 @@ describe("a double-click on a bond", () => {
   });
 });
 
+describe("the side a double bond is drawn on by itself", () => {
+  const bond = { id: 10, a: 1, b: 2 };
+  const ends = [
+    { id: 1, x: 0, y: 0 },
+    { id: 2, x: 1, y: 0 },
+  ];
+  const on = (...more: { id: number; x: number; y: number; to: number }[]) => ({
+    atoms: [...ends, ...more],
+    bonds: [bond, ...more.map((m, k) => ({ id: 20 + k, a: m.to, b: m.id }))],
+  });
+  it("is the side more neighbours stand on - the middle where as many stand on each, or none stands off the line", () => {
+    const left = on({ id: 3, x: -0.5, y: 0.87, to: 1 });
+    expect(doubleSideAuto(bond, left.atoms, left.bonds)).toBe("left");
+    const both = on({ id: 3, x: -0.5, y: 0.87, to: 1 }, { id: 4, x: 1.5, y: -0.87, to: 2 });
+    expect(doubleSideAuto(bond, both.atoms, both.bonds)).toBe("center");
+    // (a neighbour all but on the bond's line - off it by a hair - stands on neither side; one off it by a tenth, on its side)
+    const hair = on({ id: 3, x: -1, y: 0.01, to: 1 });
+    expect(doubleSideAuto(bond, hair.atoms, hair.bonds)).toBe("center");
+    const tenth = on({ id: 3, x: -1, y: -0.1, to: 1 });
+    expect(doubleSideAuto(bond, tenth.atoms, tenth.bonds)).toBe("right");
+  });
+});
+
 describe("the bond keys", () => {
   it("are 1, 2 and 3 by the key pressed - on the top row or the keypad, an input method on or Shift held - and no chord", () => {
     expect(bondKeyOf({ code: "Digit2" })).toBe(2);
@@ -133,6 +156,33 @@ describe("the bond keys", () => {
     expect(bondKindOf(bond())).toBe("hashed-wedge");
     st().bondKey(ab, 1);
     expect(bond()).toMatchObject({ stereo: "none", stereoOrient: "reverse" });
+  });
+
+  it("make a plain bond of the kind asked: a dative or bold bond made double - by 2 or a double-click - a wedge made triple, a crossed double turned to its side", () => {
+    const atoms = [
+      { id: 1, x: 0, y: 0 },
+      { id: 2, x: 1, y: 0 },
+    ];
+    const link = { id: 10, a: 1, b: 2 };
+    for (const from of [bondKindPatch("dative"), bondKindPatch("bold")]) {
+      const b = { ...link, ...from };
+      for (const patch of [doubleClickPatch(b, atoms, [link]), bondKeyPatch(2, b, atoms, [link])]) {
+        const made = { ...b, ...patch };
+        expect(bondKindOf(made)).toBe("double");
+        expect(made).toMatchObject({ dative: undefined, display: undefined, stereo: "none" });
+      }
+    }
+    expect({ ...link, ...bondKindPatch("wedge"), ...bondKeyPatch(3, { ...link, ...bondKindPatch("wedge") }, atoms, [link]) }).toMatchObject({ order: 3, stereo: "none" });
+    const crossed = { ...link, order: 2 as const, stereo: "either" as const };
+    expect({ ...crossed, ...bondKeyPatch(2, crossed, atoms, [link]) }).toMatchObject({ order: 2, stereo: "none" });
+  });
+
+  it("are no step where a bond is already what the key makes - a triple with no stereo set pressed 3", () => {
+    const { doc, st, ab } = chain();
+    st().updateBond(ab, { order: 3, stereo: undefined });
+    const before = doc.history().undoDepth;
+    expect(st().bondKey(ab, 3)).toBe(false);
+    expect(doc.history().undoDepth).toBe(before);
   });
 
   it("make every bond selected what the one under the pointer becomes, as one undo step - only that one where it is not selected", () => {

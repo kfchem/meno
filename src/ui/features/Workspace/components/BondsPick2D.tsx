@@ -19,11 +19,15 @@ import { bondLengthFrom } from "../utils/magnified";
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
   const store = useEditorStore();
-  // a bond key with the pointer on a bond (docs/EDITOR-2D.md, *Bond keys*): 1, 2, 3 - not while a label or any field is typed in
+  // a bond key with the pointer on a bond (docs/EDITOR-2D.md, *Bond keys*): 1, 2, 3 - not while a label or any field is typed
+  // in, nor while a button is held (a drag going on: the bond under it is the gesture's)
   useEffect(() => {
+    let held = 0;
+    const onDown = () => void held++;
+    const onUp = () => void (held = 0);
     const onKeyDown = (e: KeyboardEvent) => {
       const key = bondKeyOf(e);
-      if (key == null) return;
+      if (key == null || held) return;
       const s = store.getState();
       const id = s.hovered.bondId;
       if (id == null || s.labelEdit.active) return;
@@ -33,7 +37,17 @@ export default function BondsPick2D() {
       s.bondKey(id, key);
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+    window.addEventListener("blur", onUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      window.removeEventListener("blur", onUp);
+    };
   }, [store]);
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
