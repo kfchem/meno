@@ -767,7 +767,10 @@ As this part of step 5 was built (#155, from main beside step 3):
     bond from the metal to it whose endpoints are the ring's atoms, bound to
     all of them (`ENDPTS`, `ATTACH=ALL`; `withRingStars`, lib/chem/molWriter)
     - in V3000, which V2000 cannot hold, in an SD file and a molfile copied
-    alike. Without it, the ring was written as if it were not bound at all.
+    alike. That the bond is a coordination bond (type 9) is Meno's own
+    choice, not the format's: it is the type Meno's 2D writer gives a
+    drawing's ring bound to a metal, and the one its reader reads back.
+    Without it, the ring was written as if it were not bound at all.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`). Beside it: why a frame did not finish

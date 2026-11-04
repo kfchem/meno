@@ -814,8 +814,8 @@ export function writeRxnfile(
  * valence set to the bonds it has, so that no reader adds any.
  */
 export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical; isotope?: number; noImplicitH?: boolean };
-/** A bond of a molecule in 3D, by its atoms' numbers from 0 - and, for a bond to several atoms at once (V3000 ENDPTS), those atoms, and to all of them or any. */
-export type Bond3D = { a1: number; a2: number; order: number; endpoints?: number[]; attach?: "all" | "any" };
+/** A bond of a molecule in 3D, by its atoms' numbers from 0 - and, for a bond to several atoms at once (V3000 ENDPTS), those atoms, bound to all of them. */
+export type Bond3D = { a1: number; a2: number; order: number; endpoints?: number[] };
 
 /**
  * A molecule in 3D with each ring or chain bound to a metal through all its
@@ -831,7 +831,7 @@ export function withRingStars(atoms: readonly Atom3D[], bonds: readonly Bond3D[]
     if (!c.atoms.length || !atoms[c.metal] || c.atoms.some((i) => !atoms[i])) continue;
     const mean = (k: "x" | "y" | "z") => c.atoms.reduce((s, i) => s + atoms[i][k], 0) / c.atoms.length;
     out.atoms.push({ el: "*", x: mean("x"), y: mean("y"), z: mean("z") });
-    out.bonds.push({ a1: c.metal, a2: out.atoms.length - 1, order: COORDINATION_BOND, endpoints: [...c.atoms], attach: "all" });
+    out.bonds.push({ a1: c.metal, a2: out.atoms.length - 1, order: COORDINATION_BOND, endpoints: [...c.atoms] });
   }
   return out;
 }
@@ -906,7 +906,7 @@ export function writeMolfile3d(
       bonds.forEach((b, i) =>
         lines.push(
           `M  V30 ${i + 1} ${b.order} ${b.a1 + 1} ${b.a2 + 1}` +
-            (b.endpoints?.length ? ` ENDPTS=(${b.endpoints.length} ${b.endpoints.map((e) => e + 1).join(" ")}) ATTACH=${b.attach === "any" ? "ANY" : "ALL"}` : ""),
+            (b.endpoints?.length ? ` ENDPTS=(${b.endpoints.length} ${b.endpoints.map((e) => e + 1).join(" ")}) ATTACH=ALL` : ""),
         ),
       );
       lines.push("M  V30 END BOND");

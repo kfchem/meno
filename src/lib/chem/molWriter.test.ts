@@ -716,9 +716,17 @@ describe("a molecule in 3D with a ring bound to a metal through all its atoms", 
     const w = withRingStars(atoms, [], [{ metal: 0, atoms: [1, 2, 3] }]);
     expect(w.atoms[4]).toMatchObject({ el: "*" });
     expect(w.atoms[4].z).toBeCloseTo(1.6, 9);
-    expect(w.bonds).toEqual([{ a1: 0, a2: 4, order: 9, endpoints: [1, 2, 3], attach: "all" }]);
+    expect(w.bonds).toEqual([{ a1: 0, a2: 4, order: 9, endpoints: [1, 2, 3] }]);
     // (a bond to several atoms at once is V3000's alone, of a type V2000 has or not)
     expect(needsV3000In3d(atoms, [{ a1: 0, a2: 1, order: 1, endpoints: [1, 2, 3] }])).toBe(true);
     expect(writeMolfile3d(w.atoms, w.bonds)).toContain("M  V30 1 9 1 5 ENDPTS=(3 2 3 4) ATTACH=ALL");
+  });
+
+  it("is written as given where the ring or its metal names an atom the molecule has not, or the ring has no atoms", () => {
+    const atoms = [{ el: "Fe", x: 0, y: 0, z: 0 }, ...[0, 1, 2].map((k) => ({ el: "C", x: Math.cos((2 * Math.PI * k) / 3), y: Math.sin((2 * Math.PI * k) / 3), z: 1.6 }))];
+    const bonds = [{ a1: 1, a2: 2, order: 1 }];
+    for (const c of [{ metal: 0, atoms: [1, 2, 7] }, { metal: 9, atoms: [1, 2, 3] }, { metal: 0, atoms: [] }]) {
+      expect(withRingStars(atoms, bonds, [c])).toEqual({ atoms, bonds });
+    }
   });
 });
