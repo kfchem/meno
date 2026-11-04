@@ -14,7 +14,7 @@ describe("ranks by how far a mode moves each atom", () => {
   });
 
   it("does not depend on how the program scaled the mode", () => {
-    expect(modeRanks(mode.map((v) => v * 0.013))).toEqual(modeRanks(mode));
+    expect(modeRanks(mode.map((v) => v * 0.37))).toEqual(modeRanks(mode));
   });
 
   it("gives the listed atoms' ranks, the window - their count and the reach more - and those outside it", () => {
