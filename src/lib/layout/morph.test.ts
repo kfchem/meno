@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { coreMatches } from "./scaffold";
 import { fitOnto, fitted, MATCH_MOST_ATOMS, morphAt, sameAtoms, type MatchDrawing } from "./morph";
 
 /** Benzene drawn as a hexagon of side 1, its first atom at angle `turn` (radians), Kekulé bonds from atom `first`. */
@@ -125,5 +126,29 @@ describe("two drawings of one structure, matched", () => {
     ];
     const turned = propane.map((p) => ({ x: -p.y, y: p.x }));
     expect(fitOnto(turned, propane, true)).toMatchObject({ mirror: 1 });
+  });
+});
+
+describe("a core found in a structure (scaffold.ts coreMatches)", () => {
+  /** Six carbons, bonded 0-1 ... 4-5, and 5-0 closing a ring of `closing` order where it is given. */
+  const six = (closing?: number) => ({
+    atoms: Array.from({ length: 6 }, () => ({ el: "C" })),
+    bonds: [...Array.from({ length: 5 }, (_, i) => ({ a: i, b: i + 1, order: 1 })), ...(closing ? [{ a: 5, b: 0, order: closing }] : [])],
+  });
+
+  it("is not found where a bond of it is missing - a ring against an open chain, each of whose middle atoms has as many bonds", () => {
+    // (eight carbons in a chain: six of them in a row have two bonds each, as each ring atom has - only the ring's closing bond is missing)
+    const chain = { atoms: Array.from({ length: 8 }, () => ({ el: "C" })), bonds: Array.from({ length: 7 }, (_, i) => ({ a: i, b: i + 1, order: 1 })) };
+    expect(coreMatches(six(1), chain)).toEqual([]);
+    expect(coreMatches(six(1), six())).toEqual([]);
+  });
+
+  it("is not found where a bond of it is there at another order - cyclohexene's double bond against cyclohexane's single", () => {
+    expect(coreMatches(six(2), six(1))).toEqual([]);
+  });
+
+  it("is found where every bond of it is there, as it is", () => {
+    expect(coreMatches(six(1), six(1)).length).toBeGreaterThan(0);
+    expect(coreMatches(six(2), six(2)).length).toBeGreaterThan(0);
   });
 });
