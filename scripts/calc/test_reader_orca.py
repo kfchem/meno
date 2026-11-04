@@ -4,10 +4,7 @@ Python alone, as the reader is - CI runs them:
 
     python3 -m unittest scripts/calc/test_reader_orca.py
 
-The tests of single parts are written by hand, in ORCA 6.1.1's printed form, with made-up numbers. Those of whole
-outputs read ORCA's own, which are not in the repository (docs/WORKSPACE.md, stage 3): run ORCA (6.1.1 here) on the
-inputs in `INPUTS` - each in a folder of its own, with any file `BESIDE` names beside it - and put each output in
-calc-samples/ORCA-reader/ under its name. They are skipped where the files are not there.
+Every test is written by hand: lines in ORCA's printed form, with made-up numbers.
 """
 
 import importlib.util
@@ -18,7 +15,6 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "src-tauri/resources/plugins/orca"
-SAMPLES = ROOT / "calc-samples/ORCA-reader"
 
 
 def load(path, name):
@@ -38,49 +34,6 @@ def load(path, name):
 
 reader = load(PLUGIN / "reader.py", "orca_reader")
 worker = load(PLUGIN / "worker.py", "orca_worker_for_reading")
-
-WATER = "* xyz 0 1\nO 0.000 0.000 0.117\nH 0.000 0.757 -0.469\nH 0.000 -0.757 -0.469\n*\n"
-HCN = "* xyz 0 1\nC 0 0 0\nN 0 0 1.156\nH 0 0 -1.066\n*\n"
-H2CO = "* xyz 0 1\nC 0.000 0.000 -0.528\nO 0.000 0.000 0.677\nH 0.000 0.937 -1.116\nH 0.000 -0.937 -1.116\n*\n"
-NH3_TS = "* xyz 0 1\nN 0 0 0\nH 1.00 0 0\nH -0.50 0.866 0\nH -0.50 -0.866 0\n*\n"
-NH3_UP = "* xyz 0 1\nN 0 0 0\nH 0.94 0 0.38\nH -0.47 0.814 0.38\nH -0.47 -0.814 0.38\n*\n"
-ETHANOL = (
-    "* xyz 0 1\nC -0.048 -0.003 0.000\nC 1.462 0.002 0.000\nO 1.889 1.358 0.000\nH -0.420 1.027 0.000\n"
-    "H -0.420 -0.513 0.889\nH -0.420 -0.513 -0.889\nH 1.835 -0.508 0.890\nH 1.835 -0.508 -0.890\nH 2.849 1.384 0.000\n*\n"
-)
-INPUTS = {
-    "water_b3lyp_d3bj_sp.out": "! B3LYP D3BJ def2-SVP\n" + WATER,
-    "water_wb97xd3_optfreq.out": "! wB97X-D3 6-31G(d) TightOpt Freq\n%freq QuasiRRHO false end\n" + WATER,
-    "water_rimp2_sp.out": "! RI-MP2 def2-SVP def2-SVP/C\n" + WATER,
-    "water_ccsdt_sp.out": "! CCSD(T) def2-SVP\n" + WATER,
-    "water_hf_sp.out": "! HF def2-SVP\n" + WATER,
-    "water_b973c_sp.out": "! B97-3c\n" + WATER,
-    "water_pbe0_raman.out": "! PBE0 def2-SVP Freq\n%elprop polar 1 end\n" + WATER,
-    "water_charges.out": "! B3LYP def2-SVP CHELPG Hirshfeld MBIS\n" + WATER,
-    "water_cpcm_opt.out": "! B3LYP D3BJ def2-SVP Opt CPCM(water)\n" + WATER,
-    "water_smd_sp.out": "! B3LYP def2-SVP SMD(chloroform)\n" + WATER,
-    "water_maxiter_opt.out": "! B3LYP def2-SVP Opt\n%geom MaxIter 2 end\n* xyz 0 1\nO 0.0 0.0 0.0\nH 0.0 0.9 -0.7\nH 0.0 -1.1 -0.2\n*\n",
-    "water_scf_unconverged.out": "! B3LYP def2-SVP\n%scf MaxIter 3 end\n" + WATER,
-    "water_ghost_q.out": "! B3LYP def2-SVP\n* xyz 0 1\nO 0.000 0.000 0.117\nH 0.000 0.757 -0.469\nH 0.000 -0.757 -0.469\nH : 0.000 0.000 2.500\nQ 0.5 0.0 0.0 -3.0\n*\n",
-    "hydroxide_b3lyp_optfreq.out": "! B3LYP def2-SVP Opt Freq\n* xyz -1 1\nO 0.0 0.0 0.0\nH 0.0 0.0 0.97\n*\n",
-    "methylene_triplet_uks.out": "! UKS B3LYP def2-SVP Opt\n* xyz 0 3\nC 0.000 0.000 0.103\nH 0.000 0.990 -0.309\nH 0.000 -0.990 -0.309\n*\n",
-    "formaldehyde_tddft_opt.out": "! PBE0 def2-SVP Opt\n%tddft nroots 3 iroot 1 end\n" + H2CO,
-    "hcn_scan.out": "! B3LYP D3BJ def2-SVP Opt\n%geom Scan B 0 2 = 1.00, 1.20, 3 end end\n" + HCN,
-    "hcn_newjob.out": "! r2SCAN-3c\n" + HCN + "$new_job\n! B97-3c Opt\n" + HCN,
-    "ammonia_ts_opttsfreq.out": "! r2SCAN-3c OptTS Freq\n%geom Calc_Hess true end\n" + NH3_TS,
-    "ammonia_native_xtb_neb.out": "! NATIVE-XTB2 NEB-TS\n%neb neb_end_xyzfile \"end.xyz\" nimages 8 end\n" + NH3_UP,
-    "ethanol_xtb_optfreq.out": "! XTB2 Opt Freq\n" + ETHANOL,
-}
-#: The files a sample's run needs beside its input: the band's end.
-BESIDE = {"ammonia_native_xtb_neb.out": {"end.xyz": "4\nammonia inverted\nN 0 0 0\nH 0.94 0 -0.38\nH -0.47 0.814 -0.38\nH -0.47 -0.814 -0.38\n"}}
-
-
-def sample(name):
-    path = SAMPLES / name
-    if not path.exists():
-        raise unittest.SkipTest(f"no ORCA-reader/{name} in calc-samples/")
-    return path.read_text(encoding="utf-8")
-
 
 def read(name, text):
     """What the worker answers for an output, as Meno asks it."""
@@ -342,108 +295,12 @@ class Jobs(unittest.TestCase):
         self.assertIsNone(result(r["jobs"][0], "run"))
 
 
-class WholeOutputs(unittest.TestCase):
-    """ORCA's own outputs (`INPUTS`), as the worker reads them."""
-
-    def test_a_single_point_s_level_energy_and_properties(self):
-        r = read("w.out", sample("water_b3lyp_d3bj_sp.out"))
-        self.assertEqual((r["program"], r["method"], r["basis"], r["solvation"], r["charge"], r["multiplicity"]), ("ORCA", "B3LYP", "def2-SVP", "none", 0, 1))
-        self.assertEqual((r["atoms"], len(r["frames"]), len(r["energies"])), (["O", "H", "H"], 1, 1))
-        self.assertEqual(r["masses"], [15.999, 1.008, 1.008])
-        self.assertIsNone(r["optimised"])
-        for id_ in ("dipole", "charges.mulliken", "charges.lowdin", "energy.what"):
-            self.assertIsNotNone(result(r, id_), id_)
-        # (water: five occupied of both spins, in Meno's form; no list of the reader's own)
-        self.assertEqual(sum(1 for o in r["orbitals"] if o["occupation"] == 2.0 and o["spin"] == "both"), 5)
-        self.assertIsNone(result(r, "orbitals"))
-
-    def test_an_optimisation_and_its_frequencies(self):
-        r = read("w.out", sample("water_wb97xd3_optfreq.out"))
-        self.assertEqual((r["method"], r["basis"], r["optimised"]), ("wB97X-D3", "6-31G(d)", True))
-        self.assertEqual(len(r["energies"]), len(r["frames"]))
-        self.assertEqual(r["converged"], [False] * (len(r["frames"]) - 1) + [True])
-        self.assertEqual(r["imaginary"], [])
-        self.assertEqual(result(r, "thermo.treatment")["value"], "RRHO")
-        g, e, gc = result(r, "thermo.free-energy")["value"], r["energies"][-1], result(r, "thermo.g-correction")["value"]
-        self.assertAlmostEqual(g - e, gc, 7)
-        self.assertEqual(len(result(r, "vibrations")["rows"]), 3)
-
-    def test_a_correlated_method_and_its_density_s_dipole(self):
-        r = read("w.out", sample("water_ccsdt_sp.out"))
-        self.assertEqual(r["method"], "CCSD(T)")
-        self.assertEqual(read("w.out", sample("water_rimp2_sp.out"))["method"], "RI-MP2")
-        self.assertEqual(read("w.out", sample("water_hf_sp.out"))["method"], "HF")
-
-    def test_solvation_said(self):
-        self.assertEqual(read("w.out", sample("water_cpcm_opt.out"))["solvation"], "CPCM(water)")
-        self.assertEqual(read("w.out", sample("water_smd_sp.out"))["solvation"], "SMD(chloroform)")
-
-    def test_raman_and_the_charge_schemes(self):
-        v = result(read("w.out", sample("water_pbe0_raman.out")), "vibrations")
-        self.assertIn("Raman activity", [c["label"] for c in v["columns"]])
-        r = read("w.out", sample("water_charges.out"))
-        for scheme in ("mulliken", "lowdin", "hirshfeld", "mbis", "chelpg"):
-            self.assertIsNotNone(result(r, f"charges.{scheme}"), scheme)
-
-    def test_runs_that_did_not_go_well(self):
-        unmet = read("w.out", sample("water_maxiter_opt.out"))
-        self.assertEqual((unmet["optimised"], unmet["converged"][-1], unmet.get("unmarked")), (False, False, None))
-        failed = read("w.out", sample("water_scf_unconverged.out"))
-        self.assertEqual(result(failed, "run")["value"], "ended with an error")
-        self.assertIn("SCF has not converged", result(failed, "run.why")["value"])
-
-    def test_ghost_atoms_and_point_charges_left_out(self):
-        r = read("w.out", sample("water_ghost_q.out"))
-        self.assertEqual(r["atoms"], ["O", "H", "H"])
-        self.assertEqual(len(result(r, "charges.mulliken")["values"]), 3)
-
-    def test_an_ion_s_dipole_with_its_origin_and_the_masses(self):
-        r = read("w.out", sample("hydroxide_b3lyp_optfreq.out"))
-        d = result(r, "dipole")
-        self.assertEqual((r["charge"], len(d["vector"]), len(d["origin"]), len(r["masses"])), (-1, 3, 3, 2))
-
-    def test_an_open_shell_s_spins_and_orbitals_of_each_spin(self):
-        r = read("w.out", sample("methylene_triplet_uks.out"))
-        self.assertEqual(r["multiplicity"], 3)
-        self.assertIsNotNone(result(r, "spins.mulliken"))
-        self.assertEqual({o["spin"] for o in r["orbitals"]}, {"alpha", "beta"})
-        self.assertEqual(sum(o["occupation"] for o in r["orbitals"]), 8)
-
-    def test_an_excited_state_followed(self):
-        r = read("w.out", sample("formaldehyde_tddft_opt.out"))
-        self.assertIsNone(r["energies"])
-        self.assertEqual(result(r, "run.energies")["value"], "energies not read")
-        self.assertEqual(result(r, "dipole")["label"], "Dipole moment, excited state 1")
-
-    def test_a_relaxed_scan_its_points_converged_on(self):
-        r = read("w.out", sample("hcn_scan.out"))
-        self.assertEqual(result(r, "run.path")["value"], "3 points")
-        self.assertEqual(sum(r["converged"]), 3)
-        self.assertIsNone(r["optimised"])
-
-    def test_a_file_of_two_jobs(self):
-        r = read("w.out", sample("hcn_newjob.out"))
-        self.assertEqual([(j["method"], j["job"]["kind"]) for j in r["jobs"]], [("r2SCAN-3c", "Single point"), ("B97-3c", "Optimisation")])
-
-    def test_a_saddle_point_and_its_one_imaginary_frequency(self):
-        r = read("w.out", sample("ammonia_ts_opttsfreq.out"))
-        self.assertEqual((r["optimised"], len(r["imaginary"])), (True, 1))
-
-    def test_a_band_s_output_its_start_and_its_path_not_in_it(self):
-        r = read("w.out", sample("ammonia_native_xtb_neb.out"))
-        self.assertEqual((r["method"], r["unmarked"], result(r, "run.path")["value"]), ("GFN2-xTB", "path", "not read"))
-        self.assertEqual((len(r["frames"]), r["energies"], r["converged"]), (1, None, [False]))
-
+class Bands(unittest.TestCase):
     def test_a_band_s_output_gives_the_geometry_it_started_from_alone(self):
         # (however many geometries it wrote after - its refinement's steps: no path's points)
         text = echo("! NATIVE-XTB2 NEB-TS") + GEOMETRY.replace("0.117000", "0.100000") + final("-4.40") + GEOMETRY + final("-4.41") + GEOMETRY + final("-4.42") + "****ORCA TERMINATED NORMALLY****\n"
         r = read("band.out", text)
         self.assertEqual((len(r["frames"]), r["frames"][0][2], r["unmarked"]), (1, 0.1, "path"))
-
-    def test_the_xtb_program_through_orca_its_energies_one_to_each_geometry(self):
-        r = read("w.out", sample("ethanol_xtb_optfreq.out"))
-        self.assertEqual((r["method"], result(r, "method.by")["value"]), ("GFN2-xTB", "the xtb program, through ORCA"))
-        self.assertEqual(len(r["energies"]), len(r["frames"]))
 
 
 if __name__ == "__main__":

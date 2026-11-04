@@ -1637,18 +1637,21 @@ As step 3 was built:
   NWChem, ORCA, Psi4, Q-Chem, Turbomole, xTB - each told by its banner as
   cclib tells it; PySCF's the Molden file. With no plugin added, *Files*
   lists Meno's own kinds only.
-  - Each program's banner is checked on a real output of it, one per
+  - Each program's banner is checked on an output of it, one per
     program from cclib's regression data (`scripts/calc/samples.json`;
-    kept out of the repository in `calc-samples/`), and cclib's worker
-    gives each one's molecule. The tests skip a file that is not there.
+    kept out of the repository in `calc-samples/`) - none of ORCA's or
+    Gaussian's, read by their own plugins and tested on hand-written
+    lines - and cclib's worker gives each one's molecule. The tests skip
+    a file that is not there.
   - Psi3 is left out, with no output of it to test with.
   - `probe` is in place, and tested with made-up plugins.
 - **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
   *Several plugins, one role*): its manifest declares ORCA's output as its
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
-  file opened by hand alike. Written from the ORCA 6.1 manual and ORCA's
-  own outputs (ORCA 6.1.1, `scripts/calc/test_reader_orca.py`), it gives:
+  file opened by hand alike. Written from the ORCA 6.1 manual and the
+  program's printed forms, tested on hand-written lines
+  (`scripts/calc/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry
