@@ -71,8 +71,12 @@ export type Bond = BondChem & {
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   // Double-bond offset layout modes
   doubleMode?: "auto" | "center" | "left" | "right";
-  // Wedge orientation principle vs. reverse principle
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (`a1` or `a2`) a wedge is narrow at: a stereo wedge's centre, a
+   * perspective wedge's far end. None given, the end with more bonds (`a1`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn: as a plain line (the
    * default), as a bold bar, as hashes across it, or dashed along it.
@@ -90,7 +94,7 @@ export type Vec2 = { x: number; y: number };
 /**
  * How a bond is drawn where it says nothing of stereochemistry. "wedge" is
  * a ring's bond in perspective running toward the viewer, narrow at its far
- * end (as a stereo wedge is narrow at its centre: `stereoOrient`); on a
+ * end (as a stereo wedge is narrow at its centre: `narrow`); on a
  * double bond it, or "bold", takes the place of the line the second one is
  * drawn beside.
  */
@@ -2598,16 +2602,12 @@ export function buildTextLabels(
 }
 
 /**
- * Which end of a wedge carries the wide base. By the usual principle the thin
- * end points at the stereocentre, i.e. the atom of higher degree; the reverse
- * orientation swaps the ends.
+ * Which end of a wedge carries the wide base: the end it is not narrow at
+ * (`Bond.narrow`). None given, the thin end points at the stereocentre by the
+ * usual principle, the atom of higher degree.
  */
 function wedgeBaseAtom(bond: Bond, deg?: Map<number, number>): number {
-  const degA = deg?.get(bond.a1) || 0;
-  const degB = deg?.get(bond.a2) || 0;
-  const thinAtA = degA >= degB; // tie: thin end at a1
-  const baseAtA = bond.stereoOrient === "reverse" ? thinAtA : !thinAtA;
-  return baseAtA ? bond.a1 : bond.a2;
+  return wedgeNarrowAtom(bond, deg) === bond.a1 ? bond.a2 : bond.a1;
 }
 
 /**
@@ -2615,10 +2615,13 @@ function wedgeBaseAtom(bond: Bond, deg?: Map<number, number>): number {
  * lists first.
  */
 export function wedgeNarrowAtom(
-  bond: Bond,
+  bond: Pick<Bond, "a1" | "a2" | "narrow">,
   deg?: Map<number, number>,
 ): number {
-  return wedgeBaseAtom(bond, deg) === bond.a1 ? bond.a2 : bond.a1;
+  if (bond.narrow === bond.a1 || bond.narrow === bond.a2) return bond.narrow;
+  const degA = deg?.get(bond.a1) || 0;
+  const degB = deg?.get(bond.a2) || 0;
+  return degA >= degB ? bond.a1 : bond.a2; // tie: thin end at a1
 }
 
 function degreeMap(bonds: Bond[]): Map<number, number> {

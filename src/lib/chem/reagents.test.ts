@@ -178,7 +178,7 @@ describe("configurations", () => {
     const degree = new Map<number, number>();
     for (const b of proline.bonds) for (const at of [b.a1, b.a2]) degree.set(at, (degree.get(at) ?? 0) + 1);
     // (the centre is atom 3: OC(=O)[C@@H]1CCCN1)
-    expect(wedgeNarrowAtom({ ...wedges[0], stereoOrient: wedges[0].stereoOrient ?? "principle" }, degree)).toBe(3);
+    expect(wedgeNarrowAtom(wedges[0], degree)).toBe(3);
     // a centre at a ring fusion gets its H drawn, the wedge on it
     const cbs = placedAbbreviation("(S)-CBS", null, L)!;
     expect(cbs.atoms.filter((a) => a.el === "H")).toHaveLength(1);

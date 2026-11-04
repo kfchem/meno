@@ -400,15 +400,6 @@ export const createModelSlice = (
     doc.edit("change stereo", (d) => ops.updateBond(d, id, { stereo }));
   },
 
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
-  ) => {
-    doc.edit("change stereo", (d) =>
-      ops.updateBond(d, id, { stereoOrient: orient }),
-    );
-  },
-
   /**
    * The structure a tab opens with. That is where the document starts, not
    * an edit made to it: nothing to undo, nothing unsaved. Meno's own record

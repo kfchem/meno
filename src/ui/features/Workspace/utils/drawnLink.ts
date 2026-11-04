@@ -91,7 +91,7 @@ export function relinked<M extends Pick<Molecule3D, "drawnFrom" | "drawnAs">>(
   if (linkOf(m, part) !== "live") return { ...m, drawnFrom };
   const renamed: Model = {
     atoms: part.atoms.map((a) => ({ ...a, id: idOf(a.id) ?? a.id })),
-    bonds: part.bonds.map((b) => ({ ...b, a: idOf(b.a) ?? b.a, b: idOf(b.b) ?? b.b })),
+    bonds: part.bonds.map((b) => ({ ...b, a: idOf(b.a) ?? b.a, b: idOf(b.b) ?? b.b, ...(b.narrow != null ? { narrow: idOf(b.narrow) ?? b.narrow } : {}) })),
   };
   return { ...m, drawnFrom, drawnAs: signatureOf(renamed, drawnFrom.filter((id): id is number => id != null)) };
 }

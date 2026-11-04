@@ -18,7 +18,8 @@ export type WriterBond = BondChem & {
   b: number;
   order: 1 | 2 | 3;
   stereo?: "up" | "down" | "wavy" | "either" | "none";
-  stereoOrient?: "principle" | "reverse";
+  /** The atom (by id, `a` or `b`) a wedge is narrow at; none given, the end with more bonds. */
+  narrow?: number;
   dative?: boolean;
 };
 export type WriterModel = { atoms: WriterAtom[]; bonds: WriterBond[] };
@@ -76,7 +77,7 @@ function rows(model: WriterModel, index: Map<number, number>): Row[] {
     let first = i;
     if (stereo === "up" || stereo === "down") {
       first = wedgeNarrowAtom(
-        { a1: i, a2: j, order: b.order, stereoOrient: b.stereoOrient },
+        { a1: i, a2: j, narrow: b.narrow == null ? undefined : index.get(b.narrow) },
         deg,
       );
     } else if (stereo === "wavy") {
@@ -189,7 +190,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
       else atoms.push(atom);
     });
     for (const b of structure.bonds) {
-      bonds.push({ ...b, a: ids[b.a1], b: ids[b.a2], ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids[e]) } : {}) });
+      bonds.push({ ...b, a: ids[b.a1], b: ids[b.a2], ...(b.narrow != null ? { narrow: ids[b.narrow] } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids[e]) } : {}) });
     }
     // the bonds out, to the atoms it is attached by, in order - haptic
     // where that is a pi system's star
@@ -198,6 +199,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
       const to = ids[at];
       if (b.a === a.id) b.a = to;
       else b.b = to;
+      if (b.narrow === a.id) b.narrow = to;
       const pi = structure.haptic?.find((h) => h.star === at);
       if (pi) Object.assign(b, { endpoints: pi.atoms.map((e) => ids[e]), attach: "all", coordination: true });
       // (a donor that lends its pair: a coordination bond)

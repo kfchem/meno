@@ -76,15 +76,15 @@ export function bondKindOf(b: Pick<Bond, "order" | "stereo" | "display" | "dativ
  * wedge, hashed wedge, plain again with the wedge's other end narrow. A
  * bond that is another kind - wavy, or bold, hashed, dashed or dative, as
  * its menu or a file made it - is taken out of it into the cycle's plain,
- * not left as it was (a wavy bond clicked stayed wavy).
+ * not left as it was (a wavy bond clicked stayed wavy). `narrowNow` is the
+ * end a wedge is narrow at as drawn (chem/drawing `narrowEnd`).
  */
-export function singleClickPatch(b: Pick<Bond, "stereo" | "stereoOrient" | "display" | "dative">): Partial<Bond> {
+export function singleClickPatch(b: Pick<Bond, "a" | "b" | "stereo" | "display" | "dative">, narrowNow: number): Partial<Bond> {
   const stereo = b.stereo ?? "none";
-  const orient = b.stereoOrient ?? "principle";
   // (another kind of single: the plain one first)
   const other = stereo === "wavy" || stereo === "either" || b.dative || b.display === "bold" || b.display === "hashed" || b.display === "dashed";
-  if (other) return { stereo: "none", display: undefined, dative: undefined, stereoOrient: orient };
-  if (stereo === "none") return { stereo: "up", stereoOrient: orient };
-  if (stereo === "up") return { stereo: "down", stereoOrient: orient };
-  return { stereo: "none", stereoOrient: orient === "principle" ? "reverse" : "principle" };
+  if (other) return { stereo: "none", display: undefined, dative: undefined };
+  if (stereo === "none") return { stereo: "up", narrow: narrowNow };
+  if (stereo === "up") return { stereo: "down", narrow: narrowNow };
+  return { stereo: "none", narrow: narrowNow === b.a ? b.b : b.a };
 }

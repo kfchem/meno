@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Model } from "../store/types";
+import type { Bond, Model } from "../store/types";
 import { emptyWorkspaceDocument, setFigureChecked } from "../document";
 import { figureNotePlaces, figureNoteShown, readMarksShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type NotePlaces } from "./figureNotes";
 import { atomAs, bondAs, readMarks } from "./figures";
@@ -102,8 +102,8 @@ describe("the note over a structure read from a figure", () => {
     const m = model();
     const marked: Model = { ...m, bonds: m.bonds.map((b) => (b.id === 4 ? { ...b, stereo: "up" as const, unsure: { said: ["Drawn as a wedge"], as: bondAs({ ...b, stereo: "up" }) } } : b)) };
     expect(figureNotesOf(marked).map((n) => n.unsure)).toEqual([2]);
-    for (const edit of [{ display: "bold" as const }, { stereoOrient: "reverse" as const }]) {
-      const edited: Model = { ...marked, bonds: marked.bonds.map((b) => (b.id === 4 ? { ...b, ...edit } : b)) };
+    for (const edit of [(_: Bond) => ({ display: "bold" as const }), (b: Bond) => ({ narrow: b.b })]) {
+      const edited: Model = { ...marked, bonds: marked.bonds.map((b) => (b.id === 4 ? { ...b, ...edit(b) } : b)) };
       expect(figureNotesKey(edited)).not.toBe(figureNotesKey(marked));
       expect(figureNotesOf(edited).map((n) => n.unsure)).toEqual([1]);
     }

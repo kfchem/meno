@@ -566,7 +566,7 @@ describe("joinStyle", () => {
     { id: 5, x: 2.6, y: 0, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
     { a1: 2, a2: 4, order: 1, stereo: "none" },
@@ -790,7 +790,7 @@ describe("a wedge and a bond of more than one line", () => {
     { id: 4, x: -1.3, y: -0.75, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 2, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];
@@ -826,7 +826,7 @@ describe("a wedge and a bond of more than one line", () => {
     // the wedge's wide end on atom 1, where only a double bond carries on,
     // its second line on the side of the wedge's narrow end (+y)
     const alone: Bond[] = [
-      { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+      { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
       { a1: 1, a2: 2, order: 2, stereo: "none", doubleMode: "left" },
     ];
     const o = opts();
@@ -1356,7 +1356,7 @@ describe("a wedge with a bond carrying straight on", () => {
     { id: 4, x: 2.2, y: -1.3, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];
@@ -1457,7 +1457,7 @@ describe("bold, hashed, dashed and dative bonds", () => {
     expect(bondKind(one({ display: "plain" }))).toBe("lines");
   });
 
-  it("draws a ring's bond toward the viewer as a wedge, narrow where stereoOrient says, saying no configuration", () => {
+  it("draws a ring's bond toward the viewer as a wedge, narrow where it is said to be, saying no configuration", () => {
     expect(bondKind(one({ display: "wedge" }))).toBe("wedge");
     const { lines, polys } = buildBondPrimitives(pair, one({ display: "wedge" }), opts(), ZOOM, deg);
     expect(lines).toHaveLength(0);
@@ -1683,13 +1683,9 @@ describe("a ring's bonds in perspective", () => {
       { id: 2, x: L, y: 0, el: "C" },
       { id: 3, x: -0.5 * L, y: 0.8 * L, el: "C" },
     ];
-    const deg = new Map([[0, 2], [1, 1], [2, 1]]);
-    const wedge: Bond = { a1: 2, a2: 0, order: 1, display: "wedge" };
-    // (narrow at 2: as stereoOrient puts it)
-    const narrow = wedgeNarrowAtom({ ...wedge, stereoOrient: "principle" }, deg);
     const bonds: Bond[] = [
       { a1: 0, a2: 1, order: 1, display: "bold" },
-      narrow === 2 ? wedge : { ...wedge, stereoOrient: "reverse" },
+      { a1: 2, a2: 0, order: 1, display: "wedge", narrow: 2 },
     ];
     const { polys } = buildAllPrimitives(atoms, bonds, opts(), 40);
     // the corner: four points, the first the atom itself, the third out past both shapes
@@ -2006,7 +2002,7 @@ describe("angles and lines that reach an atom", () => {
       { id: 4, x: 1.5, y: -1.5, el: "C" },
     ];
     const bonds: Bond[] = [
-      { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+      { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
       { a1: 1, a2: 2, order: 1, stereo: "none" },
       { a1: 1, a2: 3, order: 1, stereo: "none" },
     ];

@@ -1,4 +1,5 @@
 import { singleClickPatch } from "../utils/bondKinds";
+import { degrees, narrowEnd } from "../chem/drawing";
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
@@ -88,7 +89,7 @@ export default function BondsPick2D() {
       });
       return;
     }
-    updateBond(b.id, singleClickPatch(b));
+    updateBond(b.id, singleClickPatch(b, narrowEnd(b, degrees(model.bonds))));
   }
   function applyDoubleCycle(b: (typeof model.bonds)[number]) {
     if (b.order !== 2) {

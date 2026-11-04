@@ -116,13 +116,13 @@ describe("structure document operations", () => {
         { id: 1, x: 0, y: 0 }, // where it is already
         { id: 2, x: 1.3, y: 0.75 },
       ],
-      bonds: [{ id: 3, stereo: "down", stereoOrient: "reverse" }],
+      bonds: [{ id: 3, stereo: "down", narrow: 2 }],
     });
     expect(next.model.atoms[0]).toBe(d.model.atoms[0]);
     expect(next.model.atoms[1]).toMatchObject({ x: 1.3, y: 0.75 });
     expect(next.model.bonds[0]).toMatchObject({
       stereo: "down",
-      stereoOrient: "reverse",
+      narrow: 2,
     });
     // nothing to change, nothing changed
     expect(
@@ -137,7 +137,7 @@ describe("structure document operations", () => {
     const next = ops.relayout(d, {
       atoms: [{ id: 1, x: 0, y: 0, z: 0.5, stereoCentre: true }],
       bonds: [],
-      added: [{ x: 0, y: 1.5, on: 2, stereo: "up", stereoOrient: "principle" }],
+      added: [{ x: 0, y: 1.5, on: 2, stereo: "up" }],
       removed: [h],
     });
     expect(next.model.atoms.map((a) => a.el)).toEqual(["C", "C", "H"]);

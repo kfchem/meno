@@ -81,8 +81,8 @@ export function labelsDrawnOut(part: Model): Model {
     const ids = s.atoms.map((_, k) => (k === head ? a.id : next--));
     s.atoms.forEach(({ x, y, ...chem }, k) => atoms.push({ ...chem, id: ids[k], x: a.x + x, y: a.y + y, r: a.r }));
     for (const b of s.bonds) {
-      const { a1, a2, endpoints, ...rest } = b;
-      bonds.push({ ...rest, id: next--, a: ids[a1], b: ids[a2], stereo: b.stereo ?? "none", ...(endpoints ? { endpoints: endpoints.map((e) => ids[e]) } : {}) } as Model["bonds"][number]);
+      const { a1, a2, endpoints, narrow, ...rest } = b;
+      bonds.push({ ...rest, id: next--, a: ids[a1], b: ids[a2], stereo: b.stereo ?? "none", ...(narrow != null ? { narrow: ids[narrow] } : {}), ...(endpoints ? { endpoints: endpoints.map((e) => ids[e]) } : {}) } as Model["bonds"][number]);
     }
   }
   return { atoms, bonds };

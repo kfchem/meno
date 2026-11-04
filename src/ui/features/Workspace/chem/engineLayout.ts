@@ -25,7 +25,7 @@ import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
-import { degrees, drawingOf, orientFor } from "./drawing";
+import { degrees, drawingOf } from "./drawing";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 
@@ -235,7 +235,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       hydrogenOf.set(h.on, own);
     } else {
       hydrogenOf.set(h.on, { added: added.length });
-      added.push({ ...p, on: ids[h.on], stereo: "none", stereoOrient: "principle" });
+      added.push({ ...p, on: ids[h.on], stereo: "none" });
     }
   }
   const removed = [...spare.values()].flat();
@@ -243,11 +243,6 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   // the wedges: those the engine draws, and no others in the part
   const gone = new Set(removed);
   const inPart = new Set(part.atoms.map((a) => a.id));
-  const finalBonds: Pick<Bond, "a" | "b">[] = [
-    ...model.bonds.filter((b) => !gone.has(b.a) && !gone.has(b.b)),
-    ...added.map((h, i) => ({ a: h.on, b: -1 - i })),
-  ];
-  const degree = degrees(finalBonds);
   const wedgeOn = new Map<number, { stereo: "up" | "down"; narrow: number }>();
   for (const w of laid.wedges) {
     const from = ids[w.from];
@@ -255,7 +250,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     if (typeof to === "object") {
       const h = added[to.added];
       h.stereo = w.stereo;
-      h.stereoOrient = orientFor({ a: h.on, b: -1 - to.added, order: 1 }, from, degree);
+      h.narrow = from;
       continue;
     }
     const bond = model.bonds.find((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
@@ -269,15 +264,14 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   // (and a cluster's metals in contact, dashed)
   const dashedOnes = new Set(laid.dashed.map(([u, v]) => pairKey(ids[u], ids[v])));
   const farEnd = new Map(laid.toward.map(([u, v]) => [pairKey(ids[u], ids[v]), ids[u]]));
-  const display = (b: Bond): Pick<Bond, "display" | "stereoOrient"> | null => {
+  const display = (b: Bond): Pick<Bond, "display" | "narrow"> | null => {
     const u = indexOf.get(b.a);
     const v = indexOf.get(b.b);
     if (u == null || v == null || laid.depth[u] == null || laid.depth[v] == null || b.endpoints?.length) return null;
     const key = pairKey(b.a, b.b);
     const far = farEnd.get(key);
     if (far != null) {
-      const stereoOrient = orientFor(b, far, degree);
-      return b.display === "wedge" && b.stereoOrient === stereoOrient ? null : { display: "wedge", stereoOrient };
+      return b.display === "wedge" && b.narrow === far ? null : { display: "wedge", narrow: far };
     }
     const want = boldOnes.has(key) ? "bold" : dashedOnes.has(key) ? "dashed" : undefined;
     return want === b.display || (!want && b.display !== "bold" && b.display !== "wedge") ? null : { display: want };
@@ -286,9 +280,9 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     if (!inPart.has(b.a) || !inPart.has(b.b) || gone.has(b.a) || gone.has(b.b)) return [];
     const w = wedgeOn.get(b.id);
     const d = display(b);
-    if (w) return [{ id: b.id, stereo: w.stereo, stereoOrient: orientFor(b, w.narrow, degree), ...d }];
-    if (b.stereo === "up" || b.stereo === "down") return [{ id: b.id, stereo: "none", stereoOrient: "principle", ...d }];
-    if (d) return [{ id: b.id, stereo: b.stereo, stereoOrient: b.stereoOrient, ...d }];
+    if (w) return [{ id: b.id, stereo: w.stereo, narrow: w.narrow, ...d }];
+    if (b.stereo === "up" || b.stereo === "down") return [{ id: b.id, stereo: "none", ...d }];
+    if (d) return [{ id: b.id, stereo: b.stereo, narrow: b.narrow, ...d }];
     return [];
   });
   // each η3-allyl posed as the maintainer draws one (2026-10-18): its

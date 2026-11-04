@@ -865,7 +865,7 @@ function numberedApart(models: readonly Model[]): Model {
       });
     }
     for (const b of m.bonds) {
-      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
+      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
     }
   }
   return out;

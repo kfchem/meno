@@ -34,11 +34,11 @@ export type AbbreviationStructure = {
     a2: number;
     order: 1 | 2 | 3;
     stereo?: "up" | "down" | "wavy" | "either" | "none";
-    /** Which end of a wedge is narrow, as a drawn bond's `stereoOrient` says. */
-    stereoOrient?: "principle" | "reverse";
+    /** The atom (`a1` or `a2`) a wedge is narrow at, as a drawn bond's `narrow` says. */
+    narrow?: number;
     /**
      * A ring's bond in perspective: a near edge, bold; one toward the viewer,
-     * a wedge (narrow as `stereoOrient` says). Two metals of a cluster in
+     * a wedge (narrow at `narrow`). Two metals of a cluster in
      * contact, dashed.
      */
     display?: "bold" | "wedge" | "dashed";
