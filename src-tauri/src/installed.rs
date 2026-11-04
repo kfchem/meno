@@ -85,12 +85,21 @@ pub fn list(root: &Path) -> Vec<Installed> {
     out
 }
 
-/// Plugin `id`'s version in use set to `version`, at once: written beside, then renamed over the old.
-pub fn set_current(root: &Path, id: &str, version: &str) -> io::Result<()> {
+/// A file or folder renamed, as `put` and `set_current` rename (a test gives them one that fails).
+type Rename = dyn Fn(&Path, &Path) -> io::Result<()>;
+
+fn renamed(from: &Path, to: &Path) -> io::Result<()> {
+    fs::rename(from, to)
+}
+
+/// Plugin `id`'s version in use set to `version`, at once: written beside, then renamed (`rename`) over the old.
+fn set_current(root: &Path, id: &str, version: &str, rename: &Rename) -> io::Result<()> {
     let folder = root.join(id);
     let tmp = folder.join(format!("{CURRENT}.{}.tmp", std::process::id()));
     fs::write(&tmp, version)?;
-    fs::rename(tmp, folder.join(CURRENT))
+    rename(&tmp, &folder.join(CURRENT)).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
 }
 
 /// A folder's files copied into another, made anew, every level: none that is a link.
@@ -188,7 +197,7 @@ pub fn seed(bundle: &Path, root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<S
             continue;
         }
         if wanted {
-            match put(&from, root, &id, &version, &print) {
+            match put(&from, root, &id, &version, &print, &renamed) {
                 Ok(()) => said.push(format!("{id} {version}: put in place from Meno")),
                 Err(e) => {
                     said.push(format!("{id} {version}: could not be put in place: {e}"));
@@ -234,7 +243,7 @@ pub fn tidy(root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<String> {
 /// and made the one in use. A folder of the same number already there - one from Meno, or one with no manifest - is
 /// first moved aside, and taken away only once the new one is in use: a step that fails or is cut short loses
 /// nothing (what is left aside, `tidy` takes away). Never over a plugin of that number put there otherwise.
-fn put(from: &Path, root: &Path, id: &str, version: &str, print: &str) -> io::Result<()> {
+fn put(from: &Path, root: &Path, id: &str, version: &str, print: &str, rename: &Rename) -> io::Result<()> {
     let staging = root.join(STAGING).join(format!("bundle-{id}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&staging);
     copy_tree(from, &staging)?;
@@ -248,19 +257,20 @@ fn put(from: &Path, root: &Path, id: &str, version: &str, print: &str) -> io::Re
             return Err(io::Error::other("a version of that number is in place from elsewhere"));
         }
         let _ = fs::remove_dir_all(&aside);
-        if let Err(e) = fs::rename(&target, &aside) {
+        if let Err(e) = rename(&target, &aside) {
             let _ = fs::remove_dir_all(&staging);
             return Err(e);
         }
     }
     fs::create_dir_all(root.join(id))?;
-    if let Err(e) = fs::rename(&staging, &target) {
+    if let Err(e) = rename(&staging, &target) {
+        let _ = fs::remove_dir_all(&staging);
         if moved {
-            let _ = fs::rename(&aside, &target);
+            let _ = rename(&aside, &target);
         }
         return Err(e);
     }
-    set_current(root, id, version)?;
+    set_current(root, id, version, rename)?;
     let _ = fs::remove_dir_all(&aside);
     Ok(())
 }
@@ -304,7 +314,7 @@ pub(crate) mod tests {
         let dir = root.join(id).join(version);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("manifest.json"), manifest).unwrap();
-        set_current(root, id, version).unwrap();
+        set_current(root, id, version, &renamed).unwrap();
         dir
     }
 
@@ -413,6 +423,45 @@ pub(crate) mod tests {
         assert!(dir(&root, "beta").unwrap().join(FROM_BUNDLE).is_file());
         // (nothing set aside is left over)
         assert!(tidy(&root, &none).is_empty());
+        let _ = (fs::remove_dir_all(&bundle), fs::remove_dir_all(&root));
+    }
+
+    /// A rename that fails where `fails` says, and renames otherwise.
+    fn failing(fails: impl Fn(&Path, &Path) -> bool) -> impl Fn(&Path, &Path) -> io::Result<()> {
+        move |from, to| if fails(from, to) { Err(io::Error::other("refused")) } else { fs::rename(from, to) }
+    }
+
+    #[test]
+    fn a_replace_whose_step_fails_loses_nothing() {
+        let (bundle, root) = (temp("fail-bundle"), temp("fail-root"));
+        carried(&bundle, "alpha", "0.1.0", "print(1)");
+        let none = |_: &str| false;
+        seed(&bundle, &root, &none);
+        let old = dir(&root, "alpha").unwrap();
+        // (the same version changed, as between builds)
+        fs::write(bundle.join("alpha").join("worker.py"), "print(2)").unwrap();
+        let from = bundle.join("alpha");
+        let print = fingerprint(&from).unwrap();
+        let aside = root.join("alpha").join(format!("old-{}", std::process::id()));
+        // (a) the new one cannot be renamed into its place: the old one back in it, whole, and still the one in use
+        let staging = root.join(STAGING);
+        let placing = failing(move |from, _| from.starts_with(&staging));
+        assert!(put(&from, &root, "alpha", "0.1.0", "x", &placing).is_err());
+        assert_eq!(dir(&root, "alpha").unwrap(), old);
+        assert_eq!(fs::read_to_string(old.join("worker.py")).unwrap(), "print(1)");
+        assert!(old.join("manifest.json").is_file() && old.join(FROM_BUNDLE).is_file());
+        assert_eq!(current(&root, "alpha").as_deref(), Some("0.1.0"));
+        assert!(!aside.exists() && fs::read_dir(root.join(STAGING)).unwrap().next().is_none());
+        // (b) the new one in place but not made the one in use: the old one still aside, nothing lost - and tidy takes it away
+        let naming = failing(|_, to| to.ends_with(CURRENT));
+        assert!(put(&from, &root, "alpha", "0.1.0", &print, &naming).is_err());
+        assert_eq!(fs::read_to_string(old.join("worker.py")).unwrap(), "print(2)");
+        assert_eq!(fs::read_to_string(aside.join("worker.py")).unwrap(), "print(1)");
+        assert!(!root.join("alpha").join(format!("{CURRENT}.{}.tmp", std::process::id())).exists());
+        assert_eq!(tidy(&root, &none), [format!("alpha old-{}: no longer in use, taken away", std::process::id())]);
+        assert_eq!(dir(&root, "alpha").unwrap(), old);
+        // (and as Meno starts again, nothing more to do: the version in use is what Meno carries)
+        assert!(seed(&bundle, &root, &none).is_empty());
         let _ = (fs::remove_dir_all(&bundle), fs::remove_dir_all(&root));
     }
 
