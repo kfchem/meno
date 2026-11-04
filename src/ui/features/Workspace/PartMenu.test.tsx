@@ -145,23 +145,14 @@ describe("the right-click menu", () => {
   });
 
   it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
-    const font = { size: 14, label: 10, lines: 1.5, family: null, drawing: "Arial", onSize: none, onLines: none, onFont: none };
+    const font = <div aria-label="Font rows">rows</div>;
     const words = { font, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
     const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
     expect(icons).toEqual(["Edit text", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
     // (the font in the menu itself, under the icons and above the list: no card to open first)
     const at = (s: string) => html.indexOf(s);
-    expect(at('aria-label="Font"')).toBeGreaterThan(at('aria-label="Frequent"'));
-    expect(at('aria-label="Font"')).toBeLessThan(at("Align left"));
-    const sizes = [...html.slice(at('aria-label="Sizes"'), at('aria-label="Size in points"')).matchAll(/<button[^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
-    expect(sizes.map((m) => m[2])).toEqual(["8", "10", "12", "14", "18", "24"]);
-    // (the size they have lit, in points, and in the field)
-    expect(sizes.filter((m) => m[1].includes("border-accel-base")).map((m) => m[2])).toEqual(["14"]);
-    expect(html).toMatch(/aria-label="Size in points"[^>]*value="14"/);
-    const spacings = [...html.slice(at('aria-label="Line spacings"'), at('aria-label="Line spacing"', )).matchAll(/<button[^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
-    expect(spacings.map((m) => m[2])).toEqual(["1", "1.15", "1.5", "2"]);
-    expect(spacings.filter((m) => m[1].includes("border-accel-base")).map((m) => m[2])).toEqual(["1.5"]);
-    expect(html).toContain("Arial");
+    expect(at('aria-label="Font rows"')).toBeGreaterThan(at('aria-label="Frequent"'));
+    expect(at('aria-label="Font rows"')).toBeLessThan(at("Align left"));
     expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
     // (their keys named by what they give - + and = - not where they lie, which a keyboard decides)
     expect(html).toMatch(/Superscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+\+|⌘\+)<\/kbd>/);

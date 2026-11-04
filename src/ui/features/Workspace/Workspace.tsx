@@ -89,6 +89,7 @@ import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
+import WordsFont from "./WordsFont";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { style3dOf, useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
@@ -2177,16 +2178,16 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              font: {
-                size: c.size ?? null,
-                label: layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10,
-                lines: c.lines ?? 1,
-                family: c.font ?? null,
-                drawing: style.fontFamily,
-                onSize: (pt) => sizeWords(c.id, pt),
-                onLines: (lines) => spaceWords(c.id, lines),
-                onFont: (font) => faceWords(c.id, font),
-              },
+              font: (
+                <WordsFont
+                  id={c.id}
+                  label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
+                  drawing={style.fontFamily}
+                  onSize={(pt) => sizeWords(c.id, pt)}
+                  onLines={(lines) => spaceWords(c.id, lines)}
+                  onFont={(font) => faceWords(c.id, font)}
+                />
+              ),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),

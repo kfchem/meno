@@ -3,7 +3,7 @@ import { SHAPE_WIDTHS_PT } from "../../../lib/chem/shapes";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
@@ -11,7 +11,7 @@ import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
-import WordsFont, { WORDS_FONT_HEIGHT } from "./WordsFont";
+import { WORDS_FONT_HEIGHT } from "./WordsFont";
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -251,7 +251,8 @@ export default function PartMenu({
    * again.
    */
   words?: {
-    font: ComponentProps<typeof WordsFont>;
+    /** Their size, line spacing and typeface (`WordsFont`), placed under the icons. */
+    font: ReactNode;
     bold: boolean;
     italic: boolean;
     list: boolean;
@@ -1044,7 +1045,7 @@ export default function PartMenu({
       )}
       {font && (
         <div role="group" aria-label="Font" className="pb-1 mb-1 border-b border-gh-line">
-          <WordsFont {...font} />
+          {font}
         </div>
       )}
       {/* (what running the step drops, said before it is pressed: as wide as the menu, never widening it) */}

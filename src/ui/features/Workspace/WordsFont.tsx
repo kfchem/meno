@@ -2,6 +2,7 @@ import { useState } from "react";
 import { WORDS_SIZE_CHIPS, WORDS_SIZE_RANGE, WORDS_SPACING_RANGE, WORDS_SPACINGS } from "../../../lib/chem/captions";
 import { LABEL_TYPEFACES } from "../../../lib/chem/styleFields";
 import TypefacePicker from "../StyleEditor/TypefacePicker";
+import { useEditor } from "./store";
 
 const ROUND = (v: number) => String(Math.round(v * 100) / 100);
 
@@ -15,26 +16,20 @@ export const WORDS_FONT_HEIGHT = 196;
  * one and a half, double, or any other typed - and their typeface, the
  * drawing's or one of their own. Each pressed, or typed and Enter, is
  * given at once, one step, the menu kept open to try another; those they
- * have now are lit.
+ * have now are lit, as they change.
  */
 export default function WordsFont({
-  size,
+  id,
   label,
-  lines,
-  family,
   drawing,
   onSize,
   onLines,
   onFont,
 }: {
-  /** Their own size, in points; none, the labels'. */
-  size: number | null;
+  /** The words, by their caption's id. */
+  id: number;
   /** The labels' size, in points. */
   label: number;
-  /** Their line spacing, as a multiple of single spacing. */
-  lines: number;
-  /** Their own typeface; none, the drawing's. */
-  family: string | null;
   /** The drawing's typeface: the labels'. */
   drawing: string;
   onSize: (pt: number) => void;
@@ -43,8 +38,12 @@ export default function WordsFont({
   /** Their own typeface; null, the drawing's. */
   onFont: (family: string | null) => void;
 }) {
+  // (as the words are now: each change seen lit as it is given)
+  const c = useEditor((s) => s.captions.find((w) => w.id === id));
+  const lines = c?.lines ?? 1;
+  const family = c?.font ?? null;
   // (the size they are set at: their own, or the labels')
-  const pt = size ?? label;
+  const pt = c?.size ?? label;
   const [typed, setTyped] = useState(() => ROUND(pt));
   const [spaced, setSpaced] = useState(() => ROUND(lines));
   const typedPt = Number(typed.replace(",", "."));
