@@ -117,7 +117,7 @@ built from its source by a recipe its site links to.
 
 ## Decided
 
-By the maintainer, 2026-10-10 and 2026-10-11:
+By the maintainer, 2026-10-10, 2026-10-11 and 2026-11-04:
 
 1. **NCI through plugins**, NCIPLOT and an interface to Multiwfn.
 2. **A general form**: a grid's surface coloured by another's, with a
