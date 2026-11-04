@@ -151,10 +151,10 @@ Built on the words already on the page (`Caption`): typed in place, smart
 words, a width they break into lines at, and how their lines lie.
 
 - **A size of their own**, in points as the drawing's labels are (a bond is
-  14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
-  *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
-  down. Unset, the drawing's labels' size, as reaction conditions are now.
-- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  14.4 points in ACS 1996's style): 8, 10, 12, 14, 18 or 24 and any number
+  typed, in the words' menu under its icons; Ctrl/Cmd+Shift+> and < a step
+  up or down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, in the same menu:
   1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
   over the drawing style's. Unset, single and the drawing's labels'
   typeface.

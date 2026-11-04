@@ -83,8 +83,6 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import WordsCard from "./WordsCard";
-import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
@@ -695,7 +693,6 @@ function WorkspaceContent({
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -1003,7 +1000,6 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1506,17 +1502,6 @@ function WorkspaceContent({
     const st = store.getState();
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
-  };
-  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
-  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
-    const a = clientToWorld(0, 0);
-    const b = clientToWorld(100, 100);
-    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
-    const kx = 100 / (b.x - a.x);
-    const ky = 100 / (a.y - b.y);
-    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
-    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
-    return cardBeside(target, WORDS_CARD, menu.within);
   };
   // (their lines as far apart as asked - single, none of their own)
   const spaceWords = (id: number, lines: number | null) => {
@@ -2034,23 +2019,6 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {wordsCard && (
-          <WordsCard
-            key={`${wordsCard.x},${wordsCard.y}`}
-            id={wordsCard.id}
-            label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            drawing={style.fontFamily}
-            onSize={(pt) => sizeWords(wordsCard.id, pt)}
-            onLines={(lines) => spaceWords(wordsCard.id, lines)}
-            onFont={(font) => faceWords(wordsCard.id, font)}
-            x={wordsCard.x}
-            y={wordsCard.y}
-            within={wordsCard.within}
-            onClose={() => setWordsCard(null)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
         {cornersCard &&
           (() => {
             const sh = store.getState().shapes.find((x) => x.id === cornersCard.id);
@@ -2209,7 +2177,16 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
+              font: {
+                size: c.size ?? null,
+                label: layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10,
+                lines: c.lines ?? 1,
+                family: c.font ?? null,
+                drawing: style.fontFamily,
+                onSize: (pt) => sizeWords(c.id, pt),
+                onLines: (lines) => spaceWords(c.id, lines),
+                onFont: (font) => faceWords(c.id, font),
+              },
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),

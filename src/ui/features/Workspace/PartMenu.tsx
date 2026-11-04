@@ -3,7 +3,7 @@ import { SHAPE_WIDTHS_PT } from "../../../lib/chem/shapes";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
@@ -11,6 +11,7 @@ import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
+import WordsFont, { WORDS_FONT_HEIGHT } from "./WordsFont";
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -244,12 +245,13 @@ export default function PartMenu({
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
   /**
    * What the words right-clicked can do besides (docs/EDITOR-2D.md,
-   * *Text*): a size, line spacing and typeface of their own, chosen on a card; all their letters bold,
-   * in italics, raised or lowered - ticked where all are already; their
-   * lines a list, or plain again.
+   * *Text*): a size, line spacing and typeface of their own, under the
+   * menu's icons (`WordsFont`); all their letters bold, in italics, raised
+   * or lowered - ticked where all are already; their lines a list, or plain
+   * again.
    */
   words?: {
-    onFont: () => void;
+    font: ComponentProps<typeof WordsFont>;
     bold: boolean;
     italic: boolean;
     list: boolean;
@@ -452,6 +454,8 @@ export default function PartMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      // (in a field of the menu's - a size typed - the keys are the field's)
+      if (e.target instanceof HTMLInputElement) return;
       e.preventDefault();
       const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
       const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -466,15 +470,19 @@ export default function PartMenu({
       swallowPress(e);
       onClose();
     };
+    // (a list scrolled inside it - the typefaces' - is no turn of the wheel elsewhere)
+    const onWheel = (e: WheelEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
-    window.addEventListener("wheel", onClose, true);
+    window.addEventListener("wheel", onWheel, true);
     // (the keys the menu's - arrows go through its items from the first - with none of them lit as it opens)
     ref.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPress, true);
-      window.removeEventListener("wheel", onClose, true);
+      window.removeEventListener("wheel", onWheel, true);
     };
   }, [onClose, leaving]);
 
@@ -672,7 +680,6 @@ export default function PartMenu({
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
           ...(words
             ? [
-                { name: "Font…", keys: "", run: words.onFont, icon: MENU_ICONS.size },
                 { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
                 { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
                 { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
@@ -930,8 +937,10 @@ export default function PartMenu({
   // (a note under a command, said in as many lines as it takes at the menu's width)
   const noteOf = (text?: string) => (text ? Math.ceil(text.length / NOTE_CHARS) * NOTE_LINE + 6 : 0);
   const stepNote = target.kind === "step" ? step?.note : undefined;
+  // (words' size, line spacing and typeface, under the icons)
+  const font = target.kind === "caption" ? words?.font : undefined;
   const height =
-    (row.length ? ROW + 9 : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
+    (row.length ? ROW + 9 : 0) + (font ? WORDS_FONT_HEIGHT : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -1031,6 +1040,11 @@ export default function PartMenu({
               {item.icon}
             </button>
           ))}
+        </div>
+      )}
+      {font && (
+        <div role="group" aria-label="Font" className="pb-1 mb-1 border-b border-gh-line">
+          <WordsFont {...font} />
         </div>
       )}
       {/* (what running the step drops, said before it is pressed: as wide as the menu, never widening it) */}
