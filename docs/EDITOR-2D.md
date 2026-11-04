@@ -1541,8 +1541,11 @@ lipids each have their own way of being drawn, which it should know.
      broken there. Its stereocentres (`Atom.stereoCentre`) show their
      configuration by the drawing itself, with no wedges: it is read from
      where their bonds point, so a substituent drawn round to the other
-     side turns its centre (agreed 2026-09-28). A file, the SMILES and R/S
-     are given the wedges that say it (`chem/drawing.ts#forFlatReaders`);
+     side turns its centre (agreed 2026-09-28). A file, the SMILES, R/S
+     and its structure in 3D are given the wedges that say it
+     (`chem/drawing.ts#forFlatReaders`; until 2026-11-04 the structure in
+     3D was not: its centres reached RDKit as left open, and tetrodotoxin's
+     nine were too many to be made in 3D in time);
      the depth itself is not saved, so a cage opened again is flat, its
      stereochemistry wedged.
    - The new drawing is read back before anything moves: if it would not

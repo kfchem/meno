@@ -394,7 +394,8 @@ by the same engine: a wedge on a bond out of its rings, its narrow end at
 the centre, an H drawn where it has no other way, or - in a cage - the
 perspective drawing itself; Clean-up reads the configuration back from it
 as the one given (tested). A cage's, shown by its perspective with no
-wedge, is written to a MOL or SD file - and copied, and sent to RDKit -
+wedge, is written to a MOL or SD file - and copied, and sent to RDKit,
+for its R/S and its SMILES and to be made in 3D (`chem/make3d.ts#blocksOf`) -
 with a wedge that says it, as any cage Clean-up draws is: on a bond out of
 the centre, or - where it has none to take one - on an explicit H atom
 added to the file for it, after every atom there is
