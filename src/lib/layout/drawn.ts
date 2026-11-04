@@ -259,6 +259,30 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
 });
 
 /**
+ * Why the wedges at atom `c` - three bonds or more, an H at most, read as
+ * no centre (`readStereo`) - say no configuration, in words that follow
+ * "the wedges at C do not say its configuration (...)": a wavy bond at it,
+ * saying either; more groups round it than a tetrahedral centre's four; an
+ * atom with three bonds and no fourth group, where a wedge states none
+ * (N, which inverts, B, Se, Te, Sb - S, P and As are read with their lone
+ * pair); two of its bonds in line or on top of each other (a T, ST-1.2.12);
+ * or else wedges and hashes that cancel, saying neither way round.
+ */
+export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
+  const mine = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c));
+  const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
+  const atom = atoms[c];
+  const el = atom.el ?? "C";
+  if (mine.some((b) => b.either)) return "a wavy bond at it says it is either";
+  const groups = around.length + atom.hs;
+  if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
+  if (around.length === 3 && atom.hs === 0 && !READ_LONE_PAIR_CENTRES.has(el)) return `it has three bonds and no fourth group: at ${el} a wedge states no configuration`;
+  // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
+  if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]))) return "two of its bonds in line or on top of each other";
+  return "they are drawn crossed, saying neither way round";
+}
+
+/**
  * What the drawing says of its stereochemistry only by luck, by index: the
  * stereocentres drawn flat with a wedge whose reading changes with one of
  * their bonds in the page turned a little either way, or with every bond

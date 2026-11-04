@@ -465,7 +465,15 @@ describe("cleanUp", () => {
     };
     const { store } = canvas(selenoxide);
     await expect(cleanUp(store)).rejects.toThrow(/nothing was moved/);
+    await expect(cleanUp(store)).rejects.toThrow(/three bonds and no fourth group: at Se a wedge states no configuration/);
     expect(store.getState().model).toEqual(selenoxide);
+    // (a phosphorane's P, wedged: five groups, said so - not three bonds)
+    const phosphorane: Model = {
+      atoms: [atom(1, 0, 0, "P"), atom(2, 0, 1, "F"), atom(3, -1, -0.5, "F"), atom(4, 1, -0.5, "F"), atom(5, 1, 0.5, "F"), atom(6, 0, -1, "F")],
+      bonds: [2, 3, 4, 5, 6].map((b, k) => ({ id: 10 + k, a: 1, b, order: 1 as const, ...(b === 2 ? { stereo: "up" as const } : {}) })),
+    };
+    const p = canvas(phosphorane);
+    await expect(cleanUp(p.store)).rejects.toThrow(/at P do not say its configuration in a way Clean-up can keep \(it has 5 groups round it, more than the four of a tetrahedral centre\)/);
   });
 
   it("lays out a centre with a lone pair for its fourth group, keeping its configuration on one wedge", async () => {

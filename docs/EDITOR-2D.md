@@ -1548,8 +1548,11 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
-     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
+     other, two of a centre's bonds in line, an N, B, Se, Te or Sb atom
+     with three bonds, where a wedge states no configuration, more groups
+     round an atom than a tetrahedral centre's four (a phosphorane's P), or
+     a wavy bond at it - rather than lose it, saying which of these it is
+     (`drawn.ts` `unreadWhy`). A centre whose fourth group is a lone pair - a
      sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
      read from its wedge and laid out like any other, on one wedge
      (2026-10-29). A wedge

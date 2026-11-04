@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, sameConfiguration, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
+import { readStereo, sameConfiguration, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -352,6 +352,36 @@ describe("a centre with a lone pair for its fourth group", () => {
     t.atoms[2] = { ...t.atoms[2], x: 0, y: -1 };
     t.atoms[3] = { ...t.atoms[3], x: 1, y: 0 };
     expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
+  });
+
+  it("says why a wedge it does not read says nothing, by what the atom is and how it is drawn", () => {
+    // (a selenoxide's Se, an amine's N: three bonds and no fourth group)
+    for (const el of ["Se", "N", "B"]) expect(unreadWhy(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds, 0), el).toBe(`it has three bonds and no fourth group: at ${el} a wedge states no configuration`);
+    // (a phosphorane's P: five groups)
+    const p: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "P", hs: 0 }, ...[90, 210, 330, 30, 270].map((d) => ({ ...at(d), el: "F", hs: 0 }))],
+      bonds: [1, 2, 3, 4, 5].map((b) => ({ a: 0, b, order: 1, ...(b === 1 ? { wedge: { narrow: 0, stereo: "up" as const } } : {}) })),
+    };
+    expect(readStereo(p.atoms, p.bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(p.atoms, p.bonds, 0)).toBe("it has 5 groups round it, more than the four of a tetrahedral centre");
+    // (a sulfoxide drawn as a T)
+    const t = sulfoxide("S", "up");
+    t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
+    t.atoms[2] = { ...t.atoms[2], x: 0, y: -1 };
+    t.atoms[3] = { ...t.atoms[3], x: 1, y: 0 };
+    expect(unreadWhy(t.atoms, t.bonds, 0)).toBe("two of its bonds in line or on top of each other");
+    // (a C of four bonds, its wedge and its hashes drawn opposite each other: they cancel)
+    const crossed: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "C", hs: 0 }, ...[90, 270, 0, 180].map((d) => ({ ...at(d), el: "C", hs: 3 }))],
+      bonds: [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo: "down" } },
+        { a: 0, b: 3, order: 1 },
+        { a: 0, b: 4, order: 1 },
+      ],
+    };
+    expect(readStereo(crossed.atoms, crossed.bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(crossed.atoms, crossed.bonds, 0)).toBe("they are drawn crossed, saying neither way round");
   });
 
   it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, each way round", () => {
