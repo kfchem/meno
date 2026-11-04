@@ -4,12 +4,14 @@ import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
 import { compoundLabelsOf, labelText, pageStructuresOf, type PageMarks, type PageStructure } from "./pageStructures";
 
 type P = { x: number; y: number };
+/** cos 30°: a zigzag's step along its length, in bonds. */
+const ALONG = Math.sqrt(3) / 2;
 type B = [number, number, number, number];
 const NONE: PageMarks = { segments: [], points: [], boxes: [] };
 /** A structure read, as a figure gives one: a zigzag of bonds 14.4 points long from `x`, `y`, its box round them. */
 function zigzag(key: string, x: number, y = 300, read = true): PageStructure {
   const L = 14.4;
-  const atoms: P[] = [0, 1, 2, 3, 4].map((i) => ({ x: x + i * L * 0.866, y: y + (i % 2) * L * 0.5 }));
+  const atoms: P[] = [0, 1, 2, 3, 4].map((i) => ({ x: x + i * L * ALONG, y: y + (i % 2) * L * 0.5 }));
   const bonds = atoms.slice(1).map((a, i): [P, P] => [atoms[i], a]);
   const box: B = [x, y, atoms[4].x, y + L * 0.5];
   return { key, bonds, atoms, labels: [], box, ends: [atoms[0], atoms[4]], reach: L / 3, read: read ? { model: {} as never } : { none: "not read" } };
@@ -64,10 +66,10 @@ describe("the compounds' numbers on a page drawn as Meno draws one", () => {
   const L = 14.4;
   const stroke = (...pts: [number, number][]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
   const letters = (text: string, [x, y]: [number, number]) => [...text].map((c, i) => ({ c, box: [x - 3.4 + 6.8 * i, y - 3.6, x + 3.4 + 6.8 * i, y + 3.6] as B, at: [x - 3.4 + 6.8 * i, y + 3.6] as [number, number], size: 10 }));
-  const zig = (x: number) => stroke(...[0, 1, 2, 3, 4].map((i): [number, number] => [x + i * L * 0.866, 300 + (i % 2) * L * 0.5]));
+  const zig = (x: number) => stroke(...[0, 1, 2, 3, 4].map((i): [number, number] => [x + i * L * ALONG, 300 + (i % 2) * L * 0.5]));
 
   it("are read with its structures: each zigzag's number under it", () => {
-    const drawn: FigureDrawn = { paths: [zig(100), zig(200)], letters: [...letters("1", [100 + 2 * L * 0.866, 300 + 1.4 * L]), ...letters("2", [200 + 2 * L * 0.866, 300 + 1.4 * L])], pictures: [] };
+    const drawn: FigureDrawn = { paths: [zig(100), zig(200)], letters: [...letters("1", [100 + 2 * L * ALONG, 300 + 1.4 * L]), ...letters("2", [200 + 2 * L * ALONG, 300 + 1.4 * L])], pictures: [] };
     const boxOf = (p: FigureDrawn["paths"][number]): B => {
       const xs = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[1]]));
       const ys = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[2]]));
