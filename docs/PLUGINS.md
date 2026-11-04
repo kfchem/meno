@@ -937,8 +937,10 @@ The same for every plugin and for Meno's own parts:
     structure that could be stereogenic, as the toolkit perceives it - its
     `kind`, the atom or bond it is `at` and its `state`: `specified`,
     `unspecified`, or `unknown`, drawn as not known - none left out; what
-    is left open, which C=N bonds are never enumerated and which open
-    double bonds are cumulated are Meno's: lib/chem/stereoOpen);
+    is left open, which atoms of three neighbours are centres by their
+    lone pair (lib/chem/lonePairCentres), which C=N bonds are never
+    enumerated and which open double bonds are cumulated are Meno's:
+    lib/chem/stereoOpen);
     `stereoisomers {molblocks, open, configured?, notEnumerated, most,
     whole?, withinMs?, inThreeD, drawings?}` (the stereoisomers of what is
     unassigned once `configured` is made - each tried in 3D, with

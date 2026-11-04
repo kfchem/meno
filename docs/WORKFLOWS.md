@@ -2757,7 +2757,9 @@ those left open, *Generate*'s, and a SMILES pasted.
 - **Left open**: a stereocentre or double bond the toolkit perceives as
   one that could have a configuration, drawn without one or with one
   drawn as not known (a wavy bond, a double bond of either) - but a C=N
-  whose E/Z is none of its own (below). An open double bond on an atom
+  whose E/Z is none of its own (below), and an atom of three neighbours
+  whose lone pair keeps no configuration (an amine's N: *Centres by a lone
+  pair*, docs/EDITOR-2D.md). An open double bond on an atom
   of two double bonds is an allene's axis, and the bonds of a run are
   one element: an allene's axis, of two or four; cis or trans, of three.
 - **At most** (an option, 32 unless changed): the most stereoisomers one
@@ -2883,7 +2885,8 @@ All of it is optional. A structure the chemist drew has none.
   lies, which bonds are wedged or which way, whether an H is drawn, nor
   whether a group is written by its label. Clean-up, which draws the same
   structure afresh, keeps a record as it is. Where its wedges cannot be
-  read (drawn crossed, or at a three-bonded N, B, Se, Te or Sb) or its identity is
+  read (drawn crossed, or at an atom of three bonds that keeps no configuration
+  of its own: *Centres by a lone pair*, docs/EDITOR-2D.md) or its identity is
   not worked out in full, the identity does not hold its configuration, so
   the drawing's own key is in `of` too: any change to the drawing is taken
   for a change of structure.
