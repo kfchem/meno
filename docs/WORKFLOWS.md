@@ -1846,9 +1846,9 @@ Not yet, and where it comes:
 
 - **Gaussian on Windows, followed as it runs**: its output is a file it
   writes, read once it ends, so *Show log* says nothing while it runs
-  there; and `g16root` is given on Windows too (the manifest's variables
-  are the same on each system), which Gaussian 16W's installed documents
-  do not name - a run with it and one without gave the same result.
+  there; and `g16root` is set on every system, Windows too (the
+  manifest's variables are the same on each), which Gaussian 16W's
+  installed documents do not name.
 - **ORCA running in parallel** needs OpenMPI where programs are looked
   for; a Meno opened from the Dock is not given a shell's PATH, so a
   located OpenMPI comes later. With one core for each job (Settings,
