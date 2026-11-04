@@ -89,6 +89,26 @@ describe("label typefaces", () => {
   });
 });
 
+describe("Arial's table, before the system's Arial is read", () => {
+  it("has its capitals standing at Arial's capital height, Arimo's outlines raised by one scale, their widths as they were", () => {
+    const top = (ch: string) => Math.max(...inkHullIn(ARIAL, ch).map((p) => p.y));
+    const bottom = (ch: string) => Math.min(...inkHullIn(ARIAL, ch).map((p) => p.y));
+    const left = (ch: string) => Math.min(...inkHullIn(ARIAL, ch).map((p) => p.x));
+    const unit = 1 / ARIAL.unitsPerEm;
+    for (const ch of "HEIT") {
+      expect(top(ch), ch).toBeCloseTo(ARIAL.capHeight / ARIAL.unitsPerEm, 6);
+      expect(bottom(ch), ch).toBe(0);
+    }
+    expect(ARIAL.capHeight / ARIAL.unitsPerEm).toBeCloseTo(0.716, 3);
+    // (the rest by the same ratio: an x's height, a g's descender; across, nothing moved)
+    const k = 1467 / 1409;
+    expect(Math.abs(top("x") - (1082 * k) / ARIAL.unitsPerEm)).toBeLessThanOrEqual(unit);
+    expect(Math.abs(bottom("g") - (-425 * k) / ARIAL.unitsPerEm)).toBeLessThanOrEqual(unit);
+    expect(left("H")).toBeCloseTo(168 / ARIAL.unitsPerEm, 9);
+    expect(advanceIn(ARIAL, "H")).toBeCloseTo(1479 / ARIAL.unitsPerEm, 9);
+  });
+});
+
 describe("a font read from its file", () => {
   const plexFile = readGlyphs(
     read("../../assets/fonts/IBMPlexSans-Regular.ttf"),

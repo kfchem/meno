@@ -22,5 +22,8 @@ Arial's font file, which is not Meno's to pass on: its hulls are made by
 this tool from Arimo-Regular.ttf (googlefonts/arimo, SIL OFL 1.1), a font
 made to Arial's metrics, and its advances are the ones every such font
 shares - checked equal to Arimo's when the hulls were made. Only the
-capital height is Arial's own figure. Make any other table from a font
+capital height is Arial's own figure, and Arimo's outlines are raised to
+it as they are read, by one vertical scale (Arimo's capitals stand at 1409
+units, Arial's at 1467); the table keeps Arimo's own, as this tool writes
+them. Make any other table from a font
 whose licence lets its outlines be passed on.

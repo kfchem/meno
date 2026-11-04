@@ -456,7 +456,8 @@ What is left before the editor counts as finished, and in what order, is in
   `NOMINAL_BOND_LENGTH` world units. Labels are set in IBM Plex Sans by
   default (`lib/chem/labelFonts` `DEFAULT_LABEL_FAMILY`), or in the style's
   own typeface: `lib/chem/labelFonts.ts` holds each typeface's advance
-  widths and the outline of each letter (Arimo's for Arial), so
+  widths and the outline of each letter (Arimo's for Arial, raised to
+  Arial's capital height), so
   `placeLabel` places every run and bonds stop the label margin clear of
   the letters without measuring anything at run time. The canvas draws the
   runs where `placeLabel` puts them, in that typeface's own font file - the

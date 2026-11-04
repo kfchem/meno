@@ -9,15 +9,19 @@
  * the outlines those of one of them, Arimo (© The Arimo Project Authors,
  * SIL Open Font License 1.1: src-tauri/resources/licenses/Arimo-OFL.txt),
  * as scripts/fonts/labelMetrics.ts works them out from Arimo-Regular.ttf.
- * Arimo's capitals stand a little lower than Arial's; the capital height
- * here is Arial's (a published figure), since ACS 1996's baseline is set by
- * it. Once the system's Arial is read, its own outlines take over.
+ * Arimo's capitals stand a little lower than Arial's (0.688 em to 0.716),
+ * so its outlines are raised to Arial's capital height (a published figure)
+ * by one vertical scale: a label is set and cleared as Arial's letters
+ * stand, ACS 1996's baseline being set by that height. Once the system's
+ * Arial is read, its own outlines take over.
  */
 import { advanceIn, inkHullIn, type LabelFontMetrics } from "./labelFonts";
 
 export const UNITS_PER_EM = 2048;
 /** The height of Arial's capitals (0.716 em). */
 export const CAP_HEIGHT = 1467;
+/** The height of Arimo's capitals, whose outlines the table holds (0.688 em). */
+const ARIMO_CAP_HEIGHT = 1409;
 
 /** Advance widths of the characters from U+0020 (space) to U+007E (~). */
 const ADVANCES = [
@@ -33,9 +37,9 @@ const ADVANCES = [
 
 /**
  * The ink of each character as a convex polygon, anticlockwise: x, y, x, y,
- * ... A space has none.
+ * ... - Arimo's, as the tool works them out. A space has none.
  */
-const HULLS: Record<string, number[]> = {
+const ARIMO_HULLS: Record<string, number[]> = {
   "0":
     [626,-17,824,53,902,122,1010,329,1057,619,1042,950,968,1199,833,1359,633,1427,400,1405,307,1359,171,1201,97,952,82,619,128,328,234,122,402,6],
   "1": [156,0,1039,0,1039,153,696,1409,530,1409,197,1180],
@@ -169,6 +173,11 @@ const HULLS: Record<string, number[]> = {
     [34,-425,197,-424,343,-366,403,-281,647,466,647,593,404,1342,346,1426,198,1483,34,1484],
   "~": [844,553,988,572,1104,633,1104,782,355,807,213,786,92,723,92,580],
 };
+
+/** Arimo's outlines raised to Arial's capital height: each y scaled by the one ratio, x as it is. */
+const HULLS: Record<string, number[]> = Object.fromEntries(
+  Object.entries(ARIMO_HULLS).map(([ch, hull]) => [ch, hull.map((v, i) => (i % 2 ? Math.round((v * CAP_HEIGHT) / ARIMO_CAP_HEIGHT) : v))]),
+);
 
 /** What a character outside the table is taken to be: a capital's box. */
 const FALLBACK_ADVANCE = 1366;
