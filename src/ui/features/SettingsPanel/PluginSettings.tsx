@@ -7,6 +7,9 @@ import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, plugins
 import { rangeSaid } from "../../../lib/plugins/depends";
 import { presetsSaid } from "../../../lib/plugins/presets";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
+import { formatBytes } from "../../../lib/net/network";
+import { offersOf, type CatalogueEntry, type Offer } from "../../../lib/plugins/catalogue";
+import { getPlugin, listOnline, useOnline, type Online } from "../../../lib/plugins/online";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
@@ -21,16 +24,25 @@ const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") 
 /** The kinds of a workflow's step a plugin fills, by their names - those Meno defines. */
 const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k) => p.steps.some((d) => d.kind === k.kind)).map((k) => k.name);
 
+/** A date and time, for people. */
+const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+
 /**
- * Plugins in Settings: every plugin on offer, added or not - what it
+ * Plugins in Settings: every plugin here, added or not - what it
  * is, the kinds of file it reads, its version, licence and home - each added
- * or taken away here. Meno
+ * or taken away here, and updated where the plugins online have a newer
+ * version; then those online not here yet, each got and added here. Meno
  * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
   const states = useReaders((s) => s.state);
   const problems = useReaders((s) => s.problem);
+  const online = useOnline();
+  const here = new Map(ALL_PLUGINS.map((p) => [p.id, p.version]));
+  const offers = online.catalogue ? offersOf(online.catalogue, here, systemHere()) : [];
+  const elsewhere = offers.filter((o) => !here.has(o.entry.id));
   useEffect(() => {
+    void listOnline();
     void addedReaders(ALL_PLUGINS);
     // (where the programs installed separately are, and their versions: looked for afresh as Plugins is shown - and as Meno is come back to, one installed or updated meanwhile)
     const look = () => void lookForAll(PLUGINS);
@@ -40,16 +52,119 @@ export default function PluginSettings() {
   }, []);
   return (
     <div className="space-y-3">
-      {/* (those that come with Meno, running nothing, first) */}
+      <OnlineList online={online} offered={offers.length} />
+      {/* (those that run nothing, first) */}
       {[...ALL_PLUGINS.filter((p) => !runs(p)), ...ALL_PLUGINS.filter(runs)].map((p) => (
-        <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} />
+        <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} offer={offers.find((o) => o.entry.id === p.id)} />
       ))}
+      {elsewhere.length > 0 && (
+        <>
+          <h3 className="pt-3 text-sm font-semibold text-gh-black">Online, not here yet</h3>
+          {elsewhere.map((o) => (
+            <OnlinePlugin key={o.entry.id} offer={o} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
 
-/** A plugin: what it is and does, whether it is added, and the button that adds it or takes it away. */
-function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: string; problem?: string }) {
+/** The list of plugins online: when it was fetched, or why it is not here, and the button that fetches it again. */
+function OnlineList({ online, offered }: { online: Online; offered: number }) {
+  const line =
+    online.state === "listing"
+      ? "Listing the plugins online…"
+      : online.state === "failed"
+        ? online.problem
+        : online.state === "listed"
+          ? online.kept
+            ? `The list as it was${online.fetchedAt ? ` on ${when(online.fetchedAt)}` : ""}: a newer one could not be fetched (${online.kept}).`
+            : `${offered === 1 ? "One plugin" : `${offered} plugins`} online${online.fetchedAt ? `, as listed on ${when(online.fetchedAt)}` : ""}.`
+          : "Plugins are got from a list online, which Meno checks is its own before reading it.";
+  return (
+    <div className="rounded-lg border border-gh-line bg-white px-4 py-3 flex items-center gap-4">
+      <p key={line} className={`flex-1 text-xs meno-fade-in ${online.state === "failed" ? "text-accel-accent" : "text-gh-gray"}`} aria-live="polite">
+        {line}
+      </p>
+      <button
+        disabled={online.state === "listing"}
+        onClick={() => void listOnline(true)}
+        className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
+      >
+        {online.state === "unlisted" ? "List them" : "Look again"}
+      </button>
+    </div>
+  );
+}
+
+/** What a plugin's program asks, as the list online says: the terms agreed to in using it, and what to cite. */
+function TermsAndCite({ entry }: { entry: CatalogueEntry }) {
+  return (
+    <>
+      {entry.terms && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Terms: {entry.terms}</p>}
+      {entry.cite && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Cite: {entry.cite}</p>}
+    </>
+  );
+}
+
+/** A plugin online, not here yet: what it is and does, as the list says, and the button that gets and adds it. */
+function OnlinePlugin({ offer }: { offer: Offer }) {
+  const e = offer.entry;
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string>();
+  const steps = KINDS.filter((k) => e.kinds.includes(k.kind)).map((k) => k.name);
+  const get = () => {
+    setBusy(true);
+    setProblem(undefined);
+    getPlugin(e)
+      .then(() => {
+        const p = anyPluginById(e.id);
+        if (!p) throw new Error(`${e.name} was got, but Meno could not read it.`);
+        return addPlugin(p);
+      })
+      .catch((err: unknown) => setProblem(err instanceof Error ? err.message : String(err)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="rounded-lg border border-gh-line bg-white px-4 py-3 flex items-start gap-4">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-gh-black">
+          {e.name} <span className="text-gh-gray">{e.version}</span>
+        </div>
+        {e.description && <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">{e.description}</p>}
+        {e.roles.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{e.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
+        {steps.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">In a workflow: {steps.join(", ")}.</p>}
+        <p className="text-xs text-gh-gray mt-1 max-w-2xl">
+          {e.licence}
+          {e.homepage && ` · ${e.homepage.replace(/^https:\/\//, "")}`} · {formatBytes(e.source.bytes)} to download
+        </p>
+        <TermsAndCite entry={e} />
+        {problem && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem}</p>}
+      </div>
+      <div className="flex flex-col items-end gap-1.5">
+        {offer.offer === "not-here" ? (
+          <span className="max-w-[10rem] text-right text-xs text-gh-gray">{offer.why}</span>
+        ) : (
+          <>
+            <span key={String(busy)} className="text-xs text-gh-gray meno-fade-in">
+              {busy ? "Getting…" : "Not added"}
+            </span>
+            <button
+              disabled={busy}
+              onClick={get}
+              className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
+            >
+              Add
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A plugin: what it is and does, whether it is added, the button that adds it or takes it away - and the one that updates it, where the list online has a newer version. */
+function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state?: string; problem?: string; offer?: Offer }) {
   const [busy, setBusy] = useState(false);
   // (whose set-up one waiting waits for: set-ups run one at a time, lib/calc/workers)
   const waiting = useReaders((s) => (state === "waiting" ? waitingSaid(s.state) : ""));
@@ -68,6 +183,13 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
       .catch(() => {}) // (said by the plugin's problem)
       .finally(() => setBusy(false));
   };
+  // (the newer version got, then set up again only where it was added and its environment is no longer the one it needs)
+  const update = (entry: CatalogueEntry) =>
+    run(async (q) => {
+      await getPlugin(entry);
+      const now = anyPluginById(q.id) ?? q;
+      if (state === "added" && !(await addedReaders([now])).has(now.id)) await addPlugin(now);
+    });
   const remove = (withUsing = false) => {
     const others = addedUsing(p.id);
     if (others.length && !withUsing) return setUsing(others);
@@ -140,6 +262,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
           {!runs(p) && " · Comes with Meno: nothing to download."}
         </p>
+        {offer && <TermsAndCite entry={offer.entry} />}
         {refused.length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
             Not taken: {refused.map((r) => `“${r.mark}”`).join(", ")} - what a file of Meno's own holds too, so it cannot tell {p.name}'s kinds.
@@ -173,6 +296,15 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
           <span className="max-w-[10rem] text-right text-xs text-gh-gray">For {p.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only</span>
         ) : (state === "added" || state === "absent") && (
           <div className="flex gap-1.5">
+            {offer?.offer === "update" && (
+              <button
+                disabled={busy}
+                onClick={() => update(offer.entry)}
+                className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
+              >
+                Update to {offer.entry.version}
+              </button>
+            )}
             <button
               disabled={busy}
               onClick={() => (state === "added" ? remove() : run(addPlugin))}

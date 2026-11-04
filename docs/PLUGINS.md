@@ -1381,7 +1381,14 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
     (the maintainer, 2026-10-12). Cancel leaves the plugin and its jobs
     as they are.
 
-  Meno is not in it.
+  Meno is not in it. Above the plugins, the list online (*Plugins
+  online*, below): when it was listed, or why it is not here, and *List
+  them* or *Look again*. A plugin here with a newer version online says
+  *Update to x.y.z* beside Remove, and the terms and what to cite that
+  the list gives; those online not here yet follow, under *Online, not
+  here yet*, each with what it does, its licence, its size to download,
+  its terms and what to cite, and *Add* - or why it is not for here: for
+  another system, or for a newer Meno.
 - **Files.** The tab named for files (FILE-IO.md) holds, for each kind
   of file, who reads it, who else adds to it, and who writes it. Meno's
   own parts show there as "Meno".
@@ -1400,6 +1407,46 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   with the one chosen, and says to add it again.
 - **What, never how** (the maintainer's rule): a choice names the program
   and the method a chemist would name, never how Meno talks to it.
+
+## Plugins online (2026-11-04)
+
+Plugins are to leave Meno's repository and its installer, and to be got
+from a list online: a catalogue, signed, that names every plugin Meno may
+get. Meno names none of them; the catalogue does. Built so far: the
+catalogue read, and Settings' side of it (`lib/plugins/catalogue`,
+`lib/plugins/online`). Meno's backend - fetching the catalogue, checking
+its signature, and fetching, checking and unpacking a plugin's files -
+comes in its own pull request.
+
+- **The catalogue.** One file, its signature beside it: its form
+  (`schema`, 1), when it was issued, a serial that only grows, and its
+  plugins. Each plugin on offer gives:
+  - its id, version (three numbers), name, licence, and - where its program asks - its terms and what to cite; a description and home page where it has them;
+  - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
+  - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
+  - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
+- **Read strictly, whole.** The backend checks the signature before
+  anything of it is read; what comes to Settings is read again as data
+  (`acceptCatalogue`). One entry Meno cannot read, or a plugin offered
+  twice, refuses the whole of it, as it is signed whole, and says why.
+- **When it is fetched.** Under a purpose of its own, `plugin-catalogue`,
+  asked once as any first use of the network is. As Settings' *Plugins*
+  opens, once a launch, where the network was allowed for it; and
+  whenever the chemist asks (*List them*, *Look again*). Otherwise, and
+  offline, the one kept from before is shown, saying it is.
+- **What is offered** (`offersOf`): a plugin not here, *Add*; one here at
+  an older version, *Update to x.y.z*; one here at that version or a
+  newer one, nothing; one for another system or a newer Meno, why not.
+- **Got.** A plugin's files are staged - fetched, checked against the
+  catalogue's fingerprint and size, and unpacked apart from the plugins
+  in use - and its manifest read as any plugin's is. Only where it is the
+  plugin and version the catalogue offered are they taken into use; else
+  they are thrown away and nothing of them is used. Nothing of a plugin
+  runs before all that. It is then added as any plugin is: its
+  environment set up, asked of first.
+- **Updated.** The newer version is got the same way, and set up again
+  only where it was added and its environment is no longer the one it
+  needs.
 
 ## Decided
 

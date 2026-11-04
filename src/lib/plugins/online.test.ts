@@ -1,0 +1,128 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useNetwork } from "../net/network";
+import { CATALOGUE_PURPOSE, type CatalogueEntry } from "./catalogue";
+import { getPlugin, listOnline, useOnline, type PluginFiles } from "./online";
+
+const HEX = "b".repeat(64);
+const ENTRY = {
+  id: "sketch",
+  version: "0.2.0",
+  name: "Sketch interface",
+  licence: "Apache-2.0",
+  contract: 1,
+  systems: [],
+  roles: [],
+  kinds: [],
+  reads: [],
+  source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 10 },
+  manifestSha256: HEX,
+};
+const CATALOGUE = { schema: 1, issued: "2026-11-10T00:00:00Z", serial: 3, plugins: [ENTRY] };
+
+/** Meno's backend, as a test has it: `catalogue_get` answers as given - and says whether it was asked to fetch. */
+function backend(answer: () => unknown) {
+  const asked: { fetch: boolean }[] = [];
+  const ask = vi.fn(async (_cmd: string, args?: Record<string, unknown>) => {
+    asked.push(args as { fetch: boolean });
+    return answer();
+  });
+  return { ask: ask as never, asked };
+}
+
+/** A fresh launch: the catalogue not yet listed or fetched - the network allowed for it, from before. */
+async function fresh() {
+  vi.resetModules();
+  const { useNetwork: network } = await import("../net/network");
+  network.setState({ offline: false, granted: [CATALOGUE_PURPOSE], asking: null });
+  return import("./online");
+}
+
+beforeEach(() => {
+  useNetwork.setState({ offline: false, granted: [], asking: null });
+  useOnline.setState({ state: "unlisted", catalogue: undefined, fetchedAt: undefined, kept: undefined, problem: undefined }, true);
+});
+
+describe("the plugins online, listed", () => {
+  it("shows the one kept from before as Settings opens, fetching nothing where the network was not allowed for it", async () => {
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
+    await listOnline(false, ask);
+    expect(asked).toEqual([{ fetch: false }]);
+    expect(useOnline.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { serial: 3 } });
+    // (none kept: nothing to show, and nothing said wrong)
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    await listOnline(false, backend(() => null).ask);
+    expect(useOnline.getState().state).toBe("unlisted");
+  });
+
+  it("fetches once a launch where the network was allowed for it, and whenever asked", async () => {
+    const { listOnline: list, useOnline: online } = await fresh();
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
+    await list(false, ask);
+    await list(false, ask);
+    await list(true, ask);
+    expect(asked).toEqual([{ fetch: true }, { fetch: false }, { fetch: true }]);
+    expect(online.getState().state).toBe("listed");
+  });
+
+  it("says why, offline: the one kept from before still shown, or none", async () => {
+    useNetwork.setState({ offline: true });
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
+    await listOnline(true, ask);
+    expect(asked).toEqual([]);
+    expect(useOnline.getState()).toMatchObject({ state: "failed", problem: expect.stringMatching(/needs the network/) });
+    await listOnline(false, ask);
+    await listOnline(true, ask);
+    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/) });
+  });
+
+  it("shows nothing of a list it cannot read, and says why", async () => {
+    await listOnline(false, backend(() => ({ catalogue: { ...CATALOGUE, plugins: [{ ...ENTRY, source: { ...ENTRY.source, url: "https://example.org/x.tar.gz" } }] } })).ask);
+    expect(useOnline.getState()).toMatchObject({ state: "failed", catalogue: undefined, problem: expect.stringMatching(/could not be read: It holds sketch: where its files are/) });
+    await listOnline(
+      false,
+      backend(() => {
+        throw new Error("Its signature is not Meno's");
+      }).ask,
+    );
+    expect(useOnline.getState()).toMatchObject({ state: "failed", problem: "The plugins online could not be listed: Its signature is not Meno's." });
+  });
+});
+
+/** The backend's handling of a plugin's files, as a test has it: what was staged, taken into use, thrown away and read again. */
+function files(manifest: unknown): PluginFiles & { did: string[] } {
+  const did: string[] = [];
+  return {
+    did,
+    stage: async (id, version) => (did.push(`stage ${id} ${version}`), { stage: "s1", manifest: typeof manifest === "string" ? manifest : JSON.stringify(manifest) }),
+    commit: async (stage) => void did.push(`commit ${stage}`),
+    discard: async (stage) => void did.push(`discard ${stage}`),
+    reload: async () => void did.push("reload"),
+  };
+}
+
+const MANIFEST = { id: "sketch", name: "Sketch interface", version: "0.2.0", description: "Draws.", licence: "Apache-2.0", homepage: "https://example.org", environment: "uv", kinds: [], reads: [], roles: [{ role: "smiles" }] };
+
+describe("a plugin got from the list", () => {
+  beforeEach(() => useNetwork.setState({ granted: [CATALOGUE_PURPOSE] }));
+
+  it("is staged, its manifest read as any plugin's is, then taken into use and the plugins read again", async () => {
+    const f = files(MANIFEST);
+    await getPlugin(ENTRY as CatalogueEntry, f);
+    expect(f.did).toEqual(["stage sketch 0.2.0", "commit s1", "reload"]);
+  });
+
+  it("is thrown away, nothing of it used, where its files are not the plugin and version the list offered", async () => {
+    for (const manifest of [{ ...MANIFEST, id: "other" }, { ...MANIFEST, version: "0.2.1" }, { ...MANIFEST, environment: "anything" }, "{not json"]) {
+      const f = files(manifest);
+      await expect(getPlugin(ENTRY as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
+      expect(f.did).toEqual(["stage sketch 0.2.0", "discard s1"]);
+    }
+  });
+
+  it("is not got offline, nothing staged", async () => {
+    useNetwork.setState({ offline: true });
+    const f = files(MANIFEST);
+    await expect(getPlugin(ENTRY as CatalogueEntry, f)).rejects.toThrow("needs the network");
+    expect(f.did).toEqual([]);
+  });
+});
