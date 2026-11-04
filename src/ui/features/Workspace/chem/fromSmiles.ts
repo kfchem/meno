@@ -4,6 +4,7 @@ import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
 import { laidOut } from "./cleanUp";
+import { openStereo } from "./openStereo";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 
 /**
@@ -15,10 +16,10 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 export async function structureFromSmiles(smiles: string, style?: DrawingStyle): Promise<Model & { stereoOpen?: StereoOpen; asCame?: string }> {
   const c = await chemWorker("smiles");
   const molblock = await molblockOfSmiles(c, smiles);
-  // (and how many of its stereocentres and double bonds the SMILES leaves without a configuration - asked of the same
-  //  plugin, by the one definition a step refusing a structure for it uses (`stereo_left_open`), while it is drawn:
-  //  none said where it cannot be asked, or does not answer in time - the structure comes all the same)
-  const [open, drawn] = await Promise.all([withinTime(c.request("stereo_left_open", { molblock }), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style)]);
+  // (and how many of its stereocentres and double bonds the SMILES leaves without a configuration - what the same plugin
+  //  perceives in it, Meno's rules on it, as a step refusing a structure for it has them (chem/openStereo), while it is
+  //  drawn: none said where it cannot be asked, or does not answer in time - the structure comes all the same)
+  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style)]);
   const stereoOpen = stereoOpenOf(open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
 }
