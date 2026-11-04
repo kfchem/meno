@@ -1615,6 +1615,35 @@ words are: by itself, not by a box drawn round it.
 - the pointer takes the nearest within a third of a bond of one of its
   bonds or labels, and none where an arrow, a "+" or words lie nearer.
 
+### A compound's number (2026-11-04, under way)
+
+The pointer on a compound's number in a PDF's text - "12", "3a", "compound
+12" - is to bring up that compound's structure, read from the figure it is
+numbered in, wherever in the PDF that is: the compound-number lens, built in
+three parts. The first, built: which number names which structure, and each
+PDF's index of them. The words that mention a number, and the card, come
+next.
+
+- **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
+  word of a figure - drawn in it, or the page's own words within it - of a
+  compound number's shape (12, 3a, 12b, 7', in parentheses or not:
+  `COMPOUND_NUMBER`), lying within a bond of a structure's ink, under or
+  over it (its middle within the structure's breadth) or beside it (within
+  its height). It is the nearest structure's, and none where an arrow or a
+  "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
+  much shorter than the figure's other words (under 0.7 of their usual
+  height: a superscript, a footnote's mark) is none, and a structure not
+  read takes none. Written as Meno writes it: its parentheses and spaces
+  set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
+- **Each PDF's index** (`utils/compoundIndex`): each number, and every
+  structure it is set by - its page, its figure and its key there - in the
+  order of the pages, so that a compound drawn again in a later scheme keeps
+  each place. Kept as figures are read, by the pointer on one or through the
+  whole PDF in idle time (`indexPdf`): a page, then the window's next idle
+  moment, then the next, each page's figures read as the column reads them
+  (`pdfPageLabels`), never holding up what is shown; a page that could not
+  be read is gone through again the next time.
+
 ### A picture read (part B, built 2026-10-11)
 
 *Read as structure* reads, by the plugin chosen for the role *Structures

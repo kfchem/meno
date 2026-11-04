@@ -7,15 +7,22 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { Box, FigureDrawn } from "../../../../lib/figure/drawn";
-import { figuresHad, objectsHad } from "../../../../lib/pdf/figures";
+import { figuresHad, figuresOn, objectsHad } from "../../../../lib/pdf/figures";
 import type { PdfStructurePick } from "../store/types";
 import { textHad, type PageText } from "../../../../lib/pdf/text";
-import { pageStructuresOf, type PageMarks, type PageStructure } from "./pageStructures";
+import { pageStructuresOf, type CompoundLabel, type PageMarks, type PageStructure } from "./pageStructures";
+import { labelsRead, type PageLabels } from "./compoundIndex";
 
-/** One figure's structures and what else it has drawn. */
-export type FigureStructures = { structures: PageStructure[]; marks: PageMarks };
+/** One figure's structures, what else it has drawn, and the compounds' numbers by its structures. */
+export type FigureStructures = { structures: PageStructure[]; marks: PageMarks; labels: CompoundLabel[] };
 
 const had = new Map<string, FigureStructures | "asked">();
+/** Those waiting for a figure being read (`figureStructuresOn`): each told what it read as, or none where it could not be read. */
+const waiting = new Map<string, ((read: FigureStructures | null) => void)[]>();
+const tell = (key: string, read: FigureStructures | null) => {
+  for (const w of waiting.get(key) ?? []) w(read);
+  waiting.delete(key);
+};
 
 /** The words a box of a page holds, as its letters say. */
 function wordsIn(t: PageText | null, box: Box): string {
@@ -44,10 +51,17 @@ export function figureStructuresHad(sha256: string, page: number, figures: reado
     .then((drawn) => {
       const t = textHad(sha256, page);
       const read = pageStructuresOf({ objects, wordsIn: (b) => wordsIn(t, b) }, figures, (j) => (j === k ? drawn : null), sha256, page);
-      had.set(key, { structures: read.structures, marks: read.marks[0] ?? { segments: [], points: [], boxes: [] } });
+      const figure = { structures: read.structures, marks: read.marks[0] ?? { segments: [], points: [], boxes: [] }, labels: read.labels };
+      had.set(key, figure);
+      // (its compounds' numbers, for the PDF's index of them: ./compoundIndex)
+      labelsRead(sha256, page, figures[k], read.labels);
       came();
+      tell(key, figure);
     })
-    .catch(() => had.delete(key));
+    .catch(() => {
+      had.delete(key);
+      tell(key, null);
+    });
   return null;
 }
 
@@ -65,3 +79,28 @@ export function pickedStructure(sha256: string, pick: Pick<PdfStructurePick, "pa
   const read = figureStructuresHad(sha256, pick.page, figures, k);
   return read?.structures.find((s) => s.key === pick.key) ?? null;
 }
+
+/** The structures of figure `k` of a page once they have been read: as `figureStructuresHad` reads them, waited for; none where they cannot be. */
+export function figureStructuresOn(sha256: string, page: number, figures: readonly Box[], k: number): Promise<FigureStructures | null> {
+  const now = figureStructuresHad(sha256, page, figures, k);
+  if (now) return Promise.resolve(now);
+  // (none to wait for: its page's objects not known, or out of the app)
+  if (!objectsHad(sha256, page) || !isTauri()) return Promise.resolve(null);
+  // (being read - asked for now, or before by the pointer on it: told when it has been, or could not be)
+  const key = `${sha256}:${page}:${k}`;
+  return new Promise((done) => (waiting.get(key) ?? waiting.set(key, []).get(key)!).push(done));
+}
+
+/** A PDF's pages read for their compounds' numbers, as the column reads them (./compoundIndex `indexPdf`): each page's figures, read ahead, and each figure's structures. */
+export const pdfPageLabels =
+  (sha256: string): PageLabels =>
+  async (page) => {
+    const figures = await figuresOn(sha256, page, true);
+    const out: { figure: Box; labels: CompoundLabel[] }[] = [];
+    for (let k = 0; k < figures.length; k++) {
+      const read = await figureStructuresOn(sha256, page, figures, k);
+      if (!read) return null;
+      out.push({ figure: figures[k], labels: read.labels });
+    }
+    return out;
+  };
