@@ -134,7 +134,11 @@ nothing, and its card says why in one line.
   *Roles*).
   - Core holds the conversation, the tools, the scope, the rights, the limits, the send log and the history.
   - The plugin calls its service and converts: Meno's messages and tools to its service's request, and the reply back to words and tool calls. It names its service and hosts as a plugin names its program; core names none.
-  - Its connections go through the app's network gate under a purpose of their own; the consent names its hosts, and every connection is in the network's record. Its question says plainly that it sends what the conversation shares to its service, with the person's key.
+  - Its connections go through the app's network gate under a purpose of their own; the consent names its hosts, and every connection made through the gate is in the network's record.
+  - **What the gate is, for a worker.** A worker is a process of the person's own. It is pointed at the gate, but nothing on the system stops it opening a connection of its own: for it, the gate's hosts are a promise its plugin keeps and the record a log of what kept it, not a bar. So, in stage 1:
+    - the *language model* and *outside entrance* roles are filled only by plugins of Meno's own catalogue - a plugin from elsewhere cannot fill them until a worker's network is confined by the system, or goes through Meno only: a later question;
+    - those plugins' workers are reviewed to open no connection but to the hosts their consent names, and their tests - the scripted test model's too - check it;
+    - adding one asks plainly: it names the service's host, and says the plugin sends what the conversation shares there, with the person's key, which goes to the plugin.
   - The key is the person's own, typed by them in Settings. Core keeps it in the system's keychain (the Keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux), by the `keyring` crate, and hands it to that plugin's worker in memory for each request: never in its arguments or environment, never in the .meno, a log, the send log, a job folder or any file Meno writes. Where the system has no keychain, no model plugin is run, saying why; the key is never kept in a file instead.
 - **A program outside Meno**, connecting by the model-tool protocol, reaches
   the same tools through a plugin of its own kind, *outside entrance*.
