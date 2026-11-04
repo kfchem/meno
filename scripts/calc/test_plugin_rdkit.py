@@ -369,6 +369,46 @@ class RingChairs(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
+class StructureFacts(unittest.TestCase):
+    """What RDKit makes of a structure drawn, as facts for Meno's *Check structures* to decide on: each atom's element,
+    atomic number, charge, valence and the most it could be, unpaired electrons and part; what it could not make
+    sense of; nothing judged."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def facts(self, *smiles):
+        blocks = []
+        for s in smiles:
+            m = Chem.MolFromSmiles(s) or Chem.MolFromSmiles(s, sanitize=False)
+            m.UpdatePropertyCache(strict=False)
+            blocks.append(Chem.MolToV3KMolBlock(m, kekulize=False))
+        return self.worker.op_structure_facts({"structures": [{"molblocks": blocks}]})["structures"][0]
+
+    def test_gives_each_atom_as_rdkit_makes_it(self):
+        salt = self.facts("CC(=O)[O-]", "[Na+]")
+        self.assertEqual([(a["el"], a["z"], a["charge"], a["part"]) for a in salt["atoms"]], [("C", 6, 0, 0), ("C", 6, 0, 0), ("O", 8, 0, 0), ("O", 8, -1, 0), ("Na", 11, 1, 1)])
+        self.assertEqual([a["radicals"] for a in self.facts("[CH3]")["atoms"]], [1])
+        five = self.facts("C(C)(C)(C)(C)C")["atoms"][0]
+        self.assertEqual((five["valence"], five["most"]), (5, 4))
+
+    def test_says_what_it_could_not_make_sense_of_and_what_it_could_not_read(self):
+        self.assertEqual(self.facts("c1cccc1")["problem"], "SANITIZE_KEKULIZE")
+        self.assertNotIn("problem", self.facts("c1ccccc1"))
+        self.assertEqual(self.worker.op_structure_facts({"structures": [{"molblocks": ["not a block"]}]})["structures"], [{"read": False}])
+
+    def test_is_asked_and_judges_nothing_itself(self):
+        # (Check structures is Meno's: the plugin fills no such step, and answers the facts)
+        import json
+        manifest = json.loads((WORKER.parent / "manifest.json").read_text(encoding="utf-8"))
+        self.assertFalse(any("check-structures" in s["kinds"] for s in manifest["steps"]))
+        self.assertNotIn("check-structures", self.worker.STRUCTURE_STEPS)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
 class HowManyTried(unittest.TestCase):
     """How many conformers are tried is Meno's to say (lib/chem/conformersSought): the search tries the number it
     is sent, never one of its own."""
@@ -977,26 +1017,19 @@ class StructureSteps(unittest.TestCase):
     def run_step(self, step, entries, options=None):
         return self.worker.op_run({"step": step, "entries": entries, "options": options or {}, "holds": "structures"})["structures"]
 
-    def test_check_keeps_each_as_drawn_or_sets_it_aside_saying_why(self):
-        got = self.run_step(
-            "check-structures",
-            [self.entry("CCO"), self.entry("C[NH3+].[Cl-]"), self.entry("[H+]"), self.entry("CC", radical_on=1), self.entry("CC(O)CC")],
-        )
-        self.assertEqual(
-            got,
-            [
-                {"as": "drawn"},
-                {"aside": "2 parts (a salt, or a mixture)", "kind": "parts"},
-                {"aside": "a part with no electrons ([H+])", "kind": "no electrons"},
-                {"aside": "a radical: unpaired electrons on C", "kind": "radical"},
-                {"as": "drawn"},
-            ],
-        )
-        # (what the options keep is not looked for)
-        kept = self.run_step("check-structures", [self.entry("C[NH3+].[Cl-]"), self.entry("CC", radical_on=1)], {"parts": "keep", "radicals": "keep"})
-        self.assertEqual(kept, [{"as": "drawn"}, {"as": "drawn"}])
+    def facts(self, entries):
+        return self.worker.op_structure_facts({"structures": entries})["structures"]
 
-    def test_check_finds_an_atom_with_more_bonds_than_it_can_have(self):
+    def test_gives_check_structures_the_facts_it_decides_on(self):
+        # (Check structures is Meno's - workflow/checkStructures - on these: parts, an atom's charge and atomic number, unpaired electrons)
+        ok, salt, proton, radical = self.facts([self.entry("CCO"), self.entry("C[NH3+].[Cl-]"), self.entry("[H+]"), self.entry("CC", radical_on=1)])
+        self.assertEqual({a["part"] for a in ok["atoms"]}, {0})
+        self.assertEqual(sorted({a["part"] for a in salt["atoms"]}), [0, 1])
+        self.assertEqual([(a["z"], a["charge"]) for a in proton["atoms"]], [(1, 1)])
+        self.assertEqual([a["radicals"] for a in radical["atoms"]], [0, 1])
+        self.assertFalse(any(a["radicals"] for a in ok["atoms"]))
+
+    def test_gives_an_atom_with_more_bonds_than_it_can_have_its_valence_and_most(self):
         five = Chem.RWMol()
         n = five.AddAtom(Chem.Atom(7))
         for _ in range(5):
@@ -1007,8 +1040,8 @@ class StructureSteps(unittest.TestCase):
         mol = five.GetMol()
         mol.UpdatePropertyCache(strict=False)
         AllChem.Compute2DCoords(mol)
-        got = self.run_step("check-structures", [{"molblocks": [Chem.MolToMolBlock(mol)]}])
-        self.assertEqual(got, [{"aside": "an atom with more bonds than it can have (N)", "kind": "valence"}])
+        [got] = self.facts([{"molblocks": [Chem.MolToMolBlock(mol)]}])
+        self.assertEqual((got["atoms"][0]["el"], got["atoms"][0]["valence"], got["atoms"][0]["most"]), ("N", 5, 3))
 
     def test_stereoisomers_of_what_is_left_open_each_a_drawing_in_a_fixed_order(self):
         got = self.run_step("stereoisomers", [self.entry("CCO"), self.entry("CC(O)CC"), self.entry("C[C@H](O)CC"), self.entry("C1CC2CCC1C2")])
@@ -1279,10 +1312,14 @@ class CoordinationBonds(unittest.TestCase):
         self.assertIn({"label": "Coordination bonds", "text": "N\u2192B, O\u2192B computed as single bonds, each donor + and acceptor \u2212"}, two["how"])
 
     def test_every_op_that_reads_a_drawing_reads_an_adduct_the_same_way(self):
-        # (H3N->BH3 drawn with an arrow: Check structures keeps it as drawn - no atom with more bonds than it can have -
-        #  Descriptors works it out, and the canvas's analysis marks no valence, as Conformers makes it)
+        # (H3N->BH3 drawn with an arrow: the facts Check structures decides on give no atom more bonds than it can have,
+        #  nothing RDKit cannot make sense of - Descriptors works it out, and the canvas's analysis marks no valence, as
+        #  Conformers makes it)
         adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])
-        self.assertEqual(self.worker.step_check([{"molblocks": [adduct]}], {}), {"structures": [{"as": "drawn"}]})
+        [facts] = self.worker.op_structure_facts({"structures": [{"molblocks": [adduct]}]})["structures"]
+        self.assertTrue(facts["read"])
+        self.assertNotIn("problem", facts)
+        self.assertFalse(any(a["valence"] > a.get("most", a["valence"]) for a in facts["atoms"]))
         described = self.worker.step_descriptors([{"molblocks": [adduct]}], {})["structures"][0]
         self.assertEqual(described["as"], "drawn")
         # (its weight: B 10.81, N 14.007, six H 1.008 each - the same in either form)
@@ -1290,9 +1327,10 @@ class CoordinationBonds(unittest.TestCase):
         seen = self.worker.op_analyse({"molblock": adduct})
         self.assertFalse(any("valenceError" in a for a in seen["atoms"]))
         self.assertEqual([a["hydrogens"] for a in seen["atoms"]], [3, 3])
-        # (one it cannot hold is still set aside by Check structures, as Conformers refuses it)
+        # (one it cannot hold gives Check structures an atom with more bonds than it can have, as Conformers refuses it)
         silicon = self.block([("N", 0, 0, 0), ("Si", 2, 0, 0), ("F", 3, 1, 0), ("F", 3, -1, 0), ("F", 2, 2, 0), ("F", 2, -2, 0)], [(9, 1, 2), (1, 2, 3), (1, 2, 4), (1, 2, 5), (1, 2, 6)])
-        self.assertEqual(self.worker.step_check([{"molblocks": [silicon]}], {})["structures"][0]["kind"], "valence")
+        [facts] = self.worker.op_structure_facts({"structures": [{"molblocks": [silicon]}]})["structures"]
+        self.assertTrue(any(a["valence"] > a["most"] for a in facts["atoms"] if "most" in a) or "problem" in facts)
 
     def test_stereoisomers_of_an_adduct_are_drawn_with_its_arrow_and_its_charges_as_drawn(self):
         # (1-fluoroethylamine->BH3, its carbon a stereocentre left open: two stereoisomers, each written back as drawn - the

@@ -1,7 +1,7 @@
 {
   "id": "rdkit",
   "name": "RDKit",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "uses": [{"name": "RDKit", "version": "2026.03.6"}],
   "description": "Makes sense of a structure as it is drawn - its hydrogens, valence, aromatic rings, and R and S, E and Z - reads and writes SMILES, and makes structures in 3D and their conformers.",
   "licence": "BSD-3-Clause",
@@ -32,15 +32,6 @@
         {"id": "field", "label": "Force field", "type": "choice", "choices": [{"value": "MMFF94", "label": "MMFF94"}, {"value": "MMFF94s", "label": "MMFF94s"}, {"value": "UFF", "label": "UFF"}], "default": "MMFF94"},
         {"id": "steps", "label": "Steps at most", "type": "number", "default": 2000, "min": 1, "max": 100000},
         {"id": "start", "label": "Start from", "type": "choice", "choices": [{"value": "as-it-comes", "label": "Where it is"}, {"value": "first", "label": "Where its restraints were first held"}], "default": "as-it-comes"}
-      ]
-    },
-    {
-      "kinds": ["check-structures"],
-      "options": [
-        {"id": "parts", "label": "More than one part (a salt, a mixture)", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep"}], "default": "aside"},
-        {"id": "valence", "label": "An atom with more bonds than it can have", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep as drawn"}], "default": "aside"},
-        {"id": "electrons", "label": "A part with no electrons (H+)", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep"}], "default": "aside"},
-        {"id": "radicals", "label": "Radicals", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep"}], "default": "aside"}
       ]
     },
     {

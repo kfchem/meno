@@ -1812,7 +1812,7 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(m.frames).toHaveLength(1);
   });
 
-  it("says a plugin does not do a step it fills no more, before it asks it anything (a workspace's step from before)", async () => {
+  it("says a step of Meno's own kind a plugin was said to do is Meno's, to be added again, before it asks it anything (a workspace's step from before)", async () => {
     const { doc, st } = editor();
     doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
     const set = st().sets[0].id;
@@ -1821,7 +1821,7 @@ describe("a plugin's conformer search, and its duplicates", () => {
     st().connect({ set }, step);
     worker.run.mockClear();
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "RDKit does not do Duplicates" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Duplicates is Meno's own step: add it again" });
     expect(worker.run).not.toHaveBeenCalled();
   });
 
