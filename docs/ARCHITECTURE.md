@@ -1457,8 +1457,9 @@ page reads anything of them (`catalogue.rs`):
   the entry's; then they are unpacked into `.staging/<stage>`, and their
   manifest's SHA-256 must be the entry's too. Anything not so refuses the
   whole, and what was unpacked is taken away, all before it answers. The
-  entry the stage was got for is kept beside it (`<stage>.for`). A stage
-  left by a Meno stopped mid-way is no plugin; as a plugin is next got,
+  entry the stage was got for is written beside it (`<stage>.for`) before
+  anything is unpacked, and kept until it is in place. A stage left by a
+  Meno stopped mid-way is no plugin; as a plugin is next got,
   each stage a day old or more, or with no entry beside it, is taken away.
 - **The archive** is the plugin's folder as a `.tar.gz`: its contents at the
   top - `manifest.json` there - with no folder around them. Regular files

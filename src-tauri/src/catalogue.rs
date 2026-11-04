@@ -344,9 +344,15 @@ fn stage_from(archive: &[u8], source: &Source, root: &Path) -> Result<Staged, St
     tools::check(archive, &source.sha256).map_err(|_| "its files are not the ones the list gave the fingerprint of".to_string())?;
     let stage = uuid::Uuid::new_v4().simple().to_string();
     let dir = root.join(".staging").join(&stage);
-    unpack_into(archive, &dir)?;
-    // (the entry it was staged for, beside it: what its manifest must say when it is taken into use)
+    // (the entry it is staged for, beside it before anything of it is unpacked - so that a stage being made
+    //  is never taken for one left by a Meno stopped mid-way - and what its manifest must say when it is
+    //  taken into use)
+    std::fs::create_dir_all(root.join(".staging")).map_err(|e| format!("making the stage: {e}"))?;
     put(&for_of(&dir), format!("{}\n{}", source.id, source.version).as_bytes())?;
+    if let Err(e) = unpack_into(archive, &dir) {
+        throw_away(&dir);
+        return Err(e);
+    }
     let manifest = std::fs::read(dir.join("manifest.json")).ok();
     let fits = manifest.as_deref().is_some_and(|m| tools::check(m, &source.manifest_sha256).is_ok());
     let text = manifest.and_then(|m| String::from_utf8(m).ok());
@@ -702,8 +708,12 @@ mod tests {
         std::fs::OpenOptions::new().write(true).open(for_of(&old_dir)).unwrap().set_modified(now - STAGE_STALE).unwrap();
         let bare = staged(&root, "{}", "");
         std::fs::remove_file(for_of(&root.join(".staging").join(&bare))).unwrap();
+        // (one being made: its entry written, nothing of it unpacked yet - kept)
+        let making = staged(&root, "{}", "sketch\n0.3.0");
+        std::fs::remove_file(root.join(".staging").join(&making).join("manifest.json")).unwrap();
         clear_stale(&root, now);
         assert!(root.join(".staging").join(&fresh).exists());
+        assert!(root.join(".staging").join(&making).exists() && for_of(&root.join(".staging").join(&making)).exists());
         assert!(!old_dir.exists() && !for_of(&old_dir).exists());
         assert!(!root.join(".staging").join(&bare).exists());
         let _ = std::fs::remove_dir_all(&root);
@@ -884,6 +894,12 @@ mod tests {
         let stage = staged(&root, r#"{"id":"other","version":"0.3.0"}"#, "sketch\n0.3.0");
         assert_eq!(commit_stage(&root, &stage).unwrap_err(), "its manifest is not the plugin it was got as");
         assert!(!root.join(".staging").join(&stage).exists() && !root.join("other").exists());
+        // (not put in place - where its folder should go, a file: the stage thrown away whole, and said why)
+        std::fs::write(root.join("blocked"), b"a file").unwrap();
+        let stage = staged(&root, r#"{"id":"blocked","version":"0.3.0"}"#, "blocked\n0.3.0");
+        let dir = root.join(".staging").join(&stage);
+        assert!(commit_stage(&root, &stage).unwrap_err().starts_with("putting blocked 0.3.0 in place"));
+        assert!(!dir.exists() && !for_of(&dir).exists());
         // (as it was got: taken in, and its entry beside it gone)
         let stage = staged(&root, r#"{"id":"sketch","version":"0.3.0"}"#, "sketch\n0.3.0");
         commit_stage(&root, &stage).unwrap();
