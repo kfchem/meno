@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { answerLine, callSaid, exchangeRows } from "./said";
+import { NO_ROOM } from "./change";
 
 describe("what a tool call did, as the exchange says it", () => {
   it("says what it is on the page - never a tool's name, its arguments or an id", () => {
@@ -25,9 +26,8 @@ describe("the exchange's rows", () => {
     expect(rows.map((r) => (r.kind === "call" ? `${callSaid(r.call)} · ${r.answer ? answerLine(r.answer) : "-"}` : r.said.by))).toEqual(["person", "Put down an arrow · Done", "Put down CCO · Meno does not read it", "model"]);
   });
 
-  it("says where a piece was put over what lies there, the frame having no room left", () => {
-    const over = { by: "tool" as const, tool: "put_structure", ok: true, answer: { id: "structure:9", over: "put down over what lies there: the frame has no room left" }, at: 1 };
-    expect(answerLine(over)).toBe("Done, over what lies there: the frame has no room left");
-    expect(answerLine({ ...over, answer: { id: "structure:9" } })).toBe("Done");
+  it("says why a piece was not put down where the frame has no room - as any refusal, its reason", () => {
+    expect(answerLine({ by: "tool", tool: "put_structure", ok: false, answer: NO_ROOM, at: 1 })).toBe(NO_ROOM);
   });
+
 });

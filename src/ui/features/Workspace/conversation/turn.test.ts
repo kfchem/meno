@@ -5,7 +5,7 @@ import { addConversation, updateConversation } from "./ops";
 import { scriptedModel } from "./scripted";
 import { LIMITS, NO_CONNECTION, runTurn, toolsFor, WITHHELD } from "./turn";
 import { NO_SUCH } from "./tools";
-import { inkBox } from "./change";
+import { inkBox, NO_ROOM } from "./change";
 import { styleOf } from "../../../../lib/chem/style";
 import { arrowEnds } from "../../../../lib/chem/reactionScheme";
 import type { ModelReply } from "./turn";
@@ -134,7 +134,7 @@ describe("a turn of a conversation", () => {
     expect(c).toMatchObject({ x0: before.x0, x1: before.x1, y0: before.y0, y1: before.y1 });
   });
 
-  it("never reaches past its frame: what it puts down stays inside it - over what lies there, said, where there is no room - and what lies outside stays no such object", async () => {
+  it("never reaches past its frame: what it puts down stays inside it - refused where there is no room - and what lies outside stays no such object", async () => {
     const { turn, doc, said, store } = page(true);
     // (an arrow just outside the frame, to its right: its middle at x = 80)
     const outside = store.getState().addArrow(80, 0, 0, 10);
@@ -157,14 +157,17 @@ describe("a turn of a conversation", () => {
     expect(Math.max(a.from.x, a.to.x)).toBeLessThanOrEqual(6);
   });
 
-  it("puts down over what lies there, and says so, where the frame has no room left - never past it", async () => {
+  it("puts nothing down where the frame has no room left - nothing over what lies there, nothing past it - and says why", async () => {
     const { turn, doc, said } = page(true);
     doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6, y1: 5 } }));
-    await turn("Two.", [{ text: "", calls: [{ tool: "put_structure", args: { smiles: "CCCCCCCC" } }, { tool: "put_structure", args: { smiles: "CCCCCCCC" } }] }, { text: "." }]).done;
+    const atoms = doc.getState().model.atoms.length;
+    await turn("Two.", [{ text: "", calls: [{ tool: "put_structure", args: { smiles: "CCCCCCCC" } }, { tool: "put_text", args: { text: "Notes" } }] }, { text: "." }]).done;
     const tools = said().filter((x) => x.by === "tool");
-    expect(tools.every((t) => JSON.stringify(t.answer).includes("over what lies there"))).toBe(true);
+    expect(tools.map((t) => [t.ok, t.answer])).toEqual([[false, NO_ROOM], [false, NO_ROOM]]);
+    expect([doc.getState().model.atoms.length, (doc.getState().texts ?? []).length]).toEqual([atoms, 0]);
     expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, y0: -5, x1: 6, y1: 5 });
   });
+
 
   it("does not send again what a tool gave once it lies outside the frame - the person's rows keep it", async () => {
     const { turn, doc, store, said } = page();
