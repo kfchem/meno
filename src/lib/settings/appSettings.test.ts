@@ -89,6 +89,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (the computer kept awake while jobs run unless turned off: only the off kept)
+    expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
     // (job folders kept once saved, or not, as set; else as Meno's default - kept, for now)
     expect(acceptAppSettings({ calculations: { keepJobFolders: true } }).calculations).toEqual({ keepJobFolders: true });
     expect(acceptAppSettings({ calculations: { keepJobFolders: false } }).calculations).toEqual({ keepJobFolders: false });

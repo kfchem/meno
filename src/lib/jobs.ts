@@ -235,7 +235,7 @@ export function overLimits(jobs: readonly { memory?: number }[], limits: { memor
 }
 
 /** What jobs may use, told to this computer's runner: every job waiting takes it up at once. */
-export const writeJobLimits = (limits: { cores: number; memory: number }) => invoke<void>("jobs_limits", limits);
+export const writeJobLimits = (limits: { cores: number; memory: number; awake: boolean }) => invoke<void>("jobs_limits", limits);
 
 /** How often a job followed is looked at. */
 const FOLLOW_MS = 500;
