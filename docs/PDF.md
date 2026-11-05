@@ -1319,6 +1319,24 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
+  - **a repeat unit in brackets, counted** (2026-11-05): a pair of
+    brackets drawn across bonds - square, a line and its ticks, or round,
+    a curve - with a count at the foot of one: digits, as (CH2)6 drawn
+    out, or a small letter, a polymer's n. Meno does not read the count
+    yet. So that the unit, drawn once, is never taken for the whole, its
+    brackets are read as no bonds and its count as no word, and the atoms
+    of each bond a bracket crosses are marked ("A repeat unit in brackets,
+    counted 6, is not read: it is drawn here once.";
+    lib/figure/read `repeatBrackets`). A bracket is a line or a curve half
+    a bond to two and a half long that crosses a line of the figure
+    square enough, away from both their ends, its own ends free - at no
+    other line's end but its ticks', and into no label - with its count
+    by its lower end; its partner is the nearest other such line or curve,
+    uncounted. A line across a bond with no count is read as before, and a
+    number by no bracket - a compound's - is left as it was. A label
+    written as one word, (CH2)6, is not read either (above). A picture
+    read by a model (part B) comes with no brackets nor counts: there,
+    nothing tells one yet;
   - a label that writes more or fewer hydrogens than its atom's bonds leave
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
@@ -1788,6 +1806,10 @@ drawn beside its figure and tied to it.
 - **Annotating a PDF** (highlights, notes on its pages). Notes go on the
   page beside it instead.
 - **Opening a PDF from the web**, by its address or its DOI.
+- **A repeat unit's count read** (2026-11-05): a unit in brackets,
+  counted, is marked as not read (*A figure read*, *Marked as unsure*),
+  never expanded. Reading it - the unit written out as many times as its
+  count says, or a polymer's held as one - comes after.
 
 ## Questions
 
