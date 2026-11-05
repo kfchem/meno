@@ -68,6 +68,14 @@ describe("a double bond a file says is either: cis or trans not known (a MOL fil
     }
   });
 
+  it("is a double bond's only: a single bond said either is drawn as it is, while a wavy one stays either at its ends", async () => {
+    const m = await read("e.mol", v2000(false, 0));
+    const single = m.bonds.find((b) => b.order === 1)!;
+    const drawnAs = (stereo: "wavy" | "either") => drawingOf({ ...m, bonds: m.bonds.map((b) => (b === single ? { ...b, stereo } : b)) }).bonds.find((b) => b.order === 1 && b.either);
+    expect(drawnAs("wavy")).toBeDefined();
+    expect(drawnAs("either")).toBeUndefined();
+  });
+
   it("is a structure of its own: E, Z and either are three, and either drawn either way is one", async () => {
     const e = identityOfDrawn(await read("e.mol", v2000(false, 0))).text;
     const z = identityOfDrawn(await read("z.mol", v2000(true, 0))).text;
