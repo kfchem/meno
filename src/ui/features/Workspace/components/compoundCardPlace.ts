@@ -3,6 +3,9 @@ import type { PdfLens } from "../store/types";
 
 /** How long the pointer rests on a number before its card comes, in ms. */
 export const REST_MS = 350;
+
+/** How long is left to wait before a card comes, the pointer on its number since `since` (ms, as `now`): none once it has rested `REST_MS`. */
+export const restLeft = (since: number, now: number) => Math.max(0, REST_MS - (now - since));
 /** The card's gap from its word's line, and from the window's edges, in pixels. */
 const LINE_GAP = 4;
 const EDGE = 8;

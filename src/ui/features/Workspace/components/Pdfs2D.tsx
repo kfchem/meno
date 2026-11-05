@@ -65,7 +65,7 @@ import { placeBefore, selects } from "../utils/pdfSelection";
 import { dragWords, onSelected, type OnScreen } from "./wordsDrag";
 import { dragBox, inBox } from "./boxDrag";
 import { figureAt, figuresHad } from "../../../../lib/pdf/figures";
-import { indexOnce, mentionUnder } from "../utils/compoundLens";
+import { boxOnSheet, indexOnce, mentionUnder } from "../utils/compoundLens";
 import { figureStructuresHad } from "../utils/pdfStructures";
 import { structureAt } from "../utils/pageStructures";
 import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
@@ -505,11 +505,9 @@ export default function Pdfs2D() {
     if (read && structureAt(read.structures, w.x, w.y, read.marks)) return null;
     const m = mentionUnder(w.t, w.x, w.y, keys.current.altKey);
     if (!m) return null;
-    const unit = pointOf(p);
-    const left = w.sheet.x - w.sheet.w / 2;
-    const top = w.sheet.y + w.sheet.h / 2;
-    const a = toScreen(left + m.box[0] * unit, top - m.box[1] * unit);
-    const b = toScreen(left + m.box[2] * unit, top - m.box[3] * unit);
+    const on = boxOnSheet(m.box, w.sheet, pointOf(p));
+    const a = toScreen(on.x0, on.y0);
+    const b = toScreen(on.x1, on.y1);
     return { id: p.id, sha256: p.sha256, label: m.label, word: { left: a.x, top: a.y, right: b.x, bottom: b.y }, since: performance.now() };
   };
 

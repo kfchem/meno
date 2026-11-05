@@ -20,6 +20,17 @@ export function mentionUnder(t: PageText, x: number, y: number, any: boolean): {
   return m && box ? { label: m.label, box } : null;
 }
 
+/**
+ * A box on a page - in points from its top left, as `mentionUnder` gives
+ * one - on the canvas: its corners in the canvas's units, the page's sheet
+ * standing centred at `sheet` (its y up), `unit` of its units a point.
+ */
+export function boxOnSheet(box: readonly [number, number, number, number], sheet: { x: number; y: number; w: number; h: number }, unit: number): { x0: number; y0: number; x1: number; y1: number } {
+  const left = sheet.x - sheet.w / 2;
+  const top = sheet.y + sheet.h / 2;
+  return { x0: left + box[0] * unit, y0: top - box[1] * unit, x1: left + box[2] * unit, y1: top - box[3] * unit };
+}
+
 const indexed = new Set<string>();
 
 /** A PDF's compounds' numbers read through in idle time, from the first time the pointer is over it: once a PDF. */

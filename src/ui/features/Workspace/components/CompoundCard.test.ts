@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardPlace } from "./compoundCardPlace";
+import { cardPlace, REST_MS, restLeft } from "./compoundCardPlace";
 
 describe("where a compound's card stands by its word", () => {
   const view = { width: 1000, height: 800 };
@@ -14,5 +14,15 @@ describe("where a compound's card stands by its word", () => {
   it("stays within the window's sides", () => {
     expect(cardPlace(word(900, 300), card, view).left).toBe(752);
     expect(cardPlace(word(2, 300), card, view).left).toBe(8);
+  });
+});
+
+describe("when a compound's card comes", () => {
+  it("is once the pointer has rested on the number about a third of a second - not at once, not seconds later", () => {
+    expect(REST_MS).toBe(350);
+    expect(restLeft(1000, 1000)).toBe(350);
+    expect(restLeft(1000, 1100)).toBe(250);
+    expect(restLeft(1000, 1350)).toBe(0);
+    expect(restLeft(1000, 5000)).toBe(0);
   });
 });

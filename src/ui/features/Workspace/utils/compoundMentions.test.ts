@@ -49,4 +49,28 @@ describe("a compound's number mentioned in the text", () => {
     expect(mentionAt(t, at(text, "2019"), true)).toBeNull();
     expect(mentionAt(t, at(text, "Table"), true)).toBeNull();
   });
+
+  it("joins numbers named together by \"or\" as by \"and\", within reach of the naming word - six words back, no further", () => {
+    const or = "compounds 3 or 4 were made";
+    expect(mentionAt(line(or), at(or, "4"))?.label).toBe("4");
+    const far = "compounds 1, 2, 3, 4, 5, 6, 7 were made";
+    const t = line(far);
+    expect(mentionAt(t, at(far, "6"))?.label).toBe("6");
+    // (seven words back: past reach)
+    expect(mentionAt(t, at(far, "7"))).toBeNull();
+  });
+
+  it("is none in parentheses after a word that makes a number no compound's - a figure's, a scheme's, an equation's, an entry's, a step's, a time's - nor after one letter", () => {
+    for (const w of ["Figure", "Fig", "Scheme", "eq", "Equation", "entry", "steps", "days", "h", "min", "years", "a"]) {
+      const text = `see ${w} (5) here`;
+      expect(mentionAt(line(text), at(text, "5)")), w).toBeNull();
+    }
+    const named = "see camphor (5) here";
+    expect(mentionAt(line(named), at(named, "5)"))?.label).toBe("5");
+  });
+
+  it("is a number in parentheses after a naming word, as that word names it", () => {
+    const text = "compound (12) was made";
+    expect(mentionAt(line(text), at(text, "12"))?.label).toBe("12");
+  });
 });

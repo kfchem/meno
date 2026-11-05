@@ -21,7 +21,7 @@ import { pickedStructure } from "../utils/pdfStructures";
 import type { PageStructure } from "../utils/pageStructures";
 import { dragStructure } from "./structureDrag";
 import { readerOf } from "./pdfColumnReader";
-import { cardPlace, REST_MS } from "./compoundCardPlace";
+import { cardPlace, restLeft } from "./compoundCardPlace";
 
 /** How long it lingers once the pointer has left, in ms. */
 const LINGER_MS = 250;
@@ -53,7 +53,7 @@ export default function CompoundCard() {
       const t = window.setTimeout(() => {
         setHeld(lens);
         setShown(true);
-      }, Math.max(0, REST_MS - (performance.now() - lens.since)));
+      }, restLeft(lens.since, performance.now()));
       return () => window.clearTimeout(t);
     }
     // (left: gone a moment later, unless the pointer has come onto the card)
