@@ -498,9 +498,13 @@ pub fn plugin_discard(app: AppHandle, stage: String) -> Result<(), String> {
 /// its folder (`remove_dir`). Asked only once its jobs are stopped: the page asks the person first, as it
 /// does before a plugin is removed (lib/calc/workers `removePlugin`). While Meno still carries plugins, one
 /// it carries is put back as it next starts.
-fn remove_files(root: &Path, id: &str, remove_dir: impl Fn(&Path) -> std::io::Result<()>) -> Result<(), String> {
+fn remove_files(root: &Path, id: &str, running: &dyn Fn(&str) -> bool, remove_dir: impl Fn(&Path) -> std::io::Result<()>) -> Result<(), String> {
     if !crate::plugin_id_ok(id) {
         return Err("not a plugin's id".to_string());
+    }
+    // (refused of itself, whatever the page knows, while a job of it waits or runs)
+    if running(id) {
+        return Err(format!("a job of {id} waits or runs"));
     }
     let dir = root.join(id);
     let current = dir.join(installed::CURRENT);
@@ -515,7 +519,8 @@ fn remove_files(root: &Path, id: &str, remove_dir: impl Fn(&Path) -> std::io::Re
 
 #[tauri::command]
 pub fn plugin_files_remove(app: AppHandle, id: String) -> Result<(), String> {
-    remove_files(&root(&app)?, &id, |d| std::fs::remove_dir_all(d))
+    let data = app.path().app_local_data_dir().map_err(|e| format!("local app data dir: {e}"))?;
+    remove_files(&installed::root(&data), &id, &|p| crate::jobs::plugin_running(&data, p), |d| std::fs::remove_dir_all(d))
 }
 
 #[cfg(test)]
@@ -670,9 +675,12 @@ mod tests {
         commit_stage(&root, &again.stage).unwrap();
         assert!(!root.join(installed::STAGING).join(&again.stage).exists());
         // (taken away: current first, then its folder)
-        remove_files(&root, "sketch", |d| std::fs::remove_dir_all(d)).unwrap();
+        // (refused, nothing taken away, while a job of it waits or runs)
+        assert_eq!(remove_files(&root, "sketch", &|id| id == "sketch", |d| std::fs::remove_dir_all(d)).unwrap_err(), "a job of sketch waits or runs");
+        assert!(root.join("sketch/current").exists() && root.join("sketch/0.3.0").exists());
+        remove_files(&root, "sketch", &|_| false, |d| std::fs::remove_dir_all(d)).unwrap();
         assert!(!root.join("sketch").exists());
-        assert!(remove_files(&root, "../up", |d| std::fs::remove_dir_all(d)).is_err());
+        assert!(remove_files(&root, "../up", &|_| false, |d| std::fs::remove_dir_all(d)).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -941,7 +949,7 @@ mod tests {
         std::fs::create_dir_all(root.join("sketch/0.3.0")).unwrap();
         set_current(&root, "sketch", "0.3.0").unwrap();
         // (its folder not taken away - say, a file in it held: `current` gone already, so it is no plugin in use)
-        let refused = remove_files(&root, "sketch", |d| {
+        let refused = remove_files(&root, "sketch", &|_| false, |d| {
             assert!(!d.join("current").exists(), "current taken away first");
             Err(std::io::Error::other("held"))
         });
