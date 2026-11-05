@@ -920,9 +920,21 @@ beside its edge - being drawn over all of it.
   default. The field gives a guide, not a default: at 298.15 K a
   conformer ΔE above the lowest weighs exp(-ΔE/RT) as much, 1/100 at
   RT ln 100 = 2.73 kcal/mol (`WINDOW_GUIDE`, workflow/kinds). Which
-  energies it is on is below. A step saved before this, which took the
-  window it had then (3 kcal/mol) without one of its own, needs one
-  given before it runs again.
+  energies it is on is below.
+  - **A window of the chemist's own** may be kept in Settings,
+    *Calculations*, under Meno's *Energy window*, where it is empty
+    until given, with the same guide under it. Each new Energy window
+    step starts with it, as each step starts with the options set there;
+    a step's own window is then its own, and changing Settings later
+    changes no step put down before. *Clear*, beside it, empties it
+    again: each new step then asks. It is the chemist's value, never
+    Meno's.
+  - A new step holds no window until one is given: an option with no
+    default is never held, nor remembered in Settings, as a number that
+    is none (lib/options `givenOnly`).
+  - A step put down before this holds the window it started with (3
+    kcal/mol) as its own and runs as before. Only one with no window of
+    its own - made otherwise than on the canvas - asks for one.
 - **Which energy** *Energy window* and *Populations* are on (2026-10-24):
   the free energy G where every entry has one and each compound's were
   worked out alike - the same temperature, pressure, solvent, program,

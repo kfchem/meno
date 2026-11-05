@@ -1,4 +1,4 @@
-import { rememberable, valuesOf } from "../../../lib/options";
+import { noDefault, rememberable, valuesOf, type Option, type OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { useReaders } from "../../../lib/calc/workers";
 import OptionRows from "../../options/OptionRows";
@@ -47,6 +47,7 @@ export default function CalculationSettings() {
                       onChange={(values) => rememberOptions(role, rememberable(options, values))}
                     />
                   )}
+                  <OwnValues options={options} own={remembered[role]} keep={(values) => rememberOptions(role, values)} />
                 </div>
               );
             })}
@@ -54,5 +55,31 @@ export default function CalculationSettings() {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Under a kind's options, each that has no default - an Energy window's
+ * window, the chemist's own: its guide, and *Clear* where the chemist has
+ * given one, which empties it again (`keep` given what is left).
+ */
+export function OwnValues({ options, own, keep }: { options: readonly Option[]; own: OptionValues | undefined; keep: (values: OptionValues) => void }) {
+  return (
+    <>
+      {options.filter(noDefault).map((o) => {
+        const given = own?.[o.id];
+        const { [o.id]: _, ...rest } = own ?? {};
+        return (
+          <div key={o.id} className="pl-8 pr-3 pb-2.5 flex items-start gap-3 text-xs text-gh-gray">
+            <p className="flex-1 max-w-2xl leading-snug">{o.note}</p>
+            {typeof given === "number" && Number.isFinite(given) && (
+              <button type="button" className="h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base" onClick={() => keep(rest)}>
+                Clear
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }

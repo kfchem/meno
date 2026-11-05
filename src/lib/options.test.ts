@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptOptions, rememberable, valuesOf, type Option, shownOptions } from "./options";
+import { acceptOptions, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
   { id: "version", label: "Version", type: "choice", choices: [{ value: "auto", label: "Auto" }, { value: "V3000", label: "V3000" }], default: "auto" },
@@ -99,6 +99,23 @@ describe("options that apply to one choice only, and choices that fill in others
     expect(look.choices[0].sets).toEqual({ band: 0.4 });
     expect(read[1]).toMatchObject({ when: { id: "look", in: ["a", 3] }, group: "Adjust" });
     expect(read[2].when).toBeUndefined();
+  });
+});
+
+describe("a number with no default", () => {
+  const window: Option = { id: "window", label: "Within", type: "number", default: Number.NaN, min: 0, unit: "kcal/mol" };
+  const within: Option = { id: "within", label: "Of", type: "choice", choices: [{ value: "a", label: "A" }], default: "a" };
+
+  it("is none until given: never held, nor remembered, as a number that is none", () => {
+    expect([noDefault(window), noDefault(within), noDefault({ ...window, default: 3 })]).toEqual([true, false, false]);
+    const values = valuesOf([window, within]);
+    expect(Number.isNaN(values.window)).toBe(true);
+    expect(givenOnly(values)).toEqual({ within: "a" });
+    expect(givenOnly({ a: Number.POSITIVE_INFINITY, b: 0, c: "", d: false })).toEqual({ b: 0, c: "", d: false });
+    expect(rememberable([window, within], values)).toEqual({ within: "a" });
+    // (the chemist's own, once given: remembered, and what each new one starts with)
+    expect(rememberable([window, within], { ...values, window: 2 })).toEqual({ window: 2, within: "a" });
+    expect(valuesOf([window, within], { window: 2 }).window).toBe(2);
   });
 });
 

@@ -23,7 +23,7 @@ import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
-import { inputsOf } from "./kinds";
+import { inputsOf, needsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
@@ -933,6 +933,16 @@ describe("Quick Add's calculations", () => {
     } finally {
       useAppSettings.setState({ options: {} });
     }
+  });
+
+  it("put down with no window of the chemist's own in Settings, an Energy window holds none - never a number that is none - and asks for one", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const id = store.getState().addStep("energy-window", "meno", 0, 0);
+    const step = store.getState().steps.find((s) => s.id === id)!;
+    expect(step.options).toEqual({ within: "each compound", groupBy: "" });
+    expect(needsOf(step)).toBe("Give the window, in kcal/mol");
   });
 
   it("are by who does them - each plugin added, then Meno - each with the kinds it fills; As conformers only from a compound set's wire", () => {

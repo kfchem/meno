@@ -129,8 +129,16 @@ export function valuesOf(
 /** The values to remember of `values`: all but those that start from what is written (`Known`). */
 export function rememberable(options: readonly Option[], values: OptionValues): OptionValues {
   const fresh = new Set(options.filter((o) => ((o.type === "number" || o.type === "text") && o.from) || o.type === "atoms").map((o) => o.id));
-  return Object.fromEntries(Object.entries(values).filter(([id]) => !fresh.has(id)));
+  return Object.fromEntries(Object.entries(givenOnly(values)).filter(([id]) => !fresh.has(id)));
 }
+
+/** `values` without a number that is none (NaN, or infinite): an option left empty - one whose default is none - holds nothing, never a number that is none. */
+export function givenOnly(values: OptionValues): OptionValues {
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => typeof v !== "number" || Number.isFinite(v)));
+}
+
+/** Whether an option's default is none: a number the chemist gives, no default standing for it (`NumberOption`). */
+export const noDefault = (o: Option): boolean => o.type === "number" && Number.isNaN(o.default);
 
 const OPTION_ID = /^[a-z][a-z0-9-]{0,39}$/;
 const KNOWN: readonly Known[] = ["charge", "multiplicity", "name"];
