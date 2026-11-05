@@ -506,6 +506,66 @@ proportion, either way; the same move however the mode is scaled; O-H-O
 moved along its proton transfer, and along a bend chosen by number; an
 entry with no imaginary vibration, or no vibrations, set aside with why.
 
+## Mode on atoms
+
+Where a saddle point's imaginary vibration puts the atoms a reaction
+changes (`modeOnAtomsEntry`, `src/lib/steps/modeOnAtoms.ts`): case F's
+check, without an IRC, that a saddle point is the one for its reaction
+(F28, F40). Meno judges nothing here: every entry is kept, and what is
+written on it is for a *Filter* to choose on.
+
+- **As a step.** It takes molecules in 3D with vibrations, and, where
+  wanted, *Atoms*: a table. *Atoms* is *From the table* - each row's atoms,
+  read as its columns count them (`atomsOfRows`): the rows of bonds formed
+  or broken (an Atom map's *Change*; an order changed is no reacting bond),
+  or every row - on every entry, or *Rows matched on* a property, as
+  *Measure* matches them; or *Typed*, from 1. *Reach* is a whole number
+  from 0, with no default: none is right for every system, and none is
+  given without a stated basis.
+- **The vibration.** The lowest: an imaginary one, the most negative of
+  several, said on the line.
+- **Ranks.** Every atom ranked by how far the vibration moves it - the
+  length of its Cartesian displacement as the program gives it, not
+  mass-weighted, so its scale makes no difference - the one moving most
+  first, atoms moving alike in the order of their numbers.
+- **Whose vectors are displacements.** Ranks of mass-weighted normal
+  coordinates could differ, a hydrogen against a heavy atom. A vibration's
+  vectors are read as Meno's general form has them, each atom's Cartesian
+  displacement (`move`, src/lib/calc/results.ts `Row`); a reader of a
+  program whose vectors are another kind is to give them so. The
+  window and the allowance stay the chemist's either way.
+- **Written on each entry**, each naming the vibration it is of (`by`):
+  - `mode.window`: the reacting atoms' count and the reach more ranks;
+  - `mode.ranks`: each reacting atom by its element and number, with its
+    rank ("C1 1, C4 2, C11 3");
+  - `mode.outside`: how many reacting atoms rank outside the window.
+
+  Where it cannot be worked out - no vibrations, no imaginary one, an atom
+  the entry has not - each is written failed, with why; the entry is kept.
+  These names are Meno's own: values an entry carried under them are
+  replaced, and the line says so.
+- **Its use.** A check such as ConfoTS's - the reacting atoms within the
+  first N + 1 ranks, at most one outside - is a Reach of 1 and a *Filter*
+  on `mode.outside` of at most 1. Those numbers are the protocol's, set on
+  the cards: Meno sets neither.
+- **Ranks are each atom's.** A strongly asynchronous saddle point - one
+  bond well formed, the other still long - can put both atoms of its long
+  bond outside a tight window while those of the other rank first. How
+  many may fall outside is the chemist's allowance, set on the *Filter*
+  (ConfoTS's acceptable invalid atoms), not a judgement Mode on atoms
+  makes.
+- **Where it goes.** As ConfoTS places its check: after a saddle point's
+  frequencies at the higher level (DFT), or in place of an IRC at the
+  lower (xTB), where no IRC is run there.
+
+Checked: ranks by hand, however the mode is scaled; the window and those
+outside it, with a reach of 0 to 2; O-H-O's proton transfer; the most
+negative of two imaginary vibrations taken and said; each failure written
+with why. End to end on the page: an Atom map's bond changes into Mode on
+atoms, two saddle points of the Diels-Alder in the reactants' numbering -
+one whose vibration moves the four carbons of the bonds formed most (none
+outside a window of 5), one whose moves the hydrogens (all four outside).
+
 ## Numbering
 
 Atoms in the entry record are numbered from 0, as its bonds are: every
