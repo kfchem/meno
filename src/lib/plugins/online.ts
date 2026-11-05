@@ -33,6 +33,9 @@ export type Online = {
 
 export const useOnline = create<Online>(() => ({ state: "unlisted" }));
 
+/** A plugin on offer in the list here, by its id; none, where none is listed or it is not in it. */
+export const onlineEntry = (id: string): CatalogueEntry | undefined => useOnline.getState().catalogue?.plugins.find((e) => e.id === id);
+
 /** What listing the plugins online asks, as any first use of the network is asked. */
 export const CATALOGUE_REQUEST: ConsentRequest = {
   purpose: CATALOGUE_PURPOSE,
@@ -84,6 +87,20 @@ export async function listOnline(again = false, ask: typeof invoke = invoke): Pr
 }
 
 /**
+ * The list kept from before, read as Meno starts - nothing fetched, nothing
+ * asked - so that the kinds of file its plugins read are told from the
+ * start, not only once Settings is opened (lib/io/kinds `offeredKinds`).
+ * None kept, or one listed already: nothing.
+ */
+export async function keptOnline(ask: typeof invoke = invoke): Promise<void> {
+  if (useOnline.getState().state !== "unlisted") return;
+  const got = (await (ask("catalogue_get", { fetch: false }) as Promise<Got | null>).catch(() => null)) ?? null;
+  const read = got ? acceptCatalogue(got.catalogue) : null;
+  if (!read || "why" in read || useOnline.getState().state !== "unlisted") return;
+  useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got!.fetchedAt, kept: got!.kept });
+}
+
+/**
  * A plugin's files, as Meno's backend handles them: staged - fetched,
  * checked against the catalogue's fingerprint and size, and unpacked apart
  * from the plugins in use - then taken into use, or thrown away; and the
@@ -101,8 +118,8 @@ export const PLUGIN_FILES: PluginFiles = {
   stage: (id, version) => invoke("plugin_stage", { id, version }),
   commit: (stage) => invoke("plugin_commit", { stage }),
   discard: (stage) => invoke("plugin_discard", { stage }),
-  // (the plugins in use read again: Meno's own list of them, once it is read from their folders)
-  reload: async () => {},
+  // (the plugins in place read again, so that the one got is known at once: lib/plugins/known)
+  reload: () => refreshPlugins(),
 };
 
 /** The SHA-256 of a text's UTF-8 bytes, in hex. */

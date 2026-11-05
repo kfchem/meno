@@ -132,8 +132,9 @@ that differ, it is given none, and says why.
   2026-11-01): its headings and the heads of its columns, never a
   structure's name, and its columns in turn - the Gaussian interface's
   orientation tables, a row of centre, atomic number, type, x, y, z. Only
-  where that plugin is added: where only a plugin not added declares it,
-  none of the table is read - its rows read as nothing else either - and
+  where that plugin is added: where only a plugin not added declares it -
+  one here, or one on offer online, by its catalogue entry
+  (`quotedTables`, PLUGINS.md, *Plugins online*) - none of the table is read - its rows read as nothing else either - and
   the card says so, naming the plugin (*A table as its program prints it:
   the Gaussian interface plugin reads it, once added in Settings,
   Plugins*), not to be placed.
@@ -549,9 +550,9 @@ How these behave:
 - **Open uses the system's dialog through Tauri**, so Meno has the file's
   path. It reads bytes, and decodes the text kinds. It offers `.meno`,
   text, and the kinds something reads: Meno, or a plugin added - and,
-  the kinds the plugins Meno carries but not added read (PLUGINS.md, *A
-  plugin to suggest for a file*). A file whose reader is not added says
-  which plugins would read it, with Add. What a plugin added
+  the kinds the plugins here or on offer online but not added read
+  (PLUGINS.md, *A plugin to suggest for a file*). A file whose reader is
+  not added says which plugins would read it, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
 - **A file's text is read as its bytes are written** (2026-10-13,

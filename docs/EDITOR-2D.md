@@ -1615,13 +1615,15 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or at an atom of three bonds that keeps no configuration of its
-     own (an amine's N, a plain N-alkyl aziridine's, a B), where a wedge
-     states none - rather than lose it. A centre whose fourth group is a
-     lone pair that keeps its configuration (*Centres by a lone pair*) - a
-     sulfoxide's or a sulfonium's S, a phosphine's P, an oxaziridine's N -
-     is read from its wedge and laid out like any other, on one wedge. A
-     wedge
+     other, two of a centre's bonds in line, an atom of three bonds that
+     keeps no configuration of its own (an amine's N, a plain N-alkyl
+     aziridine's, a B), where a wedge states none, more groups round an
+     atom than a tetrahedral centre's four (a phosphorane's P), or a wavy
+     bond at it - rather than lose it, saying which of these it is
+     (`drawn.ts` `unreadWhy`). A centre whose fourth group is a lone pair
+     that keeps its configuration (*Centres by a lone pair*) - a sulfoxide's
+     or a sulfonium's S, a phosphine's P, an oxaziridine's N - is read from
+     its wedge and laid out like any other, on one wedge. A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an
