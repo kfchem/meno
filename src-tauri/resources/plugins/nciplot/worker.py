@@ -31,9 +31,10 @@ NCIPLOT_MANUAL.pdf, "The input" and "The output"), and from nothing else:
 - COARSE or FINE, its grids and their steps, or neither (0.1 Å);
 - INTERMOLECULAR, where only interactions between the files' molecules
   are wanted;
-- CUTPLOT, the density beyond which the cubes leave the RDG out (0.07 a.u.
-  in the promolecular case, as the manual's default), and the RDG a
-  surface is drawn at.
+- CUTPLOT, the density beyond which the cubes leave the RDG out - the
+  option `density-cut`, 0.07 a.u. unless chosen, the manual's default in
+  the promolecular case (NCIPLOT_MANUAL.pdf, 11 "CUTPLOT r1 r2") - and the
+  RDG a surface is drawn at.
 
 NCIPLOT is run as its README says: given its input, with NCIPLOT_HOME
 naming its folder (the manifest's `env`) and OMP_NUM_THREADS its threads
@@ -47,14 +48,14 @@ import math
 import re
 import sys
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 PROGRAM = "nciplot"
 INPUT = "input.nci"
 NAME = "NCI"
 GRAD = f"{NAME}-grad.cube"
 DENS = f"{NAME}-dens.cube"
 GRIDS = {"coarse": "COARSE", "standard": "", "fine": "FINE"}
-# the density beyond which the cubes leave the RDG out, in the promolecular case (the manual's default)
+# the density beyond which the cubes leave the RDG out, unless chosen: the manual's default in the promolecular case
 RHO_CUT = 0.07
 
 
@@ -112,6 +113,7 @@ def files_of(entry, options):
     if grid not in GRIDS:
         raise Refused(f"no grid is called {grid!r}")
     iso = number(options.get("isovalue", 0.3), "The surface's RDG", 0.05, 1)
+    cut = number(options.get("density-cut", RHO_CUT), "The density left out above", 0.01, 0.5)
     between = options.get("between", False)
     if not isinstance(between, bool):
         raise Refused("Whether only between molecules is neither on nor off")
@@ -127,7 +129,7 @@ def files_of(entry, options):
         lines.append(GRIDS[grid])
     if between:
         lines.append("INTERMOLECULAR")
-    lines.append(f"CUTPLOT {RHO_CUT} {iso}")
+    lines.append(f"CUTPLOT {cut} {iso}")
     files.append({"name": INPUT, "text": "\n".join(lines) + "\n"})
     return files
 

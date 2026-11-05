@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "reveal" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "reveal" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Rim-light reveal: out of darkness a rim of light traces the molecule, then the key light comes up; on white, a pale ghost and its shadow develop into colour behind a fine cool line.
 

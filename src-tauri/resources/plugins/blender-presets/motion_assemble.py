@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "assemble" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "assemble" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Assemble: the atoms fly in on curves and land with a squash, in waves outward from the middle, and each bond is drawn by a bright front.
 

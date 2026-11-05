@@ -273,6 +273,7 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
     y,
     edges,
     orders,
+    straight: input.atoms.map((a) => !!a.linear),
     wedged,
     labelled,
     elements,
@@ -2034,7 +2035,11 @@ function stereoScore(
     }),
     ...stereo.hydrogens.map(() => undefined),
   ];
-  return layoutMetrics({ x, y, edges, orders, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+  // (a straight end measured as `scorer` measures it: the drawings put to this are
+  // tied by `scorer`, the straight end counted alike in each, so it keeps the
+  // measure the same rather than deciding between them - no test can tell it apart)
+  const straight = piece.map((a) => mol.straight.has(a));
+  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
@@ -2548,6 +2553,7 @@ export function scorer(
       y: piece.map((a) => pos.get(a)!.y),
       edges,
       orders,
+      straight: piece.map((a) => mol.straight.has(a)),
       elements,
       hydrogens,
       labelled,

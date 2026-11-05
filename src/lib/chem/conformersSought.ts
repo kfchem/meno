@@ -312,7 +312,7 @@ export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RIN
       ],
       default: sought,
     },
-    { id: "count", when: { id: "sought", in: ["fixed"] }, label: "How many", type: "number", default: count, min: 1, max: MOST_CONFORMERS, step: 1 },
+    { id: "count", when: { id: "sought", in: ["fixed"] }, label: "How many", type: "number", default: count, min: 1, max: MOST_CONFORMERS, step: 1, whole: true },
   ];
 }
 

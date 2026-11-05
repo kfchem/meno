@@ -78,7 +78,7 @@ def head(route_text, charge=0, multiplicity=1):
         " /g16/l1.exe \"/tmp/Gau-1.inp\" -scrdir=\"/tmp/\"",
         " Entering Link 1 = /g16/l1.exe PID=      9552.",
         " ******************************************",
-        " Gaussian 16:  ES64L-G16RevA.03  25-Dec-2016",
+        " Gaussian 16:  ES64L-G16RevZ.01   1-Jan-2020",
         "                 1-Nov-2026 ",
         " ******************************************",
         *route(route_text),
@@ -130,7 +130,7 @@ def frequencies():
         "                      1                      2                      3",
         "                     A1                     A1                     B2",
         " Frequencies --   1700.1234              3700.5678              3800.9012",
-        " Red. masses --      1.0800                 1.0450                 1.0800",
+        " Red. masses --      1.1000                 1.0500                 1.1000",
         " Frc consts  --      1.8000                 8.4000                 9.2000",
         " IR Inten    --     70.1000                 4.2000                45.3000",
         "  Atom  AN      X      Y      Z        X      Y      Z        X      Y      Z",
@@ -147,11 +147,11 @@ def frequencies():
         " Zero-point correction=                           0.021000 (Hartree/Particle)",
         " Thermal correction to Energy=                    0.024000",
         " Thermal correction to Enthalpy=                  0.025000",
-        " Thermal correction to Gibbs Free Energy=         0.003500",
+        " Thermal correction to Gibbs Free Energy=         0.004000",
         " Sum of electronic and zero-point Energies=            -76.389000",
         " Sum of electronic and thermal Energies=               -76.386000",
-        " Sum of electronic and thermal Enthalpies=             -76.385000",
-        " Sum of electronic and thermal Free Energies=          -76.406500",
+        " Sum of electronic and thermal Enthalpies=             -76.380000",
+        " Sum of electronic and thermal Free Energies=          -76.400000",
         "",
         "                     E (Thermal)             CV                S",
         "                      KCal/Mol        Cal/Mol-Kelvin    Cal/Mol-Kelvin",
@@ -163,7 +163,7 @@ def frequencies():
 def archive(nimag=0, sep="\\"):
     """An archive entry, wrapped at 70 characters, each line begun by a space."""
     body = sep.join(["1", "1", "GINC-HOST", "Freq", "RB3LYP", "6-31G(d)", "H2O1", "USER", "1-Nov-2026", "0", "", "#p b3lyp/6-31G(d) freq",
-                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevA.03", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
+                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevZ.01", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
     return [" " + body[i : i + 70] for i in range(0, len(body), 70)]
 
 
@@ -213,7 +213,7 @@ class TheRoute(unittest.TestCase):
     def test_solvation_as_the_route_says_it(self):
         gas = head("#p b3lyp/6-31G(d) opt")
         self.assertEqual(reader.solvation_of(reader.routes(gas), gas), "none")
-        smd = head("#p b3lyp/6-31G(d) scrf=(smd,solvent=water) opt") + [" Solvent              : Water, Eps=  78.355300 Eps(inf)=   1.777849"]
+        smd = head("#p b3lyp/6-31G(d) scrf=(smd,solvent=water) opt") + [" Solvent              : Water, Eps=  78.400000 Eps(inf)=   1.800000"]
         self.assertEqual(reader.solvation_of(reader.routes(smd), smd), "SMD(Water)")
         # (a model named alone takes the manual's default solvent, water; none named, IEFPCM)
         cpcm = head("#p b3lyp/6-31G(d) scrf=cpcm")
@@ -231,9 +231,9 @@ class TheRun(unittest.TestCase):
     def test_normal_error_and_cut(self):
         normal = " Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n Normal termination of Gaussian 16 at Tue Oct 13.\n"
         self.assertEqual(reader.run_of(normal), ("normal", None, [True]))
-        error = (" Entering Gaussian System\n The combination of multiplicity 2 and    10 electrons is impossible.\n"
+        error = (" Entering Gaussian System\n A made-up reason the input cannot be run.\n"
                  " Error termination via Lnk1e in /g16/l301.exe at Tue Oct 13.\n")
-        self.assertEqual(reader.run_of(error)[:2], ("error", "The combination of multiplicity 2 and    10 electrons is impossible."))
+        self.assertEqual(reader.run_of(error)[:2], ("error", "A made-up reason the input cannot be run."))
         self.assertEqual(reader.run_of(" Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n")[0], "cut")
 
     def test_an_scf_that_did_not_converge(self):
@@ -242,16 +242,16 @@ class TheRun(unittest.TestCase):
 
     def test_a_job_that_ended_normally_with_its_scf_not_converged_says_so_and_gives_no_energy(self):
         text = "\n".join(head("#p ub3lyp/6-31G(d) scf=(maxcycle=3)", 0, 3) + orientation(WATER) + [" >>>>>>>>>> Convergence criterion not met."]
-                         + scf(-39.1495, "UB3LYP") + [" Normal termination of Gaussian 16 at Sat Oct 31 19:58:17 2026."])
+                         + scf(-39.15, "UB3LYP") + [" Normal termination of Gaussian 16 at Sun Nov  1 10:00:00 2026."])
         o = reader.read("w.log", text)
         self.assertIsNone(o["energies"])
         self.assertEqual((results(o)["run"]["label"], results(o)["run"]["value"]), ("SCF", "not converged"))
 
     def test_an_optimisation_out_of_steps_says_so_not_the_quotation_before_its_end(self):
-        text = ("\n Optimization stopped.\n    -- Number of steps exceeded,  NStep=   2\n    -- Flag reset to prevent archiving.\n"
+        text = ("\n Optimization stopped.\n    -- a made-up reason, in its words\n    -- more made-up words\n"
                 " SOME WORDS OF WISDOM.\n\n                       -- AN AUTHOR\n Error termination request processed by link 9999.\n"
-                " Error termination via Lnk1e in /g16/l9999.exe at Sat Oct 31 19:58:16 2026.\n Job cpu time:       0 days\n")
-        self.assertEqual(reader.run_of(text)[:2], ("error", "Optimization stopped. -- Number of steps exceeded,  NStep=   2"))
+                " Error termination via Lnk1e in /g16/l9999.exe at Sun Nov  1 10:00:00 2026.\n Job cpu time:       0 days\n")
+        self.assertEqual(reader.run_of(text)[:2], ("error", "Optimization stopped. -- a made-up reason, in its words"))
 
     def test_an_opt_freq_cut_in_its_frequencies_did_not_come_to_its_end(self):
         text = opt_freq()
@@ -273,7 +273,7 @@ class AnOptFreq(unittest.TestCase):
 
     def test_what_the_calculation_was(self):
         o = self.out
-        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision A.03", "B3LYP", "6-31G(d)"))
+        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision Z.01", "B3LYP", "6-31G(d)"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
         self.assertEqual(o["atoms"], ["O", "H", "H"])
         self.assertEqual(o["masses"], [15.9949146, 1.007825, 1.007825])
@@ -296,11 +296,11 @@ class AnOptFreq(unittest.TestCase):
 
     def test_its_thermochemistry_as_printed(self):
         r = results(self.out)
-        self.assertEqual(r["thermo.free-energy"]["value"], -76.4065)
+        self.assertEqual(r["thermo.free-energy"]["value"], -76.4)
         self.assertEqual(r["thermo.free-energy"]["rank"], 1)
-        self.assertEqual(r["thermo.enthalpy"]["value"], -76.385)
+        self.assertEqual(r["thermo.enthalpy"]["value"], -76.38)
         self.assertEqual(r["thermo.zpve"]["value"], 0.021)
-        self.assertEqual(r["thermo.g-correction"]["value"], 0.0035)
+        self.assertEqual(r["thermo.g-correction"]["value"], 0.004)
         self.assertEqual(r["thermo.entropy"]["value"], 45.1)
         self.assertEqual((r["thermo.temperature"]["value"], r["thermo.pressure"]["value"]), (298.15, 1.0))
         self.assertEqual((r["thermo.point-group"]["value"], r["thermo.symmetry-number"]["value"]), ("C2V", 2))
@@ -309,7 +309,7 @@ class AnOptFreq(unittest.TestCase):
         v = results(self.out)["vibrations"]
         self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "Reduced mass", "IR intensity"])
         self.assertEqual(v["columns"][1]["quantity"], "symmetry")
-        self.assertEqual(v["rows"][0]["cells"], [1, "A1", 1700.1234, 1.08, 70.1])
+        self.assertEqual(v["rows"][0]["cells"], [1, "A1", 1700.1234, 1.1, 70.1])
         self.assertEqual(v["rows"][2]["move"], [0.0, 0.07, 0.0, 0.0, -0.56, 0.43, 0.0, -0.56, -0.43])
         self.assertEqual(self.out["imaginary"], [])
 
@@ -399,7 +399,7 @@ class Energies(unittest.TestCase):
 
     def test_a_field_too_narrow_for_its_number_is_not_known(self):
         self.assertIsNone(reader.number("**********"))
-        self.assertEqual(reader.numbers("-10.02022-10.02017 *******"), [-10.02022, -10.02017, None])
+        self.assertEqual(reader.numbers("-10.10000-10.05000 *******"), [-10.1, -10.05, None])
 
 
 class OpenShell(unittest.TestCase):
@@ -457,12 +457,12 @@ class OtherCharges(unittest.TestCase):
             "                Natural  -----------------------------------------------",
             "    Atom  No    Charge         Core      Valence    Rydberg      Total",
             " -----------------------------------------------------------------------",
-            "      O    1   -0.91800      1.99986     6.90920    0.00922     8.91800",
-            "      H    2    0.45900      0.00000     0.53921    0.00179     0.54100",
-            "      H    3    0.45900      0.00000     0.53921    0.00179     0.54100",
+            "      O    1   -0.90000      2.00000     6.88000    0.02000     8.90000",
+            "      H    2    0.45000      0.00000     0.54000    0.01000     0.55000",
+            "      H    3    0.45000      0.00000     0.54000    0.01000     0.55000",
             " =======================================================================",
         ])
-        self.assertEqual(results(reader.read("w.log", text))["charges.natural"]["values"], [-0.918, 0.459, 0.459])
+        self.assertEqual(results(reader.read("w.log", text))["charges.natural"]["values"], [-0.9, 0.45, 0.45])
 
 
 class Paths(unittest.TestCase):
@@ -571,7 +571,7 @@ Mulliken Charges                           R   N=           3
 Dipole Moment                              R   N=           3
   0.00000000E+00  0.00000000E+00 -8.00000000E-01
 Gaussian Version                           C   N=           2
-ES64L-G16RevA.03
+ES64L-G16RevZ.01
 """
 
 
@@ -590,7 +590,7 @@ class AFormattedCheckpoint(unittest.TestCase):
         o = self.out
         self.assertEqual(o["atoms"], ["O", "H", "H"])
         self.assertAlmostEqual(o["frames"][0][4], 1.44 * reader.BOHR)
-        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision A.03"))
+        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision Z.01"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
 
     def test_its_charges_dipole_in_debye_and_orbitals(self):

@@ -345,7 +345,7 @@ function look(
  */
 function bondAngle(mol: Molecule, a: number): number {
   const orders = mol.neighbours[a].map((b) => orderOf(mol, a, b));
-  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2) return Math.PI;
+  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2 || mol.straight.has(a)) return Math.PI;
   if (orders.includes(2)) return (2 * Math.PI) / 3;
   const lonePair = (mol.el[a] === "N" || mol.el[a] === "O") && mol.neighbours[a].length <= 3;
   if (lonePair && mol.neighbours[a].some((b) => mol.neighbours[b].some((c) => orderOf(mol, b, c) === 2))) return (2 * Math.PI) / 3;
@@ -497,13 +497,13 @@ const solids = new Map<string, Map<number, Vec3>>();
 /** How many solids are kept (`solids`). */
 const KEPT_SOLIDS = 64;
 
-/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration. */
+/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration, the atoms asked to be straight. */
 function contentOf(mol: Molecule): string {
   let content = contents.get(mol);
   if (content == null) {
     const bond = (b: Molecule["bonds"][number]) => `${b.a}-${b.b}:${b.order}${b.stereo ? `:${b.stereo.refs.join(".")}${b.stereo.cis ? "c" : "t"}` : ""}`;
     const centre = ([a, t]: [number, { neighbours: readonly number[]; volume: number }]) => `${a}:${t.neighbours.join(".")}:${t.volume}`;
-    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(",")].join("|");
+    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(","), [...mol.straight].join(",")].join("|");
     contents.set(mol, content);
   }
   return content;

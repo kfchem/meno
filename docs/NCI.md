@@ -29,7 +29,9 @@ molecule in 3D, from its geometry:
   first and works for large molecules. Its options: the grid (coarse,
   0.15 Å; standard, 0.1 Å; fine, 0.05 Å), interactions only between
   molecules not bonded to each other, the RDG the surface is drawn at
-  (0.3), and how far the colour scale reaches (± 0.07 a.u.).
+  (0.3), the density above which the RDG is left out (0.07 a.u., the
+  manual's default in the promolecular case: its *CUTPLOT r1 r2*), and
+  how far the colour scale reaches (± 0.07 a.u.).
 - **The Multiwfn interface** - from a calculation's wavefunction where
   the molecule has one: a Molden file, a Gaussian formatted checkpoint, a
   WFN or a WFX, the one the molecule was read from - opened (read by the
@@ -91,7 +93,7 @@ for either grid. Saved with the workspace as any surface is.
   the entry's fragments apart for interactions between them, as Meno gives
   them: PLUGINS.md, *The entry a plugin is given*), `ONAME NCI`, `OUTPUT
   2` (the cubes alone), `COARSE` or `FINE`, `INTERMOLECULAR`, and `CUTPLOT
-  0.07 r`; it writes `NCI-grad.cube` (the RDG) and `NCI-dens.cube`
+  <density cut> <RDG>`; it writes `NCI-grad.cube` (the RDG) and `NCI-dens.cube`
   (sign(λ2)ρ × 100, as the scale's label says). `NCIPLOT_HOME` is the
   folder above the program's (where its `dat` is, as built).
 - **Multiwfn** is run as its manual has it (2.2, 3.23.1, 3.23.2, 5.2):
