@@ -7,7 +7,7 @@ import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument
 import type { Atom, Bond, Model, Molecule3D } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { keptMap, mapMarks } from "./atomMap";
+import { keptMap, mapMarks, mapShows, mapStanding, unpairedSaid } from "./atomMap";
 import { readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -19,6 +19,8 @@ import { readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 const R_ID: Record<string, number> = { C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6 };
 const P_ID: Record<string, number> = { C1: 11, C2: 12, C3: 13, C4: 14, C5: 15, C6: 16 };
 const R_NAMES = ["C1", "C2", "C3", "C4", "H2", "H3", "H1a", "H1b", "H4a", "H4b", "C5", "C6", "H5a", "H5b", "H6a", "H6b"];
+
+let partial: ReturnType<typeof keptMap>;
 
 function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
   const at = (id: number, x: number, y: number): Atom => ({ id, el: "C", x: x * L, y: y * L, r: 0 }) as Atom;
@@ -46,6 +48,10 @@ function page(): { doc: WorkspaceDocument; kept: ReturnType<typeof keptMap> } {
   const result = mapReaction({ reactants: [da.reactants[0]], products: [da.product] });
   if ("error" in result) throw new Error(result.message);
   const kept = keptMap(model, result, [{ molecule: da.reactants[0], drawnFrom: rFrom }], [{ molecule: da.product, drawnFrom: pFrom }]);
+  // (the same, as a map that pairs all but the product's C1 - each map so cut, none complete)
+  const c1 = da.productOrder.indexOf("C1");
+  const cut = { ...result, maps: result.maps.map((m) => m.map((r, j) => (j === c1 ? -1 : r))), complete: result.maps.map(() => false) };
+  partial = keptMap(model, cut, [{ molecule: da.reactants[0], drawnFrom: rFrom }], [{ molecule: da.product, drawnFrom: pFrom }]);
   const doc = { ...emptyWorkspaceDocument(), model, nextId: 100, molecules3d: [in3d(1, da.reactants[0], rFrom), in3d(2, da.product, pFrom)], nextMolecule3dId: 3 };
   return { doc, kept };
 }
@@ -130,6 +136,30 @@ describe("an atom map between structures on the page", () => {
     const again = ops.addStructureMaps(once, [kept], [1]);
     expect(again.doc.structureMaps!.map((m) => m.id)).toEqual([2]);
     expect(again.ids).toEqual([2]);
+  });
+
+  it("keeps a partial map where none is complete, and shows the atoms it pairs - naming the rest, telling no bond's change", () => {
+    const { doc } = page();
+    expect(partial.complete).toBe(false);
+    expect(partial.maps.length).toBeGreaterThan(0);
+    expect(mapStanding({ atomMap: partial }, doc.model)).toBe("incomplete");
+    expect(mapShows("incomplete")).toBe(true);
+    const marks = mapMarks(partial, doc.model);
+    // (the product's C1, paired with nothing: no number; nor its reactant atom, now paired with nothing; the other ten carbons numbered)
+    expect(marks.numbers.has(11)).toBe(false);
+    expect(marks.numbers.size).toBe(10);
+    expect(marks.centres.size).toBe(0);
+    expect(unpairedSaid(partial, ["Before", "After"])).toBe("Not mapped: C of Before; C of After");
+    expect(unpairedSaid(page().kept, ["Before", "After"])).toBeNull();
+    const n = sideNumbers(partial);
+    expect(n.after.filter((k) => k === 0).length).toBe(1);
+    expect(n.before.filter((k) => k === 0).length).toBe(1);
+    // (shown on the page, the molecules' numbers but the two unpaired)
+    const shown = ops.addStructureMaps(doc, [partial]).doc;
+    expect(shown.molecules3d!.map((m) => m.atoms.filter((a) => a.map).length)).toEqual([15, 15]);
+    // (read back from a file as partial, its -1 kept; a complete map with one is no map)
+    expect(readStructureMaps([{ map: partial }]).maps[0].map).toEqual(partial);
+    expect(readStructureMaps([{ map: { ...partial, complete: true } }]).left).toBe(1);
   });
 
   it("is kept in the workspace's file and read back as it was; one that does not read is left out", () => {

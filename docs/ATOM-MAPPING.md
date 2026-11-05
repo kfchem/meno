@@ -445,10 +445,13 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   XYZ of its own.)
 - **An RXN file** (Export, copy) carries the map's numbers and centres
   whether or not they are shown.
-- **Incomplete.** Where not every atom finds its counterpart, the arrow
-  keeps the reaction as incomplete, with no map: the menu says *Atom map
-  incomplete* (and offers *Atom map* again), nothing is numbered, and
-  nothing is written.
+- **Partial** (the maintainer, 2026-10-30). Where not every atom finds its
+  counterpart, the arrow keeps the partial maps, best first: the atoms they
+  pair are numbered, the rest left without a number and named in the menu
+  ("Not mapped: O, 2 H of the reactants"). No bond's change is marked:
+  which bonds change is the whole map's to say. What needs every atom paired
+  is not offered for a partial map, and says why: *Export reaction in 3D*,
+  the RXN file's numbers, a workflow's *Mapped*.
 - **Changed since: it fails closed.** An edit to the drawing of a mapped
   reaction (an atom, a bond, a charge) takes the map's numbers and reacting
   centres off it in the same step: numbers that no longer match the
@@ -487,8 +490,10 @@ offers *Atom map*.
 - **From a structure's menu** in a map: *Show / Hide atom map* (of all the
   maps it is in), *Other map* ("2 of 4", stepping each of them), and
   *Export reaction in 3D...* (Before and the first After, as above).
-- **Incomplete** is as an arrow's: a map whose atoms do not all pair says
-  *Atom map incomplete* and shows nothing.
+- **Partial** is as an arrow's: a map whose atoms do not all pair numbers
+  those that do - on the drawing and on the molecules in 3D - and names the
+  rest in the menu ("Not mapped: C of Before; C of After"); its export says
+  it needs every atom mapped.
 - **Changed since: it fails closed,** as an arrow's does. An edit to either
   structure of a map takes its numbers and reacting centres off the drawing
   and off its molecules in 3D, in the same step; undo of the edit gives them

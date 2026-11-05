@@ -217,7 +217,7 @@ import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapStanding, reactionOf } from "./chem/atomMap";
+import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
@@ -2562,6 +2562,7 @@ function WorkspaceContent({
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
                     onExport: () => void files.exportReaction3d({ arrow: a.id }),
+                    ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
                 };
               })()),
@@ -2598,6 +2599,7 @@ function WorkspaceContent({
                       onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
                       onOther: () => store.getState().otherStructureMaps(ids),
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
+                      unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
                       // (of the structures before an edit: made again between them as they are now, the old ones' place taken)
                       onAgain: () => {
                         const now = store.getState().model;

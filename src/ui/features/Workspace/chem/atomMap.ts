@@ -72,10 +72,12 @@ export type Side3D = { molecule: Molecule; drawnFrom: (number | null)[] };
 
 /**
  * What an arrow keeps of a mapped reaction: each side in 3D as one
- * structure, its atoms' drawn atoms, and the complete maps, best first - a
- * reaction whose atoms do not all map keeps none (`complete` false). Of
- * maps that pair the heavy atoms alike, only the first is kept: they show
- * the same numbers, and its hydrogens are those ACCeL ranked first.
+ * structure, its atoms' drawn atoms, and the complete maps, best first - or,
+ * where none is complete, the partial ones (`complete` false: each product
+ * atom with none -1), which show the atoms that pair and name the rest (the
+ * maintainer, 2026-10-30). Of maps that pair the heavy atoms alike, only the
+ * first is kept: they show the same numbers, and its hydrogens are those
+ * ACCeL ranked first.
  */
 export function keptMap(model: Model, result: ReactionMap, reactants: readonly Side3D[], products: readonly Side3D[]): ArrowAtomMap {
   const drawn = (sides: readonly Side3D[]) => sides.flatMap((s) => s.drawnFrom);
@@ -86,9 +88,10 @@ export function keptMap(model: Model, result: ReactionMap, reactants: readonly S
   //  of those, the first in ACCeL's order stands, so that "Other map" steps through what the numbers show)
   const heavy = (m: readonly number[]) => m.flatMap((r, j) => (result.product.atoms[j].el === "H" ? [] : [`${j}:${r}`])).join(",");
   const seen = new Set<string>();
+  const anyComplete = result.complete.some(Boolean);
   const maps = result.maps
     .filter((m, i) => {
-      if (!result.complete[i]) return false;
+      if (anyComplete && !result.complete[i]) return false;
       const k = heavy(m);
       if (seen.has(k)) return false;
       seen.add(k);
@@ -104,19 +107,52 @@ export function keptMap(model: Model, result: ReactionMap, reactants: readonly S
     reactant: { ...plain(result.reactant), drawnFrom: reactantFrom },
     product: { ...plain(result.product), drawnFrom: productFrom },
     maps,
-    complete: maps.length > 0,
+    complete: anyComplete && maps.length > 0,
     chosen: 0,
     shown: true,
   };
 }
 
-/** How an arrow's map stands to the drawing: none made; made of a drawing changed since; made with atoms that do not all map; or ready to show and use. */
+/**
+ * How an arrow's map stands to the drawing: none made; made of a drawing
+ * changed since; partial - made with atoms that do not all map, shown, and
+ * not used where one to one is needed; or ready to show and use.
+ */
 export function mapStanding(arrow: Pick<Arrow, "atomMap">, model: Model): "none" | "changed" | "incomplete" | "ready" {
   const m = arrow.atomMap;
   if (!m) return "none";
   const ids = [...m.reactant.drawnFrom, ...m.product.drawnFrom].filter((id): id is number => id != null);
   if (signatureOf(model, ids) !== m.drawnAs) return "changed";
   return m.complete ? "ready" : "incomplete";
+}
+
+/** Whether a map's standing has it show on the drawing: ready, or partial. */
+export const mapShows = (standing: ReturnType<typeof mapStanding>) => standing === "ready" || standing === "incomplete";
+
+/** Which reactant atoms a map pairs with a product atom. */
+function pairedOf(map: ArrowAtomMap, mapping: readonly number[]): Set<number> {
+  return new Set(map.complete ? map.reactant.atoms.map((_, i) => i) : mapping.filter((r) => r >= 0));
+}
+
+/**
+ * The atoms a partial map does not pair, by element and side - each heavy
+ * atom by its element, the hydrogens counted ("O, 2 H") - in words, of
+ * `sides` ("the reactants" and "the products"; "Before" and "After"): none,
+ * for a complete map.
+ */
+export function unpairedSaid(map: ArrowAtomMap, sides: readonly [string, string]): string | null {
+  const mapping = map.maps[map.chosen] ?? map.maps[0];
+  if (map.complete || !mapping) return null;
+  const paired = pairedOf(map, mapping);
+  const words = (els: string[]) => {
+    const n = new Map<string, number>();
+    for (const el of els) n.set(el, (n.get(el) ?? 0) + 1);
+    return [...n].map(([el, k]) => (k > 1 ? `${k} ${el}` : el)).join(", ");
+  };
+  const before = map.reactant.atoms.flatMap((a, i) => (paired.has(i) ? [] : [a.el]));
+  const after = map.product.atoms.flatMap((a, j) => (mapping[j] >= 0 ? [] : [a.el]));
+  const said = [before.length ? `${words(before)} of ${sides[0]}` : null, after.length ? `${words(after)} of ${sides[1]}` : null].filter(Boolean);
+  return said.length ? `Not mapped: ${said.join("; ")}` : null;
 }
 
 /**
@@ -130,19 +166,22 @@ export function mapMarks(map: ArrowAtomMap, model: Pick<Model, "bonds">): { numb
   const mapping = map.maps[map.chosen] ?? map.maps[0];
   const centres = new Map<number, number>();
   if (!mapping) return { numbers, centres };
+  // (a partial map: only the atoms it pairs numbered, and no bond's change told - which bonds change is the whole map's to say)
+  const paired = pairedOf(map, mapping);
   const number = new Array<number>(map.reactant.atoms.length).fill(0);
   let next = 1;
   map.reactant.atoms.forEach((a, i) => {
     const id = map.reactant.drawnFrom[i];
-    if (a.el === "H" || id == null) return;
+    if (a.el === "H" || id == null || !paired.has(i)) return;
     number[i] = next++;
     numbers.set(id, number[i]);
   });
   mapping.forEach((r, j) => {
     const id = map.product.drawnFrom[j];
-    if (id == null || map.product.atoms[j].el === "H" || !number[r]) return;
+    if (id == null || r < 0 || map.product.atoms[j].el === "H" || !number[r]) return;
     numbers.set(id, number[r]);
   });
+  if (!map.complete) return { numbers, centres };
   // the bonds' changes, in the reactants' numbering, back to the drawn bonds
   const changes = bondChanges(map.reactant as Molecule, map.product as Molecule, mapping);
   const productOf = new Array<number>(map.reactant.atoms.length).fill(-1);

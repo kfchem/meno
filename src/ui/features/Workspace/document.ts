@@ -20,7 +20,7 @@ import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
-import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
+import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
 import { numbers3d, type StructureMap } from "./chem/structureMaps";
 import { etaHeld } from "./chem/eta";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
@@ -1461,7 +1461,7 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   if (!arrow) return doc;
   const before = arrow.atomMap;
   const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
-  const marks = map && map.shown && mapStanding({ atomMap: map }, doc.model) === "ready" ? mapMarks(map, doc.model) : null;
+  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map }, doc.model)) ? mapMarks(map, doc.model) : null;
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
@@ -1500,7 +1500,7 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
   const numbers = new Map<number, number>();
   const centres = new Map<number, number>();
   for (const { map } of maps) {
-    if (!map.shown || mapStanding({ atomMap: map }, doc.model) !== "ready") continue;
+    if (!map.shown || !mapShows(mapStanding({ atomMap: map }, doc.model))) continue;
     const marks = mapMarks(map, doc.model);
     for (const [id, n] of marks.numbers) numbers.set(id, n);
     for (const [id, c] of marks.centres) centres.set(id, c);

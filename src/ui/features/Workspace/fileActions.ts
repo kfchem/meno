@@ -972,7 +972,9 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       attempt("Export", async () => {
         const state = store.getState();
         const map = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow)?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
-        if (!map || mapStanding({ atomMap: map }, state.model) !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
+        const standing = map ? mapStanding({ atomMap: map }, state.model) : "none";
+        if (standing === "incomplete") throw new Error("Every atom must be mapped to write the reaction in 3D, and this map is partial.");
+        if (!map || standing !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);

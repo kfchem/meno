@@ -114,8 +114,13 @@ describe("the right-click menu", () => {
     const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
-    // (incomplete: said, and nothing it cannot do offered; of a structure edited since: said, and made again)
-    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "incomplete" } } }).listed).toEqual(["Atom map incomplete", "Select this structure"]);
+    // (partial: shown, the atoms not paired named, its export said to need them all; of a structure edited since: said, and made again)
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "incomplete", maps: 1, unpaired: "Not mapped: O of Before" } } }).listed).toEqual([
+      "Hide atom map",
+      "Not mapped: O of Before",
+      "Export reaction in 3D… (needs every atom mapped)",
+      "Select this structure",
+    ]);
     expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
   });
 

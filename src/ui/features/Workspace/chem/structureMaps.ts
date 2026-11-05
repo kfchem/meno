@@ -9,7 +9,7 @@
  */
 import type { ArrowAtomMap, Model, Molecule3D } from "../store/types";
 import { linkOf } from "../utils/drawnLink";
-import { mapStanding } from "./atomMap";
+import { mapShows, mapStanding } from "./atomMap";
 
 /** A map kept between two structures on the page, numbered as it was made. */
 export type StructureMap = { id: number; map: ArrowAtomMap };
@@ -25,16 +25,18 @@ export function sideNumbers(map: ArrowAtomMap): { before: number[]; after: numbe
   const before = new Array<number>(map.reactant.atoms.length).fill(0);
   const after = new Array<number>(map.product.atoms.length).fill(0);
   if (!mapping) return { before, after };
-  // (the drawn heavy atoms first, as chem/atomMap `mapMarks` numbers them on the drawing; then the rest - the hydrogens)
+  // (the drawn heavy atoms first, as chem/atomMap `mapMarks` numbers them on the drawing; then the rest - the hydrogens; of a
+  // partial map, only those it pairs)
+  const paired = new Set(map.complete ? map.reactant.atoms.map((_, i) => i) : mapping.filter((r) => r >= 0));
   const drawnHeavy = (i: number) => map.reactant.atoms[i].el !== "H" && map.reactant.drawnFrom[i] != null;
   let next = 1;
   map.reactant.atoms.forEach((_, i) => {
-    if (drawnHeavy(i)) before[i] = next++;
+    if (drawnHeavy(i) && paired.has(i)) before[i] = next++;
   });
   map.reactant.atoms.forEach((_, i) => {
-    if (!drawnHeavy(i)) before[i] = next++;
+    if (!drawnHeavy(i) && paired.has(i)) before[i] = next++;
   });
-  mapping.forEach((r, j) => (after[j] = before[r] ?? 0));
+  mapping.forEach((r, j) => (after[j] = r >= 0 ? (before[r] ?? 0) : 0));
   return { before, after };
 }
 
@@ -79,7 +81,7 @@ export function numbers3d(maps: readonly StructureMap[], molecules3d: readonly M
       { side: map.reactant, key: "before" as const },
       { side: map.product, key: "after" as const },
     ];
-    const ready = map.shown && mapStanding({ atomMap: map }, model) === "ready";
+    const ready = map.shown && mapShows(mapStanding({ atomMap: map }, model));
     const n = ready ? sideNumbers(map) : null;
     for (const { side, key } of sides) {
       // (a map of a drawing changed since: its numbers taken off its molecules, whatever their tie to it now)
@@ -128,9 +130,11 @@ export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: num
     const reactant = sideRead(m?.reactant);
     const product = sideRead(m?.product);
     const all = Array.isArray(m?.maps) ? (m!.maps as unknown[]) : null;
+    // (a partial map's product atoms with none -1; a complete one's every one paired)
+    const complete = m?.complete === true;
     const ok =
       !!m && typeof m.drawnAs === "string" && reactant && product && all &&
-      all.every((k) => Array.isArray(k) && k.length === product.atoms.length && k.every((r) => isIndex(r, reactant.atoms.length))) &&
+      all.every((k) => Array.isArray(k) && k.length === product.atoms.length && k.every((r) => isIndex(r, reactant.atoms.length) || (!complete && r === -1))) &&
       Number.isInteger(m.chosen) && (m.chosen as number) >= 0 && (m.chosen as number) < Math.max(1, all.length);
     if (!ok) {
       left++;
@@ -138,7 +142,7 @@ export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: num
     }
     maps.push({
       id: maps.length + 1,
-      map: { drawnAs: m.drawnAs as string, reactant: reactant!, product: product!, maps: all as number[][], complete: all!.length > 0, chosen: m.chosen as number, shown: m.shown !== false },
+      map: { drawnAs: m.drawnAs as string, reactant: reactant!, product: product!, maps: all as number[][], complete: complete && all!.length > 0, chosen: m.chosen as number, shown: m.shown !== false },
     });
   }
   return { maps, left };

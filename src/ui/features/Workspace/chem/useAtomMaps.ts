@@ -119,7 +119,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
           useNotices.getState().show({
             id: "atom-map",
             title: "Atom map",
-            text: "Not every atom of the reaction has its counterpart on the other side, so the map is incomplete and shows no numbers.",
+            text: "Not every atom of the reaction has its counterpart on the other side: the map is partial, the atoms that pair numbered and the rest named in the arrow's menu.",
           });
       } catch (e: unknown) {
         if (!(e instanceof MappingStopped) && !stopped) setChemError(`No atom map could be made: ${e instanceof Error ? e.message : String(e)}`);
@@ -190,7 +190,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
           useNotices.getState().show({
             id: "atom-map",
             title: "Atom map",
-            text: "Not every atom has its counterpart in the other structure, so a map is incomplete and shows no numbers.",
+            text: "Not every atom has its counterpart in the other structure: a map is partial, the atoms that pair numbered and the rest named in the structure's menu.",
           });
       } catch (e: unknown) {
         if (!(e instanceof MappingStopped) && !stopped) setChemError(`No atom map could be made: ${e instanceof Error ? e.message : String(e)}`);
