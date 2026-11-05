@@ -36,6 +36,8 @@ import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
 import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
+import { partsOf, partsSideBySide } from "./partsApart";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -536,7 +538,9 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
  * the first, alike atoms in like places (`asThePageShows`, in a worker of
  * its own: `shownConformers`). `onPage` asks the plugin to make one of two
  * enantiomers as the other's mirror image (docs/PLUGINS.md); a workflow's
- * *Conformers* step never sends it, and is given the program's own.
+ * *Conformers* step never sends it, and is given the program's own. A metal
+ * is held as Meno holds it (lib/chem/metalHolds), and those made that its
+ * checks set aside are.
  */
 export async function conformersOf(
   chem: ChemClient,
@@ -548,8 +552,12 @@ export async function conformersOf(
 ): Promise<Conformers[]> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
-  const got = await chem.request("conformers", { molblock: block.molblock, isomers: made.isomers, ...tries, options, onPage: true }, CONFORMERS_MS);
-  return shownConformers(got.isomers.map((c) => withChosen(c, made.open)));
+  // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
+  const holds = metalHoldsOf(block.molblock);
+  const got = await chem.request("conformers", { molblock: block.molblock, isomers: made.isomers, ...tries, ...(holds ? { holds } : {}), options, onPage: true }, CONFORMERS_MS);
+  const checks = madeChecksOf(block.molblock, holds);
+  // (a structure of more than one part: its parts side by side - chem/partsApart)
+  return shownConformers(got.isomers.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

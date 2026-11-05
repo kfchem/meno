@@ -1041,12 +1041,15 @@ docs/WORKSPACE.md): what its drawing leaves open is Meno's to say
 (`chem/openStereo`, on the elements `stereo_elements` perceives - lib/chem/
 stereoOpen), and `stereoisomers` makes each way it can go in 3D, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
-(ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
-their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in, its energies given
-as the model's and none as the molecule's; a ring bound through all its
-atoms, written as a multi-centre bond by `chem/etaBound.ts`, held over its
-metal; every conformer as made, in the order made, with every centre's CIP
+(ETKDG, then MMFF94 or UFF, on every core - a metal complex held as Meno
+works it out, `lib/chem/metalHolds.ts`, sent as `holds`: its bonds
+embedded at their covalent lengths and the metal typed for UFF, or, where
+UFF has no type for it, a lighter metal of its group standing in, its
+energies given as the model's and none as the molecule's; a ring bound
+through all its atoms, written as a multi-centre bond by
+`chem/etaBound.ts`, held over its metal; every conformer as made - which
+are kept Meno's, `keptMade`, a salt's parts set side by side,
+`chem/partsApart.ts`; every conformer kept in the order made, with every centre's CIP
 label; of two enantiomers, the one whose SMILES comes first is made and the
 other is its mirror image), and the page keeps each once, lowest first,
 laid over the first, equivalent atoms in the first's places
