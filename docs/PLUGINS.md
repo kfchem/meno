@@ -1622,8 +1622,10 @@ comes in its own pull request.
   back.") offers the plugins online that fill it, each to
   add: got, then set up as any plugin is, asking first. Where the list is
   not here yet, it offers to list them, asking first too; offline, it says
-  the list needs the network. Nothing is fetched without the click, and no
-  plugin is added of itself. Each entry says the roles it fills
+  the list needs the network. The list is fetched only with the
+  chemist's consent - asked first, or already given for the list, when it
+  is fetched once a launch as Settings does - and no plugin is added of
+  itself. Each entry says the roles it fills
   (`roles`), which is what it is offered for (`offeredFor`).
 
 ## Decided
