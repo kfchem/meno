@@ -57,7 +57,7 @@ import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { setMembers } from "../workflow/entries";
 import { inputKey, resultOf, stateOf } from "../workflow/flow";
-import { notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
+import { NOT_READ_NAMED, notReadNamed, notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
 import { pluginById } from "../../../../lib/calc/catalog";
 
 /** What Molgen's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one Sketchkit cannot read - each with its NLL and SMILES_state; and what made them. */
@@ -98,7 +98,7 @@ describe("Generate: a step that takes nothing in", () => {
     // (each SMILES read exactly as the model gave it)
     expect(asked.filter((a) => a.op === "from_smiles").map((a) => a.args.smiles)).toEqual(["CCO", "CC(O)CC?", "o1cXc"]);
     const ran = st().steps.find((s) => s.id === step)!.ran!;
-    expect(ran).toMatchObject({ ok: true, said: "3 sampled from molgen.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read: o1cXc (X is no element)" });
+    expect(ran).toMatchObject({ ok: true, said: "3 sampled from molgen.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read", named: "o1cXc: X is no element" });
     // (only where stereo is left open was asked, never each stereoisomer tried in 3D)
     expect(asked.some((a) => a.op === "stereoisomers")).toBe(false);
     const out = resultOf(st(), step)!;
@@ -132,7 +132,7 @@ describe("Generate: a step that takes nothing in", () => {
     expect(st().wires ?? []).toEqual([]);
     run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[2]] });
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "3 sampled from molgen.prior, seed 7, CPU · none could be read · 1 not read: o1cXc (X is no element)" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "3 sampled from molgen.prior, seed 7, CPU · none could be read · 1 not read", named: "o1cXc: X is no element" });
     run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: { nll: { value: 2, unit: "furlongs" } } }] });
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1's nll is not one Meno can take" });
@@ -271,12 +271,18 @@ describe("Generate: a step that takes nothing in", () => {
 });
 
 describe("what a Generate could not read, and its stereo not examined", () => {
-  it("names the first few not read, each with why, and counts the rest; keeps one whose stereo could not be asked, saying so", async () => {
+  it("counts those not read on its line, and names each - as given, with why - where the line is pointed at, the rest past the most counted; keeps one whose stereo could not be asked, saying so", async () => {
     expect(unreadWhy("This SMILES could not be read: a ring left open.")).toBe("a ring left open");
     expect(unreadWhy("something else")).toBe("not read");
     const seven = Array.from({ length: 7 }, (_, i) => ({ smiles: `X${i}`, why: "X is no element" }));
-    expect(notReadSaid(seven)).toBe("7 not read: X0 (X is no element), X1 (X is no element), X2 (X is no element), X3 (X is no element), X4 (X is no element), and 2 more");
-    expect(notReadSaid([{ smiles: "C".repeat(50), why: "w" }])).toBe(`1 not read: ${"C".repeat(39)}\u2026 (w)`);
+    expect(notReadSaid(seven)).toBe("7 not read");
+    expect(notReadNamed(seven).split("\n")).toEqual(seven.map((x) => `${x.smiles}: X is no element`));
+    // (a long SMILES whole, never cut short where it is named)
+    expect(notReadNamed([{ smiles: "C".repeat(50), why: "w" }])).toBe(`${"C".repeat(50)}: w`);
+    const many = Array.from({ length: NOT_READ_NAMED + 3 }, (_, i) => ({ smiles: `X${i}`, why: "w" }));
+    const lines = notReadNamed(many).split("\n");
+    expect(lines).toHaveLength(NOT_READ_NAMED + 1);
+    expect(lines[lines.length - 1]).toBe("and 3 more not read");
     const { st } = page();
     const step = st().addStep("generate", "molgen", 0, 0);
     run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[0], { smiles: "CC!", properties: {} }] });

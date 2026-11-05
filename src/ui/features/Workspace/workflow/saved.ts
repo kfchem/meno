@@ -176,7 +176,7 @@ function readRan(v: unknown): StepRan | undefined {
     ...(Object.keys(options).length ? { options } : {}),
     // (a run the chemist keeps: never dropped while kept)
     ...(r.keep === true ? { keep: true as const } : {}),
-    // (every seed its line counts but does not name)
+    // (every seed its line counts but does not name, and each SMILES it could not read)
     ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, 4000) } : {}),
     ...(() => {
       const kept = readKeptJobs(r.kept, new Set(jobs));

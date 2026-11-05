@@ -1454,8 +1454,12 @@ and the seed's values as the seed's (`made_from.<name>`, one level, as
 *Stereoisomers* carries them), never as its own. Nothing is chosen for it. One whose stereo cannot be
 asked about is kept, and counted as *with stereo not examined*. A SMILES
 that cannot be read is counted on the step's line as *not read*, never
-dropped unsaid, the first five named with why: *20 sampled ... · 18 made
-· 3 with stereo left open · 2 not read: C1CC (a ring left open), …*.
+dropped unsaid: *20 sampled ... · 18 made · 3 with stereo left open · 2
+not read*. Each one - its SMILES as given, whole, and why - is named
+where the line is pointed at, one to a line, the first thirty, the rest
+counted (*C1CC: a ring left open*; workflow/programs `notReadNamed`,
+`StepRan.named`). Named on the line itself, a few long SMILES with their
+reasons made it a paragraph, cut short where it mattered (2026-11-06).
 Where none can be read, the step fails, saying so.
 What the plugin gives that is not this form - a value with a unit Meno
 does not know, a SMILES missing, a seed that did not come in - takes none
