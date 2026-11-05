@@ -1331,7 +1331,8 @@ it where it lies out of view.
     a bond to two and a half long that crosses a line of the figure
     square enough, away from both their ends, its own ends free - at no
     other line's end but its ticks', and into no label - with its count
-    by its lower end; its partner is the nearest other such line or curve,
+    by its lower end (a count in reach of two brackets' lower ends is the
+    nearer's); its partner is the nearest other such line or curve,
     uncounted. A line across a bond with no count is read as before, and a
     number by no bracket - a compound's - is left as it was. A label
     written as one word, (CH2)6, is not read either (above). A picture
