@@ -100,6 +100,36 @@ describe("Duplicates on structures drawn", () => {
     expect(out.said).toBe("2 of 2 entries kept · 2 not compared (2: wedges that do not read)");
   });
 
+  it("never sets aside one whose identity it could not work out in full: kept, counted, with why", () => {
+    // (forty methanes apart in one drawing, alike in every way: the identity search runs out of steps)
+    const many = Array(40).fill("C").join(".");
+    const out = run(came([many, many]));
+    expect(out.aside).toEqual([]);
+    expect(out.said).toBe("2 of 2 entries kept · 2 not compared (2: its identity not worked out in full)");
+  });
+
+  it("takes a group written by its label as the same group drawn out", () => {
+    // (ethyl methyl ether, its methoxy written "OMe")
+    const labelled: Model = {
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+        { id: 2, el: "C", x: 1.3, y: 0.75, r: 0.9 },
+        { id: 3, el: "OMe", x: 2.6, y: 0, r: 0.9 },
+      ],
+      bonds: [
+        { id: 4, a: 1, b: 2, order: 1, stereo: "none" },
+        { id: 5, a: 2, b: 3, order: 1, stereo: "none" },
+      ],
+    } as Model;
+    const out = run(came(["CCOC", { drawn: labelled }, "CCCO"]));
+    expect(out.kept.map((e) => e.place)).toEqual([0, 2]);
+    expect(out.aside.map((e) => [e.place, why(e)])).toEqual([[1, "Same as 1"]]);
+  });
+
+  it("says nothing came in when nothing did, in turns as at once", async () => {
+    expect(await runDuplicatesDrawnInTurns([], {})).toEqual({ ok: false, said: "Nothing came in" });
+  });
+
   it("refuses to count mirror images in: structures drawn keep their configurations", () => {
     expect(runMenoDrawn("duplicates", came(["CCO"]), { mirrors: "counted" })).toEqual({ ok: false, said: MIRRORS_ON_DRAWN });
   });
