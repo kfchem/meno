@@ -329,11 +329,30 @@ export function conformersSoughtOf(molblock: string): number | null {
 }
 
 /**
+ * What the window for new conformers in a search in rounds says under it,
+ * the window being the chemist's own: what it is for, a guide - not a
+ * default - and what energies it is of.
+ */
+export const WITHIN_GUIDE =
+  "Meno sets none: give your own. A round that brings no new conformer within this of the lowest is the last. As a guide, at 298.15 K one 2.73 kcal/mol above the lowest weighs 1/100 as much (RT ln 100). The energies are the search's own force field's.";
+/** What a search in rounds given no window needs, wherever it is asked. */
+export const WITHIN_NEEDED = "Give the window for new conformers, in kcal/mol";
+
+/** A search in rounds' own values, where a chemist has set them (Settings, or a step): its window for new conformers, its first round, the most it tries. */
+export type RoundsChosen = { within?: number; first?: number; most?: number };
+
+/**
  * How many conformers are sought, Meno's choice for any conformer search
  * that takes a number of tries (a plugin's role says it does: `tries`) - on
  * the page, from Settings; on a *Conformers* step, from its own options.
+ * Where its search gives another set of tries for each draw (`draws`), as
+ * many as the molecule needs is asked in rounds (chem/conformerRounds),
+ * with their own options - `rounds`, from Settings: the window for new
+ * conformers, the chemist's own, none until given; the first round, 0 the
+ * molecule's own count; the most tried.
  */
-export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RING_CONFORMERS): Option[] {
+export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RING_CONFORMERS, rounds?: RoundsChosen): Option[] {
+  const needed = { when: { id: "sought", in: ["needed"] } };
   return [
     {
       id: "sought",
@@ -346,7 +365,42 @@ export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RIN
       default: sought,
     },
     { id: "count", when: { id: "sought", in: ["fixed"] }, label: "How many", type: "number", default: count, min: 1, max: MOST_CONFORMERS, step: 1 },
+    ...(rounds
+      ? ([
+          { id: "within", ...needed, label: "New conformers within", type: "number", default: rounds.within ?? Number.NaN, min: 0, step: 0.5, unit: "kcal/mol", note: WITHIN_GUIDE },
+          {
+            id: "first",
+            ...needed,
+            label: "First round",
+            type: "number",
+            default: rounds.first ?? 0,
+            unset: 0,
+            min: 0,
+            max: MOST_CONFORMERS,
+            step: 1,
+            note: "0: the molecule's own count, by the bonds that turn. Then as many again, then each twice the one before.",
+          },
+          { id: "most", ...needed, label: "Tried at most", type: "number", default: rounds.most ?? MOST_CONFORMERS, min: 1, max: MOST_CONFORMERS, step: 1 },
+        ] satisfies Option[])
+      : []),
   ];
+}
+
+/**
+ * A search in rounds as its options ask it (`soughtOptions`): its window,
+ * its first round - the chemist's, else the molecule's own (`needed`) - and
+ * the most it tries, each kept to what it may be; or what it still needs
+ * (`WITHIN_NEEDED`), or null where it is not asked in rounds: a number of
+ * the chemist's own ("fixed"), or no window option offered.
+ */
+export function roundsAsked(values: OptionValues, needed: () => number | null): { window: number; first: number; most: number } | { needs: string } | null {
+  if (values.sought === "fixed" || !("within" in values)) return null;
+  const window = values.within;
+  if (typeof window !== "number" || !Number.isFinite(window) || window < 0) return { needs: WITHIN_NEEDED };
+  const most = typeof values.most === "number" && Number.isFinite(values.most) ? Math.min(Math.max(1, Math.round(values.most)), MOST_CONFORMERS) : MOST_CONFORMERS;
+  const chosen = typeof values.first === "number" && Number.isFinite(values.first) && values.first >= 1 ? Math.round(values.first) : null;
+  const first = Math.min(Math.max(1, chosen ?? needed() ?? RING_CONFORMERS), most);
+  return { window, first, most };
 }
 
 /** The number to try, as the choice (`soughtOptions`) gives it: the number asked for, kept to 1-`MOST_CONFORMERS`, or the molecule's (`needed`, worked out only then). */
