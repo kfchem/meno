@@ -8,20 +8,20 @@ describe("a calculation's results, as a plugin gives them", () => {
       { id: "dipole", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", value: 1.85, rank: 2 },
       { id: "grad", on: "frames", group: "Optimisation", label: "RMS gradient", unit: "Eh/bohr", digits: 6, values: [0.01, 0.001] },
       { id: "q", on: "atoms", group: "Partial charges", label: "Mulliken", quantity: "charge", values: [-0.4, 0.2, 0.2] },
-      { id: "wbi", on: "pairs", group: "NBO", label: "Wiberg bond index", pairs: [[0, 1, 0.82], [0, 2, 0.82], [0, 9, 1], [1, 1, 1]] },
+      { id: "wbi", on: "pairs", group: "Popcount", label: "Wiberg bond index", pairs: [[0, 1, 0.82], [0, 2, 0.82], [0, 9, 1], [1, 1, 1]] },
       {
         id: "e2",
         on: "list",
-        group: "NBO",
+        group: "Popcount",
         label: "Donor-acceptor interactions",
         columns: [{ label: "Donor" }, { label: "Acceptor" }, { label: "E(2)", unit: "kcal/mol", digits: 2 }],
         rows: [{ cells: ["LP(1) O 1", "BD*(1) O 1-H 2", 1.23], atoms: [0, 1, 7], frame: 1 }],
         focus: 0,
       },
     ];
-    const r = readResults(given, 3, 2, "NBO 7");
+    const r = readResults(given, 3, 2, "Popcount 7");
     expect(r.map((x) => x.id)).toEqual(["dipole", "grad", "q", "wbi", "e2"]);
-    expect(r.every((x) => x.from === "NBO 7")).toBe(true);
+    expect(r.every((x) => x.from === "Popcount 7")).toBe(true);
     // (pairs of atoms it has not, or of one atom with itself, left out)
     expect((r[3] as PairsResult).pairs).toEqual([
       [0, 1, 0.82],
@@ -62,9 +62,9 @@ describe("a calculation's results, as a plugin gives them", () => {
 
   it("keep two readers' results of one name, each its own reader's - but not one reader's twice", () => {
     const one = { id: "q", on: "atoms", group: "Partial charges", label: "Mulliken", values: [0] };
-    const r = readResults([{ ...one, from: "cclib" }, { ...one, from: "other" }, { ...one, from: "cclib" }], 1, 1);
+    const r = readResults([{ ...one, from: "manyread" }, { ...one, from: "other" }, { ...one, from: "manyread" }], 1, 1);
     expect(r.map((x) => [x.id, x.from])).toEqual([
-      ["q", "cclib"],
+      ["q", "manyread"],
       ["q", "other"],
     ]);
     expect(resultKey(r[0])).not.toBe(resultKey(r[1]));
@@ -124,23 +124,23 @@ describe("a result's values, as Meno writes them", () => {
 describe("where results are said", () => {
   const results = readResults(
     [
-      { id: "g", on: "molecule", group: "Thermochemistry", label: "Gibbs free energy", quantity: "energy", value: -381.911145, rank: 1 },
-      { id: "h", on: "molecule", group: "Thermochemistry", label: "Enthalpy", quantity: "energy", value: -381.868235 },
+      { id: "g", on: "molecule", group: "Thermochemistry", label: "Gibbs free energy", quantity: "energy", value: -381.912345, rank: 1 },
+      { id: "h", on: "molecule", group: "Thermochemistry", label: "Enthalpy", quantity: "energy", value: -381.867654 },
       { id: "d", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", value: 0, rank: 2 },
       { id: "q", on: "atoms", group: "Partial charges", label: "Mulliken", quantity: "charge", values: [0] },
       { id: "s", on: "molecule", group: "Thermochemistry", label: "Temperature", unit: "K", value: 298.15 },
-      { id: "wbi", on: "pairs", group: "NBO", label: "Wiberg bond index", pairs: [[0, 1, 0.82]] },
+      { id: "wbi", on: "pairs", group: "Popcount", label: "Wiberg bond index", pairs: [[0, 1, 0.82]] },
     ],
     2,
     1,
   );
 
   it("in the chip's line: what it says first, then the ranked, as many as the line holds", () => {
-    expect(chipLine(["ORCA 6.0.1 · DFT/STO-3G", "−382.055090 Eh"], results, 110)).toBe(
-      "ORCA 6.0.1 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.911145 Eh · Dipole moment 0.00 D",
+    expect(chipLine(["Quanta 4.2.0 · DFT/STO-3G", "−382.055090 Eh"], results, 110)).toBe(
+      "Quanta 4.2.0 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.912345 Eh · Dipole moment 0.00 D",
     );
-    expect(chipLine(["ORCA 6.0.1 · DFT/STO-3G", "−382.055090 Eh"], results, 80)).toBe(
-      "ORCA 6.0.1 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.911145 Eh",
+    expect(chipLine(["Quanta 4.2.0 · DFT/STO-3G", "−382.055090 Eh"], results, 80)).toBe(
+      "Quanta 4.2.0 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.912345 Eh",
     );
     expect(chipLine(["", "−1.000000 Eh"], undefined)).toBe("−1.000000 Eh");
   });
@@ -153,11 +153,11 @@ describe("where results are said", () => {
       ],
       3,
       13,
-      "cclib 1.9rc1",
+      "manyread 2.0",
     );
-    const first = ["Gaussian 2016+B.01 · HF/STO-3G · charge 0, singlet", "−229.293084 Eh"];
-    expect(chipLine(first, run)).toBe("Gaussian 2016+B.01 · HF/STO-3G · charge 0, singlet · −229.293084 Eh · Run did not come to its end");
-    expect(chipLine(first, run, 200)).toBe("Gaussian 2016+B.01 · HF/STO-3G · charge 0, singlet · −229.293084 Eh · Run did not come to its end · Dipole moment 2.37 D");
+    const first = ["Orbitron 26+A.01 · HF/STO-3G · charge 0, singlet", "−229.293084 Eh"];
+    expect(chipLine(first, run)).toBe("Orbitron 26+A.01 · HF/STO-3G · charge 0, singlet · −229.293084 Eh · Run did not come to its end");
+    expect(chipLine(first, run, 200)).toBe("Orbitron 26+A.01 · HF/STO-3G · charge 0, singlet · −229.293084 Eh · Run did not come to its end · Dipole moment 2.37 D");
   });
 
   it("by their groups, in the order the groups first come", () => {
@@ -177,34 +177,34 @@ describe("where results are said", () => {
 describe("results from two readers", () => {
   const one = (from: string, id: string, label: string, value: number, rank?: number) => ({ id, on: "molecule", group: "Properties", label, value, from, ...(rank ? { rank } : {}) });
   const results = readResults(
-    [one("cclib", "dipole", "Dipole moment", 1.8, 1), one("pyscf", "dipole", "Dipole moment", 1.9, 1), one("pyscf", "s2", "<S²>", 0.75, 2)],
+    [one("manyread", "dipole", "Dipole moment", 1.8, 1), one("wavecalc", "dipole", "Dipole moment", 1.9, 1), one("wavecalc", "s2", "<S²>", 0.75, 2)],
     1,
     1,
   );
 
   it("stand side by side, each under its reader's name - none where one reader gave them all", () => {
     expect(bySource(results, readerNameOf).map((p) => [p.source, p.results.length])).toEqual([
-      ["cclib", 1],
-      ["PySCF", 2],
+      ["Manyread", 1],
+      ["Wavecalc", 2],
     ]);
     expect(bySource(results.slice(0, 1), readerNameOf)).toEqual([{ results: results.slice(0, 1) }]);
     const groups = cardGroupsOf(resultsOn(results, "molecule"), (r) => ({ text: valueText(r.value, r) }));
     expect(groups.map((g) => [g.source, g.group, g.rows.map((r) => r.text)])).toEqual([
-      ["cclib", "Properties", ["1.8"]],
-      ["PySCF", "Properties", ["1.9", "0.75"]],
+      ["Manyread", "Properties", ["1.8"]],
+      ["Wavecalc", "Properties", ["1.9", "0.75"]],
     ]);
   });
 
   it("are named by their reader where another's of the kind stand beside them, a menu's lists", () => {
-    expect(titled({ label: "Molecular orbitals", from: "pyscf" }, [{ from: "cclib" }, { from: "pyscf" }])).toBe("Molecular orbitals · PySCF");
-    expect(titled({ label: "Molecular orbitals", from: "cclib" }, [{ from: "cclib" }])).toBe("Molecular orbitals");
-    expect(readerNameOf("cclib")).toBe("cclib");
+    expect(titled({ label: "Molecular orbitals", from: "wavecalc" }, [{ from: "manyread" }, { from: "wavecalc" }])).toBe("Molecular orbitals · Wavecalc");
+    expect(titled({ label: "Molecular orbitals", from: "manyread" }, [{ from: "manyread" }])).toBe("Molecular orbitals");
+    expect(readerNameOf("manyread")).toBe("Manyread");
     expect(readerNameOf("meno")).toBe("Meno");
   });
 
   it("fill the chip's line from one reader: the first that ranked any", () => {
-    expect(chipLine(["ORCA"], results, 200)).toBe("ORCA · Dipole moment 1.8");
-    expect(chipLine(["ORCA"], results.slice(1), 200)).toBe("ORCA · Dipole moment 1.9 · <S²> 0.75");
+    expect(chipLine(["Quanta"], results, 200)).toBe("Quanta · Dipole moment 1.8");
+    expect(chipLine(["Quanta"], results.slice(1), 200)).toBe("Quanta · Dipole moment 1.9 · <S²> 0.75");
   });
 });
 

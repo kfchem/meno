@@ -19,7 +19,7 @@ const { PLUGINS } = await import("./catalog");
 
 /** Lets what is due run: a set-up's end, and the next one's start. */
 const settle = () => new Promise((r) => setTimeout(r, 0));
-const [a, b, c] = ["crem", "molnextr", "molscribe"].map((id) => PLUGINS.find((p) => p.id === id)!);
+const [a, b, c] = ["fragswap", "picread2", "picread"].map((id) => PLUGINS.find((p) => p.id === id)!);
 const states = () => [a, b, c].map((p) => useReaders.getState().state[p.id]);
 
 describe("plugins added one after another", () => {

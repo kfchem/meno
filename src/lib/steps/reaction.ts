@@ -73,7 +73,9 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
 export const MAPPED_ENTRY = "map.entry";
 
 /** What a bond change is called in its table's *Change* column. */
-const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };
+export const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };
+/** The column of an Atom map's bond changes that says what changed (`CHANGE_WORDS`). */
+export const CHANGE = "Change";
 
 /**
  * The bond changes of each entry mapped, as one table: a row a bond - the
@@ -90,7 +92,7 @@ export function bondChangesTable<M extends { map: number; changes: readonly Bond
     columns: [
       { name: MAPPED_ENTRY, kind: "text", label: "Product" },
       ...(maps ? [{ name: "Map", kind: "number" as const, unit: "none" as const }] : []),
-      { name: "Change", kind: "text" },
+      { name: CHANGE, kind: "text" },
       { name: "Atom 1", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
       { name: "Atom 2", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
       { name: "Element 1", kind: "text" },

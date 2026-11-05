@@ -901,6 +901,20 @@ function Set-HeldKeys {
     [MacGui]::HoldKeys([uint16[]] @($Hold | ForEach-Object { $codes[$_] }), [uint64[]] @($Hold | ForEach-Object { $flags[$_] }), -not $Up)
 }
 
+function Set-MenoHeldKeys {
+    <#
+      .SYNOPSIS
+      Press the modifier keys -Hold names and keep them down - or, with -Up,
+      let them go: what the pointer shows with a key held (Option, Alt here
+      on Windows, over an atom: docs/EDITOR-2D.md, *A bond by one click*).
+      A scenario lets them go before it ends.
+    #>
+    param([Parameter(Mandatory)] [ValidateSet("Shortcut", "Shift", "Alt")] [string[]] $Hold, [switch] $Up)
+    Assert-MenoFront
+    Set-HeldKeys -Hold $Hold -Up:$Up
+    Start-Sleep -Milliseconds 100
+}
+
 function Invoke-MenoClick {
     <#
       .SYNOPSIS
@@ -1120,12 +1134,13 @@ function Send-MenoText {
 }
 
 function Send-MenoKey {
-    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
+    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down", "1", "2", "3")] [string] $Key, [switch] $Shift)
     Assert-MenoFront
     # (Escape answers a question no: always let through)
     if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
     # Virtual key codes of the ANSI layout; these are the same on all of them.
-    $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51; Up = 126; Down = 125 }[$Key]
+    # (a digit too, alone - a bond key: docs/EDITOR-2D.md, *Bond keys*)
+    $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51; Up = 126; Down = 125; "1" = 18; "2" = 19; "3" = 20 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [MacGui]::Chord([uint16[]] @(56), [uint64[]] @(0x20000), [uint16] $code) }
     else { [MacGui]::TapKey([uint16] $code) }
@@ -1304,6 +1319,6 @@ function Wait-MenoSettled {
 Export-ModuleMember -Function Get-MenoBuild, Get-MenoProfile, Start-MenoProcess, Close-MenoProcess, Complete-FileDialog, Complete-SaveDialog,
     Get-MenoWindow, Set-MenoWindow, Get-ClientOrigin, Get-ClientSize,
     ConvertTo-Screen, Save-MenoShot, Invoke-MenoClick, Invoke-MenoDrag, Move-MenoPointer, Move-MenoPointerAlong, Invoke-MenoWheel, Invoke-MenoSwipe,
-    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Wait-MenoSettled,
+    Send-MenoText, Send-MenoKey, Send-MenoShortcut, Set-MenoHeldKeys, Wait-MenoSettled,
     # (the guard's two readings of the window list, for scripts/gui/tests/guard.tests.ps1)
     Find-SystemWindow, Find-WindowAt

@@ -302,6 +302,7 @@ export function createEditorStore(
     pdfWords: null,
     pdfBox: null,
     pdfStructureLit: null,
+    pdfLens: null,
     pdfStructures: null,
     pdfStructureFlight: null,
     hoveredText: null,

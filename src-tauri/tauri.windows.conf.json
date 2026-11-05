@@ -8,11 +8,6 @@
   },
   "bundle": {
     "resources": [
-      "resources/plugins/*/manifest.json",
-      "resources/plugins/*/*.py",
-      "resources/plugins/*/*.lock",
-      "resources/plugins/*/pixi.toml",
-      "resources/plugins/*/LICENSE",
       "resources/licenses/*",
       "pdfium/windows/pdfium.dll",
       "icons/document/meno-document.ico",

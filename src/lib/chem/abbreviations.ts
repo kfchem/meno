@@ -275,6 +275,21 @@ function madeStructure(label: string): (GroupStructure & { name: string }) | nul
 }
 
 /**
+ * A label's parts as an adduct's: split at a middle dot (BF3·OEt2) - or,
+ * written with none, at a full stop typed in its place between two parts
+ * of a formula (Na2SO4.10H2O, BF3.OEt2): after a letter, a count or a
+ * bracket and before a count, a capital or a bracket. A number's decimal
+ * point (0.5) is none: nothing but digits before it.
+ */
+function adductPieces(label: string): string[] {
+  const dotted = label.split(/[·•∙]/);
+  if (dotted.length > 1 || !label.includes(".")) return dotted;
+  const parts = label.split(".");
+  const joins = parts.slice(1).every((p, k) => /[A-Za-z)\]]\d*$/.test(parts[k]) && /[A-Za-z]/.test(parts[k]) && /^[\d(A-Z]/.test(p));
+  return joins ? parts : [label];
+}
+
+/**
  * A whole molecule a label stands for by rule alone - what the reagent
  * dictionary need not hold: a Buchwald precatalyst (XPhos Pd G3,
  * ./reagents), an adduct of known parts joined by a middle dot (BF3·OEt2,
@@ -284,7 +299,7 @@ function madeStructure(label: string): (GroupStructure & { name: string }) | nul
 export function byRule(label: string): (GroupStructure & { name: string }) | null {
   const precatalyst = precatalystStructure(label, groupStructure);
   if (precatalyst) return precatalyst;
-  const pieces = label.split(/[·•∙]/);
+  const pieces = adductPieces(label);
   if (pieces.length > 1) {
     const atoms: GroupStructure["atoms"] = [];
     const bonds: GroupStructure["bonds"] = [];
@@ -598,7 +613,9 @@ const COMPOSED_SEEN = new Map<string, Abbreviation | undefined>();
  * other.
  */
 export function abbreviationOf(label: string): Abbreviation | undefined {
-  const l = label.trim();
+  // (a full stop typed for a middle dot read as one: Na2SO4.10H2O, NaBO3.4H2O - `adductPieces`)
+  const pieces = adductPieces(label.trim());
+  const l = pieces.join("·");
   const listed = BY_LABEL.get(l) ?? custom.get(l);
   if (listed) return listed;
   if (!COMPOSED_SEEN.has(l)) COMPOSED_SEEN.set(l, composedOf(l));

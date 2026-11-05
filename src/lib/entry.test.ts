@@ -134,6 +134,9 @@ describe("restraints read back from a file", () => {
     ] };
     const p = propertyIn({ value, unit: "none", status: "computed" });
     expect(p).toEqual({ value, unit: "none", status: "computed" });
+    // (a label read back as one; anything else there, not read)
+    expect(propertyIn({ value: "start-1", unit: "none", label: true, status: "computed" })).toEqual({ value: "start-1", unit: "none", label: true, status: "computed" });
+    expect(propertyIn({ value: "start-1", unit: "none", label: "yes", status: "computed" })).toBeUndefined();
     // (and where a minimisation first held them)
     const started = { ...value, start: [0, 0, 0, 1.5, 0, 0, 3, 0, 0, 4.5, 0, 0] };
     expect(propertyIn({ value: started, unit: "none", status: "computed" })?.value).toEqual(started);

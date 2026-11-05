@@ -20,10 +20,10 @@ import { isMetal } from "../../../../lib/layout/perceive";
 import type { LineRead } from "../../../../lib/options";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { identityInputOf } from "../chem/identityOf";
-import { undrawnHydrogens } from "../chem/drawing";
+import { undrawnHydrogens, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
-import { changedAt, rewedged, wedgesHeld } from "./stereoKept";
+import { changedAt, rewedged } from "./stereoKept";
 import { joined, MOST_COMBINATIONS, readOption, type Enumerated, type Made, type OptionProblem, type OptionRead } from "./enumerate";
 
 /** How the positions are combined: one position given a group in each product, or every position in each. */
@@ -179,7 +179,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
   const { positions, problems: chosen } = positionsOf(template, ids);
   problems.push(...chosen);
   if (template.atoms.some((a) => a.el === "R" || a.el === "R#")) problems.push("The drawing has R groups: enumerate them by R groups first");
-  for (const id of identityInputOf(template).unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration)`);
+  for (const id of identityInputOf(template).unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an atom of three bonds that keeps no configuration of its own - an amine's N, a plain N-alkyl aziridine's, a B - where a wedge states none)`);
   const options = groups as OptionRead[];
   if (combine === "one" && options.some((o) => !("problem" in o) && isPlainH(o))) problems.push("H, one position at a time, only remakes the drawing: take it out, or combine the positions together");
   if (problems.length) return { ok: false, problems };
@@ -196,7 +196,7 @@ export function substituted(template: Model, ids: readonly number[], text: strin
     // (H, and a position not given one, left as drawn)
     const given = choice.flatMap((o, k) => (o && !isPlainH(o) ? [k] : []));
     const { model, rs: at } = withRs(template, positions, given);
-    let drawn = wedgesHeld(template, joined(model, given.map((k) => [k + 1, [at.get(k)!], choice[k]!] as const), style));
+    let drawn = wedgesHeld(joined(model, given.map((k) => [k + 1, [at.get(k)!], choice[k]!] as const), style), template);
     // (a heavy atom's undrawn H taken: the group in its place among the centre's neighbours)
     const took = new Map(given.filter((k) => !positions[k].drawnH).map((k) => [positions[k].id, at.get(k)!]));
     for (const c of changedAt(template, drawn, took)) {

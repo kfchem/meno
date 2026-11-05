@@ -10,10 +10,10 @@ import { MANIFESTS } from "../plugins/known";
 // in Meno's own form - no program's output is in the repository
 const water: ReaderOutput = {
   schema: 1,
-  program: "ORCA",
-  version: "6.0.1",
-  method: "B3LYP",
-  basis: "def2-SVP",
+  program: "Quanta",
+  version: "4.2.0",
+  method: "M1",
+  basis: "B-small",
   charge: 0,
   multiplicity: 1,
   atoms: ["O", "H", "H"],
@@ -40,37 +40,37 @@ const water: ReaderOutput = {
 
 describe("what a reader hands back", () => {
   it("is kept on the molecule as what the calculation was, and its results, each with the reader it came from", () => {
-    const c = calcOf(water, ["cclib 1.9rc1"]);
-    expect(c).toMatchObject({ readers: ["cclib 1.9rc1"], program: "ORCA", version: "6.0.1", method: "B3LYP", basis: "def2-SVP", charge: 0, multiplicity: 1, optimised: true });
+    const c = calcOf(water, ["manyread 2.0"]);
+    expect(c).toMatchObject({ readers: ["manyread 2.0"], program: "Quanta", version: "4.2.0", method: "M1", basis: "B-small", charge: 0, multiplicity: 1, optimised: true });
     // (each result keeps its reader by id)
     expect(c.results!.map((r) => [r.id, r.from])).toEqual([
-      ["charges.mulliken", "cclib"],
-      ["vibrations", "cclib"],
+      ["charges.mulliken", "manyread"],
+      ["vibrations", "manyread"],
     ]);
   });
 
   it("leaves out what the output does not say", () => {
-    const c = calcOf({ atoms: ["H", "H"], frames: [[0, 0, 0, 0, 0, 0.74]], program: "xTB", method: "  ", charge: null }, ["cclib 1.9rc1"]);
-    expect(c).toEqual({ readers: ["cclib 1.9rc1"], program: "xTB" });
+    const c = calcOf({ atoms: ["H", "H"], frames: [[0, 0, 0, 0, 0, 0.74]], program: "Tightbind", method: "  ", charge: null }, ["manyread 2.0"]);
+    expect(c).toEqual({ readers: ["manyread 2.0"], program: "Tightbind" });
   });
 
   it("keeps the imaginary frequencies the program judged it has, in plain words - and what it warned of - read back from a file as they were", () => {
-    const saddle = calcOf({ ...water, imaginary: [-382.63], warnings: [{ kind: "hessian-not-stationary", text: "Hessian on incompletely optimized geometry!" }] }, ["xtb 6.7.1"]);
-    expect(saddle.imaginary).toEqual([-382.63]);
-    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm⁻¹");
-    expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm⁻¹");
+    const saddle = calcOf({ ...water, imaginary: [-391.27], warnings: [{ kind: "hessian-not-stationary", text: "Hessian worked out away from a minimum" }] }, ["tightbind 1.0.0"]);
+    expect(saddle.imaginary).toEqual([-391.27]);
+    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 391.3i cm⁻¹");
+    expect(imaginaryWords([-391.27, -41.05])).toBe("2 imaginary frequencies, 391.3i, 41.0i cm⁻¹");
     expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
     // (judged none: kept as none, apart from not judged - and read back so)
-    const none = calcOf({ ...water, imaginary: [] }, ["xtb 6.7.1"]);
+    const none = calcOf({ ...water, imaginary: [] }, ["tightbind 1.0.0"]);
     expect(none.imaginary).toEqual([]);
     expect(readCalc(JSON.parse(JSON.stringify(none)), 3, 2)).toEqual(none);
     // (not numbers below 0, or not judged: no mark)
-    for (const imaginary of [[382.63], [Number.NaN], null, undefined]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
+    for (const imaginary of [[391.27], [Number.NaN], null, undefined]) expect(calcOf({ ...water, imaginary }, ["tightbind 1.0.0"]).imaginary).toBeUndefined();
   });
 
   it("says an adopted output is one first, and reads back as it was - when with it", () => {
-    const adopted = { ...calcOf(water, ["cclib 1.9rc1"]), adopted: 1_760_000_000_000 };
-    expect(calcLine(adopted)).toBe(`adopted output \u00b7 ${calcLine(calcOf(water, ["cclib 1.9rc1"]))}`);
+    const adopted = { ...calcOf(water, ["manyread 2.0"]), adopted: 1_760_000_000_000 };
+    expect(calcLine(adopted)).toBe(`adopted output \u00b7 ${calcLine(calcOf(water, ["manyread 2.0"]))}`);
     expect(readCalc(JSON.parse(JSON.stringify(adopted)), 3, 2)).toEqual(adopted);
   });
 
@@ -79,15 +79,15 @@ describe("what a reader hands back", () => {
     const given = { readers: [], charge: 1, multiplicity: 2 };
     expect(readCalc(JSON.parse(JSON.stringify(given)), 3, 1)).toEqual(given);
     // (as a conformer search on a drawing writes one: the plugin, and its force field)
-    const made = { readers: [], program: "RDKit", method: "MMFF94" };
+    const made = { readers: [], program: "Sketchkit", method: "KF1" };
     expect(readCalc(JSON.parse(JSON.stringify(made)), 3, 1)).toEqual(made);
     expect(readCalc({ readers: [] }, 3, 1)).toBeUndefined();
     expect(readCalc({ readers: [], charge: "1" }, 3, 1)).toBeUndefined();
   });
 
   it("refuses the whole record where any field there is not as Meno writes it - never read back without it, as if it had not been said", () => {
-    const made = { readers: [], program: "RDKit", method: "MMFF94" };
-    const kept = calcOf(water, ["cclib 1.9rc1"]);
+    const made = { readers: [], program: "Sketchkit", method: "KF1" };
+    const kept = calcOf(water, ["manyread 2.0"]);
     // (each field malformed in turn, in a record by no reader and in one by a reader)
     const malformed: Record<string, unknown[]> = {
       charge: ["1", 1.5, null, Number.NaN],
@@ -106,24 +106,24 @@ describe("what a reader hands back", () => {
         expect(readCalc({ ...kept, [k]: v }, 3, 2), `${k} ${String(v)}`).toBeUndefined();
       }
     // (the desk's case: the program kept, the charge gone, said nowhere - refused instead)
-    expect(readCalc({ readers: [], program: "RDKit", charge: "1" }, 3, 1)).toBeUndefined();
+    expect(readCalc({ readers: [], program: "Sketchkit", charge: "1" }, 3, 1)).toBeUndefined();
     // (a reader that is no name; readers that are not a list)
-    expect(readCalc({ ...kept, readers: ["cclib 1.9rc1", 3] }, 3, 2)).toBeUndefined();
+    expect(readCalc({ ...kept, readers: ["manyread 2.0", 3] }, 3, 2)).toBeUndefined();
     expect(readCalc({ ...kept, readers: [" "] }, 3, 2)).toBeUndefined();
-    expect(readCalc({ ...kept, readers: "cclib 1.9rc1" }, 3, 2)).toBeUndefined();
+    expect(readCalc({ ...kept, readers: "manyread 2.0" }, 3, 2)).toBeUndefined();
     // (each well formed, as written: read back as it was)
     expect(readCalc({ ...made, charge: -1, multiplicity: 1, optimised: true }, 3, 1)).toEqual({ ...made, charge: -1, multiplicity: 1, optimised: true });
   });
 
   it("reads back from a file as it was kept, and not where it does not read", () => {
-    const kept = calcOf(water, ["cclib 1.9rc1"]);
+    const kept = calcOf(water, ["manyread 2.0"]);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)).toEqual(kept);
-    expect(readCalc({ program: "ORCA" }, 3, 2)).toBeUndefined();
+    expect(readCalc({ program: "Quanta" }, 3, 2)).toBeUndefined();
     // (the wavefunction kept with it, as Meno holds it: never a place to find it again)
     const wavefunction = { name: "water.molden", sha256: "a".repeat(64), kind: "molden" };
     expect(readCalc({ ...kept, wavefunction: { ...wavefunction, path: "/tmp/water.molden" } }, 3, 2)?.wavefunction).toEqual(wavefunction);
     expect(readCalc({ ...kept, wavefunction: { name: "x", sha256: "nope" } }, 3, 2)).not.toHaveProperty("wavefunction");
-    expect(readCalc("ORCA", 3, 2)).toBeUndefined();
+    expect(readCalc("Quanta", 3, 2)).toBeUndefined();
     // (what belongs to another molecule's atoms is not this one's: its
     // charges, and its vibrations' motions - their frequencies stay)
     const other = readCalc(kept, 4, 2)?.results;
@@ -132,45 +132,45 @@ describe("what a reader hands back", () => {
   });
 
   it("keeps the output it was read from - its name, kind, SHA-256, and where it was - and not a place that does not read", () => {
-    const source = { name: "water.out", sha256: "a".repeat(64), kind: "orca", path: "/data/run 3/water.out" };
-    const kept = calcOf(water, ["cclib 1.9rc1"], source);
+    const source = { name: "water.out", sha256: "a".repeat(64), kind: "quanta", path: "/data/run 3/water.out" };
+    const kept = calcOf(water, ["manyread 2.0"], source);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)?.source).toEqual(source);
-    expect(readCalc({ ...kept, source: { ...source, path: 7 } }, 3, 2)?.source).toEqual({ name: "water.out", sha256: "a".repeat(64), kind: "orca" });
+    expect(readCalc({ ...kept, source: { ...source, path: 7 } }, 3, 2)?.source).toEqual({ name: "water.out", sha256: "a".repeat(64), kind: "quanta" });
     expect(readCalc({ ...kept, source: { ...source, path: "x".repeat(5000) } }, 3, 2)?.source?.path).toBeUndefined();
   });
 
   it("keeps the readers that could not read it, and why", () => {
-    const c = calcOf(water, ["cclib 1.9rc1"], undefined, [{ from: "pyscf", why: "no basis" }]);
-    expect(c.unread).toEqual([{ from: "pyscf", why: "no basis" }]);
-    expect(readCalc(JSON.parse(JSON.stringify(c)), 3, 2)?.unread).toEqual([{ from: "pyscf", why: "no basis" }]);
+    const c = calcOf(water, ["manyread 2.0"], undefined, [{ from: "wavecalc", why: "no basis" }]);
+    expect(c.unread).toEqual([{ from: "wavecalc", why: "no basis" }]);
+    expect(readCalc(JSON.parse(JSON.stringify(c)), 3, 2)?.unread).toEqual([{ from: "wavecalc", why: "no basis" }]);
   });
 
   it("of a file of several jobs, keeps which job it is and what it did, says so in its line, and reads it back", () => {
     const job = { ...water, job: { number: 1, of: 2, kind: "Optimisation" } };
-    const calc = calcOf(job, ["cclib"]);
+    const calc = calcOf(job, ["manyread"]);
     expect(calc.job).toEqual({ number: 1, of: 2, kind: "Optimisation" });
-    expect(calcLine(calc)).toBe("ORCA 6.0.1 · job 1 of 2, optimisation · B3LYP/def2-SVP · charge 0, singlet");
+    expect(calcLine(calc)).toBe("Quanta 4.2.0 · job 1 of 2, optimisation · M1/B-small · charge 0, singlet");
     expect(readCalc(JSON.parse(JSON.stringify(calc)), 3, 1)!.job).toEqual(calc.job);
     // (not a job of several: none kept)
-    for (const bad of [{ number: 1, of: 1 }, { number: 3, of: 2 }, { number: 0, of: 2 }, { number: "1", of: 2 }]) expect(calcOf({ ...water, job: bad as never }, ["cclib"]).job).toBeUndefined();
+    for (const bad of [{ number: 1, of: 1 }, { number: 3, of: 2 }, { number: 0, of: 2 }, { number: "1", of: 2 }]) expect(calcOf({ ...water, job: bad as never }, ["manyread"]).job).toBeUndefined();
   });
 
   it("is said in a line: program, method and basis, charge and multiplicity", () => {
-    expect(calcLine(calcOf(water, ["cclib"]))).toBe("ORCA 6.0.1 · B3LYP/def2-SVP · charge 0, singlet");
-    expect(calcLine({ readers: ["cclib"], program: "xTB", method: "GFN2-xTB", charge: -1, multiplicity: 2 })).toBe("xTB · GFN2-xTB · charge \u22121, doublet");
-    expect(calcLine({ readers: ["cclib"], charge: 2 })).toBe("charge +2");
+    expect(calcLine(calcOf(water, ["manyread"]))).toBe("Quanta 4.2.0 · M1/B-small · charge 0, singlet");
+    expect(calcLine({ readers: ["manyread"], program: "Tightbind", method: "TB-2", charge: -1, multiplicity: 2 })).toBe("Tightbind · TB-2 · charge \u22121, doublet");
+    expect(calcLine({ readers: ["manyread"], charge: 2 })).toBe("charge +2");
   });
 
   it("says the solvation the output says, after the method, and gas phase where it says none", () => {
-    const solvated = calcOf({ ...water, program: "xtb", version: "6.7.1", method: "GFN2-xTB", basis: null, solvation: "ALPB(water), reference state gsolv [1 M gas/solution]" }, ["xtb 0.1.0"]);
-    expect(solvated.solvation).toBe("ALPB(water), reference state gsolv [1 M gas/solution]");
-    expect(calcLine(solvated)).toBe("xtb 6.7.1 · GFN2-xTB · ALPB(water), reference state gsolv [1 M gas/solution] · charge 0, singlet");
-    expect(levelOf({ method: "GFN2-xTB", solvation: "none" })).toBe("GFN2-xTB · gas phase");
+    const solvated = calcOf({ ...water, program: "tightbind", version: "1.0.0", method: "TB-2", basis: null, solvation: "CONT(water), reference state [1 M gas/solution]" }, ["tightbind 0.1.0"]);
+    expect(solvated.solvation).toBe("CONT(water), reference state [1 M gas/solution]");
+    expect(calcLine(solvated)).toBe("tightbind 1.0.0 · TB-2 · CONT(water), reference state [1 M gas/solution] · charge 0, singlet");
+    expect(levelOf({ method: "TB-2", solvation: "none" })).toBe("TB-2 · gas phase");
     // (unsaid: nothing said of it)
-    expect(levelOf({ method: "B3LYP", basis: "def2-SVP" })).toBe("B3LYP/def2-SVP");
+    expect(levelOf({ method: "M1", basis: "B-small" })).toBe("M1/B-small");
     // (kept in the file, and read back)
     expect(readCalc(JSON.parse(JSON.stringify(solvated)), 3, 2)?.solvation).toBe(solvated.solvation);
-    expect(calcOf({ ...water, solvation: "  " }, ["cclib"]).solvation).toBeUndefined();
+    expect(calcOf({ ...water, solvation: "  " }, ["manyread"]).solvation).toBeUndefined();
     expect(multiplicityName(7)).toBe("multiplicity 7");
   });
 });
@@ -178,74 +178,74 @@ describe("what a reader hands back", () => {
 describe("reading an output", () => {
   // (a kind the plugins Meno carries bring, all added)
   const carried = registered(MANIFESTS).kinds;
-  const orca = kindById("orca", carried)!;
-  // a second reader of ORCA's output
-  const other: ReaderPlugin = { ...(READER_PLUGINS[0] as PythonPlugin), id: "orca-own", name: "Meno's ORCA reader", reads: ["orca"], profile: "plugin-orca-own" };
+  const quanta = kindById("quanta", carried)!;
+  // a second reader of Quanta's output
+  const other: ReaderPlugin = { ...(READER_PLUGINS[0] as PythonPlugin), id: "quanta-own", name: "Meno's Quanta reader", reads: ["quanta"], profile: "plugin-quanta-own" };
   const readers = [...READERS, other];
   const ids = (w: ReturnType<typeof whoReads>) => (w instanceof Error ? w.message : [w.reader.id, w.also.map((p) => p.id)]);
 
   it("is its reader's - the one chosen - alone, unless others are chosen to read it as well", () => {
-    expect(ids(whoReads(orca, "job.out", new Set(["cclib"]), { read: {}, also: {} }, readers))).toEqual(["cclib", []]);
-    expect(ids(whoReads(orca, "job.out", new Set(["cclib", "orca-own"]), { read: { orca: "orca-own" }, also: {} }, readers))).toEqual(["orca-own", []]);
-    expect(ids(whoReads(orca, "job.out", new Set(["cclib", "orca-own"]), { read: { orca: "orca-own" }, also: { orca: ["cclib"] } }, readers))).toEqual([
-      "orca-own",
-      ["cclib"],
+    expect(ids(whoReads(quanta, "job.out", new Set(["manyread"]), { read: {}, also: {} }, readers))).toEqual(["manyread", []]);
+    expect(ids(whoReads(quanta, "job.out", new Set(["manyread", "quanta-own"]), { read: { quanta: "quanta-own" }, also: {} }, readers))).toEqual(["quanta-own", []]);
+    expect(ids(whoReads(quanta, "job.out", new Set(["manyread", "quanta-own"]), { read: { quanta: "quanta-own" }, also: { quanta: ["manyread"] } }, readers))).toEqual([
+      "quanta-own",
+      ["manyread"],
     ]);
   });
 
   it("says no plugin added reads it, where none that reads it is - naming none of its own accord (catalogues do: lib/calc/probe)", () => {
-    const why = whoReads(orca, "job.out", new Set(), { read: {}, also: {} });
+    const why = whoReads(quanta, "job.out", new Set(), { read: {}, also: {} });
     expect(why).toBeInstanceOf(Error);
     expect((why as Error).message).toBe("No plugin added reads job.out.");
   });
 
-  it("says so where the output holds no geometry, as an xTB single point's does not", () => {
-    const xtb = kindById("xtb", carried)!;
-    expect(() => checked({ atoms: ["O", "H", "H"], frames: [] }, xtb, "sp.out")).toThrow(/holds no geometry/);
-    expect(checked(water, orca, "job.out")).toBe(water);
+  it("says so where the output holds no geometry, as an Tightbind single point's does not", () => {
+    const tightbind = kindById("tightbind", carried)!;
+    expect(() => checked({ atoms: ["O", "H", "H"], frames: [] }, tightbind, "sp.out")).toThrow(/holds no geometry/);
+    expect(checked(water, quanta, "job.out")).toBe(water);
   });
 });
 
 describe("what several readers found in one output", () => {
-  // a reader of NBO's analysis: no geometry, the same atoms, results of its own
-  const nbo: ReaderOutput = {
+  // a reader of Popcount's analysis: no geometry, the same atoms, results of its own
+  const popcount: ReaderOutput = {
     atoms: ["O", "H", "H"],
     frames: [],
-    method: "B3LYP-D3",
+    method: "M1-DSP",
     results: [
       { id: "natural", on: "atoms", group: "Partial charges", label: "Natural (NPA)", quantity: "charge", values: [-0.9, 0.45, 0.45] },
-      // (of the same name as one of the first reader's: NBO's own, kept beside it)
+      // (of the same name as one of the first reader's: Popcount's own, kept beside it)
       { id: "mulliken", on: "atoms", group: "Partial charges", label: "Mulliken", quantity: "charge", values: [-0.5, 0.25, 0.25] },
-      { id: "wiberg", on: "pairs", group: "NBO", label: "Wiberg bond index", pairs: [[0, 1, 0.82]] },
+      { id: "wiberg", on: "pairs", group: "Popcount", label: "Wiberg bond index", pairs: [[0, 1, 0.82]] },
     ],
   };
 
   it("keeps which geometries the run converged on, as the reader that read them marked them (2026-10-22: found in the app, left out here)", () => {
     const marks = water.frames.map((_, i) => i === water.frames.length - 1);
-    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: marks } }, { from: "nbo", version: "7", output: nbo }]).output.converged).toEqual(marks);
+    expect(combine([{ from: "manyread", version: "2.0", output: { ...water, converged: marks } }, { from: "popcount", version: "7", output: popcount }]).output.converged).toEqual(marks);
     // (marks of other geometries than these say nothing of which converged: none did, not stated - never every one)
-    const odd = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: [true] } }]).output;
+    const odd = combine([{ from: "manyread", version: "2.0", output: { ...water, converged: [true] } }]).output;
     expect([odd.converged, odd.unmarked]).toEqual([water.frames.map(() => false), "unstated"]);
     // (a reader saying why none is, kept with its marks)
-    const cut = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: water.frames.map(() => false), unmarked: "cut" } }]).output;
+    const cut = combine([{ from: "manyread", version: "2.0", output: { ...water, converged: water.frames.map(() => false), unmarked: "cut" } }]).output;
     expect(cut.unmarked).toBe("cut");
   });
 
   it("keeps the imaginary frequencies the program judged the last geometry has, and what it warned of (2026-10-28: found in the app, left out here)", () => {
     const warnings = [{ kind: "hessian-not-stationary", text: "the gradient is not small" }];
-    const saddle = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, imaginary: [-927.98], warnings } }, { from: "nbo", version: "7", output: nbo }]).output;
-    expect([saddle.imaginary, saddle.warnings]).toEqual([[-927.98], warnings]);
+    const saddle = combine([{ from: "manyread", version: "2.0", output: { ...water, imaginary: [-912.34], warnings } }, { from: "popcount", version: "7", output: popcount }]).output;
+    expect([saddle.imaginary, saddle.warnings]).toEqual([[-912.34], warnings]);
     // (none judged, as some: kept - and none said where no reader judged)
-    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, imaginary: [] } }]).output.imaginary).toEqual([]);
-    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }]).output).not.toHaveProperty("imaginary");
+    expect(combine([{ from: "manyread", version: "2.0", output: { ...water, imaginary: [] } }]).output.imaginary).toEqual([]);
+    expect(combine([{ from: "manyread", version: "2.0", output: water }]).output).not.toHaveProperty("imaginary");
     // (of a reader that read other geometries: not of the last of these)
-    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }, { from: "nbo", version: "7", output: { ...nbo, imaginary: [-50] } }]).output).not.toHaveProperty("imaginary");
+    expect(combine([{ from: "manyread", version: "2.0", output: water }, { from: "popcount", version: "7", output: { ...popcount, imaginary: [-50] } }]).output).not.toHaveProperty("imaginary");
   });
 
   it("keeps each geometry's mark with it where one before it does not read - never all marks dropped with one geometry", () => {
     // (three geometries, the middle one cut short: the last, marked converged, still is)
     const three = [water.frames[0], water.frames[0].slice(0, 5), water.frames[0]];
-    const out = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, frames: three, converged: [false, false, true] } }]).output;
+    const out = combine([{ from: "manyread", version: "2.0", output: { ...water, frames: three, converged: [false, false, true] } }]).output;
     expect(out.frames).toHaveLength(2);
     expect(out.converged).toEqual([false, true]);
     expect(marksOf({ atoms: water.atoms, frames: three, converged: [false, false, true] })).toEqual({ converged: [false, true] });
@@ -255,41 +255,41 @@ describe("what several readers found in one output", () => {
   it("keeps, of a file of several jobs, its jobs as its reader read them", () => {
     const sp: ReaderOutput = { ...water, job: { number: 2, of: 2, kind: "Single point" } };
     const opt: ReaderOutput = { ...water, job: { number: 1, of: 2, kind: "Optimisation" } };
-    const { output } = combine([{ from: "cclib", version: "1.9rc1", output: { ...sp, jobs: [opt, sp] } }, { from: "nbo", version: "7", output: nbo }]);
+    const { output } = combine([{ from: "manyread", version: "2.0", output: { ...sp, jobs: [opt, sp] } }, { from: "popcount", version: "7", output: popcount }]);
     expect(output.jobs).toEqual([opt, sp]);
     expect(output.job).toEqual(sp.job);
-    expect(combine([{ from: "cclib", version: "1.9rc1", output: water }]).output.jobs).toBeUndefined();
+    expect(combine([{ from: "manyread", version: "2.0", output: water }]).output.jobs).toBeUndefined();
   });
 
   it("is put together: the geometries, and what the calculation was, the first's that gives them; every reader's results, each its own", () => {
     const { output, readers } = combine([
-      { from: "cclib", version: "1.9rc1", output: water },
-      { from: "nbo", version: "7", output: nbo },
+      { from: "manyread", version: "2.0", output: water },
+      { from: "popcount", version: "7", output: popcount },
     ]);
-    expect(readers).toEqual(["cclib 1.9rc1", "nbo 7"]);
+    expect(readers).toEqual(["manyread 2.0", "popcount 7"]);
     expect(output.frames).toEqual(water.frames);
     expect(output.energies).toEqual(water.energies);
-    expect(output.method).toBe("B3LYP");
+    expect(output.method).toBe("M1");
     const results = calcOf(output, readers).results!;
-    // (a name is its reader's own: NBO's Mulliken is NBO's, beside cclib's)
+    // (a name is its reader's own: Popcount's Mulliken is Popcount's, beside manyread's)
     expect(results.map((r) => `${r.label} (${r.from})`)).toEqual([
-      "Mulliken (cclib)",
-      "Vibrations (cclib)",
-      "Natural (NPA) (nbo)",
-      "Mulliken (nbo)",
-      "Wiberg bond index (nbo)",
+      "Mulliken (manyread)",
+      "Vibrations (manyread)",
+      "Natural (NPA) (popcount)",
+      "Mulliken (popcount)",
+      "Wiberg bond index (popcount)",
     ]);
   });
 
   it("takes the geometries of whichever gives them, the order deciding what both give, and whose results come first", () => {
     const { output } = combine([
-      { from: "nbo", version: "7", output: nbo },
-      { from: "cclib", version: "1.9rc1", output: water },
+      { from: "popcount", version: "7", output: popcount },
+      { from: "manyread", version: "2.0", output: water },
     ]);
     expect(output.frames).toEqual(water.frames);
-    expect(output.method).toBe("B3LYP-D3");
-    expect(output.program).toBe("ORCA");
-    expect((output.results as { label: string; from: string }[]).filter((r) => r.label === "Mulliken").map((r) => r.from)).toEqual(["nbo", "cclib"]);
+    expect(output.method).toBe("M1-DSP");
+    expect(output.program).toBe("Quanta");
+    expect((output.results as { label: string; from: string }[]).filter((r) => r.label === "Mulliken").map((r) => r.from)).toEqual(["popcount", "manyread"]);
   });
 
   it("leaves out a reader whose atoms are not the geometries', and what belongs to frames it did not read as many of", () => {
@@ -300,37 +300,37 @@ describe("what several readers found in one output", () => {
       results: [{ id: "grad", on: "frames", group: "Optimisation", label: "RMS gradient", unit: "Eh/bohr", values: [0.001] }],
     };
     const { output, readers } = combine([
-      { from: "cclib", version: "1.9rc1", output: water },
-      { from: "x", version: "", output: { ...nbo, atoms: ["O", "H"] } },
+      { from: "manyread", version: "2.0", output: water },
+      { from: "x", version: "", output: { ...popcount, atoms: ["O", "H"] } },
       { from: "y", version: "", output: other },
     ]);
-    expect(readers).toEqual(["cclib 1.9rc1", "y"]);
+    expect(readers).toEqual(["manyread 2.0", "y"]);
     expect(output.energies).toEqual(water.energies);
     expect((output.results as { id: string }[]).map((r) => r.id)).toEqual(["charges.mulliken", "vibrations"]);
   });
 });
 
 describe("how a conformer search took conformers as one, as its program said it", () => {
-  it("keeps CREGEN's thresholds, as the CREST plugin reads them from its run, as the molecule's results", () => {
+  it("keeps the conformer sorting thresholds, as the Confsweep plugin reads them from its run, as the molecule's results", () => {
     const out: ReaderOutput = {
       schema: 1,
-      program: "CREST",
-      version: "2.12",
-      method: "iMTD-GC, GFN2-xTB",
+      program: "Confsweep",
+      version: "1.0",
+      method: "sweep, TB-2",
       atoms: ["O", "H", "H"],
       frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0]],
       energies: [-5.07],
       results: [
-        { id: "cregen.rmsd", group: "Same conformer (CREGEN)", label: "RMSD threshold", on: "molecule", value: 0.125, unit: "Å" },
-        { id: "cregen.bconst", group: "Same conformer (CREGEN)", label: "Rotational-constant threshold (relative)", on: "molecule", value: 0.01 },
-        { id: "cregen.ewin", group: "Same conformer (CREGEN)", label: "Energy window", on: "molecule", value: 6, unit: "kcal/mol" },
+        { id: "sweep.rmsd", group: "Same conformer (sorting)", label: "RMSD threshold", on: "molecule", value: 0.125, unit: "Å" },
+        { id: "sweep.bconst", group: "Same conformer (sorting)", label: "Rotational-constant threshold (relative)", on: "molecule", value: 0.01 },
+        { id: "sweep.ewin", group: "Same conformer (sorting)", label: "Energy window", on: "molecule", value: 6, unit: "kcal/mol" },
       ],
     } as ReaderOutput;
-    const calc = calcOf(out, ["crest 0.1.0"]);
+    const calc = calcOf(out, ["confsweep 0.1.0"]);
     expect(calc.results?.map((r) => [r.group, r.label, r.on === "molecule" ? r.value : null, "unit" in r ? r.unit : undefined])).toEqual([
-      ["Same conformer (CREGEN)", "RMSD threshold", 0.125, "Å"],
-      ["Same conformer (CREGEN)", "Rotational-constant threshold (relative)", 0.01, undefined],
-      ["Same conformer (CREGEN)", "Energy window", 6, "kcal/mol"],
+      ["Same conformer (sorting)", "RMSD threshold", 0.125, "Å"],
+      ["Same conformer (sorting)", "Rotational-constant threshold (relative)", 0.01, undefined],
+      ["Same conformer (sorting)", "Energy window", 6, "kcal/mol"],
     ]);
   });
 });
