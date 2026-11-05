@@ -96,10 +96,35 @@ export default function CompoundCard() {
     const el = inner.current;
     if (el) setSize({ width: el.offsetWidth, height: el.offsetHeight });
   }, [svg, held?.label, holds]);
+  // (its drawing come after its words: the drawing and its pages faded in, the words kept a moment to fade out under the
+  // card's easing width - never cut mid-letter)
+  const before = useRef<typeof holds>(null);
+  const [fresh, setFresh] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const was = before.current;
+    before.current = holds;
+    if (was !== "reading" || holds !== "drawing") return;
+    setFresh(true);
+    setLeaving(true);
+    let next = 0;
+    const one = requestAnimationFrame(() => (next = requestAnimationFrame(() => setFresh(false))));
+    const t = window.setTimeout(() => setLeaving(false), DURATION.base * 1000);
+    return () => {
+      cancelAnimationFrame(one);
+      cancelAnimationFrame(next);
+      window.clearTimeout(t);
+      setFresh(false);
+      setLeaving(false);
+    };
+  }, [holds]);
   if (!held || !holds) return null;
 
   const at = cardPlace(held.word, size, { width: window.innerWidth, height: window.innerHeight });
   const ease = `${DURATION.base * 1000}ms`;
+  // (over its word, as it mostly is: held by its bottom-left corner, so that it grows upward and its number never moves)
+  const above = at.top + size.height <= held.word.top;
+  const fade = (on: boolean) => ({ opacity: on ? 1 : 0, transitionProperty: "opacity", transitionDuration: ease });
   const pdf = store.getState().pdfs.find((p) => p.id === held.id);
   const others = first ? [...new Set(places.slice(1).map((p) => p.page + 1))].filter((p) => p !== first.page + 1) : [];
 
@@ -143,14 +168,14 @@ export default function CompoundCard() {
       ref={card}
       role="dialog"
       aria-label={`Compound ${held.label}`}
-      className="fixed z-50 select-none overflow-hidden rounded-xl border border-gh-line bg-white/90 backdrop-blur shadow-sm text-[11px] leading-[16px] ease-meno"
+      className="fixed z-50 flex select-none flex-col overflow-hidden rounded-xl border border-gh-line bg-white/90 backdrop-blur shadow-sm text-[11px] leading-[16px] ease-meno"
       style={{
         left: at.left,
-        top: at.top,
+        ...(above ? { bottom: window.innerHeight - (at.top + size.height + 2), justifyContent: "flex-end" } : { top: at.top }),
         // (its size and place eased as what it holds grows - from its words while its figures are read to its drawing)
         ...(size.width > 0 ? { width: size.width + 2, height: size.height + 2 } : {}),
         opacity: shown ? 1 : 0,
-        transitionProperty: "opacity, width, height, left, top",
+        transitionProperty: "opacity, width, height, left, top, bottom",
         transitionDuration: ease,
         pointerEvents: shown ? "auto" : "none",
       }}
@@ -160,7 +185,7 @@ export default function CompoundCard() {
         if (!store.getState().pdfLens) setShown(false);
       }}
     >
-      <div ref={inner} className="w-max px-2.5 py-2">
+      <div ref={inner} className="w-max shrink-0 px-2.5 py-2">
         {holds === "drawing" && first && svg && s ? (
           <>
             <img
@@ -169,15 +194,25 @@ export default function CompoundCard() {
               draggable={false}
               width={w0 * k}
               height={h0 * k}
-              className="block cursor-grab"
+              className="block cursor-grab ease-meno"
+              style={fade(!fresh)}
               onPointerDown={onPress}
             />
             <div className="mt-1 flex items-baseline gap-1.5 text-gh-gray">
               <span className="font-semibold text-gh-black">{held.label}</span>
-              <button type="button" className="hover:text-gh-black transition-colors duration-150 ease-meno" onClick={() => show(first.page, s.box)}>
-                p. {first.page + 1}
-              </button>
-              {others.length > 0 && <span>· also on p. {others.join(", ")}</span>}
+              <span className="relative flex items-baseline gap-1.5">
+                <span className="flex items-baseline gap-1.5 ease-meno" style={fade(!fresh)}>
+                  <button type="button" className="hover:text-gh-black transition-colors duration-150 ease-meno" onClick={() => show(first.page, s.box)}>
+                    p. {first.page + 1}
+                  </button>
+                  {others.length > 0 && <span>· also on p. {others.join(", ")}</span>}
+                </span>
+                {leaving && (
+                  <span className="pointer-events-none absolute left-0 whitespace-nowrap ease-meno" style={fade(fresh)} aria-hidden>
+                    Reading this PDF&rsquo;s figures&hellip;
+                  </span>
+                )}
+              </span>
             </div>
           </>
         ) : (
