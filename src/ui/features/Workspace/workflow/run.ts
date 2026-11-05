@@ -1052,6 +1052,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
         ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
+        ...(e.madeOf?.length ? { madeOf: [...e.madeOf] } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
         ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
@@ -1079,6 +1080,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
     //  first, saying why)
     const calc = alike ? (first as Worked).calc : undefined;
+    // (what they were made from, where all were made from the same: a compound's conformers, of one structure drawn)
+    const madeOf = first.madeOf?.length && g.every((e) => JSON.stringify(e.madeOf ?? []) === JSON.stringify(first.madeOf)) ? first.madeOf : undefined;
     return {
       atoms: atomsAt(first),
       bonds: first.bonds.map((b) => ({ ...b })),
@@ -1097,6 +1100,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
+      ...(madeOf ? { madeOf: [...madeOf] } : {}),
       ...keptKnown(first),
       // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
       ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),

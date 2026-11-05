@@ -190,6 +190,13 @@ describe("what a plugin reads back of a job", () => {
     }
   });
 
+  it("gives the entry worked out back with what it was made from - its lineage - at the geometry it came to, and at its own", () => {
+    const made = { ...WATER, madeOf: ["a#1"] };
+    const optimised = workedOf("optimise", made, out, ["xtb 6.7.1"]);
+    const energy = workedOf("energy", made, { ...out, frames: [WATER.xyz as number[]], energies: [-5.07] }, ["xtb 6.7.1"]);
+    expect([optimised, energy].map((w) => (isFailure(w) ? w.why : w.madeOf))).toEqual([["a#1"], ["a#1"]]);
+  });
+
   it("makes the entry worked out: its last geometry and energy; an optimisation's path before it; what the calculation was", () => {
     const w = workedOf("optimise", WATER, out, ["xtb 6.7.1"]);
     if (isFailure(w)) throw new Error(w.why);

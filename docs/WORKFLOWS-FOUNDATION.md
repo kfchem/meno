@@ -380,7 +380,9 @@ isomers, which Meno's rule takes as one structure, are listed by name.
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
 one whose geometry it took and the one whose bonding it took. Lineage is a
-record, for provenance. No node matches entries by it.
+record, for provenance. No node matches entries by it. A step's entry in 3D
+keeps it as `madeOf`; its `from` is the molecule it is a frame of, which
+is not lineage (WORKFLOWS.md, *Lineage in 3D*).
 
 **Properties ride along.** An entry made from another keeps its properties,
 each still saying the geometry it was worked out at. That is how an ID
