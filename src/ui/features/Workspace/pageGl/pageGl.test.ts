@@ -193,7 +193,7 @@ describe("the page's layers of regions", () => {
     const a = all.add({ regions: [{ key: "set:1", part: "tab", rect: frame }], on: { down: (k) => told.push(`a ${k}`) } });
     const b = all.add({ regions: [{ key: "set:2", part: "tab", rect: frame }], on: { down: (k) => told.push(`b ${k}`) } });
     const hit = all.at(5, 3, zoom)!;
-    hit.on.down?.(hit.key, hit.part, { screen: { x: 0, y: 0 }, page: { x: 5, y: 3 }, event: {} as MouseEvent });
+    hit.on.down?.(hit.key, hit.part, { screen: { x: 0, y: 0 }, page: { x: 5, y: 3 }, zoom: 1, event: {} as MouseEvent });
     expect(told).toEqual(["b set:2"]);
     // (the later layer moved away: the earlier one's)
     all.set(b, { regions: [{ key: "set:2", part: "tab", rect: { x0: 20, y0: 0, x1: 30, y1: 6 } }], on: {} });

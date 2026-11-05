@@ -5,13 +5,22 @@ import { CURSORS, setCursor, type CursorName } from "../../../theme/cursors";
 import { pageAt } from "../utils/page";
 import { hitAt, type Hit, type Region } from "./hits";
 
-/** A press, a move or a menu on a region: where, on the screen and on the page, and the event itself. */
-export type PagePointer = { screen: { x: number; y: number }; page: { x: number; y: number }; event: PointerEvent | MouseEvent };
+/**
+ * A press, a move or a menu on a region: where, on the screen and on the
+ * page, the zoom then (a screen pixel is 1 / `zoom` of the page's units: a
+ * drag's moves on the screen read on the page), and the event itself.
+ */
+export type PagePointer = { screen: { x: number; y: number }; page: { x: number; y: number }; zoom: number; event: PointerEvent | MouseEvent };
 
-/** What a layer of regions is told (`usePageHits`): a press on one, the pointer coming onto one or leaving it, its menu asked for. */
+/**
+ * What a layer of regions is told (`usePageHits`): a press on one, the
+ * pointer coming onto one or leaving it, each move it makes over one (a
+ * chip's bars, saying the one under it), its menu asked for.
+ */
 export type HitHandlers = {
   down?: (key: string, part: string, e: PagePointer) => void;
   hover?: (key: string, part: string, on: boolean) => void;
+  move?: (key: string, part: string, e: PagePointer) => void;
   menu?: (key: string, part: string, e: PagePointer) => void;
 };
 
@@ -107,7 +116,8 @@ export default function PageHits({ children }: { children?: ReactNode }) {
     const find = (e: PointerEvent | MouseEvent) => {
       const screen = { x: e.clientX, y: e.clientY };
       const page = toPage(screen, dom, camera);
-      return { hit: all.at(page.x, page.y, (camera as THREE.OrthographicCamera).zoom || 1), at: { screen, page, event: e } };
+      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      return { hit: all.at(page.x, page.y, zoom), at: { screen, page, zoom, event: e } as PagePointer };
     };
     const show = (hit: (Hit & { on: HitHandlers }) | null) => {
       const same = hit && over && hit.key === over.key && hit.part === over.part;
@@ -125,9 +135,11 @@ export default function PageHits({ children }: { children?: ReactNode }) {
     const onMove = (e: PointerEvent) => {
       // (a press held - a drag under way - is its own: nothing hovered meanwhile)
       if (e.buttons) return;
-      const { hit } = find(e);
+      const { hit, at } = find(e);
       show(hit);
-      if (hit) e.stopImmediatePropagation();
+      if (!hit) return;
+      e.stopImmediatePropagation();
+      hit.on.move?.(hit.key, hit.part, at);
     };
     const onDown = (e: PointerEvent) => {
       const { hit, at } = find(e);

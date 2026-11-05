@@ -12,6 +12,7 @@ import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
 import PageHits from "./pageGl/PageHits";
+import PagePlaced from "./pageGl/PagePlaced";
 import {
   Atoms2D,
   Bonds2D,
@@ -1233,6 +1234,7 @@ function WorkspaceContent({
     setMenu({
       kind: workflowMenu.kind,
       id: workflowMenu.id,
+      ...(workflowMenu.copy ? { copy: workflowMenu.copy } : {}),
       selection: "none",
       at: clientToWorld(workflowMenu.clientX, workflowMenu.clientY) ?? pasteTarget(),
       x: workflowMenu.clientX - box.left,
@@ -2663,6 +2665,8 @@ function WorkspaceContent({
         <color attach="background" args={["#ffffff"]} />
         {/* What WebGL draws on the page takes the pointer before anything else on the canvas, as the page's HTML did (pageGl/PageHits) */}
         <PageHits>
+        {/* ... and what is placed on it by what moves - the molecules' and stacks' frames chips - drawn with it at once (pageGl/PagePlaced) */}
+        <PagePlaced>
         <FitToContent2D trigger={fitNonce} />
         {/* The drawing, laid out once for every layer below to draw from */}
         <DrawnLayoutProvider>
@@ -2762,6 +2766,7 @@ function WorkspaceContent({
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
         <FollowStyle />
+        </PagePlaced>
         </PageHits>
       </Canvas>
       </PageHtmlLayer.Provider>
