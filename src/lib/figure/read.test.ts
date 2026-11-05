@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, figureBond, labelText, readFigure, repeatBrackets, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf } from "./read";
+import { bondLength, figureBond, labelText, readFigure, repeatBrackets, repeatsRead, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf, type ReadAtom, type ReadBond } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import atp from "./fixtures/atp-rdkit.json";
@@ -1451,11 +1451,69 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     expect(s.atoms).toHaveLength(8);
     expect(s.bonds).toHaveLength(8);
     expect(degrees(s).every((d) => d === 2)).toBe(true);
+    // (no bond stretched: the ring closes on the unit's last copy where it stood)
+    const lengths = s.bonds.map((x) => Math.hypot(s.atoms[x.a].x - s.atoms[x.b].x, s.atoms[x.a].y - s.atoms[x.b].y));
+    expect(Math.max(...lengths)).toBeLessThan(2 * Math.min(...lengths));
     // (the ring's other five as the figure has them: none moved against another)
     const given = read(figure([stroke(...hex, hex[0])]));
     const apart = (ps: { x: number; y: number }[]) => ps.flatMap((p, i) => ps.slice(i + 1).map((q) => Math.hypot(p.x - q.x, p.y - q.y))).sort((x, y) => x - y);
     const kept = apart(s.atoms.filter((x) => !x.multiple));
     apart(given.atoms.slice(1)).forEach((d, i) => expect(kept[i]).toBeCloseTo(d, 6));
+    // (and where they were against the unit drawn: none moved round it)
+    const unitAtom = s.atoms.find((x) => x.multiple?.paradigm)!;
+    const from = (ps: { x: number; y: number }[], o: { x: number; y: number }) => ps.map((p) => Math.hypot(p.x - o.x, p.y - o.y)).sort((x, y) => x - y);
+    const was = from(given.atoms.slice(1), given.atoms[0]);
+    from(s.atoms.filter((x) => !x.multiple), unitAtom).forEach((d, i) => expect(d).toBeCloseTo(was[i], 6));
+  });
+
+  it("sets a one-atom unit's copies on back and forth, as a chain is drawn - in a line at most where they meet what lies past them", () => {
+    // (HO-C-[C]-C-OH counted 4: its four carbons in brackets each turning the chain back)
+    const p0: P = [40, 80];
+    const pts = [p0];
+    for (let k = 0; k < 4; k++) pts.push(step(pts[k], k % 2 ? 30 : -30));
+    const h = 0.55 * L;
+    const line = ([x, y]: P) => stroke([x, y - h], [x, y + h]);
+    const [x1, x2] = [along(pts[1], pts[2], 0.5), along(pts[2], pts[3], 0.5)];
+    const s = read(figure([stroke(...pts), line(x1), line(x2)], [...word("_4", [x2[0] + 0.25 * L, x2[1] + h])]));
+    expect(s.atoms).toHaveLength(8);
+    // (along the chain, from one end: no three atoms in a line)
+    const next = (from: number, not: number) => s.bonds.flatMap((b) => (b.a === from && b.b !== not ? [b.b] : b.b === from && b.a !== not ? [b.a] : []))[0];
+    const order = [degrees(s).indexOf(1)];
+    for (let prev = -1; order.length < s.atoms.length; ) {
+      const n = next(order[order.length - 1], prev);
+      prev = order[order.length - 1];
+      order.push(n);
+    }
+    // (an odd number of atoms put in turns what lies past them the other way: one bend there straight, never a mirror image of it)
+    const straight = order.slice(1, -1).filter((_, k) => {
+      const [a, b, c] = [s.atoms[order[k]], s.atoms[order[k + 1]], s.atoms[order[k + 2]]];
+      return Math.abs((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)) < 1e-3;
+    });
+    expect(straight.length).toBeLessThanOrEqual(1);
+  });
+
+  it("is not read where a bracket crosses a line that is no bond, or bonds of a ring drawn with its circle - each said", () => {
+    // (repeatsRead as the figure's reading calls it: a chain of four, brackets across its middle bond's neighbours)
+    const atoms = (): ReadAtom[] => [0, 1, 2, 3].map((k) => ({ x: k * L, y: 0 }));
+    const bonds = (aromatic = false): ReadBond[] => [0, 1, 2].map((k) => ({ a: k, b: k + 1, order: 1, ...(aromatic ? { aromatic: true as const } : {}) }));
+    const across = (x: number, y = 0) => ({ a: { x, y: y - 0.1 * L }, b: { x: x + L, y: y + 0.1 * L }, w: 0.6 });
+    const pair = (lines: ReturnType<typeof across>[]) => [{ count: "6", brackets: lines.map((l) => ({ ends: [{ x: l.a.x + 0.5 * L, y: -h }, { x: l.a.x + 0.5 * L, y: h }] as [{ x: number; y: number }, { x: number; y: number }], crosses: [l] })) }];
+    const h = 0.55 * L;
+    const near = (a: ReadAtom, p: { x: number; y: number }) => Math.hypot(a.x - p.x, a.y - p.y);
+    // (the second bracket across a line from nowhere to nowhere)
+    const loose = atoms();
+    repeatsRead(pair([across(0), { a: { x: 10 * L, y: 5 * L }, b: { x: 11 * L, y: 5 * L }, w: 0.6 }]), loose, bonds(), L, near);
+    expect(loose.some((a) => a.unsure?.includes(REPEAT_REFUSED("6", "a bracket crosses a line that is no bond")))).toBe(true);
+    // (both across bonds of a ring drawn with its circle: their orders the ring's, not drawn)
+    const ring = atoms();
+    repeatsRead(pair([across(0), across(2 * L)]), ring, bonds(true), L, near);
+    expect(ring.some((a) => a.unsure?.includes(REPEAT_REFUSED("6", "the two bonds its brackets cross are not of one order")))).toBe(true);
+    // (and the same, plain: read)
+    const plain = atoms();
+    const ok = bonds();
+    repeatsRead(pair([across(0), across(2 * L)]), plain, ok, L, near);
+    expect(plain.map((a) => a.repeat?.n)).toEqual([undefined, 6, 6, undefined]);
+    expect(ok.map((b) => b.repeat?.group)).toEqual([0, undefined, 0]);
   });
 
   it("reads a unit counted 1 once, as drawn, its brackets and count taken", () => {

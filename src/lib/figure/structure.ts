@@ -267,7 +267,9 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
  * length and a bond, alternately the second bracket's bond and the
  * first's, so that they turn back and forth as a chain does. What lies
  * past the unit is moved on with them, unless it reaches round to the unit
- * again (a ring), which stays where it is. Each atom's index in the figure
+ * again (a ring), which stays where it is. An odd number of atoms put in
+ * leaves one bend straight where the copies meet what lies past them:
+ * turning that the other way would draw its mirror image, its wedges' too. Each atom's index in the figure
  * as given (`of`), and each unit's atoms, copies and all, with its count,
  * the first unit's the paradigm (`multiple`).
  */
