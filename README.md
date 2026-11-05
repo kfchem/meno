@@ -222,7 +222,7 @@ Meno's reaction atom mapper (`src/lib/chem/accelMapper.ts`) is ported from ACCeL
 
 The npm packages in Meno's window and the Rust crates built into its program are each under their own licence; their names, versions, licences and notices are in [`src-tauri/resources/licenses/THIRD-PARTY-NOTICES.txt`](./src-tauri/resources/licenses/THIRD-PARTY-NOTICES.txt), which the app carries and shows, with the files above, in Settings (General, Licences).
 
-Meno carries no plugin: each is got, when the chemist adds it, from [`kfchem/meno-plugins`](https://github.com/kfchem/meno-plugins), where each plugin's folder says its own licence - the Blender plugin's, for one, is the **GNU General Public License, version 3 or later**, as a script using Blender's Python API must be. A plugin stands apart from Meno, which takes nothing from it and speaks to it only through files and arguments ([`docs/PLUGINS.md`](./docs/PLUGINS.md)). A program a plugin fetches as it is set up - Blender's official build, for one - is fetched for Meno's own use and never shipped with Meno (*A program Meno fetches*).
+Meno carries no plugin: each is got, when the chemist adds it, from [`kfchem/meno-plugins`](https://github.com/kfchem/meno-plugins), where each plugin's folder says its own licence - the Blender plugin's, for one, is the **GNU General Public License, version 3 or later**. A plugin stands apart from Meno, which takes nothing from it and speaks to it only through files and arguments ([`docs/PLUGINS.md`](./docs/PLUGINS.md)). A program a plugin fetches as it is set up - Blender's official build, for one - is fetched for Meno's own use and never shipped with Meno (*A program Meno fetches*).
 
 ## Acknowledgments
 

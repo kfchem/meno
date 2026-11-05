@@ -329,35 +329,18 @@ separately - that code's. Settings,
 
 What a plugin brings is fetched as it is set up - from PyPI, conda-forge
 or its makers' repository, as its lock says - and is carried neither in
-its folder nor in Meno, so its folder holds no text of that licence
-(checked on 2026-10-13 against the licences the packages install;
-MolScribe's as PDF.md, *A picture read*, gives it):
-
-- **cclib** and **RDKit** (BSD-3-Clause) ask that copies passed on, as
-  source or built, keep their notice; **MolScribe** (MIT), that its
-  notice go with copies of it or of substantial parts of it. Meno passes
-  on no copy of any of them: its lock names each, and a worker of Meno's
-  uses it.
-- **xTB** and **CREST** (LGPL-3.0-or-later) set their conditions on
-  conveying them, and none on running them (GPL-3.0, section 2, which the
-  LGPL takes in): Meno runs each as a program apart, from the environment
-  pixi made on the computer.
-- A model's trained weights (`downloads`) are fetched under their own
-  licence too, and not carried.
+its folder nor in Meno. A model's trained weights (`downloads`) are
+fetched under their own licence too. Each plugin's folder in
+kfchem/meno-plugins says its licence.
 
 A plugin's folder holds a licence's text (`LICENSE`) only where its own
-code is under another licence than Meno's. A plugin whose code must be -
-a script for Blender, which uses Blender's own Python API and so is GPL -
-may come with Meno while it stands apart (the maintainer, 2026-10-10; to
-be distributed apart later, if those using Meno in companies make that
-worthwhile):
+code is under another licence than Meno's. Such a plugin:
 
-- it is a folder of its own, with its licence's text, and says it
+- is a folder of its own, with its licence's text, and says it
   (`licence: "GPL-3.0-or-later"`);
-- Meno's code and other plugins never take anything from it, and it
-  speaks to Meno only through files and arguments - a separate program,
-  not a part of Meno;
-- it is listed with its licence wherever Meno lists the plugins'
+- is never taken from by Meno's code or other plugins, and speaks to
+  Meno only through files and arguments;
+- is listed with its licence wherever Meno lists the plugins'
   licences: README, and Settings, *Plugins*.
 
 Two such plugins are among the plugins online, both GPL-3.0-or-later: the
