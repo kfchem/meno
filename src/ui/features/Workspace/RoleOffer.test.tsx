@@ -9,7 +9,7 @@ import type { Catalogue, CatalogueEntry } from "../../../lib/plugins/catalogue";
 const shown = vi.hoisted(() => ({ online: { state: "unlisted" } as Online }));
 vi.mock("../../../lib/plugins/online", async (actual) => {
   const real = await actual<typeof import("../../../lib/plugins/online")>();
-  const hook = Object.assign(<T,>(pick?: (s: Online) => T) => (pick ? pick(shown.online) : shown.online), { setState: () => {}, getState: () => shown.online });
+  const hook = Object.assign(<T,>(pick?: (s: Online) => T) => (pick ? pick(shown.online) : shown.online), { setState: () => {}, getState: () => shown.online, subscribe: () => () => {} });
   return { ...real, useOnline: hook, listOnline: async () => {} };
 });
 vi.mock("../../../lib/plugins/here", async (actual) => ({ ...(await actual<typeof import("../../../lib/plugins/here")>()), systemHere: () => "macos" }));
