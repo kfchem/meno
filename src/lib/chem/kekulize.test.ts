@@ -274,6 +274,14 @@ describe("the orders an atom's hydrogens are counted from (valenceOrders)", () =
     expect(hydrogens(ring(["O", "C", "C", "C", "C"]))).toEqual([0, 1, 1, 1, 1]);
   });
 
+  it("leaves an aromatic bond no Kekulé structure makes double single - a hydrogen more, never fewer", () => {
+    // (a ring of five carbons, its bonds aromatic: two doubles at most, one carbon left with none)
+    const orders = valenceOrders(ring(["C", "C", "C", "C", "C"]).atoms, ring(["C", "C", "C", "C", "C"]).bonds);
+    expect(orders.every((o) => o === 1 || o === 2)).toBe(true);
+    expect(orders.filter((o) => o === 2)).toHaveLength(2);
+    expect(hydrogens(ring(["C", "C", "C", "C", "C"])).sort()).toEqual([1, 1, 1, 1, 2]);
+  });
+
   it("leaves bonds not aromatic as they are, and a molecule with none untouched", () => {
     const bonds = [
       { a: 0, b: 1, order: 2 },
