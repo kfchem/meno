@@ -8,6 +8,8 @@ describe("a molecule's balls, by their size on the screen", () => {
     expect(ballSegmentsFor(40, 32)).toBe(32);
     expect(ballSegmentsFor(39, 32)).toBe(24);
     expect(ballSegmentsFor(20, 32)).toBe(16);
+    expect(ballSegmentsFor(16, 32)).toBe(16);
+    expect(ballSegmentsFor(14, 32)).toBe(12);
     expect(ballSegmentsFor(10, 32)).toBe(12);
     expect(ballSegmentsFor(7.9, 32)).toBe(8);
     expect(ballSegmentsFor(1, 32)).toBe(8);
@@ -50,11 +52,13 @@ describe("the line round the balls", () => {
   it("is as fine as the balls up to the most atoms, never finer", () => {
     expect(outlineSegments(32, 100, 2000, 16)).toEqual([32, 32]);
     expect(outlineSegments(12, 100, 2000, 16)).toEqual([12, 12]);
+    expect(outlineSegments(32, 2000, 2000, 16)).toEqual([32, 32]);
   });
 
   it("is the coarse one past them, unless the balls are coarser", () => {
     expect(outlineSegments(32, 3000, 2000, 16)).toEqual([16, 8]);
     expect(outlineSegments(12, 3000, 2000, 16)).toEqual([12, 12]);
+    expect(outlineSegments(16, 3000, 2000, 16)).toEqual([16, 16]);
   });
 });
 
