@@ -100,10 +100,10 @@ describe("holding an entry's restraints as it is optimised", () => {
     const e = water([{ kind: "fixed", atoms: [1] }]);
     // (atom 2 at the end where it began, to well within 1e-4 Å: held)
     const still = [0, 0, 0.001, 0.96, 0, 0.00005, -0.24, 0.93, 0];
-    expect(isFailure(workedOf("optimise", e, output({ frames: [e.xyz, still] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e)))).toBe(false);
+    expect(isFailure(workedOf("optimise", e, output({ frames: [[...e.xyz], still] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e)))).toBe(false);
     // (moved by a thousandth of an ångström: not held)
     const moved = [0, 0, 0, 0.961, 0, 0, -0.24, 0.93, 0];
-    expect(workedOf("optimise", e, output({ frames: [e.xyz, moved] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e))).toEqual({ kind: "failed", why: "Atom 2 moved though held" });
+    expect(workedOf("optimise", e, output({ frames: [[...e.xyz], moved] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e))).toEqual({ kind: "failed", why: "Atom 2 moved though held" });
   });
 
   it("is no minimum for a step that takes minima, until it is optimised free of them", () => {
