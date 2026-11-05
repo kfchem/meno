@@ -39,8 +39,9 @@ and in particular:
     divided by the screen's pixel ratio, and at 150 % a wheel's zoom lit
     another bond (2026-11-02; `utils/pageEvents`).
 - **Drawing is dragging bonds out of atoms**, and the editor is made for
-  that way of drawing rather than for keys to learn: there are no keyboard
-  shortcuts for building structures (agreed 2026-09-27).
+  that way of drawing rather than for keys to learn: no keyboard shortcut
+  builds a structure (agreed 2026-09-27); the bond keys only set a bond's
+  kind (*Bond keys*, below; 2026-11-02).
   - A drag on an atom moves it; it snaps as it goes, and dropped on another
     atom it becomes that atom.
   - A double-click on an atom draws one bond where there is room; a
@@ -48,6 +49,17 @@ and in particular:
     degrees from a bond already there it snaps to that, and an arc grows
     out of the atom to tell it from the 30-degree grid. (Agreed 2026-09-28,
     after trying it: a plain drag drawing a bond was hard to get used to.)
+  - **A bond by one click** (users' wish, relayed by the maintainer on
+    2026-11-02): a click on an atom with Option held (Alt on Windows and
+    Linux) draws the one bond a double-click would, where there is room
+    (`bondOut`, utils/geometry `newBondFrom`). Each click is its own step,
+    never the first of a double-click, so clicking along a chain draws it a
+    bond at a time; a drag with the key held moves the atom as without it,
+    and a press with it held is never a long press: made slowly, it does
+    not select the structure instead (the maintainer's ruling).
+    While the key is held and the pointer is on an atom, a thin line in the
+    highlight's colour shows where the bond would go, easing in, and out as
+    the key is let go (`ClickBondPreview2D`).
   - A click alone selects the atom, alone, at once: its shade spreads out
     from the atom in 160 ms (`SPREAD_MS`, eased). The second click of a
     double-click, within DOUBLE_CLICK_MS (half a second), takes it back -
@@ -234,6 +246,13 @@ let go while still zooming, it glides as a trackpad's pinch does. A second
 finger later than that, the first drawing or moving, is no press at all. A
 pen writes as before.
 
+On Windows Alt pressed and let go on its own does nothing. Windows would
+take it as the keyboard's way into the window's menu, which Meno's window
+does not show, and the next key would go to that menu and the page answer
+nothing until Esc; so the window does not pass that command on
+(`src-tauri/src/keymenu.rs`; F10 sends the same). Alt+Space still opens the
+window's menu, and Alt+F4 still closes it.
+
 On Windows a pinch - two fingers on a precision touchpad, as on a
 Surface's, or on its touch screen - is the user's only where WebView2's
 `IsPinchZoomEnabled` lets it be, and Meno's webview is made with it off
@@ -279,6 +298,27 @@ click on an atom chooses it, for a measurement, and a click elsewhere on the
 molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
 come up, so a right drag is a move, not a menu.
+
+**Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
+again they go on as clicks do, 2026-11-04). With the pointer on a bond, 1, 2
+and 3 set its kind, and a key pressed again goes on round as a click would:
+- **1** makes a double or triple bond single; on a single bond it goes round
+  as a click does - wedge, hashed wedge, plain with the other end narrow.
+- **2** makes a bond double; on a double bond it moves the second line to
+  the next side as a double-click does - its own side, the middle, the
+  other side (`doubleClickPatch`, shared with the double-click).
+- **3** makes it triple.
+
+Where the bond is among those selected, every bond selected takes what the
+one under the pointer becomes, as one step; a key that would change
+nothing is no step (`bondKey`, utils/bondKinds `bondKeyPatch`). The key the
+hand pressed is read (`code`, the top row or the keypad), so a keyboard
+whose digits take Shift and an input method that is on set it all the same.
+None is taken with Ctrl, ⌘ or Alt held (⌘1 fits the view), held down and
+coming again, over an atom - digits never begin a label - while a button
+is held (a drag going on), or while a label or any field is typed in. A bond's menu says each beside *Single bond*,
+*Double bond* and *Triple bond*. They are the only keys that change a structure;
+ring templates and the like are still not keys.
 
 **A menu's first row is icons** (the maintainer, 2026-10-10: the menus had
 grown busy, and a row of icons for what is done most - as Windows has -
@@ -375,15 +415,20 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 opens, up and to the right of it, what can be put down there, each an
 icon - named as the pointer rests on it - and none in words: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
-SMILES, text, an arrow (*Arrows* below), a "+", an electron-pushing
-arrow (from the first atom or bond pressed, *Electron-pushing arrows*
-below), a slide of what is seen (docs/PRESENTING.md), *Pen* - its card
-opened, to write by hand with the mouse or the trackpad
-(docs/PRESENTING.md, *Handwriting*; a pen writes anywhere, always) - and
-*Shapes*, which opens a row below it of a rectangle, an ellipse and a
-line - each drawn from where the double-click
-was by a drag from its icon, or traced with the button up until a click
-(docs/PRESENTING.md, *Shapes*). A choice puts it down where the
+SMILES, text and an arrow (*Arrows* below); then two groups, each with a
+small mark at its corner, each opening a row of its own below the first,
+with no heading (the maintainer, 2026-10-29, layout A): *Scheme* - a "+",
+an electron-pushing arrow (from the first atom or bond pressed,
+*Electron-pushing arrows* below), a catalytic cycle and a slide of what
+is seen (docs/PRESENTING.md) - and *Marks on the page* - a rectangle, an
+ellipse and a line, each drawn from where the double-click was by a drag
+from its icon, or traced with the button up until a click
+(docs/PRESENTING.md, *Shapes*), and *Pen*, its card opened, to write by
+hand with the mouse or the trackpad (docs/PRESENTING.md, *Handwriting*;
+a pen writes anywhere, always). What is in a group's row is put down as
+the first row's is. Opening a row closes any other below the first; each
+opens and closes in a short ease, and nothing of which was open is kept
+for the next time Quick Add opens. A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
 it. Going, it does nothing more as it fades - nor does the right-click
 menu: an icon double-clicked put its choice down once, not a second time
@@ -433,7 +478,7 @@ bond; on an arrow, a "+" or text, none of this (`Selection2D`, `QuickAdd`,
 canvas*), a double-click on empty space shuts it instead - the work comes
 back to the canvas (the maintainer, 2026-10-10) - and the next opens
 Quick Add.
-*SMILES*, *Shapes* and *Calculations* open and shut their panels a click
+*SMILES*, *Scheme*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,
 utils/press; double-clicked, a panel opened and shut again at once).
 After a thin rule, one more button - *Calculations* - opens below the
@@ -1247,7 +1292,7 @@ All hover-based, as above.
 - **Catalytic cycles** (the maintainer, 2026-10-15): a circle on the
   page, and what is placed on it, round which a cycle's reaction arrows
   run (`lib/chem/cycle`, `Cycles2D`, `utils/cycles`).
-  - **Put down from Quick Add**, its *Catalytic cycle*, where Quick Add
+  - **Put down from Quick Add**, its *Catalytic cycle* (under *Scheme*), where Quick Add
     was opened: four and a half bonds from its middle to its line.
   - **On it** is a structure or words whose middle - of the box round
     what is drawn, its labels' letters included, the H of HO and all -
@@ -1552,18 +1597,23 @@ lipids each have their own way of being drawn, which it should know.
      broken there. Its stereocentres (`Atom.stereoCentre`) show their
      configuration by the drawing itself, with no wedges: it is read from
      where their bonds point, so a substituent drawn round to the other
-     side turns its centre (agreed 2026-09-28). A file, the SMILES and R/S
-     are given the wedges that say it (`chem/drawing.ts#forFlatReaders`);
+     side turns its centre (agreed 2026-09-28). A file, the SMILES, R/S
+     and its structure in 3D are given the wedges that say it
+     (`chem/drawing.ts#forFlatReaders`; until 2026-11-04 the structure in
+     3D was not: its centres reached RDKit as left open, and tetrodotoxin's
+     nine were too many to be made in 3D in time);
      the depth itself is not saved, so a cage opened again is flat, its
      stereochemistry wedged.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
-     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
-     sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
-     read from its wedge and laid out like any other, on one wedge
-     (2026-10-29). A wedge
+     other, or at an atom of three bonds that keeps no configuration of its
+     own (an amine's N, a plain N-alkyl aziridine's, a B), where a wedge
+     states none - rather than lose it. A centre whose fourth group is a
+     lone pair that keeps its configuration (*Centres by a lone pair*) - a
+     sulfoxide's or a sulfonium's S, a phosphine's P, an oxaziridine's N -
+     is read from its wedge and laid out like any other, on one wedge. A
+     wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an
@@ -1587,6 +1637,40 @@ lipids each have their own way of being drawn, which it should know.
      atoms all on one point, as a SMILES's are before it is laid out - is
      not held to this: it is laid out as before, a double bond whose
      configuration the SMILES does not give drawn one way or the other.
+   - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
+     An atom of three neighbours and a lone pair is a pyramid that its
+     lone pair can turn into its mirror image, through the plane of the
+     three. It keeps a configuration of its own only where that is slow at
+     room temperature, on the barriers Rauk, Allen and Mislow review
+     (Angew. Chem. Int. Ed. Engl. 9, 400, 1970):
+     - P, As and S, measured there: a phosphine's P (Table 2), an arsine's
+       As (Sec. 4.4.2), a sulfoxide's, a sulfinamide's, a sulfonium's S
+       (Sec. 4.4.2). Not a P or an As whose planar form would close an
+       aromatic ring with its lone pair (a phosphole's, an arsole's): a
+       phosphole's is about 16 kcal/mol, lower than a plain N-alkyl
+       aziridine's (Sec. 4.2);
+     - Sb, Bi, Se and Te, by the review's trend - barriers rise down a group
+       (Sec. 4) - none of them measured there;
+     - an N in a three-membered ring with a halogen, an O or an N on it or
+       next to it in the ring (an N-chloro or N-alkoxy aziridine, an
+       oxaziridine, a diaziridine), bonded to no pi system: the ring and
+       the heteroatom together hold it (Sec. 4.1, 4.4.1). A plain N-alkyl
+       aziridine's N is lower, 17.7-20.5 kcal/mol (Sec. 4.3), an N-aryl's
+       or N-acyl's lower still: its invertomers are the conformer search's
+       to find;
+     - an N at a bridgehead of a small bridged ring system, every bridge of
+       three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
+       at most): it cannot turn over without breaking a bond. A larger cage
+       can turn it in and out, and is left free.
+     An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
+     says which such atoms a drawing's wedge is read at, which a SMILES's @
+     is read at, which centres a structure leaves open, and which a
+     molecule in 3D has read from its geometry (docs/PLUGINS.md,
+     *Configurations*). A wedge at a
+     pyramid of three that keeps none - an O+ - is read as no axis's end
+     either: Clean-up refuses it rather than lose it. An N's wedge may
+     still be an axis's, where its lone pair lies in a ring or a carbonyl
+     beside it (an N-aryl pyrrole, an anilide).
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).

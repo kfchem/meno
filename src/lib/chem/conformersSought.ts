@@ -21,7 +21,7 @@ import type { Option, OptionValues } from "../options";
 import { symmetryClasses } from "../layout/canonical";
 import { smallestRings } from "../layout/rings";
 import { readMolfile } from "./ctfile";
-import { huckelBonds } from "./huckel";
+import { aromaticIn } from "./aromaticity";
 import { implicitHydrogens, mostBonds } from "./molecule";
 
 /** An atom as the count reads it. */
@@ -217,22 +217,16 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
 }
 
 /**
- * The atoms that lie on a ring held flat by its pi electrons, by index:
- * each ring (the smallest set) every atom of which gives the ring pi
- * electrons, 4n + 2 of them in all - Hückel's rule. An atom gives one where
- * it has a double bond in the ring, lies on a Hückel ring's bond
- * (lib/chem/huckel: a fused ring's, however its Kekulé structure is drawn)
- * or on a bond drawn aromatic; none where it is a carbon with a double bond
- * out of the ring to O, N or S (a pyridone's C=O, a tropone's), or a
- * carbocation, or a boron with three bonds; two where it is a lone pair's:
- * an N, P, O, S or Se with no double bond (pyrrole's, furan's, thiophene's
- * heteroatom), or a carbanion. Any other atom - a CH2, a double bond to a
- * carbon out of the ring (a fulvene's) - and the ring is not held flat. A
- * ring every atom of which lies on a Hückel ring is (azulene's five-ring:
- * its ten pi electrons are the rings' together), as is one every bond of
- * which is drawn aromatic, and one every atom of which is bound to one
- * metal (a ferrocene's, eta) - by a bond each, or through a star at its
- * centre (`held`: each such bond's atoms) - as its metal holds it.
+ * The atoms that lie on a ring held flat, by index: each ring (the smallest
+ * set) every atom of which is aromatic under Meno's rule (lib/chem/
+ * aromaticity: Hückel's 4n + 2, of each ring and each pair of rings fused
+ * at a bond) - a benzene's, a pyrrole's, a tropone's, azulene's two, and a
+ * fluoranthene's five-ring, which is not aromatic itself but every atom of
+ * which lies on an aromatic ring (the rule's 22 electrons at most is the
+ * rule's alone). So, whatever its count, is one every bond of which is
+ * drawn aromatic, and one every atom of which is bound to one metal (a
+ * ferrocene's, eta) - by a bond each, or through a star at its centre
+ * (`held`: each such bond's atoms) - as its metal holds it.
  */
 export function flatRingAtoms(
   atoms: readonly SoughtAtom[],
@@ -241,42 +235,15 @@ export function flatRingAtoms(
   held: readonly (readonly number[])[] = [],
 ): Set<number> {
   const around = neighboursOf(atoms, bonds);
-  const huckel = huckelBonds(atoms.length, bonds.filter((b) => b.order === 1 || b.order === 2 || b.order === 3));
-  const key = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
   const metal = (i: number) => heavy(atoms[i]) && mostBonds(atoms[i].el) === null;
-  const onHuckel = (x: number) => around[x].some(([j]) => huckel.has(key(x, j)));
+  const aromatic = aromaticIn(atoms, bonds, rings);
   const out = new Set<number>();
   for (const ring of rings) {
-    const inRing = new Set(ring);
     const order = (x: number, y: number) => around[x].find(([j]) => j === y)?.[1];
     const ringBondsOf = ring.map((x, k) => order(x, ring[(k + 1) % ring.length]));
     const bound = ring.every((x) => around[x].some(([j]) => metal(j))) && around[ring[0]].some(([m]) => metal(m) && ring.every((x) => around[x].some(([j]) => j === m)));
     const centred = held.some((h) => ring.every((x) => h.includes(x)));
-    let flat = bound || centred || ringBondsOf.every((o) => o === 4) || ring.every((x) => onHuckel(x));
-    if (!flat) {
-      let pi = 0;
-      flat = ring.every((x, k) => {
-        const a = atoms[x];
-        const charge = a.charge ?? 0;
-        const prev = ring[(k + ring.length - 1) % ring.length];
-        const next = ring[(k + 1) % ring.length];
-        const mine = [order(x, prev), order(x, next)];
-        if (mine.some((o) => o === 2) || mine.some((o) => o === 4) || huckel.has(key(x, prev)) || huckel.has(key(x, next))) return (pi += 1), true;
-        const outward = around[x].filter(([j, o]) => !inRing.has(j) && o === 2);
-        if (outward.length) {
-          if (a.el === "C" && outward.length === 1 && ["O", "N", "S"].includes(atoms[outward[0][0]].el)) return true;
-          return false;
-        }
-        if (around[x].some(([, o]) => o === 3)) return false;
-        if (["N", "P", "O", "S", "Se"].includes(a.el) && charge <= 0) return (pi += 2), true;
-        if (a.el === "C" && charge === -1) return (pi += 2), true;
-        if (a.el === "C" && charge === 1) return true;
-        if (a.el === "B" && charge === 0 && around[x].length === 3) return true;
-        return false;
-      });
-      flat &&= pi % 4 === 2;
-    }
-    if (flat) for (const x of ring) out.add(x);
+    if (bound || centred || ringBondsOf.every((o) => o === 4) || ring.every((x) => aromatic.has(x))) for (const x of ring) out.add(x);
   }
   return out;
 }

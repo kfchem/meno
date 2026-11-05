@@ -58,8 +58,10 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
  * The atoms, by their places in the drawing, with a wedge that could make
  * them a stereocentre but says nothing that can be read: wedge and hashes
  * drawn opposite each other, or an atom of three bonds at which a wedge
- * states no configuration - an N, a B, a selenoxide's Se (a sulfoxide's S
- * is read, lib/layout/drawn).
+ * states no configuration - an amine's N, a plain N-alkyl aziridine's, a B:
+ * none whose lone pair
+ * keeps one (lib/chem/lonePairCentres; a sulfoxide's S, a phosphine's P,
+ * an aziridine's N are read, lib/layout/drawn).
  */
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
   const bondsOf = bondsAt(drawing.bonds);
@@ -100,7 +102,7 @@ export function layoutJob(part: Model): LayoutJob {
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
-        "(drawn crossed, with two of its bonds in line or on top of each other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration), so nothing was moved",
+        "(drawn crossed, with two of its bonds in line or on top of each other, or at an atom of three bonds that keeps no configuration of its own - an amine's N, a plain N-alkyl aziridine's, a B - where a wedge states none), so nothing was moved",
     );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own

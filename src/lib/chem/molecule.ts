@@ -265,6 +265,19 @@ export function implicitHydrogens(
   return Math.max(0, valenceAs(v, v.valence, charge, radical) - bondOrderSum);
 }
 
+/**
+ * The valences an atom of `el` takes at its charge, as `implicitHydrogens`
+ * counts them - its element's own and, below the second row, its highest
+ * (`HIGHEST`) - or none where Meno has no valence for the element.
+ */
+export function valencesAt(el: string, charge = 0, radical?: Radical): number[] {
+  const v = VALENCE[el];
+  if (!v) return [];
+  const own = valenceAs(v, v.valence, charge, radical);
+  const most = HIGHEST[el] != null ? valenceAs(v, HIGHEST[el], charge, radical) : null;
+  return most != null && most !== own ? [own, most] : [own];
+}
+
 /** A valence as a charge and an unpaired electron leave it, as `implicitHydrogens` counts them. */
 function valenceAs(v: { group: number }, valence: number, charge: number, radical?: Radical): number {
   if (v.group >= 15) valence += charge;

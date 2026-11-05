@@ -1,4 +1,4 @@
-import { singleClickPatch } from "../utils/bondKinds";
+import { bondKeyOf, doubleClickPatch, singleClickPatch } from "../utils/bondKinds";
 import { degrees, narrowEnd } from "../chem/drawing";
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
@@ -20,6 +20,36 @@ import { bondLengthFrom } from "../utils/magnified";
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
   const store = useEditorStore();
+  // a bond key with the pointer on a bond (docs/EDITOR-2D.md, *Bond keys*): 1, 2, 3 - not while a label or any field is typed
+  // in, nor while a button is held (a drag going on: the bond under it is the gesture's)
+  useEffect(() => {
+    let held = 0;
+    const onDown = () => void held++;
+    const onUp = () => void (held = 0);
+    const onKeyDown = (e: KeyboardEvent) => {
+      const key = bondKeyOf(e);
+      if (key == null || held) return;
+      const s = store.getState();
+      const id = s.hovered.bondId;
+      if (id == null || s.labelEdit.active) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.dataset.textField != null)) return;
+      e.preventDefault();
+      s.bondKey(id, key);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+    window.addEventListener("blur", onUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      window.removeEventListener("blur", onUp);
+    };
+  }, [store]);
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
     const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
@@ -92,98 +122,10 @@ export default function BondsPick2D() {
     updateBond(b.id, singleClickPatch(b, narrowEnd(b, degrees(model.bonds))));
   }
   function applyDoubleCycle(b: (typeof model.bonds)[number]) {
-    if (b.order !== 2) {
-      updateBond(b.id, {
-        order: 2 as any,
-        doubleMode: "auto",
-        stereo: "none" as any,
-      });
-      return;
-    }
-    type DM = "auto" | "left" | "center" | "right";
-    const dm = ((b as any).doubleMode ?? "auto") as DM;
-    const effAuto = (() => {
-      const a1 = model.atoms.find((a) => a.id === b.a);
-      const a2 = model.atoms.find((a) => a.id === b.b);
-      if (!a1 || !a2) return "center" as const;
-      const dx = a2.x - a1.x,
-        dy = a2.y - a1.y;
-      const L0 = Math.hypot(dx, dy);
-      const dirx = L0 > 1e-9 ? dx / L0 : 1;
-      const diry = L0 > 1e-9 ? dy / L0 : 0;
-      const nx = -diry,
-        ny = dirx;
-      const EPS = Math.max(1e-4, L0 * 0.06);
-      let plus = 0,
-        minus = 0;
-      for (const bb of model.bonds) {
-        if (bb.id === b.id) continue;
-        if (bb.a === a1.id || bb.b === a1.id) {
-          const other = bb.a === a1.id ? bb.b : bb.a;
-          if (other === a2.id) continue;
-          const pa = model.atoms.find((x) => x.id === other);
-          if (!pa) continue;
-          const sx = pa.x - a1.x,
-            sy = pa.y - a1.y;
-          const s = sx * nx + sy * ny;
-          if (s > EPS) plus++;
-          else if (s < -EPS) minus++;
-        }
-        if (bb.a === a2.id || bb.b === a2.id) {
-          const other = bb.a === a2.id ? bb.b : bb.a;
-          if (other === a1.id) continue;
-          const pb = model.atoms.find((x) => x.id === other);
-          if (!pb) continue;
-          const sx = pb.x - a2.x,
-            sy = pb.y - a2.y;
-          const s = sx * nx + sy * ny;
-          if (s > EPS) plus++;
-          else if (s < -EPS) minus++;
-        }
-      }
-      if (plus === minus) return "center" as const;
-      return plus > minus ? ("left" as const) : ("right" as const);
-    })();
-
-    const currentEff = dm === "auto" ? effAuto : dm;
-    let cands: DM[] = [];
-    if (effAuto === "left") {
-      if (dm === "auto")
-        cands = ["center", "right", "left"]; // auto->center->right->...
-      else if (dm === "left")
-        cands = ["center", "right", "auto"]; // left->center
-      else if (dm === "center")
-        cands = ["right", "auto", "left"]; // center->right
-      else if (dm === "right") cands = ["auto", "left", "center"]; // right->auto
-    } else if (effAuto === "right") {
-      if (dm === "auto")
-        cands = ["center", "left", "right"]; // auto->center->left->...
-      else if (dm === "right")
-        cands = ["center", "left", "auto"]; // right->center
-      else if (dm === "center")
-        cands = ["left", "auto", "right"]; // center->left
-      else if (dm === "left") cands = ["auto", "right", "center"]; // left->auto
-    } else {
-      // effAuto === "center"
-      if (dm === "auto")
-        cands = ["left", "right", "center"]; // auto->left(or right)
-      else if (dm === "center")
-        cands = ["right", "left", "auto"]; // prefer center->right
-      else if (dm === "left")
-        cands = ["right", "auto", "center"]; // left->right
-      else if (dm === "right") cands = ["left", "auto", "center"]; // right->left
-    }
-    for (const cand of cands) {
-      const candEff = cand === "auto" ? effAuto : cand;
-      if (candEff !== currentEff) {
-        setBondDoubleMode(b.id, cand as any);
-        return;
-      }
-    }
-    setBondDoubleMode(
-      b.id,
-      dm === "right" ? ("left" as any) : ("right" as any)
-    );
+    // (a double one: its next side; any other, a double - utils/bondKinds, as the "2" key does)
+    const patch = doubleClickPatch(b, model.atoms, model.bonds);
+    if (b.order === 2) setBondDoubleMode(b.id, patch.doubleMode!);
+    else updateBond(b.id, patch);
   }
   function applyTriple(b: (typeof model.bonds)[number]) {
     updateBond(b.id, { order: 3 as any, stereo: "none" });

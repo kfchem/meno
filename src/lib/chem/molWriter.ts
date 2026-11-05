@@ -816,7 +816,27 @@ export function writeRxnfile(
  * valence set to the bonds it has, so that no reader adds any.
  */
 export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical; isotope?: number; noImplicitH?: boolean };
-export type Bond3D = { a1: number; a2: number; order: number };
+/** A bond of a molecule in 3D, by its atoms' numbers from 0 - and, for a bond to several atoms at once (V3000 ENDPTS), those atoms, bound to all of them. */
+export type Bond3D = { a1: number; a2: number; order: number; endpoints?: number[] };
+
+/**
+ * A molecule in 3D with each ring or chain bound to a metal through all its
+ * atoms (`centres`: the metal and the ring's atoms, by number from 0) written
+ * as a file holds one ("CTfile Formats", a multi-centre bond): a star atom
+ * (*) at its atoms' centre, after the molecule's own atoms, and a
+ * coordination bond from the metal to it, its endpoints the ring's atoms,
+ * bound to all of them. Atoms and bonds as given where there are none.
+ */
+export function withRingStars(atoms: readonly Atom3D[], bonds: readonly Bond3D[], centres: readonly { metal: number; atoms: readonly number[] }[]): { atoms: Atom3D[]; bonds: Bond3D[] } {
+  const out = { atoms: [...atoms], bonds: [...bonds] };
+  for (const c of centres) {
+    if (!c.atoms.length || !atoms[c.metal] || c.atoms.some((i) => !atoms[i])) continue;
+    const mean = (k: "x" | "y" | "z") => c.atoms.reduce((s, i) => s + atoms[i][k], 0) / c.atoms.length;
+    out.atoms.push({ el: "*", x: mean("x"), y: mean("y"), z: mean("z") });
+    out.bonds.push({ a1: c.metal, a2: out.atoms.length - 1, order: COORDINATION_BOND, endpoints: [...c.atoms] });
+  }
+  return out;
+}
 
 /** The second header line of a molfile in 3D: the program, no date, and that it is 3D. */
 const PROGRAM_LINE_3D = "  Meno    " + " ".repeat(10) + "3D";
@@ -826,13 +846,14 @@ const PROGRAM_LINE_3D = "  Meno    " + " ".repeat(10) + "3D";
  * counts line's fields and the bond block's atom numbers are three columns
  * - a coordinate past xxxxx.xxxx or a symbol past aaa ("CTfile Formats",
  * automatic V3000 output: long fields); or a bond of a type V2000 has not,
- * its types stopping at 8: a coordination (9) or a hydrogen (10) bond.
+ * its types stopping at 8: a coordination (9) or a hydrogen (10) bond; or a
+ * bond to several atoms at once (ENDPTS), which V2000 has not.
  */
 export function needsV3000In3d(atoms: readonly Atom3D[], bonds: readonly Bond3D[]): boolean {
   return (
     atoms.length > 999 ||
     bonds.length > 999 ||
-    bonds.some((b) => b.order > 8) ||
+    bonds.some((b) => b.order > 8 || b.endpoints?.length) ||
     atoms.some((a) => a.el.length > 3 || !fitsF10(a.x) || !fitsF10(a.y) || !fitsF10(a.z))
   );
 }
@@ -884,7 +905,12 @@ export function writeMolfile3d(
     lines.push("M  V30 END ATOM");
     if (bonds.length > 0) {
       lines.push("M  V30 BEGIN BOND");
-      bonds.forEach((b, i) => lines.push(`M  V30 ${i + 1} ${b.order} ${b.a1 + 1} ${b.a2 + 1}`));
+      bonds.forEach((b, i) =>
+        lines.push(
+          `M  V30 ${i + 1} ${b.order} ${b.a1 + 1} ${b.a2 + 1}` +
+            (b.endpoints?.length ? ` ENDPTS=(${b.endpoints.length} ${b.endpoints.map((e) => e + 1).join(" ")}) ATTACH=ALL` : ""),
+        ),
+      );
       lines.push("M  V30 END BOND");
     }
     lines.push("M  V30 END CTAB", "M  END");

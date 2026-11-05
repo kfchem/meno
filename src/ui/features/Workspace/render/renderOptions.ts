@@ -126,6 +126,18 @@ export function withFixed(options: readonly Option[], values: OptionValues, fixe
   return { options: shown, values: out };
 }
 
+/**
+ * What the choices made fix, shown so and said why, whatever else was chosen: a film's motion's (`fixed`, the renderer it is
+ * made with), and the studio's (the background it is itself) - each as its manifest declares it; none where nothing is fixed.
+ */
+export function fixedChosen(kind: Kind, values: OptionValues, motions: readonly MotionDecl[] | undefined, studios: readonly { id: string; fixed?: FixedChoice[] }[]): FixedChoice[] | undefined {
+  const all = [
+    ...((kind === "film" ? motions?.find((d) => d.id === values.motion)?.fixed : undefined) ?? []),
+    ...(studios.find((x) => x.id === values.studio)?.fixed ?? []),
+  ];
+  return all.length ? all : undefined;
+}
+
 /** Options by the part of the card each is shown in; those that say none, apart (`own`: the renderer's own part). */
 export function bySection(options: readonly Option[]): Record<OptionSection | "own", Option[]> {
   const out: Record<OptionSection | "own", Option[]> = { look: [], render: [], scene: [], motion: [], own: [] };

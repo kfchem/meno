@@ -37,31 +37,31 @@ describe("the readers Meno knows of", () => {
       version: "0.2.1",
       uses: [{ name: "cclib", version: "1.9rc1" }],
       profile: "plugin-cclib",
-      lock: "resources/plugins/cclib/requirements.lock",
-      worker: "resources/plugins/cclib/worker.py",
+      lock: expect.stringMatching(/^plugins\/cclib\/[^/]+\/requirements\.lock$/),
+      worker: expect.stringMatching(/^plugins\/cclib\/[^/]+\/worker\.py$/),
     });
     expect(cclib.env).toBeUndefined();
     // (every program cclib reads, each a kind it brings itself)
     expect(cclib.reads).toEqual(expect.arrayContaining(["orca", "gaussian", "gaussian-fchk", "xtb", "nwchem", "psi4", "qchem", "gamess", "molpro"]));
     expect(cclib.reads.length).toBeGreaterThan(15);
     // (a program's own plugin reads its outputs: Gaussian's, the kinds it declares itself)
-    expect(gaussian).toMatchObject({ name: "Gaussian interface", reads: ["gaussian", "gaussian-fchk"], worker: "resources/plugins/gaussian/worker.py" });
+    expect(gaussian).toMatchObject({ name: "Gaussian interface", reads: ["gaussian", "gaussian-fchk"], worker: expect.stringMatching(/^plugins\/gaussian\/[^/]+\/worker\.py$/) });
     expect(pyscf).toMatchObject({
       name: "PySCF",
       profile: "plugin-pyscf",
-      lock: "resources/plugins/pyscf/pixi.lock",
-      worker: "resources/plugins/pyscf/worker.py",
+      lock: expect.stringMatching(/^plugins\/pyscf\/[^/]+\/pixi\.lock$/),
+      worker: expect.stringMatching(/^plugins\/pyscf\/[^/]+\/worker\.py$/),
       env: "pixi",
       reads: ["molden"],
     });
     // (a program's plugin that reads its own program's output, the kind its manifest declares)
-    expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb", "xtb-g98"], ownKinds: ["xtb", "xtb-g98"], env: "pixi", worker: "resources/plugins/xtb/worker.py" });
+    expect(READER_PLUGINS.find((p) => p.id === "xtb")).toMatchObject({ reads: ["xtb", "xtb-g98"], ownKinds: ["xtb", "xtb-g98"], env: "pixi", worker: expect.stringMatching(/^plugins\/xtb\/[^/]+\/worker\.py$/) });
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
     expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
-    expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
+    expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: expect.stringMatching(/^plugins\/rdkit\/[^/]+\/requirements\.lock$/), worker: expect.stringMatching(/^plugins\/rdkit\/[^/]+\/worker\.py$/) });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
     expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "gaussian", "orca", "pyscf", "xtb"]);
     // (ORCA's own output read by the plugin whose program writes it: its own kind, by its manifest's writtenBy)
@@ -72,7 +72,7 @@ describe("the readers Meno knows of", () => {
     expect(pluginsFilling("pictures").map((p) => p.id)).toEqual(["molnextr", "molscribe"]);
     for (const id of ["molnextr", "molscribe"]) {
       const p = PLUGINS.find((q) => q.id === id)!;
-      expect(p).toMatchObject({ roles: ["pictures"], systems: ["macos", "windows"], lock: `resources/plugins/${id}/requirements.lock` });
+      expect(p).toMatchObject({ roles: ["pictures"], systems: ["macos", "windows"], lock: expect.stringMatching(new RegExp(`^plugins/${id}/[^/]+/requirements\\.lock$`)) });
       // (the confidence its model's reading is unsure below, as it declares it)
       expect(p.roleUnsure.pictures).toBeGreaterThan(0);
       expect(p.roleUnsure.pictures).toBeLessThan(1);
@@ -82,7 +82,7 @@ describe("the readers Meno knows of", () => {
     }
     // (and those that write files: Gaussian's input, its plugin set up as any is)
     expect(WRITER_PLUGINS.map((p) => p.id)).toEqual(["gaussian"]);
-    expect(WRITER_PLUGINS[0]).toMatchObject({ reads: ["gaussian", "gaussian-fchk"], roles: [], profile: "plugin-gaussian", worker: "resources/plugins/gaussian/worker.py" });
+    expect(WRITER_PLUGINS[0]).toMatchObject({ reads: ["gaussian", "gaussian-fchk"], roles: [], profile: "plugin-gaussian", worker: expect.stringMatching(/^plugins\/gaussian\/[^/]+\/worker\.py$/) });
     // (and those that run a program installed separately: ORCA, and Gaussian besides writing its input - never fetched, found)
     const orca = PLUGINS.find((p) => p.id === "orca")!;
     expect(orca.steps.map((d) => [d.kind, d.programs])).toEqual([
@@ -109,7 +109,7 @@ describe("the readers Meno knows of", () => {
     expect(WRITER_PLUGINS[0].steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     // (and those that fill kinds of step: xTB, made by pixi, which reads its own program's output too - and RDKit, a 3D structure besides its roles)
     const xtb = PLUGINS.find((p) => p.id === "xtb")!;
-    expect(xtb).toMatchObject({ reads: ["xtb", "xtb-g98"], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: "resources/plugins/xtb/pixi.lock" });
+    expect(xtb).toMatchObject({ reads: ["xtb", "xtb-g98"], roles: [], writes: [], profile: "plugin-xtb", env: "pixi", lock: expect.stringMatching(/^plugins\/xtb\/[^/]+\/pixi\.lock$/) });
     expect(xtb.steps.map((d) => d.kind)).toEqual(["optimise", "energy", "frequencies"]);
     const crest = PLUGINS.find((p) => p.id === "crest")!;
     expect(crest).toMatchObject({ profile: "plugin-crest", env: "pixi", systems: ["macos", "linux"] });
@@ -121,7 +121,6 @@ describe("the readers Meno knows of", () => {
     expect(rdkit.steps.map((d) => [d.kind, d.programs])).toEqual([
       ["conformers", ["python"]],
       ["minimise", ["python"]],
-      ["stereoisomers", []],
       ["descriptors", []],
     ]);
     // (and those that fill a role by running a program Meno fetches as the plugin is set up: Blender, rendering - never one installed separately)
@@ -156,6 +155,7 @@ describe("the readers Meno knows of", () => {
       id: "nbo",
       name: "NBO",
       version: "7",
+      contract: 1,
       uses: [],
       description: "",
       licence: "",
@@ -172,7 +172,7 @@ describe("the readers Meno knows of", () => {
       xyzSteps: [],
       kinds: [{ id: "nbo-47", name: "NBO input", program: "NBO", extensions: [".47"], marks: [{ text: "$GENNBO" }], lines: [] }],
     });
-    expect(nbo).toMatchObject({ reads: ["nbo-47", "xyz"], lock: "resources/plugins/nbo/requirements.lock", worker: "resources/plugins/nbo/worker.py" });
+    expect(nbo).toMatchObject({ reads: ["nbo-47", "xyz"], lock: "plugins/nbo/7/requirements.lock", worker: "plugins/nbo/7/worker.py" });
     // (each kind it reads one it brings, or Meno's: registered while it is added)
     registerKinds(MANIFESTS);
     for (const p of READER_PLUGINS) {
