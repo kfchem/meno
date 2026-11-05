@@ -9,12 +9,15 @@ tests of how the page shows a structure's conformers (chem/settle.test.ts, chem/
 
     <chem python> scripts/conformers/made_by_rdkit.py
 
-`<chem python>` is the Python of the RDKit plugin's lock (scripts/layout/README.md).
+`<chem python>` is the Python of the RDKit plugin's lock (scripts/layout/README.md); MENO_PLUGINS, a checkout of the
+plugins' repository, where the RDKit plugin's worker is found.
 """
 
 import importlib.util
 import json
+import os
 import pathlib
+import sys
 
 import rdkit
 from rdkit import Chem, RDLogger
@@ -22,7 +25,9 @@ from rdkit.Chem import AllChem
 
 RDLogger.DisableLog("rdApp.*")
 root = pathlib.Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("plugin_rdkit", root / "src-tauri/resources/plugins/rdkit/worker.py")
+if not os.environ.get("MENO_PLUGINS"):
+    sys.exit("set MENO_PLUGINS to a checkout of the plugins' repository: the RDKit plugin's worker is found there")
+spec = importlib.util.spec_from_file_location("plugin_rdkit", pathlib.Path(os.environ["MENO_PLUGINS"]) / "plugins/rdkit/worker.py")
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 

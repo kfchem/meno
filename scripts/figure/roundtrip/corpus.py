@@ -8,11 +8,15 @@ gets it when one is typed (`from_smiles`). And for every reaction of
 reactions.json, its reactants, agents and products, each side its molecules'
 canonical SMILES. Written to .roundtrip/corpus.json.
 
-    <chem python> scripts/figure/roundtrip/corpus.py [--only=Name,Name]
+    MENO_PLUGINS=<plugins checkout> <chem python> scripts/figure/roundtrip/corpus.py [--only=Name,Name]
+
+MENO_PLUGINS is a checkout of the plugins' repository: the RDKit plugin's
+worker is found there.
 """
 
 import importlib.util
 import json
+import os
 import pathlib
 import sys
 
@@ -23,7 +27,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = ROOT / ".roundtrip"
 
-spec = importlib.util.spec_from_file_location("chem_worker", ROOT / "src-tauri/resources/plugins/rdkit/worker.py")
+if not os.environ.get("MENO_PLUGINS"):
+    sys.exit("set MENO_PLUGINS to a checkout of the plugins' repository: the RDKit plugin's worker is found there")
+spec = importlib.util.spec_from_file_location("chem_worker", pathlib.Path(os.environ["MENO_PLUGINS"]) / "plugins/rdkit/worker.py")
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 
