@@ -149,7 +149,7 @@ def step_defaults(kind):
 ENTRY = {**WATER, "charge": 0, "multiplicity": 1}
 
 # (after "Running Gaussian": what the output ends with when a run ends in error, the message before it)
-FAILED = """ Some atoms are too close together.
+FAILED = """ A made-up reason the run stopped.
  Error termination via Lnk1e in /Applications/g16/l202.exe at Thu Oct  8 12:00:00 2026.
 """
 # (a run whose link died: its output stops where it was, with no termination line)
@@ -258,12 +258,12 @@ class Steps(unittest.TestCase):
         read = ask("collect", step="optimise", entries=[ENTRY], options={}, files={"wavefunction.wfx": "<Title>"}, log=" Normal termination of Gaussian 16", ended="done")
         self.assertEqual(read["read"][0]["wavefunction"], {"kind": "wfx", "file": "wavefunction.wfx", "name": "water.wfx"})
         why = ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=FAILED, ended="failed")
-        self.assertEqual(why, {"why": "Some atoms are too close together."})
+        self.assertEqual(why, {"why": "A made-up reason the run stopped."})
         # (an optimisation that stopped once under way: its output read too, for the geometry it reached - Runs again)
         stopped = ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=" Berny optimization.\n" + FAILED, ended="failed")
-        self.assertEqual(stopped, {"why": "Some atoms are too close together.", "partial": [{"kind": "gaussian", "log": True, "name": "water.log"}]})
+        self.assertEqual(stopped, {"why": "A made-up reason the run stopped.", "partial": [{"kind": "gaussian", "log": True, "name": "water.log"}]})
         # (not for a single point, nor where it wrote nothing)
-        self.assertEqual(ask("collect", step="energy", entries=[ENTRY], options={}, files={}, log=FAILED, ended="failed"), {"why": "Some atoms are too close together."})
+        self.assertEqual(ask("collect", step="energy", entries=[ENTRY], options={}, files={}, log=FAILED, ended="failed"), {"why": "A made-up reason the run stopped."})
         # (a link that dies says nothing of why: what it printed last is said)
         died = ask("collect", step="frequencies", entries=[ENTRY], options={}, files={}, log=DIED, ended="failed")
         self.assertEqual(died, {"why": "Gaussian stopped without saying why, after: Berny optimization."})
@@ -272,7 +272,7 @@ class Steps(unittest.TestCase):
     def test_a_job_its_runner_saw_end_well_but_whose_output_does_not_say_normal_termination_failed(self):
         # (an error its exit code did not tell: failed, in Gaussian's words)
         why = ask("collect", step="optimise", entries=[ENTRY], options={}, files={}, log=FAILED, ended="done")
-        self.assertEqual(why, {"why": "Some atoms are too close together."})
+        self.assertEqual(why, {"why": "A made-up reason the run stopped."})
         # (cut off, saying nothing of how it ended; a normal termination then an error one)
         self.assertEqual(ask("collect", step="frequencies", entries=[ENTRY], options={}, files={}, log=DIED, ended="done"), {"why": "Gaussian stopped without saying why, after: Berny optimization."})
         both = " Normal termination of Gaussian 16\n" + FAILED
