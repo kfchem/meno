@@ -283,7 +283,8 @@ describe("kinds only plugins not added read", () => {
     expect(kindOf("x", "head\nF A R   P R O G R A M\n", cataloguedKinds())?.output).toEqual({});
     // (one here as well as on offer: the one here is the one told by)
     registerKinds([], [reader("far", { id: "far-out", name: "Far, here", extensions: [".far"], marks: [{ text: "F A R   P R O G R A M" }] })], online.slice(1));
-    expect(cataloguedKinds().map((k) => k.name)).toEqual(["Far, here"]);
+    // (once: its entry online is not a second plugin that reads it)
+    expect(cataloguedKinds().map((k) => [k.name, k.suggest])).toEqual([["Far, here", ["far"]]]);
     // (and none suggested for a kind a plugin added reads)
     expect(offeredKinds(online.map(broughtBy), [reader("x", { ...out, id: "far-out" })]).map((k) => k.id)).toEqual(["nbo-out"]);
     registerKinds([]);
@@ -297,6 +298,9 @@ describe("kinds only plugins not added read", () => {
     const here = acceptManifest({ id: "far", name: "Far, here", version: "1", environment: "uv", reads: ["far-out"], kinds: [{ id: "far-out", name: "Far output", extensions: [".far"], marks: [{ text: "F A R   P R O G R A M" }] }], quotedTables: [table] })!;
     registerKinds([], [here], [entry]);
     expect(quotedTables().offered.map((t) => t.plugin)).toEqual(["Far, here"]);
+    // (added - whether or not among those here - its entry's tables are not said to be another's)
+    registerKinds([here], [], [entry]);
+    expect([quotedTables().offered, quotedTables().added.map((t) => t.plugin)]).toEqual([[], ["Far, here"]]);
     registerKinds([here], [here], [entry]);
     expect([quotedTables().offered, quotedTables().added.map((t) => t.plugin)]).toEqual([[], ["Far, here"]]);
     registerKinds([]);
