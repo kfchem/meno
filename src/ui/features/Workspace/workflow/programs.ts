@@ -5,7 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
-import { isId } from "../../../../lib/plugins/manifest";
+import { isId, type SolvationDecl } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA, geometryKey, type By, type Property, type Restraint } from "../../../../lib/entry";
@@ -27,6 +27,8 @@ import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
 import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
+import { keptFrames, keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
+import { partsOf, partsSideBySide } from "../chem/partsApart";
 
 /**
  * An entry as a plugin is given it: Meno's plain data - its atoms, each its
@@ -684,6 +686,44 @@ export function passedSaid(kind: StepKind, count: number): string | null {
 }
 
 /**
+ * The solvation a step's options ask for, in the words its program says
+ * one it ran in (`SolvationDecl`): "none" where they ask for none, the
+ * gas phase; else its `says` with each option's value put in - "ALPB(water)".
+ * Unsaid where the step's manifest says no solvation, or where an option it
+ * names has no value - never words with a gap in them; the options as a run
+ * takes them have every value, their defaults filled in (kinds `optionsOf`).
+ */
+export function solvationAsked(decl: SolvationDecl | undefined, options: OptionValues): string | undefined {
+  if (!decl) return undefined;
+  if (String(options[decl.none.id]) === decl.none.is) return "none";
+  const named = [...decl.says.matchAll(/\{([^{}]*)\}/g)].map((m) => m[1]);
+  if (named.some((id) => options[id] == null)) return undefined;
+  return decl.says.replace(/\{([^{}]*)\}/g, (_, id: string) => String(options[id]));
+}
+
+/** A solvation in words: "none", the gas phase. */
+const solvationSaid = (s: string) => (s === "none" ? "the gas phase" : s);
+
+/**
+ * Why what a job gave is not of the solvation asked (docs/WORKFLOWS.md,
+ * *Solvation as asked*), whatever program ran it - or none. Its output says
+ * the solvation it ran in (`ReaderOutput.solvation`); that is as asked
+ * where it is the same words, in any case, or begins with them and says
+ * more after a comma - "ALPB(water), reference state gsolv [1 M
+ * gas/solution]" is ALPB(water); never more without the comma, which may
+ * be another solvent's name going on. The gas phase is "none" alone: there
+ * is nothing of a solvation to say more of. An output that does not say
+ * its solvation is not held to it: its calculation says it was not stated.
+ */
+export function notAsAsked(asked: string | undefined, said: string | null | undefined): Failure | null {
+  if (asked == null || said == null) return null;
+  const a = asked.trim().toLowerCase();
+  const s = said.trim().toLowerCase();
+  if (s === a || (a !== "none" && s.startsWith(`${a},`))) return null;
+  return { kind: "refused", why: `It ran in ${solvationSaid(said.trim())}, not in ${solvationSaid(asked)} as asked` };
+}
+
+/**
  * An entry's conformers, as a conformer search worked them out: each
  * geometry it gave a conformer of the entry's compound, numbered in order,
  * with its energy - and what the calculation was, kept with each, what it
@@ -693,29 +733,48 @@ export function passedSaid(kind: StepKind, count: number): string | null {
  * another's (`partOf`); each linked to the structure drawn as `workedOf`
  * keeps it (`keptAnew`).
  */
-export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | Failure {
+export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, checks?: MadeChecks): Worked[] | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
-  const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return { kind: "no-geometry", why: "It found no conformer" };
-  const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
-  // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
-  const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
-  const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
+  const whole = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
+  if (!whole.length) return { kind: "no-geometry", why: "It found no conformer" };
+  const given = out.energies?.length === whole.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
+  // (those Meno's checks set aside, where it gives them: lib/chem/metalHolds `keptMade`)
+  let kept: { frames: number[][]; energies?: number[]; how?: { label: string; text: string }[] };
+  try {
+    kept = keptMade({ atoms: entry.atoms, frames: whole, ...(given ? { energies: given } : {}) }, checks ?? null);
+    // (a structure of more than one part - a salt - its parts side by side, where Meno checks what the search made: chem/partsApart)
+    if (checks) kept = partsSideBySide({ atoms: entry.atoms, ...kept }, partsOf(entry.atoms, entry.bonds));
+  } catch (e) {
+    return { kind: "no-geometry", why: e instanceof Error ? e.message : String(e) };
+  }
+  const { frames, energies } = kept;
+  // (the program's own populations, where it gives one for each and Meno set none aside - shares of all it made are no
+  //  shares of fewer, so where any was set aside they are not carried - and each one's degeneracy, a whole number, of
+  //  those kept)
+  const at = keptFrames(whole, checks ?? null);
+  const shares = at.length === whole.length && out.populations?.length === whole.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
+  const degeneracies = out.degeneracies?.length === whole.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? at.map((i) => out.degeneracies![i]) : undefined;
   const calc = calcOf(out, readers, source);
+  // (what Meno's checks set aside, said in how each one kept was made)
+  const aside = kept.how?.filter((r) => r.label === "Set aside") ?? [];
   // (a search of its own: all the conformers it found, whole - whatever the entry it began from was a part of)
   const { partOf: _part, ...from } = entry;
-  return frames.map((f, k) => ({
-    ...anewWithoutEnergy(from),
+  return frames.map((f, k) => {
     // (each still linked to the structure drawn the entry was made from, where it is still that compound)
-    ...keptAnew(entry, f, calc?.charge),
-    number: k + 1,
-    xyz: [...f],
-    ...(energies ? { energy: energies[k] } : {}),
-    ...(shares ? { share: shares[k] } : {}),
-    ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
-    calc: k === 0 ? calc : { ...calc, results: undefined },
-  }));
+    const anew = keptAnew(entry, f, calc?.charge);
+    return {
+      ...anewWithoutEnergy(from),
+      ...anew,
+      ...(aside.length ? { keep: { ...anew.keep, made: { ...anew.keep?.made, how: [...(anew.keep?.made?.how ?? []), ...aside] } } } : {}),
+      number: k + 1,
+      xyz: [...f],
+      ...(energies ? { energy: energies[k] } : {}),
+      ...(shares ? { share: shares[k] } : {}),
+      ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
+      calc: k === 0 ? calc : { ...calc, results: undefined },
+    };
+  });
 }
 
 /**

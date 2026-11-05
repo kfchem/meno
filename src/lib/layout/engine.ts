@@ -960,6 +960,7 @@ function byAHair(
     y: y[i],
     el: a.el,
     hs: a.tetra ? Number(a.tetra.neighbours.includes(-1)) : mol.hs[i],
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(depth[i] != null ? { z: depth[i]! } : {}),
     ...(a.tetra && centres.includes(i) ? { centre: true } : {}),
   }));
@@ -1003,6 +1004,7 @@ function misread(input: LayoutInput, mol: Molecule, out: Layout2D): Set<number> 
     el: a.el,
     // (a centre's H as its configuration has it, however many the input gives)
     hs: a.tetra ? Number(a.tetra.neighbours.includes(-1)) : mol.hs[i],
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(out.depth[i] != null ? { z: out.depth[i]! } : {}),
     ...(out.solid[i] && a.tetra ? { centre: true } : {}),
   }));

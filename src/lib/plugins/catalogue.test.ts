@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import { acceptCatalogue, offersOf, type Catalogue } from "./catalogue";
+
+const HEX = "a".repeat(64);
+
+/** An entry as a catalogue writes it, with what is changed. */
+const entry = (over: Record<string, unknown> = {}) => ({
+  id: "sketch",
+  version: "0.2.0",
+  name: "Sketch interface",
+  licence: "Apache-2.0",
+  contract: 1,
+  systems: ["macos", "linux"],
+  roles: ["smiles"],
+  kinds: ["energy"],
+  source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 12_345 },
+  manifestSha256: HEX,
+  ...over,
+});
+
+const catalogue = (plugins: unknown[], over: Record<string, unknown> = {}) => ({ schema: 1, issued: "2026-11-10T00:00:00Z", serial: 12, plugins, ...over });
+
+const read = (raw: unknown) => acceptCatalogue(raw);
+const why = (raw: unknown) => (read(raw) as { why?: string }).why;
+
+describe("a catalogue of plugins online, read", () => {
+  it("reads each entry as it is written: what Settings says of it, and where its files are", () => {
+    const got = read(catalogue([entry({ terms: "For academic use.", cite: "A. Author, J. Chem. 1 (2020) 1.", description: "Draws.", homepage: "https://example.org" })]));
+    expect(got).toEqual({
+      catalogue: {
+        schema: 1,
+        issued: "2026-11-10T00:00:00Z",
+        serial: 12,
+        plugins: [
+          {
+            id: "sketch",
+            version: "0.2.0",
+            name: "Sketch interface",
+            licence: "Apache-2.0",
+            contract: 1,
+            systems: ["macos", "linux"],
+            roles: ["smiles"],
+            kinds: ["energy"],
+            reads: [],
+            source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 12_345 },
+            manifestSha256: HEX,
+            description: "Draws.",
+            homepage: "https://example.org",
+            terms: "For academic use.",
+            cite: "A. Author, J. Chem. 1 (2020) 1.",
+          },
+        ],
+      },
+    });
+  });
+
+  it("refuses the whole of it for one entry it cannot read - a catalogue is signed whole", () => {
+    const good = entry();
+    for (const bad of [
+      entry({ id: "Sketch" }),
+      entry({ id: "../up" }),
+      entry({ version: "0.2" }),
+      entry({ version: "latest" }),
+      entry({ contract: "1" }),
+      entry({ contract: 0 }),
+      entry({ systems: ["amiga"] }),
+      entry({ roles: ["anything"] }),
+      entry({ kinds: ["Energy Window"] }),
+      entry({ manifestSha256: "abc" }),
+      entry({ terms: "" }),
+      entry({ homepage: "http://example.org" }),
+    ]) {
+      expect(why(catalogue([good, bad]))).toMatch(/^It holds /);
+    }
+    expect(why(catalogue([good, { ...good }]))).toBe("It offers sketch twice");
+  });
+
+  it("takes a plugin's files only on https, from where the plugins' releases are - nowhere else", () => {
+    const at = (url: string, sha256 = HEX, bytes: unknown = 10) => why(catalogue([entry({ source: { url, sha256, bytes } })]));
+    expect(at("https://objects.githubusercontent.com/x/sketch.tar.gz")).toBeUndefined();
+    expect(at("https://release-assets.githubusercontent.com/x/sketch.tar.gz")).toBeUndefined();
+    // (letters made small, as the address reads them: the same host)
+    expect(at("https://GITHUB.com/x.tar.gz")).toBeUndefined();
+    // (a host only like one of them, or one of them with a dot at its end: none of them, and the whole list refused)
+    for (const url of ["https://evilgithub.com/x.tar.gz", "https://github.com.evil.net/x.tar.gz", "https://objects.githubusercontent.com.evil.net/x.tar.gz", "https://github.com./x.tar.gz", "https://xgithub.com/x.tar.gz", "https://api.github.com/x.tar.gz"]) {
+      expect(at(url), url).toMatch(/where its files are/);
+    }
+    for (const url of ["http://github.com/x.tar.gz", "https://example.org/x.tar.gz", "https://github.com:8443/x.tar.gz", "https://user:pw@github.com/x.tar.gz", "file:///tmp/x.tar.gz", "not a url"]) {
+      expect(at(url)).toMatch(/where its files are/);
+    }
+    expect(at("https://github.com/x.tar.gz", "A".repeat(64))).toMatch(/fingerprint/);
+    expect(at("https://github.com/x.tar.gz", HEX, 0)).toMatch(/size/);
+    expect(at("https://github.com/x.tar.gz", HEX, 1.5)).toMatch(/size/);
+  });
+
+  it("reads only the form it knows, and one with its serial, date and plugins", () => {
+    expect(why(catalogue([], { schema: 2 }))).toMatch(/newer Meno/);
+    expect(why(catalogue([], { serial: 0 }))).toMatch(/serial/);
+    expect(why(catalogue([], { issued: "soon" }))).toMatch(/serial/);
+    expect(why(catalogue([], { plugins: {} }))).toMatch(/serial/);
+    expect(why(null)).toBe("It is not a catalogue");
+    expect(read(catalogue([]))).toEqual({ catalogue: { schema: 1, issued: "2026-11-10T00:00:00Z", serial: 12, plugins: [] } });
+  });
+});
+
+describe("what Settings offers of each plugin online", () => {
+  const listed = (read(catalogue([entry(), entry({ id: "lens", version: "1.0.0", systems: [] }), entry({ id: "winonly", systems: ["windows"] }), entry({ id: "future", contract: 2 })])) as { catalogue: Catalogue }).catalogue;
+
+  it("adds one not here, updates one older here, and leaves one as new or newer here", () => {
+    const offers = (here: [string, string][]) => offersOf(listed, new Map(here), "macos").map((o) => [o.entry.id, o.offer]);
+    expect(offers([])).toEqual([["sketch", "add"], ["lens", "add"], ["winonly", "not-here"], ["future", "not-here"]]);
+    expect(offers([["sketch", "0.1.9"], ["lens", "1.0.0"]])).toEqual([["sketch", "update"], ["lens", "here"], ["winonly", "not-here"], ["future", "not-here"]]);
+    // (a newer one here than the list's - one made locally: never offered as an update back)
+    expect(offers([["sketch", "0.10.0"]])[0]).toEqual(["sketch", "here"]);
+  });
+
+  it("says why one is not for here: another system, or a newer Meno", () => {
+    const why = (here: [string, string][] = []) => offersOf(listed, new Map(here), "macos").flatMap((o) => (o.offer === "not-here" ? [o.why] : []));
+    expect(why()).toEqual(["For Windows only", "It is for a newer Meno"]);
+    expect(why([["future", "0.1.0"]])[1]).toBe("Its newer versions are for a newer Meno");
+    // (a Meno that speaks its contract offers it; a system not known, every one)
+    expect(offersOf(listed, new Map(), null, [1, 2]).map((o) => o.offer)).toEqual(["add", "add", "add", "add"]);
+  });
+});

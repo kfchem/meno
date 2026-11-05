@@ -197,11 +197,13 @@ class Collect(unittest.TestCase):
         self.assertIsNone(worker.solvation_of(""))
         # (CREST's own words alone: another program's setup is not read)
         self.assertIsNone(worker.solvation_of("      * Solvation model:               ALPB\n        Solvent                        water\n"))
-        # (not what was asked: refused)
+        # (said as it ran, whatever was asked: whether that is as asked is Meno's to say - the manifest's solvation)
         for asked in ("none", "water"):
             said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "conformers", "entries": [METHANOL], "options": {"solvent": asked}, "files": {"crest_conformers.xyz": ENSEMBLE}, "log": ECHO_THF, "ended": "done"}))
-            self.assertFalse(said["ok"], asked)
-            self.assertIn("not as asked", said["error"])
+            self.assertTrue(said["ok"], asked)
+            self.assertEqual({o["solvation"] for o in said["result"]["outputs"]}, {"ALPB(thf)"})
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual([s.get("solvation") for s in manifest["steps"]], [{"says": "ALPB({solvent})", "none": {"id": "solvent", "is": "none"}}] * 2)
 
     def test_each_conformers_population_as_cregen_gives_it(self):
         # (after "Metadynamics-based Conformational Sampling": CREGEN's table, the row that begins each set of rotamers giving the set's weight)

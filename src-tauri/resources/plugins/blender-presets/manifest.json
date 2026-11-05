@@ -1,7 +1,7 @@
 {
   "id": "blender-presets",
   "name": "Blender looks and motions",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Looks, studios and film motions made with Blender's own materials, light and keys, for the Blender plugin to render.",
   "licence": "GPL-3.0-or-later",
   "homepage": "https://www.blender.org",
@@ -222,7 +222,7 @@
       {
         "id": "change-ring",
         "label": "Change, ring: atoms circle and land as the next",
-        "description": "Two molecules or more, one becoming the next in turn: the atoms rise into one ring, which turns and lets them fall into the next molecule's places.",
+        "description": "Two molecules or more, one becoming the next in turn: the atoms rise into one ring, which turns and lets them fall into the next molecule's places - which atom lands where is the motion's own choreography.",
         "shortest": {
           "change": 3
         },

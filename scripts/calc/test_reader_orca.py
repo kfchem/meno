@@ -109,8 +109,8 @@ def final(value):
 class Run(unittest.TestCase):
     def test_ended_normally_with_an_error_or_cut_short(self):
         self.assertEqual(reader.run_of("...\n                             ****ORCA TERMINATED NORMALLY****\n")[:2], ("normal", None))
-        error = "[file orca_leanscf/orca_leanscf.cpp, line 306]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged.\n\nORCA finished by error termination in LEANSCF\n"
-        self.assertEqual(reader.run_of(error)[:2], ("error", "unfortunately, the SCF has not converged."))
+        error = "[file made_up/made_up.cpp, line 1]: Error (MADE_UP): made-up words, the SCF has not converged.\n\nORCA finished by error termination in LEANSCF\n"
+        self.assertEqual(reader.run_of(error)[:2], ("error", "made-up words, the SCF has not converged."))
         self.assertEqual(reader.run_of("ORCA finished by error termination in Startup\n")[:2], ("error", "ORCA finished by error termination in Startup"))
         self.assertEqual(reader.run_of("still going\n")[:2], ("cut", None))
         # (a job another follows says its end only at the file's end)
@@ -168,14 +168,14 @@ class Level(unittest.TestCase):
 
 class Geometries(unittest.TestCase):
     def test_each_geometry_its_energy_after_it(self):
-        text = GEOMETRY + final("-76.38619838") + GEOMETRY + final("-76.38627110")
+        text = GEOMETRY + final("-76.31234567") + GEOMETRY + final("-76.31239876")
         geos = reader.geometries(text)
         self.assertEqual([[el for el, _ in g["atoms"]] for g in geos], [["O", "H", "H"]] * 2)
-        self.assertEqual(reader.energies_of(text, geos), ([-76.38619838, -76.3862711], None))
+        self.assertEqual(reader.energies_of(text, geos), ([-76.31234567, -76.31239876], None))
 
     def test_an_energy_stated_again_unchanged_is_the_same(self):
-        text = GEOMETRY + final("-11.388607") + "...\n" + final("-11.388607")
-        self.assertEqual(reader.energies_of(text, reader.geometries(text)), ([-11.388607], None))
+        text = GEOMETRY + final("-11.398765") + "...\n" + final("-11.398765")
+        self.assertEqual(reader.energies_of(text, reader.geometries(text)), ([-11.398765], None))
 
     def test_no_energy_where_they_are_not_one_to_each_geometry(self):
         geos = reader.geometries(GEOMETRY + GEOMETRY)
@@ -191,8 +191,8 @@ class Geometries(unittest.TestCase):
             "  O      0.000000    0.000000    0.117000\n  H      0.000000    0.757000   -0.469000\n  H      0.000000    0.000000    2.500000\n"
             "  Q      0.000000    0.000000   -3.000000\n\n----------------------------\nCARTESIAN COORDINATES (A.U.)\n----------------------------\n"
             "  NO LB      ZA    FRAG     MASS         X           Y           Z\n"
-            "   0 O     8.0000    0    15.999    0.000000    0.000000    0.221098\n   1 H     1.0000    0     1.008    0.000000    1.430523   -0.886282\n"
-            "   2 H     0.0000    0     0.000    0.000000    0.000000    4.724315\n   3 Q     0.5000    0     0.000    0.000000    0.000000   -5.669178\n\n"
+            "   0 O     8.0000    0    15.999    0.000000    0.000000    0.223456\n   1 H     1.0000    0     1.008    0.000000    1.412345   -0.891234\n"
+            "   2 H     0.0000    0     0.000    0.000000    0.000000    4.712345\n   3 Q     0.5000    0     0.000    0.000000    0.000000   -5.654321\n\n"
         )
         [g] = reader.geometries(text)
         self.assertEqual(([el for el, _ in g["atoms"]], g["ghosts"], g["masses"]), (["O", "H", "H"], {2}, [15.999, 1.008, 0.0]))
@@ -220,21 +220,21 @@ class Thermochemistry(unittest.TestCase):
     TEXT = (
         "--------------------------\nTHERMOCHEMISTRY AT 298.15K\n--------------------------\n\n"
         "Temperature         ...   298.15 K\nPressure            ...     1.00 atm\nTotal Mass          ...    18.02 AMU\nQuasi RRHO          ...    False\n\n"
-        "Zero point energy                ...      0.02160000 Eh      13.55 kcal/mol\n"
-        "Total Enthalpy                    ...    -76.36090000 Eh\n"
+        "Zero point energy                ...      0.02130000 Eh      13.37 kcal/mol\n"
+        "Total Enthalpy                    ...    -76.31230000 Eh\n"
         "Point Group:  C2v, Symmetry Number:   2  \n"
-        "Final entropy term                ...      0.02140000 Eh     13.43 kcal/mol\n"
-        "Final Gibbs free energy         ...    -76.38230000 Eh\n"
-        "G-E(el)                           ...      0.00400000 Eh      2.51 kcal/mol\n"
+        "Final entropy term                ...      0.02190000 Eh     13.74 kcal/mol\n"
+        "Final Gibbs free energy         ...    -76.33460000 Eh\n"
+        "G-E(el)                           ...      0.00410000 Eh      2.57 kcal/mol\n"
     )
 
     def test_each_value_as_printed(self):
         got = {r["id"]: r["value"] for r in reader.thermo_of(self.TEXT)}
-        self.assertEqual(got["thermo.free-energy"], -76.3823)
-        self.assertEqual(got["thermo.enthalpy"], -76.3609)
-        self.assertEqual(got["thermo.zpve"], 0.0216)
-        self.assertEqual(got["thermo.g-correction"], 0.004)
-        self.assertAlmostEqual(got["thermo.entropy"], 0.0214 / 298.15 * 627509.474, 9)
+        self.assertEqual(got["thermo.free-energy"], -76.3346)
+        self.assertEqual(got["thermo.enthalpy"], -76.3123)
+        self.assertEqual(got["thermo.zpve"], 0.0213)
+        self.assertEqual(got["thermo.g-correction"], 0.0041)
+        self.assertAlmostEqual(got["thermo.entropy"], 0.0219 / 298.15 * 627509.474, 9)
         self.assertEqual((got["thermo.temperature"], got["thermo.pressure"]), (298.15, 1.0))
         self.assertEqual((got["thermo.point-group"], got["thermo.symmetry-number"], got["thermo.treatment"]), ("C2v", 2, "RRHO"))
 
@@ -289,7 +289,7 @@ class Properties(unittest.TestCase):
         self.assertEqual(d["value"], 2.0334)
         self.assertAlmostEqual(d["vector"][2], -2.0334, 12)
         self.assertAlmostEqual(d["origin"][2], 0.1 * reader.BOHR, 12)
-        # (the other form ORCA 6.1.1 prints it in: three numbers, no brackets)
+        # (its other printed form: three numbers, no brackets)
         plain = self.DIPOLE.replace("(  0.0000,  0.0000,  0.1000) ", "    0.000000    0.000000    0.100000")
         self.assertAlmostEqual(reader.dipole_of(plain)[0]["origin"][2], 0.1 * reader.BOHR, 12)
 
@@ -321,7 +321,7 @@ class Properties(unittest.TestCase):
         # (an open shell's: alpha, then beta; with symmetry where ORCA printed it)
         uks = (
             "----------------\nORBITAL ENERGIES\n----------------\n                 SPIN UP ORBITALS\n  NO   OCC          E(Eh)            E(eV)    Irrep \n"
-            "   0   1.0000     -10.221371      -278.1376    1-A1\n   1   0.0000       0.083582         2.2744    1-B1\n\n"
+            "   0   1.0000     -10.234567      -278.4985    1-A1\n   1   0.0000       0.084567         2.3012    1-B1\n\n"
             "                 SPIN DOWN ORBITALS\n  NO   OCC          E(Eh)            E(eV)    Irrep \n"
             "   0   1.0000     -10.190000      -277.2840    1-A1\n   1   0.0000       0.100000         2.7211    1-B1\n"
         )

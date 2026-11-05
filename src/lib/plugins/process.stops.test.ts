@@ -41,7 +41,7 @@ vi.mock("@tauri-apps/api/core", () => ({
     return undefined;
   },
 }));
-vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => `/resources/${p}` }));
+vi.mock("@tauri-apps/api/path", () => ({ appLocalDataDir: async () => "/data", join: async (...parts: string[]) => parts.join("/") }));
 vi.mock("../pyEnv", () => ({
   pyEnvReady: async () => true,
   ensurePyEnv: async () => "/data/uv/plugin-demo/venv/bin/python",

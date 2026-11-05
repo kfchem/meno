@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptManifest, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
+import { acceptManifest, CONTRACTS, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
 import { MANIFESTS } from "./known";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -8,6 +8,7 @@ const good = {
   id: "nbo",
   name: "NBO",
   version: "7.0",
+  contract: 1,
   uses: [],
   description: "Natural bond orbitals.",
   licence: "Commercial",
@@ -26,10 +27,17 @@ const good = {
 };
 
 describe("a plugin's manifest", () => {
+  it("is written to a plugin contract this Meno speaks: unsaid, the first; another, or none Meno takes, refused", () => {
+    expect(CONTRACTS).toEqual([1]);
+    expect(acceptManifest({ ...good, contract: undefined })?.contract).toBe(1);
+    expect(acceptManifest({ ...good, contract: 1 })?.contract).toBe(1);
+    for (const contract of [2, 0, "1", null, 1.5]) expect(acceptManifest({ ...good, contract }), String(contract)).toBeNull();
+  });
+
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, ...said } = good;
+    const { contract: _c, uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
     const declared = acceptManifest({
@@ -262,6 +270,27 @@ describe("a plugin's manifest", () => {
     // (CREST's, as Meno carries it - which stops on one atom - and no other plugin's: the others run theirs on one)
     expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.noLoneAtom).map((d) => `${m.id} ${d.kind}`))).toEqual(["crest conformers", "crest optimise"]);
     expect(MANIFESTS.find((m) => m.id === "crest")!.steps.map((d) => d.programs)).toEqual([["crest"], ["crest"]]);
+  });
+
+  it("may say how its options ask for a solvation - each option it names a choice of the step's own, else it says none", () => {
+    const solvent = { id: "solvent", label: "Solvent", type: "choice", choices: [{ value: "none", label: "None" }, { value: "water", label: "Water" }], default: "none" };
+    const level = { id: "level", label: "Level", type: "text", default: "" };
+    const of = (solvation: unknown) => acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["xtb"], options: [solvent, level], solvation }] })!.steps[0].solvation;
+    expect(of({ says: "ALPB({solvent})", none: { id: "solvent", is: "none" } })).toEqual({ says: "ALPB({solvent})", none: { id: "solvent", is: "none" } });
+    expect(of({ says: "ALPB({level})", none: { id: "solvent", is: "none" } })).toBeUndefined();
+    expect(of({ says: "ALPB({gone})", none: { id: "solvent", is: "none" } })).toBeUndefined();
+    expect(of({ says: "ALPB", none: { id: "solvent", is: "none" } })).toBeUndefined();
+    expect(of({ says: "ALPB({solvent})", none: { id: "solvent", is: "vacuum" } })).toBeUndefined();
+    expect(of({ says: "ALPB({solvent})" })).toBeUndefined();
+    expect(of(undefined)).toBeUndefined();
+    // (xTB's and CREST's, as Meno carries them: each step that takes a solvent)
+    expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.solvation).map((d) => `${m.id} ${d.kind} ${d.solvation!.says}`))).toEqual([
+      "crest conformers ALPB({solvent})",
+      "crest optimise ALPB({solvent})",
+      "xtb optimise ALPB({solvent})",
+      "xtb energy ALPB({solvent})",
+      "xtb frequencies ALPB({solvent})",
+    ]);
   });
 
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {

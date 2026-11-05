@@ -19,8 +19,10 @@
  * code they write is built in; not build scripts' or tests' - with each
  * crate's files read from its own folder in Cargo's registry. A crate with no
  * licence file is given its licence's standard text only where that text
- * comes with another crate here (as the Apache License 2.0's does); the rest
- * are named as having none.
+ * comes with another crate here (as the Apache License 2.0's does); a crate
+ * or a package whose licence names its authors (MIT, BSD) is given the text
+ * its repository holds, kept beside this file (upstream.json); the rest are
+ * named as having none.
  *
  * Beside the notices, scripts/licenses/bundled.json keeps each package's
  * name, version and licence, and the crates in the lock file that are not
@@ -105,6 +107,13 @@ function npmLicence(pkg) {
   return null;
 }
 
+/** Who an npm package is by, as its package.json says - its `author` and `contributors` - each without an address or a link. */
+function npmAuthors(pkg) {
+  return [pkg.author, ...(Array.isArray(pkg.contributors) ? pkg.contributors : [])]
+    .map((a) => (typeof a === "string" ? a : a?.name ?? "").replace(/\s*<[^>]*>/, "").replace(/\s*\([^)]*\)/, "").trim())
+    .filter(Boolean);
+}
+
 // ---------------------------------------------------------------- npm
 
 /**
@@ -165,7 +174,7 @@ export async function bundledNpm(root = ROOT) {
     const lock = `node_modules/${relative(nodeModules, dir).split(sep).join("/")}`;
     if (found.has(lock)) return;
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-    found.set(lock, { name: pkg.name, version: pkg.version, license: npmLicence(pkg), repository: repositoryUrl(pkg.repository) ?? pkg.homepage ?? null, lock, dir });
+    found.set(lock, { name: pkg.name, version: pkg.version, license: npmLicence(pkg), repository: repositoryUrl(pkg.repository) ?? pkg.homepage ?? null, authors: npmAuthors(pkg), lock, dir });
   };
   const packageDirOf = (file) => {
     const real = existsSync(file) ? realpathSync(file) : file;
@@ -349,26 +358,35 @@ const OTHER_NOTICES = [
 ];
 
 /**
- * What the files of a package leave out, found by reading it: code by others
- * it carries in itself, and where that code's licence is to be found.
+ * What the files of a package leave out, found by reading those that go into
+ * the window: code by others it carries in itself, and where that code's
+ * licence is to be found - its text, where it is not given elsewhere here,
+ * read from where that code is kept and given with the package (upstream.json,
+ * `carried`).
  */
 const NOTES = {
   "@react-three/fiber":
     "Its build carries React's reconciler (react-reconciler), copyright Meta Platforms, Inc. and affiliates, under the MIT License: the text given for react in Part 1.",
+  "motion-utils":
+    "Its cubic Bézier easing (dist/es/easing/cubic-bezier.mjs) is modified from Gaëtan Renaudeau's bezier-easing, as a comment in it says, which is under the MIT License: its text is given below.",
+  "troika-three-text":
+    "Its build (dist/) carries others' code, as built into its libs/, each named in a comment there with its licence: Typr.ts (libs/typr.factory.js), under the MIT License; woff2otf, under the Apache License 2.0, with fflate, under the MIT License (libs/woff2otf.factory.js); and @unicode-font-resolver/client 1.0.2 (libs/unicode-font-resolver-client.factory.js), under the MIT License. Their texts are given below, after its own.",
   "webview2-com-sys":
     "On Windows it links into Meno's program the WebView2 loader (WebView2LoaderStatic.lib) from Microsoft's WebView2 SDK, which comes with the crate; the SDK's own licence does not, and is given below as Microsoft publishes it.",
 };
 
 /**
- * Licence texts read from their published pages, for crates that ship none
- * (upstream.json, upstream/): each at the commit its version was published
- * from, with where it was read and when - and what else it carries whose
- * licence it does not ship.
+ * Licence texts read from their published pages, for crates and npm packages
+ * that ship none (upstream.json, upstream/): each at the commit its version
+ * was published from, with where it was read and when - and what else it
+ * carries whose licence it does not ship; and the licences of code by others
+ * that a package carries in its own files without them (`carried`).
  */
 const UPSTREAM = join(ROOT, "scripts", "licenses", "upstream.json");
 const upstream = existsSync(UPSTREAM) ? JSON.parse(readFileSync(UPSTREAM, "utf8")) : { texts: [] };
 const upstreamText = (file) => cleanText(readFileSync(join(ROOT, "scripts", "licenses", "upstream", file), "utf8"));
-const upstreamOf = (p) => upstream.texts.find((t) => t.for === p.name && t.version === p.version);
+const upstreamOf = (kind, p) => upstream.texts.find((t) => (t.kind ?? "crate") === kind && t.for === p.name && t.version === p.version);
+const carriedBy = (p) => (upstream.carried ?? []).filter((c) => c.in === p.name && c.version === p.version);
 
 const RULE = "=".repeat(80);
 const THIN = "-".repeat(80);
@@ -395,15 +413,17 @@ export function compose(npm, { crates, leftOut }) {
     if (NOTES[p.name]) lines.push(NOTES[p.name], "");
     const own = `${p.name} ${p.version}`;
     let files = p.files;
-    const read = !files.length && kind === "crate" ? upstreamOf(p) : null;
+    const read = !files.length ? upstreamOf(kind, p) : null;
     if (read) {
       // (no licence file comes with it: the text its repository holds at the commit it was published from, read from its page)
-      lines.push(`No licence file comes with this crate. Its licence's text is given as its repository holds it at the commit ${read.version} was published from (${read.commit}), read on ${upstream.read}: ${read.source}`);
+      const what = kind === "crate" ? "crate" : "package";
+      const from = kind === "crate" ? "Cargo.toml" : "package.json";
+      lines.push(`No licence file comes with this ${what}. Its licence's text is given as its repository holds it at the commit ${read.version} was published from (${read.commit}), read on ${read.read ?? upstream.read}: ${read.source}`);
       // (who it is by, as its own manifest says - and where that names no one, so said: no holder is added that neither gives)
-      lines.push("", p.authors.length ? `Its authors, as its Cargo.toml names them: ${p.authors.join(", ")}.` : "Its Cargo.toml names no authors.");
+      lines.push("", p.authors.length ? `Its authors, as its ${from} names them: ${p.authors.join(", ")}.` : `Its ${from} names no authors.`);
       files = [{ name: read.file, text: upstreamText(read.file) }];
       for (const a of read.also ?? []) {
-        lines.push("", `${a.what} Read on ${upstream.read}: ${a.source}`);
+        lines.push("", `${a.what} Read on ${read.read ?? upstream.read}: ${a.source}`);
         files.push({ name: a.file, text: upstreamText(a.file) });
       }
     } else if (!files.length) {
@@ -420,6 +440,23 @@ export function compose(npm, { crates, leftOut }) {
         const authors = kind === "crate" && p.authors.length ? ` Its authors, as its manifest names them: ${p.authors.join(", ")}.` : "";
         lines.push(`No licence file comes with this ${kind === "crate" ? "crate" : "package"}. Its ${from} gives its licence as: ${p.license ?? "(none)"}.${authors}`);
         missing.push(`${own} (${p.license ?? "none"}): no text`);
+      }
+    }
+    // (others' code it carries, whose licences it does not: each text read from where that code is kept, or a standard
+    // one that names no one, its holders as the code itself names them - the copy of it already given above, where there
+    // is one, else the one the crates bring)
+    for (const c of kind === "npm" ? carriedBy(p) : []) {
+      if (c.standard) {
+        const s = standard.get(c.standard);
+        if (!s) throw new Error(`${own}: no standard ${c.standard} text comes with any crate here, for what it carries`);
+        const above = [...firstSeen.keys()].find((t) => s.opens.test(t));
+        if (lines.at(-1) !== "") lines.push("");
+        lines.push(c.what);
+        files = [...files, { name: s.id, text: above ?? s.text, standard: true }];
+      } else {
+        if (lines.at(-1) !== "") lines.push("");
+        lines.push(`${c.what} Read on ${c.read ?? upstream.read}: ${c.source}`);
+        files = [...files, { name: c.file, text: upstreamText(c.file) }];
       }
     }
     for (const f of files) {
@@ -457,9 +494,10 @@ export function compose(npm, { crates, leftOut }) {
     ...groups.map((g) => `  ${g.name.padEnd(20)}${g.what}`),
     ...ungrouped.map((n) => `  ${n}`),
     "",
-    "The Blender plugin's own scripts are licensed under the GNU General Public",
-    "License, version 3 or later; its licence's text (LICENSE) is in its folder,",
-    "resources/plugins/blender.",
+    "The own scripts of the Blender plugin and of the Film looks and motions",
+    "plugin are licensed under the GNU General Public License, version 3 or",
+    "later; the licence's text (LICENSE) is in each one's folder,",
+    "resources/plugins/blender and resources/plugins/blender-presets.",
     "",
     "Written by scripts/licenses/notices.mjs (npm run notices) from a build of",
     "Meno and its lock files.",
