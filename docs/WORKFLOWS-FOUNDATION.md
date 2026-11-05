@@ -763,7 +763,10 @@ Each option is read in one of three ways:
 - **an element's symbol** is that atom: `Cl`, `F`, `H`;
 - **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
   (`structureProblem`): exactly one `*`, bonded by one single bond to the
-  atom the group is attached by.
+  atom the group is attached by. A double bond's cis or trans written in it
+  (`/` and `\`, `*/C=C/C` for (E)-prop-1-enyl) is kept in each product, its
+  side against the `*` taken as the atom it is attached to (`smilesGroup`):
+  so are a centre's `@` and `@@`.
 
 A line without a `*` is never read as SMILES, so `CO` is a label, and its
 reading is shown. Beside each line the step shows what it was read as: the
