@@ -398,6 +398,9 @@ describe("a double bond's cis or trans and an axis's sense, in a structure's ide
   // (the same axis from its other end, and by the other ortho atom of its first end: the same atropisomer)
   const back = (at: number): Axial => ({ atoms: [at + 6, at], refs: [at + 7, at + 1], sense: 1 });
   const otherOrtho = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 5, at + 7], sense: -1 });
+  // (and by the other ortho atom of its second end, or of both)
+  const farOrtho = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 1, at + 11], sense: -1 });
+  const bothOrtho = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 5, at + 11], sense: 1 });
   const mirror = (at: number): Axial => ({ ...along(at), sense: -1 });
   // (two alkenyl arms on an O, CH2-C(CH3)=C(X)Y each, X and Y as `far` has them: each arm's configuration given against its CH2 or CH3 and its X or Y)
   type Arm = { refs: readonly ["CH2" | "CH3", "X" | "Y"]; cis: boolean };
@@ -437,6 +440,9 @@ describe("a double bond's cis or trans and an axis's sense, in a structure's ide
     expect(identityText(ether(FCl, byCH2, byCH2))).toBe(identityText(ether(FCl, byCH2, byCl)));
     expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(otherOrtho(0))));
     expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(back(0))));
+    expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(farOrtho(0))));
+    expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(bothOrtho(0))));
+    expect(identityText(biaryls(along, along))).toBe(identityText(biaryls(along, farOrtho)));
     expect(identityText(biaryls(along, along))).toBe(identityText(biaryls(along, back)));
     expect(identityText(biaryls(along, along))).toBe(identityText(biaryls(along, otherOrtho)));
   });
@@ -445,6 +451,7 @@ describe("a double bond's cis or trans and an axis's sense, in a structure's ide
     expect(symmetryOrbits(ether(FCl, byCH2, byCH3)).orbit).toEqual(symmetryOrbits(ether(FCl, byCH2, byCH2)).orbit);
     expect(symmetryOrbits(ether(FCl, byCH2, byCl)).orbit).toEqual(symmetryOrbits(ether(FCl, byCH2, byCH2)).orbit);
     expect(symmetryOrbits(biaryls(along, back)).orbit).toEqual(symmetryOrbits(biaryls(along, along)).orbit);
+    expect(symmetryOrbits(biaryls(along, farOrtho)).orbit).toEqual(symmetryOrbits(biaryls(along, along)).orbit);
     expect(symmetryOrbits(biaryls(along, along)).orbit[0]).toBe(symmetryOrbits(biaryls(along, along)).orbit[14]);
   });
 
@@ -470,6 +477,8 @@ describe("a double bond's cis or trans and an axis's sense, in a structure's ide
     expect(identityText(biaryl(otherOrtho(0)))).not.toBe(identityText(biaryl(mirror(0))));
     expect(identityText(biaryls(along, along))).not.toBe(identityText(biaryls(along, mirror)));
     expect(identityText(biaryls(along, back))).not.toBe(identityText(biaryls(back, mirror)));
+    expect(identityText(biaryls(along, farOrtho))).not.toBe(identityText(biaryls(farOrtho, mirror)));
+    expect(identityText(biaryl(farOrtho(0)))).not.toBe(identityText(biaryl(mirror(0))));
   });
 
   it("does not depend on the order of the atoms", () => {

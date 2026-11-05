@@ -277,7 +277,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         )}
         <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
-          {!runs(p) && " · Comes with Meno: nothing to download."}
+          {!runs(p) && " · Nothing to set up: its files only."}
         </p>
         {offer && <TermsAndCite entry={offer.entry} />}
         {refused.length > 0 && (
