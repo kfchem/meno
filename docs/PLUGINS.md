@@ -340,8 +340,8 @@ code is under another licence than Meno's. Such a plugin:
   (`licence: "GPL-3.0-or-later"`);
 - is never taken from by Meno's code or other plugins, and speaks to
   Meno only through files and arguments;
-- is listed with its licence wherever Meno lists the plugins'
-  licences: README, and Settings, *Plugins*.
+- has its licence shown in Settings, *Plugins*, as every plugin has, and
+  stated in its own folder of the plugins online (kfchem/meno-plugins).
 
 Two such plugins are among the plugins online, both GPL-3.0-or-later: the
 Blender plugin (`meno-plugins/plugins/blender`, RENDER.md), and the Film looks
