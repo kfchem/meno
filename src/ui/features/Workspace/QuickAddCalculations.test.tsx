@@ -8,7 +8,7 @@ import type { QuickGroup } from "./workflow/offered";
 const none = () => {};
 
 const STEPS: QuickGroup[] = [
-  { by: "xtb", name: "xTB", steps: [{ kind: "optimise", name: "Optimise", icon: "curve" }] },
+  { by: "tight", name: "Tight", steps: [{ kind: "optimise", name: "Optimise", icon: "curve" }] },
   {
     by: "meno",
     name: "Meno",
@@ -35,14 +35,14 @@ describe("Quick Add's calculations", () => {
     const { heads } = drawn([{ id: "p", name: "Screen", needs: [] }]);
     expect(heads).toEqual([
       { name: "Meno", count: 3, open: true },
-      { name: "xTB", count: 1, open: false },
+      { name: "Tight", count: 1, open: false },
       { name: "Procedures", count: 1, open: false },
     ]);
   });
 
   it("put the steps of the one open in their families, in order, each family apart by a thin rule", () => {
     const { html } = drawn();
-    const meno = html.slice(html.indexOf('aria-label="Meno"'), html.indexOf('aria-label="xTB"'));
+    const meno = html.slice(html.indexOf('aria-label="Meno"'), html.indexOf('aria-label="Tight"'));
     const order = [...meno.matchAll(/aria-label="([^"]+) · Meno"|role="separator"/g)].map((m) => m[1] ?? "|");
     expect(order).toEqual(["As conformers", "|", "Energy", "|", "Render"]);
   });

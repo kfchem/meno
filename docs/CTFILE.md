@@ -34,7 +34,9 @@ title, its first line; the record's data items are not kept:
   ATTCHPT, ATTCHORD).
 - **Bonds**: types 1 to 10 (single, double, triple, aromatic, the four
   query types, coordination, hydrogen); stereo (a single bond's up, down,
-  either; a double bond's either - cis or trans, not known); topology;
+  either - a wedge or hashes narrow at the bond's first atom, as the file
+  lists it, and kept narrow at that atom as the drawing is edited; a
+  double bond's either - cis or trans, not known); topology;
   reacting centre; stereo care (as an atom's: read, not carried on nor
   written back); V3000's haptic endpoints (ENDPTS with
   ATTACH=ALL or ANY) and display (DISP: COORD, DATIVE, HBOND1, HBOND2).

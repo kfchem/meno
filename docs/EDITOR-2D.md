@@ -430,7 +430,10 @@ the first row's is. Opening a row closes any other below the first; each
 opens and closes in a short ease, and nothing of which was open is kept
 for the next time Quick Add opens. A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
-it. Going, it does nothing more as it fades - nor does the right-click
+it - but not while a question is asked over the window (a "List the
+plugins online?" or a "Download RDKit?" asked from its SMILES field): the
+press, the wheel and Escape are the question's, and Quick Add stays open,
+with what was typed in it, for the answer (`quickAddLeave`). Going, it does nothing more as it fades - nor does the right-click
 menu: an icon double-clicked put its choice down once, not a second time
 on the first (theme/leaving.ts) - and a press elsewhere as it fades is
 the next thing done, not one to close it. It opens as the second click's button comes up: a third click asks
@@ -686,7 +689,10 @@ Both go together, because both touch every layer.
   starting there on their own (the maintainer, 2026-10-29). In the journals'
   styles it reaches the atom: none of their specifications says otherwise.
   The setting is "Hashed wedge: widest hash" (At the atom, Short of the
-  atom). At a label the hashes stop at the label in every style. A style
+  atom). It holds only where bonds go on from the wide end: at a bare end
+  bonded to nothing else, the widest hash is the bond's end in every style,
+  or the wedge would have no end and look short (the maintainer,
+  2026-11-05). At a label the hashes stop at the label in every style. A style
   saved before the setting reaches the atom, as it was drawn then; a
   picture draws it as the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
@@ -697,6 +703,17 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **A wedge's narrow end is kept by atom** (`Bond.narrow`). A wedge or
+  hashes, and a ring's bond in perspective, are narrow at the atom they
+  were drawn, read or laid out narrow at, and stay so while bonds are
+  added to or taken from either end. Before, the narrow end was the end
+  with more bonds unless the bond said otherwise, counted again after
+  every edit: two bonds drawn out of a wedge's wide end could move it to
+  the other atom, turning one configuration into another with nothing
+  said. A wedge given no narrow end - chosen from the menu, say - is
+  narrow at the end with more bonds as the edit leaves it, and from then
+  on keeps it. A click on a single bond runs plain, wedge, hashes, and
+  plain again with the other end narrow next time round.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
@@ -1474,26 +1491,26 @@ All hover-based, as above.
   - **Text boxes** (the maintainer, 2026-10-11: words for a research talk,
     in place of a slide program's): words on the page with a size of
     their own, letters marked, and lists.
-    - *A size of their own*, in points as the drawing's labels are: their
-      menu's *Font…* shows a card - beside them, clear of them, so that
-      what it changes is seen changing (to their right, else below, to
-      their left or above) - of *Label* (the drawing's labels' size,
-      10 points in ACS 1996's style, as words have had), *Text* 14,
-      *Heading* 20 and *Title* 28 - the one they have ringed - and any
-      other typed, 4 to 288 points, given with Enter. While they are
+    - *A size of their own*, in points as the drawing's labels are, in
+      their menu itself, under its icons, with their line spacing and
+      typeface (the maintainer's ruling: no card to open first): *8*,
+      *10*, *12*, *14*, *18* and *24* - points alone, no names by purpose -
+      the size they are set at lit, and any other typed in the field
+      beside them, 4 to 288 points, given with Enter; the menu stays open
+      while sizes are tried (`WordsFont`). While they are
       written, Ctrl/Cmd+Shift+> and < take them a size up or down (6, 7,
       8 ... 28, 32, 36, 44 ... 96). One undo step; saved, copied and drawn
       so in pictures (SVG, EMF and PNG). Without one, they are the labels'
       size, as the drawing style says.
-    - *Line spacing of their own* (the maintainer, 2026-10-27), on the same
-      card: *1* (single, as words have had: 1.25 ems baseline to
-      baseline), *1.15*, *1.5* and *2*, the one they have ringed, or any
+    - *Line spacing of their own* (the maintainer, 2026-10-27), in the same
+      menu: *1* (single, as words have had: 1.25 ems baseline to
+      baseline), *1.15*, *1.5* and *2*, the one they have lit, or any
       other typed, 0.5 to 4 times single, given with Enter. Their lines
       move apart or together eased, and so on an undo; a box given a
       width keeps its top. One undo step; saved, copied and drawn so in
       pictures.
-    - *A typeface of their own* (the maintainer, 2026-10-27), on the same
-      card, picked as the drawing style's is (the same list: those that
+    - *A typeface of their own* (the maintainer, 2026-10-27), in the same
+      menu, picked as the drawing style's is (the same list: those that
       come with Meno and stand for a journal's, then every one on this
       computer, each shown in itself). It is theirs over the drawing
       style's: the style changed, they keep it. The drawing's typeface,
@@ -1601,13 +1618,15 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or at an atom of three bonds that keeps no configuration of its
-     own (an amine's N, a plain N-alkyl aziridine's, a B), where a wedge
-     states none - rather than lose it. A centre whose fourth group is a
-     lone pair that keeps its configuration (*Centres by a lone pair*) - a
-     sulfoxide's or a sulfonium's S, a phosphine's P, an oxaziridine's N -
-     is read from its wedge and laid out like any other, on one wedge. A
-     wedge
+     other, two of a centre's bonds in line, an atom of three bonds that
+     keeps no configuration of its own (an amine's N, a plain N-alkyl
+     aziridine's, a B), where a wedge states none, more groups round an
+     atom than a tetrahedral centre's four (a phosphorane's P), or a wavy
+     bond at it - rather than lose it, saying which of these it is
+     (`drawn.ts` `unreadWhy`). A centre whose fourth group is a lone pair
+     that keeps its configuration (*Centres by a lone pair*) - a sulfoxide's
+     or a sulfonium's S, a phosphine's P, an oxaziridine's N - is read from
+     its wedge and laid out like any other, on one wedge. A wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an

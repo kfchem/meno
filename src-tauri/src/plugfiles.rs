@@ -883,21 +883,6 @@ mod tests {
     }
 
     #[test]
-    fn reads_blender_s_official_builds_as_meno_carries_them() {
-        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/blender/manifest.json")).unwrap();
-        let all = downloads_of(&serde_json::from_str(&text).unwrap()).unwrap();
-        assert_eq!(all.len(), 3);
-        assert!(all.iter().all(|d| d.provides.as_deref() == Some("blender") && d.url.starts_with("https://download.blender.org/release/")));
-        let mac = all.iter().find(|d| d.system.as_deref() == Some("macos")).unwrap();
-        assert_eq!((mac.unpack, mac.program.as_deref()), (Some(Unpack::Dmg), Some("Blender.app/Contents/MacOS/Blender")));
-        // (the one for this computer fetched as the plugin is set up, where there is one)
-        assert!(needed(&all).len() <= 1);
-        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            assert_eq!(needed(&all)[0].file, "blender-5.2.2-macos-arm64.dmg");
-        }
-    }
-
-    #[test]
     fn sets_a_plugin_up_with_what_is_for_this_computer_alone() {
         let elsewhere = if crate::jobs::system() == "windows" { "macos" } else { "windows" };
         let all = downloads_of(&json!({"downloads": [

@@ -28,6 +28,7 @@ import { kindOf, MARK_REACH, MENO_KINDS, type Kind } from "../../../../lib/io/ki
 import { headOfFile, textOfFile } from "../../../../lib/io/text";
 import { NotRead } from "../../../../lib/calc/read";
 import { kindOfFile } from "../../../../lib/calc/probe";
+import { sayNoneTold } from "../../../views/openFile";
 import { anyKindById } from "../../../../lib/calc/catalog";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { atomOfLabelAt, labelReachOf } from "../utils/labelHits";
@@ -60,8 +61,8 @@ export function useStructureEvents(
   // Where the pointer is over the drawing, in the window; null off it
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   // Last import failure, shown in the canvas until dismissed or replaced:
-  // where no plugin added reads the file, with the plugins a catalogue
-  // suggests, each to add - and the file read again once one is.
+  // where no plugin added reads the file, with the plugins that would - here,
+  // or on offer online - each to add, and the file read again once one is.
   const [importError, setImportError] = useState<ImportError | null>(null);
   // (a drop being read: where it was dropped, in the window's pixels - marked there until what it brings is placed, or fails)
   const [dropping, setDropping] = useState<{ x: number; y: number; key: number } | null>(null);
@@ -480,6 +481,8 @@ export function useStructureEvents(
     if (!kind && opensAsText(f.name, head)) {
       store.getState().addTexts([{ name: f.name, text: await textOfFile(f) }], at);
       setImportError(null);
+      // (nothing told it, and the plugins online not listed: said, with the button that lists them - and read again, where one tells it then)
+      if (again) sayNoneTold([f.name], again, () => kindOfFile(f.name, head));
       return true;
     }
     const text = await textOfFile(f);

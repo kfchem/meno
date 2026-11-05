@@ -2,26 +2,26 @@ import { describe, expect, it } from "vitest";
 import { keyRows, openAfter, openFirst, remembersPress, rowAfter, typedIn } from "./quickAddList";
 
 describe("Quick Add's list of calculations", () => {
-  const ids = ["meno", "xtb", "orca", "procedures"];
+  const ids = ["meno", "tight", "loose", "procedures"];
 
   it("opens with who was opened last, where it is still there - Meno's own otherwise", () => {
-    expect(openFirst("orca", ids)).toBe("orca");
+    expect(openFirst("loose", ids)).toBe("loose");
     expect(openFirst("crest", ids)).toBe("meno");
     expect(openFirst(undefined, ids)).toBe("meno");
     expect(openFirst(3, ids)).toBe("meno");
-    expect(openFirst("orca", [])).toBeUndefined();
+    expect(openFirst("loose", [])).toBeUndefined();
   });
 
   it("opens one row at a time: a press on another opens it, a press on the one open shuts it", () => {
-    expect(openAfter("meno", "orca")).toBe("orca");
-    expect(openAfter("orca", "orca")).toBeUndefined();
-    expect(openAfter(undefined, "xtb")).toBe("xtb");
+    expect(openAfter("meno", "loose")).toBe("loose");
+    expect(openAfter("loose", "loose")).toBeUndefined();
+    expect(openAfter(undefined, "tight")).toBe("tight");
   });
 
   it("remembers a row as it is opened, and not as it is shut: it stays who was opened last", () => {
-    expect(remembersPress("meno", "orca")).toBe(true);
-    expect(remembersPress(undefined, "orca")).toBe(true);
-    expect(remembersPress("orca", "orca")).toBe(false);
+    expect(remembersPress("meno", "loose")).toBe(true);
+    expect(remembersPress(undefined, "loose")).toBe(true);
+    expect(remembersPress("loose", "loose")).toBe(false);
   });
 
   it("goes down and up from row to row, stopping at either end, from the first where no row has the keys", () => {
@@ -46,9 +46,9 @@ describe("Quick Add's list of calculations", () => {
     const rows = [
       { id: "meno", disabled: false, shut: false },
       { id: "step in a shut row", disabled: false, shut: true },
-      { id: "orca", disabled: true, shut: false },
-      { id: "xtb", disabled: false, shut: false },
+      { id: "loose", disabled: true, shut: false },
+      { id: "tight", disabled: false, shut: false },
     ];
-    expect(keyRows(rows, (r) => r.shut).map((r) => r.id)).toEqual(["meno", "xtb"]);
+    expect(keyRows(rows, (r) => r.shut).map((r) => r.id)).toEqual(["meno", "tight"]);
   });
 });
