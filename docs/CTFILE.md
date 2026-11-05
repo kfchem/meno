@@ -232,7 +232,9 @@ What is put together from them is read by rule, not listed:
   S(=O)2H; what parentheses hold, with its count, hangs on the
   atom before them - an O or an S alone in them an =O, as one unbracketed
   may be (C(O)NMe2, C(O)OMe, C(O)NiPr2), a group alone in them as it is
-  unbracketed (N(iPr)2). O's with H's written after them are an acid's:
+  unbracketed (N(iPr)2), a group with a hyphen in its own name too
+  (N(t-Bu)2, N(i-Pr)2: a hyphen between a letter and the rest of a name
+  is no charge). O's with H's written after them are an acid's:
   each H on an O of its own, the rest =O (CO2H, SO3H, SO2H S(=O)OH, PO3H2
   P(=O)(OH)2), never on the atom they hang on (the maintainer,
   2026-10-17). D is deuterium wherever an H could stand, an atom of its
