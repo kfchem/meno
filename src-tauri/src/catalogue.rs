@@ -624,8 +624,8 @@ mod tests {
             .collect();
         assert_eq!(ids[0], "2F17AB3E9FB8307D");
         // (a list signed with a key made for the tests alone - its secret one not kept - is refused, whichever)
-        assert_eq!(checked(SERIAL3, SERIAL3_A, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
-        assert_eq!(checked(SERIAL4, SERIAL4_C, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
+        assert_eq!(checked(LIST, LIST_A, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
+        assert_eq!(checked(LATER, LATER_C, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
     }
 
     #[test]
