@@ -17,7 +17,7 @@ const ENTRY = {
   source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 10 },
   manifestSha256: HEX,
 };
-const CATALOGUE = { schema: 1, issued: "2026-11-10T00:00:00Z", serial: 3, plugins: [ENTRY] };
+const CATALOGUE = { schema: 1, issued: "2026-11-10T00:00:00Z", plugins: [ENTRY] };
 
 /** Meno's backend, as a test has it: `catalogue_get` answers as given - and says whether it was asked to fetch. */
 function backend(answer: () => unknown) {
@@ -57,7 +57,7 @@ describe("the plugins online, listed", () => {
     await list(false, ask);
     await list(true, ask);
     expect(asked).toEqual([{ fetch: true }, { fetch: false }, { fetch: true }]);
-    expect(online.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { serial: 3 } });
+    expect(online.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { issued: "2026-11-10T00:00:00Z" } });
   });
 
   it("shows the one kept from before offline, saying why - or, none kept, that it needs the network", async () => {
@@ -65,7 +65,7 @@ describe("the plugins online, listed", () => {
     const kept = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
     await listOnline(true, kept.ask);
     expect(kept.asked).toEqual([{ fetch: false }]);
-    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/), catalogue: { serial: 3 } });
+    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/), catalogue: { issued: "2026-11-10T00:00:00Z" } });
     useOnline.setState({ state: "unlisted", catalogue: undefined });
     await listOnline(true, backend(() => null).ask);
     expect(useOnline.getState()).toMatchObject({ state: "failed", problem: expect.stringMatching(/^Listing them needs the network: Meno is offline/) });

@@ -61,8 +61,24 @@ export type CatalogueEntry = {
   manifestSha256: string;
 };
 
-/** A catalogue, as it was signed: when, its serial - which only grows - and its plugins. */
-export type Catalogue = { schema: number; issued: string; serial: number; plugins: CatalogueEntry[] };
+/**
+ * A catalogue, as it was signed: when it was issued - UTC, to the second
+ * (`issuedOk`), which only grows: Meno's backend takes none issued before
+ * the one taken, nor another issued the same second - and its plugins.
+ */
+export type Catalogue = { schema: number; issued: string; plugins: CatalogueEntry[] };
+
+/** When a catalogue was issued, as Meno takes it: `2026-11-05T13:04:09Z` - UTC, to the second, nothing else - and a real time. */
+const ISSUED = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
+
+/** Whether `v` says when a catalogue was issued as Meno takes it (`ISSUED`): a real date and time, never one a calendar rolls over. */
+export function issuedOk(v: unknown): v is string {
+  const m = typeof v === "string" ? ISSUED.exec(v) : null;
+  if (!m) return false;
+  const [y, mo, d, h, mi, s] = m.slice(1).map(Number);
+  const t = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d && t.getUTCHours() === h && t.getUTCMinutes() === mi && t.getUTCSeconds() === s;
+}
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -141,9 +157,9 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
   const c = raw as Record<string, unknown> | null;
   if (!c || typeof c !== "object") return { why: "It is not a catalogue" };
   if (c.schema !== CATALOGUE_SCHEMA) return { why: "It is of a form this Meno does not read: a newer Meno may" };
-  const serial = typeof c.serial === "number" && Number.isSafeInteger(c.serial) && c.serial > 0 ? c.serial : null;
-  const issued = typeof c.issued === "string" && !Number.isNaN(Date.parse(c.issued)) ? c.issued : null;
-  if (serial == null || !issued || !Array.isArray(c.plugins)) return { why: "Its serial, its date or its plugins are missing" };
+  if ("serial" in c) return { why: "It carries a serial, which this Meno does not read" };
+  if (!issuedOk(c.issued) || !Array.isArray(c.plugins)) return { why: "When it was issued, or its plugins, are not as Meno takes them" };
+  const issued = c.issued;
   const plugins: CatalogueEntry[] = [];
   for (const raw of c.plugins) {
     const e = entryOf(raw);
@@ -151,7 +167,7 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
     if (plugins.some((p) => p.id === e.id)) return { why: `It offers ${e.id} twice` };
     plugins.push(e);
   }
-  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, serial, plugins } };
+  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, plugins } };
 }
 
 /**

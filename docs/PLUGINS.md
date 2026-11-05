@@ -1588,16 +1588,21 @@ its signature, and fetching, checking and unpacking a plugin's files -
 comes in its own pull request.
 
 - **The catalogue.** One file, its signature beside it: its form
-  (`schema`, 1), when it was issued, a serial that only grows, and its
-  plugins. Each plugin on offer gives:
+  (`schema`, 1), when it was issued (`issued`), and its plugins - no
+  counter (the maintainer, 2026-11-05). `issued` is UTC, to the second,
+  in one form alone - `2026-11-05T13:04:09Z` - and a real time, so that
+  its order as text is its order in time; each list released is issued
+  later than the last. Each plugin on offer gives:
   - its id, version (three numbers), name, licence, and - where its program asks - its terms and what to cite; a description and home page where it has them;
   - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
 - **Read strictly, whole.** The backend checks the signature before
-  anything of it is read, and its serial against the one kept: one lower
-  is refused, and the one kept stays, so that an older list replayed
-  never undoes a plugin taken off it. What comes to Settings is read again
+  anything of it is read, and when it was issued against the one kept:
+  one issued earlier is refused, and one issued the same second is taken
+  only where it is that very list, byte for byte (its SHA-256 kept with
+  it); the one kept stays, so that an older list replayed never undoes a
+  plugin taken off it. A list that still carries a serial is refused. What comes to Settings is read again
   as data (`acceptCatalogue`). One entry Meno cannot read, or a plugin
   offered twice, refuses the whole of it, as it is signed whole, and says
   why. A list is not refused for its age: Settings shows the day it was
