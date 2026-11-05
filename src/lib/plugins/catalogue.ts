@@ -9,7 +9,7 @@
  * of its plugins: the catalogue does.
  */
 import { compareVersions, versionParts } from "./depends";
-import { SYSTEMS, type System } from "./manifest";
+import { EXTENSION, markOf, PROGRAM, QUOTED_TABLES_MOST, quotedTableOf, SYSTEMS, type Mark, type QuotedTableDecl, type System } from "./manifest";
 import { SYSTEM_NAMES } from "./here";
 import { isRole, type RoleId } from "./roles";
 
@@ -55,11 +55,23 @@ export type CatalogueEntry = {
   roles: RoleId[];
   kinds: string[];
   reads: string[];
+  /** The kinds of file it reads that their marks tell, as its manifest says them: how a file only it would read is told, before it is got. */
+  fileKinds: FileKind[];
+  /** The tables of atoms its program prints, as papers quote them, as its manifest declares them: so that one is said to be its to read, before it is got. */
+  quotedTables: QuotedTableDecl[];
   /** Its files: one archive, its fingerprint and its size. */
   source: { url: string; sha256: string; bytes: number };
   /** Its manifest's fingerprint, checked once its files are unpacked. */
   manifestSha256: string;
 };
+
+/**
+ * A kind of file a plugin on offer reads, as its manifest says it: what it
+ * is called, the names its files go by, the marks that tell one, and - where
+ * the plugin's own program writes it - that program, so that the plugin is
+ * named first for it.
+ */
+export type FileKind = { id: string; name: string; extensions: string[]; marks: Mark[]; writtenBy?: string };
 
 /**
  * A catalogue, as it was signed: when it was issued - UTC, to the second
@@ -88,6 +100,51 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const KIND = /^[a-z][a-z0-9-]{0,39}$/;
 
 const text = (v: unknown, most: number): string | null => (typeof v === "string" && v.trim() && v.length <= most ? v.trim() : null);
+
+/** A mark, as a manifest says it, and nothing else: no key of it but its text unless it says something. */
+function markIn(v: unknown): Mark | null {
+  const m = v as Record<string, unknown> | null;
+  if (!m || typeof m !== "object" || Object.keys(m).some((k) => !["text", "at", "anyCase"].includes(k))) return null;
+  if (("at" in m && m.at !== "line-start") || ("anyCase" in m && m.anyCase !== true)) return null;
+  return markOf(m);
+}
+
+/** An entry's tables of atoms, read strictly: each exactly as a manifest's is kept - nothing of it dropped or trimmed - or null. */
+function quotedTablesOf(v: unknown): QuotedTableDecl[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v) || v.length > QUOTED_TABLES_MOST) return null;
+  const out: QuotedTableDecl[] = [];
+  for (const raw of v) {
+    const t = quotedTableOf(raw);
+    const r = raw as Record<string, unknown>;
+    const same = (a: readonly string[], b: unknown) => Array.isArray(b) && b.length === a.length && a.every((x, k) => x === b[k]);
+    if (!t || out.some((o) => o.id === t.id) || Object.keys(r).some((k) => !["id", "headings", "heads", "columns"].includes(k))) return null;
+    if (!same(t.headings, r.headings) || !same(t.heads, r.heads ?? [])) return null;
+    out.push(t);
+  }
+  return out;
+}
+
+/** The kinds of file an entry reads that marks tell, read strictly; null, where one is not as Meno takes it. */
+function fileKindsOf(v: unknown): FileKind[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v)) return null;
+  const out: FileKind[] = [];
+  for (const raw of v) {
+    const k = raw as Record<string, unknown> | null;
+    const id = typeof k?.id === "string" && KIND.test(k.id) ? k.id : null;
+    const name = text(k?.name, 80);
+    const extensions = k?.extensions ?? [];
+    const marks = Array.isArray(k?.marks) ? k.marks.map(markIn) : null;
+    const writtenBy = k?.writtenBy;
+    if (!id || !name || out.some((o) => o.id === id)) return null;
+    if (!Array.isArray(extensions) || !extensions.every((e) => typeof e === "string" && EXTENSION.test(e))) return null;
+    if (!marks?.length || marks.some((m) => m == null)) return null;
+    if (writtenBy !== undefined && !(typeof writtenBy === "string" && PROGRAM.test(writtenBy))) return null;
+    out.push({ id, name, extensions: [...new Set(extensions as string[])], marks: marks as Mark[], ...(writtenBy ? { writtenBy } : {}) });
+  }
+  return out;
+}
 
 /** A plugin's files' place: on https, at a host the catalogue's files come from, and nothing else. */
 function sourceUrl(v: unknown): string | null {
@@ -119,6 +176,10 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const kinds = list(e.kinds, (k) => KIND.test(k));
   const reads = list(e.reads, (k) => KIND.test(k));
   if (!roles || !kinds || !reads) return `${id}: a role or kind Meno does not take`;
+  const fileKinds = fileKindsOf(e.fileKinds);
+  if (!fileKinds) return `${id}: a kind of file it reads not as Meno takes it`;
+  const quotedTables = quotedTablesOf(e.quotedTables);
+  if (!quotedTables) return `${id}: a table of atoms not as Meno takes it`;
   const s = e.source as Record<string, unknown> | null;
   const url = sourceUrl(s?.url);
   const sha256 = typeof s?.sha256 === "string" && HEX64.test(s.sha256) ? s.sha256 : null;
@@ -142,6 +203,8 @@ function entryOf(raw: unknown): CatalogueEntry | string {
     roles: roles as RoleId[],
     kinds,
     reads,
+    fileKinds,
+    quotedTables,
     source: { url, sha256, bytes },
     manifestSha256,
     ...(description ? { description } : {}),
