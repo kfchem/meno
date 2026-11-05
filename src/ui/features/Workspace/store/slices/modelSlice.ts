@@ -7,7 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKindPatch, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -384,6 +384,19 @@ export const createModelSlice = (
   setBondsKind: (ids: readonly number[], kind: BondKindName) => {
     const patch = bondKindPatch(kind);
     doc.edit("change bonds' kind", (d) => ids.reduce((acc, id) => ops.updateBond(acc, id, patch), d));
+  },
+
+  // (a bond key with the pointer on a bond: what it makes of that bond, made of it - and of every bond selected, where it is
+  //  among them - one step; nothing, where it would change nothing)
+  bondKey: (id: number, key: BondKey) => {
+    const { model, sel } = get();
+    const bond = model.bonds.find((b) => b.id === id);
+    if (!bond) return false;
+    const patch = bondKeyPatch(key, bond, model.atoms, model.bonds);
+    const ids = sel.bonds.has(id) ? [...sel.bonds] : [id];
+    if (ids.every((i) => patchChangesNothing(model.bonds.find((b) => b.id === i) ?? patch, patch))) return false;
+    doc.edit("change bonds' kind", (d) => ids.reduce((acc, i) => ops.updateBond(acc, i, patch), d));
+    return true;
   },
 
   setBondOrder: (id: number, order: Bond["order"]) => {

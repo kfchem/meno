@@ -1120,12 +1120,13 @@ function Send-MenoText {
 }
 
 function Send-MenoKey {
-    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down")] [string] $Key, [switch] $Shift)
+    param([Parameter(Mandatory)] [ValidateSet("Enter", "Escape", "Tab", "Backspace", "Up", "Down", "1", "2", "3")] [string] $Key, [switch] $Shift)
     Assert-MenoFront
     # (Escape answers a question no: always let through)
     if ($Key -ne "Escape") { Assert-NotYesKeys -What "the $Key key" }
     # Virtual key codes of the ANSI layout; these are the same on all of them.
-    $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51; Up = 126; Down = 125 }[$Key]
+    # (a digit too, alone - a bond key: docs/EDITOR-2D.md, *Bond keys*)
+    $code = @{ Enter = 36; Escape = 53; Tab = 48; Backspace = 51; Up = 126; Down = 125; "1" = 18; "2" = 19; "3" = 20 }[$Key]
     # (with Shift, if asked: Shift+Enter)
     if ($Shift) { [MacGui]::Chord([uint16[]] @(56), [uint64[]] @(0x20000), [uint16] $code) }
     else { [MacGui]::TapKey([uint16] $code) }
