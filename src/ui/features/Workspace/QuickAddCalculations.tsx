@@ -5,6 +5,7 @@ import { ProcedureGlyph, StepGlyph } from "./workflow/icons";
 import { kindInfo, STEP_FAMILIES, type StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { CALC_ROW, stepsMost } from "./quickAddLabel";
+import { keyRows, openAfter, openFirst, remembersPress, rowAfter, typedIn } from "./utils/quickAddList";
 
 /** What Quick Add remembers of its list (lib/settings/appSettings `options`): who was opened last. */
 const REMEMBERED = "quick-add";
@@ -40,10 +41,11 @@ export default function QuickAddCalculations({
   // (Meno's own first, then the plugins in their order)
   const groups = [...steps.filter((g) => g.by === "meno"), ...steps.filter((g) => g.by !== "meno")];
   const ids = [...groups.map((g) => g.by), ...(procedures.length ? [PROCEDURES] : [])];
-  const [open, setOpen] = useState<string | undefined>(() => (typeof remembered === "string" && ids.includes(remembered) ? remembered : ids[0]));
+  const [open, setOpen] = useState<string | undefined>(() => openFirst(remembered, ids));
   const choose = (by: string) => {
-    setOpen((o) => (o === by ? undefined : by));
-    rememberOptions(REMEMBERED, { open: by });
+    // (who was opened last is remembered: a row shut stays it - utils/quickAddList)
+    if (remembersPress(open, by)) rememberOptions(REMEMBERED, { open: by });
+    setOpen((o) => openAfter(o, by));
   };
   // (Up and Down: the row before or after, among those that show - taken wherever the keys are while it shows, as a click
   //  on a row leaves them on the page in a Mac's webview; never from a field being typed in, the SMILES field's)
@@ -52,11 +54,10 @@ export default function QuickAddCalculations({
     if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      const rows = [...(list.current?.querySelectorAll<HTMLButtonElement>("button[data-row]") ?? [])].filter((b) => !b.closest("[inert]") && !b.disabled);
-      const at = rows.indexOf(document.activeElement as HTMLButtonElement);
-      const next = rows[at < 0 ? 0 : Math.min(rows.length - 1, Math.max(0, at + (e.key === "ArrowDown" ? 1 : -1)))];
+      if (typedIn(e.target as HTMLElement | null)) return;
+      const rows = keyRows([...(list.current?.querySelectorAll<HTMLButtonElement>("button[data-row]") ?? [])], (b) => !!b.closest("[inert]"));
+      const to = rowAfter(rows.length, rows.indexOf(document.activeElement as HTMLButtonElement), e.key as "ArrowUp" | "ArrowDown");
+      const next = to == null ? undefined : rows[to];
       if (!next) return;
       e.preventDefault();
       e.stopPropagation();
