@@ -6,7 +6,7 @@ describe("Quick Add's list of calculations", () => {
 
   it("opens with who was opened last, where it is still there - Meno's own otherwise", () => {
     expect(openFirst("loose", ids)).toBe("loose");
-    expect(openFirst("crest", ids)).toBe("meno");
+    expect(openFirst("gone", ids)).toBe("meno");
     expect(openFirst(undefined, ids)).toBe("meno");
     expect(openFirst(3, ids)).toBe("meno");
     expect(openFirst("loose", [])).toBeUndefined();
