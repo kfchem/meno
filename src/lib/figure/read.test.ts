@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, figureBond, labelText, readFigure, REPEAT_UNREAD, wordsOf } from "./read";
+import { bondLength, figureBond, labelText, readFigure, repeatBrackets, REPEAT_UNREAD, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import atp from "./fixtures/atp-rdkit.json";
@@ -1422,6 +1422,101 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     const s = read(counted(false, "_6", false));
     expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
     expect(marked(s, "6")).toBe(2);
+  });
+
+  describe("is no bracket where one of its tests fails, each with a count by its lower end", () => {
+    // (a bond A-B of a chain - its ends the chain's - and a line across its middle, upright, a bracket's height, its count at its
+    // foot: found; each case below changes one thing of it, and is not)
+    const A: P = [100, 100];
+    const B: P = [100 + L, 100];
+    const x = 100 + L / 2;
+    const h = 0.55 * L;
+    const foot = (end: P) => word("_6", [end[0] + 0.25 * L, end[1]]);
+    const bracketed = (paths: FigurePath[], letters: FigureLetter[]) => {
+      const f = figure([stroke(step(A, 150), A, B, step(B, 30)), ...paths], letters);
+      const r = repeatBrackets(shapesOf(f), wordsOf(f.letters), L);
+      return { counts: r.counts.size, lines: r.strokes.size + r.curves.size };
+    };
+    const upright = (half: number): [P, P] => [[x, 100 - half], [x, 100 + half]];
+
+    it("is one, as drawn: the control", () => {
+      const [top, low] = upright(h);
+      expect(bracketed([stroke(top, low)], foot(low))).toEqual({ counts: 1, lines: 1 });
+    });
+
+    it("is none too short or too long: 0.3 bond, 3 bonds", () => {
+      for (const half of [0.15 * L, 1.5 * L]) {
+        const [top, low] = upright(half);
+        expect(bracketed([stroke(top, low)], foot(low)), `${half / L}`).toEqual({ counts: 0, lines: 0 });
+      }
+    });
+
+    it("is none across a bond at 30 degrees, nor across it near its end, nor meeting it near its own", () => {
+      const r = 1.1 * L * 0.5;
+      const [c, s] = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)];
+      const low: P = [x + r * c, 100 + r * s];
+      expect(bracketed([stroke([x - r * c, 100 - r * s], low)], foot(low))).toEqual({ counts: 0, lines: 0 });
+      const near: P = [100 + 0.05 * L, 100 + h];
+      expect(bracketed([stroke([100 + 0.05 * L, 100 - h], near)], foot(near))).toEqual({ counts: 0, lines: 0 });
+      // (nor one that meets it near its own end, as a T: no line across it)
+      const t: P = [x, 100 + 1.05 * L];
+      expect(bracketed([stroke([x, 100 - 0.05 * L], t)], foot(t))).toEqual({ counts: 0, lines: 0 });
+    });
+
+    it("is none whose end is a wedge's, a label's, or another line's - as a chain's bond, crossed by a bracket, is", () => {
+      const [top, low] = upright(h);
+      expect(bracketed([stroke(top, low), wedge(top, [top[0] + L, top[1]])], foot(low))).toEqual({ counts: 0, lines: 0 });
+      expect(bracketed([stroke(top, low)], [...foot(low), ...word("O", [top[0], top[1] - 0.3 * L])])).toEqual({ counts: 0, lines: 0 });
+      expect(bracketed([stroke(top, low), stroke(top, [top[0] + 0.6 * L, top[1]])], foot(low))).toEqual({ counts: 0, lines: 0 });
+      // (the chain's bond a bracket crosses: never taken for the bracket - its ends meet the chain's other bonds - the bracket is)
+      const f = counted(false, "_6");
+      const r = repeatBrackets(shapesOf(f), wordsOf(f.letters), L);
+      expect([...r.strokes].filter((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) > 0.9 * L).every((t) => Math.abs(t.a.x - t.b.x) < 1e-6)).toBe(true);
+    });
+
+    it("is none counted with four digits, nor with its count above its foot", () => {
+      const [top, low] = upright(h);
+      expect(bracketed([stroke(top, low)], word("_1_2_3_4", [low[0] + 0.25 * L, low[1]]))).toEqual({ counts: 0, lines: 0 });
+      expect(bracketed([stroke(top, low)], word("_6", [low[0] + 0.2 * L, low[1] - 0.7 * L]))).toEqual({ counts: 0, lines: 0 });
+    });
+
+    it("is none that is a closed curve - a ring's circle across a bond, or a D, a round bracket closed by its chord", () => {
+      const low: P = [x + 0.18 * L, 100 + h];
+      expect(bracketed([circle([x, 100], h)], foot(low))).toEqual({ counts: 0, lines: 0 });
+      const t = 0.18 * L;
+      const d: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: [["M", x + t, 100 - h], ["C", x - t, 100 - h / 2], ["C", x - t, 100 + h / 2], ["C", x + t, 100 + h], ["Z"]] };
+      expect(bracketed([d], foot(low))).toEqual({ counts: 0, lines: 0 });
+      // (the same arc left open: a round bracket, found)
+      expect(bracketed([{ ...d, d: d.d.slice(0, -1) }], foot(low))).toEqual({ counts: 1, lines: 1 });
+    });
+  });
+
+  it("pairs a counted bracket with the nearest one uncounted, never with another counted - each taken, none left a bond", () => {
+    // (three across a long chain's bonds: the first and second counted, the third not, the second nearer the first than the third)
+    const p0: P = [40, 80];
+    const pts = [p0];
+    for (let k = 0; k < 7; k++) pts.push(step(pts[k], k % 2 ? 30 : -30));
+    const h = 0.55 * L;
+    const at = (k: number) => along(pts[k], pts[k + 1], 0.5);
+    const line = ([x, y]: P) => stroke([x, y - h], [x, y + h]);
+    const f = figure([stroke(...pts), line(at(1)), line(at(2)), line(at(5))], [...word("_6", [at(1)[0] + 0.25 * L, at(1)[1] + h]), ...word("_n", [at(2)[0] + 0.25 * L, at(2)[1] + h])]);
+    const s = read(f);
+    // (every bracket taken: the chain's seven bonds alone, none of the brackets' lines one)
+    expect(s.bonds.length).toBe(7);
+    expect(s.atoms.length).toBe(8);
+    // (the first's count on its bond's atoms and its partner's - the third's - the second's on its own alone)
+    expect([marked(s, "6"), marked(s, "n")]).toEqual([4, 2]);
+  });
+
+  it("reads a square bracket's ticks as no bonds, however long they are drawn short of half a bond", () => {
+    const p0: P = [40, 80];
+    const pts = [p0, step(p0, -30), step(step(p0, -30), 30), step(step(step(p0, -30), 30), -30)];
+    const [h, t] = [0.55 * L, 0.4 * L];
+    const [x, y] = along(pts[1], pts[2], 0.5);
+    const f = figure([stroke(...pts), stroke([x + t, y - h], [x, y - h], [x, y + h], [x + t, y + h])], word("_6", [x + 0.25 * L, y + h + 0.2 * L]));
+    const s = read(f);
+    expect(s.bonds.length).toBe(3);
+    expect(s.atoms.length).toBe(4);
   });
 
   it("is not seen where there is no count - lines across a bond read as before - nor where a number stands by no bracket", () => {

@@ -640,8 +640,12 @@ export type RepeatBrackets = { strokes: Set<Stroke>; curves: Set<Curve>; counts:
 /** What the atoms of a bond a repeat unit's bracket crosses are marked with (`repeatBrackets`). */
 export const REPEAT_UNREAD = (count: string) => `A repeat unit in brackets, counted ${count}, is not read: it is drawn here once.`;
 
-/** Where two segments cross, as how far along each they meet - none where they do not, or meet at or near an end of either. */
-function crossing(s: { a: Point; b: Point }, t: { a: Point; b: Point }): { u: number; v: number } | null {
+/**
+ * Where two segments cross, as how far along each they meet - none where they do not, or meet at or near an end of either;
+ * `piece`: `s` a piece of a curve, taken anywhere along it from its start to short of its end - a curve's pieces end where
+ * the next begins, so that a crossing where two meet is its own.
+ */
+function crossing(s: { a: Point; b: Point }, t: { a: Point; b: Point }, piece = false): { u: number; v: number } | null {
   const r = { x: s.b.x - s.a.x, y: s.b.y - s.a.y };
   const q = { x: t.b.x - t.a.x, y: t.b.y - t.a.y };
   const d = cross(r, q);
@@ -649,7 +653,8 @@ function crossing(s: { a: Point; b: Point }, t: { a: Point; b: Point }): { u: nu
   const w = { x: t.a.x - s.a.x, y: t.a.y - s.a.y };
   const u = cross(w, q) / d;
   const v = cross(w, r) / d;
-  return u > 0.1 && u < 0.9 && v > 0.1 && v < 0.9 ? { u, v } : null;
+  const along = piece ? u >= 0 && u < 1 : u > 0.1 && u < 0.9;
+  return along && v > 0.1 && v < 0.9 ? { u, v } : null;
 }
 
 export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: number): RepeatBrackets {
@@ -657,8 +662,8 @@ export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: num
   const bondLines = shapes.strokes.filter((t) => len(t) >= 0.3 * bond);
   // (a bracket: a line, or a curve's chord, of half a bond to two and a half, across a bond line at more than 45 degrees)
   type Bracket = { ends: [Point, Point]; stroke?: Stroke; curve?: Curve; crosses: Stroke[] };
-  const across = (seg: { a: Point; b: Point }, not?: Stroke) =>
-    bondLines.filter((t) => t !== not && crossing(seg, t) && Math.abs(cross(unit(seg.a, seg.b), unit(t.a, t.b))) > Math.SQRT1_2);
+  const across = (seg: { a: Point; b: Point }, not?: Stroke, piece = false) =>
+    bondLines.filter((t) => t !== not && crossing(seg, t, piece) && Math.abs(cross(unit(seg.a, seg.b), unit(t.a, t.b))) > Math.SQRT1_2);
   // (its ends free: at no other line's end but its own ticks', and into no label - a bond's meet others', or a label)
   const counts = (w: Word) => /^(\d{1,3}|[a-z])$/.test(w.letters.map((l) => l.c).join(""));
   const free = (p: Point, not?: Stroke) =>
@@ -676,13 +681,18 @@ export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: num
     const ends: [Point, Point] = [c.pts[0], c.pts[c.pts.length - 1]];
     const chord = dist(ends[0], ends[1]);
     if (chord < 0.5 * bond || chord > 2.5 * bond || !free(ends[0]) || !free(ends[1])) continue;
-    const crosses = [...new Set(c.pts.slice(1).flatMap((p, i) => across({ a: c.pts[i], b: p })))];
+    const crosses = [...new Set(c.pts.slice(1).flatMap((p, i) => across({ a: c.pts[i], b: p }, undefined, true)))];
     if (crosses.length) brackets.push({ ends, curve: c, crosses });
   }
-  // (its count: digits, or one small letter, set by its lower end - the page's y running down)
+  // (its count: digits, or one small letter, set by its lower end - the page's y running down - the nearest, where two
+  //  brackets' counts are set close)
   const countAt = (b: Bracket) => {
     const low = b.ends[0].y > b.ends[1].y ? b.ends[0] : b.ends[1];
-    return words.findIndex((w) => counts(w) && fromBox(low, w.box) < 0.6 * bond && centre(w.box).y > low.y - 0.25 * bond);
+    let best = -1;
+    words.forEach((w, k) => {
+      if (counts(w) && fromBox(low, w.box) < 0.6 * bond && centre(w.box).y > low.y - 0.25 * bond && (best < 0 || fromBox(low, w.box) < fromBox(low, words[best].box))) best = k;
+    });
+    return best;
   };
   const take = (b: Bracket) => {
     if (b.stroke) out.strokes.add(b.stroke);
