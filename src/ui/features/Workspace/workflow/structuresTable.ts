@@ -131,7 +131,8 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
   );
   // (moleculesAsTable's own first three - id, constitution, configuration - are of a molecule's atoms, which an entry read
   //  by its record has none of: its id kept, its SMILES and state in their place)
-  const own = seen.columns.slice(3);
+  // (a value its record holds by the name of Meno's own column, `structure`, said apart: "structure (record)", as the SMILES are)
+  const own = seen.columns.slice(3).map((c) => (c.name === STRUCTURE_COLUMN ? { ...c, name: `${STRUCTURE_COLUMN} (record)` } : c));
   const ownRows = seen.rows.map((r) => r.slice(3));
   // (a value not worked out, in its cell: in its column, the first of its ways where it has several, or one of its own)
   const notWorked = new Map<string, (string | null)[]>();

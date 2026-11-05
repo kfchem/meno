@@ -138,4 +138,13 @@ describe("a chart of structures drawn, by structure", () => {
     const mixed = chartOf(charted([numbered(4, 30, 1), done(44, 2)], undefined, { x: "structure", y: "logp" }));
     expect(mixed?.kind === "points" && mixed.points.map((p) => p.x)).toEqual([1, 2]);
   });
+
+  it("says a value a record holds by the name structure apart from which structure the row is", () => {
+    const own: DrawnRecord = { ...done(30, 1), properties: { ...done(30, 1).properties, structure: value(9) } };
+    const chart = chartOf(charted([own, own], undefined, { x: "structure", y: "structure (record)" }));
+    expect(chart?.kind === "points" && chart.points.map((p) => [p.x, p.y])).toEqual([
+      [1, 9],
+      [2, 9],
+    ]);
+  });
 });

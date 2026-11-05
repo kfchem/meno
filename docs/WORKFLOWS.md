@@ -2960,7 +2960,8 @@ molecules in 3D does: *Open as a table* on its menu (workflow
 - **Its columns**: its place (#); which structure it is, as a number
   (`structure`): the number its record carries where every one carries
   one (an *Enumerate*'s), else its place from 1, never the two mixed - what
-  a chart takes across to plot a value for each structure (2026-11-06); its SMILES as the step that made it
+  a chart takes across to plot a value for each structure, a value a
+  record holds by that name said apart as `structure (record)` (2026-11-06); its SMILES as the step that made it
   gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
   where any did; its SMILES as Meno writes it from the drawing (`SMILES
   (drawing, constitution only)`: Kekulé, a label of no element as `*`,
