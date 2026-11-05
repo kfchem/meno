@@ -9,19 +9,13 @@
  * of its plugins: the catalogue does.
  */
 import { compareVersions, versionParts } from "./depends";
-import { EXTENSION, markOf, PROGRAM, QUOTED_TABLES_MOST, quotedTableOf, SYSTEMS, type Mark, type QuotedTableDecl, type System } from "./manifest";
+import { CONTRACTS, EXTENSION, markOf, PROGRAM, QUOTED_TABLES_MOST, quotedTableOf, SYSTEMS, type Mark, type QuotedTableDecl, type System } from "./manifest";
 import { SYSTEM_NAMES } from "./here";
 import { isRole, type RoleId } from "./roles";
 
 /** The form of catalogue Meno reads. */
 export const CATALOGUE_SCHEMA = 1;
 
-/**
- * The plugin contracts Meno speaks: a plugin made for another is listed
- * as not for this Meno, and never got. (The manifest's own `contract`
- * comes with plugins read from a folder; until then, the same numbers.)
- */
-export const CONTRACTS_SPOKEN: readonly number[] = [1];
 
 /** What the catalogue is fetched under, asked once as any first use of the network is (lib/net/network). */
 export const CATALOGUE_PURPOSE = "plugin-catalogue";
@@ -47,7 +41,7 @@ export type CatalogueEntry = {
   terms?: string;
   /** What to cite, where its program asks to be. */
   cite?: string;
-  /** The plugin contract it is made for (`CONTRACTS_SPOKEN`). */
+  /** The plugin contract it is made for: one Meno speaks (lib/plugins/manifest `CONTRACTS`), or it is listed as not for this Meno, and never got. */
   contract: number;
   /** The systems it is made for; none said, all. */
   systems: System[];
@@ -247,7 +241,7 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
 export type Offer = { entry: CatalogueEntry; offer: "add" | "update" | "here" } | { entry: CatalogueEntry; offer: "not-here"; why: string };
 
 /** What each plugin on offer is, beside what is here (`here`, each plugin's version by its id), on this system, for this Meno. */
-export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>, system: System | null, contracts: readonly number[] = CONTRACTS_SPOKEN): Offer[] {
+export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>, system: System | null, contracts: readonly number[] = CONTRACTS): Offer[] {
   return catalogue.plugins.map((entry): Offer => {
     const mine = here.get(entry.id);
     if (!contracts.includes(entry.contract)) return { entry, offer: "not-here", why: mine ? "Its newer versions are for a newer Meno" : "It is for a newer Meno" };
