@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, figureBond, labelText, readFigure, wordsOf } from "./read";
+import { bondLength, figureBond, labelText, readFigure, REPEAT_UNREAD, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import atp from "./fixtures/atp-rdkit.json";
@@ -1380,5 +1380,58 @@ describe("a frame, a graph's axes and a page's rules", () => {
     const r = readFigure(figure([...hexagon([100, 120]), ...frame(70, 70, 190, 150)], word("L1", [130, 160])));
     expect(r.atoms).toHaveLength(6);
     expect(r.bonds).toHaveLength(6);
+  });
+});
+
+describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in brackets*)", () => {
+  /** A curve from `a` to `b` by two control points, stroked. */
+  const curve = (a: P, c1: P, c2: P, b: P): FigurePath => ({ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", ...a], ["C", ...c1], ["C", ...c2], ["C", ...b]] });
+  /** HO-C-C-C-C-OH, its two middle carbons' bonds out crossed by brackets - square, or round as curves - the second counted `count` at its foot (none, `null`); `open`: the first bracket drawn. */
+  function counted(round: boolean, count: string | null, open = true): FigureDrawn {
+    const p0: P = [40, 80];
+    const [p1, p2, p3, p4] = [step(p0, -30), step(step(p0, -30), 30), step(step(step(p0, -30), 30), -30), step(step(step(step(p0, -30), 30), -30), 30)];
+    const p5 = step(p4, -30);
+    const paths = [stroke(along(p0, p1, 0.25), p1, p2, p3, p4, along(p4, p5, 0.75))];
+    const [h, t] = [0.55 * L, 0.18 * L];
+    const [x1, x2] = [along(p1, p2, 0.5), along(p3, p4, 0.5)];
+    const bracket = ([x, y]: P, side: number) =>
+      round ? curve([x + side * t, y - h], [x - side * t, y - h / 2], [x - side * t, y + h / 2], [x + side * t, y + h]) : stroke([x + side * t, y - h], [x, y - h], [x, y + h], [x + side * t, y + h]);
+    if (open) paths.push(bracket(x1, 1));
+    paths.push(bracket(x2, -1));
+    return figure(paths, [...word("O", p0), ...word("O", p5), ...(count ? word(count, [x2[0] + 0.25 * L, x2[1] + h]) : [])]);
+  }
+  const marked = (s: ReturnType<typeof read>, count: string) => s.atoms.filter((a) => a.unsure?.includes(REPEAT_UNREAD(count))).length;
+
+  it("is not read: its unit once, its brackets no bonds, its count no word - the atoms of each bond a bracket crosses marked, saying so", () => {
+    for (const round of [false, true])
+      for (const [count, said] of [
+        ["_6", "6"],
+        ["6", "6"],
+        ["_n", "n"],
+      ]) {
+        const f = counted(round, count);
+        const s = read(f);
+        expect(s.atoms.map((a) => a.el).sort(), `${round} ${count}`).toEqual(["C", "C", "C", "C", "O", "O"]);
+        expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
+        expect(marked(s, said), `${round} ${count}`).toBe(4);
+        expect(readFigure(f).left.letters).toEqual([]);
+      }
+  });
+
+  it("is told by one bracket counted alone: the atoms of the bonds it crosses marked", () => {
+    const s = read(counted(false, "_6", false));
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
+    expect(marked(s, "6")).toBe(2);
+  });
+
+  it("is not seen where there is no count - lines across a bond read as before - nor where a number stands by no bracket", () => {
+    const uncounted = read(counted(false, null));
+    expect(uncounted.atoms.some((a) => a.unsure?.some((u) => u.startsWith("A repeat unit")))).toBe(false);
+    expect(uncounted.bonds.length).toBe(7);
+    // (a compound's number under it, by no bracket: its own word, left as it was)
+    const p0: P = [40, 80];
+    const f = figure([stroke(p0, step(p0, -30), step(step(p0, -30), 30))], word("6", [step(p0, -30)[0], step(p0, -30)[1] + 1.5 * L]));
+    expect(read(f).atoms.some((a) => a.unsure)).toBe(false);
+    expect(readFigure(f).left.letters.map((l) => l.c)).toEqual(["6"]);
   });
 });
