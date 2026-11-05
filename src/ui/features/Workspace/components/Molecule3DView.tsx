@@ -1,6 +1,5 @@
 import clsx from "clsx";
 import { longPressMs } from "../longPress";
-import { PAGE_SIZED } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -12,7 +11,7 @@ import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
-import { NOTES_SCALE, pageScale } from "../utils/pageScale";
+import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
@@ -104,6 +103,10 @@ const LOOK_TAU = 0.08;
  */
 const LINES_FINE_MOST = 2000;
 const LINES_COARSE = 16;
+/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it; and its notes, hung from their foot (utils/pageScale `pageSized`, `notesSized`). */
+const SIZED_MIDDLE = pageSized("middle");
+const SIZED_TOP = pageSized("top");
+const NOTES_SIZED = notesSized("foot");
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
 /** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
@@ -1918,7 +1921,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 Delete key) */}
             <PageHtml center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
               {/* (as large as the page draws it: a chip on the page) */}
-              <div className="meno-page-chip" style={PAGE_SIZED}>
+              <div className="meno-page-chip" style={SIZED_MIDDLE}>
                 <div
                   ref={(el) => {
                     const l = labels.current.get(x.id) ?? { anchor: null, el: null };
@@ -2038,9 +2041,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <PageHtml zIndexRange={[30, 20]}>
               <div
                 className="meno-page-chip meno-control-chip flex flex-col items-center"
-                style={{ transform: "translate(-50%, calc(10px * var(--page, 1)))" }}
+                style={{ transform: `translate(-50%, ${pagePx(10)})` }}
               >
-                <div className="flex flex-col items-center" style={PAGE_SIZED}>
+                <div className="flex flex-col items-center" style={SIZED_TOP}>
                   {m.edited && <Edited from={m.edited.from} />}
                   {props.onRemake && <Changed onRemake={props.onRemake} />}
                 </div>
@@ -2075,7 +2078,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               data-fit-notes={MARK_GAP_PX}
               style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
             >
-              <div className="flex flex-col items-center" style={{ zoom: `clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})` }}>
+              <div className="flex flex-col items-center" style={NOTES_SIZED}>
               {notesEver.map((text) => (
                 <NoteMark
                   key={text}

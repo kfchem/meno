@@ -3,8 +3,11 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import { figureNotePlaces, figureNoteShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type FigureNote, type NotePlaces } from "../utils/figureNotes";
-import { pageScale } from "../utils/pageScale";
+import { notesSized, pageScale } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
+
+/** A note as large as the page draws it, between `NOTES_SCALE`'s two scales, hung from its foot (utils/pageScale `notesSized`). */
+const NOTES_SIZED = notesSized("foot");
 
 /** Below this many screen pixels to a bond the note is a dot, its words too small to read: a page pixel's scale, a bond being 48 of them. */
 const DOT_BELOW = 12 / 48;
@@ -98,8 +101,8 @@ function FigureNote2D({ shown }: { shown: Shown }) {
           onPointerDown={(e) => e.button === 2 && e.stopPropagation()}
           title={title}
         >
-          {/* (as large as the page draws it, between three quarters and half as large again: laid out at that size, its words crisp - utils/pageScale `PAGE_SIZED`) */}
-          <div style={{ zoom: "clamp(0.75, var(--page, 1), 1.5)" }}>
+          {/* (as large as the page draws it, between three quarters and half as large again: laid out at that size, its words crisp - utils/pageScale `notesSized`) */}
+          <div style={NOTES_SIZED}>
           {quiet ? (
             far ? null : <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteSource(from, note.page)}</div>
           ) : far ? (

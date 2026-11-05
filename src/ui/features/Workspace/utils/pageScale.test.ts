@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_PX, WORDS_LEAST, wordsReadAt, ZOOM_WRITTEN_STEP, zoomWritten } from "./pageScale";
+import { NOTES_SCALE, PAGE_PX, pageScale, pageSized, pageTold, notesSized, WORDS_LEAST, wordsReadAt, ZOOM_WRITTEN_STEP, zoomWritten } from "./pageScale";
 import { SWITCH_BAND } from "./zoomSwitch";
 
 /** The zoom at which a page pixel is `scale` screen pixels. */
@@ -61,5 +61,56 @@ describe("what the page's HTML is sized by, written again as the zoom goes", () 
     expect(writes[writes.length - 1]).toBe(6.667);
     // (each write while it moved, at least a step from the one before)
     for (let i = 1; i < writes.length - 1; i++) expect(Math.abs(Math.log(writes[i] / writes[i - 1]))).toBeGreaterThanOrEqual(ZOOM_WRITTEN_STEP);
+  });
+});
+
+describe("the page's chips as the zoom moves", () => {
+  it("are laid out at the zoom first, and once it stands still - scaled from there, never laid out again, while it moves", () => {
+    expect(pageTold(Number.NaN, 4, false)).toEqual({ laid: 4, page: pageScale(4), k: 1, notesK: 1 });
+    // (moving: still laid out at 4, scaled by how far the zoom has gone - however far)
+    const moving = pageTold(4, 6, false);
+    expect(moving.laid).toBe(4);
+    expect(moving.page).toBe(pageScale(4));
+    expect(moving.k).toBeCloseTo(1.5);
+    expect(pageTold(4, 4 * 1.001, false).laid).toBe(4);
+    // (standing: laid out where it stands, nothing scaled)
+    expect(pageTold(4, 6, true)).toEqual({ laid: 6, page: pageScale(6), k: 1, notesK: 1 });
+  });
+
+  it("are as large, scaled, as laid out at the zoom they are scaled to - and so are notes, between their two scales", () => {
+    for (const [laid, zoom] of [
+      [zoomAt(1), zoomAt(1.3)],
+      [zoomAt(1), zoomAt(0.5)],
+      [zoomAt(1.2), zoomAt(3)],
+      [zoomAt(0.4), zoomAt(0.6)],
+    ]) {
+      const t = pageTold(laid, zoom, false);
+      expect(t.page * t.k).toBeCloseTo(pageScale(zoom));
+      const notes = (s: number) => Math.min(NOTES_SCALE.most, Math.max(NOTES_SCALE.least, s));
+      expect(notes(t.page) * t.notesK).toBeCloseTo(notes(pageScale(zoom)));
+    }
+  });
+
+  it("over a zoom from one scale to three, are laid out twice: as it begins, and where it stops", () => {
+    let laid = Number.NaN;
+    let before = Number.NaN;
+    let layouts = 0;
+    const zooms: number[] = [];
+    for (let z = zoomAt(1), k = 0; k < 40; k++) zooms.push((z += (zoomAt(3) - z) / 6));
+    zooms.push(zooms[zooms.length - 1]);
+    for (const z of [zoomAt(1), ...zooms]) {
+      const t = pageTold(laid, z, z === before);
+      before = z;
+      if (t.laid !== laid) layouts++;
+      laid = t.laid;
+    }
+    expect(layouts).toBe(2);
+  });
+
+  it("each hang from their own point, scaled as the zoom moves and laid out at the page's scale", () => {
+    expect(pageSized("top")).toEqual({ zoom: "var(--page, 1)", transform: "scale(var(--page-k, 1))", transformOrigin: "50% 0" });
+    expect(pageSized("middle").transformOrigin).toBe("50% 50%");
+    expect(notesSized("foot")).toMatchObject({ transform: "scale(var(--notes-k, 1))", transformOrigin: "50% 100%" });
+    expect(notesSized("foot").zoom).toBe(`clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})`);
   });
 });
