@@ -35,7 +35,7 @@ import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wire
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, passesAsLone, passedAsLone, passedSaid, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -1593,6 +1593,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const r of run.refused ?? []) fails([entries[r.entry]], r.kind, r.why);
       // (none where it ran no job: lone atoms alone, passed through)
       const client = plugin && run.jobs.length ? await pluginClient(plugin).catch(() => null) : null;
+      // (the solvation its options ask for, as its manifest says its program says one: what each job gave held to it,
+      //  whatever program ran it - workflow/programs `notAsAsked`)
+      const asked = solvationAsked(plugin?.steps.find((s) => s.kind === kind)?.solvation, optionsOf(optionsFor(kind, by), run.options));
       // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
       //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
       const passing = [...(run.passed ?? [])].sort((a, b) => a - b);
@@ -1685,6 +1688,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", read);
               continue;
             }
+            const unlike = notAsAsked(asked, read.output.solvation);
+            if (unlike) {
+              fails([mine[i]], unlike.kind, unlike.why);
+              continue;
+            }
             const made =
               kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source);
             if (isFailure(made)) {
@@ -1718,6 +1726,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (that entry alone failed, saying why)
           if (isFailure(out)) {
             fails([mine[i]], out.kind, out.why);
+            continue;
+          }
+          const unlike = notAsAsked(asked, out.solvation);
+          if (unlike) {
+            fails([mine[i]], unlike.kind, unlike.why);
             continue;
           }
           // (by the version its worker said it runs, as a reader's is kept)
