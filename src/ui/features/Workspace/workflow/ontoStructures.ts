@@ -4,30 +4,39 @@
  * what the set wired into *3D results* holds made of it - its conformers,
  * which name the structure by its lasting id in their lineage (`madeOf`,
  * entries `structureLineage`) - written on its record, as values any table,
- * chart, Filter or Rank after it reads as it reads any other:
+ * chart, Filter or Rank after it reads as it reads any other; first on it,
+ * before what it said already, in this order (`IN_3D`), so that a table
+ * shows them first and a chart told no columns takes the share:
+ * - `share among isomers`: its Boltzmann share, at the step's temperature,
+ *   among the structures of its formula and charge alone - each of their
+ *   finished conformers weighed by Populations' own rule (meno `basisOf`),
+ *   with their degeneracies where each has one - their energies all of one
+ *   calculation, and their free energies used only where all of them were
+ *   worked out alike; none across formulas. A value of a group, as an
+ *   ensemble's: at its lowest conformer's geometry and the temperature, by
+ *   what worked out the energies it is of, over its own conformers;
  * - `conformers in 3D`: how many of its conformers the set holds;
  * - `E min` (Eh): the lowest electronic energy of those finished, as that
  *   conformer's energy is, where they come from one calculation;
  * - `G min` (Eh): the lowest free energy, where each finished one has one
  *   and all were worked out alike (lib/nodes `workedOutDiffer`);
- * - `share among isomers`: its Boltzmann share, at the step's temperature,
- *   among the structures of its formula and charge alone - each of their
- *   finished conformers weighed by Populations' own rule (meno `basisOf`),
- *   with their degeneracies where each has one; none across formulas;
  * - `state in 3D`: finished, or how many of its conformers did not finish,
  *   or none in the set.
- * A value that cannot be worked out says why in its place, never a number.
+ * A value that cannot be worked out says why in its place, never a number:
+ * one with no conformer finished, or none in the set, its E min and G min
+ * too.
  * Matched by id alone, never by what a structure is: one with no lasting id,
  * or whose id another structure here has too, is given nothing.
  */
 import type { Property } from "../../../../lib/entry";
 import { workedOutDiffer } from "../../../../lib/nodes/base";
 import { boltzmann } from "../../../../lib/boltzmann";
+import { geometryKey } from "../../../../lib/entry";
 import { calcLevel, entryOfSet, entryState, FINISHED, freeEnergyOf, madeWords, structureLineage, type DrawnEntry, type SetEntry } from "./entries";
 import { basisOf, hasEnergy, notAllMinima, type DrawnOutcome } from "./meno";
 
-/** The names the values are written under, as a table's columns name them. */
-export const IN_3D = { conformers: "conformers in 3D", eMin: "E min", gMin: "G min", share: "share among isomers", state: "state in 3D" } as const;
+/** The names the values are written under, as a table's columns name them - in the order they are written. */
+export const IN_3D = { share: "share among isomers", conformers: "conformers in 3D", eMin: "E min", gMin: "G min", state: "state in 3D" } as const;
 
 /** What a structure with none of its conformers in the set says, as its state. */
 export const NO_3D = "no 3D result";
@@ -92,13 +101,15 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
     if (!id) return { [IN_3D.state]: notApplicable("it has no lasting id to be found by") };
     if (shared.has(id)) return { [IN_3D.state]: notApplicable(`its lasting id is another structure's here too (${rows.flatMap((_, j) => (j !== k && ids[j] === id ? [name(j)] : [])).join(", ")})`) };
     const n = mine[k].length;
-    if (!n) return { [IN_3D.state]: value(NO_3D), [IN_3D.conformers]: value(0) };
+    if (!n) return { [IN_3D.conformers]: value(0), [IN_3D.eMin]: notApplicable(NO_3D, "Eh"), [IN_3D.gMin]: notApplicable(NO_3D, "Eh"), [IN_3D.state]: value(NO_3D) };
     const d = done[k].length;
     const state = d === n ? FINISHED : d ? `${n - d} of ${n} conformers not finished` : `none of its ${plural(n, "conformer")} finished: ${entryState(mine[k][0])}`;
+    const none = notApplicable("none of its conformers finished", "Eh");
     return {
       [IN_3D.conformers]: value(n),
+      [IN_3D.eMin]: d ? eMinOf(done[k]) : none,
+      [IN_3D.gMin]: d ? gMinOf(done[k]) : none,
       [IN_3D.state]: value(state),
-      ...(d ? { [IN_3D.eMin]: eMinOf(done[k]), [IN_3D.gMin]: gMinOf(done[k]) } : {}),
     };
   });
   // (shares among the structures of one formula and charge alone, each of their finished conformers weighed as Populations weighs them)
@@ -111,8 +122,15 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
   const sharesSaid: string[] = [];
   for (const members of groups.values()) {
     const all = members.flatMap((k) => done[k]);
-    const basis = basisOf(all, kelvin, members.map((k) => ({ said: `${name(k)}'s`, entries: done[k] })));
-    const why = !basis.free && !all.every(hasEnergy) ? "not every finished conformer of its isomers has an energy" : notAllMinima(all);
+    // (the isomers' free energies all worked out alike, as one compound's are, to be weighed against each other; else their electronic energies, all of one calculation)
+    const basis = basisOf(all, kelvin, [{ said: "its isomers'", entries: all }]);
+    const levels = new Set(all.filter(hasEnergy).map((e) => calcLevel(e.calc)));
+    const why =
+      !basis.free && !all.every(hasEnergy)
+        ? "not every finished conformer of its isomers has an energy"
+        : !basis.free && levels.size > 1
+          ? `its isomers' energies come from different calculations (${[...new Set(all.map(madeWords))].join("; ")})`
+          : notAllMinima(all);
     if (why) {
       for (const k of members) properties[k][IN_3D.share] = notWorked(why);
       continue;
@@ -121,7 +139,15 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
     let at = 0;
     for (const k of members) {
       const of = done[k].length;
-      properties[k][IN_3D.share] = { ...value(w.slice(at, at + of).reduce((s, x) => s + x, 0)), ensemble: { of: all.length } };
+      // (a value of its conformers together: at its lowest one's geometry and the temperature, by what worked out the energies weighed)
+      const lowest = done[k].reduce((a, b) => (basis.energy(b)! < basis.energy(a)! ? b : a));
+      const weighed = basis.free ? freeEnergyOf(lowest) : entryOfSet(lowest, "lowest").properties.energy;
+      properties[k][IN_3D.share] = {
+        ...value(w.slice(at, at + of).reduce((s, x) => s + x, 0)),
+        at: { geometry: geometryKey(lowest.xyz), kelvin },
+        ...(weighed?.by ? { by: { ...weighed.by } } : {}),
+        ensemble: { of },
+      };
       at += of;
     }
     sharesSaid.push(basis.words);
@@ -130,7 +156,13 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
   rows.forEach((_, k) => {
     if (ids[k] && !shared.has(ids[k]!) && !(IN_3D.share in properties[k])) properties[k][IN_3D.share] = notApplicable(mine[k].length ? "none of its conformers finished" : NO_3D);
   });
-  const kept = rows.map((r, k) => ({ ...r, record: { ...r.record, properties: { ...r.record?.properties, ...properties[k] } } }));
+  // (first on the record, in IN_3D's order; what it said before after them)
+  const order: string[] = Object.values(IN_3D);
+  const kept = rows.map((r, k) => {
+    const mine = Object.fromEntries(order.filter((n) => n in properties[k]).map((n) => [n, properties[k][n]]));
+    const before = Object.fromEntries(Object.entries(r.record?.properties ?? {}).filter(([n]) => !(n in mine)));
+    return { ...r, record: { ...r.record, properties: { ...mine, ...before } } };
+  });
   const found = mine.filter((m) => m.length).length;
   const said = [
     `${found} of ${plural(rows.length, "structure")} with 3D results`,

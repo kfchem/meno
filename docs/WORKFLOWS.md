@@ -3397,10 +3397,11 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
   them has too, is given nothing, saying so; conformers made of none of
   them are counted in what the step says.
 - **What each is given**, on its record, as any other value - each under
-  its name, a number with its unit:
+  its name, a number with its unit - first on the record, in this order,
+  before what it said already: a table shows them first, and a chart told
+  no columns takes the share (2026-11-06):
+  - *share among isomers*: below;
   - *conformers in 3D*: how many of its conformers the set holds;
-  - *state in 3D*: finished; or how many of its conformers did not
-    finish; or none of them finished, and why; or *no 3D result*;
   - *E min* (Eh): the lowest electronic energy of its finished
     conformers, as that conformer's energy is - where they come from one
     calculation; else not worked out, and why;
@@ -3408,17 +3409,28 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
     has one and all were worked out alike (temperature, pressure,
     solvent, program, method, basis, treatment); else not worked out, and
     why - never a G of one level beside another's;
-  - *share among isomers*: its Boltzmann share at *Shares at* (298.15 K,
+  - *state in 3D*: finished; or how many of its conformers did not
+    finish; or none of them finished, and why; or *no 3D result*;
+  - the share, *share among isomers*: its Boltzmann share at *Shares at* (298.15 K,
     the IUPAC standard temperature, as Populations' own) among the
     structures of its formula and charge alone: each of their finished
     conformers weighed as *Populations* weighs one - by G where each has
     one alike, else by E, said which - with each one's degeneracy where
-    each has one; refused, naming it, where one is no minimum. Structures
+    each has one; refused, naming it, where one is no minimum. The
+    isomers are weighed against each other only on energies of one
+    calculation, and by G only where all of theirs were worked out alike
+    - else by E, saying why not G; else no share, saying so. Structures
     of another formula are never weighed against it: their energies are
-    of other atoms. One alone in its formula has all of its own (1).
+    of other atoms. One alone in its formula has all of its own (1). A
+    value of its conformers together, as an ensemble's: at its lowest
+    conformer's geometry and the temperature, by what worked out the
+    energies weighed, over its own conformers (`Property.at`, `by`,
+    `ensemble`) - so a chart's axis says where it stands.
 - **Never a number in place of none.** A value that cannot be worked out
   says why in its cell ("not worked out: its conformer #2 has no free
-  energy"), and a structure with no 3D result has no share, not 0.
+  energy"), and a structure with no 3D result has no share, not 0 - nor
+  an E min or a G min: none, saying why, as does one with no conformer
+  finished.
 - Failed and unfinished conformers are never a minimum: they are left out
   of E min, G min and the shares, and counted in its state.
 

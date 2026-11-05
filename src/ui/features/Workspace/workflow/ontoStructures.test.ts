@@ -75,8 +75,29 @@ describe("3D results onto structures", () => {
     expect(valueOf(out, 1, IN_3D.share)?.value).toBeCloseTo(w[2], 12);
     // (ethanol, alone in its formula, all of its own: never weighed against the others, 30 kcal/mol up or not)
     expect(valueOf(out, 2, IN_3D.share)?.value).toBe(1);
-    expect(valueOf(out, 0, IN_3D.share)).toMatchObject({ ensemble: { of: 3 } });
+    // (a value of its conformers together: at its lowest one's geometry and the temperature, by what worked out its energies, over its own two)
+    expect(valueOf(out, 0, IN_3D.share)).toMatchObject({ unit: "none", status: "computed", at: { geometry: geometryKey(entries[0].xyz), kelvin: 298.15 }, by: { program: "xtb", method: "GFN2-xTB" }, ensemble: { of: 2 } });
     expect(out.ok && out.said).toMatch(/shares at 298.15 K among the isomers of each formula \(2 formulas\), from electronic energies/);
+  });
+
+  it("shares only where the isomers' energies come from one calculation, and weighs their free energies only where all were worked out alike", () => {
+    const rows = [row(0, "a"), row(1, "b")];
+    const orca = { calc: { readers: [], program: "orca", method: "r2SCAN-3c" } as SetEntry["calc"] };
+    // (each structure's conformers of one calculation, but not the two structures': no share, for either, saying why)
+    const mixed = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 0, orca)], 298.15);
+    for (const k of [0, 1]) expect(valueOf(mixed, k, IN_3D.share)?.status).toMatchObject({ failed: expect.stringMatching(/^its isomers' energies come from different calculations/) });
+    // (their free energies of two methods: weighed by their electronic energies, of one calculation, said so)
+    const otherG = { properties: { "thermo.free-energy": { ...g(0).properties["thermo.free-energy"], by: { program: "orca", method: "r2SCAN-3c" } } } };
+    const byE = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0, g(5)), conformer("b", 1, 1, C3H8O, 1, otherG)], 298.15);
+    const w = boltzmann([0, 1].map((k) => -100 + k / KCAL), 298.15);
+    expect(valueOf(byE, 0, IN_3D.share)?.value).toBeCloseTo(w[0], 12);
+    expect(byE.ok && byE.said).toMatch(/from electronic energies \(not free energies: its isomers' differ in /);
+  });
+
+  it("writes its values first on each record, the share first of them, then what the record said before", () => {
+    const rows = [{ ...row(0, "a"), record: { id: "a", of: "of-a", properties: { nll: { value: 12, unit: "none", status: "computed" } as Property } } }];
+    const out = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0)], 298.15);
+    expect(Object.keys(out.ok ? out.kept[0].record!.properties! : {})).toEqual([IN_3D.share, IN_3D.conformers, IN_3D.eMin, IN_3D.gMin, IN_3D.state, "nll"]);
   });
 
   it("weighs each conformer by its degeneracy, where each has one, and by G where each has one alike", () => {
@@ -87,6 +108,10 @@ describe("3D results onto structures", () => {
     const free = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0, g(2)), conformer("b", 1, 1, C3H8O, 2, g(0))], 298.15);
     expect(valueOf(free, 1, IN_3D.share)?.value).toBeGreaterThan(0.9);
     expect(free.ok && free.said).toMatch(/from free energies/);
+    // (weighed by free energies of another program than the energies': its share by that one's)
+    const orcaG = (kcal: number) => ({ properties: { "thermo.free-energy": { ...g(kcal).properties["thermo.free-energy"], by: { program: "orca", method: "r2SCAN-3c" } } } });
+    const byG = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0, orcaG(2)), conformer("b", 1, 1, C3H8O, 2, orcaG(0))], 298.15);
+    expect(valueOf(byG, 0, IN_3D.share)).toMatchObject({ by: { program: "orca", method: "r2SCAN-3c" } });
   });
 
   it("gives G min where each finished conformer has a G worked out alike - else why not, never a number", () => {
@@ -125,7 +150,8 @@ describe("3D results onto structures", () => {
     expect(valueOf(out, 0, IN_3D.eMin)?.value).toBe(-100);
     // (none finished: no E, no share - said in its place)
     expect(valueOf(out, 1, IN_3D.state)?.value).toMatch(/^none of its 1 conformer finished: /);
-    expect(valueOf(out, 1, IN_3D.eMin)).toBeUndefined();
+    expect(valueOf(out, 1, IN_3D.eMin)).toMatchObject({ value: "", unit: "Eh", status: { notApplicable: "none of its conformers finished" } });
+    expect(valueOf(out, 1, IN_3D.gMin)).toMatchObject({ status: { notApplicable: "none of its conformers finished" } });
     expect(valueOf(out, 1, IN_3D.share)).toMatchObject({ status: { notApplicable: "none of its conformers finished" } });
     expect(valueOf(out, 2, IN_3D.eMin)?.status).toMatchObject({ failed: expect.stringMatching(/^its conformers' energies come from different calculations/) });
   });
@@ -146,6 +172,7 @@ describe("3D results onto structures", () => {
     expect(valueOf(out, 3, IN_3D.state)?.value).toBe(NO_3D);
     expect(valueOf(out, 3, IN_3D.conformers)?.value).toBe(0);
     expect(valueOf(out, 3, IN_3D.share)).toMatchObject({ status: { notApplicable: NO_3D } });
+    for (const n of [IN_3D.eMin, IN_3D.gMin]) expect(valueOf(out, 3, n)).toMatchObject({ unit: "Eh", status: { notApplicable: NO_3D } });
     expect(out.ok && out.said).toMatch(/0 of 4 structures with 3D results · 2 conformers made of none of them · 2 structures sharing a lasting id given nothing$/);
   });
 
