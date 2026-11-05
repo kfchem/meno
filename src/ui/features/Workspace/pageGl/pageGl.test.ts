@@ -112,6 +112,43 @@ describe("what is under the pointer on the page", () => {
   });
 });
 
+describe("what is under the pointer, at its edges", () => {
+  const zoom = 1 / PAGE_PX;
+  const frame = { x0: 0, y0: 0, x1: 10, y1: 6 };
+
+  it("takes a frame's corner over the sides it joins, whichever order they are given in", () => {
+    const bands: Region[] = (["ne", "n", "e"] as const).map((side) => ({ key: "f", part: side, band: { ...frame, widthPx: 8, side } }));
+    expect(hitAt([bands], 10, 6, zoom)?.part).toBe("ne");
+  });
+
+  it("takes a band as far as its screen pixels reach on either side of its edge, and no further", () => {
+    const top: Region[] = [{ key: "f", part: "n", band: { ...frame, widthPx: 8, side: "n" } }];
+    expect(hitAt([top], 5, 6 + 7 / zoom, zoom)?.part).toBe("n");
+    expect(hitAt([top], 5, 6 - 7 / zoom, zoom)?.part).toBe("n");
+    expect(hitAt([top], 5, 6 + 9 / zoom, zoom)).toBeNull();
+  });
+
+  it("takes of two circles on one centre at one z the one drawn last", () => {
+    const two: Region[] = [
+      { key: "under", part: "take", circle: { x: 0, y: 0, diameterPx: 12 } },
+      { key: "over", part: "take", circle: { x: 0, y: 0, diameterPx: 12 } },
+    ];
+    expect(hitAt([two], 1 / zoom, 0, zoom)?.key).toBe("over");
+  });
+
+  it("takes a control where it is drawn, where that is larger than its grab size", () => {
+    const big: Region[] = [{ key: "c", part: "take", circle: { x: 0, y: 0, diameterPx: 12, size: { screenPx: 40, mostPagePx: 100 } } }];
+    // (15 screen pixels out: past its grab size's 6, within its 20 drawn)
+    expect(hitAt([big], 15 / zoom, 0, zoom)?.key).toBe("c");
+    expect(hitAt([big], 21 / zoom, 0, zoom)).toBeNull();
+  });
+
+  it("takes a rectangle given corner to corner either way round", () => {
+    const flipped: Region[] = [{ key: "r", part: "tab", rect: { x0: 10, y0: 6, x1: 0, y1: 0 } }];
+    expect(hitAt([flipped], 5, 3, zoom)?.key).toBe("r");
+  });
+});
+
 describe("words on the page", () => {
   it("are measured by Plex's own advances where there is no canvas, and cut with an ellipsis to fit", () => {
     const w = textWidth("Conformers", 11);

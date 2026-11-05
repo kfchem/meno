@@ -29,7 +29,7 @@ export type Region =
 /** What was found: the region's key and part, and the region itself. */
 export type Hit = { key: string; part: string; region: Region };
 
-/** How far `p` is inside `r`'s band, or -1 where it is not in it (`zoom`: screen pixels are 1 / zoom of the page's units). */
+/** Whether `x`, `y` is within the band (`zoom`: screen pixels are 1 / zoom of the page's units). */
 function inBand(b: Rect & { widthPx: number; side: Side }, x: number, y: number, zoom: number): boolean {
   const w = b.widthPx / Math.max(zoom, 1e-9);
   const xs = Math.min(b.x0, b.x1);
