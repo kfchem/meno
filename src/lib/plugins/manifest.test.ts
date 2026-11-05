@@ -187,6 +187,13 @@ describe("a plugin's manifest", () => {
     expect(unsure({ below: 0.6, basis: " Set on pictures drawn for it. " })).toEqual({ below: 0.6, basis: "Set on pictures drawn for it." });
     for (const u of [{ below: 0.6 }, { below: 0.6, basis: " " }, { below: 1, basis: "b" }, { below: 0, basis: "b" }, { below: "0.6", basis: "b" }, 0.6]) expect(unsure(u)).toBeUndefined();
     expect(unsure({ below: 0.6, basis: "b" }, "smiles")).toBeUndefined();
+    // (the hosts a model's plugin talks to: each a name exactly, 1 to 8 - the role none without them, and no other role naming any)
+    const talks = (hosts: unknown, role = "language-model") => acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role, hosts }] })?.roles[0];
+    expect(talks(["api.example.com", "api.example.com", "files.example.com"])?.hosts).toEqual(["api.example.com", "files.example.com"]);
+    for (const h of [undefined, [], ["*.example.com"], [".example.com"], ["API.example.com"], ["api.example.com:443"], ["127.0.0.1"], ["localhost"], ["https://api.example.com"], ["-a.example.com"], ["api.example.com", 3], Array.from({ length: 9 }, (_, i) => `h${i}.example.com`), "api.example.com"])
+      expect(talks(h), JSON.stringify(h)).toBeUndefined();
+    expect(talks(["api.example.com"], "smiles")).toBeUndefined();
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "smiles" }] })?.roles[0].hosts).toBeUndefined();
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
