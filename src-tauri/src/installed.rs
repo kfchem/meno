@@ -18,6 +18,8 @@ use serde::Serialize;
 pub const ROOT: &str = "plugins";
 /// The file naming the version in use, in a plugin's folder.
 pub const CURRENT: &str = "current";
+/// Where a version is made before it is put in place (catalogue.rs): never read as a plugin.
+pub const STAGING: &str = ".staging";
 
 /// The plugins' folder in Meno's local data folder `data`.
 pub fn root(data: &Path) -> PathBuf {
@@ -60,6 +62,17 @@ pub struct Installed {
     pub id: String,
     pub version: String,
     pub dir: PathBuf,
+}
+
+/// Plugin `id`'s version in use set to `version`, at once: written beside, then renamed over the old - so that a
+/// reader finds the old or the new, never half of either.
+pub fn put_in_use(root: &Path, id: &str, version: &str) -> std::io::Result<()> {
+    let folder = root.join(id);
+    let tmp = folder.join(format!("{CURRENT}.{}.tmp", std::process::id()));
+    fs::write(&tmp, version)?;
+    fs::rename(&tmp, folder.join(CURRENT)).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
 }
 
 /// The plugins in place, in their ids' order: each folder whose `current` names a version there.

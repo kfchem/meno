@@ -430,7 +430,10 @@ the first row's is. Opening a row closes any other below the first; each
 opens and closes in a short ease, and nothing of which was open is kept
 for the next time Quick Add opens. A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
-it. Going, it does nothing more as it fades - nor does the right-click
+it - but not while a question is asked over the window (a "List the
+plugins online?" or a "Download RDKit?" asked from its SMILES field): the
+press, the wheel and Escape are the question's, and Quick Add stays open,
+with what was typed in it, for the answer (`quickAddLeave`). Going, it does nothing more as it fades - nor does the right-click
 menu: an icon double-clicked put its choice down once, not a second time
 on the first (theme/leaving.ts) - and a press elsewhere as it fades is
 the next thing done, not one to close it. It opens as the second click's button comes up: a third click asks

@@ -329,35 +329,18 @@ separately - that code's. Settings,
 
 What a plugin brings is fetched as it is set up - from PyPI, conda-forge
 or its makers' repository, as its lock says - and is carried neither in
-its folder nor in Meno, so its folder holds no text of that licence
-(checked on 2026-10-13 against the licences the packages install;
-MolScribe's as PDF.md, *A picture read*, gives it):
-
-- **cclib** and **RDKit** (BSD-3-Clause) ask that copies passed on, as
-  source or built, keep their notice; **MolScribe** (MIT), that its
-  notice go with copies of it or of substantial parts of it. Meno passes
-  on no copy of any of them: its lock names each, and a worker of Meno's
-  uses it.
-- **xTB** and **CREST** (LGPL-3.0-or-later) set their conditions on
-  conveying them, and none on running them (GPL-3.0, section 2, which the
-  LGPL takes in): Meno runs each as a program apart, from the environment
-  pixi made on the computer.
-- A model's trained weights (`downloads`) are fetched under their own
-  licence too, and not carried.
+its folder nor in Meno. A model's trained weights (`downloads`) are
+fetched under their own licence too. Each plugin's folder in
+kfchem/meno-plugins says its licence.
 
 A plugin's folder holds a licence's text (`LICENSE`) only where its own
-code is under another licence than Meno's. A plugin whose code must be -
-a script for Blender, which uses Blender's own Python API and so is GPL -
-may come with Meno while it stands apart (the maintainer, 2026-10-10; to
-be distributed apart later, if those using Meno in companies make that
-worthwhile):
+code is under another licence than Meno's. Such a plugin:
 
-- it is a folder of its own, with its licence's text, and says it
+- is a folder of its own, with its licence's text, and says it
   (`licence: "GPL-3.0-or-later"`);
-- Meno's code and other plugins never take anything from it, and it
-  speaks to Meno only through files and arguments - a separate program,
-  not a part of Meno;
-- it is listed with its licence wherever Meno lists the plugins'
+- is never taken from by Meno's code or other plugins, and speaks to
+  Meno only through files and arguments;
+- is listed with its licence wherever Meno lists the plugins'
   licences: README, and Settings, *Plugins*.
 
 Two such plugins are among the plugins online, both GPL-3.0-or-later: the
@@ -828,9 +811,9 @@ On update: nothing keys on `version`. An environment is set up again only by its
 A plugin may use other plugins, as a library uses libraries (the maintainer, 2026-10-31): its manifest's `depends` says which, each by its id, with the versions of it it works with, and what of it is used - only what that plugin declares in its own manifest (its programs, and its interfaces), never its files. Meno keeps each one's presence and version, and never what it does: core names no plugin and no program (`lib/plugins/depends`).
 
 - **Versions** are written `>=A <B`, each of three numbers, B after A - always bounded above, an interface's too, so that a plugin's next major is never taken on trust (2026-11-01; before, `>=A` alone was taken too); nothing else is taken - no caret, no "or" - so that what a 0.x version takes is never misread. A plugin's version is compared by its numbers (0.1.10 after 0.1.9).
-- **Refused** - not offered at all - is a plugin that uses one Meno does not know, or a program, an interface or a kind of file that one does not declare, or whose step takes a kind of file that is none of its own, none of Meno's, and none it says it uses; and every plugin of a circle (a uses b, b uses a), named, which could be set up in no order. One that uses a plugin refused is refused in turn.
+- **Refused** - not offered at all - is a plugin that uses a program, an interface or a kind of file that a plugin it uses does not declare, or whose step takes a kind of file that is none of its own, none of Meno's, and none it says it uses; and every plugin of a circle (a uses b, b uses a), named, which could be set up in no order. One that uses a plugin refused is refused in turn. One that uses a plugin Meno does not know yet - not got from the plugins online - is not refused: that plugin is missing, as one not added is (*Optional*, *Stopped*, below), and what is used of it is checked once it is got (2026-11-05).
 - **Optional** is one only some of its work needs (`optional: true`): the ORCA interface's xTB, for its xTB methods alone. It is not set up with it, and missing it stops nothing: a job that needs its program is refused, saying so ("Needs xTB, which is not added."), and the plugin's other steps run as ever. There, it is kept as one it needs is: never taken away unasked while it is used, and of a version it does not work with, the plugin is stopped - unless it uses that one for no program and no interface, for its kinds of file alone (below).
-- **Adding** a plugin sets up first those it needs - not those it uses only for some of its work - that are not added, each before any that uses it, all asked of the network in one question - each one's own words under its name ("Set up the ORCA interface, with xTB?"); a yes allows each of them, a no sets none up. Where one it uses cannot be set up, neither is it, saying which.
+- **Adding** a plugin sets up first those it needs - not those it uses only for some of its work - that are not added, each before any that uses it, all asked of the network in one question - each one's own words under its name ("Set up the ORCA interface, with xTB?"); a yes allows each of them, a no sets none up. Where one it uses cannot be set up, neither is it, saying which. One it needs that is not got yet is not got with it: the plugin is added, stopped, saying which it needs (*Stopped*), until that one is added too.
 - **Taking away** a plugin another added uses is never done alone: Settings asks ("Remove xTB?" - "ORCA interface uses it. Removing xTB removes it too." - *Remove both*), and those that use it go first, their jobs asked about as its own are; asked to take it away alone otherwise, Meno takes none away, saying why ("xTB was not removed: ORCA interface uses it.").
 - **Stopped** is a plugin added that a plugin it needs is not added for, or one it uses - optionally or not - added of a version it does not work with, or with an interface it uses of a version it does not work with ("Needs Blender's preset interface from 1.0.0 to before 2.0.0; 2.0.0 is added"): Settings says so on it ("Stopped: needs xTB, which is not added."), and its steps run nothing, saying the same ("ORCA interface is stopped. Needs xTB from 0.1.4 to before 0.2.0; 0.2.0 is added."); a job of it that would run that plugin's program is refused by the backend too, reading that plugin's version from its own folder, never from what the job's spec says ("orca needs xTB >=0.1.4 <0.2.0; 0.2.0 is here").
 - **A kind of file of another's** that a step takes (`kinds`: Multiwfn's NCI, the Gaussian interface's formatted checkpoint) is taken only while that plugin is added, of a version it works with; used for some of its work, as Multiwfn uses it, it stops nothing - not added, or of a version it does not work with: an entry read from such a file is given none, and Settings says why on the plugin ("Gaussian formatted checkpoint is not taken: Needs Gaussian interface from 0.4.0 to before 1.0.0; 1.2.0 is added.").
@@ -1538,12 +1521,12 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 ## Settings
 
 - **Plugins.** A tab of its own that lists every plugin on offer, added or
-  not - those that come with Meno and run nothing first:
+  not - those that run nothing first:
   - what roles it fills, by name - the kinds of file it reads and writes
     among them - the plugins it uses, with the versions of each it works
     with, and those that use it;
-  - its version, licence and home; "Comes with Meno: nothing to download"
-    for one that runs nothing;
+  - its version, licence and home; "Nothing to set up: its files only"
+    for one that runs nothing - its files are all it brings;
   - Add, and Remove. Removing a
     plugin while any of its jobs waits or runs asks first, saying how
     many; once the chemist says *Stop and remove*, those jobs are stopped
@@ -1641,6 +1624,11 @@ comes in its own pull request.
 - **Updated.** The newer version is got the same way, and set up again
   only where it was added and its environment is no longer the one it
   needs.
+- **Its files taken away.** A plugin here and not added - one no plugin
+  added uses - has *Remove its files*, asking first: the version in use
+  unnamed, then its folder, as the plugins in place are read (`installed.rs`,
+  the backend's one rule for where they are); then they are read again,
+  and it is gone at once. It can be got again from the list.
 - **Offered where it is needed** (2026-11-05). Where a role is asked of -
   a SMILES drawn, a structure made in 3D - and no plugin here fills it,
   the line that says so ("Needs a plugin: SMILES to a structure, and
@@ -1650,7 +1638,8 @@ comes in its own pull request.
   the list needs the network. The list is fetched only with the
   chemist's consent - asked first, or already given for the list, when it
   is fetched once a launch as Settings does - and no plugin is added of
-  itself. Each entry says the roles it fills
+  itself. Added from Quick Add's SMILES field, what was typed there is
+  read again and drawn, not typed again. Each entry says the roles it fills
   (`roles`), which is what it is offered for (`offeredFor`).
 
 ### Plugins used before
