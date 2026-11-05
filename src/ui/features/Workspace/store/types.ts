@@ -773,7 +773,7 @@ export type WorkflowSet = {
    * be seen on the page (docs/WORKFLOWS.md, *Held results*): laid out as
    * one not wired on is, until they close it. Not opened, such a set is
    * held - what it holds kept in the set itself, off the page, its frame
-   * drawn nowhere (workflow/held `heldSets`).
+   * drawn nowhere (workflow/onPage `heldSets`).
    */
   opened?: true;
   /**

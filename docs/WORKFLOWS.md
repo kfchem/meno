@@ -2206,7 +2206,7 @@ port is that exit's set's.
   under the first, made with its step (place `lineFrom`) - and said, as
   its placing must, for one not made yet (place `placeFor`).
 - **A wire drawn out of an exit's port** is drawn out of its set, and
-  starts at that port, drawn and made (held `wireStart`): a step's
+  starts at that port, drawn and made (place `wireStart`): a step's
   result set's frame gives from no port of its own - a set the chemist
   made gives from its frame's right side. A wire drawn back from an
   input is let go on the port.
