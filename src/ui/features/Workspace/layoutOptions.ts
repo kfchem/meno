@@ -17,7 +17,7 @@ export function layoutBond(b: Bond, a1: number, a2: number): LBond {
     order: b.order,
     stereo: b.stereo ?? "none",
     doubleMode: b.doubleMode ?? "auto",
-    stereoOrient: b.stereoOrient ?? "principle",
+    ...(b.narrow === b.a ? { narrow: a1 } : b.narrow === b.b ? { narrow: a2 } : {}),
     ...(b.display ? { display: b.display } : {}),
     ...(b.dative ? { dative: true } : {}),
     ...(b.color ? { color: b.color } : {}),

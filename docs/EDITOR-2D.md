@@ -686,7 +686,10 @@ Both go together, because both touch every layer.
   starting there on their own (the maintainer, 2026-10-29). In the journals'
   styles it reaches the atom: none of their specifications says otherwise.
   The setting is "Hashed wedge: widest hash" (At the atom, Short of the
-  atom). At a label the hashes stop at the label in every style. A style
+  atom). It holds only where bonds go on from the wide end: at a bare end
+  bonded to nothing else, the widest hash is the bond's end in every style,
+  or the wedge would have no end and look short (the maintainer,
+  2026-11-05). At a label the hashes stop at the label in every style. A style
   saved before the setting reaches the atom, as it was drawn then; a
   picture draws it as the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
@@ -697,6 +700,17 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **A wedge's narrow end is kept by atom** (`Bond.narrow`). A wedge or
+  hashes, and a ring's bond in perspective, are narrow at the atom they
+  were drawn, read or laid out narrow at, and stay so while bonds are
+  added to or taken from either end. Before, the narrow end was the end
+  with more bonds unless the bond said otherwise, counted again after
+  every edit: two bonds drawn out of a wedge's wide end could move it to
+  the other atom, turning one configuration into another with nothing
+  said. A wedge given no narrow end - chosen from the menu, say - is
+  narrow at the end with more bonds as the edit leaves it, and from then
+  on keeps it. A click on a single bond runs plain, wedge, hashes, and
+  plain again with the other end narrow next time round.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
@@ -1192,7 +1206,12 @@ All hover-based, as above.
     highlight or a fill, a black #141414 and a gray #c0c0c0: a few that
     look right as they are, as colour makes a drawing look cheap easily -
     and Okabe and Ito's, told apart by those who see colours otherwise,
-    are built in and kept as they are. The plus after the sets begins one
+    are built in and kept as they are. Okabe and Ito's yellow, #f0e442,
+    stands at 1.32 : 1 against white, too pale to read as a line or a
+    letter: it is offered for a highlight and a fill, and shown struck
+    through, not given, in a row that colours lines and letters (*Colour*,
+    a shape's *Line*) and for the pen - the set itself kept exactly theirs
+    (the maintainer's choice; `ColourSet.fillsOnly`). The plus after the sets begins one
     of the user's own; a set's menu (a right-click) duplicates it, and
     renames or deletes one of the user's own. The user's own set in use
     shows its colours: two clicks on one open the system's chooser beside
@@ -1469,26 +1488,26 @@ All hover-based, as above.
   - **Text boxes** (the maintainer, 2026-10-11: words for a research talk,
     in place of a slide program's): words on the page with a size of
     their own, letters marked, and lists.
-    - *A size of their own*, in points as the drawing's labels are: their
-      menu's *Font…* shows a card - beside them, clear of them, so that
-      what it changes is seen changing (to their right, else below, to
-      their left or above) - of *Label* (the drawing's labels' size,
-      10 points in ACS 1996's style, as words have had), *Text* 14,
-      *Heading* 20 and *Title* 28 - the one they have ringed - and any
-      other typed, 4 to 288 points, given with Enter. While they are
+    - *A size of their own*, in points as the drawing's labels are, in
+      their menu itself, under its icons, with their line spacing and
+      typeface (the maintainer's ruling: no card to open first): *8*,
+      *10*, *12*, *14*, *18* and *24* - points alone, no names by purpose -
+      the size they are set at lit, and any other typed in the field
+      beside them, 4 to 288 points, given with Enter; the menu stays open
+      while sizes are tried (`WordsFont`). While they are
       written, Ctrl/Cmd+Shift+> and < take them a size up or down (6, 7,
       8 ... 28, 32, 36, 44 ... 96). One undo step; saved, copied and drawn
       so in pictures (SVG, EMF and PNG). Without one, they are the labels'
       size, as the drawing style says.
-    - *Line spacing of their own* (the maintainer, 2026-10-27), on the same
-      card: *1* (single, as words have had: 1.25 ems baseline to
-      baseline), *1.15*, *1.5* and *2*, the one they have ringed, or any
+    - *Line spacing of their own* (the maintainer, 2026-10-27), in the same
+      menu: *1* (single, as words have had: 1.25 ems baseline to
+      baseline), *1.15*, *1.5* and *2*, the one they have lit, or any
       other typed, 0.5 to 4 times single, given with Enter. Their lines
       move apart or together eased, and so on an undo; a box given a
       width keeps its top. One undo step; saved, copied and drawn so in
       pictures.
-    - *A typeface of their own* (the maintainer, 2026-10-27), on the same
-      card, picked as the drawing style's is (the same list: those that
+    - *A typeface of their own* (the maintainer, 2026-10-27), in the same
+      menu, picked as the drawing style's is (the same list: those that
       come with Meno and stand for a journal's, then every one on this
       computer, each shown in itself). It is theirs over the drawing
       style's: the style changed, they keep it. The drawing's typeface,
@@ -1618,11 +1637,16 @@ lipids each have their own way of being drawn, which it should know.
      centre with three bonds and its H left out whose two bonds are in
      line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
      with a group straight on from it (ST-4.4, the linear drawing of a
-     double bond whose configuration is not given). Clean-up would draw
-     one or the other configuration there, so it refuses: a wedge on such
-     a centre as a wedge it cannot carry, and a double bond so drawn
-     because the new drawing would state a configuration the old one did
-     not (`lib/layout/drawn.ts#IN_LINE`). A structure not yet drawn - its
+     double bond whose configuration is not given). At such a centre
+     Clean-up would draw one or the other configuration, so it refuses, a
+     wedge on it as a wedge it cannot carry (`lib/layout/drawn.ts#IN_LINE`).
+     A double bond so drawn it lays out keeping the straight end straight -
+     its one group straight on from it, as ST-4.4 draws a double bond of
+     unspecified configuration - and the rest around it, so the new drawing
+     leaves it unsaid as the old one did (the maintainer's ruling;
+     `straightEnds`, `LayoutAtom.linear`). An end with two
+     groups is not one of these: its other group states the bond. A
+     structure not yet drawn - its
      atoms all on one point, as a SMILES's are before it is laid out - is
      not held to this: it is laid out as before, a double bond whose
      configuration the SMILES does not give drawn one way or the other.

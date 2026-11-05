@@ -34,7 +34,9 @@ title, its first line; the record's data items are not kept:
   ATTCHPT, ATTCHORD).
 - **Bonds**: types 1 to 10 (single, double, triple, aromatic, the four
   query types, coordination, hydrogen); stereo (a single bond's up, down,
-  either; a double bond's either - cis or trans, not known); topology;
+  either - a wedge or hashes narrow at the bond's first atom, as the file
+  lists it, and kept narrow at that atom as the drawing is edited; a
+  double bond's either - cis or trans, not known); topology;
   reacting centre; stereo care (as an atom's: read, not carried on nor
   written back); V3000's haptic endpoints (ENDPTS with
   ATTACH=ALL or ANY) and display (DISP: COORD, DATIVE, HBOND1, HBOND2).
@@ -232,7 +234,9 @@ What is put together from them is read by rule, not listed:
   S(=O)2H; what parentheses hold, with its count, hangs on the
   atom before them - an O or an S alone in them an =O, as one unbracketed
   may be (C(O)NMe2, C(O)OMe, C(O)NiPr2), a group alone in them as it is
-  unbracketed (N(iPr)2). O's with H's written after them are an acid's:
+  unbracketed (N(iPr)2), a group with a hyphen in its own name too
+  (N(t-Bu)2, N(i-Pr)2: a hyphen between a letter and the rest of a name
+  is no charge). O's with H's written after them are an acid's:
   each H on an O of its own, the rest =O (CO2H, SO3H, SO2H S(=O)OH, PO3H2
   P(=O)(OH)2), never on the atom they hang on (the maintainer,
   2026-10-17). D is deuterium wherever an H could stand, an atom of its
@@ -365,7 +369,10 @@ Read by rule, besides, as whole molecules:
   own ion too ((Cl-)2, two chlorides; Cl- alone is read as an element
   with its charge is);
 - an adduct of known parts, a middle dot between them, each counted:
-  BF3·OEt2, CeCl3·7H2O, EDC·HCl;
+  BF3·OEt2, CeCl3·7H2O, EDC·HCl - or a full stop typed in its place,
+  between two parts of a formula (Na2SO4.10H2O, BF3.OEt2, and so the
+  dictionary's NaBO3·4H2O typed NaBO3.4H2O); a number's point (0.5) and
+  a SMILES's dot (CC.O) are none;
 - a Buchwald precatalyst named by its phosphine and generation - XPhos Pd
   G2, SPhos-Pd-G3, RuPhos Pd G4 - as its palladacycle: the phosphine, a
   2-aminobiphenyl's carbon and nitrogen, and a chloride (G2) or a mesylate

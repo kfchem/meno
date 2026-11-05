@@ -42,7 +42,7 @@ SYMBOLS = (
 
 
 def number(token):
-    """A number as Gaussian prints it - "-0.75002282127454D+02" with a Fortran D, "-382.308266602" - or None where it
+    """A number as Gaussian prints it - "-0.76400000000000D+02" with a Fortran D, "-76.400000000" - or None where it
     is not one: a field too narrow for its value, which Fortran fills with asterisks ("**********"), is not known."""
     try:
         v = float(token.replace("D", "E").replace("d", "e"))
@@ -51,7 +51,7 @@ def number(token):
     return v if math.isfinite(v) else None
 
 
-# a number in a line, where several may stand with no space between them ("-10.02022-10.02017"), or a field of
+# a number in a line, where several may stand with no space between them ("-10.10000-10.05000"), or a field of
 # asterisks in its place
 NUMBERS = re.compile(r"[-+]?\d+\.\d*(?:[DdEe][-+]?\d+)?|\*{2,}")
 
@@ -92,7 +92,7 @@ def jobs(text):
     return ["\n".join(lines[: starts[1]])] + ["\n".join([lines[0]] + lines[a:b]) for a, b in zip(starts[1:], ends)]
 
 
-# " Normal termination of Gaussian 16 at Fri Jul  4 15:55:16 2025."; " Error termination via Lnk1e in /g16/l9999.exe ..."
+# " Normal termination of Gaussian 16 at Sun Nov  1 10:00:00 2026."; " Error termination via Lnk1e in /g16/l9999.exe ..."
 NORMAL = "Normal termination of Gaussian"
 ERROR = "Error termination"
 # an SCF that did not converge, before its "SCF Done": " >>>>>>>>>> Convergence criterion not met."
@@ -101,7 +101,7 @@ SCF_DONE = re.compile(r"^ SCF Done:\s+E\((\S+)\)\s+=\s+(\S+)")
 
 
 # an optimisation that stopped short of its point (Opt), and why, on the line after:
-# " Optimization stopped.", "    -- Number of steps exceeded,  NStep=   2"; its job then ends in error in link 9999,
+# " Optimization stopped.", "    -- <why, in its words>"; its job then ends in error in link 9999,
 # which prints a quotation before it says so
 OPT_STOPPED = "Optimization stopped."
 
@@ -210,7 +210,7 @@ def options_of(word):
 # --- what the calculation was --------------------------------------------------------
 
 
-# " Gaussian 16:  ES64L-G16RevA.03  25-Dec-2016"
+# " Gaussian 16:  ES64L-G16RevZ.01   1-Jan-2020" (a made-up revision)
 VERSION = re.compile(r"^ Gaussian (\d+):\s+\S*?Rev([A-Z]\.\d+)")
 # " Charge =  0 Multiplicity = 1", " Charge =  0 Multiplicity = 1 in supermolecule" (a counterpoise job's whole)
 CHARGE = re.compile(r"^ Charge =\s*(-?\d+) Multiplicity =\s*(\d+)(?: in supermolecule)?\s*$")
@@ -248,7 +248,7 @@ def level_of(route_list, lines):
     return method or None, standard or basis or None
 
 
-# the solvent Gaussian says it took, in its block on the continuum model: " Solvent              : Water, Eps=  78.355300 Eps(inf)=   1.777849"
+# the solvent Gaussian says it took, in its block on the continuum model: " Solvent              : Water, Eps=  78.400000 Eps(inf)=   1.800000"
 PCM_SOLVENT = re.compile(r"^ Solvent\s+:\s+([^,]+),\s+Eps=")
 # the models SCRF names among its options (gaussian.com, SCRF), each as it is written
 SCRF_MODELS = {"pcm": "IEFPCM", "iefpcm": "IEFPCM", "cpcm": "CPCM", "smd": "SMD", "ipcm": "IPCM", "scipcm": "SCIPCM", "dipole": "Dipole"}
@@ -292,7 +292,7 @@ def orientation_blocks(lines, title):
          Center     Atomic      Atomic             Coordinates (Angstroms)
          Number     Number       Type             X           Y           Z
          ---------------------------------------------------------------------
-              1          6           0        0.269445    1.410118    0.000000
+              1          6           0        0.250000    1.400000    0.000000
          ---------------------------------------------------------------------
     """
     out = []
@@ -407,8 +407,8 @@ def without(result, gone):
 
 
 # a correlated energy after an SCF's, each method's own line (gaussian.com, MP2, MP4, CCSD, QCISD):
-# " E2 =    -0.3795333610D-01 EUMP2 =    -0.75002282127454D+02", " UMP4(SDTQ)=   -0.76112D+02",
-# " CCSD(T)= -0.76241D+02", " QCISD(T)= -0.76241D+02"
+# " E2 =    -0.4000000000D-01 EUMP2 =    -0.76440000000000D+02", " UMP4(SDTQ)=   -0.76450D+02",
+# " CCSD(T)= -0.76300D+02", " QCISD(T)= -0.76300D+02"
 MP_ENERGY = re.compile(r"(?:EUMP2|EUMP3|UMP4\(DQ\)|UMP4\(SDQ\)|UMP4\(SDTQ\)|MP5)\s*=\s*(\S+)")
 CC_ENERGY = re.compile(r"^\s*(?:CCSD\(T\)|QCISD\(T\)|QCISD|CCSD)\s*=\s*(\S+)")
 
@@ -446,7 +446,7 @@ def frame_energies(lines, frames, ends):
 
 # where an optimisation found its point (gaussian.com, Opt): " Optimization completed.", "    -- Stationary point found."
 COMPLETED = " Optimization completed."
-# where it stopped without one: " Optimization stopped.", "    -- Number of steps exceeded,  NStep=   2"
+# where it stopped without one: " Optimization stopped.", "    -- <why, in its words>"
 STOPPED = " Optimization stopped."
 # a relaxed scan's summary (gaussian.com, Scan; Opt=ModRedundant): " Summary of Optimized Potential Surface Scan"
 RELAXED_SCAN = "Summary of Optimized Potential Surface Scan"
@@ -560,7 +560,7 @@ def last_block(lines, start, stop=None):
 
 
 def atom_rows(block, n, columns=1):
-    """Each atom's values in a block that lists them - "     1  C   -0.004504" - as many as its atoms, else None: the
+    """Each atom's values in a block that lists them - "     1  C   -0.004000" - as many as its atoms, else None: the
     first `columns` numbers after the element."""
     rows = []
     for line in block[2:]:
@@ -631,7 +631,7 @@ def charges(lines, n, route_list):
         if scheme:
             add("charges", scheme, [r[0] for r in rows])
     # " Summary of Natural Population Analysis:" over two lines of headings and a rule, rows
-    # "      O    1   -0.91828      1.99986     6.90920    0.00922     8.91828"
+    # "      O    1   -0.90000      2.00000     6.88000    0.02000     8.90000"
     k = max((i for i, line in enumerate(lines) if "Summary of Natural Population Analysis:" in line), default=None)
     rule = next((j for j in range(k + 1, min(k + 8, len(lines))) if lines[j].strip().startswith("---")), None) if k is not None else None
     if rule is not None:
@@ -667,7 +667,7 @@ def dipole(lines):
     }]
 
 
-# " Alpha  occ. eigenvalues --  -10.02022 -10.02017", "  Beta virt. eigenvalues --    0.03742"
+# " Alpha  occ. eigenvalues --  -10.10000 -10.05000", "  Beta virt. eigenvalues --    0.04000"
 EIGENVALUES = re.compile(r"^\s+(Alpha|Beta)\s+(occ\.|virt\.) eigenvalues --(.*)$")
 
 
@@ -734,8 +734,8 @@ def orbitals(lines):
 
 
 # a vibration's values as Gaussian lists them, three to a block (gaussian.com, Freq; "Vibrational Analysis in
-# Gaussian"): over "                     AU                     BG", " Frequencies --     53.1981   84.7415",
-# " Red. masses --      3.2266", " Frc consts  --      0.0054", " IR Inten    --      0.0342", " Raman Activ --",
+# Gaussian"): over "                     AU                     BG", " Frequencies --     50.0000   80.0000",
+# " Red. masses --      3.2000", " Frc consts  --      0.0050", " IR Inten    --      0.0300", " Raman Activ --",
 # then "  Atom  AN      X      Y      Z        X      Y      Z" and a row to each atom
 HARMONIC = " Harmonic frequencies (cm**-1)"
 FREQ_ROWS = {"Frequencies": "freq", "Red. masses": "mass", "Frc consts": "force", "IR Inten": "ir", "Raman Activ": "raman"}
@@ -886,16 +886,16 @@ def nimag_of(text):
 # " Temperature   298.150 Kelvin.  Pressure   1.00000 Atm."
 TEMPERATURE = re.compile(r"^ Temperature\s+(\S+) Kelvin\.\s+Pressure\s+(\S+) Atm\.")
 THERMO_LINES = {
-    # " Zero-point correction=                           0.177132 (Hartree/Particle)"
+    # " Zero-point correction=                           0.020000 (Hartree/Particle)"
     "thermo.zpve": re.compile(r"^ Zero-point correction=\s+(\S+)"),
-    # " Thermal correction to Gibbs Free Energy=         0.143352"
+    # " Thermal correction to Gibbs Free Energy=         0.010000"
     "thermo.g-correction": re.compile(r"^ Thermal correction to Gibbs Free Energy=\s+(\S+)\s*$"),
-    # " Sum of electronic and thermal Enthalpies=            -382.121307"
+    # " Sum of electronic and thermal Enthalpies=             -76.380000"
     "thermo.enthalpy": re.compile(r"^ Sum of electronic and thermal Enthalpies=\s+(\S+)"),
-    # " Sum of electronic and thermal Free Energies=         -382.164915"
+    # " Sum of electronic and thermal Free Energies=          -76.400000"
     "thermo.free-energy": re.compile(r"^ Sum of electronic and thermal Free Energies=\s+(\S+)"),
 }
-# the table of E (Thermal), CV and S, its row of totals: " Total                  116.727             33.556             91.781"
+# the table of E (Thermal), CV and S, its row of totals: " Total                   13.000              6.000             45.000"
 THERMO_TOTAL = re.compile(r"^ Total\s+(\S+)\s+(\S+)\s+(\S+)\s*$")
 # " Full point group                 C2H     NOp   4"; " Rotational symmetry number  2."
 POINT_GROUP = re.compile(r"^ Full point group\s+(\S+)")
@@ -975,7 +975,7 @@ def rms_gradients(lines, frames, ends):
 # --- excited states -----------------------------------------------------------------------
 
 
-# " Excited State   1:      Singlet-A1     8.1234 eV  152.63 nm  f=0.0123  <S**2>=0.000" (gaussian.com, TD)
+# " Excited State   1:      Singlet-A1     7.0000 eV  177.12 nm  f=0.0100  <S**2>=0.000" (gaussian.com, TD)
 EXCITED = re.compile(r"^ Excited State\s+\d+:")
 # the density Gaussian's population analysis - its charges, its dipole - is of: " Population analysis using the SCF density."
 DENSITY = re.compile(r"Population analysis using the (\S+) density", re.I)

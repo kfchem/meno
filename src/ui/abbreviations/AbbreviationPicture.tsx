@@ -21,7 +21,7 @@ function modelOf(s: GroupStructure): Model {
       b: b.a2 + 1,
       order: b.order,
       stereo: b.stereo ?? ("none" as const),
-      ...(b.stereoOrient ? { stereoOrient: b.stereoOrient } : {}),
+      ...(b.narrow != null ? { narrow: b.narrow + 1 } : {}),
       ...(b.display ? { display: b.display } : {}),
       ...(b.coordination ? { coordination: true } : {}),
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => e + 1), attach: "all" as const } : {}),

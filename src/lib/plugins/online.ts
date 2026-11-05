@@ -32,6 +32,9 @@ export type Online = {
 
 export const useOnline = create<Online>(() => ({ state: "unlisted" }));
 
+/** A plugin on offer in the list here, by its id; none, where none is listed or it is not in it. */
+export const onlineEntry = (id: string): CatalogueEntry | undefined => useOnline.getState().catalogue?.plugins.find((e) => e.id === id);
+
 /** What listing the plugins online asks, as any first use of the network is asked. */
 export const CATALOGUE_REQUEST: ConsentRequest = {
   purpose: CATALOGUE_PURPOSE,
@@ -80,6 +83,20 @@ export async function listOnline(again = false, ask: typeof invoke = invoke): Pr
   const read = acceptCatalogue(got.catalogue);
   if ("why" in read) return useOnline.setState({ state: "failed", catalogue: undefined, problem: `The list of plugins online could not be read: ${read.why}.` });
   useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got.fetchedAt, kept: got.kept ?? offline, problem: undefined });
+}
+
+/**
+ * The list kept from before, read as Meno starts - nothing fetched, nothing
+ * asked - so that the kinds of file its plugins read are told from the
+ * start, not only once Settings is opened (lib/io/kinds `offeredKinds`).
+ * None kept, or one listed already: nothing.
+ */
+export async function keptOnline(ask: typeof invoke = invoke): Promise<void> {
+  if (useOnline.getState().state !== "unlisted") return;
+  const got = (await (ask("catalogue_get", { fetch: false }) as Promise<Got | null>).catch(() => null)) ?? null;
+  const read = got ? acceptCatalogue(got.catalogue) : null;
+  if (!read || "why" in read || useOnline.getState().state !== "unlisted") return;
+  useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got!.fetchedAt, kept: got!.kept });
 }
 
 /**

@@ -42,6 +42,8 @@ describe("a catalogue of plugins online, read", () => {
             roles: ["smiles"],
             kinds: ["energy"],
             reads: [],
+            fileKinds: [],
+            quotedTables: [],
             source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 12_345 },
             manifestSha256: HEX,
             description: "Draws.",
@@ -73,6 +75,55 @@ describe("a catalogue of plugins online, read", () => {
       expect(why(catalogue([good, bad]))).toMatch(/^It holds /);
     }
     expect(why(catalogue([good, { ...good }]))).toBe("It offers sketch twice");
+  });
+
+  it("reads the kinds of file an entry reads as its manifest says them - their marks strictly - or refuses the whole list", () => {
+    const kind = { id: "sketch-out", name: "Sketch output", extensions: [".out", ".log"], marks: [{ text: "* S K E T C H *" }, { text: "Sketch version", at: "line-start", anyCase: true }], writtenBy: "sketch" };
+    const got = read(catalogue([entry({ reads: ["sketch-out"], fileKinds: [kind] })])) as { catalogue: Catalogue };
+    expect(got.catalogue.plugins[0].fileKinds).toEqual([kind]);
+    // (none said: none)
+    expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.plugins[0].fileKinds).toEqual([]);
+    const { writtenBy: _, ...notWritten } = kind;
+    expect((read(catalogue([entry({ fileKinds: [notWritten] })])) as { catalogue: Catalogue }).catalogue.plugins[0].fileKinds).toEqual([notWritten]);
+    for (const bad of [
+      {},
+      [{ ...kind, id: "Sketch Out" }],
+      [{ ...kind, name: "" }],
+      [{ ...kind, extensions: [".OUT"] }],
+      [{ ...kind, extensions: "out" }],
+      [{ ...kind, marks: [] }],
+      [{ ...kind, marks: [{ text: "abc" }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", at: null }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", anyCase: false }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", at: "anywhere" }] }],
+      [{ ...kind, marks: [{ text: "* S K E T C H *", pattern: ".*" }] }],
+      [{ ...kind, writtenBy: "a program" }],
+      [kind, kind],
+    ]) {
+      expect(why(catalogue([entry(), entry({ id: "other", fileKinds: bad })])), JSON.stringify(bad)).toMatch(/^It holds other: a kind of file/);
+    }
+  });
+
+  it("reads the tables of atoms an entry's program prints as its manifest keeps them - or refuses the whole list", () => {
+    const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
+    expect((read(catalogue([entry({ quotedTables: [table] })])) as { catalogue: Catalogue }).catalogue.plugins[0].quotedTables).toEqual([table]);
+    expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.plugins[0].quotedTables).toEqual([]);
+    for (const bad of [
+      {},
+      [{ ...table, id: "Orientation" }],
+      [{ ...table, headings: [] }],
+      [{ ...table, headings: [" Standard orientation:"] }],
+      [{ ...table, heads: ["x".repeat(81)] }],
+      [{ ...table, columns: ["x", "y", "z"] }],
+      [{ ...table, columns: ["element", "atomic-number", "x", "y", "z"] }],
+      [{ ...table, columns: ["element", "x", "x", "y", "z"] }],
+      [{ ...table, columns: ["element", "x", "y", "z", "charge"] }],
+      [{ ...table, pattern: ".*" }],
+      [table, table],
+      [1, 2, 3, 4, 5].map((k) => ({ ...table, id: `t${k}` })),
+    ]) {
+      expect(why(catalogue([entry(), entry({ id: "other", quotedTables: bad })])), JSON.stringify(bad).slice(0, 80)).toMatch(/^It holds other: a table of atoms/);
+    }
   });
 
   it("takes a plugin's files only on https, from where the plugins' releases are - nowhere else", () => {

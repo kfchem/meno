@@ -1,7 +1,7 @@
 {
   "id": "orca",
   "name": "ORCA interface",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with ORCA - installed separately, under its own licence, and never downloaded by Meno.",
   "licence": "Apache-2.0",
   "homepage": "https://www.faccts.de/orca/",
@@ -52,7 +52,7 @@
           {"value": "2-propanol", "label": "2-Propanol"}
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500},
+        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500, "whole": true},
         {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     },
@@ -89,12 +89,12 @@
           {"value": "2-propanol", "label": "2-Propanol"}
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500},
+        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500, "whole": true},
         {"id": "vibrations", "label": "Low-frequency vibrations", "type": "choice", "choices": [{"value": "none", "label": "ORCA's own"}, {"value": "rrho", "label": "Harmonic (RRHO)"}], "default": "none"},
         {"id": "wavefunction", "label": "Keep the wavefunction", "type": "switch", "default": true}
       ]
     },
-    {"kinds": ["path-search"], "programs": ["orca"], "options": [{"id": "method", "label": "Method", "type": "text", "default": "NATIVE-XTB2"}, {"id": "basis", "label": "Basis set", "type": "text", "default": ""}, {"id": "run", "label": "Path", "type": "choice", "choices": [{"value": "NEB-TS", "label": "A band, its highest point refined (NEB-TS)"}, {"value": "ZOOM-NEB-TS", "label": "A band, a finer one about its highest point, that refined (ZOOM-NEB-TS)"}], "default": "NEB-TS"}, {"id": "images", "label": "Images between the ends (NImages)", "type": "number", "default": 8, "min": 1, "step": 1}, {"id": "maxiter", "label": "Steps for refining its highest point (%geom MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50}, {"id": "keywords", "label": "More keywords", "type": "text", "default": ""}, {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}]},
+    {"kinds": ["path-search"], "programs": ["orca"], "options": [{"id": "method", "label": "Method", "type": "text", "default": "NATIVE-XTB2"}, {"id": "basis", "label": "Basis set", "type": "text", "default": ""}, {"id": "run", "label": "Path", "type": "choice", "choices": [{"value": "NEB-TS", "label": "A band, its highest point refined (NEB-TS)"}, {"value": "ZOOM-NEB-TS", "label": "A band, a finer one about its highest point, that refined (ZOOM-NEB-TS)"}], "default": "NEB-TS"}, {"id": "images", "label": "Images between the ends (NImages)", "type": "number", "default": 8, "min": 1, "step": 1, "whole": true}, {"id": "maxiter", "label": "Steps for refining its highest point (%geom MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50, "whole": true}, {"id": "keywords", "label": "More keywords", "type": "text", "default": ""}, {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500, "whole": true}]},
     {
       "kinds": ["reaction-path"],
       "programs": ["orca"],
@@ -128,8 +128,8 @@
           {"value": "2-propanol", "label": "2-Propanol"}
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
-        {"id": "maxiter", "label": "Steps each way (%irc MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}
+        {"id": "maxiter", "label": "Steps each way (%irc MaxIter; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 50, "whole": true},
+        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500, "whole": true}
       ]
     },
     {
@@ -166,7 +166,7 @@
         ], "default": "water"},
         {"id": "keywords", "label": "More keywords", "type": "text", "default": ""},
         {"id": "hessian", "label": "First Hessian", "type": "choice", "choices": [{"value": "computed", "label": "Computed at the start (Calc_Hess)"}, {"value": "model", "label": "ORCA's model Hessian"}], "default": "computed"},
-        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500}
+        {"id": "maxcore", "label": "Memory for each core (%maxcore, MB; 0 leaves it to ORCA)", "type": "number", "default": 0, "unset": 0, "min": 0, "step": 500, "whole": true}
       ]
     }
   ]
