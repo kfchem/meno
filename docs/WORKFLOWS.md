@@ -692,8 +692,9 @@ frames chip opens to its slider:
   options the two share kept as they were;
 - the plugin's own options, drawn in Meno's general form (`lib/options`,
   as Export draws a writer's): for xTB, its method (GFN2-xTB, GFN1-xTB,
-  GFN-FF), solvent, optimisation level; for *Energy window*, the window
-  (3 kcal/mol) - or *No options*;
+  GFN-FF), solvent, optimisation level; for *Energy window*, the window,
+  which is the chemist's own (*The window is the chemist's*) - or *No
+  options*;
 - its runs, where it has more than one: each when, and what it said,
   with *Show* to put its results back on the page (*Results*).
 
@@ -911,6 +912,17 @@ beside its edge - being drawn over all of it.
   their line: "2 of 2 kept, on electronic energies · each compound has
   one conformer", or "1 compound has one conformer" where others have
   more (2026-10-22);
+- **The window is the chemist's** (2026-11-05): *Energy window* sets
+  none. Its field is empty until the chemist gives one, and until then
+  the card says what it needs ("Give the window, in kcal/mol") and the
+  step does not run; run without one, its line says the same. No window
+  has a basis that holds for every set of energies, so none stands as a
+  default. The field gives a guide, not a default: at 298.15 K a
+  conformer ΔE above the lowest weighs exp(-ΔE/RT) as much, 1/100 at
+  RT ln 100 = 2.73 kcal/mol (`WINDOW_GUIDE`, workflow/kinds). Which
+  energies it is on is below. A step saved before this, which took the
+  window it had then (3 kcal/mol) without one of its own, needs one
+  given before it runs again.
 - **Which energy** *Energy window* and *Populations* are on (2026-10-24):
   the free energy G where every entry has one and each compound's were
   worked out alike - the same temperature, pressure, solvent, program,

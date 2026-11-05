@@ -5,7 +5,7 @@ import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from ".
 import type { Molecule3D } from "../store/types";
 import { setMolecules } from "./entries";
 import { resultOf } from "./flow";
-import { howOf, kindInfo, needsOf } from "./kinds";
+import { howOf, kindInfo, needsOf, WINDOW_GUIDE } from "./kinds";
 import { addSet, addStep, connect } from "./model";
 import { runStep, type RunWith } from "./run";
 import { SET_ASIDE } from "./structureSteps";
@@ -94,9 +94,25 @@ describe("Energy window, of the lowest in each value of a property", () => {
 
   it("says on its card the window and what it is of, and what it still needs", () => {
     const info = kindInfo("energy-window");
-    expect(howOf(info.options!, {}, info.how)).toBe("within 3 kcal/mol of each compound's lowest");
+    expect(howOf(info.options!, { window: 3 }, info.how)).toBe("within 3 kcal/mol of each compound's lowest");
     expect(howOf(info.options!, { window: 10, within: "each value", groupBy: "product" }, info.how)).toBe("within 10 kcal/mol of each product's lowest");
-    expect(needsOf({ kind: "energy-window", options: { within: "each value" } })).toBe("Name the property whose values are the groups");
+    expect(needsOf({ kind: "energy-window", options: { window: 3, within: "each value" } })).toBe("Name the property whose values are the groups");
     expect(info.takes).toEqual(["conformers", "molecules"]);
+  });
+
+  it("has no window of its own: the chemist gives one, and it does not run until then - its field saying a guide, never a default", () => {
+    const info = kindInfo("energy-window");
+    const window = info.options!.find((o) => o.id === "window")!;
+    expect(window.type === "number" && Number.isNaN(window.default)).toBe(true);
+    expect(window.note).toBe(WINDOW_GUIDE);
+    expect(WINDOW_GUIDE).toContain("2.73 kcal/mol");
+    // (none given, one that is no number, one below 0: each needs a window, and the card says so in place of how it works)
+    const given: (Record<string, string | number> | undefined)[] = [undefined, {}, { window: "" }, { window: Number.NaN }, { window: -1 }];
+    for (const options of given) expect(needsOf({ kind: "energy-window", options })).toBe("Give the window, in kcal/mol");
+    expect(howOf(info.options!, {}, info.how)).toBe("Give the window, in kcal/mol");
+    expect(needsOf({ kind: "energy-window", options: { window: 0 } })).toBeUndefined();
+    // (a page whose window was never given: not run, said so)
+    const doc = runStep(windowed([water(0, 0), water(9, 2)], {}), 2, W);
+    expect(ran(doc)).toMatchObject({ ok: false, said: "Give the window, in kcal/mol" });
   });
 });

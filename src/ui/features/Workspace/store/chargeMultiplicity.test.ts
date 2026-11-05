@@ -510,6 +510,8 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
     if (kind === "measure") st().updateStep(id, { options: { measurements: "1-2" } });
     // (Restraints asked an atom every entry has fixed: it has no default to run with)
     if (kind === "restraints") st().updateStep(id, { options: { coordination: false, fixed: "1" } });
+    // (an Energy window given its window: it has no default to run with)
+    if (kind === "energy-window") st().updateStep(id, { options: { window: 3 } });
     st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });

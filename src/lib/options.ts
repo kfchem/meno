@@ -38,7 +38,13 @@ export type ChoiceOption = OptionBase & {
   choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
-/** `unset`: the value that sets nothing - what is left to the program ("0 leaves it to ORCA"): not said on a step's line. */
+/**
+ * `unset`: the value that sets nothing - what is left to the program ("0
+ * leaves it to ORCA"): not said on a step's line. A `default` that is no
+ * number (NaN) is none: the field is empty until the chemist gives one,
+ * and a step needs it before it runs (its kind's `needs`) - Meno's own
+ * kinds' alone, where no value has a basis to stand as a default.
+ */
 export type NumberOption = OptionBase & {
   type: "number";
   default: number;
