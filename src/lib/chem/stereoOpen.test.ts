@@ -25,6 +25,19 @@ describe("C=N double bonds whose E/Z is none of their own", () => {
     expect(moving("CC(n1cccc1)=[N+](C)CC")).toEqual([]);
   });
 
+  it("are one beside a ring's N-H whose ring bonds are given as aromatic, no hydrogens stated - counted as a Kekulé structure has it", () => {
+    // (CN=c1cccc[nH]1, its ring's bonds as a file gives them: type 4, and no H on its N)
+    const atoms: StereoAtom[] = ["C", "N", "C", "C", "C", "C", "C", "N"].map((el) => ({ el }));
+    const bonds: StereoBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      ...[[2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 2]].map(([a, b]) => ({ a, b, order: 4 })),
+    ];
+    expect([...movingCN(atoms, bonds)]).toEqual([[1, "shift"]]);
+    // (its N's hydrogen stated as none: a pyridinylidene with no H to move)
+    expect([...movingCN(atoms.map((a, i) => (i === 7 ? { ...a, hs: 0 } : a)), bonds)]).toEqual([]);
+  });
+
   it("are not an imine whose N bears a carbon, an oxime's, a hydrazone's - nor one in a ring held flat", () => {
     for (const smiles of ["CC=NC", "CC=NO", "CC=NN", "C1=CC=NC=C1", "NC1=NC=CC=C1"]) expect(moving(smiles), smiles).toEqual([]);
   });

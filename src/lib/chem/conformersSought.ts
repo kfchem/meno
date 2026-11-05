@@ -22,6 +22,7 @@ import { symmetryClasses } from "../layout/canonical";
 import { smallestRings } from "../layout/rings";
 import { readMolfile } from "./ctfile";
 import { aromaticIn } from "./aromaticity";
+import { valenceOrders } from "./kekulize";
 import { implicitHydrogens, mostBonds } from "./molecule";
 
 /** An atom as the count reads it. */
@@ -171,8 +172,11 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
   // (an end N, O or S's hydrogens - those bonded to it as atoms, or those its valence leaves - whose turn gives conformers of
   //  their own: the same conformer keeps OH and NH rotamers apart (workflow/sameConformer) - but not where the bond is held flat
   //  and they are two, its two forms one shape: an amide's NH2)
+  //  (aromatic bonds counted as a Kekulé structure has them: lib/chem/kekulize `valenceOrders`)
+  let valence: [number, number][][] | null = null;
   const hydrogens = (i: number) => {
-    const sum = around[i].reduce((n, [, o]) => n + (o === 4 ? 1.5 : o <= 3 ? o : 0), 0);
+    valence ??= neighboursOf(atoms, valenceOrders(atoms, bonds).map((order, k) => ({ ...bonds[k], order })));
+    const sum = valence[i].reduce((n, [, o]) => n + (o <= 3 ? o : 0), 0);
     return around[i].filter(([j]) => atoms[j].el === "H").length + implicitHydrogens(atoms[i].el, Math.round(sum), atoms[i].charge ?? 0);
   };
   //  - and an NH3's three, a symmetric top as a methyl is)
