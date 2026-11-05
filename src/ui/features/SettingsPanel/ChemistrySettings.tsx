@@ -9,7 +9,7 @@ import {
 } from "../../../lib/settings/appSettings";
 import { Fragment } from "react";
 import { noDefault, shownOptions, type Option, type OptionValues } from "../../../lib/options";
-import { OwnValues, partsOf } from "./CalculationSettings";
+import { clearOf, OwnValues, partsOf } from "./CalculationSettings";
 import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
@@ -127,12 +127,12 @@ function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemist
   const shown = shownOptions(soughtOptions("needed", RING_CONFORMERS, rounds ? {} : undefined), values);
   return (
     <div className="mt-2 rounded-lg border border-gh-line bg-white">
-      {/* (the window with its guide and Clear under it, as one row: Settings, Calculations does the same) */}
+      {/* (the window with Clear just before its field and its guide under it, as one row: Settings, Calculations does the same) */}
       {partsOf(shown).map((part, k) =>
         part.some(noDefault) ? (
           <div key={k}>
-            <OptionRows options={part} values={values} onChange={change} />
-            <OwnValues options={part} own={{ within: values.within }} keep={() => change({ ...values, within: Number.NaN })} indent={false} />
+            <OptionRows options={part} values={values} onChange={change} before={(o) => clearOf(o, { within: values.within }, () => change({ ...values, within: Number.NaN }))} />
+            <OwnValues options={part} indent={false} />
           </div>
         ) : (
           <Fragment key={k}>

@@ -177,7 +177,8 @@ const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", 
  * chemist's own: a guide, not a default - at 298.15 K a conformer ΔE above
  * the lowest weighs exp(-ΔE/RT) as much, 1/100 at RT ln 100 = 2.73 kcal/mol.
  */
-export const WINDOW_GUIDE = "Meno sets none: give your own. As a guide, at 298.15 K one 2.73 kcal/mol above the lowest weighs 1/100 as much (RT ln 100).";
+// (each number with its unit, and RT ln 100, never split across lines: joined by no-break spaces)
+export const WINDOW_GUIDE = "Meno sets none: give your own. As a guide, at 298.15 K one 2.73\u00a0kcal/mol above the lowest weighs 1/100 as much (RT\u00a0ln\u00a0100).";
 /** What an energy window given none needs, on its card and on its line alike. */
 export const WINDOW_NEEDED = "Give the window, in kcal/mol";
 

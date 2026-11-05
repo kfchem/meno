@@ -106,9 +106,13 @@ describe("Energy window, of the lowest in each value of a property", () => {
     expect(window.type === "number" && Number.isNaN(window.default)).toBe(true);
     expect(window.note).toBe(WINDOW_GUIDE);
     // (its two numbers one with the other: RT ln 100 at the temperature it says is the window it says, to the places it gives)
-    const [, kelvin, kcal] = /at ([\d.]+) K one ([\d.]+) kcal\/mol/.exec(WINDOW_GUIDE)!;
-    expect((GAS_CONSTANT_HARTREE * Number(kelvin) * Math.log(100) * factor("Eh", "kcal/mol")).toFixed(2)).toBe(kcal);
-    expect(kcal).toBe("2.73");
+    const [, kelvin, kcal, ratio, logOf] = /at ([\d.]+) K one ([\d.]+)\skcal\/mol above the lowest weighs 1\/(\d+) as much \(RT\sln\s(\d+)\)/.exec(WINDOW_GUIDE)!;
+    // (its number and unit, and RT ln 100, each one unbroken: no-break spaces)
+    expect(WINDOW_GUIDE).toContain("2.73\u00a0kcal/mol");
+    expect(WINDOW_GUIDE).toContain("(RT\u00a0ln\u00a0100)");
+    expect(logOf).toBe(ratio);
+    expect((GAS_CONSTANT_HARTREE * Number(kelvin) * Math.log(Number(ratio)) * factor("Eh", "kcal/mol")).toFixed(2)).toBe(kcal);
+    expect([kelvin, kcal, ratio]).toEqual(["298.15", "2.73", "100"]);
     // (none given, one that is no number, one below 0: each needs a window, and the card says so in place of how it works)
     const given: (Record<string, string | number> | undefined)[] = [undefined, {}, { window: "" }, { window: Number.NaN }, { window: -1 }];
     for (const options of given) expect(needsOf({ kind: "energy-window", options })).toBe("Give the window, in kcal/mol");

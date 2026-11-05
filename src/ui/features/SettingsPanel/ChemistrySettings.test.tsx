@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions, WITHIN_GUIDE } from "../../../lib/chem/conformersSought";
 import type { ChemistrySettings } from "../../../lib/settings/appSettings";
-import { OwnValues } from "./CalculationSettings";
+import type { ReactElement } from "react";
+import { clearOf, OwnValues } from "./CalculationSettings";
 import { soughtChosen, soughtValues } from "./ChemistrySettings";
 
 // Settings, Chemistry, 3D: how many conformers the page's 3D structure tries - as many as the molecule needs asked in
@@ -29,13 +30,18 @@ describe("conformers sought on the page, in Settings", () => {
     expect(soughtChosen(plain, { ...base, sought: "fixed", count: 40 })).toEqual({ ...plain, sought3d: "fixed", count3d: 40 });
   });
 
-  it("shows the window's guide, and Clear where the chemist has given one, set in as Settings' rows are here", () => {
+  it("shows the window's guide under it, set in as Settings' rows are here, and Clear just before its field where the chemist has given one", () => {
     const options = soughtOptions("needed", RING_CONFORMERS, {});
-    const given = renderToString(OwnValues({ options, own: { within: 2.5 }, keep: () => {}, indent: false }));
+    const guide = renderToString(OwnValues({ options, indent: false }));
     // (as written into the page: its apostrophes as entities)
-    expect(given).toContain(WITHIN_GUIDE.replace(/'/g, "&#x27;"));
-    expect(given).toMatch(/>Clear<\/button>/);
-    expect(given).toContain("pl-3");
-    expect(renderToString(OwnValues({ options, own: { within: Number.NaN }, keep: () => {}, indent: false }))).not.toMatch(/>Clear<\/button>/);
+    expect(guide).toContain(WITHIN_GUIDE.replace(/'/g, "&#x27;"));
+    expect(guide).toContain("pl-3");
+    const within = options.find((o) => o.id === "within")!;
+    let kept: unknown = null;
+    const clear = clearOf(within, { within: 2.5 }, () => (kept = "cleared")) as ReactElement<{ onClick: () => void }>;
+    expect(renderToString(clear)).toMatch(/>Clear<\/button>/);
+    clear.props.onClick();
+    expect(kept).toBe("cleared");
+    expect(clearOf(within, { within: Number.NaN }, () => {})).toBeNull();
   });
 });
