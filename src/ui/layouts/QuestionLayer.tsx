@@ -15,7 +15,8 @@ import { QUESTION_LAYER } from "../guide/layers";
  * question's (layouts/asking).
  */
 export default function QuestionLayer({ children }: { children: ReactNode }) {
-  if (typeof document === "undefined") return null;
+  // (with no page to put it on - drawn on the server, in a test - the question as it is, in place)
+  if (typeof document === "undefined") return <>{children}</>;
   return createPortal(
     <div className="fixed inset-0 pointer-events-none [&>*]:pointer-events-auto" style={{ zIndex: QUESTION_LAYER }}>
       {children}
