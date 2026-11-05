@@ -12,7 +12,8 @@ import { useNotices } from "../notices";
 import { listOnline, onlineEntry, useOnline } from "../../lib/plugins/online";
 import type { CatalogueEntry } from "../../lib/plugins/catalogue";
 import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
-import { addOnline, addPlugin } from "../../lib/calc/workers";
+import { addPlugin } from "../../lib/calc/workers";
+import { addOnline } from "../../lib/calc/addOnline";
 import type { OpenedText } from "./texts";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */

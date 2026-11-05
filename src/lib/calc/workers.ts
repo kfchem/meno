@@ -9,8 +9,8 @@ import { menoReader } from "./builtin";
 import { stopWorker, workerOf } from "../plugins/process";
 import { useAppSettings } from "../settings/appSettings";
 import { forThisSystem, systemHere } from "../plugins/here";
-import { offersOf, type CatalogueEntry } from "../plugins/catalogue";
-import { getPlugin, useOnline } from "../plugins/online";
+import { offersOf } from "../plugins/catalogue";
+import { useOnline } from "../plugins/online";
 import { onPluginsChanged } from "../plugins/known";
 import { stopJobsAndWait } from "../jobs";
 
@@ -65,14 +65,6 @@ function registerAll(): void {
 // (and again as the plugins online are listed, or the list is let go of - and as one is put in place or taken away: lib/plugins/known)
 useOnline.subscribe((s, was) => s.catalogue !== was.catalogue && registerAll());
 onPluginsChanged(registerAll);
-
-/** Gets a plugin on offer online - its files checked, as any got are (lib/plugins/online `getPlugin`) - and adds it, as any plugin is. */
-export async function addOnline(entry: CatalogueEntry, get: (entry: CatalogueEntry) => Promise<void> = getPlugin): Promise<void> {
-  await get(entry);
-  const p = anyPluginById(entry.id);
-  if (!p) throw new Error(`${entry.name} was got, but Meno could not read it.`);
-  await addPlugin(p);
-}
 
 let meno: Reader | null = null;
 

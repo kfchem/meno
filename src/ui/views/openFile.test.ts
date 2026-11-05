@@ -118,7 +118,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
 
   it("listed, say in the notice's place what each is and the plugin that reads it, with Add - added, the file read again", async () => {
     const online = await import("../../lib/plugins/online");
-    const workers = await import("../../lib/calc/workers");
+    const workers = await import("../../lib/calc/addOnline");
     const far = { id: "far", name: "Far" } as CatalogueEntry;
     vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [far] } }));
     const added = vi.spyOn(workers, "addOnline").mockResolvedValue();

@@ -73,7 +73,8 @@ import { flowOf, partsBounds, procedureParts, type FlowParts } from "./workflow/
 import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from "./workflow/procedures";
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
-import { addOnline, addPlugin, useReaders } from "../../../lib/calc/workers";
+import { addPlugin, useReaders } from "../../../lib/calc/workers";
+import { addOnline } from "../../../lib/calc/addOnline";
 import { useOnline } from "../../../lib/plugins/online";
 import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";

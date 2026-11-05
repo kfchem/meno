@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cataloguedKinds, registerKinds } from "../io/kinds";
 import type { CatalogueEntry } from "../plugins/catalogue";
 import { useOnline } from "../plugins/online";
-import { addOnline } from "./workers";
+import "./workers";
 
 // (this computer a Mac)
 vi.mock("../plugins/here", async (actual) => ({ ...(await actual<typeof import("../plugins/here")>()), systemHere: () => "macos" }));
@@ -44,15 +44,6 @@ describe("the kinds of file the plugins online read", () => {
     expect(cataloguedKinds().some((k) => k.id === "far-out")).toBe(true);
     useOnline.setState({ state: "unlisted", catalogue: undefined });
     expect(cataloguedKinds().some((k) => k.id === "far-out")).toBe(false);
-  });
-});
-
-describe("a plugin added from the list", () => {
-  it("is got first, then added as any plugin is - and where what was got cannot be read, says so", async () => {
-    const got: string[] = [];
-    await expect(addOnline(onOffer(), async (e) => void got.push(e.id))).rejects.toThrow("Far interface was got, but Meno could not read it.");
-    expect(got).toEqual(["far"]);
-    await expect(addOnline(onOffer(), async () => Promise.reject(new Error("Far interface was not got.")))).rejects.toThrow("was not got");
   });
 });
 
