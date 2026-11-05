@@ -8,7 +8,10 @@ import type { ReaderClient, Reader } from "./client";
 import { menoReader } from "./builtin";
 import { stopWorker, workerOf } from "../plugins/process";
 import { useAppSettings } from "../settings/appSettings";
-import { forThisSystem } from "../plugins/here";
+import { forThisSystem, systemHere } from "../plugins/here";
+import { offersOf } from "../plugins/catalogue";
+import { useOnline } from "../plugins/online";
+import { onPluginsChanged } from "../plugins/known";
 import { stopJobsAndWait } from "../jobs";
 
 /**
@@ -36,17 +39,32 @@ const setState = (id: string, state: ReaderState, problem?: string) => {
     state: { ...s.state, [id]: state },
     problem: problem ? { ...s.problem, [id]: problem } : Object.fromEntries(Object.entries(s.problem).filter(([k]) => k !== id)),
   }));
-  // (the kinds of the plugins added - until one is taken away - registered with Meno's own; and those only plugins not added read,
-  //  to name them for a file nothing added reads)
+  registerAll();
+};
+
+/**
+ * The kinds of the plugins added - until one is taken away - registered with
+ * Meno's own; and those only plugins not added read, to name them for a file
+ * nothing added reads: those here, and those on offer online, none of them
+ * here, made for this system and this Meno.
+ */
+function registerAll(): void {
   const now = useReaders.getState().state;
+  const catalogue = useOnline.getState().catalogue;
+  const here = new Map(ALL_PLUGINS.map((p) => [p.id, p.version]));
   registerKinds(
     Object.keys(now)
       .filter((p) => now[p] === "added" || now[p] === "removing")
       .map(manifestOf)
       .filter((m): m is Manifest => m != null),
     ALL_PLUGINS.map((p) => manifestOf(p.id)).filter((m): m is Manifest => m != null),
+    catalogue ? offersOf(catalogue, here, systemHere()).flatMap((o) => (o.offer === "add" ? [o.entry] : [])) : [],
   );
-};
+}
+
+// (and again as the plugins online are listed, or the list is let go of - and as one is put in place or taken away: lib/plugins/known)
+useOnline.subscribe((s, was) => s.catalogue !== was.catalogue && registerAll());
+onPluginsChanged(registerAll);
 
 let meno: Reader | null = null;
 

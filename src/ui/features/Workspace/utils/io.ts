@@ -154,7 +154,7 @@ export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
       b: b.b,
       order: (b.order as 1 | 2 | 3) ?? 1,
       stereo: b.stereo ?? "none",
-      stereoOrient: b.stereoOrient ?? "principle",
+      ...(typeof b.narrow === "number" ? { narrow: b.narrow } : {}),
       ...(b.doubleMode ? { doubleMode: b.doubleMode } : {}),
       ...(b.display ? { display: b.display } : {}),
       ...(b.dative ? { dative: true } : {}),

@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fetchedFrom, pixiSetUp, uvSetUp, type SetUpFile } from "./setUpSources";
+// (plugins' set-ups, hand-written: each kind, and each way a lock or a file is fetched)
+import { SET_UPS } from "../../test/setUps";
 
-// Every plugin Meno carries: its manifest, and the lock its environment is built from.
-const manifests = import.meta.glob<{ id: string; environment?: string; downloads?: SetUpFile[] }>("/src-tauri/resources/plugins/*/manifest.json", { eager: true, import: "default" });
-const uvLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/requirements.lock", { eager: true, query: "?raw", import: "default" });
-const pixiLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/pixi.lock", { eager: true, query: "?raw", import: "default" });
-
-const folder = (path: string) => path.split("/").slice(-2, -1)[0];
-const lockOf = (locks: Record<string, string>, id: string) => Object.entries(locks).find(([p]) => folder(p) === id)?.[1];
 const hostOf = (url: string) => new URL(url).host;
 
 /** Whether a host is one of those a task may reach, as Meno's network takes them (src-tauri/src/net.rs `host_named`). */
@@ -35,27 +30,21 @@ function contacted(environment: string, lock: string, downloads: readonly SetUpF
 }
 
 describe("where setting a plugin up fetches from, as asking says it", () => {
-  const plugins = Object.values(manifests).filter((m) => m.environment === "uv" || m.environment === "pixi");
-
   it("names every host each plugin's set-up contacts - its tool, its index, each URL its lock fetches, each file besides, and where each hands a fetch on - and lets its task reach each", () => {
-    expect(plugins.length).toBeGreaterThan(8);
-    for (const m of plugins) {
-      const downloads = m.downloads ?? [];
-      const lock = m.environment === "uv" ? lockOf(uvLocks, m.id) : lockOf(pixiLocks, m.id);
-      expect(lock, m.id).toBeDefined();
-      const pypi = m.environment === "pixi" && /- pypi: /.test(lock!);
-      const setUp = m.environment === "uv" ? uvSetUp(lock!, downloads) : pixiSetUp(pypi, downloads);
+    for (const m of SET_UPS) {
+      const pypi = m.environment === "pixi" && /- pypi: /.test(m.lock);
+      const setUp = m.environment === "uv" ? uvSetUp(m.lock, m.downloads) : pixiSetUp(pypi, m.downloads);
       const said = setUp.sources.join("\n");
-      for (const host of contacted(m.environment!, lock!, downloads)) {
+      for (const host of contacted(m.environment, m.lock, m.downloads)) {
         expect(said, `${m.id}: ${host}`).toContain(host);
         expect(reaches(setUp.hosts, host), `${m.id}: ${host}`).toBe(true);
       }
     }
   });
 
-  it("names, for MolScribe, each host its set-up was seen to contact, and lets it reach each", () => {
-    const m = Object.values(manifests).find((x) => x.id === "molscribe")!;
-    const setUp = uvSetUp(lockOf(uvLocks, "molscribe")!, m.downloads!);
+  it("names, for a package from a repository and a model on Hugging Face, each host such a set-up was seen to contact, and lets it reach each", () => {
+    const m = SET_UPS.find((x) => x.id === "from-a-repository")!;
+    const setUp = uvSetUp(m.lock, m.downloads);
     const said = setUp.sources.join("\n");
     for (const host of ["releases.astral.sh", "pypi.org", "files.pythonhosted.org", "github.com", "codeload.github.com", "huggingface.co", "us.aws.cdn.hf.co"]) {
       expect(said).toContain(host);

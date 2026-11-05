@@ -108,21 +108,21 @@ describe("what the SMILES field's text will be drawn as", () => {
 describe("what is pasted in the SMILES field", () => {
   afterEach(() => registerKinds([]));
   // (made up: an output's banner, then a geometry as a text of coordinates would have it)
-  const ORCA = ["", "                                 * O   R   C   A *", "", "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n");
+  const QUANTA = ["", "                                 ~ Q   U   A   N   T   A ~", "", "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n");
   const all = { output: true, coordinates: true };
 
   it("is a calculation's output, whole, where its program's banner says so - its plugin added or only offered - never read as coordinates", () => {
     for (const [added, offered] of [[MANIFESTS, []], [[], MANIFESTS]] as const) {
       registerKinds(added, offered);
-      expect(pastedAs(ORCA, all)).toEqual({ output: ORCA });
+      expect(pastedAs(QUANTA, all)).toEqual({ output: QUANTA });
     }
     // (where Quick Add takes no output - where it is opened for nothing to put down - coordinates, as before)
-    expect(pastedAs(ORCA, { output: false, coordinates: true })).toMatchObject({ structures: [{ atoms: expect.any(Array) }] });
+    expect(pastedAs(QUANTA, { output: false, coordinates: true })).toMatchObject({ structures: [{ atoms: expect.any(Array) }] });
   });
 
   it("is coordinates in a text where no banner says it is an output; and typed as it is where it is neither", () => {
     registerKinds(MANIFESTS);
-    const water = ORCA.split("\n").slice(3).join("\n");
+    const water = QUANTA.split("\n").slice(3).join("\n");
     expect(pastedAs(water, all)).toMatchObject({ structures: [{ atoms: [{ el: "O" }, { el: "H" }, { el: "H" }] }] });
     expect(pastedAs("c1ccccc1O", all)).toBeNull();
   });
@@ -131,10 +131,10 @@ describe("what is pasted in the SMILES field", () => {
 describe("the names of who does each row of steps", () => {
   it("stand as wide as the widest of them, with its padding - whoever's it is, no width sized to one name", () => {
     expect(labelWidth([])).toBe(12);
-    const short = labelWidth(["xTB"]);
-    const long = labelWidth(["xTB", "A plugin with a long name"]);
+    const short = labelWidth(["Tight"]);
+    const long = labelWidth(["Tight", "A plugin with a long name"]);
     expect(long).toBeGreaterThan(short);
-    expect(labelWidth(["A plugin with a long name", "xTB"])).toBe(long);
+    expect(labelWidth(["A plugin with a long name", "Tight"])).toBe(long);
     // (but never wider than the most: a longer name is cut, said whole on hover)
     expect(labelWidth(["A plugin whose name runs on and on, far past what a row can hold"])).toBe(LABEL_MOST);
   });

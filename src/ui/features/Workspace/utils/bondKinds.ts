@@ -6,6 +6,7 @@
  * (its stereo orientation, its colour and the rest it has are kept).
  */
 import type { Bond } from "../store/types";
+import { degrees, narrowEnd } from "../chem/drawing";
 
 export type BondKindName = "single" | "double" | "triple" | "wedge" | "hashed-wedge" | "wavy" | "bold" | "hashed" | "dashed" | "dative";
 
@@ -79,17 +80,17 @@ export function bondKindOf(b: Pick<Bond, "order" | "stereo" | "display" | "dativ
  * wedge, hashed wedge, plain again with the wedge's other end narrow. A
  * bond that is another kind - wavy, or bold, hashed, dashed or dative, as
  * its menu or a file made it - is taken out of it into the cycle's plain,
- * not left as it was (a wavy bond clicked stayed wavy).
+ * not left as it was (a wavy bond clicked stayed wavy). `narrowNow` is the
+ * end a wedge is narrow at as drawn (chem/drawing `narrowEnd`).
  */
-export function singleClickPatch(b: Pick<Bond, "stereo" | "stereoOrient" | "display" | "dative">): Partial<Bond> {
+export function singleClickPatch(b: Pick<Bond, "a" | "b" | "stereo" | "display" | "dative">, narrowNow: number): Partial<Bond> {
   const stereo = b.stereo ?? "none";
-  const orient = b.stereoOrient ?? "principle";
   // (another kind of single: the plain one first)
   const other = stereo === "wavy" || stereo === "either" || b.dative || b.display === "bold" || b.display === "hashed" || b.display === "dashed";
-  if (other) return { stereo: "none", display: undefined, dative: undefined, stereoOrient: orient };
-  if (stereo === "none") return { stereo: "up", stereoOrient: orient };
-  if (stereo === "up") return { stereo: "down", stereoOrient: orient };
-  return { stereo: "none", stereoOrient: orient === "principle" ? "reverse" : "principle" };
+  if (other) return { stereo: "none", display: undefined, dative: undefined };
+  if (stereo === "none") return { stereo: "up", narrow: narrowNow };
+  if (stereo === "up") return { stereo: "down", narrow: narrowNow };
+  return { stereo: "none", narrow: narrowNow === b.a ? b.b : b.a };
 }
 
 type At = { id: number; x: number; y: number };
@@ -157,16 +158,29 @@ export type BondKey = 1 | 2 | 3;
  * that every bond selected can take it alike: 1, a single - on a single, the click's cycle (`singleClickPatch`); 2, a
  * double - on a double, the double-click's sides (`doubleClickPatch`); 3, a triple.
  */
-export function bondKeyPatch(key: BondKey, b: Link & Pick<Bond, "order" | "doubleMode" | "stereo" | "stereoOrient" | "display" | "dative">, atoms: readonly At[], bonds: readonly Link[]): Partial<Bond> {
+export function bondKeyPatch(key: BondKey, b: Link & Pick<Bond, "order" | "doubleMode" | "stereo" | "narrow" | "display" | "dative">, atoms: readonly At[], bonds: readonly Link[]): Partial<Bond> {
   const plain = { stereo: "none" as const, display: undefined, dative: undefined };
   if (key === 3) return { order: 3, ...plain };
   if (key === 2) return b.order === 2 ? { order: 2, ...plain, ...doubleClickPatch(b, atoms, bonds) } : doubleClickPatch(b, atoms, bonds);
-  return b.order === 1 ? { order: 1, display: undefined, dative: undefined, ...singleClickPatch(b) } : { order: 1, ...plain };
+  return b.order === 1 ? { order: 1, display: undefined, dative: undefined, ...singleClickPatch(b, narrowEnd(b, degrees(bonds))) } : { order: 1, ...plain };
+}
+
+/**
+ * `patch`, made of the bond `from`, for another bond selected with it, `to`: the same, but where it says which end is
+ * narrow (`Bond.narrow`, an atom's id) - that end of `to` as it is now where the patch keeps `from`'s, its other end
+ * where the patch turns `from`'s round.
+ */
+export function patchAlike(patch: Partial<Bond>, from: Pick<Bond, "a" | "b" | "narrow">, to: Pick<Bond, "a" | "b" | "narrow">, bonds: readonly Link[]): Partial<Bond> {
+  if (patch.narrow == null) return patch;
+  const degree = degrees(bonds);
+  const kept = patch.narrow === narrowEnd(from, degree);
+  const now = narrowEnd(to, degree);
+  return { ...patch, narrow: kept ? now : now === to.a ? to.b : to.a };
 }
 
 /** Whether `patch` would change nothing of `b`: each field as it reads where it is not set. */
 export function patchChangesNothing(b: Partial<Bond>, patch: Partial<Bond>): boolean {
-  const unset: Partial<Record<keyof Bond, unknown>> = { stereo: "none", doubleMode: "auto", stereoOrient: "principle", dative: false };
+  const unset: Partial<Record<keyof Bond, unknown>> = { stereo: "none", doubleMode: "auto", dative: false };
   return (Object.keys(patch) as (keyof Bond)[]).every((k) => (b[k] ?? unset[k]) === (patch[k] ?? unset[k]));
 }
 

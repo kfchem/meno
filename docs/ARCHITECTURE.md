@@ -14,7 +14,7 @@ a workspace holding 2D and 3D together - see [`WORKSPACE.md`](./WORKSPACE.md).
 | App shell (React) | `src/App.tsx`, `src/lib/core/`, `src/ui/layouts/`, `src/ui/views/` | Tab model (open/close/reorder/rename), mapping a tab's `kind` to a view component. |
 | Features (React) | `src/ui/features/*` | One folder per view: the workspace (2D drawing, molecules in 3D, texts, PDFs, workflows) and settings, with the text and style editors they share. |
 | Chemistry helpers (TS) | `src/lib/chem/`, `src/utils/` | File parsing (MOL/SDF/RXN/XYZ/PDB), editor model conversion, 2D depiction layout (bond lines, wedges, labels) and ACS-style sizing. Pure functions — no React, no Tauri. |
-| Python workers | `src-tauri/resources/plugins/<id>/worker.py` | Each plugin's worker: JSON lines over stdio, run in the plugin's own environment, made by uv or pixi. (The Python Console, a REPL in a tab of its own, was removed from the UI on 2026-10-10, and its worker with it on 2026-10-13.) |
+| Python workers | `plugins/<id>/<version>/worker.py`, in Meno's local data folder (kfchem/meno-plugins) | Each plugin's worker: JSON lines over stdio, run in the plugin's own environment, made by uv or pixi. (The Python Console, a REPL in a tab of its own, was removed from the UI on 2026-10-10, and its worker with it on 2026-10-13.) |
 
 Rule of thumb: parsing and geometry are pure TypeScript (testable with Vitest),
 rendering is React + react-three-fiber, and anything touching processes goes
@@ -51,7 +51,7 @@ src/
                           (menoFileWorker.ts) - docs/FILE-IO.md, *The workspace file*
   lib/roles/              the roles' workers (RDKit's, for now): client, sidecar, the MOL blocks they are asked about
   lib/calc/               readers of calculation output: the catalog, reading, promises, Meno's own reading
-  lib/plugins/            plugins' manifests (data), read and checked; the plugins Meno carries, found in their folders;
+  lib/plugins/            plugins' manifests (data), read and checked; the plugins Meno knows of, found in their folders;
                           the roles and kinds of step Meno defines; each plugin's one worker (process.ts)
   lib/guide/              Meno's first steps (steps.ts) and the one shown (guide.ts)
   ui/guide/               the first steps, shown in Meno's own card beside the part each points at (GuideCard)
@@ -98,7 +98,7 @@ src-tauri/
   src/pinch.rs            Windows: the main window made with WebView2's pinch let through, before its page loads
                           (EDITOR-2D.md, *Touch and pinch*); elsewhere it is made from its config in setup
   capabilities/           permission sets for the main window
-  resources/plugins/<id>/ a plugin Meno carries, for now, put in place as it starts - each in
+  (no plugins)            Meno carries none: each is got online (kfchem/meno-plugins), and in
                           place is <local app data>/plugins/<id>/<version>/ (src/installed.rs,
                           PLUGINS.md *Where plugins are*): manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
@@ -802,7 +802,7 @@ it; structures read from pictures; stereoisomers; conformers; a formula of
 a molecule in 3D; and pictures and films rendered) are filled by plugins
 that say so in their manifests - RDKit the chemistry roles, MolScribe and
 MolNexTR the pictures, Blender the renders - each a folder of its own like
-any plugin (`resources/plugins/rdkit/`, its environment `plugin-rdkit`).
+any plugin (`meno-plugins/plugins/rdkit/`, its environment `plugin-rdkit`).
 A worker is a sidecar, started by `lib/roles/worker.ts` (`chemWorker(role)`:
 the plugin chosen for the role in Settings, else the first that fills it)
 and asked through `lib/roles/client.ts`: JSON lines, a fixed set of
@@ -815,14 +815,13 @@ blocks or coordinates out. It is set up the first time a role it fills is
 needed, asking first, unless the chemist took it away in Settings, Plugins
 (`plugins.removed` in the settings); then the role says to add it. It runs
 no code it is sent, and the app keeps it off the network. Its tests need
-RDKit and run by hand (`scripts/chem/test_chem_worker.py`).
+RDKit and run by hand (`meno-plugins/tests/test_chem_worker.py`).
 
 Reader plugins (docs/FILE-IO.md, docs/PLUGINS.md) are sidecars too, one
 profile each, named `plugin-<id>` as every plugin's is. Each is a folder
-of its own, `resources/plugins/<id>/`, and stands alone: it knows of no
+of its own, `meno-plugins/plugins/<id>/`, and stands alone: it knows of no
 other plugin, and Meno names none of them. Its manifest (`lib/plugins/manifest.ts`;
-the folders found by `lib/plugins/known.ts`, the plugins Meno carries for
-now) is data saying what it is, what makes its environment (its lock and
+the folders found by `lib/plugins/known.ts`, the plugins Meno knows of) is data saying what it is, what makes its environment (its lock and
 `worker.py` in its folder), every kind of file it knows - each it reads
 told by marks, text, never a pattern - and the kinds it reads by id, its
 own or Meno's; it is checked as data however it came (docs/PLUGINS.md,
@@ -833,9 +832,9 @@ reading (`MENO`) first. Meno's core knows no program (the maintainer,
 the kinds of the plugins added - while they are added (`lib/calc/workers.ts`)
 - refusing a mark that one of Meno's own sample files holds. A plugin not
 added is never started or asked: a file no plugin added reads is told by
-the kinds the plugins Meno carries but not added say they read, by their
-own marks (`offeredKinds`, `catalogued`), to say which plugins would read
-it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
+the kinds the plugins here or on offer online (their catalogue entries'
+`fileKinds`) but not added say they read, by their own marks
+(`offeredKinds`, `catalogued`), to say which plugins would read it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
 - A plugin is added in Settings, *Plugins*: `ensurePyEnv`, with the
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.
@@ -862,8 +861,8 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   the worker is asked `{"op": "write", "kind", "name", "molecules",
   "options"}` through the same client, and the text it gives back is
   written where the chemist chose. The first is Gaussian's input
-  (`resources/plugins/gaussian/`, Python alone, whose steps run Gaussian
-  as well; its tests, `scripts/calc/test_plugin_gaussian.py`, run in CI).
+  (`meno-plugins/plugins/gaussian/`, Python alone, whose steps run Gaussian
+  as well; its tests, `meno-plugins/tests/test_plugin_gaussian.py`, run in CI).
 - Where the line is between a plugin and Meno: a plugin knows the file,
   Meno where and how what it found shows, and what can be done with it.
   What Meno does something with has a form of its own in `ReaderOutput` -
@@ -931,7 +930,7 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   (each its `reader.py`; FILE-IO.md) - each written from its program's
   manual and its own outputs - and a job's output and a file opened by
   hand alike.
-- The cclib plugin (`resources/plugins/cclib/worker.py`) gives cclib's
+- The cclib plugin (`meno-plugins/plugins/cclib/worker.py`) gives cclib's
   reading of many programs' outputs, as a reading of its own: chosen in
   Settings, *Files*, never the default where the program's own plugin is
   added. cclib is used as a library, its version pinned in its folder's
@@ -945,13 +944,12 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   translations and rotations an output lists among them, at a frequency
   of naught (under 1 cm-1), are left out and the rest numbered from one,
   as the ORCA and xTB plugins' readers do. Its tests
-  (`scripts/calc/test_reader_cclib.py`) run in CI in its environment from
-  its lock, as the other plugins' that need their packages do; those that
-  read a sample output are skipped where it is not there. No program's
-  output is committed; the app's side is tested with the plain data
-  written by hand. An answer
+  (`meno-plugins/tests/test_reader_cclib.py`) run in the plugins' CI in its
+  environment from its lock; those that read a sample output are skipped
+  where it is not there. No program's output is committed; the app's side
+  is tested with the plain data written by hand. An answer
   never holds a number that is not one (JSON has none).
-- The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
+- The PySCF reader (`meno-plugins/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows) is a
   plugin of its own, sharing no code with another (the maintainer,
   2026-10-06). It reads a Molden file with PySCF's own reader
@@ -969,7 +967,7 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   `lib/calc/grids.ts`), the basis functions' values a chunk of points at
   a time, and says whether each grid is an orbital or a density - the
   value it is drawn at first is Meno's. Its tests
-  (`scripts/calc/test_reader_pyscf.py`) run by hand in an environment made
+  (`meno-plugins/tests/test_reader_pyscf.py`) run by hand in an environment made
   from its lock.
 - Meno's own reading under the same contract (`MENO` in the catalog,
   `lib/calc/menoReads.ts`, the one list of what it reads so) is asked as a
@@ -1420,7 +1418,7 @@ own, checked against the archives (`cargo test -- --ignored` fetches and
 runs both for the computer it runs on).
 
 An environment pixi makes (`pixienv.rs`, `py_env_setup_pixi`) comes from the
-manifest and the lock in a plugin's folder, `resources/plugins/<id>/pixi.toml`
+manifest and the lock in a plugin's folder, `meno-plugins/plugins/<id>/pixi.toml`
 and `pixi.lock` - every package for every platform pinned by its SHA-256 -
 copied into `<data>/pixi/plugin-<id>/`, where `pixi install --frozen` makes it
 (`.pixi/envs/default`). pixi keeps its cache and home under `<data>/pixi/`
@@ -1710,8 +1708,8 @@ do beyond files, and which are kept running: [`PLUGINS.md`](./PLUGINS.md).
 
 The kinds, as the table of kinds has them (`lib/io/kinds.ts`, `MENO_KINDS`),
 with the kinds Meno writes (`lib/io/writers.ts`, `WRITERS`) and every kind
-the plugins Meno carries know - those they read, write, or only colour as
-text (their manifests' `kinds`, `src-tauri/resources/plugins/*/manifest.json`).
+the plugins Meno knows of know - those they read, write, or only colour as
+text (their manifests' `kinds`, `meno-plugins/plugins/*/manifest.json`).
 A plugin's kinds are registered only while it is added. `src/lib/io/architecture.test.ts` checks
 that every kind of these is in this table, by its id, and no other.
 

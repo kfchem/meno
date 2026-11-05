@@ -867,7 +867,7 @@ function movedBy(m: Model, dx: number, dy: number): Model {
  * adds by id - and none of them a record of a stack (utils/stacks): each a
  * structure in its own right.
  */
-function numberedApart(models: readonly Model[]): Model {
+export function numberedApart(models: readonly Model[]): Model {
   const out: Model = { atoms: [], bonds: [] };
   let next = 1;
   for (const m of models) {
@@ -886,7 +886,7 @@ function numberedApart(models: readonly Model[]): Model {
       });
     }
     for (const b of m.bonds) {
-      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
+      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
     }
   }
   return out;

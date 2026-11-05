@@ -69,7 +69,7 @@ describe("a ring bound face-on to a metal", () => {
       const wedges = fc.bonds.filter((b) => b.display === "wedge" && own(b));
       expect(wedges).toHaveLength(2);
       for (const b of wedges) {
-        const narrow = wedgeNarrowAtom({ ...b, stereoOrient: b.stereoOrient ?? "principle" }, degrees(fc));
+        const narrow = wedgeNarrowAtom(b, degrees(fc));
         const broad = narrow === b.a1 ? b.a2 : b.a1;
         expect(fc.atoms[narrow].z!).toBeLessThanOrEqual(1e-6);
         expect(fc.atoms[broad].z!).toBeGreaterThan(0);
