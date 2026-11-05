@@ -135,3 +135,17 @@ describe("a plugin got from the list", () => {
     expect(f.did).toEqual([]);
   });
 });
+
+describe("a plugin got, taken into use", () => {
+  it("is known at once: the plugins in place read again from Meno's backend", async () => {
+    const manifest = JSON.stringify({ ...MANIFEST, id: "sketch-new" });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke: async (cmd: string) => (cmd === "plugins_installed" ? [{ id: "sketch-new", version: "0.2.0", dir: "/data/plugins/sketch-new/0.2.0", manifest, grammars: {} }] : null) }));
+    vi.resetModules();
+    const { PLUGIN_FILES: files } = await import("./online");
+    const { anyPluginById } = await import("../calc/catalog");
+    expect(anyPluginById("sketch-new")).toBeUndefined();
+    await files.reload();
+    expect(anyPluginById("sketch-new")?.name).toBe("Sketch interface");
+    vi.doUnmock("@tauri-apps/api/core");
+  });
+});

@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { askToConnect, useNetwork, type ConsentRequest } from "../net/network";
 import { acceptCatalogue, CATALOGUE_HOSTS, CATALOGUE_PURPOSE, type Catalogue, type CatalogueEntry } from "./catalogue";
+import { refreshPlugins } from "./known";
 import { acceptManifest } from "./manifest";
 
 /**
@@ -100,8 +101,8 @@ export const PLUGIN_FILES: PluginFiles = {
   stage: (id, version) => invoke("plugin_stage", { id, version }),
   commit: (stage) => invoke("plugin_commit", { stage }),
   discard: (stage) => invoke("plugin_discard", { stage }),
-  // (the plugins in use read again: Meno's own list of them, once it is read from their folders)
-  reload: async () => {},
+  // (the plugins in place read again, so that the one got is known at once: lib/plugins/known)
+  reload: () => refreshPlugins(),
 };
 
 /** The SHA-256 of a text's UTF-8 bytes, in hex. */
