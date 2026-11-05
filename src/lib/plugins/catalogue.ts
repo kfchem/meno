@@ -226,7 +226,7 @@ function retiredOf(v: unknown): Retired[] | null {
     const r = raw as Record<string, unknown> | null;
     const id = typeof r?.id === "string" && ID.test(r.id) ? r.id : null;
     const name = text(r?.name, 60);
-    const why = text(r?.why, 200);
+    const why = text(r?.why, 160);
     if (!id || !name || !why || out.some((o) => o.id === id)) return null;
     out.push({ id, name, why });
   }

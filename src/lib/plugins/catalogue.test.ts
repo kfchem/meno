@@ -201,5 +201,14 @@ describe("what is offered for a role no plugin here fills", () => {
       expect(why(catalogue([entry()], { retired: bad })), JSON.stringify(bad)).toBe("Its plugins no longer offered are not as Meno takes them");
     expect(why(catalogue([entry()], { retired: [{ id: entry().id, name: "n", why: "w" }] }))).toBe("It offers a plugin it says is no longer offered");
   });
+
+  it("takes a retired plugin's name up to 60 letters and its why up to 160, as the list's builder writes them; and never one on offer, so that a plugin is said either not made for here or no longer offered, never both", () => {
+    const retired = (name: string, why: string) => catalogue([entry()], { retired: [{ id: "wfx", name, why }] });
+    expect("catalogue" in read(retired("n".repeat(60), "w".repeat(160)))).toBe(true);
+    expect(why(retired("n".repeat(61), "w"))).toBe("Its plugins no longer offered are not as Meno takes them");
+    expect(why(retired("n", "w".repeat(161)))).toBe("Its plugins no longer offered are not as Meno takes them");
+    // (one made for another system and said retired too: the list is refused - its why would be two)
+    expect(why(catalogue([entry({ systems: ["windows"] })], { retired: [{ id: entry().id, name: "n", why: "w" }] }))).toBe("It offers a plugin it says is no longer offered");
+  });
 });
 

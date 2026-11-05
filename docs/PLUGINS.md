@@ -1586,9 +1586,11 @@ comes in its own pull request.
   - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is got again (*Plugins used before*).
 
   Beside its plugins, the list may name those no longer offered
-  (`retired`), each by its id, name and why, in words ("Meno reads these
-  files itself now"), so that one set up before is said not to be got
-  again, and why. None on offer may be among them.
+  (`retired`), each by its id, its name (at most 60 letters) and why, in
+  words, at most 160 ("Meno reads these files itself now"), so that one
+  set up before is said not to be got again, and why. None on offer may be
+  among them: a plugin is said either not made for here or no longer
+  offered, never both.
 - **Read strictly, whole.** The backend checks the signature before
   anything of it is read, and when it was issued against the one kept:
   one issued earlier is refused, and one issued the same second is taken

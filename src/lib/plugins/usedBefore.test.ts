@@ -263,5 +263,28 @@ describe("the plugins set up before they came online, got again", () => {
     expect(r.said).toEqual(["Plugins used before: None of them is got again: Later: It is for a newer Meno; gone: no longer among the plugins online."]);
     expect(asked()).toBe(true);
   });
+
+  it("offers presets only for one got again, never twice, nor one here already", async () => {
+    useNetwork.setState({ granted: [CATALOGUE_PURPOSE] });
+    const inPlace = MANIFESTS[0].id;
+    const listed: Catalogue = {
+      ...CATALOGUE,
+      plugins: [
+        ...CATALOGUE.plugins,
+        // (for one not got again: gamma was not set up here)
+        entry("gamma-presets", "Gamma presets", 3_000, { presetsFor: "gamma" }),
+        // (for one got again, but set up here before itself: got once, as one of them)
+        entry("alpha-presets", "Alpha presets", 3_000, { presetsFor: "alpha" }),
+        // (for one got again, but here already)
+        entry(inPlace, "In place", 3_000, { presetsFor: "beta" }),
+      ],
+    };
+    const r = deps({ stamps: ["alpha", "beta", "alpha-presets"], listed });
+    await getUsedBefore(r.say, r.d);
+    expect(r.asked[0].title).toBe("Get these 3 again?");
+    expect(r.asked[0].parts?.map((p) => p.name)).toEqual(["Alpha interface", "Beta interface", "Alpha presets"]);
+    expect(r.asked[0].detail).not.toContain("With them");
+    expect(r.got).toEqual(["alpha", "beta", "alpha-presets"]);
+  });
 });
 
