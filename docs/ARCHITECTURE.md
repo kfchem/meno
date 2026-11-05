@@ -1483,8 +1483,10 @@ page reads anything of them (`catalogue.rs`):
   `catalogue-2.json`, the whole list; an earlier Meno fetched
   `catalogue.json`, the plugins every Meno in use reads whole (PLUGINS.md,
   *Plugins online*). Until this Meno's is first fetched, the one an earlier
-  Meno kept is shown, and holds a fetched one to nothing: the two of one
-  release are issued the same second, as different files. Until a key is carried, no list is
+  Meno kept is shown, and holds a fetched one to when it was issued, and
+  that alone: the two of one release are issued the same second, as
+  different files, and an older list, signed, served in this Meno's place
+  is still refused. Until a key is carried, no list is
   taken. Only minisign's own signatures, made over the list's hash, are
   taken - never its older form, made over the list itself.
 - **A plugin's files** (`plugin_stage`) are found by their id and version in

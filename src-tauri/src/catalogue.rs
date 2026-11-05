@@ -141,11 +141,13 @@ fn issued_ok(s: &str) -> bool {
     (1..=days).contains(&d) && h < 24 && mi < 60 && sec < 60
 }
 
-/// What a list fetched is held to: when the one taken before was issued, and its fingerprint.
+/// What a list fetched is held to: when the one taken before was issued, and its fingerprint - none, where
+/// what it is held to is an earlier Meno's list, another file of the same release: then issued no earlier,
+/// whatever its bytes.
 #[derive(Debug, Clone, PartialEq)]
 struct Taken {
     issued: String,
-    sha256: String,
+    sha256: Option<String>,
 }
 
 /// A signed list read: of the form Meno reads - no serial, and when it was issued, as Meno takes that - and,
@@ -164,8 +166,10 @@ fn form_of(list: &[u8], floor: Option<&Taken>) -> Result<(Value, String), String
         if issued < taken.issued {
             return Err(format!("the list is older than one Meno has taken (issued {issued}, before {})", taken.issued));
         }
-        if issued == taken.issued && tools::check(list, &taken.sha256).is_err() {
-            return Err(format!("the list was issued at the same second as one Meno has taken ({issued}) but is not that one"));
+        if let Some(sha256) = &taken.sha256 {
+            if issued == taken.issued && tools::check(list, sha256).is_err() {
+                return Err(format!("the list was issued at the same second as one Meno has taken ({issued}) but is not that one"));
+            }
         }
     }
     Ok((value, issued))
@@ -222,11 +226,15 @@ fn keep(root: &Path, list: &[u8], sig: &[u8], issued: &str, fetched_at: &str) ->
 }
 
 /// What a fetched catalogue is held to: the one kept's, signed or not - a catalogue kept whose signature no
-/// longer checks does not lower it. This Meno's alone: an earlier Meno's list is another file of the same
-/// release, issued the same second.
+/// longer checks does not lower it. This Meno's, when and what it was; until it has one, when the one an
+/// earlier Meno kept was issued, and that alone - the two of one release are issued the same second, as other
+/// bytes - so that an older list, signed, served in this Meno's place, is never taken past what was kept.
 fn floor(root: &Path) -> Option<Taken> {
-    let state: KeptState = serde_json::from_slice(&std::fs::read(root.join(KEPT.state)).ok()?).ok()?;
-    Some(Taken { issued: state.issued, sha256: state.sha256 })
+    let read = |at: &Kept| -> Option<KeptState> { serde_json::from_slice(&std::fs::read(root.join(at.state)).ok()?).ok() };
+    match read(&KEPT) {
+        Some(state) => Some(Taken { issued: state.issued, sha256: Some(state.sha256) }),
+        None => read(&KEPT_BEFORE).map(|state| Taken { issued: state.issued, sha256: None }),
+    }
 }
 
 /// What the page is given: the catalogue checked, when it was fetched, and - where it is the one kept from
@@ -671,7 +679,7 @@ mod tests {
 
     #[test]
     fn a_list_issued_before_the_one_taken_is_refused_and_one_issued_the_same_second_unless_it_is_that_list() {
-        let taken = Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: fingerprint(LIST) };
+        let taken = Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: Some(fingerprint(LIST)) };
         // (later: taken; the very list again: taken)
         assert!(checked(LATER, LATER_B, &[KEY_B], Some(&taken)).is_ok());
         assert!(checked(LIST, LIST_A, &[KEY_A], Some(&taken)).is_ok());
@@ -686,7 +694,7 @@ mod tests {
         keep(&root, LIST, LIST_A, "2026-11-03T00:00:00Z", "2026-11-05T00:00:00Z").unwrap();
         let (value, state) = kept(&root, &[KEY_A]).unwrap();
         assert_eq!((value["issued"].as_str(), state.fetched_at.as_str()), (Some("2026-11-03T00:00:00Z"), "2026-11-05T00:00:00Z"));
-        assert_eq!(floor(&root), Some(Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: fingerprint(LIST) }));
+        assert_eq!(floor(&root), Some(Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: Some(fingerprint(LIST)) }));
         // (one changed where it is kept - another list, signed, of the same second: not read)
         std::fs::write(root.join(KEPT.list), SAME_TIME).unwrap();
         std::fs::write(root.join(KEPT.sig), SAME_TIME_A).unwrap();
@@ -697,7 +705,7 @@ mod tests {
     }
 
     #[test]
-    fn an_earlier_menos_list_is_shown_until_this_menos_is_fetched_and_holds_it_to_nothing() {
+    fn an_earlier_menos_list_is_shown_until_this_menos_is_fetched_and_holds_it_to_when_it_was_issued_alone() {
         let root = scratch("before");
         // (an earlier Meno's kept list, and its state, as it wrote them)
         std::fs::create_dir_all(&root).unwrap();
@@ -707,12 +715,16 @@ mod tests {
         std::fs::write(root.join(KEPT_BEFORE.state), state).unwrap();
         // (shown, as the one kept - offline, the plugins online are still listed)
         assert_eq!(kept(&root, &[KEY_A]).unwrap().0["issued"], "2026-11-03T00:00:00Z");
-        // (but no floor: this Meno's list of the same release, issued the same second, is another file - taken)
-        assert_eq!(floor(&root), None);
+        // (held to when it was issued, and that alone: an older list, signed, served in this Meno's place, refused -
+        //  nothing written; this Meno's of the same release, issued the same second as other bytes, taken)
+        assert_eq!(floor(&root), Some(Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: None }));
+        assert!(take_fetched(&root, EARLIER, EARLIER_A, &[KEY_A], "2026-11-06T00:00:00Z").unwrap_err().contains("older"));
+        assert!(!root.join(KEPT.list).exists());
         take_fetched(&root, SAME_TIME, SAME_TIME_A, &[KEY_A], "2026-11-06T00:00:00Z").unwrap();
-        // (from then on, this Meno's is the one kept, and its floor)
+        // (from then on, this Meno's is the one kept, and its floor - when and what it was)
         assert_eq!(kept(&root, &[KEY_A]).unwrap().1.sha256, fingerprint(SAME_TIME));
-        assert_eq!(floor(&root).unwrap().sha256, fingerprint(SAME_TIME));
+        assert_eq!(floor(&root), Some(Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: Some(fingerprint(SAME_TIME)) }));
+        assert!(take_fetched(&root, LIST, LIST_A, &[KEY_A], "2026-11-06T00:00:00Z").unwrap_err().contains("same second"));
         let _ = std::fs::remove_dir_all(&root);
     }
 

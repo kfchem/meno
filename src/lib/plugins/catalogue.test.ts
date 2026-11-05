@@ -79,9 +79,12 @@ describe("a catalogue of plugins online, read", () => {
     expect(newer({ roles: ["language-model-9"] }).newer).toBe("It says a role this Meno does not know");
     expect(newer({ kinds: ["Energy Window"] }).newer).toBe("It says a kind this Meno does not know");
     expect(newer({ roles: ["anything"], systems: ["amiga"] }).newer).toBe("It says a system and a role this Meno does not know");
-    // (nothing of what it says taken: no role, kind or file to offer it by)
+    // (nothing of what it says taken: no role, kind or file to offer it by - those it says as this Meno knows them too)
     const e = newer({ roles: ["anything"], reads: ["sketch-out"], fileKinds: [{ id: "sketch-out", name: "Sketch output", extensions: [".out"], marks: [{ text: "SKETCH" }] }] });
     expect([e.roles, e.reads, e.fileKinds]).toEqual([[], [], []]);
+    const bySystem = newer({ systems: ["amiga"], roles: ["smiles"], kinds: ["conformers"], reads: ["sketch-out"] });
+    expect(bySystem.newer).toBe("It says a system this Meno does not know");
+    expect([bySystem.roles, bySystem.kinds, bySystem.reads]).toEqual([[], [], []]);
     // (offered as not here: a newer Meno's - beside one here too)
     const listed = (read(catalogue([entry({ roles: ["anything"] })])) as { catalogue: Catalogue }).catalogue;
     expect(offersOf(listed, new Map(), null)).toEqual([{ entry: listed.plugins[0], offer: "not-here", why: "It is for a newer Meno" }]);
