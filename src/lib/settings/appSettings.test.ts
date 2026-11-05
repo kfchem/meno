@@ -109,6 +109,9 @@ describe("the settings file", () => {
       programs: {},
     });
     expect(acceptAppSettings({}).plugins).toEqual({ removed: [], roles: {}, programs: {} });
+    // whether the plugins set up before were asked about: kept only as answered, anything else not
+    expect(acceptAppSettings({ plugins: { usedBeforeAsked: true } }).plugins.usedBeforeAsked).toBe(true);
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ plugins: { usedBeforeAsked: v } }).plugins).not.toHaveProperty("usedBeforeAsked");
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });

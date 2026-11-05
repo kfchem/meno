@@ -12,7 +12,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
 import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
 import { overlapsMade, sameStereo } from "./engineLayout";
-import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
+import { degrees, drawingOf, forFlatReaders } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
 import { MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
@@ -124,7 +124,7 @@ function flatDrawing(input: LayoutInput): Model {
   const bonds: Bond[] = input.bonds.map((b, i) => ({ id: 100 + i, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 }));
   const wedge = (from: number, to: number, stereo: "up" | "down") => {
     const i = bonds.findIndex((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
-    bonds[i] = { ...bonds[i], stereo, stereoOrient: orientFor(bonds[i], from, degrees(bonds)) };
+    bonds[i] = { ...bonds[i], stereo, narrow: from };
   };
   const addH = (on: number, at: { x: number; y: number }) => {
     const id = 500 + atoms.length;
@@ -234,7 +234,7 @@ describe("cleanUp", () => {
     const zigzag = (first: number, by: number, x0: number, magnified?: number): Model => {
       const b = NOMINAL_BOND_LENGTH * by;
       const atoms = [0, 1, 2, 3].map((i) => ({ ...atom(first + i, x0 + i * b * Math.cos(Math.PI / 6), (i % 2) * b * 0.5), ...(magnified ? { magnified } : {}) }));
-      return { atoms, bonds: [0, 1, 2].map((i) => ({ id: first + i, a: first + i, b: first + i + 1, order: 1 as const, stereo: "none" as const, stereoOrient: "principle" as const })) };
+      return { atoms, bonds: [0, 1, 2].map((i) => ({ id: first + i, a: first + i, b: first + i + 1, order: 1 as const, stereo: "none" as const })) };
     };
     const parts = [zigzag(1, 0.5, 0), zigzag(11, 2, 40), zigzag(21, 2, 80, 2)];
     const drawn: Model = { atoms: parts.flatMap((m) => m.atoms), bonds: parts.flatMap((m) => m.bonds) };
@@ -331,8 +331,8 @@ describe("cleanUp", () => {
     // a centre with a wedge and a hash in line, its other two bonds across: what Clean-up cannot keep; and a butane
     const cross = [atom(1, 0, 0), atom(2, 1.8, 0), atom(3, -1.8, 0), atom(4, 0, 1.8), atom(5, 0, -1.8, "N")];
     const crossBonds: Bond[] = [
-      { id: 11, a: 1, b: 2, order: 1, stereo: "up", stereoOrient: "principle" },
-      { id: 12, a: 1, b: 3, order: 1, stereo: "down", stereoOrient: "principle" },
+      { id: 11, a: 1, b: 2, order: 1, stereo: "up" },
+      { id: 12, a: 1, b: 3, order: 1, stereo: "down" },
       { id: 13, a: 1, b: 4, order: 1 },
       { id: 14, a: 1, b: 5, order: 1 },
     ];
@@ -525,7 +525,15 @@ describe("cleanUp", () => {
     };
     const { store } = canvas(amine);
     await expect(cleanUp(store)).rejects.toThrow(/nothing was moved/);
+    await expect(cleanUp(store)).rejects.toThrow(/at N do not say its configuration in a way Clean-up can keep \(it has three bonds and keeps no configuration of its own, so a wedge at it states none\)/);
     expect(store.getState().model).toEqual(amine);
+    // (a phosphorane's P, wedged: five groups, said so - not three bonds)
+    const phosphorane: Model = {
+      atoms: [atom(1, 0, 0, "P"), atom(2, 0, 1, "F"), atom(3, -1, -0.5, "F"), atom(4, 1, -0.5, "F"), atom(5, 1, 0.5, "F"), atom(6, 0, -1, "F")],
+      bonds: [2, 3, 4, 5, 6].map((b, k) => ({ id: 10 + k, a: 1, b, order: 1 as const, ...(b === 2 ? { stereo: "up" as const } : {}) })),
+    };
+    const p = canvas(phosphorane);
+    await expect(cleanUp(p.store)).rejects.toThrow(/at P do not say its configuration in a way Clean-up can keep \(it has 5 groups round it, more than the four of a tetrahedral centre\)/);
   });
 
   it("lays out a centre with a lone pair for its fourth group, keeping its configuration on one wedge", async () => {
@@ -682,13 +690,13 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
   const pentagon = (cy: number, from: number) =>
     Array.from({ length: 5 }, (_, i) => ({ id: from + i, x: 0.85 * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / 5), y: cy + 0.4 * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / 5), r: 0.9, el: "C" }));
   const ring = (from: number, id0: number): Bond[] =>
-    Array.from({ length: 5 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 5), order: i === 0 || i === 2 ? 2 : 1, stereo: "none", stereoOrient: "principle" }) as Bond);
+    Array.from({ length: 5 }, (_, i) => ({ id: id0 + i, a: from + i, b: from + ((i + 1) % 5), order: i === 0 || i === 2 ? 2 : 1, stereo: "none" }) as Bond);
   const ferrocene: Model = {
     atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "Fe" }, ...pentagon(1.5, 2), ...pentagon(-1.5, 7)],
     bonds: [
       ...ring(2, 20),
       ...ring(7, 30),
-      ...Array.from({ length: 10 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none", stereoOrient: "principle" }) as Bond),
+      ...Array.from({ length: 10 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none" }) as Bond),
     ],
   };
   it("is laid out as the sandwich a written-out Cp2Fe is: each ring face-on, one over the metal and one under, its ten bonds two to the rings' centres", async () => {

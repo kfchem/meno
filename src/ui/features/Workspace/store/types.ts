@@ -1,3 +1,6 @@
+import type { Conversation } from "../conversation/types";
+import type { ConversationPatch } from "../conversation/ops";
+import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
 import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
@@ -115,12 +118,19 @@ export type Bond = BondChem & {
   /** A single bond's wedge, hash or wave; a double bond's "either": cis or trans not known. */
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   doubleMode?: "auto" | "center" | "left" | "right";
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (by id, `a` or `b`) a wedge is narrow at: a stereo wedge's
+   * centre, a perspective wedge's far end. Kept by atom, so a bond added or
+   * taken away beside it does not move it; every wedge in a document has
+   * one (document `wedgesHeld`). None given, the end with more bonds (`a`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn; plain when unset. "wedge" is
-   * a ring's bond in perspective toward the viewer, narrow where
-   * `stereoOrient` says; on a double bond it, or "bold", is the line the
-   * second one is drawn beside.
+   * a ring's bond in perspective toward the viewer, narrow at `narrow`; on
+   * a double bond it, or "bold", is the line the second one is drawn
+   * beside.
    */
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
@@ -642,6 +652,13 @@ export type WordPlace = { page: number; at: number };
 /** A structure of a PDF's figure (utils/pageStructures): which PDF, which page, which figure there by its box, and its key among the page's structures. */
 export type PdfStructurePick = { id: number; page: number; figure: [number, number, number, number]; key: string };
 /**
+ * A compound's number in a PDF's text under the pointer (docs/PDF.md, *A
+ * compound's number*): which PDF, what the number says, and where its word
+ * lies in the window - its card shown by it, once the pointer has rested
+ * there (`since`).
+ */
+export type PdfLens = { id: number; sha256: string; label: string; word: { left: number; top: number; right: number; bottom: number }; since: number };
+/**
  * A structure carried out of a PDF (docs/PDF.md, *Structures picked from a
  * PDF*): Meno's drawing of it (SVG, its size in the drawing's units), where
  * it lay in the window when it was pressed, where it was pressed, when it
@@ -1118,6 +1135,9 @@ export type EditorState = {
   /** The structure of a PDF's figure under the pointer, lit whole (docs/PDF.md, *Structures picked from a PDF*). */
   pdfStructureLit: PdfStructurePick | null;
   setPdfStructureLit: (pick: PdfStructurePick | null) => void;
+  /** A compound's number in a PDF's text under the pointer, its structure's card by it (components/CompoundCard). */
+  pdfLens: PdfLens | null;
+  setPdfLens: (lens: PdfLens | null) => void;
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
@@ -1457,6 +1477,24 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The conversations on the page, each in its frame (conversation/types); which is under the pointer, which is read in the column, and each one's turn - the view's. */
+  conversations: Conversation[];
+  hoveredConversation: number | null;
+  conversationShown: number | null;
+  talking: Record<number, Talking>;
+  setHoveredConversation: (id: number | null) => void;
+  addConversation: (frame: { x0: number; y0: number; x1: number; y1: number }) => number | null;
+  moveConversation: (id: number, dx: number, dy: number, gesture?: string) => void;
+  resizeConversation: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  updateConversation: (id: number, patch: ConversationPatch) => void;
+  removeConversation: (id: number) => void;
+  readConversation: (id: number) => void;
+  stopReadingConversation: () => void;
+  clearConversation: (id: number) => void;
+  sendToConversation: (id: number, words: string) => Promise<void>;
+  stopConversation: (id: number) => void;
+  keepConversationChanges: (id: number) => void;
+  discardConversationChanges: (id: number) => "dropped" | "running" | "since" | "none";
   /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
   cycles: Cycle[];
   selCycles: Set<number>;
@@ -1898,10 +1936,6 @@ export type EditorState = {
   setBondDoubleMode: (
     id: number,
     mode: NonNullable<Bond["doubleMode"]>,
-  ) => void;
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
   ) => void;
   setSel: (sel: Sel, anchor?: number | null) => void;
   /**

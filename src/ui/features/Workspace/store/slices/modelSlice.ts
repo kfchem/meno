@@ -7,7 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKeyPatch, bondKindPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatch, patchAlike, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { newBondFrom } from "../../utils/geometry";
@@ -406,8 +406,13 @@ export const createModelSlice = (
     if (!bond) return false;
     const patch = bondKeyPatch(key, bond, model.atoms, model.bonds);
     const ids = sel.bonds.has(id) ? [...sel.bonds] : [id];
-    if (ids.every((i) => patchChangesNothing(model.bonds.find((b) => b.id === i) ?? patch, patch))) return false;
-    doc.edit("change bonds' kind", (d) => ids.reduce((acc, i) => ops.updateBond(acc, i, patch), d));
+    // (each bond's own narrow end kept, or turned round, as the one pressed on has its: utils/bondKinds `patchAlike`)
+    const patchOf = (i: number) => {
+      const other = model.bonds.find((b) => b.id === i);
+      return other ? patchAlike(patch, bond, other, model.bonds) : patch;
+    };
+    if (ids.every((i) => patchChangesNothing(model.bonds.find((b) => b.id === i) ?? patch, patchOf(i)))) return false;
+    doc.edit("change bonds' kind", (d) => ids.reduce((acc, i) => ops.updateBond(acc, i, patchOf(i)), d));
     return true;
   },
 
@@ -423,15 +428,6 @@ export const createModelSlice = (
 
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => {
     doc.edit("change stereo", (d) => ops.updateBond(d, id, { stereo }));
-  },
-
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
-  ) => {
-    doc.edit("change stereo", (d) =>
-      ops.updateBond(d, id, { stereoOrient: orient }),
-    );
   },
 
   /**
@@ -494,6 +490,8 @@ export const createModelSlice = (
           nextSlideId: (drawn.slides ?? []).length + 1,
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
+          conversations: (ws.conversations ?? []).map((c, i) => ({ ...c, id: i + 1 })),
+          nextConversationId: (ws.conversations ?? []).length + 1,
         },
         // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
         ws.style ?? useAppSettings.getState().drawingStyle,

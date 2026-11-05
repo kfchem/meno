@@ -31,13 +31,13 @@ describe("the kinds a bond's menu chooses among", () => {
     const c = st().addAtom(2, 0, "C");
     const ab = st().addBond(a, b);
     const bc = st().addBond(b, c);
-    st().updateBond(ab, { color: "#ff0000", stereoOrient: "reverse" });
+    st().updateBond(ab, { color: "#ff0000", narrow: a });
     const before = doc.history().undoDepth;
     st().setBondsKind([ab, bc], "wedge");
     const kinds = () => st().model.bonds.map((x) => bondKindOf(x));
     expect(kinds()).toEqual(["wedge", "wedge"]);
     expect(doc.history().undoDepth).toBe(before + 1);
-    expect(st().model.bonds[0]).toMatchObject({ color: "#ff0000", stereoOrient: "reverse" });
+    expect(st().model.bonds[0]).toMatchObject({ color: "#ff0000", narrow: a });
     doc.undo();
     expect(kinds()).toEqual(["single", "single"]);
     st().setBondsKind([ab], "dative");
@@ -47,17 +47,18 @@ describe("the kinds a bond's menu chooses among", () => {
 
 describe("a click on a single bond", () => {
   it("cycles plain, wedge, hashed wedge and plain again, the other end narrow the second time round", () => {
-    const b = { stereo: "none" as const, stereoOrient: "principle" as const };
-    expect(singleClickPatch(b)).toMatchObject({ stereo: "up" });
-    expect(singleClickPatch({ ...b, stereo: "up" })).toMatchObject({ stereo: "down" });
-    expect(singleClickPatch({ ...b, stereo: "down" })).toMatchObject({ stereo: "none", stereoOrient: "reverse" });
+    const b = { a: 1, b: 2, stereo: "none" as const };
+    expect(singleClickPatch(b, 1)).toMatchObject({ stereo: "up", narrow: 1 });
+    expect(singleClickPatch({ ...b, stereo: "up" }, 1)).toMatchObject({ stereo: "down", narrow: 1 });
+    expect(singleClickPatch({ ...b, stereo: "down" }, 1)).toMatchObject({ stereo: "none", narrow: 2 });
+    expect(singleClickPatch({ ...b, stereo: "none" }, 2)).toMatchObject({ stereo: "up", narrow: 2 });
   });
 
   it("takes a bond of another kind out of it - wavy, bold, hashed, dashed, dative - to plain, so it can be cycled", () => {
-    expect(singleClickPatch({ stereo: "wavy" })).toMatchObject({ stereo: "none" });
+    expect(singleClickPatch({ a: 1, b: 2, stereo: "wavy" }, 1)).toMatchObject({ stereo: "none" });
     for (const kind of ["bold", "hashed", "dashed", "dative"] as const) {
       const made = bondKindPatch(kind);
-      const patch = singleClickPatch(made);
+      const patch = singleClickPatch({ a: 1, b: 2, ...made }, 1);
       const after = { ...made, ...patch };
       expect(bondKindOf(after)).toBe("single");
     }
@@ -152,10 +153,24 @@ describe("the bond keys", () => {
     const bond = () => st().model.bonds.find((x) => x.id === ab)!;
     st().bondKey(ab, 1);
     expect(bondKindOf(bond())).toBe("wedge");
+    const narrow = bond().narrow!;
     st().bondKey(ab, 1);
     expect(bondKindOf(bond())).toBe("hashed-wedge");
     st().bondKey(ab, 1);
-    expect(bond()).toMatchObject({ stereo: "none", stereoOrient: "reverse" });
+    expect(bond()).toMatchObject({ stereo: "none", narrow: narrow === bond().a ? bond().b : bond().a });
+  });
+
+  it("1 on bonds selected turns each one's own narrow end round, as the one pressed on has its - never to an atom not on it", () => {
+    const { st, ab, bc } = chain();
+    const bond = (id: number) => st().model.bonds.find((x) => x.id === id)!;
+    st().setSel({ atoms: new Set(), bonds: new Set([ab, bc]) });
+    st().bondKey(ab, 1);
+    // (a - b - c: each narrow at b, the end with more bonds, as drawn)
+    const b = bond(ab).b;
+    expect([bond(ab).narrow, bond(bc).narrow]).toEqual([b, b]);
+    st().bondKey(ab, 1);
+    st().bondKey(ab, 1);
+    expect([bond(ab).narrow, bond(bc).narrow]).toEqual([bond(ab).a, bond(bc).b]);
   });
 
   it("make a plain bond of the kind asked: a dative or bold bond made double - by 2 or a double-click - a wedge made triple, a crossed double turned to its side", () => {

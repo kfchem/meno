@@ -151,10 +151,10 @@ Built on the words already on the page (`Caption`): typed in place, smart
 words, a width they break into lines at, and how their lines lie.
 
 - **A size of their own**, in points as the drawing's labels are (a bond is
-  14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
-  *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
-  down. Unset, the drawing's labels' size, as reaction conditions are now.
-- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  14.4 points in ACS 1996's style): 8, 10, 12, 14, 18 or 24 and any number
+  typed, in the words' menu under its icons; Ctrl/Cmd+Shift+> and < a step
+  up or down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, in the same menu:
   1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
   over the drawing style's. Unset, single and the drawing's labels'
   typeface.
@@ -475,7 +475,8 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points as the pointer gives them, kept whole (*A stroke is kept whole*).
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
   eraser, the colours of the set in use and the pen's own (a marker's own
-  being the set's first, shown once), three widths - a pen's first as
+  being the set's first, shown once; a colour for fills alone, Okabe and
+  Ito's yellow, the marker's only, struck through for the pen), three widths - a pen's first as
   wide as the drawing's bonds, following its style, then 1.5 and 3
   points (`lib/chem/ink` `INK_WIDTHS_PT`) - Done (or Escape).
   Quick Add's *Pen*, among the marks on the page, opens it; the pointer is a cross while it is open.

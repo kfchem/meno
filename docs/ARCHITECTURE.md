@@ -482,7 +482,8 @@ What is left before the editor counts as finished, and in what order, is in
   `NOMINAL_BOND_LENGTH` world units. Labels are set in IBM Plex Sans by
   default (`lib/chem/labelFonts` `DEFAULT_LABEL_FAMILY`), or in the style's
   own typeface: `lib/chem/labelFonts.ts` holds each typeface's advance
-  widths and the outline of each letter (Arimo's for Arial), so
+  widths and the outline of each letter (Arimo's for Arial, brought to
+  Arial's capital height and x-height), so
   `placeLabel` places every run and bonds stop the label margin clear of
   the letters without measuring anything at run time. The canvas draws the
   runs where `placeLabel` puts them, in that typeface's own font file - the
@@ -832,9 +833,9 @@ reading (`MENO`) first. Meno's core knows no program (the maintainer,
 the kinds of the plugins added - while they are added (`lib/calc/workers.ts`)
 - refusing a mark that one of Meno's own sample files holds. A plugin not
 added is never started or asked: a file no plugin added reads is told by
-the kinds the plugins Meno carries but not added say they read, by their
-own marks (`offeredKinds`, `catalogued`), to say which plugins would read
-it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
+the kinds the plugins here or on offer online (their catalogue entries'
+`fileKinds`) but not added say they read, by their own marks
+(`offeredKinds`, `catalogued`), to say which plugins would read it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
 - A plugin is added in Settings, *Plugins*: `ensurePyEnv`, with the
   network's consent under `python-env:plugin-<id>`. It is taken away there
   too: `py_env_remove`, which removes only its own folder.
@@ -943,9 +944,12 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   besides, and nothing cclib returns changed but the vibrations: the
   translations and rotations an output lists among them, at a frequency
   of naught (under 1 cm-1), are left out and the rest numbered from one,
-  as the ORCA and xTB plugins' readers do (`scripts/calc/test_reader_cclib.py`).
-  No program's output is committed; the app's side is tested with the
-  plain data written by hand. An answer
+  as the ORCA and xTB plugins' readers do. Its tests
+  (`scripts/calc/test_reader_cclib.py`) run in CI in its environment from
+  its lock, as the other plugins' that need their packages do; those that
+  read a sample output are skipped where it is not there. No program's
+  output is committed; the app's side is tested with the plain data
+  written by hand. An answer
   never holds a number that is not one (JSON has none).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows) is a
@@ -1050,8 +1054,9 @@ through all its atoms, written as a multi-centre bond by
 `chem/etaBound.ts`, held over its metal; every conformer as made - which
 are kept Meno's, `keptMade`, a salt's parts set side by side,
 `chem/partsApart.ts`; every conformer kept in the order made, with every centre's CIP
-label; of two enantiomers, the one whose SMILES comes first is made and the
-other is its mirror image), and the page keeps each once, lowest first,
+label; of two enantiomers, the one whose identity with its configuration
+comes first is made, and the other as its reflection, `chem/pageMirror`),
+and the page keeps each once, lowest first,
 laid over the first, equivalent atoms in the first's places
 (`chem/pageConformers`, in a worker of its own: `chem/shownConformers`;
 WORKSPACE.md, *The page's conformers*). Both take
