@@ -21,14 +21,21 @@ import { formulaOf } from "../../../../lib/io/coordinates";
 /**
  * An atom and every atom bonded to it, however far along - a haptic bond
  * joining a metal to every atom of its pi system (a Cp ring is one
- * structure with its metal).
+ * structure with its metal) - and every atom of a structure of several parts
+ * it is in (`Atom.joined`).
  */
 export function fragmentOf(model: Model, atomId: number): Set<number> {
   return reached(neighboursIn(model), atomId);
 }
 
-/** The atoms each atom is bonded to: through a haptic bond, every atom of the pi system and its metal. */
-function neighboursIn(model: Model): Map<number, number[]> {
+/**
+ * The atoms each atom is bonded to: through a haptic bond, every atom of the
+ * pi system and its metal - and, `joined`, every atom that shares its
+ * structure of several parts, bonded or not (docs/EDITOR-2D.md, *One
+ * structure of several parts*). Clean-up asks without: it lays out each
+ * piece as it is, and the parts keep where they stand.
+ */
+function neighboursIn(model: Model, joined = true): Map<number, number[]> {
   const next = new Map<number, number[]>();
   const join = (u: number, v: number) => {
     for (const [from, to] of [[u, v], [v, u]]) {
@@ -40,6 +47,16 @@ function neighboursIn(model: Model): Map<number, number[]> {
   for (const b of model.bonds) {
     join(b.a, b.b);
     for (const e of b.endpoints ?? []) join(b.a, e);
+  }
+  if (joined) {
+    // (each of a number's atoms to the first of it: enough for them to be reached from one another)
+    const first = new Map<number, number>();
+    for (const a of model.atoms) {
+      if (a.joined == null) continue;
+      const f = first.get(a.joined);
+      if (f == null) first.set(a.joined, a.id);
+      else join(f, a.id);
+    }
   }
   return next;
 }
@@ -68,14 +85,19 @@ export function partOf(model: Model, ids: Set<number>): Model {
   });
 }
 
-/** The structures on the canvas, each the atoms bonded together, a lone atom not among them. */
-export function fragmentsOf(model: Model): Set<number>[] {
+/**
+ * The structures on the canvas, each the atoms bonded together, a lone atom
+ * not among them - or, `joined`, each structure of several parts as one, a
+ * lone ion in one with the rest (Clean-up asks for the pieces).
+ */
+export function fragmentsOf(model: Model, joined = true): Set<number>[] {
   const seen = new Set<number>();
   const out: Set<number>[] = [];
   const bonded = new Set(model.bonds.flatMap((b) => [b.a, b.b]));
+  if (joined) for (const a of model.atoms) if (a.joined != null) bonded.add(a.id);
   // (the bonds gone over once for them all, not again for each: a thousand
   // structures took 17 s)
-  const next = neighboursIn(model);
+  const next = neighboursIn(model, joined);
   for (const a of model.atoms) {
     if (seen.has(a.id) || !bonded.has(a.id)) continue;
     const f = reached(next, a.id);
@@ -85,10 +107,10 @@ export function fragmentsOf(model: Model): Set<number>[] {
   return out;
 }
 
-/** The fragments that hold any of `atoms`, each once. */
-export function fragmentsHolding(model: Model, atoms: Iterable<number>): Set<number>[] {
+/** The fragments that hold any of `atoms`, each once - a structure of several parts as one, unless not `joined` (Clean-up's pieces). */
+export function fragmentsHolding(model: Model, atoms: Iterable<number>, joined = true): Set<number>[] {
   const out: Set<number>[] = [];
-  const next = neighboursIn(model);
+  const next = neighboursIn(model, joined);
   const there = new Set(model.atoms.map((a) => a.id));
   const taken = new Set<number>();
   for (const id of atoms) {
@@ -173,9 +195,10 @@ export async function cleanUp(
   const model = atTrueSize(held);
   const expanded = store.getState().justExpanded();
   const parts = (
+    // (each piece as it is: a structure of several parts is laid out piece by piece, its parts keeping where they stand)
     around == null
-      ? fragmentsOf(model)
-      : fragmentsHolding(model, typeof around === "number" ? [around] : around)
+      ? fragmentsOf(model, false)
+      : fragmentsHolding(model, typeof around === "number" ? [around] : around, false)
   )
     .map((ids) => partOf(model, ids))
     .filter((part) => part.bonds.length > 0);

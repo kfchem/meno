@@ -2604,6 +2604,19 @@ function WorkspaceContent({
               })()),
             };
           })()}
+          parts={(() => {
+            // (one structure of several parts: the structures selected made one; the one right-clicked, of several parts, taken apart - utils/joinedParts)
+            const st = store.getState();
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            const picked = menu.selection === "here" ? st.sel.atoms : new Set<number>();
+            const joinable = structuresOf(st.model).filter((s) => s.some((id) => picked.has(id))).length > 1;
+            const joined = at != null && [...fragmentOf(st.model, at)].some((id) => st.model.atoms.find((a) => a.id === id)?.joined != null);
+            if (!joinable && !joined) return undefined;
+            return {
+              ...(joinable ? { onJoin: () => store.getState().joinStructures(picked) } : {}),
+              ...(joined ? { onSeparate: () => store.getState().separateStructures([at!]) } : {}),
+            };
+          })()}
           pageMap={(() => {
             // (atom maps between structures on the page: made from the structures selected, the one right-clicked Before -
             // chem/structureMaps; and those the structure right-clicked is in)

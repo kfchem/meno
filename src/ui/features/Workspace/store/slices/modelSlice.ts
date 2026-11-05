@@ -302,6 +302,16 @@ export const createModelSlice = (
     if (maps.length) doc.edit("atom map", (d) => ops.addStructureMaps(d, maps, replacing).doc);
   },
 
+  joinStructures: (ids: Iterable<number>) => {
+    const atoms = [...ids];
+    doc.edit("make one structure", (d) => ops.joinStructures(d, atoms));
+  },
+
+  separateStructures: (ids: Iterable<number>) => {
+    const atoms = [...ids];
+    doc.edit("separate", (d) => ops.separateStructures(d, atoms));
+  },
+
   showStructureMaps: (ids: readonly number[], shown: boolean) => {
     const of = new Set(ids);
     doc.edit(shown ? "show atom map" : "hide atom map", (d) => ops.setStructureMaps(d, (d.structureMaps ?? []).map((m) => (of.has(m.id) ? { ...m, map: { ...m.map, shown } } : m))));
