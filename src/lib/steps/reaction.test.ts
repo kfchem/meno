@@ -23,7 +23,7 @@ function water(): Entry {
       energy: { value: -76.4, unit: "Eh", at, status: "computed" },
       charges: { value: { list: [0.4, -0.8, 0.4], per: "atom" }, unit: "none", at, status: "computed" },
       modes: { value: { modes: [[1, 0, 0, 2, 0, 0, 3, 0, 0]] }, unit: "none", at, status: "computed" },
-      held: { value: { restraints: [{ kind: "distance", atoms: [0, 1], value: 1, strength: 1 }] }, unit: "none", status: "computed" },
+      held: { value: { restraints: [{ kind: "distance", atoms: [0, 1], value: 1, strength: 1 }, { kind: "fixed", atoms: [0, 2] }], start: [1, 1, 1, 2, 2, 2, 3, 3, 3] }, unit: "none", status: "computed" },
       name: { value: "water", unit: "none", status: "computed" },
     },
     stereo: { perceived: true, elements: [{ kind: "centre", atoms: [1], specified: true }], key: "k", by: { plugin: "p", version: "1" } },
@@ -49,7 +49,14 @@ describe("an entry renumbered as the reactants are", () => {
   it("renumbers what names atoms - a list by atom, a vibration, a restraint, the stereo - and leaves the rest as it was", () => {
     expect(e.properties.charges.value).toEqual({ list: [-0.8, 0.4, 0.4], per: "atom" });
     expect(e.properties.modes.value).toEqual({ modes: [[2, 0, 0, 1, 0, 0, 3, 0, 0]] });
-    expect(e.properties.held.value).toEqual({ restraints: [{ kind: "distance", atoms: [1, 0], value: 1, strength: 1 }] });
+    // (its atoms fixed too, and where its restraints were first held, by atom as it is numbered now)
+    expect(e.properties.held.value).toEqual({
+      restraints: [
+        { kind: "distance", atoms: [1, 0], value: 1, strength: 1 },
+        { kind: "fixed", atoms: [1, 2] },
+      ],
+      start: [2, 2, 2, 1, 1, 1, 3, 3, 3],
+    });
     expect(e.stereo).toMatchObject({ elements: [{ atoms: [0] }] });
     expect(e.properties.energy.value).toBe(-76.4);
     expect(e.properties.name).toEqual(water().properties.name);
