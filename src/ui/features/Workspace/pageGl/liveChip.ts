@@ -9,7 +9,7 @@
  */
 import { colourHex, colourMix, COLORS } from "../../../theme/colors";
 import { barsAbove, NO_LOWEST, NOT_FINISHED } from "../utils/barsAbove";
-import { chipShiftOf, chipWidthOf } from "../utils/chipWidth";
+import { chipWidthOf } from "../utils/chipWidth";
 import { aboutLine, chipDetails, isSingle, setChipRuns, singleChipRuns, type ChipFacts, type SaidRun } from "../utils/chipSaid";
 import { FAILURE_WORDS } from "../workflow/failures";
 import { greatest } from "../../../../lib/chem/lists";
@@ -268,15 +268,14 @@ export function liveChip(s: ChipState, at: { x: number; y: number }, view: PageV
   const polys: PagePoly[] = [];
   const regions: Region[] = [];
   const o = s.opacity;
-  // (how wide it is, opened as far as it is, and how far right of its middle - how it was made widening it right only)
+  // (how wide it is, opened as far as it is: widened both ways about its middle, how it was made too - the maintainer, 2026-11-06)
   const widths = { shut: s.widths.shut, open: s.widths.open, details: s.widths.details, made: m.details.made ? m.details.made.width + 2 * LIVE.detailsSide : 0, grown: s.read.grown, madeGrown: s.made.grown };
   const width = chipWidthOf(widths);
-  const shift = chipShiftOf(widths);
   // (how tall each part is, as far as it has opened)
   const above = !m.single && c.energies ? barsAbove(c.energies, c.failed, c.marksUnread) : null;
   const { barsH, saidH, height } = chipHeights(s);
   const made = m.details.made;
-  const cx = at.x + P(shift);
+  const cx = at.x;
   const top = at.y - P(FRAMES_CHIP_GAP);
   const box = { x0: cx - P(width) / 2, y0: top - P(height), x1: cx + P(width) / 2, y1: top };
   shapes.push({ kind: "box", key: s.key, ...box, radiusPx: CHIP.radius, fill: COLORS.background, fillAlpha: s.fill, line: { widthPx: CHIP.border, color: COLORS.hairline }, shadow: CHIP.shadow, opacity: o, z: zBase });
