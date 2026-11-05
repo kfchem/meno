@@ -113,9 +113,9 @@ describe("3D results onto structures", () => {
     const out = ontoStructures(
       rows,
       [
-        conformer("a", 0, 1, C3H8O, -5, { failed: { kind: "error", why: "SCF did not converge" } as SetEntry["failed"] }),
+        conformer("a", 0, 1, C3H8O, -5, { failed: { kind: "not-converged", why: "SCF did not converge" } }),
         conformer("a", 0, 2, C3H8O, 0),
-        conformer("b", 1, 1, C3H8O, 0, { failed: { kind: "error", why: "x" } as SetEntry["failed"] }),
+        conformer("b", 1, 1, C3H8O, 0, { failed: { kind: "failed", why: "x" } }),
         conformer("c", 2, 1, C2H6O, 0),
         conformer("c", 2, 2, C2H6O, 1, { calc: { readers: [], program: "orca", method: "r2SCAN-3c" } as SetEntry["calc"] }),
       ],
