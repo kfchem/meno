@@ -855,6 +855,16 @@ The texts are compared, not their hashed keys. The set states the method:
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
+- **a configuration drawn where there is no stereo unit counts for
+  nothing.** That is a wedge on a centre two of whose groups are alike (an
+  isopropyl's CH), or a double bond drawn bent whose one end carries two
+  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
+  it was drawn so or not. "Alike" counts every other configuration in the
+  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
+  are alike only until the other centre is counted, so its cis and trans
+  stay two structures, and a pseudoasymmetric centre keeps its r or s
+  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
+  them aside;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);
