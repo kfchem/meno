@@ -382,6 +382,9 @@ describe("a plugin's manifest", () => {
     // (one with its looks alone; and a plugin that brings nothing and does nothing is none)
     expect(acceptManifest({ ...preset, presets: { interface: "styling", looks: presets.looks } })?.presets?.studios).toEqual([]);
     expect(acceptManifest({ ...preset, presets: undefined })).toBeNull();
+    // (a studio that is itself the background says so, as a motion says what it is made with; a fixed choice not as it must be is left out)
+    const fixedStudio = { id: "attic", label: "Attic", file: "attic.py", fixed: [{ id: "background", value: "white", why: "The attic is the background" }, { id: "x" }] };
+    expect(acceptManifest({ ...preset, presets: { ...presets, studios: [fixedStudio] } })?.presets?.studios).toEqual([{ id: "attic", label: "Attic", file: "attic.py", fixed: [{ id: "background", value: "white", why: "The attic is the background" }] }]);
     // (through an interface it does not use, an item without a file or one not as it must be, a file outside its folder, the plain studio's id, nothing at all, too many files: none)
     const many = Array.from({ length: 64 }, (_, i) => `f${i}.py`);
     for (const bad of [

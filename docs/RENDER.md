@@ -459,13 +459,14 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
   copper 0.95 0.64 0.54, linear.
 - **Its studios**: the Scene's *Studio* choice offers them after *As
   asked*, the plain scene. **Paper sweep**: a floor curving up into a wall
-  behind, in the background's colour, big soft lights and a soft source
-  overhead pooling light on the floor; where Meno's camera looks level, the
-  floor lies below what it frames. **Dark cyclorama**: a wall far behind,
-  lit as a pool by its own light and seen by the camera alone, a key, a
-  fill, a top light and two coloured rims. A studio is the backdrop chosen:
-  on a transparent background the paper is white, and the cyclorama's
-  wall dark.
+  behind, white, big soft lights and a soft source overhead pooling light
+  on the floor; where Meno's camera looks level, the floor lies below what
+  it frames. **Dark cyclorama**: a dark wall far behind, lit as a pool by
+  its own light and seen by the camera alone, a key, a fill, a top light
+  and two coloured rims. A studio is the backdrop chosen: while one is,
+  the card shows the Background as the studio sets it - white for the
+  paper, black for the cyclorama - said, with why beneath it (`fixed`),
+  and a picture is that backdrop all over.
   Each is built round Meno's molecules at their own size, its lights as
   strong as the key light asked for, and as soft as the shadows' softness;
   a molecule in either reads as bright as Meno lights it with no studio.

@@ -183,7 +183,8 @@ export type Shortest = { film?: number; loop?: number; change?: number };
  * the plugin it is for (`presets/<id>/`), and never runs one.
  */
 export type PresetLook = LookDecl & { file: string };
-export type PresetStudio = { id: string; label: string; description?: string; file: string };
+/** A studio a preset plugin brings: its id, label and description, the file that makes it, and what it fixes while chosen (`fixed`: the background it is itself, say), as a motion fixes what it is made with. */
+export type PresetStudio = { id: string; label: string; description?: string; file: string; fixed?: FixedChoice[] };
 export type PresetMotion = MotionDecl & { file: string };
 export type PresetsDecl = {
   /** The interface it brings them through: one its `depends` uses, of the plugin that interface is that one's. */
@@ -850,12 +851,13 @@ function presetsOf(v: unknown, depends: readonly DependDecl[]): PresetsDecl | nu
   const motions = withFile(r.motions, acceptMotions(r.motions));
   const studios = withFile(
     r.studios,
-    list(r.studios).flatMap((raw): { id: string; label: string; description?: string }[] => {
+    list(r.studios).flatMap((raw): { id: string; label: string; description?: string; fixed?: FixedChoice[] }[] => {
       const x = raw as Record<string, unknown> | null;
       const label = typeof x?.label === "string" ? x.label.trim().slice(0, 80) : "";
       if (typeof x?.id !== "string" || !LOOK_ID.test(x.id) || x.id === PLAIN_STUDIO || !label) return [];
       const description = typeof x.description === "string" && x.description.trim() ? x.description.trim().slice(0, 200) : undefined;
-      return [{ id: x.id, label, ...(description ? { description } : {}) }];
+      const fixed = fixedOf(x.fixed);
+      return [{ id: x.id, label, ...(description ? { description } : {}), ...(fixed.length ? { fixed } : {}) }];
     }),
   );
   if (!looks || !motions || !studios || new Set(studios.map((x) => x.id)).size !== studios.length) return null;

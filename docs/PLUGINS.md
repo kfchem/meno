@@ -833,7 +833,7 @@ A plugin may bring another plugin presets through that one's interface (2026-11-
 |---|---|
 | `interface` | The interface it brings them through: one its `depends` uses, of exactly one plugin - the one they are for. |
 | `looks` | Each as a render role declares a look (*Looks*, below), with its `file`. |
-| `studios` | Each `{id, label, description?, file}`: a scene a render is made in. `asked` is the card's plain scene, and no studio's id. |
+| `studios` | Each `{id, label, description?, file, fixed?}`: a scene a render is made in. `asked` is the card's plain scene, and no studio's id. `fixed`, as a motion's (*Motions*): what the studio is made with whatever was chosen - a studio that is itself the background fixes the renderer's background - shown on the card as that one choice, said, with why beneath it. |
 | `motions` | Each as a render role declares a motion (*Motions*, below), with its `file`. |
 | `files` | The files those share, each a path in its folder. |
 | `options` | Its options, in the general form (`lib/options`), each `when` it says - of its own options, or the card's `look`, `studio` or `motion`. |
