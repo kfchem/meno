@@ -90,19 +90,17 @@ HESSIANS = {"computed": "%geom Calc_Hess true end", "model": ""}
 #: The steps whose stopped run's output is read for the geometry it reached (a run again's start; docs/WORKFLOWS.md,
 #: *Runs again*).
 PARTIAL_STEPS = {"optimise"}
-#: What ORCA prints at each step of an optimisation (ORCA 6.1.1): a run that stopped before it computed nothing to start from.
+#: The heading of each step of an optimisation in ORCA's output: a run that stopped before it computed nothing to start from.
 OPTIMISING = "GEOMETRY OPTIMIZATION CYCLE"
-#: What ORCA prints where an optimisation took the most cycles it allows without converging (ORCA 6.1.1, in a box of
-#: warnings, over two lines): "The optimization did not converge but reached the maximum number of optimization cycles."
-#: It goes on all the same - to what it was asked for after, its properties - and may then stop there by an error in
-#: words that say nothing of it ("ERROR (SHARK): Failed to read input file", "error termination in PROPERTIES"), or end
-#: normally. Either way, the geometry it reached is no converged one: nothing of it is read as a result.
+#: The words by which an optimisation that took the most cycles it allows without converging is known in the output
+#: (they may run over two lines). The plugin reads such a run as not converged whatever follows - an error later in
+#: other words, or a normal end: the geometry it reached is no converged one, and nothing of it is read as a result.
 MAX_CYCLES = re.compile(r"did not converge but reached the maximum number of\s+optimization cycles")
-MAX_CYCLES_SAID = "The optimization did not converge but reached the maximum number of optimization cycles"
+MAX_CYCLES_SAID = "did not converge but reached the maximum number of optimization cycles"
 #: The optimisations whose cycles ORCA counts so: an optimisation, a saddle point's.
 OPTIMISATIONS = {"optimise", "saddle-point"}
-# ORCA's own xTB (NATIVE-XTB2 and its kin): it has no analytic Hessian for one, and ORCA 6.1.1 stops a FREQ run of
-# one rather than work it out numerically - NUMFREQ, the numerical Hessian, asked for by name, it runs
+# ORCA's own xTB (NATIVE-XTB2 and its kin): the plugin asks for its frequencies numerically - NUMFREQ, the numerical
+# Hessian, by name - as no analytic Hessian is offered for it
 NATIVE_XTB = re.compile(r"NATIVE-\S+", re.I)
 NUMERICAL = "NUMFREQ"
 # (said on the step's line, so that what was chosen for the chemist is never hidden)
@@ -115,7 +113,7 @@ def numerical(step, options):
 
 
 #: Said on a saddle point's line where ORCA computes its first Hessian numerically: at ORCA's own xTB, which has no
-#: analytic one, ORCA 6.1.1 says so ("Switching to Numerical Hessian") and does.
+#: analytic one.
 NUMERICAL_HESSIAN_SAID = "its first Hessian computed numerically"
 
 
@@ -184,8 +182,8 @@ def mass_of(el, atom):
 
 
 #: How a frequency job's thermochemistry treats the low-frequency vibrations (its *Low-frequency vibrations* option):
-#: ORCA's own, nothing asked ("none") - Grimme's quasi-RRHO for their entropy, ORCA 6.1.1's default, "Quasi RRHO ...
-#: True" - or the harmonic oscillator alone, the rigid-rotor harmonic oscillator a program with no low-mode treatment
+#: ORCA's own, nothing asked ("none") - its default, read back from its output's "Quasi RRHO" line - or the harmonic
+#: oscillator alone, the rigid-rotor harmonic oscillator a program with no low-mode treatment
 #: gives: ORCA's %freq QuasiRRHO false. ("none" is the value a step's line leaves unsaid: its default.)
 LOW_VIBRATIONS = {"none": "", "rrho": "%freq QuasiRRHO false end"}
 
@@ -235,7 +233,7 @@ def orca_input(step, entry, options, cores):
         lines.append(f"%maxcore {maxcore}")
     if vibrations:
         lines.append(vibrations)
-    # (a reaction path's steps each way, where said: ORCA's own else - the manual's 4.4.2 states none, ORCA 6.1.1 prints 20)
+    # (a reaction path's steps each way, where said: ORCA's own else)
     steps = whole(options.get("maxiter", 0), "The steps each way", 0) if step == "reaction-path" else 0
     if steps:
         lines.append(f"%irc maxiter {steps} end")
@@ -269,8 +267,7 @@ def memory_of(options, cores):
 #: ORCA's keywords for the xTB methods it runs through the xtb program, not its own: the ORCA 6.1 manual, 3.5.2
 #: Extended Tight-Binding: GFN0-xTB, GFN-xTB, GFN2-xTB, its simple input keywords
 #: (https://www.faccts.de/docs/orca/6.1/manual/contents/modelchemistries/semiempirical.html#extended-tight-binding-gfn0-xtb-gfn-xtb-gfn2-xtb).
-#: ORCA 6.1.1 on macOS stops on each without the program ("otool_xtb not available ... Please set the XTBEXE
-#: environment variable"; 1.2.4 How do I install the xtb module?). Its native ones (3.5.3 Native GFN-xTB and
+#: Each needs the xtb program, named in XTBEXE (the manual's 1.2.4 How do I install the xtb module?). Its native ones (3.5.3 Native GFN-xTB and
 #: GFN2-xTB: NATIVE-XTB2, NATIVE-GFN2-XTB and the rest) run in ORCA itself, and need none.
 XTB_KEYWORDS = {"XTB", "XTB0", "GFN0-XTB", "XTB1", "GFN1-XTB", "XTB2", "GFN2-XTB", "XTBFF", "GFN-FF"}
 
@@ -283,12 +280,12 @@ def needs_xtb(options):
 
 #: A path search (ORCA's NEB-TS: the ORCA 6.1 manual, Nudged Elastic Band Method,
 #: https://www.faccts.de/docs/orca/6.1/manual/contents/structurereactivity/neb.html): the path between an entry and the
-#: end it is paired with, its highest point refined, and - where asked - that point's frequencies. Its files, as ORCA
-#: 6.1.1 writes them for an input named input.inp: the path as images, the point refined.
+#: end it is paired with, its highest point refined, and - where asked - that point's frequencies. Its files, for an
+#: input named input.inp: the path as images, the point refined.
 PATH_RUN = "NEB-TS"
 #: The runs a path search offers (its *Path* option): a band, its highest point refined; or a band, a finer one about
 #: its highest point, that refined (the manual's 4.5.12 *ZOOM-NEB* and 4.5.13 *NEB-TS*). Both write the same files and
-#: end in one PATH SUMMARY FOR NEB-TS (ORCA 6.1.1).
+#: end in one PATH SUMMARY FOR NEB-TS, read for both.
 PATH_RUNS = ("NEB-TS", "ZOOM-NEB-TS")
 END = "end.xyz"
 
@@ -387,8 +384,7 @@ def path_input(entry, options, cores):
 
 
 #: A reaction path (ORCA's IRC: the ORCA 6.1 manual, 4.4 *Intrinsic Reaction Coordinate*), followed both ways from the
-#: point given - the manual's default direction - in one job. Its file, as ORCA 6.1.1 writes it for an input named
-#: input.inp: the whole path, one end to the other, each frame with its energy; its IRC PATH SUMMARY marks the point it
+#: point given - the manual's default direction - in one job. Its file, for an input named input.inp: the whole path, one end to the other, each frame with its energy; its IRC PATH SUMMARY marks the point it
 #: started from ("<= TS").
 #: The program ORCA starts its processes with, where it runs more than one (the ORCA 6.1 manual, 2.5.2.1): Open MPI's
 #: mpirun on macOS and Linux, Microsoft MPI's mpiexec on Windows - looked for where ORCA's jobs look for it, on the PATH.
@@ -472,14 +468,12 @@ def output_name(entry):
 
 def ended_well(log):
     """Whether ORCA says it ended well, as its output is read (reader `run_of`): "ORCA TERMINATED NORMALLY", and nowhere
-    "error termination". Its exit code is no word on it: ORCA 6.1.1 exits 0 where it stopped at its start-up with "ORCA
-    finished by error termination in Startup" (a parallel run, its MPI not there) - read as done, it would hand on as
-    worked out what it never touched."""
+    "error termination". Its exit code alone is not taken for it: a run that stopped at its start-up (a parallel run,
+    its MPI not there) may still exit 0 - read as done, it would hand on as worked out what it never touched."""
     return reader.run_of(log)[0] == "normal"
 
 
-#: What a parallel run says where Open MPI's mpirun is not there to start it: ORCA's error at its start-up, the shell's
-#: words on mpirun beside it (ORCA 6.1.1).
+#: How a parallel run whose mpirun is not there is known: the shell's words on mpirun in its output.
 NO_MPI = re.compile(r"mpirun: (?:command )?not found", re.I)
 #: That said plainly, and what to do: ORCA runs on more than one core with Open MPI on Linux and Mac alone, its mpirun on
 #: the PATH (the ORCA 6.1 manual, 2.5.2.1, *Single Node Runs*).
@@ -499,8 +493,7 @@ def not_ended_why(log, ended):
     return "ORCA's log does not say it ended normally" + (f"; it last said: {lines[-1]}" if lines else "")
 
 
-#: What ORCA says where its band did not converge in the iterations it allows ("NEB not converged. Skipping NEB-TS run
-#: here.").
+#: The marker words by which a band that did not converge in the iterations it allows is known in ORCA's output.
 NEB_NOT_CONVERGED = "NEB not converged"
 
 

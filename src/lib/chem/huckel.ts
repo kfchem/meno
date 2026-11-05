@@ -4,7 +4,9 @@
  * pyridine's, every one of a naphthalene's. Which of them a Kekulé structure
  * makes double is no part of a molecule's shape or of which of its atoms are
  * alike. A cyclooctatetraene's ring, of 4n, is none: its double bonds stay
- * where they are, as a pyrrole's do.
+ * where they are, as a pyrrole's do. This answers which bonds a Kekulé
+ * structure may draw either way, for sameness and shape; which rings are
+ * aromatic is Meno's rule in ./aromaticity.
  */
 import type { LayoutInput } from "../layout/perceive";
 
