@@ -31,6 +31,9 @@ const MOST_TEXT = 1_000_000;
 /** The most tools it may call in one reply. */
 const MOST_CALLS = 64;
 
+/** The most what a plugin keeps of a reply may be, as JSON. */
+const MOST_KEEP = 2_000_000;
+
 /** The purpose a model's plugin uses the network under (src-tauri/src/model.rs `purpose`). */
 export const modelPurpose = (plugin: string) => `model:${plugin}`;
 
@@ -59,7 +62,10 @@ export function replyOf(raw: unknown): ModelReply {
   const r = raw as Record<string, unknown> | null;
   if (typeof r !== "object" || r === null || Array.isArray(r)) throw new Error(NOT_READ);
   if (typeof r.text !== "string" || r.text.length > MOST_TEXT) throw new Error(NOT_READ);
-  if (r.calls === undefined) return { text: r.text };
+  // (what it keeps of the reply: its own, opaque - taken as it is, within its bound)
+  const kept = r.keep === undefined ? {} : (JSON.stringify(r.keep)?.length ?? Infinity) <= MOST_KEEP ? { keep: r.keep } : null;
+  if (!kept) throw new Error(NOT_READ);
+  if (r.calls === undefined) return { text: r.text, ...kept };
   if (!Array.isArray(r.calls) || r.calls.length > MOST_CALLS) throw new Error(NOT_READ);
   const calls: ToolCall[] = r.calls.map((c) => {
     const call = c as Record<string, unknown> | null;
@@ -68,7 +74,7 @@ export function replyOf(raw: unknown): ModelReply {
     if (args !== undefined && (typeof args !== "object" || args === null || Array.isArray(args))) throw new Error(NOT_READ);
     return args === undefined ? { tool: call.tool } : { tool: call.tool, args: args as Record<string, unknown> };
   });
-  return calls.length ? { text: r.text, calls } : { text: r.text };
+  return calls.length ? { text: r.text, calls, ...kept } : { text: r.text, ...kept };
 }
 
 /** What a connection is made of, Meno's own unless a test gives its own. */

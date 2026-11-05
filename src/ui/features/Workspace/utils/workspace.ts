@@ -192,7 +192,8 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       // (catalytic cycles: lib/chem/cycle)
       ...(state.cycles?.length ? { cycles: state.cycles } : {}),
       // (conversations, what was said and sent with them: saved by default - conversation/saved)
-      ...(state.conversations?.length ? { conversations: state.conversations.map(({ id: _id, ...c }) => c) } : {}),
+      // (what a model's plugin keeps of a reply, not: it is its own, for while the conversation is open)
+      ...(state.conversations?.length ? { conversations: state.conversations.map(({ id: _id, ...c }) => ({ ...c, said: c.said.map((s) => (s.by === "model" && "keep" in s ? (({ keep: _keep, ...rest }) => rest)(s) : s)) })) } : {}),
     }) + "\n"
   );
 }

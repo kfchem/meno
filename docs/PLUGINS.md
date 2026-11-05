@@ -1039,8 +1039,10 @@ The same for every plugin and for Meno's own parts:
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
   - for *Talking with a model*, `converse {told, said, tools, options, key}`
-    (answered `{text, calls?}`: its words, plain text, and the tools it
-    calls, `{tool, args?}`), `key` added by the backend alone
+    (answered `{text, calls?, keep?}`: its words, plain text; the tools it
+    calls, `{tool, args?}`; and what it keeps of the reply - its service's
+    own record of it, opaque to Meno, given back with what was said and
+    never saved), `key` added by the backend alone
     (CONVERSATIONS.md, *Talking through a plugin*);
   - each role's own requests, by the role (*Roles*): `from_smiles
     {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a

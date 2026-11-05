@@ -459,7 +459,12 @@ neither read it nor send a key of its own, nor send `converse` by the way
 other requests go. What the plugin answers is read strictly: its words,
 plain text, and the tools it calls, each by name with its arguments - or
 its error; anything else is refused, never guessed at
-(conversation/modelConnection `replyOf`).
+(conversation/modelConnection `replyOf`). With them, what the plugin keeps
+of the reply (`keep`, at most 2 MB as JSON): its service's own record of
+it - the reasoning a service needs given back, as it gave it, with what was
+said after it. Opaque to Meno, it stays with the reply while the
+conversation is open and goes back to the plugin with it; it is never
+saved in the .meno.
 
 **The key.** Typed once in Settings, *Conversations*, and kept by the
 system's keychain under the service "Meno", one account a plugin

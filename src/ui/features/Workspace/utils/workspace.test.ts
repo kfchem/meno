@@ -577,4 +577,16 @@ describe("a workspace's sets, saved (version 2)", () => {
     store.getState().openWorkspace(readWorkspace(JSON.stringify(saved))!, true);
     expect(store.getState().sets[0].members).toEqual([{ structure: [1, 2, 3] }]);
   });
+
+  it("saves a conversation without what a model's plugin keeps of its replies - that is its own, for while it is open", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const conversation = { id: 1, x0: 0, y0: 0, x1: 20, y1: 10, rights: { read: true, propose: false }, said: [{ by: "person" as const, text: "Hi", at: 1 }, { by: "model" as const, text: "Hello", keep: { signature: "sig" }, at: 2 }], sent: [] };
+    doc.edit("conversation", (d) => ({ ...d, conversations: [conversation] }));
+    const text = workspaceText(store.getState());
+    expect(text).not.toContain("sig");
+    expect(readWorkspace(text)?.conversations?.[0].said).toEqual([{ by: "person", text: "Hi", at: 1 }, { by: "model", text: "Hello", at: 2 }]);
+  });
 });
+

@@ -83,6 +83,11 @@ describe("a model's plugin's answer, read strictly", () => {
     expect(replyOf({ text: "<img src=x onerror=alert(1)> ![a](http://x/y.png)" })).toEqual({ text: "<img src=x onerror=alert(1)> ![a](http://x/y.png)" });
     expect(replyOf({ text: "", calls: [{ tool: "look" }, { tool: "add", args: { smiles: "CCO" } }] })).toEqual({ text: "", calls: [{ tool: "look" }, { tool: "add", args: { smiles: "CCO" } }] });
     expect(replyOf({ text: "ok", calls: [] })).toEqual({ text: "ok" });
+    // (what its plugin keeps of the reply: taken as it is - opaque to Meno - within its bound)
+    const keep = { content: [{ type: "thinking", thinking: "", signature: "abc" }, { type: "text", text: "ok" }] };
+    expect(replyOf({ text: "ok", keep })).toEqual({ text: "ok", keep });
+    expect(replyOf({ text: "", calls: [{ tool: "look" }], keep })).toEqual({ text: "", calls: [{ tool: "look" }], keep });
+    expect(() => replyOf({ text: "ok", keep: "x".repeat(2_000_001) })).toThrow(NOT_READ);
   });
 
   it("refuses anything else, never guessing at it", () => {
