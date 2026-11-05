@@ -31,7 +31,7 @@ export type FrameTab = {
 };
 
 /** Meno's colours as its HTML has them (theme/colors, docs/LOOK.md *Colours*): the line at rest, under the pointer and chosen; the words; the warning. */
-export const FRAME_COLORS = { line: COLORS.line, hover: COLORS.quiet, chosen: COLORS.base, words: COLORS.text, quiet: COLORS.quiet, warn: COLORS.attention, fill: COLORS.background } as const;
+export const FRAME_COLORS = { line: COLORS.hairline, hover: COLORS.quiet, chosen: COLORS.base, words: COLORS.ink, quiet: COLORS.quiet, warn: COLORS.attention, fill: COLORS.background } as const;
 
 /** A frame's corners, its line, and its tab's words and icons, in page pixels: as a set's (rounded-xl, the hair line, text-[11px], h-3.5, gap-1.5). */
 export const FRAME_PX = { radius: 12, line: 1, words: 11, icon: 14, gap: 6, edge: 8 } as const;

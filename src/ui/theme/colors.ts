@@ -14,10 +14,11 @@ export const COLORS = {
   base: "#317689",
   // R, S, E and Z beside a molecule in 3D (--color-accel-blue; StereoInk3D)
   stereo3d: "#1d4ed8",
-  // The interface's words (--color-gh-black), the words that say less (--color-gh-gray) and its every line (--color-gh-line): drawn on the page by WebGL as its HTML has them (pageGl/FrameTabs)
-  text: "#1f2328",
+  // What the page draws by WebGL as its HTML drew it (pageGl): words (--color-gh-black), words said quietly (--color-gh-gray),
+  // and a chip's or a frame's hairline (--color-gh-line)
+  ink: "#1f2328",
   quiet: "#59636e",
-  line: "#d1d9e0",
+  hairline: "#d1d9e0",
 
   // Base drawing colors (kept here for centralization)
   bond: "#000000",

@@ -1,18 +1,14 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useRef, useState } from "react";
-import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 import { wordsReadAt } from "../utils/pageScale";
 import PageShapes from "./PageShapes";
 import PageTexts from "./PageTexts";
 import PageIcons from "./PageIcons";
 import { usePageHits, type PagePointer } from "./PageHits";
-import { addPageIcon } from "./icons";
 import type { Side } from "./hits";
 import { frameTabParts, type FrameTab } from "./frameParts";
 
 export type { FrameTab } from "./frameParts";
-
-addPageIcon("chat", (size) => <ChatBubbleLeftRightIcon width={size} height={size} strokeWidth={1.5} />);
 
 /** What a frame's parts are told: its tab pressed, an edge or a corner pressed, the pointer onto its tab or off it, its menu asked for. */
 export type FrameTabsOn = {

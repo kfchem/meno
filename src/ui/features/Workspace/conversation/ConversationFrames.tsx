@@ -5,12 +5,16 @@ import { useEditor, useEditorStore } from "../store";
 import { MOV_PX } from "../constants";
 import { PX } from "../workflow/look";
 import { pageAt } from "../utils/page";
+import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 import FrameTabs from "../pageGl/FrameTabs";
+import { addPageIcon } from "../pageGl/icons";
 import type { FrameTab } from "../pageGl/frameParts";
 import { fading, presenceAt, presentAt, type Present } from "../pageGl/presence";
 import type { PagePointer } from "../pageGl/PageHits";
 import type { Side } from "../pageGl/hits";
 import { conversationTabs } from "./tabs";
+
+addPageIcon("chat", (size) => <ChatBubbleLeftRightIcon width={size} height={size} strokeWidth={1.5} />);
 
 /** How small a frame may be sized, each way: as a set's (components/Workflow2D). */
 const LEAST = 48 * PX;
