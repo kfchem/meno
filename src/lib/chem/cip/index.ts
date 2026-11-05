@@ -2,11 +2,11 @@
  * R/S and E/Z by Meno's own reading of the CIP rules (docs/CIP.md), from a
  * structure's configuration as drawn (lib/layout/drawn `readStereo`) or as
  * read: the descriptors of its centres and its double bonds, or why one
- * has none. Rules 1a to 5, as Hanson et al. 2018 state them on BB 2013:
- * R and S, r and s for a pseudoasymmetric centre, E and Z - seqCis and
- * seqTrans said as Z and E that turn in the mirror image (`turns`). A tie
- * only the proposed rule 6 could break (a centre on an axis of symmetry),
- * or an axis's M or P, is said not worked out, never guessed.
+ * has none. Rules 1a to 5, as Hanson et al. 2018 state them on BB 2013,
+ * and their proposed rule 6 (`byRule6`): R and S, r and s for a
+ * pseudoasymmetric centre, E and Z - seqCis and seqTrans said as Z and E
+ * that turn in the mirror image (`turns`). A tie only an axis's M or P
+ * could break is said not worked out, never guessed.
  *
  * Which atoms and bonds are units is the configuration's to say (what
  * perception reads): this ranks what it is given, and tells whether the
@@ -24,7 +24,6 @@ import { parity, Ranker, RULE_5, Unknown } from "./rank";
  * - `alike`: two of its ligands are alike, by every rule (no centre);
  * - `open`: it hangs on a double bond the drawing leaves open (`bond`);
  * - `later`: only an axis's M or P could tell two ligands apart - not worked out yet;
- * - `symmetric`: only the proposed rule 6 could - not worked out yet;
  * - `unsure`: a ligand it would have to look past cannot be told from the
  *   drawing - a charged or radical mesomeric system whose usual structures
  *   give different labels, or more of them than `MOST_VARIANTS`, a metal, a
@@ -32,7 +31,7 @@ import { parity, Ranker, RULE_5, Unknown } from "./rank";
  *   lone pair);
  * - `large`: its digraph grows past what is worked out.
  */
-export type CipWhy = "alike" | "open" | "later" | "symmetric" | "unsure" | "large";
+export type CipWhy = "alike" | "open" | "later" | "unsure" | "large";
 /**
  * A unit's descriptor: R or S, or r or s for a pseudoasymmetric centre; E or
  * Z, `turns` where it turns in the mirror image (seqCis or seqTrans, Hanson
@@ -40,10 +39,15 @@ export type CipWhy = "alike" | "open" | "later" | "symmetric" | "unsure" | "larg
  */
 export type CipResult = { label: "R" | "S" | "r" | "s" | "E" | "Z"; turns?: true } | { why: CipWhy; bond?: number };
 
-/** A unit's result as worked out on one structure, with the unsure atom it stopped at, if it did (`agreed`). */
-type Said = CipResult & { at?: number };
+/**
+ * A unit's result as worked out on one structure, with the unsure atom it
+ * stopped at, if it did (`agreed`) - or, ligands alike and three paths or
+ * more back to the root, rule 6 to be asked (`byRule6`).
+ */
+type Said = (CipResult | { why: "rule 6" }) & { at?: number };
 
 const no = (why: CipWhy, bond?: number): CipResult => (bond == null ? { why } : { why, bond });
+const RULE_6_ASKED: Said = { why: "rule 6" };
 const fromUnknown = (u: Unknown): Said => (u.at == null ? no(u.why, u.bond) : { ...no(u.why, u.bond), at: u.at });
 
 /**
@@ -68,7 +72,7 @@ function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly numbe
 }
 
 /** Why two ligands alike by every rule leave no descriptor: alike, or for an axis or rule 6, not worked out yet. */
-function tied(rank: Ranker, ligands: readonly CipNode[], two: readonly number[], root: readonly number[]): CipResult {
+function tied(rank: Ranker, ligands: readonly CipNode[], two: readonly number[], root: readonly number[]): Said {
   const blocked = new Set(root);
   const atoms = two.map((i) => ligands[i].atom);
   const around = rank.region(atoms, blocked);
@@ -76,7 +80,7 @@ function tied(rank: Ranker, ligands: readonly CipNode[], two: readonly number[],
   if (rank.configured(around)) return no("later");
   // (three paths or more back to the root: the proposed rule 6 might - Hanson et al. 2018 p. 1762)
   const back = ligands.filter((l) => l.atom >= 0 && ligands.some((m) => m !== l && m.atom >= 0 && rank.region([l.atom], blocked).has(m.atom)));
-  return back.length >= 3 ? no("symmetric") : no("alike");
+  return back.length >= 3 ? RULE_6_ASKED : no("alike");
 }
 
 /** Whether a centre is one the rules complement as it is configured: its ligands its neighbours and H, and a lone pair where it has three. */
@@ -113,18 +117,60 @@ function centre(p: Prepared, c: number): Said {
       const o = inOrder(r, ligands, [c]);
       return "order" in o ? r.volumeOf(c) * parity(o.order) < 0 : o;
     };
-    const o = inOrder(rank, ligands, [c]);
-    if (!("order" in o)) return o;
-    const up = rank.volumeOf(c) * parity(o.order) < 0;
-    if (o.rule < RULE_5) return { label: up ? "R" : "S" };
-    // (decided by rule 5: pseudoasymmetric, r or s, where the mirror image reads it the same - Hanson et al. 2018 p. 1761)
-    const m = sense(rank.mirror);
-    if (typeof m !== "boolean") return m;
-    return { label: m === up ? (up ? "r" : "s") : up ? "R" : "S" };
+    const labelBy = (r: Ranker): Said => {
+      const o = inOrder(r, ligands, [c]);
+      if (!("order" in o)) return o;
+      const up = r.volumeOf(c) * parity(o.order) < 0;
+      if (o.rule < RULE_5) return { label: up ? "R" : "S" };
+      // (decided by rule 5: pseudoasymmetric, r or s, where the mirror image reads it the same - Hanson et al. 2018 p. 1761)
+      const m = sense(r.mirror);
+      if (typeof m !== "boolean") return m;
+      return { label: m === up ? (up ? "r" : "s") : up ? "R" : "S" };
+    };
+    const first = labelBy(rank);
+    return "why" in first && first.why === "rule 6" ? byRule6(rank, ligands, sense) : first;
   } catch (e) {
     if (e instanceof TooLarge) return no("large");
     throw e;
   }
+}
+
+/**
+ * Rule 6, the 2018 proposal (Hanson et al. 2018 pp. 1761-1762): where
+ * rules 1a to 5 leave ligands alike and three paths or more lead back to
+ * the root, one undifferentiated node - each ligand alike with another, in
+ * turn - is promoted above the rest, and the unit worked out again, as
+ * drawn and in its mirror image (read back: its R for an S). Each
+ * promotion that tells every ligand apart gives R or S; those that come in
+ * pairs, R and S, are set aside, and what is left over is the unit's ("a
+ * full application of Rule 6 tests all possible promotions ... Any
+ * matching R and S pairs are ignored; if a descriptor remains, it is
+ * valid", p. 1762). None left over: its ligands are alike after all -
+ * cubane's, its promotions' R in its mirror image's S.
+ */
+function byRule6(rank: Ranker, ligands: readonly CipNode[], senseBy: (r: Ranker) => boolean | Said): Said {
+  const alike = new Set<number>();
+  for (let i = 0; i < ligands.length; i++)
+    for (let j = i + 1; j < ligands.length; j++) {
+      const c = rank.ranked(ligands[i], ligands[j]);
+      if (c instanceof Unknown) return fromUnknown(c);
+      if (c === 0) alike.add(i).add(j);
+    }
+  let r = 0;
+  for (const i of alike) {
+    if (ligands[i].atom < 0) continue;
+    const promoted = rank.withPromoted(ligands[i].atom);
+    for (const [read, back] of [
+      [promoted, false],
+      [promoted.mirror, true],
+    ] as const) {
+      const up = senseBy(read);
+      if (typeof up === "boolean") r += up !== back ? 1 : -1;
+      // (one that cannot be told: the unit neither; one still alike: no descriptor of its own - Hanson's outcome (a))
+      else if ("why" in up && up.why !== "alike" && up.why !== "rule 6") return up;
+    }
+  }
+  return r === 0 ? no("alike") : { label: r > 0 ? "R" : "S" };
 }
 
 function doubleBond(p: Prepared, i: number): Said {
@@ -201,7 +247,9 @@ function agreed(p: Prepared, unit: (q: Prepared) => Said, variants: (systems: nu
     if (reached.reduce((t, i) => t * p.systems[i].structures.length, 1) > MOST_VARIANTS) return no("unsure");
     results = variants(reached).map(unit);
   }
-  const plain = (r: Said): CipResult => ("label" in r ? (r.turns ? { label: r.label, turns: true } : { label: r.label }) : no(r.why, r.bond));
+  // (rule 6 left asked - a double bond's end, which rule 6 is not worked out for: its groups alike)
+  const plain = (r: Said): CipResult =>
+    "label" in r ? (r.turns ? { label: r.label, turns: true } : { label: r.label }) : r.why === "rule 6" ? no("alike") : no(r.why, "bond" in r ? r.bond : undefined);
   const said = new Set(results.map((r) => JSON.stringify(plain(r))));
   return said.size === 1 ? plain(results[0]) : no("unsure");
 }
@@ -241,10 +289,18 @@ export function cipLabels(input: IdentityInput, ask?: { centres?: Iterable<numbe
   const atomsAsked = ask?.centres ? [...ask.centres] : input.atoms.map((_, i) => i);
   const bondsAsked = ask?.bonds ? [...ask.bonds] : input.bonds.map((_, i) => i);
   for (const c of atomsAsked) {
-    if (input.atoms[c]?.tetra) centres.set(c, agreed(p, (q) => centre(q, c), variants));
+    if (input.atoms[c]?.tetra)
+      centres.set(
+        c,
+        agreed(p, (q) => centre(q, c), variants),
+      );
   }
   for (const i of bondsAsked) {
-    if (input.bonds[i]?.stereo) bonds.set(i, agreed(p, (q) => doubleBond(q, i), variants));
+    if (input.bonds[i]?.stereo)
+      bonds.set(
+        i,
+        agreed(p, (q) => doubleBond(q, i), variants),
+      );
   }
   return { centres, bonds };
 }

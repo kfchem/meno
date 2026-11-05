@@ -118,8 +118,6 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond"): string {
       return `No ${what} until the double bond it depends on is drawn E or Z.`;
     case "later":
       return `No ${what} yet: it depends on an axis of chirality, which Meno does not name yet.`;
-    case "symmetric":
-      return `No ${what} yet: its groups differ only by the symmetry they are set in, which Meno does not name yet.`;
     case "unsure":
       return `No ${what}: a group it depends on cannot be told from the drawing.`;
     case "large":

@@ -158,8 +158,13 @@ describe("what gives no label, and why", () => {
     expect(three("F[CH+]Cl")).toEqual(["C1:unsure"]);
   });
 
-  it("says where only the proposed rule 6 could tell: a spiro atom between two alike rings - but not a ring atom with two ways round its one ring", () => {
-    expect(cipOf("C1=CC[C@]2(C1)CCCCC2")).toEqual(["C3:symmetric"]);
+  it("6, the 2018 proposal: a spiro atom between two rings each with an N and a C=O - its N alike, its C alike - R or S, the other in the mirror image", () => {
+    expect(cipOf("O=C1CCN[C@@]12NCCC2=O")).toEqual(["C5:R"]);
+    expect(cipOf("O=C1CCN[C@]12NCCC2=O")).toEqual(["C5:S"]);
+  });
+
+  it("6 leaves alike what promotion does not tell apart, as drawn and in the mirror image: a spiro atom between two rings each alike in itself, a ring atom with two ways round its one ring", () => {
+    expect(cipOf("C1=CC[C@]2(C1)CCCCC2")).toEqual(["C3:alike"]);
     expect(cipOf("O[C@H]1CCCCC1")).toEqual(["C1:alike"]);
   });
 

@@ -8,14 +8,13 @@ import { cipOf } from "./testdata/cipFrom";
  * figure where the paper discusses it, and the Blue Book section the suite
  * gives for it. The descriptors are the suite's (CIP_LABELS), put on our
  * atoms - r, s, and a Z or E that turns in the mirror image ("Z turns",
- * the suite's z) as the suite has them; a case rule 6 decides says it is not
- * worked out yet. The whole suite is run locally before each change to
+ * the suite's z) as the suite has them. The whole suite is run locally before each change to
  * lib/chem/cip, never kept in the repo (docs/CIP.md, *How it is checked*).
  */
 type Case = { vs: string; cite?: string; smiles: string; said: string[] };
 
 const CASES: Case[] = [
-  // no label: no unit, two ligands alike, or rule 6 (not worked out yet) to decide
+  // no label: no unit, or two ligands alike - after rule 6 too (cubane, adamantane, a spiro atom between two rings each alike)
   {
     vs: "VS003",
     cite: "BB 2013 P-93.3.3.2 as given in the suite",
@@ -25,18 +24,18 @@ const CASES: Case[] = [
   {
     vs: "VS009",
     smiles: String.raw`[C@@H]12[C@H]3[C@H]4[C@@H]1[C@@H]5[C@H]4[C@H]3[C@H]25`,
-    said: ["C0:symmetric", "C1:symmetric", "C2:symmetric", "C3:symmetric", "C4:symmetric", "C5:symmetric", "C6:symmetric", "C7:symmetric"],
+    said: ["C0:alike", "C1:alike", "C2:alike", "C3:alike", "C4:alike", "C5:alike", "C6:alike", "C7:alike"],
   },
   {
     vs: "VS001",
     cite: "BB 2013 P-93.5.3.3 as given in the suite",
     smiles: String.raw`C1=CC[C@]2(C1)CCCCC2`,
-    said: ["C3:symmetric"],
+    said: ["C3:alike"],
   },
   {
     vs: "VS006",
     smiles: String.raw`[C@H]12C[C@@H]3C[C@H](C1)C[C@H](C2)C3`,
-    said: ["C0:symmetric", "C2:symmetric", "C4:symmetric", "C7:symmetric"],
+    said: ["C0:alike", "C2:alike", "C4:alike", "C7:alike"],
   },
   {
     vs: "VS005",
@@ -131,7 +130,7 @@ const CASES: Case[] = [
   {
     vs: "VS173",
     smiles: String.raw`O[C@H]([C@]12C=C[C@H](C=C1)C=C2)C(\C=C/C1C=C1)(\C=C/C1C=C1)\C=C/C1C=C1`,
-    said: ["C1:S", "C2:symmetric", "C5:symmetric", "C11=C12:Z", "C16=C17:Z", "C21=C22:Z"],
+    said: ["C1:S", "C2:alike", "C5:alike", "C11=C12:Z", "C16=C17:Z", "C21=C22:Z"],
   },
   {
     vs: "VS174",
@@ -178,7 +177,7 @@ const CASES: Case[] = [
     smiles: String.raw`O[C@@H](C\C=C/C)C/C=C/C`,
     said: ["C1:R", "C3=C4:Z", "C7=C8:E"],
   },
-  // rules 4a to 5: r and s, seqCis and seqTrans (Z or E that turns in the mirror image); rule 6 not worked out yet
+  // rules 4a to 5: r and s, seqCis and seqTrans (Z or E that turns in the mirror image)
   // (4a, 4b and 5 together: like and unlike pairs read with their places on the way out, Hanson et al. 2018 p. 1760)
   {
     vs: "VS261",
@@ -300,8 +299,13 @@ const CASES: Case[] = [
     vs: "VS285",
     cite: "Fig. 12; BB 2013 P-93.5.3.2 as given in the suite",
     smiles: String.raw`O=C1CCN[C@@]12NCCC2=O`,
-    said: ["C5:symmetric"],
+    said: ["C5:R"],
   },
+  // rule 6, the 2018 proposal: one of the ligands alike promoted, each in turn (Fig. 12; p. 1762)
+  { vs: "VS281", cite: "Fig. 12; p. 1762", smiles: String.raw`C1C=3[C@]24C(CCC1)=CC=C2CCCCC4=CC=3`, said: ["C2:S"] },
+  { vs: "VS283", cite: "Fig. 12", smiles: String.raw`C2C=1[C@H]3C(CCC=1)=CCCC3=CC2`, said: ["C2:S"] },
+  // (rule 6 deciding the auxiliary descriptors, two C3 centres, and rule 5 the root's: p. 1762)
+  { vs: "VS300", cite: "p. 1762", smiles: String.raw`C1=C3CCC=C2CCC=C(CC1)[C@@]23C[C@@H](C[C@@]56C=4CCC=C6CCC=C5CCC=4)O`, said: ["C12:S", "C14:s", "C16:R"] },
 ];
 
 describe("the validation suite's cases, redrawn", () => {

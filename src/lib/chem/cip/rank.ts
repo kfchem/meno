@@ -1,6 +1,6 @@
 /**
- * The sequence rules 1a, 1b, 2, 3, 4a, 4b, 4c and 5, applied to a
- * hierarchical digraph as the texts give it (docs/CIP.md).
+ * The sequence rules 1a, 1b, 2, 3, 4a, 4b, 4c and 5, and the proposed 6,
+ * applied to a hierarchical digraph as the texts give it (docs/CIP.md).
  *
  * - Exhaustively, rule by rule (Prelog and Helmchen 1982 pp. 573-574; BB 2013
  *   P-92.1.3 as Hanson et al. 2018 quote it, p. 1757): two branches are
@@ -52,6 +52,9 @@
  * - Rule 4c: r precedes s (BB 2013 via Hanson p. 1761).
  * - Rule 5: R precedes S, seqCis seqTrans (BB 2013 via Hanson p. 1761; CIP
  *   1966 p. 391).
+ * - Rule 6, Hanson's proposal (pp. 1761-1762): a ranker given an atom to
+ *   promote (`withPromoted`) ranks it, and every duplicate of it, above a
+ *   node of another atom alike with it; index.ts tries each.
  *
  * What cannot be told gives `Unknown`, never a guess: a double bond the
  * drawing leaves open, an unsure atom (lib/chem/cip/prepare) that would have
@@ -61,13 +64,14 @@
 import { HYDROGEN, PHANTOM, rootwardOf, TooLarge, type Budget, type CipNode } from "./digraph";
 import type { Prepared } from "./prepare";
 
-/** The rules in their order: 1a, 1b, 2, 3, 4a, 4b, 4c, 5. */
-export const RULES = ["1a", "1b", "2", "3", "4a", "4b", "4c", "5"] as const;
+/** The rules in their order: 1a, 1b, 2, 3, 4a, 4b, 4c, 5, and the proposed 6. */
+export const RULES = ["1a", "1b", "2", "3", "4a", "4b", "4c", "5", "6"] as const;
 export const LAST_RULE = RULES.length - 1;
 export const RULE_4A = 4;
 export const RULE_4B = 5;
 export const RULE_4C = 6;
 export const RULE_5 = 7;
+export const RULE_6 = 8;
 
 /** Why a comparison cannot be made: a double bond left open in the drawing (`bond`), an unsure atom to be looked past, or a tie an axis could break. */
 export class Unknown {
@@ -129,26 +133,45 @@ export class Ranker {
   private twin: Ranker | null;
   /** Each node's ligands sorted, by the last rule read: those to rule 4c shared with the mirror image's ranker, which they read alike. */
   private readonly sortedOf: Map<CipNode, Sorted[]>;
-  private readonly sorted5Of = new Map<CipNode, Sorted>();
+  private readonly sorted5Of: Map<CipNode, Sorted>;
+  private readonly sorted6Of = new Map<CipNode, Sorted>();
+  /** Rule 6's reference node's atom, promoted above the nodes alike with it (`withPromoted`); none, where rule 6 is not asked. */
+  readonly promoted: number | null;
+  /** The ranker with nothing promoted that this one promotes on: its auxiliary descriptors are that one's, rule 6 left out of them (Hanson p. 1762). */
+  private readonly base: Ranker | null;
   private readonly letterOf = new Map<CipNode, Letter | Unknown>();
   private readonly auxOf = new Map<CipNode, Aux | Unknown>();
   private readonly placesOf = new Map<CipNode, { places: Place[] } | Unknown>();
   private readonly ringOf = new Map<string, number>();
 
-  constructor(p: Prepared, budget: Budget, mirrored = false, twin: Ranker | null = null) {
+  constructor(p: Prepared, budget: Budget, mirrored = false, twin: Ranker | null = null, promoted: number | null = null, base: Ranker | null = null) {
     this.p = p;
     this.budget = budget;
     this.mirrored = mirrored;
     this.twin = twin;
+    this.promoted = promoted;
+    this.base = base;
     // (rules 1a to 4c read a structure and its mirror image alike: 4a and 4c read only whether a descriptor is chiral, and r or s; 4b
-    //  like or unlike - so the twins share what they sort by them)
-    this.sortedOf = twin ? twin.sortedOf : new Map();
+    //  like or unlike - so the twins share what they sort by them; and a ranker promoting a node for rule 6 sorts by rules 1a to 5 as
+    //  the one it promotes on does)
+    this.sortedOf = twin ? twin.sortedOf : base ? base.sortedOf : new Map();
+    this.sorted5Of = base ? base.sorted5Of : new Map();
   }
 
   /** The same structure read in the mirror image, sharing this one's digraphs and budget. */
   get mirror(): Ranker {
-    if (!this.twin) this.twin = new Ranker(this.p, this.budget, !this.mirrored, this);
+    if (!this.twin) this.twin = new Ranker(this.p, this.budget, !this.mirrored, this, this.promoted, this.base ? this.base.mirror : null);
     return this.twin;
+  }
+
+  /**
+   * The same ranking with `atom` promoted for rule 6, the 2018 proposal: an
+   * undifferentiated reference node has priority over any other
+   * undifferentiated node (Hanson p. 1761) - the node, and every duplicate
+   * of its atom, ranking above a node of another atom alike with it.
+   */
+  withPromoted(atom: number): Ranker {
+    return new Ranker(this.p, this.budget, this.mirrored, null, atom, this);
   }
 
   /** A centre's configuration as this ranker reads it: its volume turned in the mirror image. */
@@ -170,6 +193,8 @@ export class Ranker {
         return this.rule3(n);
       case RULE_4B:
         return 0;
+      case RULE_6:
+        return this.promoted != null && n.atom === this.promoted ? 1 : 0;
       default: {
         const d = this.descriptorOf(n);
         if (d instanceof Unknown) return d;
@@ -209,7 +234,7 @@ export class Ranker {
    */
   decided(a: CipNode, b: CipNode, r: number = LAST_RULE, inSort = false): Decided {
     for (let i = 0; i <= r; i++) {
-      if (inSort && i === RULE_4B) continue;
+      if ((inSort && i === RULE_4B) || (i === RULE_6 && this.promoted == null)) continue;
       const c = i === RULE_4B ? this.rule4b(a, b) : this.byRule(a, b, i);
       if (c instanceof Unknown) return c;
       if (c !== 0) return { c, rule: i };
@@ -256,8 +281,9 @@ export class Ranker {
 
   /** A node's ligands but the root-ward one, highest first by rules 1a to `r` (but 4b: `decided`), the order a comparison goes through them in; those whose order among them could not be told, said. */
   sorted(n: CipNode, r: number): Sorted {
-    const memo = r === RULE_5 ? undefined : this.sortedOf.get(n);
-    if (r === RULE_5 ? this.sorted5Of.has(n) : memo?.[r]) return r === RULE_5 ? this.sorted5Of.get(n)! : memo![r];
+    const own = r === RULE_5 ? this.sorted5Of : r === RULE_6 ? this.sorted6Of : null;
+    const memo = own ? undefined : this.sortedOf.get(n);
+    if (own ? own.has(n) : memo?.[r]) return own ? own.get(n)! : memo![r];
     let out: Sorted;
     if (n.dup || n.atom < 0 || !n.parent) out = { kids: [], ambiguous: new Map() };
     else if (this.p.unsure[n.atom]) out = new Unknown("unsure", undefined, n.atom);
@@ -278,7 +304,7 @@ export class Ranker {
       }
       out = { kids, ambiguous };
     }
-    if (r === RULE_5) this.sorted5Of.set(n, out);
+    if (own) own.set(n, out);
     else {
       const m = memo ?? [];
       m[r] = out;
@@ -415,8 +441,9 @@ export class Ranker {
     if (c === n.parent.atom) return n.parent.sphere === 0 ? null : { near: n.parent, far: n };
     const kid = n.graph.children(n).find((k) => !k.dup && k.atom === c);
     if (kid) return { near: n, far: kid };
-    // (its double bond closes a ring back to the path: none to tell in a small ring, else not worked out here)
-    return this.ringThrough(n.atom, c) < OPEN_RING ? null : new Unknown("unsure");
+    // (its double bond closes a ring back to the path, its far end a duplicate here, with phantoms for its groups: none to tell on this
+    //  branch - its descriptor is the one its end nearer the root carries)
+    return null;
   }
 
   /**
@@ -445,6 +472,7 @@ export class Ranker {
 
   /** A node's auxiliary descriptor: its sense (`letter`), told chiral where it turns in the mirror image. */
   aux(n: CipNode): Aux | Unknown {
+    if (this.base) return this.base.aux(n);
     const memo = this.auxOf.get(n);
     if (memo !== undefined) return memo;
     const l = this.letter(n);
@@ -482,17 +510,55 @@ export class Ranker {
   private centreLetter(n: CipNode): Letter | Unknown {
     const p = this.p;
     const a = n.atom;
-    const t = p.input.atoms[a].tetra!;
     if (p.unsure[a] || p.dups[a].length) return new Unknown("unsure", undefined, a);
-    // (its ligands in the digraph ranked by every rule, 4b with them)
+    const here = this.centreSense(n, this);
+    if (here instanceof Unknown) return here;
+    if (here !== "tie") return { kind: "centre", up: here.up, rule: here.rule };
+    // two ligands alike by every rule: an axis might tell them apart (not worked out yet); else rule 6, where three paths or more lead
+    // back to it (Hanson p. 1762: "Rule 6 must be applied in the determination of all auxiliary descriptors", VS300); else no unit
+    const kids = n.graph.children(n);
+    const alike = new Set<number>();
+    for (let i = 0; i < kids.length; i++)
+      for (let j = i + 1; j < kids.length; j++) {
+        const c = this.ranked(kids[i], kids[j]);
+        if (c instanceof Unknown) return c;
+        if (c === 0) alike.add(i).add(j);
+      }
+    const tied = [...alike].map((i) => kids[i].atom).filter((x) => x >= 0);
+    if (this.configured(this.region(tied, new Set([a])))) return new Unknown("later");
+    const ends = [...kids.map((k) => k.atom).filter((x) => x >= 0), n.parent!.atom];
+    const back = ends.filter((x) => ends.some((y) => y !== x && this.region([x], new Set([a])).has(y)));
+    if (back.length < 3) return null;
+    let votes = 0;
+    for (const x of tied) {
+      const promoted = this.withPromoted(x);
+      for (const [read, turned] of [
+        [promoted, false],
+        [promoted.mirror, true],
+      ] as const) {
+        const s = this.centreSense(n, read);
+        if (s instanceof Unknown) return s;
+        if (s !== "tie") votes += s.up !== turned ? 1 : -1;
+      }
+    }
+    return votes === 0 ? null : { kind: "centre", up: votes > 0, rule: RULE_6 };
+  }
+
+  /**
+   * An auxiliary centre's sense as `r` ranks it - its ligands in the digraph
+   * by every rule, 4b with them, the one toward the root among them by rule
+   * 1a - and the last rule its ligands needed; `tie` where two are alike.
+   */
+  private centreSense(n: CipNode, r: Ranker): { up: boolean; rule: number } | "tie" | Unknown {
+    const a = n.atom;
+    const t = this.p.input.atoms[a].tetra!;
     const kids = [...n.graph.children(n)];
     let rule = -1;
     for (let i = 1; i < kids.length; i++) {
       for (let j = i; j > 0; j--) {
-        const d = this.decided(kids[j - 1], kids[j]);
+        const d = r.decided(kids[j - 1], kids[j]);
         if (d instanceof Unknown) return d;
-        // (two ligands alike by every rule: no stereogenic unit)
-        if (d.c === 0) return this.configured(this.region([kids[j - 1].atom, kids[j].atom], new Set([a]))) ? new Unknown("later") : null;
+        if (d.c === 0) return "tie";
         rule = Math.max(rule, d.rule);
         if (d.c > 0) break;
         [kids[j - 1], kids[j]] = [kids[j], kids[j - 1]];
@@ -501,7 +567,7 @@ export class Ranker {
     const back = rootwardOf(n, this.budget);
     let at = 0;
     for (const k of kids) {
-      const c = this.ranked(back, k, 0);
+      const c = r.ranked(back, k, 0);
       if (c instanceof Unknown) return c;
       if (c === 0) return new Unknown("unsure");
       if (c < 0) at++;
@@ -517,7 +583,7 @@ export class Ranker {
     const order = ligands.map((l) => nodes.indexOf(l));
     if (order.some((i) => i < 0)) return new Unknown("unsure");
     // (as at the root: R where the volume turned to the order of rank is negative)
-    return { kind: "centre", up: this.volumeOf(a) * parity(order) < 0, rule };
+    return { up: r.volumeOf(a) * parity(order) < 0, rule };
   }
 
   /** The sense of the double bond from `near` out to `far`, on their digraph: seqcis or seqtrans, or none. */

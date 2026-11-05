@@ -83,7 +83,7 @@ labelled case needs some 600,000 comparisons for each of its two units.
 ### The rules, in order (`rank.ts`)
 
 The rules are applied exhaustively and in turn, 1a, 1b, 2, 3, 4a, 4b, 4c,
-then 5: two branches are compared by one rule through their whole depth
+5, then 6: two branches are compared by one rule through their whole depth
 before the next rule is asked (PH 1982 pp. 573-574; Hanson 2018 p. 1757). Within a
 rule, sphere by sphere, the ligands of the higher-ranked atom are compared
 first (PH 1982 p. 574, Fig. 14).
@@ -120,6 +120,18 @@ first (PH 1982 p. 574, Fig. 14).
 - **4c: r precedes s** (the Blue Book via Hanson 2018 p. 1761).
 - **5: R precedes S, and seqCis seqTrans** (the Blue Book via Hanson 2018
   p. 1761; CIP 1966 p. 391).
+- **6, Hanson 2018's proposal: an undifferentiated reference node has
+  priority over any other undifferentiated node** (pp. 1761-1762, Figs.
+  12 and 13). Where rules 1a to 5 leave ligands alike and three paths or
+  more lead back to the unit, each ligand alike with another is promoted in
+  turn - it and every duplicate of its atom above a node of another atom -
+  and the unit worked out again, as drawn and in its mirror image read
+  back. R and S that come in pairs are set aside ("Any matching R and S
+  pairs are ignored; if a descriptor remains, it is valid", p. 1762), so a
+  spiro atom between two rings each with an N and a C=O (VS285) is R or S,
+  and cubane's atoms have none. It decides auxiliary descriptors too
+  (VS300); a promotion leaves the auxiliary descriptors as they were, which
+  Hanson stops short of recommending otherwise (p. 1762, Fig. 14).
 
 **Auxiliary descriptors** (Hanson 2018 p. 1757; PH 1982 p. 575). Rules 3 to
 5 read the configured units within a ligand: each centre and double bond
@@ -218,10 +230,9 @@ A unit with no label always says why; none is ever guessed.
 
 | Why | What it means |
 |---|---|
-| alike | Two of its ligands are alike by every rule: no centre, or no E/Z. |
+| alike | Two of its ligands are alike by every rule, rule 6 with them: no centre, or no E/Z. |
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
 | later | Only an axis's M or P could tell two ligands apart. Not worked out yet. |
-| symmetric | Only the proposed rule 6 could: a spiro atom, or a centre on an axis of symmetry. Not worked out yet. |
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement (three bonds and no lone pair). |
 | large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |
 
@@ -230,7 +241,6 @@ a protonated amine's N (*Where it is used*).
 
 ## What it does not do yet
 
-- **Rule 6**, the 2018 proposal: those units say `symmetric`.
 - **Axes and odd cumulenes** (Ra and Sa, M and P); a tie only one could
   break says `later`.
 
