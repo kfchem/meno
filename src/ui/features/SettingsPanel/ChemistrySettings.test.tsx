@@ -33,7 +33,7 @@ describe("conformers sought on the page, in Settings", () => {
     const options = soughtOptions("needed", RING_CONFORMERS, {});
     const given = renderToString(OwnValues({ options, own: { within: 2.5 }, keep: () => {}, indent: false }));
     // (as written into the page: its apostrophes as entities)
-    expect(given).toContain(WITHIN_GUIDE.replaceAll("'", "&#x27;"));
+    expect(given).toContain(WITHIN_GUIDE.replace(/'/g, "&#x27;"));
     expect(given).toMatch(/>Clear<\/button>/);
     expect(given).toContain("pl-3");
     expect(renderToString(OwnValues({ options, own: { within: Number.NaN }, keep: () => {}, indent: false }))).not.toMatch(/>Clear<\/button>/);
