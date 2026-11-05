@@ -1101,7 +1101,8 @@ export default function Workflow2D() {
       key: `set:${b.id}`,
       box: shownOf(b),
       tone: chosenSet === b.id || selFlow.sets.has(b.id) ? "chosen" : hoveredSet === b.id ? "hover" : "rest",
-      tab: { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
+      // (its words left to the field over its tab while it is named anew)
+      tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
       iconWhenSmall: true,
       edges: true,
     };
