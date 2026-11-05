@@ -398,7 +398,7 @@ export class Ranker {
    */
   configured(atoms: ReadonlySet<number>, but: { bond?: number } = {}): boolean {
     const input = this.p.input;
-    if ((input.axes ?? []).some((x) => x.atoms.some((a) => atoms.has(a)))) return true;
+    if ([...(input.axes ?? []), ...(input.cumulated ?? [])].some((x) => x.atoms.some((a) => atoms.has(a)))) return true;
     return input.bonds.some((b, i) => !!b.stereo && i !== but.bond && (atoms.has(b.a) || atoms.has(b.b)) && (this.cumulated(b.a) || this.cumulated(b.b)));
   }
 

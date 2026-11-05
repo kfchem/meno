@@ -117,6 +117,28 @@ describe("rules 4a, 4b, 4c and 5: configurations in the ligands", () => {
   });
 });
 
+describe("an allene's axis and an odd cumulene's cis or trans", () => {
+  it("names an allene's axis by its ends' groups, the near end's first: M or P, the same from either end", () => {
+    expect(cipOf("CC=[C@]=CC")).toEqual(["C1~C3:M"]);
+    expect(cipOf("CC=[C@@]=CC")).toEqual(["C1~C3:P"]);
+    expect(cipOf("NC(Br)=[C@]=C(O)C")).toEqual(["C1~C4:M"]);
+    expect(cipOf("CC(O)=[C@]=C(Br)N")).toEqual(["C1~C4:M"]);
+    expect(cipOf("CC(O)=[C@@]=C(Br)N")).toEqual(["C1~C4:P"]);
+    // (an even run of four double bonds, likewise)
+    expect(cipOf("CC=C=[C@]=C=CC")).toEqual(["C1~C5:M"]);
+    // (an end with two alike groups: no axis)
+    expect(cipOf("CC(C)=[C@]=CC")).toEqual(["C1~C4:alike"]);
+  });
+
+  it("names an odd cumulene's cis or trans E or Z by its ends' groups ranked, as a double bond's", () => {
+    expect(cipOf("C/C=C=C=C/C")).toEqual(["C1=..=C4:E"]);
+    expect(cipOf("C/C=C=C=C\\C")).toEqual(["C1=..=C4:Z"]);
+    // (Cl over F at the first end: Cl trans to the far F, so E)
+    expect(cipOf("Cl/C(F)=C=C=C/F")).toEqual(["C1=..=C5:E"]);
+    expect(cipOf("F/C(Cl)=C=C=C/F")).toEqual(["C1=..=C5:Z"]);
+  });
+});
+
 describe("what gives no label, and why", () => {
   it("says a ligand's double bond left open in the drawing, by its bond", () => {
     const input = cipInput("CC=C[C@H](O)/C=C/C");
@@ -135,7 +157,7 @@ describe("what gives no label, and why", () => {
       { atoms: [7, 8] as const, refs: [6, 13] as const, sense: 1 as const },
       { atoms: [20, 21] as const, refs: [19, 26] as const, sense: -1 as const },
     ];
-    expect(cipSaid({ ...input, axes })).toEqual(["C1:later"]);
+    expect(cipSaid({ ...input, axes })).toEqual(["C1:later", "C7~C8:M", "C20~C21:P"]);
   });
 
   it("says a ligand it would have to look past cannot be told from the drawing: a metal's, a star's", () => {

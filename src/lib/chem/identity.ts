@@ -19,7 +19,7 @@
  */
 import { canonicalWritten, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
 import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
-import type { Axial, Tetrahedral } from "../layout/stereo";
+import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
 
 /**
@@ -30,7 +30,7 @@ import type { Radical } from "./molecule";
  * hydrogens not drawn as atoms.
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
-export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[] };
+export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[] };
 
 /** The bond order a bond its Kekulé structures disagree on is given for identity and symmetry, beside 1, 2 and 3. */
 const AROMATIC = 4;

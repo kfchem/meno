@@ -176,17 +176,41 @@ function byRule6(rank: Ranker, ligands: readonly CipNode[], senseBy: (r: Ranker)
 
 function doubleBond(p: Prepared, i: number): Said {
   const b = p.input.bonds[i];
-  const stereo = b.stereo!;
   // (a double bond on a blended cycle is still the unit drawn: a cyclophane's bridge, its alternating cycle through both rings - Hanson et al. 2018 validation suite VS155)
   const k = b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`;
   if (p.order.get(k) !== 2 && !p.blended.has(k)) return no("unsure");
-  if (p.unsure[b.a] || p.unsure[b.b]) return no("unsure");
+  return cisOrTrans(p, [b.a, b.b], [b.b, b.a], b.stereo!);
+}
+
+/**
+ * An odd cumulene's E or Z (a butatriene's: CIP 1966 p. 396, its ends'
+ * groups in one plane as a double bond's are; the Blue Book via Hanson et
+ * al. 2018 p. 1760): its two ends' groups ranked on a digraph rooted at
+ * the ends, each end's but the cumulated double bond it runs on through,
+ * as a double bond's are.
+ */
+function cumulene(p: Prepared, k: number): Said {
+  const c = p.input.cumulated![k];
+  const [i, j] = c.atoms;
+  const through = (end: number) => p.around[end].find((n) => (p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1) >= 2);
+  const [ti, tj] = [through(i), through(j)];
+  if (ti == null || tj == null) return no("unsure");
+  return cisOrTrans(p, [i, j], [ti, tj], c);
+}
+
+/**
+ * Z or E of the unit whose two ends are `ends`, each end's groups those but
+ * `others` (the double bond's other end; a cumulene's next atom along it),
+ * `stereo` its sides as drawn.
+ */
+function cisOrTrans(p: Prepared, [ea, eb]: readonly [number, number], [oa, ob]: readonly [number, number], stereo: { refs: readonly [number, number]; cis: boolean }): Said {
+  if (p.unsure[ea] || p.unsure[eb]) return no("unsure");
   const budget: Budget = { left: NODE_BUDGET, steps: STEP_BUDGET };
   try {
-    const g = new Digraph(p, [b.a, b.b], budget);
+    const g = new Digraph(p, [ea, eb], budget);
     const ends = [
-      [0, b.a, b.b],
-      [1, b.b, b.a],
+      [0, ea, oa],
+      [1, eb, ob],
     ] as const;
     // (each end's two groups, kept on it for an auxiliary unit's way back through it - digraph `rootwardOf`)
     for (const [k, , other] of ends) g.roots[k].kids = g.substituentsOf(g.roots[k], other);
@@ -311,13 +335,13 @@ function agreed(p: Prepared, unit: (q: Prepared) => Said, variants: (systems: nu
 
 /**
  * The descriptors of a structure's configured centres (by atom index),
- * double bonds (by bond index) and axes (by their index in `axes`) - all
- * of them, or those asked for.
+ * double bonds (by bond index), axes (by their index in `axes`) and odd
+ * cumulenes (by theirs in `cumulated`) - all of them, or those asked for.
  */
 export function cipLabels(
   input: IdentityInput,
-  ask?: { centres?: Iterable<number>; bonds?: Iterable<number>; axes?: Iterable<number> },
-): { centres: Map<number, CipResult>; bonds: Map<number, CipResult>; axes: Map<number, CipResult> } {
+  ask?: { centres?: Iterable<number>; bonds?: Iterable<number>; axes?: Iterable<number>; cumulated?: Iterable<number> },
+): { centres: Map<number, CipResult>; bonds: Map<number, CipResult>; axes: Map<number, CipResult>; cumulated: Map<number, CipResult> } {
   const p = prepared(input);
   const made = new Map<string, Prepared>();
   // (the structure with each combination of usual structures of `systems` drawn, each made once)
@@ -357,5 +381,9 @@ export function cipLabels(
   for (const k of ask?.axes ? [...ask.axes] : (input.axes ?? []).map((_, k) => k)) {
     if (input.axes?.[k]) axes.set(k, agreed(p, (q) => axis(q, k), variants));
   }
-  return { centres, bonds, axes };
+  const cumulated = new Map<number, CipResult>();
+  for (const k of ask?.cumulated ? [...ask.cumulated] : (input.cumulated ?? []).map((_, k) => k)) {
+    if (input.cumulated?.[k]) cumulated.set(k, agreed(p, (q) => cumulene(q, k), variants));
+  }
+  return { centres, bonds, axes, cumulated };
 }
