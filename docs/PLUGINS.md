@@ -1655,7 +1655,8 @@ comes in its own pull request.
   the list needs the network. The list is fetched only with the
   chemist's consent - asked first, or already given for the list, when it
   is fetched once a launch as Settings does - and no plugin is added of
-  itself. Each entry says the roles it fills
+  itself. Added from Quick Add's SMILES field, what was typed there is
+  read again and drawn, not typed again. Each entry says the roles it fills
   (`roles`), which is what it is offered for (`offeredFor`).
 
 ### Plugins used before
