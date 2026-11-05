@@ -195,6 +195,7 @@ import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/c
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
 import StructureFlight from "./components/StructureFlight";
+import CompoundCard from "./components/CompoundCard";
 import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
@@ -1737,6 +1738,8 @@ function WorkspaceContent({
       </AnimatePresence>
       {/* (a structure carried out of a PDF, over everything: components/StructureFlight) */}
       <StructureFlight />
+      {/* (a compound's structure by its number in a PDF's text: components/CompoundCard) */}
+      <CompoundCard />
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
