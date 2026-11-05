@@ -7,7 +7,7 @@ import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument
 import type { Atom, Bond, Model, Molecule3D } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { keptMap, mapMarks, mapShows, mapStanding, unpairedSaid } from "./atomMap";
+import { exportRefusal, keptMap, mapMarks, mapShows, mapStanding, unpairedSaid } from "./atomMap";
 import { numbers3d, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -192,15 +192,16 @@ describe("an atom map between structures on the page", () => {
 
 describe("the guards of an atom map between structures", () => {
   /** A map as a workspace's file holds it, made plain - JSON - and changed by `change`. */
+  // (the map worked out once - mapping it takes a while - each bad copy made from its JSON)
+  const once = JSON.stringify(page().kept);
   const saved = (change: (m: Record<string, unknown> & { reactant: { atoms: Record<string, unknown>[]; bonds: Record<string, unknown>[]; drawnFrom: unknown[] }; product: { atoms: unknown[] }; maps: number[][] }) => void) => {
-    const m = JSON.parse(JSON.stringify(page().kept));
+    const m = JSON.parse(once);
     change(m);
     return { map: m };
   };
 
   it("reads a saved map only within its bounds: each one broken leaves that map out, and a good one reads", () => {
-    const { kept } = page();
-    const nR = kept.reactant.atoms.length;
+    const nR = (JSON.parse(once) as { reactant: { atoms: unknown[] } }).reactant.atoms.length;
     const bad = [
       saved((m) => (m.chosen = m.maps.length)),
       saved((m) => (m.chosen = -1)),
@@ -267,5 +268,49 @@ describe("the guards of an atom map between structures", () => {
     expect(m2.atoms.every((a) => a.map == null)).toBe(true);
     expect(m2.atomNumbers).toBeUndefined();
     expect(again.molecules3d!.find((m) => m.id === 1)!.atoms.every((a) => (a.map ?? 0) > 0)).toBe(true);
+  });
+});
+
+describe("a partial atom map", () => {
+  it("is put on the drawing, a page's and an arrow's alike: its paired heavy atoms numbered, the others bare, no reacting centres", () => {
+    const { doc } = page();
+    const shown = ops.addStructureMaps(doc, [partial]).doc;
+    const numbered = shown.model.atoms.filter((a) => a.map).map((a) => a.id);
+    expect(numbered.length).toBe(10);
+    // (the product's C1, paired with nothing, bare - and the one Before atom it was paired with in the whole map)
+    expect(numbered).not.toContain(11);
+    expect(shown.model.bonds.every((b) => b.reactingCentre == null)).toBe(true);
+    const arrowed = ops.setAtomMap({ ...doc, arrows: [{ id: 1, x: 0, y: 0, angle: 0, length: 3 * L }] }, 1, partial);
+    expect(arrowed.model.atoms.filter((a) => a.map).map((a) => a.id).sort()).toEqual([...numbered].sort());
+    expect(arrowed.model.bonds.every((b) => b.reactingCentre == null)).toBe(true);
+  });
+
+  it("is not written in 3D, said why; a complete one is", () => {
+    const { doc, kept } = page();
+    expect(exportRefusal(partial, doc.model)).toMatch(/Every atom must be mapped.*partial/);
+    expect(exportRefusal(kept, doc.model)).toBeNull();
+    expect(exportRefusal(undefined, doc.model)).toMatch(/no atom map/);
+  });
+
+  it("is not kept beside a complete one: where any map is complete, only the complete ones are", () => {
+    const { doc } = page();
+    const da = dielsAlder();
+    const result = mapReaction({ reactants: [da.reactants[0]], products: [da.product] });
+    if ("error" in result) throw new Error(result.message);
+    const c1 = da.productOrder.indexOf("C1");
+    // (a second map, the first's with C1 paired with none, put first: partial, beside the complete one)
+    const mixed = { ...result, maps: [result.maps[0].map((r, j) => (j === c1 ? -1 : r)), result.maps[0]], complete: [false, true] };
+    const rFrom = R_NAMES.map((k) => R_ID[k] ?? null);
+    const pFrom = da.productOrder.map((k) => P_ID[k] ?? null);
+    const k = keptMap(doc.model, mixed, [{ molecule: da.reactants[0], drawnFrom: rFrom }], [{ molecule: da.product, drawnFrom: pFrom }]);
+    expect(k.complete).toBe(true);
+    expect(k.maps).toEqual([result.maps[0]]);
+  });
+
+  it("counts the atoms it does not pair, by element", () => {
+    const da = dielsAlder();
+    const hs = da.productOrder.flatMap((n, j) => (n.startsWith("H") ? [j] : [])).slice(0, 2);
+    const two = { ...partial, maps: [partial.maps[0].map((r, j) => (hs.includes(j) ? -1 : r))], chosen: 0 };
+    expect(unpairedSaid(two, ["Before", "After"])).toBe("Not mapped: C, 2 H of Before; C, 2 H of After");
   });
 });

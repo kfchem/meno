@@ -74,8 +74,8 @@ export type Side3D = { molecule: Molecule; drawnFrom: (number | null)[] };
  * What an arrow keeps of a mapped reaction: each side in 3D as one
  * structure, its atoms' drawn atoms, and the complete maps, best first - or,
  * where none is complete, the partial ones (`complete` false: each product
- * atom with none -1), which show the atoms that pair and name the rest (the
- * maintainer, 2026-10-30). Of maps that pair the heavy atoms alike, only the
+ * atom with none -1), which show the atoms that pair and name the rest. Of
+ * maps that pair the heavy atoms alike, only the
  * first is kept: they show the same numbers, and its hydrogens are those
  * ACCeL ranked first.
  */
@@ -126,6 +126,13 @@ export function mapStanding(arrow: Pick<Arrow, "atomMap">, model: Model): "none"
   return m.complete ? "ready" : "incomplete";
 }
 
+/** Why a map cannot be written in 3D as a reaction - partial, or of the drawing before an edit, or none - or null where it can. */
+export function exportRefusal(map: ArrowAtomMap | undefined, model: Model): string | null {
+  const standing = map ? mapStanding({ atomMap: map }, model) : "none";
+  if (standing === "incomplete") return "Every atom must be mapped to write the reaction in 3D, and this map is partial.";
+  return standing === "ready" ? null : "The reaction has no atom map of it as it is drawn.";
+}
+
 /** Whether a map's standing has it show on the drawing: ready, or partial. */
 export const mapShows = (standing: ReturnType<typeof mapStanding>) => standing === "ready" || standing === "incomplete";
 
@@ -136,7 +143,7 @@ function pairedOf(map: ArrowAtomMap, mapping: readonly number[]): Set<number> {
 
 /**
  * The atoms a partial map does not pair, by element and side - each heavy
- * atom by its element, the hydrogens counted ("O, 2 H") - in words, of
+ * atom by its element, each counted, in Hill's order ("C, 2 H, O") - in words, of
  * `sides` ("the reactants" and "the products"; "Before" and "After"): none,
  * for a complete map.
  */
@@ -147,7 +154,9 @@ export function unpairedSaid(map: ArrowAtomMap, sides: readonly [string, string]
   const words = (els: string[]) => {
     const n = new Map<string, number>();
     for (const el of els) n.set(el, (n.get(el) ?? 0) + 1);
-    return [...n].map(([el, k]) => (k > 1 ? `${k} ${el}` : el)).join(", ");
+    // (in Hill's order: C, H, then the rest alphabetically)
+    const rank = (el: string) => (el === "C" ? "0" : el === "H" ? "1" : `2${el}`);
+    return [...n].sort(([p], [q]) => (rank(p) < rank(q) ? -1 : 1)).map(([el, k]) => (k > 1 ? `${k} ${el}` : el)).join(", ");
   };
   const before = map.reactant.atoms.flatMap((a, i) => (paired.has(i) ? [] : [a.el]));
   const after = map.product.atoms.flatMap((a, j) => (mapping[j] >= 0 ? [] : [a.el]));

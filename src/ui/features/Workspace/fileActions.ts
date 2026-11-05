@@ -10,7 +10,7 @@ import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
-import { mapStanding, mappedPairSdf } from "./chem/atomMap";
+import { exportRefusal, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
@@ -972,9 +972,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       attempt("Export", async () => {
         const state = store.getState();
         const map = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow)?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
-        const standing = map ? mapStanding({ atomMap: map }, state.model) : "none";
-        if (standing === "incomplete") throw new Error("Every atom must be mapped to write the reaction in 3D, and this map is partial.");
-        if (!map || standing !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
+        const refused = exportRefusal(map, state.model);
+        if (refused || !map) throw new Error(refused ?? "The reaction has no atom map of it as it is drawn.");
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);
