@@ -51,7 +51,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -818,7 +818,7 @@ export const KINDS: readonly KindInfo[] = [
     //  E and G, its share among the structures of its formula; none set aside - workflow/ontoStructures)
     kind: "onto-structures",
     name: "3D results onto structures",
-    icon: "join",
+    icon: "onto",
     takes: ["structures", "conformers", "molecules"],
     gives: "same",
     runs: "entries",
