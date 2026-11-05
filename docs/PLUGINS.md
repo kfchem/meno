@@ -613,6 +613,19 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   so is refused in words, naming the reason: an acceptor not of group 13,
   a charged acceptor or donor, a donor that cannot carry the charge, or
   two such bonds onto one acceptor. From RDKit plugin 0.1.15.
+- **What a metal complex is held to is Meno's** (lib/chem/metalHolds; the
+  plugin boundary, 2026-10-31): its metals' bonds at their covalent
+  lengths, an η ring's atoms 0.15 Å beyond theirs, its ligands kept apart,
+  which four-coordinate metals are square planar, its bridging halides'
+  angles and a square-planar metal's trans pairs held as embedded, a
+  metal's hydrides, and which lighter metal stands in where the force
+  field has no type for one - all worked out by Meno and sent with
+  `conformers` as `holds`, for a plugin that fills the role to hold as
+  given. Which of what was made are kept is Meno's too (`keptMade`,
+  below). The RDKit plugin does not take `holds` yet: it holds a complex
+  by its own copy of these rules, which gives the same holds but at a d10
+  metal and a metal's hydrides (below), and drops those under a floor
+  itself. Its copy goes when it takes Meno's.
 - **A metal's ligands are kept apart, where that is sound.** While a
   metal complex is embedded and optimised, two atoms bonded to its metal,
   of different ligands, are held at least a floor's angle apart, so that
@@ -624,8 +637,8 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
 
   | Atoms bonded | Floor | Narrowest ideal polyhedra |
   |---|---|---|
-  | 2 to 6 | 75° (`NARROWEST_AT_METAL`) | trigonal prism with equal edges, 2 asin(√(3/7)) = 81.8°; octahedron, square plane, trigonal bipyramid, square pyramid, 90° |
-  | 7 to 12 | 60° (`NARROWEST_CROWDED`) | pentagonal bipyramid, 72° (360°/5); icosahedron, 63.4° (arctan 2). No common polyhedron of 10 or 11 points was worked out: there the margin rests on the icosahedron alone, 3.4° |
+  | 2 to 6 | 75° (`FLOORS`) | trigonal prism with equal edges, 2 asin(√(3/7)) = 81.8°; octahedron, square plane, trigonal bipyramid, square pyramid, 90° |
+  | 7 to 12 | 60° (`FLOORS`) | pentagonal bipyramid, 72° (360°/5); icosahedron, 63.4° (arctan 2). No common polyhedron of 10 or 11 points was worked out: there the margin rests on the icosahedron alone, 3.4° |
   | more | none | |
 
   Only between point donors:
@@ -638,13 +651,59 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   - nor for a hydride, which may sit closer to another (cis H-M-H).
 
   The metal's row on the chip says which floor held, or that none did and
-  why. A conformer that comes out with two ligands closer than its floor
-  by more than five degrees is dropped - the holds give up to two, measured
-  on complexes pressed against the 60° floor - and
-  the chip counts it, naming the metal and the floor: it sat in a well of
-  the force field the hold could not pull it out of. [OsCl6]2-, with Fe
-  standing in, gave one 87.7 kcal/mol above the octahedron with two Cl 62
-  degrees apart.
+  why. In Meno's holds, a metal's hydrogens its file gives it past its
+  bonds (a hydride written as a valence) count among its atoms bonded,
+  and are held at their covalent length from it; the RDKit plugin's own
+  copy does not hold them yet.
+- **Which of what was made are kept is Meno's** (`keptMade`, lib/chem/
+  metalHolds), on the page, in a *Conformers* step on structures drawn,
+  and in a search Meno tells how many to try: a conformer is set aside,
+  and counted on a row of Meno's own, *Set aside*, after the search's
+  rows, with the worst of each reason, where
+  - two ligands came out closer than its floor by more than five degrees
+    (`FLOOR_SLACK`) - the holds give up to two, measured on complexes
+    pressed against the 60° floor: it sat in a well of the force field the
+    hold could not pull it out of. [OsCl6]2-, with Fe standing in, gave
+    one 87.7 kcal/mol above the octahedron with two Cl 62 degrees apart;
+  - two heavy atoms of one part, neither bonded to the other nor both to
+    one atom, came nearer than 0.65 of their van der Waals contact
+    (`CONTACT_FLOOR`) - two parts of it run into one another: of normal
+    molecules none was seen under 0.69, of Cp2ZrCl2 one Cl 1.16 Å from a
+    ring carbon;
+  - a metal's bond to a point donor came out more than 0.15 of its length
+    from it (`METAL_BOND_OFF`) - a bond the hold lost: of Pd(PPh3)4 made
+    300 times, 47 had a phosphine pulled off or into the metal.
+
+  Where none is left, it is refused, saying which. The search's own rows
+  are left as it wrote them - the RDKit plugin's *Dropped* row for those
+  it drops under a floor itself, until it takes Meno's holds - and none of
+  their words are read. In a workflow's step, Meno's row goes with each
+  conformer kept, in how it was made; a program's populations are of all
+  it made, so where Meno set any aside they are not carried, and each
+  kept conformer's degeneracy is.
+- **Four-coordinate metals are square planar, or not, by their d
+  electrons** (`metalGeometries`): the d count is the metal's group less
+  its oxidation state - its charge and one for each anionic donor (a
+  halide, an aryl, an amide's N), a dative bond's donor neutral whatever
+  its charge says, a phosphine, an amine or a carbonyl's C drawn [C-]#[O+]
+  neutral. d8 (Pd(II), Pt(II), Ni(II), Au(III)) is held square planar, as
+  UFF types it; d10 (Pd(0), Pt(0), Ni(0), Zn(II)) is not: Pd(PPh3)4 and
+  Ni(CO)4, which UFF types square planar for want of a tetrahedral type,
+  are not held so in Meno's holds (2026-11-04). The RDKit plugin's own
+  copy of the rules still holds them square planar, until it takes
+  Meno's. An ammine drawn as N alone reads as
+  an amide, as its valence gives it hydrogens, so cisplatin drawn so has
+  no count to be sure of, and is left as UFF types it. Embedding a d8
+  metal square planar from the first, and keeping a chelate's two ends
+  cis, are not done yet.
+- **A structure of more than one part - a salt, a mixture - has its parts
+  set side by side** (Workspace/chem/partsApart): each part turned as in
+  the first conformer, and set along x, largest first, the gap between the
+  two atoms that face each other the sum of their van der Waals radii.
+  Each part is embedded where the others are and optimised with nothing
+  between parts counted, so that they lay on one another - a salt's two
+  ions at 0.00 Å; where they lie against each other is no result of the
+  method, and the *Parts* row says so (2026-11-04).
 
   Before (RDKit plugin 0.1.4 to 0.1.7, from 2026-10-17), one floor of 75°
   held at every metal, between every two of its atoms not joined within
@@ -938,9 +997,10 @@ The same for every plugin and for Meno's own parts:
     configuration of the `open` elements, its SMILES and, with `drawings`,
     a drawing of it - or why it cannot be one - and `free` where none
     holds in 3D); `conformers {molblock, isomers?, count,
-    options, onPage?}` (structures in 3D and their conformers - of each
-    configuration `isomers` gives, which Meno chose, or of the structure
-    as drawn - `count`
+    holds?, options, onPage?}` (structures in 3D and their conformers - of
+    each configuration `isomers` gives, which Meno chose, or of the
+    structure as drawn; a metal complex held as `holds` says, lib/chem/
+    metalHolds - `count`
     tried - Meno's number, where the role says `tries` - with the role's
     options: every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,

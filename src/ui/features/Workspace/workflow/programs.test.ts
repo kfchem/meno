@@ -7,6 +7,8 @@ import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, job
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
+import { covalentLength, holdsGraphOf3d, madeChecks, metalHolds } from "../../../../lib/chem/metalHolds";
+import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 
 const WATER: SetEntry = {
   compound: 0,
@@ -354,6 +356,41 @@ describe("a conformer search", () => {
     expect(m.calc?.results?.map((r) => [r.id, r.on === "molecule" ? r.value : null])).toEqual([["search.rmsd", 0.125]]);
     // (the same conformers, each a job of its own: what the first's found is of it alone, not the compound's)
     expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "frequencies").molecules[0].calc?.results).toBeUndefined();
+  });
+
+  it("sets aside what Meno's checks find, saying so in how each one kept was made - its degeneracy kept, no populations of fewer", () => {
+    // (Pd at the origin, its Cl and P each at its covalent length; the second conformer with its P at 1.3 of its own: a bond lost)
+    const [pdCl, pdP] = [covalentLength("Pd", "Cl", 1)!, covalentLength("Pd", "P", 1)!];
+    const at = (p: number, z = 0) => [pdCl, 0, z, 0, 0, 0, 0, p * pdP, 0];
+    const pd: SetEntry = {
+      compound: 0,
+      number: 1,
+      atoms: [
+        { el: "Cl", x: pdCl, y: 0, z: 0 },
+        { el: "Pd", x: 0, y: 0, z: 0 },
+        { el: "P", x: 0, y: pdP, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+      ],
+      xyz: at(1),
+    };
+    const g = holdsGraphOf3d(pd.atoms, pd.bonds, COORDINATION_BOND);
+    const checks = madeChecks(g.atoms, g.bonds, metalHolds(g.atoms, g.bonds));
+    const out = { schema: 1, program: "RDKit", atoms: ["Cl", "Pd", "P"], frames: [at(1), at(1.3), at(1, 0.1)], energies: [-1, -0.9, -0.95], populations: [0.5, 0.2, 0.3], degeneracies: [1, 2, 3] };
+    const made = conformersWorked(pd, out, ["rdkit 2026.03.6"], undefined, checks);
+    if (isFailure(made)) throw new Error(made.why);
+    expect(made.map((w) => [w.number, w.energy, w.degeneracy, w.share])).toEqual([
+      [1, -1, 1, undefined],
+      [2, -0.95, 3, undefined],
+    ]);
+    for (const w of made) expect(w.keep?.made?.how).toEqual([{ label: "Set aside", text: expect.stringMatching(/^1 of 3: a bond to a metal far from its length \(the worst: Pd-P at /) }]);
+    // (none set aside: as it came, its populations with it)
+    const whole = conformersWorked(pd, { ...out, frames: [at(1), at(1, 0.2), at(1, 0.1)] }, [], undefined, checks);
+    if (isFailure(whole)) throw new Error(whole.why);
+    expect(whole.map((w) => w.share)).toEqual([0.5, 0.2, 0.3]);
+    expect(whole[0].keep).toBeUndefined();
   });
 
   it("keeps the program's own populations, where it gives one for each conformer", () => {

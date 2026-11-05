@@ -24,8 +24,11 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { anyOpen, isomersToMake, openStereo, withChosen } from "../../chem/openStereo";
+import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
+import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
+import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
@@ -85,6 +88,18 @@ const ON_DRAWN = "Not on structures drawn: only Meno's own steps take or give th
 /** Structures by their places among `of`: "structure 3", "structures 1, 2 and 4". */
 const structuresAt = (places: readonly number[]) =>
   places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
+
+/** What a molecule in 3D with metals is held to while its conformers are made, as Meno sends it (lib/chem/metalHolds), or none. */
+function entryHolds(e: Pick<SetEntry, "atoms" | "bonds">) {
+  const g = holdsGraphOf3d(e.atoms, e.bonds, COORDINATION_BOND);
+  return metalHolds(g.atoms, g.bonds);
+}
+
+/** What the conformers a search made of a molecule in 3D are checked by before any is kept (lib/chem/metalHolds `madeChecks`). */
+function entryChecks(e: Pick<SetEntry, "atoms" | "bonds">) {
+  const g = holdsGraphOf3d(e.atoms, e.bonds, COORDINATION_BOND);
+  return madeChecks(g.atoms, g.bonds, metalHolds(g.atoms, g.bonds));
+}
 
 /** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
 export function notMade(places: readonly number[], of: number): string {
@@ -758,8 +773,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same - the step's
           //  own number, or as many as the molecule needs: lib/chem/conformersSought)
           const tries = soughtNumber(options, () => conformersSoughtOf(block.molblock));
-          const got = (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(tries != null ? { count: tries } : {}), options }, CONFORMERS_MS)).isomers[0];
-          made = got && withChosen(got, which.open);
+          // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
+          const holds = metalHoldsOf(block.molblock);
+          const got = (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(tries != null ? { count: tries } : {}), ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers[0];
+          made = got && partsSideBySide(keptMade(withChosen(got, which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
@@ -1169,7 +1186,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (a conformer search that takes how many to try: told, for each molecule, the step's own number or as many as it needs - lib/chem/conformersSought)
       const tries = step.kind === "conformers" && plugin.roleTries.includes("conformers");
       const triesOf = (e: SetEntry) => soughtNumber(options, () => conformersSought(e.atoms, e.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order }))));
-      const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e) } : {}) }));
+      // (and a molecule with metals its holds: lib/chem/metalHolds)
+      const holdsOf = (e: SetEntry) => {
+        const holds = entryHolds(e);
+        return holds ? { holds } : {};
+      };
+      const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e), ...holdsOf(e) } : {}) }));
       const raw = await client.prepare(step.kind, sent, options, cores, Object.fromEntries(paths));
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
@@ -1722,7 +1744,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           }
           // (by the version its worker said it runs, as a reader's is kept)
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
-          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined) : workedOf(kind, mine[i], out, readers, log ? source : undefined));
+          // (a search Meno tells how many to try: which of what it made stand, Meno's checks - lib/chem/metalHolds)
+          const checks = plugin.roleTries.includes("conformers") ? entryChecks(mine[i]) : undefined;
+          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined));
         }
       }
       passOn(Infinity);
