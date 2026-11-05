@@ -49,6 +49,37 @@ describe("a ring system that closes on itself", () => {
   });
 });
 
+describe("a ring system's rings that are no closed surface, each for one reason alone", () => {
+  // (cubane's six faces: its five smallest rings, and the one they leave out; each case below its rings as given,
+  //  every other condition met - so that each guard of closedFaces is the one that refuses it)
+  const cube = perceive(fromSmiles("C12C3C4C1C5C2C3C45"));
+  const six = closedFaces(cube, cube.systems[0])!;
+  const top = six[5];
+  const bottom = six.find((f) => !f.some((a) => top.includes(a)))!;
+  const sides = six.filter((f) => f !== top && f !== bottom);
+  const withRings = (rings: number[][]) => {
+    const mol = { ...cube, rings };
+    return closedFaces(mol, { ...cube.systems[0], rings: rings.map((_, i) => i) });
+  };
+
+  it("is as found where its rings are the five smallest - the sixth the one they leave out", () => {
+    expect(withRings(six.slice(0, 5))).toHaveLength(6);
+  });
+
+  it("is none where a bond lies in three rings: a face counted twice, the face it is across from left out", () => {
+    expect(sides).toHaveLength(4);
+    expect(withRings([...six.slice(0, 5), bottom])).toBeNull();
+  });
+
+  it("is none where no bond lies in one ring only: all six faces given, none left out", () => {
+    expect(withRings(six)).toBeNull();
+  });
+
+  it("is none where the bonds in one ring only go round two faces, not one: the four sides of a box, its top and bottom left out", () => {
+    expect(withRings(sides)).toBeNull();
+  });
+});
+
 describe("a closed surface, of any faces", () => {
   it("is drawn through its largest face whatever its faces - triangles and decagons, squares and hexagons - and at 21 atoms or more", () => {
     for (const [name, input] of [
