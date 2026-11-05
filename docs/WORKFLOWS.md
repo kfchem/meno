@@ -3245,9 +3245,9 @@ it.
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
   not nll < 30; 1: it has no nll)"). The line counts them by the
   conditions not met, a number's without its value, so that forty
-  structures over a limit are one count, not forty ("rest 13 (9: not nll
+  structures over a limit are one count, not forty ("rest 12 (8: not nll
   < 40; 4: not mw ≤ 500 g/mol)"); each one's own value is on its record
-  as it is set aside ("not nll < 40 (44.98)"), in the set and its table.
+  as it is set aside ("not nll < 40 (45)"), in the set and its table.
   A text or true or false is counted with its value, being a kind rather
   than an entry's own number ("2: not state = finished (not converged)")
   (2026-11-06). An entry with no value for a

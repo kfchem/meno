@@ -48,6 +48,19 @@ describe("Filter", () => {
     ]);
   });
 
+  it("counts those set aside by a property against another of their own by the condition, the two values on each entry", () => {
+    const ab = (a: number, b: number) => ({ a: quantity(a, "none"), b: quantity(b, "none") });
+    const pairs = [entry("p", ab(1, 2)), entry("q", ab(3, 2)), entry("r", ab(5, 4)), entry("s", ab(9, 1))];
+    const out = filter(pairs, { conditions: [{ property: "a", compare: "<", its: "b" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(out.said).toBe("1 of 4 entries kept · rest 3 (3: not a < its b)");
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["q", { aside: "not a < its b (3 and 2)" }],
+      ["r", { aside: "not a < its b (5 and 4)" }],
+      ["s", { aside: "not a < its b (9 and 1)" }],
+    ]);
+  });
+
   it("counts those set aside by a text as it is, its value with it: a text is a kind, not an entry's own number", () => {
     const text = (v: string): Property => ({ ...quantity(0, "none"), value: v });
     const kinds = [entry("a", { route: text("found") }), entry("b", { route: text("lost") }), entry("c", { route: text("lost") }), entry("d", { route: text("open") })];
