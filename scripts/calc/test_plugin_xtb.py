@@ -69,7 +69,7 @@ def log_of(atoms="    1    1 H      1, 4\n    2    6 C      2, 3\n", body="", ca
         "          :  unpaired electrons                  0          :\n"
     ) if setup else ""
     return (
-        "   * xtb version 6.7.1 (edcfbbe) compiled by 'someone' on 2026-01-01\n"
+        "   * xtb version 6.7.1 (abc1234) compiled by 'someone' on 2026-01-01\n"
         f"   ID    Z sym.   atoms\n{atoms}\n"
         f"          program call               : {call}\n{box}{body}"
         "         :: total energy              -5.200000000000 Eh    ::\n"
@@ -109,14 +109,14 @@ eigval :     -120.50   829.07   900.00   950.00  1000.00  2000.00
           :  imag. cutoff                  -20.0000000 cm⁻¹ :
     T/K    H(0)-H(T)+PV         H(T)/Eh          T*S/Eh         G(T)/Eh
 ------------------------------------------------------------------------
- 150.00    0.250495E-02    0.546739E-01    0.135034E-01    0.411705E-01
+ 150.00    0.251234E-02    0.551234E-01    0.131234E-01    0.421234E-01
 Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
- 298.15    0.617016E-02    0.583013E-01    0.316937E-01    0.266076E-01 (used)
+ 298.15    0.612345E-02    0.581234E-01    0.312345E-01    0.268889E-01 (used)
 ------------------------------------------------------------------------
-        :: total free energy          -8.613409150740 Eh   ::
-        :: zero point energy           0.052131167146 Eh   ::
-        :: G(RRHO) contrib.           -0.025523531193 Eh   ::
-         | TOTAL ENTHALPY             -8.581715486693 Eh   |
+        :: total free energy          -8.612345678901 Eh   ::
+        :: zero point energy           0.051234567891 Eh   ::
+        :: G(RRHO) contrib.           -0.025123456789 Eh   ::
+         | TOTAL ENTHALPY             -8.581234567890 Eh   |
 """
 
 SOLVATED = """
@@ -268,13 +268,13 @@ class Collect(unittest.TestCase):
         # (the translations and rotations left out; an imaginary one kept, negative)
         self.assertEqual([row["cells"] for row in vibrations["rows"]][:2], [[1, -120.5, 2.0, 1.5], [2, 829.07, 3.0, 2.5]])
         thermo = {r["id"]: r["value"] for r in out["results"] if r["on"] == "molecule"}
-        self.assertAlmostEqual(thermo["thermo.free-energy"], -8.613409150740)
-        self.assertAlmostEqual(thermo["thermo.zpve"], 0.052131167146)
-        self.assertAlmostEqual(thermo["thermo.g-correction"], -0.025523531193)
+        self.assertAlmostEqual(thermo["thermo.free-energy"], -8.612345678901)
+        self.assertAlmostEqual(thermo["thermo.zpve"], 0.051234567891)
+        self.assertAlmostEqual(thermo["thermo.g-correction"], -0.025123456789)
         self.assertAlmostEqual(thermo["thermo.temperature"], 298.15)
-        self.assertAlmostEqual(thermo["thermo.h-correction"], 0.0583013)
-        self.assertAlmostEqual(thermo["thermo.ts"], 0.0316937)
-        self.assertAlmostEqual(thermo["thermo.enthalpy"], -8.581715486693)
+        self.assertAlmostEqual(thermo["thermo.h-correction"], 0.0581234)
+        self.assertAlmostEqual(thermo["thermo.ts"], 0.0312345)
+        self.assertAlmostEqual(thermo["thermo.enthalpy"], -8.581234567890)
         self.assertEqual(thermo["thermo.treatment"], "rotor cutoff 50 cm⁻¹, imag. cutoff -20 cm⁻¹, scaling factor 1")
         self.assertEqual((thermo["thermo.point-group"], thermo["thermo.symmetry-number"]), ("c2v", 2))
         # (none said found significant: none, judged so)
@@ -296,10 +296,10 @@ class Collect(unittest.TestCase):
         wide = FREQUENCIES.replace("   9:  0.00  10:  0.00", "   9:******  10:  0.00")
         g98 = (
             " Frequencies --  -120.5000               829.0700               900.0000\n"
-            " IR Inten    --     1.5000                 2.5000              1046.7471\n"
+            " IR Inten    --     1.5000                 2.5000              1012.3456\n"
         )
         rows = lambda out: next(r for r in out["results"] if r["id"] == "vibrations")["rows"]
-        self.assertEqual(rows(collect("frequencies", log_of(body=wide), {"g98.out": g98})["outputs"][0])[2]["cells"], [3, 900.0, 1.0, 1046.7471])
+        self.assertEqual(rows(collect("frequencies", log_of(body=wide), {"g98.out": g98})["outputs"][0])[2]["cells"], [3, 900.0, 1.0, 1012.3456])
         self.assertIsNone(rows(collect("frequencies", log_of(body=wide))["outputs"][0])[2]["cells"][-1])
         self.assertIn("g98.out", ask("prepare", step="frequencies", entries=[ETHYNE], options=defaults("frequencies"))["jobs"][0]["reads"])
 

@@ -5,10 +5,10 @@ import type { SetEntry } from "./entries";
 import { kindInfo, needsOf } from "./kinds";
 import { runMenoPair } from "./meno";
 
-// (the numbers: ORCA 6.1.1 at its own GFN2-xTB, 298.15 K, 1 atm, quasi-RRHO - ammonia's inversion, and a Diels-Alder's
-//  saddle point above the complex of its two reactants; each a value its output printed, in hartrees)
-const AMMONIA = { saddle: { e: -4.41650682, g: -4.40194074, group: "D3h", sigma: 6 }, minimum: { e: -4.42624404, g: -4.41175675, group: "Cs", sigma: 1 } };
-const DIELS_ALDER = { saddle: { e: -17.81225922, g: -17.7053786 }, complex: { e: -17.82305901, g: -17.72551573 } };
+// (the numbers, made up, in hartrees, as GFN2-xTB at 298.15 K and 1 atm with quasi-RRHO might give them - ammonia's
+//  inversion, and a Diels-Alder's saddle point above the complex of its two reactants)
+const AMMONIA = { saddle: { e: -4.416, g: -4.4005, group: "D3h", sigma: 6 }, minimum: { e: -4.425, g: -4.41, group: "Cs", sigma: 1 } };
+const DIELS_ALDER = { saddle: { e: -17.81, g: -17.705 }, complex: { e: -17.821, g: -17.725 } };
 
 const reading = (id: string, value: number | string, measure: Record<string, unknown> = { quantity: "energy" }) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, ...measure });
 
@@ -40,7 +40,7 @@ function made(m: Made, extra: Partial<SetEntry> = {}): SetEntry {
     ...extra,
   } as unknown as SetEntry;
 }
-const saddle = (m: Partial<Made> = {}) => made({ ...AMMONIA.saddle, imaginary: [-972], how: "highest point refined", shift: 0.2, ...m });
+const saddle = (m: Partial<Made> = {}) => made({ ...AMMONIA.saddle, imaginary: [-950], how: "highest point refined", shift: 0.2, ...m });
 const minimum = (m: Partial<Made> = {}) => made({ ...AMMONIA.minimum, ...m });
 
 const run = (saddles: SetEntry[], starts: SetEntry[], options: Record<string, string> = {}) => runMenoPair("barrier", { entries: saddles, holds: "molecules" }, { entries: starts, holds: "molecules" }, options);
@@ -63,49 +63,49 @@ describe("a Barrier step", () => {
     const o = run([saddle()], [minimum()]);
     const b = barrier(o);
     // (CODATA 2018's hartree: 627.509474 kcal/mol)
-    expect(b.value as number).toBeCloseTo(6.16, 2);
+    expect(b.value as number).toBeCloseTo(5.96, 2);
     expect(b.value as number).toBeCloseTo((AMMONIA.saddle.g - AMMONIA.minimum.g) * 627.5094740630558, 9);
     expect(b).toMatchObject({ unit: "kcal/mol", at: { geometry: geometryKey(saddle().xyz), kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "GFN2-xTB" } });
     // (the sigmas differ - D3h's 6, the minimum read as Cs, 1 - and are kept, both said)
     expect(b.by?.treatment).toBe(
       "free energy G (thermo.free-energy; quasi-RRHO (Grimme), 100 cm⁻¹): the saddle point's less its start a #1's; point group and rotational symmetry number: D3h, σ 6 (saddle point), Cs, σ 1 (start)",
     );
-    expect(kept(o).said).toBe("ΔG‡ 6.16 kcal/mol (G at GFN2-xTB, 298.15 K)");
+    expect(kept(o).said).toBe("ΔG‡ 5.96 kcal/mol (G at GFN2-xTB, 298.15 K)");
   });
 
   it("leaves the rotational symmetry out where asked - sigma 1 on both sides, each side's RT ln sigma taken off - so that the program's tolerance no longer moves it", () => {
-    // (the reference's sigma 1 on both sides: 5.098 kcal/mol)
+    // (sigma 1 on both sides: 4.900 kcal/mol)
     const o = run([saddle()], [minimum()], { symmetry: "left-out" });
-    expect(barrier(o).value as number).toBeCloseTo(5.098, 3);
+    expect(barrier(o).value as number).toBeCloseTo(4.9, 3);
     expect(barrier(o).by?.treatment).toMatch(/; rotational symmetry left out - σ 1 on both sides, each side's RT ln σ taken off by Meno \(R = 8\.314462618 J\/\(mol K\)\)$/);
-    expect(kept(o).said).toBe("ΔG‡ 5.10 kcal/mol (G at GFN2-xTB, 298.15 K, σ left out)");
-    // (another run, the same two read otherwise - the point refined Cs, sigma 1; the minimum C3v, sigma 3: 4.45 as read, 5.10 left out, as the other)
-    const other = { saddle: saddle({ g: -4.40362848, group: "Cs", sigma: 1 }), minimum: minimum({ g: -4.41071972, group: "C3v", sigma: 3 }) };
-    expect(barrier(run([other.saddle], [other.minimum])).value as number).toBeCloseTo(4.45, 2);
-    expect(barrier(run([other.saddle], [other.minimum], { symmetry: "left-out" })).value as number).toBeCloseTo(5.101, 3);
+    expect(kept(o).said).toBe("ΔG‡ 4.90 kcal/mol (G at GFN2-xTB, 298.15 K, σ left out)");
+    // (another run, the same two read otherwise - the point refined Cs, sigma 1; the minimum C3v, sigma 3: 4.25 as read, 4.90 left out, as the other)
+    const other = { saddle: saddle({ g: -4.40222905, group: "Cs", sigma: 1 }), minimum: minimum({ g: -4.409, group: "C3v", sigma: 3 }) };
+    expect(barrier(run([other.saddle], [other.minimum])).value as number).toBeCloseTo(4.25, 2);
+    expect(barrier(run([other.saddle], [other.minimum], { symmetry: "left-out" })).value as number).toBeCloseTo(4.9, 3);
     // (E counts no rotation: the option is G's alone)
-    expect(barrier(run([saddle()], [minimum()], { energy: "E", symmetry: "left-out" })).value as number).toBeCloseTo(6.11, 2);
+    expect(barrier(run([saddle()], [minimum()], { energy: "E", symmetry: "left-out" })).value as number).toBeCloseTo(5.65, 2);
   });
 
   it("gives the electronic energy's height where E is asked", () => {
     const o = run([saddle()], [minimum()], { energy: "E" });
-    expect(barrier(o).value as number).toBeCloseTo(6.11, 2);
+    expect(barrier(o).value as number).toBeCloseTo(5.65, 2);
     expect(barrier(o).by?.treatment).toBe("electronic energy E: the saddle point's less its start a #1's");
-    expect(kept(o).said).toBe("ΔE‡ 6.11 kcal/mol (E at GFN2-xTB)");
+    expect(kept(o).said).toBe("ΔE‡ 5.65 kcal/mol (E at GFN2-xTB)");
   });
 
-  it("gives a Diels-Alder's from the complex of its reactants, as the reference numbers have it", () => {
+  it("gives a Diels-Alder's from the complex of its reactants", () => {
     const atoms = ["C", "C", "C", "C", "C", "C", ...Array(10).fill("H")];
-    const ts = made({ ...DIELS_ALDER.saddle, group: "C1", sigma: 1, atoms, imaginary: [-394], how: "saddle point optimisation", shift: 0.3 });
+    const ts = made({ ...DIELS_ALDER.saddle, group: "C1", sigma: 1, atoms, imaginary: [-400], how: "saddle point optimisation", shift: 0.3 });
     const complex = made({ ...DIELS_ALDER.complex, group: "C1", sigma: 1, atoms });
-    expect(barrier(run([ts], [complex])).value as number).toBeCloseTo(12.636, 3);
-    expect(barrier(run([ts], [complex], { energy: "E" })).value as number).toBeCloseTo(6.777, 3);
+    expect(barrier(run([ts], [complex])).value as number).toBeCloseTo(12.55, 3);
+    expect(barrier(run([ts], [complex], { energy: "E" })).value as number).toBeCloseTo(6.903, 3);
   });
 
   it("refuses a saddle point that is none: not converged to one, or not with one imaginary frequency", () => {
     expect(why(run([saddle({ how: null })], [minimum()]))).toBe("a #1 is no converged saddle point: optimise it to a saddle point, or take Path search's point refined, then Frequencies on it");
     expect(why(run([saddle({ how: "optimisation" })], [minimum()]))).toMatch(/^a #1 is no converged saddle point/);
-    expect(why(run([saddle({ imaginary: [-972, -40] })], [minimum()]))).toBe("a #1 has 2 imaginary frequencies: a saddle point has one");
+    expect(why(run([saddle({ imaginary: [-950, -40] })], [minimum()]))).toBe("a #1 has 2 imaginary frequencies: a saddle point has one");
     expect(why(run([saddle({ imaginary: [] })], [minimum()]))).toBe("a #1 has 0 imaginary frequencies: a saddle point has one");
     // (a run that failed, its record there still: no result)
     expect(why(run([{ ...saddle(), failed: { kind: "failed", why: "x" } }], [minimum()]))).toMatch(/^a #1 is no converged saddle point/);
@@ -126,7 +126,7 @@ describe("a Barrier step", () => {
       "a #1: the rotational symmetry number thermo.free-energy was worked out with was not read of the saddle point: its rotational entropy cannot be told",
     );
     // (E counts no rotation: no sigma asked)
-    expect(barrier(run([saddle({ sigma: undefined })], [minimum()], { energy: "E" })).value as number).toBeCloseTo(6.11, 2);
+    expect(barrier(run([saddle({ sigma: undefined })], [minimum()], { energy: "E" })).value as number).toBeCloseTo(5.65, 2);
     expect(why(run([saddle()], [minimum({ g: undefined })]))).toBe("its start a #1 has no thermo.free-energy");
   });
 
@@ -190,7 +190,7 @@ describe("a Barrier step", () => {
     expect(kept(run([saddle()], [minimum(), minimum({ g: AMMONIA.minimum.g + 0.001 })], { pairs: "each" })).kept).toHaveLength(2);
     const on = run([tag(saddle(), "p1"), tag(saddle(), "p2")], [tag(minimum(), "p2")], { pairs: "property", property: "path" });
     expect([kept(on).kept.length, why(on)]).toEqual([1, "a #1 is paired with no start: no entry of Starts has its path, p1"]);
-    expect(kept(on).said).toBe("ΔG‡ 6.16 kcal/mol (G at GFN2-xTB, 298.15 K) · failed 1");
+    expect(kept(on).said).toBe("ΔG‡ 5.96 kcal/mol (G at GFN2-xTB, 298.15 K) · failed 1");
   });
 
   it("is a step of Meno's on two inputs, its saddle points and their starts, its options read", () => {

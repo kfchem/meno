@@ -382,14 +382,14 @@ describe("a conformer search", () => {
     // (CREST's conformers, then each one's frequencies by xtb: the second a saddle point)
     const conformers: SetEntry[] = [WATER, { ...WATER, number: 2 }];
     const out = (imaginary: number[]) => ({ schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[]], energies: [-1], imaginary });
-    const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-382.63] : []), ["xtb 6.7.1"]));
+    const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-391.27] : []), ["xtb 6.7.1"]));
     if (done.some(isFailure)) throw new Error("not done");
     const [m] = resultsOf({ ok: true, holds: "conformers", kept: done as Worked[], aside: [], said: "" }, "frequencies").molecules;
     // (the first judged none: none, apart from not judged)
-    expect(m.imaginary).toEqual([[], [-382.63]]);
+    expect(m.imaginary).toEqual([[], [-391.27]]);
     expect(m.calc?.imaginary).toBeUndefined();
     // (taken on: the second named as no minimum)
-    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([[], [-382.63]]);
+    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([[], [-391.27]]);
     expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.calc?.imaginary)).toEqual([undefined, undefined]);
   });
 
