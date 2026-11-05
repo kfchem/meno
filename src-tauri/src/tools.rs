@@ -176,7 +176,7 @@ pub async fn ensure(data: &Path, tool: Tool, proxy: Option<String>) -> Result<Pa
         return Ok(program);
     }
     let proxy = proxy.ok_or("the network is not ready")?;
-    let archive = download(pin.url, &proxy).await?;
+    let archive = download(pin.url, &proxy, ARCHIVE_MOST).await?;
     check(&archive, pin.sha256).map_err(|e| format!("{} {}: {e}", pin.tool.name(), pin.version))?;
     let body = unpack(&archive, pin.archive, pin.member)?;
     place(&program, &body)?;
@@ -188,7 +188,9 @@ pub async fn ensure(data: &Path, tool: Tool, proxy: Option<String>) -> Result<Pa
 /// no size is pinned with them, so the bound is a generous one.
 const ARCHIVE_MOST: u64 = 256 * 1024 * 1024;
 
-async fn download(url: &str, proxy: &str) -> Result<Vec<u8>, String> {
+/// What is at `url`, fetched through `proxy` (a network task's), never more
+/// than `most` bytes: the tools' archives, and the plugins online (catalogue.rs).
+pub async fn download(url: &str, proxy: &str, most: u64) -> Result<Vec<u8>, String> {
     // (rustls, as the updater has it: its crypto provider set once)
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -204,7 +206,7 @@ async fn download(url: &str, proxy: &str) -> Result<Vec<u8>, String> {
         .await
         .and_then(|r| r.error_for_status())
         .map_err(|e| format!("fetching {url}: {e}"))?;
-    body_within(response, url, ARCHIVE_MOST).await
+    body_within(response, url, most).await
 }
 
 /// A response's body, read piece by piece as it comes, never more than

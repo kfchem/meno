@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "uses": [
     {
       "name": "Blender",

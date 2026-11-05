@@ -27,6 +27,7 @@ export function tag(entries: readonly Entry[], options: TagOptions): NodeOutcome
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const taken = entries.filter((e) => e.properties[name]);
   if (taken.length) return { ok: false, said: `${count(taken.length)} already ${taken.length === 1 ? "has" : "have"} ${name}: give the tag another name` };
-  const done = entries.map((e, k) => ({ ...e, properties: { ...e.properties, [name]: { value: `${name}-${k + 1}`, unit: "none" as const, status: "computed" as const } } }));
+  // (a label, of neither a geometry nor a structure: it rides a change of bonding - lib/steps/restructure)
+  const done = entries.map((e, k) => ({ ...e, properties: { ...e.properties, [name]: { value: `${name}-${k + 1}`, unit: "none" as const, label: true as const, status: "computed" as const } } }));
   return { ok: true, exits: { done }, said: `${name}: ${count(done.length)} tagged, ${name}-1${done.length > 1 ? ` to ${name}-${done.length}` : ""}` };
 }

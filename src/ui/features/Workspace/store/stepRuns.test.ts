@@ -1311,6 +1311,59 @@ describe("a step that runs a plugin's program", () => {
     expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "stopped", why: "It stopped without finishing" }]]);
   });
 
+  it("refuses an entry whose output says it ran in another solvation than its step asked - out of its Failed exit, saying both - whatever program ran it", async () => {
+    const { st, step } = waters(3);
+    st().updateStep(step, { options: { solvent: "water" } });
+    // (as asked, xtb's words with its reference state after; in the gas phase; and not said)
+    const said = ["ALPB(water), reference state gsolv [1 M gas/solution]", "none", undefined];
+    worker.collect.mockImplementationOnce(async (_step, entries) => ({
+      outputs: entries.map((e, i) => ({
+        schema: 1,
+        program: "xtb",
+        version: "6.7.1",
+        method: "GFN2-xTB",
+        atoms: e.atoms.map((a) => a.el),
+        frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z])],
+        energies: [-5.07],
+        optimised: true,
+        ...(said[i] ? { solvation: said[i] } : {}),
+      })),
+    }) as never);
+    const two = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
+    const failedOnes = setMembers(st(), resultOf(st(), step, "failed")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why: "It ran in the gas phase, not in ALPB(water) as asked" }]]);
+
+    // (an output Meno's readers read, held to it the same)
+    jobs.clear();
+    next = 1;
+    const other = waters(3);
+    other.st().updateStep(other.step, { options: { solvent: "water" } });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [0, 1, 2].map(() => ({ kind: "xtb", log: true, name: "water.out" })) }) as never);
+    for (const solvation of ["ALPB(acetone)", "alpb(WATER)", "ALPB(water)"])
+      readOutput.mockImplementationOnce(async () => ({
+        output: { schema: 1, program: "xtb", version: "6.7.1", method: "GFN2-xTB", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]], energies: [-5.07], solvation },
+        readers: ["xtb 0.1.7"],
+      }));
+    const again = other.st().runStep(other.step);
+    await settle();
+    await settle();
+    end(1, "done", { log: "xtb's output" });
+    await other.st().lookAtJobs();
+    await again;
+    expect(other.st().steps.find((s) => s.id === other.step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
+    const refused = setMembers(other.st(), resultOf(other.st(), other.step, "failed")!).molecules.map((id) => other.st().molecules3d.find((m) => m.id === id)!);
+    expect(refused.map((m) => m.failed)).toEqual([[{ kind: "refused", why: "It ran in ALPB(acetone), not in ALPB(water) as asked" }]]);
+  });
+
   it("counts a job that failed as each entry it was for - and says why in its runner's words, where the runner said", async () => {
     const { st, step } = waters(3);
     const two = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };

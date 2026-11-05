@@ -177,6 +177,16 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M7.6 10 H9.8 M8.5 8.5 L10 10 L8.5 11.5" strokeWidth={1.5} />
     </>
   ),
+  // (the atoms listed move most: two moving, a third still)
+  modeOn: (
+    <>
+      <circle cx="4.5" cy="10" r="2.3" fill="currentColor" stroke="none" />
+      <circle cx="11" cy="10" r="2.3" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="10" r="1.8" />
+      <path d="M6.8 10 H8.7 M13.3 10 H15.2" />
+      <path d="M4.5 6.8 V2.2 M2.8 4 L4.5 2.1 L6.2 4 M11 13.2 V17.8 M9.3 16 L11 17.9 L12.7 16" />
+    </>
+  ),
   // (a chain as drawn, the same as its reference)
   compare: (
     <>

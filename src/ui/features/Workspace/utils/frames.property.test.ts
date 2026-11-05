@@ -340,7 +340,7 @@ function xyzText(r: Rand, made: Made): string {
     const e = made.energies?.[j];
     if (e === undefined) return `frame ${j + 1}`;
     return r.pick([
-      () => ` energy: ${e.toFixed(8)} gnorm: 0.00012345 xtb: 6.7.1 (edcfbbe)`,
+      () => ` energy: ${e.toFixed(8)} gnorm: 0.00012345 xtb: 6.7.1 (abc1234)`,
       () => `Coordinates from ORCA-job opt E ${e.toFixed(6)}`,
       () => `  ${e.toFixed(8)}`,
     ])();

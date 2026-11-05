@@ -62,6 +62,8 @@ describe("Tag", () => {
     const out = tag([entry("x", {}), entry("y", {})], { name: "start" });
     if (!out.ok) throw new Error(out.said);
     expect(out.exits.done.map((e) => e.properties.start.value)).toEqual(["start-1", "start-2"]);
+    // (each a label: it rides a change of bonding - lib/steps/restructure)
+    expect(out.exits.done.every((e) => e.properties.start.label === true)).toBe(true);
     expect(out.said).toBe("start: 2 entries tagged, start-1 to start-2");
     expect(tag(out.exits.done, { name: "start" })).toEqual({ ok: false, said: "2 entries already have start: give the tag another name" });
     expect(tag([entry("x", {})], { name: " " }).ok).toBe(false);
