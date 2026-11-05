@@ -314,23 +314,27 @@ describe("what a drawing says of its stereochemistry only by luck", () => {
 
 describe("a centre with a lone pair for its fourth group", () => {
   // (methyl phenyl sulfoxide's S at the origin: its O up, its methyl left on
-  // a wedge, its ring carbon right; and the same with another element)
-  const sulfoxide = (el: string, stereo: "up" | "down"): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
-    atoms: [
-      { x: 0, y: 0, el, hs: 0 },
-      { x: 0, y: 1, el: "O", hs: 0 },
-      { x: -0.87, y: -0.5, el: "C", hs: 3 },
-      { x: 0.87, y: -0.5, el: "C", hs: 2 },
-    ],
-    bonds: [
-      { a: 0, b: 1, order: 2 },
-      { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo } },
-      { a: 0, b: 3, order: 1 },
-    ],
-  });
+  // a wedge, its ring carbon right; and the same with another element - of
+  // group 15 or another, with a methyl up in the O's place, three single bonds)
+  const sulfoxide = (el: string, stereo: "up" | "down"): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => {
+    const chalcogen = ["S", "Se", "Te"].includes(el);
+    return {
+      atoms: [
+        { x: 0, y: 0, el, hs: 0 },
+        { x: 0, y: 1, el: chalcogen ? "O" : "C", hs: chalcogen ? 0 : 3 },
+        { x: -0.87, y: -0.5, el: "C", hs: 3 },
+        { x: 0.87, y: -0.5, el: "C", hs: 2 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: chalcogen ? 2 : 1 },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo } },
+        { a: 0, b: 3, order: 1 },
+      ],
+    };
+  };
 
-  it("is read from its wedge where every reader reads it - a sulfoxide's S, a phosphine's P, an arsine's As - the two ways round told apart", () => {
-    for (const el of ["S", "P", "As"]) {
+  it("is read from its wedge where its lone pair keeps a configuration - a sulfoxide's S, a selenoxide's Se, a telluroxide's Te, a phosphine's P, an arsine's As, a stibine's Sb, a bismuthine's Bi - the two ways round told apart", () => {
+    for (const el of ["S", "Se", "Te", "P", "As", "Sb", "Bi"]) {
       const up = readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.get(0);
       const down = readStereo(sulfoxide(el, "down").atoms, sulfoxide(el, "down").bonds).tetra.get(0);
       expect(up?.neighbours, el).toHaveLength(3);
@@ -339,8 +343,54 @@ describe("a centre with a lone pair for its fourth group", () => {
     }
   });
 
-  it("is not read where a wedge states no configuration - a selenoxide's Se, an amine's N (which inverts), a borane's B - nor at a C of three bonds", () => {
-    for (const el of ["Se", "N", "B", "C"]) expect(readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.has(0), el).toBe(false);
+  it("is not read where its lone pair keeps no configuration - an amine's N (which inverts), a borane's B - nor at a C of three bonds", () => {
+    for (const el of ["N", "B", "C"]) expect(readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.has(0), el).toBe(false);
+  });
+
+  it("is read at an N its ring or its cage holds - an N-chloro aziridine's, an oxaziridine's, a quinuclidine's - and not at a plain N-methyl aziridine's, an N-aryl aziridine's or an amine's", () => {
+    // (each laid out with no configuration, and a wedge put on a bond out of its N)
+    const wedgedAt = (smiles: string, at: number) => {
+      const input = fromSmiles(smiles);
+      const l = layout2D(input);
+      const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({ x: l.x[i], y: l.y[i], el: a.el, hs: a.hs ?? 0 }));
+      let wedged = false;
+      const bonds: DrawnBond[] = input.bonds.map((b) => {
+        if (wedged || (b.a !== at && b.b !== at)) return { a: b.a, b: b.b, order: b.order };
+        wedged = true;
+        return { a: b.a, b: b.b, order: b.order, wedge: { narrow: at, stereo: "up" as const } };
+      });
+      return readStereo(atoms, bonds).tetra.has(at);
+    };
+    expect(wedgedAt("CC1(C)CN1Cl", 4)).toBe(true);
+    expect(wedgedAt("CC1ON1C", 3)).toBe(true);
+    expect(wedgedAt("CC1CC2CCN1CC2", 6)).toBe(true);
+    expect(wedgedAt("CC1CN1C", 3)).toBe(false);
+    expect(wedgedAt("CC1CN1c1ccccc1", 3)).toBe(false);
+    expect(wedgedAt("CN(CC)CCC", 1)).toBe(false);
+  });
+
+  it("is no axis's end where it is a pyramid of three that keeps no configuration: a wedge at an O+ beside a ring is read as neither", () => {
+    for (const [el, charge] of [["O", 1]] as const) {
+      // (its methyl left on a wedge, an ethyl's CH2 up, a ring's ipso C right, that C with two more neighbours)
+      const atoms: DrawnAtom[] = [
+        { x: 0, y: 0, el, hs: 0, charge },
+        { x: -0.87, y: -0.5, el: "C", hs: 3 },
+        { x: 0, y: 1, el: "C", hs: 3 },
+        { x: 0.87, y: -0.5, el: "C", hs: 0 },
+        { x: 1.73, y: 0, el: "C", hs: 1 },
+        { x: 0.87, y: -1.5, el: "C", hs: 1 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 2, order: 1 },
+        { a: 0, b: 3, order: 1 },
+        { a: 3, b: 4, order: 2 },
+        { a: 3, b: 5, order: 1 },
+      ];
+      const read = readStereo(atoms, bonds);
+      expect(read.tetra.has(0), el).toBe(false);
+      expect(read.axes, el).toEqual([]);
+    }
   });
 
   it("states no configuration with two of its bonds in line - a T - as a centre with its H left out does not", () => {
@@ -354,8 +404,21 @@ describe("a centre with a lone pair for its fourth group", () => {
     expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
   });
 
-  it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, each way round", () => {
-    for (const smiles of ["C[S@](=O)c1ccccc1", "C[S@@](=O)c1ccccc1", "CC(C)(C)[S@](=O)N", "CC[P@](C)c1ccccc1", "CC[P@@](C)c1ccccc1", "C[S@+](CC)c1ccccc1", "C[S@@](=O)C[C@H](N)C(=O)O"]) {
+  it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, a selenoxide, a stibine, an N-chloro aziridine, an oxaziridine, each way round", () => {
+    for (const smiles of [
+      "C[S@](=O)c1ccccc1",
+      "C[S@@](=O)c1ccccc1",
+      "CC(C)(C)[S@](=O)N",
+      "CC[P@](C)c1ccccc1",
+      "CC[P@@](C)c1ccccc1",
+      "C[S@+](CC)c1ccccc1",
+      "C[S@@](=O)C[C@H](N)C(=O)O",
+      "C[Se@](=O)c1ccccc1",
+      "CC[Sb@@](C)c1ccccc1",
+      "C1[N@@](Cl)C1(C)C",
+      "CC1[N@](C)O1",
+      "C1[N@](Cl)C1[C@H](C)O",
+    ]) {
       const input = fromSmiles(smiles);
       expect(misreadCentres(input, layout2D(input)), smiles).toEqual([]);
     }

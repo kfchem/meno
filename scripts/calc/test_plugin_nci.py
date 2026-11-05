@@ -150,13 +150,14 @@ class Multiwfn(unittest.TestCase):
         for kind, ext in [("gaussian-fchk", ".fch"), ("wfx", ".wfx")]:
             entry = {**DIMER, "files": [{"kind": kind, "name": "x", "text": "x"}]}
             self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "wavefunction" + ext)
-        # (a kind it does not name - no plugin declares one - is no wavefunction of its: from the geometry alone)
+        # (a kind it does not name - no plugin declares one - is no wavefunction of its: from the geometry alone, where
+        #  the fallback is chosen)
         entry = {**DIMER, "files": [{"kind": "wfn", "name": "x", "text": "x"}]}
-        self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={})["result"]["jobs"][0]["args"][0], "molecule.xyz")
+        self.assertEqual(ask(multiwfn, "prepare", entries=[entry], options={"fallback": True})["result"]["jobs"][0]["args"][0], "molecule.xyz")
 
-    def test_works_from_the_geometry_alone_where_there_is_no_wavefunction_or_promolecular_is_asked_for(self):
+    def test_works_from_the_geometry_alone_where_promolecular_is_asked_for(self):
         orca = {**DIMER, "files": [{"kind": "orca", "name": "x.out", "text": "x"}]}
-        for entry, options in [(DIMER, {}), (orca, {}), (self.WFN, {"density": "promolecular"})]:
+        for entry, options in [(DIMER, {"fallback": True}), (orca, {"fallback": True}), (self.WFN, {"density": "promolecular"}), (DIMER, {"density": "promolecular"})]:
             said = ask(multiwfn, "prepare", entries=[entry], options={**options, "grid": "low"}, cores=2)
             self.assertTrue(said["ok"], said)
             [job] = said["result"]["jobs"]
@@ -168,14 +169,32 @@ class Multiwfn(unittest.TestCase):
             lines = files["molecule.xyz"].splitlines()
             self.assertEqual((lines[0], lines[1]), ("6", "water dimer"))
             self.assertEqual(lines[2].split(), ["O", "-1.55100700", "-0.11452000", "0.00000000"])
-        # (a step's entries each as they can be: one with a wavefunction from it, one from its geometry)
-        jobs = ask(multiwfn, "prepare", entries=[self.WFN, DIMER], options={})["result"]["jobs"]
+        # (the fallback chosen, a step's entries each as they can be: one with a wavefunction from it, one from its geometry)
+        jobs = ask(multiwfn, "prepare", entries=[self.WFN, DIMER], options={"fallback": True})["result"]["jobs"]
         self.assertEqual([j["args"][0] for j in jobs], ["wavefunction.molden", "molecule.xyz"])
+
+    def test_refuses_a_molecule_with_no_wavefunction_unless_the_fallback_is_chosen(self):
+        # (off unless chosen: the one with no wavefunction refused in words, alone - out of the Failed exit - the
+        #  other run from its wavefunction; no step's surfaces of two densities)
+        said = ask(multiwfn, "prepare", entries=[self.WFN, DIMER], options={})
+        self.assertTrue(said["ok"], said)
+        self.assertEqual([(j["entries"], j["args"][0]) for j in said["result"]["jobs"]], [([0], "wavefunction.molden")])
+        [refused] = said["result"]["refused"]
+        self.assertEqual((refused["entry"], refused["kind"]), (1, "refused"))
+        self.assertIn("read from no wavefunction", refused["why"])
+        self.assertIn("Promolecular where a molecule has no wavefunction", refused["why"])
+        # (none with one: the step refused as a whole, saying why)
+        said = ask(multiwfn, "prepare", entries=[DIMER], options={})
+        self.assertFalse(said["ok"])
+        self.assertIn("no molecule was read from a wavefunction", said["error"])
+        # (all with one: nothing refused)
+        self.assertNotIn("refused", ask(multiwfn, "prepare", entries=[self.WFN], options={})["result"])
 
     def test_refuses_what_it_cannot_do(self):
         self.assertFalse(ask(multiwfn, "prepare", entries=[DIMER], options={"density": "exact"})["ok"])
-        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "atoms": []}], options={})["ok"])
-        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "atoms": [{"el": "c 1", "x": 0, "y": 0, "z": 0}]}], options={})["ok"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[DIMER], options={"fallback": "yes"})["ok"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "atoms": []}], options={"fallback": True})["ok"])
+        self.assertFalse(ask(multiwfn, "prepare", entries=[{**DIMER, "atoms": [{"el": "c 1", "x": 0, "y": 0, "z": 0}]}], options={"fallback": True})["ok"])
         self.assertFalse(ask(multiwfn, "prepare", entries=[], options={})["ok"])
 
     def test_says_which_cube_is_the_surface_and_which_colours_it(self):
@@ -203,7 +222,7 @@ class Multiwfn(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get("MULTIWFN_BIN"), "Multiwfn is not named here")
     def test_multiwfn_writes_the_cubes_it_says_from_the_geometry_alone(self):
-        job = ask(multiwfn, "prepare", entries=[DIMER], options={"grid": "low"}, cores=2)["result"]["jobs"][0]
+        job = ask(multiwfn, "prepare", entries=[DIMER], options={"grid": "low", "density": "promolecular"}, cores=2)["result"]["jobs"][0]
         done, files = run(job, os.environ["MULTIWFN_BIN"], {"Multiwfnpath": str(pathlib.Path(os.environ["MULTIWFN_BIN"]).parent)})
         self.assertEqual(done.returncode, 0, done.stdout[-2000:])
         self.assertIn("has been exported to func2.cub", done.stdout)
@@ -213,7 +232,7 @@ class Multiwfn(unittest.TestCase):
 
 class Manifests(unittest.TestCase):
     def test_declare_what_the_workers_read(self):
-        for name, ids in [("nciplot", {"grid", "between", "isovalue", "density-cut", "range"}), ("multiwfn", {"density", "grid", "isovalue", "isovalue-promolecular", "from", "to"})]:
+        for name, ids in [("nciplot", {"grid", "between", "isovalue", "density-cut", "range"}), ("multiwfn", {"density", "fallback", "grid", "isovalue", "isovalue-promolecular", "from", "to"})]:
             m = json.loads((ROOT / f"src-tauri/resources/plugins/{name}/manifest.json").read_text(encoding="utf-8"))
             self.assertEqual({o["id"] for o in m["steps"][0]["options"]}, ids, name)
             self.assertEqual(m["steps"][0]["kinds"], ["nci"])

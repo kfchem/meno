@@ -24,6 +24,17 @@ import type { Model } from "./store/types";
 import { readStructures } from "../../../lib/io/structures";
 import type { OptionValues } from "../../../lib/options";
 import { readPdb } from "../../../lib/chem/pdb";
+import { readMolfile } from "../../../lib/chem/ctfile";
+
+/** Fe and a five-ring of carbons round the z axis above it, bound to it through all of them: a half-sandwich, synthetic. */
+const halfSandwich = (id = 1) => ({
+  id,
+  atoms: [{ el: "Fe", x: 0, y: 0, z: 0 }, ...[0, 1, 2, 3, 4].map((k) => ({ el: "C", x: 1.2 * Math.cos((2 * Math.PI * k) / 5), y: 1.2 * Math.sin((2 * Math.PI * k) / 5), z: 1.65 }))],
+  bonds: [0, 1, 2, 3, 4].map((k) => ({ a1: 1 + k, a2: 1 + ((k + 1) % 5), order: k === 0 || k === 2 ? 2 : 1 })),
+  centres: [{ metal: 0, atoms: [1, 2, 3, 4, 5] }],
+  at: { x: 0, y: 0 },
+  name: "cpfe.xyz",
+});
 import { writtenOf } from "./utils/written";
 import { WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
@@ -404,6 +415,26 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     expect(second).toContain("> <Energy (Eh)>\n-75.39\n\n> <Failed>\nnot converged: stopped at 200 cycles\n");
     const unread = structureFileText({ atoms: [], bonds: [], molecules3d: [{ ...water, failed: undefined, marksUnread: true as const }] }, "/tmp/oh.sdf", { frames: "all" });
     expect(unread.match(/<Failed>/g)).toHaveLength(2);
+    // (and in an XYZ file, on each frame's comment line)
+    const xyz = xyzFileText([water as never], "t", { frames: "all" });
+    expect(xyz.split("\n").filter((l) => l.startsWith("oh"))).toEqual(["oh frame 1/2 E = -75.4000000000 Eh", "oh frame 2/2 E = -75.3900000000 Eh failed: not converged: stopped at 200 cycles"]);
+    const xyzUnread = xyzFileText([{ ...water, failed: undefined, marksUnread: true } as never], "t", { frames: "all" });
+    expect(xyzUnread.match(/failed: its marks of which frames failed could not be read/g)).toHaveLength(2);
+  });
+
+  it("writes a ring bound to a metal through all its atoms as a file holds one - a star at its centre, a bond to its atoms - and reads it back so", () => {
+    const text = structureFileText({ atoms: [], bonds: [], molecules3d: [halfSandwich()] }, "/tmp/cpfe.sdf", {});
+    expect(text).toContain("V3000");
+    expect(text).toMatch(/ENDPTS=\(5 2 3 4 5 6\) ATTACH=ALL/);
+    const ct = readMolfile(text.split("$$$$\n")[0])!;
+    const star = ct.atoms.findIndex((a) => a.symbol === "*");
+    expect(star).toBe(6);
+    // (at the ring's centre)
+    expect(ct.atoms[star].x).toBeCloseTo(0, 6);
+    expect(ct.atoms[star].y).toBeCloseTo(0, 6);
+    expect(ct.atoms[star].z).toBeCloseTo(1.65, 6);
+    const eta = ct.bonds.find((b) => b.endpoints?.length)!;
+    expect([eta.a1, eta.a2, eta.endpoints, eta.attach]).toEqual([0, 6, [1, 2, 3, 4, 5], "all"]);
   });
 
   it("keeps a molecule in 3D's radicals, in the frame it shows and in every frame", () => {

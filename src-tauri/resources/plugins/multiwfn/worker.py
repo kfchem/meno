@@ -15,10 +15,13 @@ each way, as every plugin's:
 It fills the kind of step NCI from a calculation's wavefunction - a
 Molden file, a Gaussian formatted checkpoint, a WFN or a WFX - each entry
 given the one its molecule was read from (the step's `files`, joined to
-the plugin that read it by the kind's id alone); and, for a molecule read
-from none - or where the promolecular density is asked for - from its
-geometry alone: Multiwfn sums its atoms' free densities, built into it
-(the promolecular density), so that nothing else is needed. It runs
+the plugin that read it by the kind's id alone); or, where the
+promolecular density is asked for, from the geometry alone: Multiwfn sums
+its atoms' free densities, built into it (the promolecular density), so
+that nothing else is needed. A molecule read from no wavefunction is
+refused, saying so, the others run (`refused`) - one step's surfaces all
+of one density - unless the promolecular density is asked for where
+there is none (the option `fallback`, off unless chosen). It runs
 nothing itself: `prepare` writes the wavefunction under a name whose
 extension tells Multiwfn what it is, or the geometry as an XYZ file, and
 what Multiwfn is to be told, a line at a time - read back after the run
@@ -58,7 +61,7 @@ import math
 import re
 import sys
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 PROGRAM = "multiwfn"
 STREAM = "nci.txt"
 GEOMETRY = "molecule.xyz"
@@ -67,10 +70,17 @@ RDG = "func2.cub"
 # what each kind of wavefunction's file is called, for Multiwfn to tell it by
 EXTENSIONS = {"molden": ".molden", "gaussian-fchk": ".fch", "wfx": ".wfx"}
 GRIDS = {"low": "1", "medium": "2", "high": "3"}
-# the density each entry's NCI is of: the wavefunction's where it has one, else promolecular; or promolecular for all
+# the density each entry's NCI is of: the wavefunction's (where an entry has none, refused - or promolecular, where the
+# fallback is chosen); or promolecular for all
 DENSITIES = ("wavefunction", "promolecular")
 # the two analyses, as main function 20 numbers them
 NCI, NCI_PROMOLECULAR = "1", "2"
+# (an entry with no wavefunction, the fallback off: said on it, and on the step where it is every entry)
+NO_WAVEFUNCTION = ("Multiwfn: this molecule was read from no wavefunction (a Molden file, a Gaussian formatted checkpoint"
+                   " or a WFX). Choose the promolecular density, or turn on \"Promolecular where a molecule has no"
+                   " wavefunction\".")
+NO_WAVEFUNCTION_ANY = ("no molecule was read from a wavefunction (a Molden file, a Gaussian formatted checkpoint or a WFX):"
+                       " choose the promolecular density, or turn on \"Promolecular where a molecule has no wavefunction\"")
 
 
 class Refused(Exception):
@@ -127,11 +137,21 @@ def op_prepare(m):
     density = options.get("density", "wavefunction")
     if density not in DENSITIES:
         raise Refused(f"no density is called {density!r}")
+    fallback = options.get("fallback", False)
+    if not isinstance(fallback, bool):
+        raise Refused("the fallback is neither on nor off")
+    entries = m.get("entries") or []
+    if not entries:
+        raise Refused("nothing came in")
     jobs = []
-    for i, entry in enumerate(m.get("entries") or []):
+    refused = []
+    for i, entry in enumerate(entries):
         given = wavefunction_of(entry) if density == "wavefunction" else None
         if given:
             name, text, analysis = "wavefunction" + EXTENSIONS[given[0]], given[1], NCI
+        elif density == "wavefunction" and not fallback:
+            refused.append({"entry": i, "why": NO_WAVEFUNCTION, "kind": "refused"})
+            continue
         else:
             name, text, analysis = GEOMETRY, xyz_of(entry), NCI_PROMOLECULAR
         stream = "\n".join(["20", analysis, GRIDS[grid], "3", "0", "0", "q"]) + "\n"
@@ -144,8 +164,8 @@ def op_prepare(m):
             "reads": [STREAM],
         })
     if not jobs:
-        raise Refused("nothing came in")
-    return {"jobs": jobs}
+        raise Refused(NO_WAVEFUNCTION_ANY)
+    return {"jobs": jobs, **({"refused": refused} if refused else {})}
 
 
 def why_of(log):
