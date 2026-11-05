@@ -15,47 +15,10 @@
  * out in that step too.
  */
 import { removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
-import type { DrawnModel, Molecule3D, Wire, WorkflowSet, WorkflowStep } from "../store/types";
-import { setMembers, setMolecules, entriesIn, LARGE_SET, type Frame } from "./entries";
-import { setGives } from "./look";
-import { exitStart } from "./place";
+import type { DrawnModel, Molecule3D, WorkflowSet } from "../store/types";
+import { setMembers, setMolecules, entriesIn, LARGE_SET } from "./entries";
+import { heldSets } from "./onPage";
 import { drawnEntries, laidOutAgain, type RunWith } from "./run";
-
-type Pt = { x: number; y: number };
-
-/** The held sets of a page, by the page's sets and wires: worked out again only as either changes. */
-const heldBy = new WeakMap<readonly WorkflowSet[], { wires: readonly Wire[] | undefined; held: ReadonlySet<number> }>();
-
-/** The ids of a page's held sets: each a step's result set (`made`), a wire out of it, and not opened. */
-export function heldSets(doc: Pick<WorkspaceDocument, "sets" | "wires">): ReadonlySet<number> {
-  const sets = doc.sets ?? [];
-  const was = heldBy.get(sets);
-  if (was && was.wires === doc.wires) return was.held;
-  const wired = new Set((doc.wires ?? []).map((w) => w.from.set));
-  const held = new Set(sets.filter((b) => b.made && !b.opened && wired.has(b.id)).map((b) => b.id));
-  heldBy.set(sets, { wires: doc.wires, held });
-  return held;
-}
-
-/** Whether a set is held off the page (`heldSets`). */
-export const isHeld = (doc: Pick<WorkspaceDocument, "sets" | "wires">, set: Pick<WorkflowSet, "id">): boolean => heldSets(doc).has(set.id);
-
-/** A page's sets that lie on it: all but those held (`heldSets`). */
-export function setsOnPage<T extends Pick<WorkflowSet, "id">>(doc: Pick<WorkspaceDocument, "sets" | "wires">, sets: readonly T[]): T[] {
-  const held = heldSets(doc);
-  return held.size ? sets.filter((b) => !held.has(b.id)) : [...sets];
-}
-
-/**
- * Where a wire out of a set starts: a step's result set's at its exit's
- * port on the step's card (look `stepGives`), held or not - its frame,
- * where it has one on the page, gives from no port of its own; a set the
- * chemist made, at its frame's right side.
- */
-export function wireStart(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | "kind">[] | ReadonlyMap<number, Pick<WorkflowStep, "id" | "x" | "y" | "kind">>, set: Frame & Pick<WorkflowSet, "made">): Pt {
-  const s = set.made ? ("get" in steps ? steps.get(set.made.step) : steps.find((x) => x.id === set.made!.step)) : undefined;
-  return s && set.made ? exitStart(s, set.made.exit) : setGives(set);
-}
 
 /**
  * `doc` with set `id` held off the page: what it holds on the page - its
