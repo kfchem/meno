@@ -144,10 +144,15 @@ describe("the right-click menu", () => {
     expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
   });
 
-  it("offers words' size, bold, italic and a list among their icons - ticked as they are - and how their lines lie listed", () => {
-    const words = { onFont: none, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
+  it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
+    const font = <div aria-label="Font rows">rows</div>;
+    const words = { font, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
     const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
-    expect(icons).toEqual(["Edit text", "Font…", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    expect(icons).toEqual(["Edit text", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    // (the font in the menu itself, under the icons and above the list: no card to open first)
+    const at = (s: string) => html.indexOf(s);
+    expect(at('aria-label="Font rows"')).toBeGreaterThan(at('aria-label="Frequent"'));
+    expect(at('aria-label="Font rows"')).toBeLessThan(at("Align left"));
     expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
     // (their keys named by what they give - + and = - not where they lie, which a keyboard decides)
     expect(html).toMatch(/Superscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+\+|⌘\+)<\/kbd>/);

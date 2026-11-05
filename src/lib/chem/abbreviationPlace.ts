@@ -2,7 +2,6 @@ import { layout2D, type Layout2D } from "../layout/engine";
 import type { LayoutInput } from "../layout/perceive";
 import { abbreviationStructure } from "./abbreviations";
 import { contractGraph, contractionTrials, hiddenIn, type Contraction } from "./contract";
-import { wedgeNarrowAtom } from "./layout2d";
 import type { GroupStructure, StructureBond } from "./ligands";
 import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder, type AbbreviationStructure, type AtomChem } from "./molecule";
@@ -184,20 +183,12 @@ function placedFrom(
     bonds.push({ a1: h.on, a2: atoms.length - 1, order: 1 });
   }
   // each wedge on its bond, its narrow end at its centre
-  const degree = new Map<number, number>();
-  const count = (i: number) => degree.set(i, (degree.get(i) ?? 0) + 1);
-  for (const b of bonds) {
-    count(b.a1);
-    count(b.a2);
-  }
-  for (const at of s.attach) count(at);
   for (const w of laid.wedges) {
     const to = w.to === -1 ? hydrogenOn.get(w.from) : w.to;
     const b = bonds.find((x) => !x.endpoints && ((x.a1 === w.from && x.a2 === to) || (x.a1 === to && x.a2 === w.from)));
     if (!b) continue;
     b.stereo = w.stereo;
-    const usual = wedgeNarrowAtom({ a1: b.a1, a2: b.a2, order: b.order, stereoOrient: "principle" }, degree);
-    if (usual !== w.from) b.stereoOrient = "reverse";
+    b.narrow = w.from;
   }
   // and a ring's bond toward the viewer, a wedge narrow at its far end
   // a cluster's metals in contact, dashed
@@ -209,8 +200,7 @@ function placedFrom(
     const b = bonds.find((x) => (x.a1 === far && x.a2 === nearer) || (x.a1 === nearer && x.a2 === far));
     if (!b) continue;
     b.display = "wedge";
-    const usual = wedgeNarrowAtom({ a1: b.a1, a2: b.a2, order: b.order, stereoOrient: "principle" }, degree);
-    if (usual !== far) b.stereoOrient = "reverse";
+    b.narrow = far;
   }
 
   const into = { x: laid.x[head] - laid.x[from], y: laid.y[head] - laid.y[from] };
