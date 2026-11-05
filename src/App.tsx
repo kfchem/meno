@@ -16,6 +16,7 @@ import DocumentBridge from "./ui/views/DocumentBridge";
 import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
 import { keptOnline } from "./lib/plugins/online";
 import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
+import QuestionLayer from "./ui/layouts/QuestionLayer";
 import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
 import { withOwn3d, withRole } from "./lib/chem/style3d";
@@ -895,8 +896,9 @@ export default function App() {
         />
       )}
       {pendingClose && (
+        // (a question about the whole window: asked in the window's own layer, over all else - layouts/QuestionLayer)
+        <QuestionLayer key="confirm-discard">
         <ConfirmDiscard
-          key="confirm-discard"
           title={
             pendingClose.kind === "tab"
               ? `Close "${state.tabsById[pendingClose.id]?.meta.label ?? "this tab"}"?`
@@ -919,6 +921,7 @@ export default function App() {
           }}
           onSave={savable(pendingClose) ? () => void saveThenClose(pendingClose) : undefined}
         />
+        </QuestionLayer>
       )}
       </AnimatePresence>
       {state.mountOrder.map((id) => {

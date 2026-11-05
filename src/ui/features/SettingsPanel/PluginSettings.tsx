@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FADE } from "../../theme/motion";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import QuestionLayer from "../../layouts/QuestionLayer";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
 import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
@@ -333,10 +334,11 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         )}
         {filesCanGo(state, addedUsing(p.id)) && files.button}
       </div>
+      <QuestionLayer>
       <AnimatePresence>
         {using && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="using" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="using" {...FADE} className="absolute inset-0">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
               message={`${listOf(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it. Removing ${p.name} removes ${using.length === 1 ? "it" : "them"} too.`}
@@ -350,14 +352,14 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
           </motion.div>
         )}
         {files.question && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="files" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="files" {...FADE} className="absolute inset-0">
             {files.question}
           </motion.div>
         )}
         {live && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="remove" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="remove" {...FADE} className="absolute inset-0">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
               message={`${live.length === 1 ? "One of its jobs is" : `${live.length} of its jobs are`} running or waiting. Removing it stops ${live.length === 1 ? "that job" : "them"}, and what ${live.length === 1 ? "it" : "they"} would have made is lost.`}
@@ -372,6 +374,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
           </motion.div>
         )}
       </AnimatePresence>
+      </QuestionLayer>
     </div>
   );
 }
