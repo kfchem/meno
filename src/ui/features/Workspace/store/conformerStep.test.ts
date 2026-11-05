@@ -104,8 +104,8 @@ import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { optionsFor } from "../workflow/doers";
-import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { optionsFor, roundsNeed } from "../workflow/doers";
+import { FEW_CONFORMERS, WITHIN_NEEDED } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
 import { entryOfSet, setEntries, setMembers } from "../workflow/entries";
 import { readWorkspace, workspaceText } from "../utils/workspace";
@@ -463,6 +463,15 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
       rdkit.roleDraws = was;
       useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings } }));
     }
+  });
+
+  it("needs its window - its own, else Settings' - where its plugin's search takes draws; not where it takes none, nor for a number of the chemist's own", () => {
+    const needed = { sought: "needed", count: 200, within: Number.NaN, first: 0, most: 5000 };
+    expect(roundsNeed("conformers", true, needed)).toBe(WITHIN_NEEDED);
+    expect(roundsNeed("conformers", true, { ...needed, within: 2.5 })).toBeUndefined();
+    expect(roundsNeed("conformers", false, needed)).toBeUndefined();
+    expect(roundsNeed("conformers", true, { ...needed, sought: "fixed" })).toBeUndefined();
+    expect(roundsNeed("optimise", true, needed)).toBeUndefined();
   });
 
   it("says, run as jobs on molecules in 3D, that it asks each once where it was asked for as many as each needs in rounds", () => {

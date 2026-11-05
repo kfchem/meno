@@ -121,16 +121,3 @@ describe("a search in rounds", () => {
     expect(roundsSaid({ tried: 50, rounds: 1, ended: "unjudged" }, o)).toBe("1 round, 50 tried: no energies came with them to tell a new conformer by");
   });
 });
-
-describe("a Conformers step asked for as many as the molecule needs, in rounds", () => {
-  it("needs its window - its own, else Settings' - where its plugin's search takes draws; not where it takes none, nor for a number of the chemist's own", async () => {
-    const { roundsNeed } = await import("../workflow/doers");
-    const { WITHIN_NEEDED } = await import("../../../../lib/chem/conformersSought");
-    const needed = { sought: "needed", count: 200, within: Number.NaN, first: 0, most: 5000 };
-    expect(roundsNeed("conformers", true, needed)).toBe(WITHIN_NEEDED);
-    expect(roundsNeed("conformers", true, { ...needed, within: 2.5 })).toBeUndefined();
-    expect(roundsNeed("conformers", false, needed)).toBeUndefined();
-    expect(roundsNeed("conformers", true, { ...needed, sought: "fixed" })).toBeUndefined();
-    expect(roundsNeed("optimise", true, needed)).toBeUndefined();
-  });
-});
