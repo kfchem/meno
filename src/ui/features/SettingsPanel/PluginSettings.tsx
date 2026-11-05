@@ -14,6 +14,7 @@ import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
+import { showSettingsSection } from "./section";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
@@ -245,6 +246,16 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             {p.reads.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Reads {p.reads.map(named).join(", ")}.</p>}
             {p.writes.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Writes {p.writes.map((w) => `${w.name} (${w.extensions.join(", ")})`).join(", ")}.</p>}
             {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
+            {/* (its options and its key are a conversation's: kept in Settings, Conversations) */}
+            {p.roles.includes("language-model") && (
+              <p className="text-xs text-gh-gray mt-1 max-w-2xl">
+                Its options and its key are in{" "}
+                <button type="button" className="underline hover:text-gh-black" onClick={() => showSettingsSection("conversations")}>
+                  Conversations
+                </button>
+                .
+              </p>
+            )}
             {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">In a workflow: {stepNames(p).join(", ")}.</p>}
             {p.installed.map((d) => (
               <Installed key={d.name} plugin={p.id} decl={d} />
