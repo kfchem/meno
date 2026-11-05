@@ -9,15 +9,15 @@ import {
   useTypefaces,
 } from "../../fonts/typefaces";
 
+/** How tall the open list is at most, its search field with it, in pixels. */
+const LIST_ROOM = 340;
+
 /**
  * Picks the typeface labels are set in: those that come with Meno and those
  * the journals' styles use first, then every one on this computer, each
  * shown in itself. Below it, what became of the one picked, if it cannot be
  * used as it is.
  */
-/** How tall the open list is at most, its search field with it, in pixels. */
-const LIST_ROOM = 340;
-
 export default function TypefacePicker({
   value,
   suggested,
