@@ -610,8 +610,7 @@ fn to_trash(dir: &Path) -> Result<(), String> {
 fn to_trash(dir: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::UI::Shell::{SHFileOperationW, SHQueryRecycleBinW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING, FO_DELETE, SHFILEOPSTRUCTW, SHQUERYRBINFO};
-    // (its drive's root, as the Recycle Bin is asked of: C:\, or \\server\share\)
-    let root: Vec<u16> = dir.ancestors().last().unwrap_or(dir).as_os_str().encode_wide().chain([0]).collect();
+    let root: Vec<u16> = drive_root(dir).ok_or("its drive is not known")?.encode_wide().chain([0]).collect();
     let mut bin = SHQUERYRBINFO { cbSize: std::mem::size_of::<SHQUERYRBINFO>() as u32, i64Size: 0, i64NumItems: 0 };
     // SAFETY: `root` is nul-ended and `bin` sized as the call asks; both live through it.
     if unsafe { SHQueryRecycleBinW(root.as_ptr(), &mut bin) } < 0 {
@@ -636,6 +635,20 @@ fn to_trash(dir: &Path) -> Result<(), String> {
     } else {
         Err(format!("the Recycle Bin did not take it ({code})"))
     }
+}
+
+/// A Windows path's drive root as the Recycle Bin is asked of it - `C:\` or
+/// `\\server\share\` - its `\\?\` form or not; none where it names no drive.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn drive_root(dir: &Path) -> Option<std::ffi::OsString> {
+    use std::path::{Component, Prefix};
+    let Some(Component::Prefix(p)) = dir.components().next() else { return None };
+    let root = match p.kind() {
+        Prefix::Disk(d) | Prefix::VerbatimDisk(d) => format!("{}:\\", d as char),
+        Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => format!("\\\\{}\\{}\\", server.to_string_lossy(), share.to_string_lossy()),
+        _ => return None,
+    };
+    Some(root.into())
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
@@ -1032,6 +1045,17 @@ mod tests {
                 fs::copy(&p, to.join(e.file_name())).unwrap();
             }
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn asks_the_recycle_bin_of_a_paths_drive_its_long_form_too() {
+        let root = |p: &str| drive_root(Path::new(p)).map(|r| r.to_string_lossy().into_owned());
+        assert_eq!(root(r"C:\Users\a\jobs\x"), Some(r"C:\".into()));
+        assert_eq!(root(r"\\?\D:\jobs\x"), Some(r"D:\".into()));
+        assert_eq!(root(r"\\server\share\jobs\x"), Some(r"\\server\share\".into()));
+        assert_eq!(root(r"\\?\UNC\server\share\jobs\x"), Some(r"\\server\share\".into()));
+        assert_eq!(root(r"jobs\x"), None);
     }
 
     // (the system's own Trash: run by hand, `--ignored` - it puts a small empty folder in this computer's Trash)
