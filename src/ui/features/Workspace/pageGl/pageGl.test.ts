@@ -203,3 +203,21 @@ describe("the page's layers of regions", () => {
     expect(all.at(25, 3, zoom)?.key).toBe("set:2");
   });
 });
+
+describe("a line of runs", () => {
+  it("lays its runs one after another by their widths, about its anchor, each its own colour - leaving out empty ones", async () => {
+    const { lineOf, widthOfRuns } = await import("./texts");
+    const runs = [
+      { text: "1 / 5", color: "#6e7781" },
+      { text: "", color: "#000000" },
+      { text: " · Failed", color: "#cd4560", weight: 500 as const },
+    ];
+    const start = lineOf("chip", 2, 1, "start", runs, 11);
+    expect(start.map((t) => t.key)).toEqual(["chip:0", "chip:1"]);
+    expect(start[0].x).toBeCloseTo(2, 9);
+    expect(start[1].x).toBeCloseTo(2 + pagePx(textWidth("1 / 5", 11)), 9);
+    expect(start[1]).toMatchObject({ color: "#cd4560", weight: 500 });
+    const middle = lineOf("chip", 2, 1, "middle", runs, 11);
+    expect(middle[0].x).toBeCloseTo(2 - pagePx(widthOfRuns(runs, 11)) / 2, 9);
+  });
+});

@@ -25,9 +25,14 @@ export type Box = {
   /** How opaque its fill is: 1 unless said. */
   fillAlpha?: number;
   line?: Line;
+  /** A soft shadow under it, as CSS's box-shadow: blurred `blurPx` page pixels, `offsetYPx` below it, black at `alpha`. */
+  shadow?: Shadow;
   z?: number;
   opacity?: number;
 };
+
+/** A soft shadow under a box (`Box.shadow`): as Tailwind's shadow-sm is 1 px down, 2 px blurred, black at 5 %. */
+export type Shadow = { blurPx: number; offsetYPx: number; alpha: number };
 
 /**
  * A ring - a circle, filled or not - centred at `x`, `y`: `diameterPx` page
@@ -67,6 +72,8 @@ export const PER = {
   dash: 2,
   /** 1 a ring, 0 a box; how opaque the whole */
   kindOpacity: 2,
+  /** its shadow's blur and its offset down, world units, and how dark (0: none) */
+  shadow: 3,
 } as const;
 
 export type Packed = { -readonly [K in keyof typeof PER]: Float32Array } & { count: number; keys: string[] };
@@ -117,6 +124,8 @@ export function packShapes(shapes: readonly Shape[], into?: Packed): Packed {
     else out.stroke.fill(0, i * PER.stroke, (i + 1) * PER.stroke);
     out.dash.set(line?.dashed ? [pagePx(line.dashed.onPx), pagePx(line.dashed.offPx)] : [0, 0], i * PER.dash);
     out.kindOpacity.set([s.kind === "ring" ? 1 : 0, s.opacity ?? 1], i * PER.kindOpacity);
+    const sh = s.kind === "box" ? s.shadow : undefined;
+    out.shadow.set(sh ? [pagePx(sh.blurPx), pagePx(sh.offsetYPx), sh.alpha] : [0, 0, 0], i * PER.shadow);
   });
   return out;
 }
