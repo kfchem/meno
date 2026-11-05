@@ -29,6 +29,18 @@ describe("a frame with its tab, drawn as a set's", () => {
     expect([small.texts, small.icons.map((i) => i.icon)]).toEqual([[], ["chat"]]);
   });
 
+  it("a set's: says its name and count from its padding, read, with no icon - its icon standing in for them only where they are too small to read", () => {
+    const set = frame({ key: "set:3", iconAlone: true, tab: { icon: "rings", name: "Input", status: "3 structures" } });
+    const read = frameTabParts([set], true);
+    expect(read.icons).toEqual([]);
+    expect(read.texts[0]).toMatchObject({ text: "Input", weight: 500 });
+    expect(read.texts[0].x).toBeCloseTo(SET_PAD);
+    expect(read.texts[1].x).toBeCloseTo(SET_PAD + pagePx(textWidth("Input", 11, 500) + FRAME_PX.gap));
+    expect(tabWidthPx(set.tab, true, true)).toBeCloseTo(textWidth("Input", 11, 500) + FRAME_PX.gap + textWidth("3 structures", 11));
+    const small = frameTabParts([set], false);
+    expect([small.texts, small.icons.map((i) => i.icon)]).toEqual([[], ["rings"]]);
+  });
+
   it("of the whole page, is its tab alone - a white box as wide as what it says - and takes the pointer there only", () => {
     const it = frame({ tabOnly: true, edges: true, tab: { icon: "chat", name: "Ideas", warn: "Sees the whole page" } });
     const parts = frameTabParts([it], true);

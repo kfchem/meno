@@ -8,7 +8,8 @@ import { pageAt } from "../utils/page";
 import { COLORS } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
-import SetFrame, { type Edge } from "../workflow/SetFrame";
+import SetFrame from "../workflow/SetFrame";
+import FrameTabs, { type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
 import StepCard, { shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
@@ -42,7 +43,7 @@ import { portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
-import type { Region } from "../pageGl/hits";
+import type { Region, Side as Edge } from "../pageGl/hits";
 import type { PageIcon } from "../pageGl/icons";
 import type { PageTipAt } from "../pageGl/PagePlaced";
 import type { Shape } from "../pageGl/shapes";
@@ -398,6 +399,10 @@ function runRows(s: WorkflowStep): RunRow[] {
 
 /** Where the steps' shut cards are drawn among the page's WebGL: over the wires (4) and the drawing's marks (40-42), under the molecules' chips (PAGE_GL_ORDER) - as their HTML lay. */
 const CARDS_ORDER = 44;
+/** Where the sets' frames and tabs are drawn: over the wires and the drawing's marks, under the cards - as their HTML lay, before the cards. */
+const SETS_ORDER = 42.5;
+/** How close two presses on a set's tab come to name it anew, in ms: a double-click's. */
+const DOUBLE_MS = 400;
 /** Where the ports are drawn: over the molecules' chips (PAGE_GL_ORDER, their words + 1), under a chip opened over the rest (pageGl/PagePlaced RAISED_ORDER). */
 const PORTS_ORDER = PAGE_GL_ORDER + 4;
 const NO_TEXTS: readonly PageText[] = [];
@@ -527,6 +532,8 @@ export default function Workflow2D() {
   const [compact, setCompact] = useState(false);
   // (the cards' words, faded as the page's are past the zoom they are read at: their icons alone and large below it)
   const words = useEasedTo(compact ? 0 : 1);
+  // (a chemist's set being named anew, by two presses on its tab)
+  const [renaming, setRenaming] = useState<number | null>(null);
   // (a shut card's state pointed at: its words in full, in the page's tip)
   const [statePointed, setStatePointed] = useState<number | null>(null);
   // (the port under the pointer: lit a little, as its HTML was on hover)
@@ -571,6 +578,11 @@ export default function Workflow2D() {
     layer.current?.style.setProperty("--words", read.current ? "1" : "0");
     layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
   });
+
+  // (what is under a point on the screen among what the page's WebGL takes the pointer for - a port a wire is let go on, a set's tab)
+  const hitAt = useHitAt();
+  const hitNow = useRef(hitAt);
+  hitNow.current = hitAt;
 
   const worldOf = (cx: number, cy: number): Pt => {
     const r = gl.domElement.getBoundingClientRect();
@@ -630,7 +642,6 @@ export default function Workflow2D() {
   };
 
   /** What lies under the pointer where a wire is let go: a port that takes or gives, empty space, or something else. */
-  const hitAt = useHitAt();
   const dropTarget = (ev: PointerEvent): { take: WireTo } | { give: WireEnd } | "empty" | null => {
     // (a port: a step's input, or a set's giving - found by its shape on the page, as the page's WebGL takes the pointer)
     const port = hitAt({ x: ev.clientX, y: ev.clientY }, (key) => key.startsWith("port:"));
@@ -821,7 +832,9 @@ export default function Workflow2D() {
     if (chosenSet == null) return;
     const letGo = () => store.getState().setWorkflowView({ chosenSet: null });
     const onPress = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement | null)?.closest?.(`[data-set-tab="${chosenSet}"]`)) letGo();
+      // (its tab is drawn by WebGL: what is under the press asked of the page's regions)
+      const hit = e.target === gl.domElement ? hitNow.current({ x: e.clientX, y: e.clientY }) : null;
+      if (!(hit?.key === `set:${chosenSet}` && hit.part === "tab")) letGo();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") letGo();
@@ -832,7 +845,7 @@ export default function Workflow2D() {
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [chosenSet, store]);
+  }, [chosenSet, store, gl]);
 
   // --- what is drawn ---------------------------------------------------------
   const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
@@ -961,28 +974,28 @@ export default function Workflow2D() {
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out; the steps' cards shut drawn by WebGL
   const faceList: CardFaceOf[] = [];
   const parts = [
-    ...sets.map((b) => {
+    // (what a set holds - a summary, a table, a chart - and its name being written anew, in HTML: its frame and tab by WebGL, `setTabs`)
+    ...sets.flatMap((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
-      return (
+      if (!info.summary && !b.table && !b.number && !b.chart && renaming !== b.id) return [];
+      return [
         <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
           <SetFrame
             set={{ ...b, ...f }}
             name={info.name}
-            count={info.count}
             {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
-            hovered={hoveredSet === b.id}
-            chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
-            onTabDown={(e) => dragSet(e, b)}
-            onEdgeDown={(edge, e) => sizeSet(edge, e, b)}
             onContextMenu={menuOf("set", b.id)}
-            onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
-            {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
+            renaming={renaming === b.id}
+            onRename={(name) => {
+              if (name != null) store.getState().renameSet(b.id, name);
+              setRenaming(null);
+            }}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
-        </div>
-      );
+        </div>,
+      ];
     }),
     ...steps.flatMap((s) => {
       const info = kindInfo(s.kind);
@@ -1055,6 +1068,48 @@ export default function Workflow2D() {
     }),
   ];
   const shownParts = usePresence(parts, (el) => String(el.key));
+  // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top, its icon - what made it, or a set's
+  // own - standing in for them where they are too small to read; its line darker while its tab is pointed at, Meno's colour chosen
+  const setTabs: FrameTab[] = sets.map((b) => {
+    const info = setInfo.get(b.id)!;
+    const maker = b.made ? stepById.get(b.made.step) : undefined;
+    return {
+      key: `set:${b.id}`,
+      box: shownOf(b),
+      tone: chosenSet === b.id || selFlow.sets.has(b.id) ? "chosen" : hoveredSet === b.id ? "hover" : "rest",
+      tab: { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
+      iconAlone: true,
+      edges: true,
+    };
+  });
+  const tabsShown = useFaded(setTabs, (t) => t.key).map(({ item, opacity, leaving }) => ({ ...item, opacity, ...(leaving ? { noHits: true as const } : {}) }));
+  // (two presses on a chemist's set's tab, close together: its name written anew, in a field over the tab)
+  const tabPressed = useRef<{ set: number; at: number } | null>(null);
+  const onSetTabs: FrameTabsOn = {
+    tabDown: (key, e) => {
+      const b = setById.get(stepOfKey(key));
+      if (!b) return;
+      const now = performance.now();
+      const twice = tabPressed.current?.set === b.id && now - tabPressed.current.at < DOUBLE_MS;
+      tabPressed.current = { set: b.id, at: now };
+      if (twice && !b.made) {
+        (e.event as PointerEvent).stopPropagation();
+        setRenaming(b.id);
+        return;
+      }
+      dragSet(asPress(e), b);
+    },
+    edgeDown: (key, side, e) => {
+      const b = setById.get(stepOfKey(key));
+      if (b) sizeSet(side as Edge, asPress(e), b);
+    },
+    hover: (key, on) => {
+      const id = stepOfKey(key);
+      if (on) hover({ hoveredSet: id });
+      else unhover("hoveredSet", id);
+    },
+    menu: (key, e) => store.getState().setWorkflowView({ workflowMenu: { kind: "set", id: stepOfKey(key), clientX: e.screen.x, clientY: e.screen.y } }),
+  };
   // the shut cards, coming and going as their HTML did, drawn by WebGL in one layer over the wires (pageGl/cardFace)
   const faces = useFaded(faceList, (f) => f.key);
   const cards = { shapes: [] as Shape[], texts: [] as PageText[], icons: [] as PageIcon[], regions: [] as Region[], tip: null as PageTipAt | null };
@@ -1198,6 +1253,8 @@ export default function Workflow2D() {
       })}
       {drawn && wirePoints.get("drawn") && <WireLine target={wirePoints.get("drawn")!} color={ACCENT} zoom={zoom} />}
 
+      {/* the sets' frames and tabs, by WebGL: under the cards (SETS_ORDER) */}
+      <FrameTabs items={tabsShown} on={onSetTabs} order={SETS_ORDER} />
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

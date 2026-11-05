@@ -1,56 +1,32 @@
 import { useEffect, useReducer, useRef } from "react";
-import { DURATION } from "../../../theme/motion";
-
-/** Where a thing is in its fade: come at `since` (ms), or going since then. */
-type Seen<T> = { item: T; since: number; leaving: boolean };
-
-/** How opaque a thing is `now` (ms), `ms` its fade's length: coming, up from none; going, down to none. */
-export function fadeAt(e: { since: number; leaving: boolean }, now: number, ms: number): number {
-  const t = Math.min(1, Math.max(0, (now - e.since) / ms));
-  return e.leaving ? 1 - t : t;
-}
+import { fading, presenceAt, presentAt, type Present } from "./presence";
 
 /**
  * What WebGL draws on the page coming and going as its HTML did
- * (`meno-fade-in`, `meno-fade-out`, theme/presence): each of `items` faded in
- * as it comes, and each gone kept as it last was while it fades out - from
- * where it was, should it turn back mid-way - frame by frame while any
- * fades. Each with how opaque it is now, and whether it is going.
+ * (`meno-fade-in`, `meno-fade-out`), over Meno's base time and easing
+ * (./presence): each of `items` faded in as it comes - those there as the
+ * page is first drawn there at once - and each gone kept as it last was
+ * while it fades out, frame by frame while any fades. Each with how
+ * present it is now, and whether it is going.
  */
-export function useFaded<T>(items: readonly T[], keyOf: (item: T) => string, ms = DURATION.quick * 1000): { key: string; item: T; opacity: number; leaving: boolean }[] {
-  const seen = useRef(new Map<string, Seen<T>>());
+export function useFaded<T>(items: readonly T[], keyOf: (item: T) => string): { key: string; item: T; opacity: number; leaving: boolean }[] {
+  const was = useRef<Map<string, Present<{ key: string; item: T }>> | null>(null);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const now = performance.now();
-  const here = new Set<string>();
-  for (const item of items) {
-    const key = keyOf(item);
-    here.add(key);
-    const e = seen.current.get(key);
-    // (back mid-way out: in again from as far as it had gone)
-    if (!e || e.leaving) seen.current.set(key, { item, since: e ? now - fadeAt(e, now, ms) * ms : now, leaving: false });
-    else e.item = item;
-  }
-  for (const [key, e] of seen.current) {
-    if (here.has(key) || e.leaving) continue;
-    seen.current.set(key, { item: e.item, since: now - (1 - fadeAt(e, now, ms)) * ms, leaving: true });
-  }
-  const out: { key: string; item: T; opacity: number; leaving: boolean }[] = [];
-  let fading = false;
-  for (const [key, e] of seen.current) {
-    const opacity = fadeAt(e, now, ms);
-    if (e.leaving && opacity <= 0) {
-      seen.current.delete(key);
-      continue;
-    }
-    if (opacity < 1 || e.leaving) fading = true;
-    out.push({ key, item: e.item, opacity, leaving: e.leaving });
-  }
+  const present = presentAt(
+    was.current ?? new Map(),
+    items.map((item) => ({ key: keyOf(item), item })),
+    now,
+    was.current == null,
+  );
+  was.current = present;
+  const still = fading(present, now);
   useEffect(() => {
-    if (!fading) return;
+    if (!still) return;
     const id = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(id);
   });
-  return out;
+  return [...present.values()].map((p) => ({ key: p.item.key, item: p.item.item, opacity: presenceAt(p, now), leaving: p.gone != null }));
 }
 
 /** A value `ms` milliseconds a step nearer `to` from `at`, `rate` a whole unit in `ms`. */
