@@ -13,7 +13,8 @@ import {
 } from "./lib/core";
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
-import { openable, openedAs, openedTexts, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import { keptOnline } from "./lib/plugins/online";
 import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
 import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
@@ -57,7 +58,8 @@ import {
   startNetwork,
   useNetwork,
 } from "./lib/net/network";
-import { sayFailedSetUps } from "./ui/setUpSaid";
+import { sayFailedSetUps, sayUsedBefore } from "./ui/setUpSaid";
+import { getUsedBefore } from "./lib/plugins/usedBefore";
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
@@ -122,6 +124,8 @@ export default function App() {
   // step they fill offered in Quick Add.
   useEffect(() => {
     if (isTauri()) void addedReaders([...READERS, ...ALL_PLUGINS.filter((p) => !READERS.some((r) => r.id === p.id))]).catch(() => {});
+    // (and the plugins online, as the list kept from before has them - nothing fetched - their kinds of file told too)
+    if (isTauri()) void keptOnline();
   }, []);
 
   // A plugin's set-up that ends without its being added, said wherever the chemist is, until dismissed (ui/setUpSaid).
@@ -157,6 +161,8 @@ export default function App() {
       await applyNetworkSettings(useAppSettings.getState().network);
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
+      // the plugins set up here before they came online, asked about once (lib/plugins/usedBefore)
+      if (!gone && isTauri()) void getUsedBefore(sayUsedBefore);
     })();
     const unwatch = useNetwork.subscribe((s, prev) => {
       if (!useAppSettings.getState().loaded) return;
@@ -404,6 +410,7 @@ export default function App() {
     const workspaces: { name: string; workspace: string; path: string }[] = [];
     const texts: OpenedText[] = [];
     const structures: OpenedFile[] = [];
+    const untold: OpenedFile[] = [];
     const pdfs: OpenedPdf[] = [];
     const pictures: PictureToAdd[] = [];
     for (const path of paths) {
@@ -446,10 +453,12 @@ export default function App() {
         }
         const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
-        const opened = openedAs(name, text, path, await kindOfFile(name, text));
+        const kind = await kindOfFile(name, text);
+        const opened = openedAs(name, text, path, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
         else structures.push({ name, bytes, path });
+        if (asText && !kind) untold.push({ name, bytes, path });
       } catch (e) {
         setNotice(`${name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -471,7 +480,20 @@ export default function App() {
     if (pdfs.length) openPdfs(pdfs, front);
     if (pictures.length) openPictures(pictures, front);
     if (structures.length) openStructureFiles(structures, front);
+    sayUntold(untold);
   };
+  // Texts nothing told, opened as texts while the plugins online are not
+  // listed: said, with the button that lists them - and those a plugin on
+  // offer then tells read as what they are, as any file opened is (ui/views/openFile `sayNoneTold`).
+  const sayUntold = (untold: OpenedFile[]) =>
+    sayNoneTold(
+      untold.map((u) => u.name),
+      (told) => openStructureFiles(untold.filter((u) => told.includes(u.name)), stateRef.current.activeId),
+      async (name) => {
+        const u = untold.find((x) => x.name === name);
+        return u ? kindOfFile(name, textOf(u.bytes)) : null;
+      },
+    );
   // Closing with unsaved changes: the tabs that hold them, and whether
   // each can be saved (lib/doc/savers).
   const unsavedOf = (p: { kind: "tab"; id: string } | { kind: "window" }): string[] =>
@@ -512,6 +534,7 @@ export default function App() {
   const openFilesAlone = async (files: File[]) => {
     const texts: OpenedText[] = [];
     const structures: OpenedFile[] = [];
+    const untold: OpenedFile[] = [];
     for (const f of files) {
       try {
         const bytes = new Uint8Array(await f.arrayBuffer());
@@ -527,10 +550,12 @@ export default function App() {
         }
         const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
-        const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
+        const kind = await kindOfFile(f.name, text);
+        const opened = openedAs(f.name, text, undefined, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
         else structures.push({ name: f.name, bytes });
+        if (asText && !kind) untold.push({ name: f.name, bytes });
       } catch (e) {
         // (as Open through the dialog says it: a file that does not read - a workspace cut short - said so, not dropped unseen)
         setNotice(`${f.name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
@@ -540,6 +565,7 @@ export default function App() {
     const front = stateRef.current.activeId;
     if (texts.length) openTexts(texts, front);
     if (structures.length) openStructureFiles(structures, front);
+    sayUntold(untold);
   };
   // A workspace file's workspace in a tab of its own - where it opens: one
   // that does not - saved by a newer Meno, say - is said so, and leaves no

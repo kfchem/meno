@@ -76,7 +76,7 @@ describe("a colour card over what an undo took away (it closes; a ring is filled
         }
         for (let k = 0; k < 6; k++) {
           const id = x.nextId;
-          x = { ...x, nextId: id + 1, model: { atoms: x.model.atoms, bonds: [...x.model.bonds, { id, a: ids[k], b: ids[(k + 1) % 6], order: 1, stereo: "none", stereoOrient: "principle" }] } };
+          x = { ...x, nextId: id + 1, model: { atoms: x.model.atoms, bonds: [...x.model.bonds, { id, a: ids[k], b: ids[(k + 1) % 6], order: 1, stereo: "none" }] } };
         }
         return x;
       });

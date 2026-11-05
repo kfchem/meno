@@ -686,8 +686,9 @@ export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: num
   }
   // (its count: digits, or one small letter, set by its lower end - the page's y running down - the nearest, where two
   //  brackets' counts are set close)
+  const lowOf = (b: Bracket) => (b.ends[0].y > b.ends[1].y ? b.ends[0] : b.ends[1]);
   const countAt = (b: Bracket) => {
-    const low = b.ends[0].y > b.ends[1].y ? b.ends[0] : b.ends[1];
+    const low = lowOf(b);
     let best = -1;
     words.forEach((w, k) => {
       if (counts(w) && fromBox(low, w.box) < 0.6 * bond && centre(w.box).y > low.y - 0.25 * bond && (best < 0 || fromBox(low, w.box) < fromBox(low, words[best].box))) best = k;
@@ -700,10 +701,12 @@ export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: num
     // (a square bracket's ticks: the short lines from its ends)
     for (const t of shapes.strokes) if (len(t) < 0.45 * bond && b.ends.some((e) => Math.min(dist(e, t.a), dist(e, t.b)) < 0.1 * bond)) out.strokes.add(t);
   };
-  const counted = brackets.flatMap((b) => {
+  const near = brackets.flatMap((b) => {
     const k = countAt(b);
-    return k >= 0 ? [{ b, k }] : [];
+    return k >= 0 ? [{ b, k, d: fromBox(lowOf(b), words[k].box) }] : [];
   });
+  // (a count is the bracket's whose foot it is nearest: another that has it in reach is uncounted - its partner, where it is one)
+  const counted = near.filter((c) => !near.some((o) => o.k === c.k && o.d < c.d));
   const mid = (b: Bracket) => ({ x: (b.ends[0].x + b.ends[1].x) / 2, y: (b.ends[0].y + b.ends[1].y) / 2 });
   for (const { b, k } of counted) {
     if (out.counts.has(k)) continue;

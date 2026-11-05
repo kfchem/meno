@@ -11,7 +11,8 @@ import { usePresentingWindow } from "./presenting";
 /** How long a notice stays, unless it is dismissed. */
 const NOTICE_MS = 9000;
 
-export type Notice = { id: string; title: string; text: string; action?: { label: string; run: () => void }; stays?: boolean };
+/** A notice; its action, clicked, lets it go - unless it `keeps` it, to say in its place what came of it. */
+export type Notice = { id: string; title: string; text: string; action?: { label: string; run: () => void; keeps?: true }; stays?: boolean };
 
 type Notices = { notices: Notice[]; show: (n: Notice) => void; dismiss: (id: string) => void };
 
@@ -27,7 +28,8 @@ export const useNotices = create<Notices>((set, get) => ({
       held.splice(0, held.length, ...held.filter((x) => x.id !== n.id), n);
       return;
     }
-    set((s) => ({ notices: [...s.notices.filter((x) => x.id !== n.id), n] }));
+    // (one of the same id said again: in its place)
+    set((s) => ({ notices: s.notices.some((x) => x.id === n.id) ? s.notices.map((x) => (x.id === n.id ? n : x)) : [...s.notices, n] }));
     clearTimeout(timers.get(n.id));
     timers.delete(n.id);
     if (!n.stays)

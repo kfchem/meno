@@ -33,8 +33,12 @@ pub const HOSTS: [&str; 3] = ["github.com", "objects.githubusercontent.com", "re
 const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue.json";
 
 /// The keys the catalogue is signed with (minisign, base64): the one in use, and the next, so that one is
-/// changed for the other by a Meno that carries both first. Until one is carried, no catalogue is taken.
-const KEYS: &[&str] = &[];
+/// changed for the other by a Meno that carries both first. Only the public key is here; the secret one that
+/// signs the catalogue is kept by the maintainer, never in the repository.
+const KEYS: &[&str] = &[
+    // (key id 2F17AB3E9FB8307D)
+    "RWR9MLifPqsXL86AyrBHekSl4CsDiTA8jJneU+l/xIP6jWeVrzIV0GBe",
+];
 
 /// The most the catalogue, its signature, a plugin's archive, its files unpacked, and their number may be.
 const LIST_MOST: u64 = 4 * 1024 * 1024;
@@ -90,33 +94,79 @@ fn signed(list: &[u8], sig: &[u8], keys: &[&str]) -> Result<(), String> {
 
 /// The catalogue, checked: signed by one of `keys` - before anything of it is read - then of the form Meno
 /// reads, and not older than one taken before (`floor`).
-fn checked(list: &[u8], sig: &[u8], keys: &[&str], floor: Option<u64>) -> Result<(Value, u64), String> {
+fn checked(list: &[u8], sig: &[u8], keys: &[&str], floor: Option<&Taken>) -> Result<(Value, String), String> {
     signed(list, sig, keys)?;
     form_of(list, floor)
 }
 
-/// A signed list read: of the form Meno reads, with a serial, and - where Meno has taken one before
-/// (`floor`, its serial) - not older than it.
-fn form_of(list: &[u8], floor: Option<u64>) -> Result<(Value, u64), String> {
+/// Whether `s` is a time as a catalogue gives the one it was issued at: UTC, to the second, and nothing else -
+/// `2026-11-05T13:04:09Z` - and a real one. Of this one form, its order as text is its order in time.
+fn issued_ok(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 20 || !s.is_ascii() || b[4] != b'-' || b[7] != b'-' || b[10] != b'T' || b[13] != b':' || b[16] != b':' || b[19] != b'Z' {
+        return false;
+    }
+    let n = |r: std::ops::Range<usize>| {
+        let t = &s[r];
+        t.bytes().all(|c| c.is_ascii_digit()).then(|| t.parse::<u32>().ok()).flatten()
+    };
+    let (Some(y), Some(mo), Some(d), Some(h), Some(mi), Some(sec)) = (n(0..4), n(5..7), n(8..10), n(11..13), n(14..16), n(17..19)) else {
+        return false;
+    };
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let days = match mo {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    (1..=days).contains(&d) && h < 24 && mi < 60 && sec < 60
+}
+
+/// What a list fetched is held to: when the one taken before was issued, and its fingerprint.
+#[derive(Debug, Clone, PartialEq)]
+struct Taken {
+    issued: String,
+    sha256: String,
+}
+
+/// A signed list read: of the form Meno reads - no serial, and when it was issued, as Meno takes that - and,
+/// where Meno has taken one before (`floor`), issued no earlier; issued at the same second only where it is
+/// that list, byte for byte.
+fn form_of(list: &[u8], floor: Option<&Taken>) -> Result<(Value, String), String> {
     let value: Value = serde_json::from_slice(list).map_err(|_| "the list is not one Meno reads".to_string())?;
     if value.get("schema").and_then(Value::as_u64) != Some(SCHEMA) {
         return Err("the list is of a form this Meno does not read: a newer Meno may".to_string());
     }
-    let serial = value.get("serial").and_then(Value::as_u64).filter(|s| *s > 0).ok_or("the list has no serial")?;
-    if let Some(floor) = floor {
-        if serial < floor {
-            return Err(format!("the list is older than one Meno has taken (its serial {serial}, under {floor})"));
+    if value.get("serial").is_some() {
+        return Err("the list carries a serial, which this Meno does not read".to_string());
+    }
+    let issued = value.get("issued").and_then(Value::as_str).filter(|i| issued_ok(i)).ok_or("the list does not say when it was issued as Meno takes it")?.to_string();
+    if let Some(taken) = floor {
+        if issued < taken.issued {
+            return Err(format!("the list is older than one Meno has taken (issued {issued}, before {})", taken.issued));
+        }
+        if issued == taken.issued && tools::check(list, &taken.sha256).is_err() {
+            return Err(format!("the list was issued at the same second as one Meno has taken ({issued}) but is not that one"));
         }
     }
-    Ok((value, serial))
+    Ok((value, issued))
 }
 
-/// The catalogue as kept, and what Meno knows of it.
+/// The catalogue as kept, and what Meno knows of it: when it was issued, its fingerprint, and when it was fetched.
 #[derive(serde::Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct KeptState {
-    serial: u64,
+    issued: String,
+    sha256: String,
     fetched_at: String,
+}
+
+/// The SHA-256 of `bytes`, in hex.
+fn fingerprint(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Writes a file whole, or not at all: beside it first, then put in its place.
@@ -129,30 +179,31 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
-/// The catalogue kept from before, checked again as it is read - never trusted for having been kept.
+/// The catalogue kept from before, checked again as it is read - never trusted for having been kept: it must
+/// be the very list its state was written for.
 fn kept(root: &Path, keys: &[&str]) -> Option<(Value, KeptState)> {
     let list = std::fs::read(root.join("catalogue.json")).ok()?;
     let sig = std::fs::read(root.join("catalogue.json.minisig")).ok()?;
     let state: KeptState = serde_json::from_slice(&std::fs::read(root.join("catalogue-state.json")).ok()?).ok()?;
-    let (value, serial) = checked(&list, &sig, keys, None).ok()?;
-    (serial == state.serial).then_some((value, state))
+    let (value, issued) = checked(&list, &sig, keys, None).ok()?;
+    (issued == state.issued && fingerprint(&list) == state.sha256).then_some((value, state))
 }
 
-/// Keeps a catalogue checked: the list and its signature, then what Meno knows of it - its serial the floor
-/// a later one is held to.
-fn keep(root: &Path, list: &[u8], sig: &[u8], serial: u64, fetched_at: &str) -> Result<(), String> {
+/// Keeps a catalogue checked: the list and its signature, then what Meno knows of it - when it was issued
+/// and its fingerprint, what a later one is held to.
+fn keep(root: &Path, list: &[u8], sig: &[u8], issued: &str, fetched_at: &str) -> Result<(), String> {
     std::fs::create_dir_all(root).map_err(|e| format!("making {}: {e}", root.display()))?;
     put(&root.join("catalogue.json"), list)?;
     put(&root.join("catalogue.json.minisig"), sig)?;
-    let state = serde_json::to_vec(&KeptState { serial, fetched_at: fetched_at.to_string() }).map_err(|e| e.to_string())?;
-    put(&root.join("catalogue-state.json"), &state)
+    let state = KeptState { issued: issued.to_string(), sha256: fingerprint(list), fetched_at: fetched_at.to_string() };
+    put(&root.join("catalogue-state.json"), &serde_json::to_vec(&state).map_err(|e| e.to_string())?)
 }
 
-/// The serial a fetched catalogue is held to: the one kept's, signed or not - a catalogue kept whose
-/// signature no longer checks does not lower it.
-fn floor(root: &Path) -> Option<u64> {
+/// What a fetched catalogue is held to: the one kept's, signed or not - a catalogue kept whose signature no
+/// longer checks does not lower it.
+fn floor(root: &Path) -> Option<Taken> {
     let state: KeptState = serde_json::from_slice(&std::fs::read(root.join("catalogue-state.json")).ok()?).ok()?;
-    Some(state.serial)
+    Some(Taken { issued: state.issued, sha256: state.sha256 })
 }
 
 /// What the page is given: the catalogue checked, when it was fetched, and - where it is the one kept from
@@ -203,7 +254,7 @@ pub async fn catalogue_get(app: AppHandle, net: State<'_, net::Net>, fetch: bool
 type Fetched = Result<(Vec<u8>, Vec<u8>), String>;
 
 /// What `catalogue_get` gives, from what was fetched, if anything: a list fetched taken - checked, held to
-/// the serial of the one kept, then kept - else the one kept, saying why a newer one was not had.
+/// when the one kept was issued, then kept - else the one kept, saying why a newer one was not had.
 fn got(root: &Path, keys: &[&str], fetched: Option<Fetched>, now: &str) -> Result<Option<Got>, String> {
     let mut why = None;
     if let Some(fetched) = fetched {
@@ -222,8 +273,8 @@ fn got(root: &Path, keys: &[&str], fetched: Option<Fetched>, now: &str) -> Resul
 /// A list fetched, taken: signed, of the form Meno reads, and not older than the one kept - else refused,
 /// and nothing written - then kept.
 fn take_fetched(root: &Path, list: &[u8], sig: &[u8], keys: &[&str], now: &str) -> Result<Got, String> {
-    let (catalogue, serial) = checked(list, sig, keys, floor(root))?;
-    keep(root, list, sig, serial, now)?;
+    let (catalogue, issued) = checked(list, sig, keys, floor(root).as_ref())?;
+    keep(root, list, sig, &issued, now)?;
     Ok(Got { catalogue, fetched_at: now.to_string(), kept: None })
 }
 
@@ -521,16 +572,19 @@ mod tests {
     use super::*;
 
     // Three key pairs made for these tests alone, their secret keys not kept: the list signed with the first
-    // (serial 3, and 2), and with the second (serial 4); the third, no key of Meno's.
+    // (issued 2026-11-03, and one of 11-02, and another issued at the same second as the first), and with the
+    // second (issued 11-04); the third, no key of Meno's.
     const KEY_A: &str = "RWSs/jS3j5RbI4onMUi8LIJIdFYySkSf8LvHJ/GjO3I7aCC3nHeGRbyg";
     const KEY_B: &str = "RWTQ7SrJNzUVkBa6/essR0FBoRqIxc/TXBT0aOV96ubAdl4JQ68b2IgT";
-    const SERIAL2: &[u8] = include_bytes!("../fixtures/catalogue/serial2.json");
-    const SERIAL2_A: &[u8] = include_bytes!("../fixtures/catalogue/serial2.a.minisig");
-    const SERIAL3: &[u8] = include_bytes!("../fixtures/catalogue/serial3.json");
-    const SERIAL3_A: &[u8] = include_bytes!("../fixtures/catalogue/serial3.a.minisig");
-    const SERIAL4: &[u8] = include_bytes!("../fixtures/catalogue/serial4.json");
-    const SERIAL4_B: &[u8] = include_bytes!("../fixtures/catalogue/serial4.b.minisig");
-    const SERIAL4_C: &[u8] = include_bytes!("../fixtures/catalogue/serial4.c.minisig");
+    const EARLIER: &[u8] = include_bytes!("../fixtures/catalogue/earlier.json");
+    const EARLIER_A: &[u8] = include_bytes!("../fixtures/catalogue/earlier.a.minisig");
+    const LIST: &[u8] = include_bytes!("../fixtures/catalogue/list.json");
+    const LIST_A: &[u8] = include_bytes!("../fixtures/catalogue/list.a.minisig");
+    const SAME_TIME: &[u8] = include_bytes!("../fixtures/catalogue/same-time.json");
+    const SAME_TIME_A: &[u8] = include_bytes!("../fixtures/catalogue/same-time.a.minisig");
+    const LATER: &[u8] = include_bytes!("../fixtures/catalogue/later.json");
+    const LATER_B: &[u8] = include_bytes!("../fixtures/catalogue/later.b.minisig");
+    const LATER_C: &[u8] = include_bytes!("../fixtures/catalogue/later.c.minisig");
 
     fn scratch(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("meno-catalogue-{name}-{}", uuid::Uuid::new_v4().simple()))
@@ -538,52 +592,81 @@ mod tests {
 
     #[test]
     fn a_list_is_read_only_signed_with_meno_s_key() {
-        let (value, serial) = checked(SERIAL3, SERIAL3_A, &[KEY_A], None).unwrap();
-        assert_eq!(serial, 3);
+        let (value, issued) = checked(LIST, LIST_A, &[KEY_A], None).unwrap();
+        assert_eq!(issued, "2026-11-03T00:00:00Z");
         assert_eq!(value["plugins"][0]["id"], "sketch");
         // (signed with no key of Meno's, or with none given at all)
-        assert_eq!(checked(SERIAL4, SERIAL4_C, &[KEY_A, KEY_B], None).unwrap_err(), "the list is not signed with Meno's key");
-        assert_eq!(checked(SERIAL3, SERIAL3_A, &[], None).unwrap_err(), "Meno has no key to check the list with yet");
+        assert_eq!(checked(LATER, LATER_C, &[KEY_A, KEY_B], None).unwrap_err(), "the list is not signed with Meno's key");
+        assert_eq!(checked(LIST, LIST_A, &[], None).unwrap_err(), "Meno has no key to check the list with yet");
         // (a list changed after it was signed - one byte - or another list's signature)
-        let mut changed = SERIAL3.to_vec();
+        let mut changed = LIST.to_vec();
         let at = changed.iter().position(|b| *b == b'3').unwrap();
         changed[at] = b'9';
-        assert!(checked(&changed, SERIAL3_A, &[KEY_A], None).is_err());
-        assert!(checked(SERIAL2, SERIAL3_A, &[KEY_A], None).is_err());
-        assert!(checked(SERIAL3, b"not a signature", &[KEY_A], None).is_err());
+        assert!(checked(&changed, LIST_A, &[KEY_A], None).is_err());
+        assert!(checked(EARLIER, LIST_A, &[KEY_A], None).is_err());
+        assert!(checked(LIST, b"not a signature", &[KEY_A], None).is_err());
+    }
+
+    #[test]
+    fn meno_carries_its_key_and_takes_no_list_signed_with_another() {
+        use base64::Engine;
+        // (each key one minisign reads, an Ed25519 key - its id as minisign prints it, and the one in use first)
+        for k in KEYS {
+            assert!(PublicKey::from_base64(k).is_ok(), "{k}");
+        }
+        let ids: Vec<String> = KEYS
+            .iter()
+            .map(|k| {
+                let raw = base64::engine::general_purpose::STANDARD.decode(k).unwrap();
+                assert_eq!((raw.len(), &raw[..2]), (42, &b"Ed"[..]));
+                format!("{:016X}", u64::from_le_bytes(raw[2..10].try_into().unwrap()))
+            })
+            .collect();
+        assert_eq!(ids[0], "2F17AB3E9FB8307D");
+        // (a list signed with a key made for the tests alone - its secret one not kept - is refused, whichever)
+        assert_eq!(checked(LIST, LIST_A, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
+        assert_eq!(checked(LATER, LATER_C, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
     }
 
     #[test]
     fn the_next_key_signs_once_meno_carries_it() {
-        assert!(checked(SERIAL4, SERIAL4_B, &[KEY_A], None).is_err());
-        assert_eq!(checked(SERIAL4, SERIAL4_B, &[KEY_A, KEY_B], None).unwrap().1, 4);
+        assert!(checked(LATER, LATER_B, &[KEY_A], None).is_err());
+        assert_eq!(checked(LATER, LATER_B, &[KEY_A, KEY_B], None).unwrap().1, "2026-11-04T00:00:00Z");
     }
 
     #[test]
     fn a_signature_is_read_as_minisign_writes_it_or_in_base64() {
         use base64::Engine;
-        let wrapped = base64::engine::general_purpose::STANDARD.encode(SERIAL3_A);
-        assert_eq!(checked(SERIAL3, wrapped.as_bytes(), &[KEY_A], None).unwrap().1, 3);
+        // (the signatures here are as `tauri signer` writes them: minisign's text in base64 - and that text itself, too)
+        let text = base64::engine::general_purpose::STANDARD.decode(LIST_A.trim_ascii()).unwrap();
+        assert_eq!(checked(LIST, &text, &[KEY_A], None).unwrap().1, "2026-11-03T00:00:00Z");
+        assert_eq!(checked(LIST, LIST_A, &[KEY_A], None).unwrap().1, "2026-11-03T00:00:00Z");
     }
 
     #[test]
-    fn a_list_older_than_one_taken_is_refused() {
-        assert!(checked(SERIAL2, SERIAL2_A, &[KEY_A], Some(2)).is_ok());
-        assert_eq!(checked(SERIAL2, SERIAL2_A, &[KEY_A], Some(3)).unwrap_err(), "the list is older than one Meno has taken (its serial 2, under 3)");
+    fn a_list_issued_before_the_one_taken_is_refused_and_one_issued_the_same_second_unless_it_is_that_list() {
+        let taken = Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: fingerprint(LIST) };
+        // (later: taken; the very list again: taken)
+        assert!(checked(LATER, LATER_B, &[KEY_B], Some(&taken)).is_ok());
+        assert!(checked(LIST, LIST_A, &[KEY_A], Some(&taken)).is_ok());
+        // (earlier: refused; the same second, another list: refused)
+        assert_eq!(checked(EARLIER, EARLIER_A, &[KEY_A], Some(&taken)).unwrap_err(), "the list is older than one Meno has taken (issued 2026-11-02T00:00:00Z, before 2026-11-03T00:00:00Z)");
+        assert_eq!(checked(SAME_TIME, SAME_TIME_A, &[KEY_A], Some(&taken)).unwrap_err(), "the list was issued at the same second as one Meno has taken (2026-11-03T00:00:00Z) but is not that one");
     }
 
     #[test]
-    fn a_list_kept_is_checked_again_as_it_is_read_and_holds_later_ones_to_its_serial() {
+    fn a_list_kept_is_checked_again_as_it_is_read_and_holds_later_ones_to_when_it_was_issued() {
         let root = scratch("kept");
-        keep(&root, SERIAL3, SERIAL3_A, 3, "2026-11-05T00:00:00Z").unwrap();
+        keep(&root, LIST, LIST_A, "2026-11-03T00:00:00Z", "2026-11-05T00:00:00Z").unwrap();
         let (value, state) = kept(&root, &[KEY_A]).unwrap();
-        assert_eq!((value["serial"].as_u64(), state.fetched_at.as_str()), (Some(3), "2026-11-05T00:00:00Z"));
-        assert_eq!(floor(&root), Some(3));
-        // (one changed where it is kept: not read)
-        std::fs::write(root.join("catalogue.json"), SERIAL2).unwrap();
+        assert_eq!((value["issued"].as_str(), state.fetched_at.as_str()), (Some("2026-11-03T00:00:00Z"), "2026-11-05T00:00:00Z"));
+        assert_eq!(floor(&root), Some(Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: fingerprint(LIST) }));
+        // (one changed where it is kept - another list, signed, of the same second: not read)
+        std::fs::write(root.join("catalogue.json"), SAME_TIME).unwrap();
+        std::fs::write(root.join("catalogue.json.minisig"), SAME_TIME_A).unwrap();
         assert!(kept(&root, &[KEY_A]).is_none());
         // (and the floor stays: a list signed but older is refused still)
-        assert!(checked(SERIAL2, SERIAL2_A, &[KEY_A], floor(&root)).is_err());
+        assert!(checked(EARLIER, EARLIER_A, &[KEY_A], floor(&root).as_ref()).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -770,23 +853,38 @@ mod tests {
     }
 
     #[test]
-    fn a_list_is_read_only_of_the_form_meno_reads_with_a_serial_never_lower_than_the_one_taken() {
-        let list = |schema: u64, serial: u64| format!(r#"{{"schema":{schema},"issued":"2026-11-05T00:00:00Z","serial":{serial},"plugins":[]}}"#).into_bytes();
-        assert_eq!(form_of(&list(1, 3), None).unwrap().1, 3);
-        assert_eq!(form_of(&list(2, 3), None).unwrap_err(), "the list is of a form this Meno does not read: a newer Meno may");
-        assert_eq!(form_of(&list(1, 0), None).unwrap_err(), "the list has no serial");
-        assert_eq!(form_of(br#"{"schema":1,"plugins":[]}"#, None).unwrap_err(), "the list has no serial");
+    fn a_list_is_read_only_of_the_form_meno_reads_saying_when_it_was_issued_as_meno_takes_it_and_with_no_serial() {
+        let list = |schema: u64, issued: &str| format!(r#"{{"schema":{schema},"issued":"{issued}","plugins":[]}}"#).into_bytes();
+        assert_eq!(form_of(&list(1, "2026-11-05T13:04:09Z"), None).unwrap().1, "2026-11-05T13:04:09Z");
+        // (leap years as the calendar has them: every fourth, not every hundredth, every four hundredth; each month's own last day)
+        for real in ["2028-02-29T23:59:59Z", "2000-02-29T00:00:00Z", "2026-12-31T00:00:00Z", "2026-04-30T00:00:00Z", "0001-01-01T00:00:00Z"] {
+            assert_eq!(form_of(&list(1, real), None).unwrap().1, real);
+        }
+        assert_eq!(form_of(&list(2, "2026-11-05T13:04:09Z"), None).unwrap_err(), "the list is of a form this Meno does not read: a newer Meno may");
+        // (to the second, in UTC, as `Z`, and a real time: nothing else)
+        for odd in ["2026-11-05T13:04:09.5Z", "2026-11-05T13:04Z", "2026-11-05T13:04:09+00:00", "2026-11-05T13:04:09", "2026-11-05 13:04:09Z", "2026-11-05", "2026-13-05T13:04:09Z", "2026-02-29T00:00:00Z", "2026-11-31T00:00:00Z", "2026-11-05T24:00:00Z", "2026-11-05T13:60:00Z", "2026-11-05T13:04:60Z", "+026-11-05T13:04:09Z", "2026-11-05t13:04:09z", "1900-02-29T00:00:00Z", "2026-11-00T00:00:00Z", "2026-00-05T00:00:00Z", "2026-04-31T00:00:00Z", "2026-11-05T13:04:éZ"] {
+            assert_eq!(form_of(&list(1, odd), None).unwrap_err(), "the list does not say when it was issued as Meno takes it", "{odd}");
+        }
+        assert_eq!(form_of(br#"{"schema":1,"plugins":[]}"#, None).unwrap_err(), "the list does not say when it was issued as Meno takes it");
+        assert_eq!(form_of(br#"{"schema":1,"issued":20261105,"plugins":[]}"#, None).unwrap_err(), "the list does not say when it was issued as Meno takes it");
+        // (one that still carries a serial: refused, never read as the other)
+        assert_eq!(form_of(br#"{"schema":1,"issued":"2026-11-05T13:04:09Z","serial":3,"plugins":[]}"#, None).unwrap_err(), "the list carries a serial, which this Meno does not read");
         assert!(form_of(b"not json", None).is_err());
-        assert!(form_of(&list(1, 3), Some(3)).is_ok());
-        assert!(form_of(&list(1, 3), Some(4)).is_err());
     }
 
     #[test]
-    fn a_list_kept_is_not_read_where_its_serial_is_not_the_one_kept_with_it() {
-        let root = scratch("serial");
-        keep(&root, SERIAL3, SERIAL3_A, 3, "2026-11-05T00:00:00Z").unwrap();
-        std::fs::write(root.join("catalogue-state.json"), br#"{"serial":4,"fetchedAt":"2026-11-05T00:00:00Z"}"#).unwrap();
+    fn a_list_kept_is_not_read_where_it_is_not_the_one_its_state_was_written_for() {
+        let root = scratch("state");
+        keep(&root, LIST, LIST_A, "2026-11-03T00:00:00Z", "2026-11-05T00:00:00Z").unwrap();
+        assert!(kept(&root, &[KEY_A]).is_some());
+        let state = |issued: &str, sha256: &str| format!(r#"{{"issued":"{issued}","sha256":"{sha256}","fetchedAt":"2026-11-05T00:00:00Z"}}"#);
+        std::fs::write(root.join("catalogue-state.json"), state("2026-11-04T00:00:00Z", &fingerprint(LIST))).unwrap();
         assert!(kept(&root, &[KEY_A]).is_none());
+        std::fs::write(root.join("catalogue-state.json"), state("2026-11-03T00:00:00Z", &"0".repeat(64))).unwrap();
+        assert!(kept(&root, &[KEY_A]).is_none());
+        // (a state as an earlier Meno wrote it, with a serial: not read)
+        std::fs::write(root.join("catalogue-state.json"), br#"{"serial":3,"fetchedAt":"2026-11-05T00:00:00Z"}"#).unwrap();
+        assert!(kept(&root, &[KEY_A]).is_none() && floor(&root).is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -794,19 +892,22 @@ mod tests {
     fn a_list_fetched_older_than_the_one_kept_is_refused_and_nothing_written() {
         let root = scratch("replay");
         let now = "2026-11-06T00:00:00Z";
-        take_fetched(&root, SERIAL3, SERIAL3_A, &[KEY_A], "2026-11-05T00:00:00Z").unwrap();
+        take_fetched(&root, LIST, LIST_A, &[KEY_A], "2026-11-05T00:00:00Z").unwrap();
         let before: Vec<Vec<u8>> = ["catalogue.json", "catalogue.json.minisig", "catalogue-state.json"].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
-        assert!(take_fetched(&root, SERIAL2, SERIAL2_A, &[KEY_A], now).unwrap_err().contains("older"));
+        assert!(take_fetched(&root, EARLIER, EARLIER_A, &[KEY_A], now).unwrap_err().contains("older"));
+        assert!(take_fetched(&root, SAME_TIME, SAME_TIME_A, &[KEY_A], now).unwrap_err().contains("same second"));
         let after: Vec<Vec<u8>> = ["catalogue.json", "catalogue.json.minisig", "catalogue-state.json"].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
         assert_eq!(before, after);
         // (as the command gives it: the one kept, saying why the newer one was not taken)
-        let given = got(&root, &[KEY_A], Some(Ok((SERIAL2.to_vec(), SERIAL2_A.to_vec()))), now).unwrap().unwrap();
-        assert_eq!(given.catalogue["serial"], 3);
+        let given = got(&root, &[KEY_A], Some(Ok((EARLIER.to_vec(), EARLIER_A.to_vec()))), now).unwrap().unwrap();
+        assert_eq!(given.catalogue["issued"], "2026-11-03T00:00:00Z");
         assert!(given.kept.unwrap().contains("older"));
         // (a newer one, signed with the next key Meno carries: taken, and kept)
-        let given = got(&root, &[KEY_A, KEY_B], Some(Ok((SERIAL4.to_vec(), SERIAL4_B.to_vec()))), now).unwrap().unwrap();
-        assert_eq!((given.catalogue["serial"].as_u64(), given.kept), (Some(4), None));
-        assert_eq!(floor(&root), Some(4));
+        // (the very list again, fetched once more: taken)
+        assert!(got(&root, &[KEY_A], Some(Ok((LIST.to_vec(), LIST_A.to_vec()))), now).unwrap().unwrap().kept.is_none());
+        let given = got(&root, &[KEY_A, KEY_B], Some(Ok((LATER.to_vec(), LATER_B.to_vec()))), now).unwrap().unwrap();
+        assert_eq!((given.catalogue["issued"].as_str(), given.kept), (Some("2026-11-04T00:00:00Z"), None));
+        assert_eq!(floor(&root).map(|t| t.issued), Some("2026-11-04T00:00:00Z".to_string()));
         // (not fetched: the one kept, no word of why; fetching failed: the one kept, and why)
         assert!(got(&root, &[KEY_A, KEY_B], None, now).unwrap().unwrap().kept.is_none());
         assert_eq!(got(&root, &[KEY_A, KEY_B], Some(Err("offline".into())), now).unwrap().unwrap().kept.as_deref(), Some("offline"));
@@ -821,7 +922,7 @@ mod tests {
     fn a_plugin_s_entry_is_found_in_the_list_kept_never_as_the_page_says_it() {
         let root = scratch("entry");
         assert_eq!(entry_for(&root, &[KEY_A], "sketch", "0.3.0").unwrap_err(), "there is no list of the plugins online here");
-        keep(&root, SERIAL3, SERIAL3_A, 3, "2026-11-05T00:00:00Z").unwrap();
+        keep(&root, LIST, LIST_A, "2026-11-03T00:00:00Z", "2026-11-05T00:00:00Z").unwrap();
         let source = entry_for(&root, &[KEY_A], "sketch", "0.3.0").unwrap();
         assert_eq!((source.id.as_str(), source.version.as_str(), source.bytes), ("sketch", "0.3.0", 10));
         assert!(entry_for(&root, &[KEY_A], "sketch", "0.4.0").unwrap_err().contains("holds no"));

@@ -77,8 +77,10 @@ export function atomAs(a: Pick<Atom, "id" | "el" | "charge">, bonds: readonly Bo
     .join(",");
   return `${a.el}|${a.charge ?? 0}|${round}`;
 }
-export function bondAs(b: Pick<Bond, "order" | "stereo" | "stereoOrient" | "display">): string {
-  return `${b.order}|${b.stereo ?? "none"}|${b.stereoOrient ?? ""}|${b.display ?? ""}`;
+export function bondAs(b: Pick<Bond, "a" | "b" | "order" | "stereo" | "narrow" | "display">): string {
+  // (its narrow end by which end it is, not by id: a bond pasted is still as it was read)
+  const narrow = b.narrow === b.a ? "a" : b.narrow === b.b ? "b" : "";
+  return `${b.order}|${b.stereo ?? "none"}|${narrow}|${b.display ?? ""}`;
 }
 
 /** What Meno said is unsure of the parts read from figures that are still as they were read: by atom id and bond id, what to say. */
@@ -264,8 +266,6 @@ export function schemeOf(read: SchemeRead, about: { x: number; y: number }): Imp
 /** A figure read made a structure in Meno's units, each atom tied to its place in the figure (`spot`) - its middle at naught, or `about`. */
 export function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): Model {
   const s = structureOf(read, figureLabels, about);
-  const degree = new Map<number, number>();
-  for (const b of s.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
   const atoms: Atom[] = s.atoms.map((a, i) => ({
     id: i + 1,
     x: a.x,
@@ -283,8 +283,8 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
     b: b.b + 1,
     order: b.order,
     ...(b.stereo ? { stereo: b.stereo } : {}),
-    // (a wedge narrow where the figure has it: Meno draws it narrow at the end with more bonds, else told)
-    ...(b.stereo === "up" || b.stereo === "down" ? ((degree.get(b.a) ?? 0) < (degree.get(b.b) ?? 0) ? { stereoOrient: "reverse" as const } : {}) : {}),
+    // (a wedge narrow where the figure has it, at its first atom)
+    ...(b.stereo === "up" || b.stereo === "down" ? { narrow: b.a + 1 } : {}),
     ...(b.bold ? { display: "bold" as const } : {}),
   }));
   // (made regular, its arrangement kept - its rings and chains where and as they go, at the style's bond and angles: lib/layout/
