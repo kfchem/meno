@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Box, FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
 import { narrowestBox, shapesOf } from "./drawn";
-import { bondLength, figureBond, labelText, readFigure, repeatBrackets, REPEAT_UNREAD, wordsOf } from "./read";
+import { bondLength, figureBond, labelText, readFigure, repeatBrackets, REPEAT_REFUSED, REPEAT_UNREAD, wordsOf } from "./read";
 import camphor from "./fixtures/camphor-rdkitacs.json";
 import aflatoxin from "./fixtures/aflatoxin-rdkitacs.json";
 import atp from "./fixtures/atp-rdkit.json";
@@ -1401,27 +1401,139 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     return figure(paths, [...word("O", p0), ...word("O", p5), ...(count ? word(count, [x2[0] + 0.25 * L, x2[1] + h]) : [])]);
   }
   const marked = (s: ReturnType<typeof read>, count: string) => s.atoms.filter((a) => a.unsure?.includes(REPEAT_UNREAD(count))).length;
+  const refused = (s: ReturnType<typeof read>, count: string, why: string) => s.atoms.filter((a) => a.unsure?.includes(REPEAT_REFUSED(count, why))).length;
+  /** Whether an atom says anything of a repeat unit. */
+  const saysRepeat = (s: ReturnType<typeof read>) => s.atoms.some((a) => a.unsure?.some((u) => u.startsWith("A repeat unit")));
+  /** Each atom's bonds, by atom. */
+  const degrees = (s: ReturnType<typeof read>) => s.atoms.map((_, i) => s.bonds.filter((b) => b.a === i || b.b === i).length);
 
-  it("is not read: its unit once, its brackets no bonds, its count no word - the atoms of each bond a bracket crosses marked, saying so", () => {
+  it("reads a whole count's unit that many times, head to tail - its brackets no bonds, its count no word - kept a multiple group, the first unit its paradigm", () => {
     for (const round of [false, true])
-      for (const [count, said] of [
-        ["_6", "6"],
-        ["6", "6"],
-        ["_n", "n"],
-      ]) {
+      for (const count of ["_6", "6"]) {
         const f = counted(round, count);
         const s = read(f);
-        expect(s.atoms.map((a) => a.el).sort(), `${round} ${count}`).toEqual(["C", "C", "C", "C", "O", "O"]);
-        expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
-        expect(marked(s, said), `${round} ${count}`).toBe(4);
+        // (HO-C-(C-C)6-C-OH: two carbons, then the unit's two six times, as one chain)
+        expect(s.atoms.map((a) => a.el).sort(), `${round} ${count}`).toEqual([...Array(14).fill("C"), "O", "O"]);
+        expect(s.bonds).toHaveLength(15);
+        expect(degrees(s).filter((d) => d === 1)).toHaveLength(2);
+        expect(degrees(s).every((d) => d <= 2)).toBe(true);
+        expect(saysRepeat(s)).toBe(false);
+        expect(s.atoms.filter((a) => a.multiple?.n === 6)).toHaveLength(12);
+        expect(s.atoms.filter((a) => a.multiple?.paradigm)).toHaveLength(2);
+        // (each copy of the figure's atoms it stands for; the rest the figure's own)
+        expect(s.atoms.filter((a) => a.of != null)).toHaveLength(10);
+        // (each set apart: no two atoms in one place)
+        expect(s.atoms.every((a, i) => s.atoms.every((b, j) => i === j || Math.hypot(a.x - b.x, a.y - b.y) > 0.5))).toBe(true);
         expect(readFigure(f).left.letters).toEqual([]);
       }
   });
 
-  it("is told by one bracket counted alone: the atoms of the bonds it crosses marked", () => {
+  it("reads a unit in a ring so many times, the ring closing on itself - what lies round it left where it is", () => {
+    // (a hexagon, one corner's two bonds across brackets, counted 3: an eight-membered ring)
+    const c: P = [100, 100];
+    const hex = Array.from({ length: 6 }, (_, k): P => [c[0] + L * Math.cos((Math.PI / 3) * k), c[1] + L * Math.sin((Math.PI / 3) * k)]);
+    const h = 0.55 * L;
+    const ends = (p: P, q: P): [P, P] => {
+      const m = along(p, q, 0.5);
+      const [ux, uy] = unit(p, q);
+      return [
+        [m[0] - uy * h, m[1] + ux * h],
+        [m[0] + uy * h, m[1] - ux * h],
+      ];
+    };
+    const [ea, eb] = [ends(hex[5], hex[0]), ends(hex[0], hex[1])];
+    const [a, b] = [stroke(...ea), stroke(...eb)];
+    // (its count by the second's lower end)
+    const foot = eb[0][1] > eb[1][1] ? eb[0] : eb[1];
+    const low: P = [foot[0] + 0.25 * L, foot[1]];
+    const s = read(figure([stroke(...hex, hex[0]), a, b], word("_3", low)));
+    expect(saysRepeat(s)).toBe(false);
+    expect(s.atoms).toHaveLength(8);
+    expect(s.bonds).toHaveLength(8);
+    expect(degrees(s).every((d) => d === 2)).toBe(true);
+    // (the ring's other five as the figure has them: none moved against another)
+    const given = read(figure([stroke(...hex, hex[0])]));
+    const apart = (ps: { x: number; y: number }[]) => ps.flatMap((p, i) => ps.slice(i + 1).map((q) => Math.hypot(p.x - q.x, p.y - q.y))).sort((x, y) => x - y);
+    const kept = apart(s.atoms.filter((x) => !x.multiple));
+    apart(given.atoms.slice(1)).forEach((d, i) => expect(kept[i]).toBeCloseTo(d, 6));
+  });
+
+  it("reads a unit counted 1 once, as drawn, its brackets and count taken", () => {
+    const s = read(counted(false, "_1"));
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
+    expect(saysRepeat(s) || s.atoms.some((a) => a.multiple)).toBe(false);
+  });
+
+  it("is not read where its count is a letter - a polymer's n - its unit once, the atoms of each bond a bracket crosses marked, saying so", () => {
+    for (const round of [false, true]) {
+      const f = counted(round, "_n");
+      const s = read(f);
+      expect(s.atoms.map((a) => a.el).sort(), `${round}`).toEqual(["C", "C", "C", "C", "O", "O"]);
+      expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
+      expect(marked(s, "n"), `${round}`).toBe(4);
+      expect(s.atoms.some((a) => a.multiple)).toBe(false);
+      expect(readFigure(f).left.letters).toEqual([]);
+    }
+  });
+
+  it("is not read where it is counted 0, saying so", () => {
+    const s = read(counted(false, "_0"));
+    expect(s.atoms).toHaveLength(6);
+    expect(refused(s, "0", "a count of 0 is no unit")).toBe(4);
+  });
+
+  it("is told by one bracket counted alone: not read, the atoms of the bonds it crosses marked, saying why", () => {
     const s = read(counted(false, "_6", false));
     expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-O", "O-C"]);
-    expect(marked(s, "6")).toBe(2);
+    expect(refused(s, "6", "it has one bracket, and no other is found across a bond to close the unit")).toBe(2);
+  });
+
+  describe("is not read where its shape breaks a rule, saying which", () => {
+    const h = 0.55 * L;
+    const line = ([x, y]: P) => stroke([x, y - h], [x, y + h]);
+    const zigzag = (n: number) => {
+      const pts: P[] = [[40, 80]];
+      for (let k = 0; k < n; k++) pts.push(step(pts[k], k % 2 ? 30 : -30));
+      return pts;
+    };
+    const count = (p: P) => word("_6", [p[0] + 0.25 * L, p[1] + h]);
+
+    it("two bonds out of the brackets of two orders", () => {
+      // (C=C-C-C: its brackets across the double bond and a single one)
+      const pts = zigzag(3);
+      const off = (p: P, q: P, t: number): P => [along(p, q, t)[0], along(p, q, t)[1] + 0.18 * L];
+      const at = [along(pts[0], pts[1], 0.5), along(pts[2], pts[3], 0.5)];
+      const s = read(figure([stroke(...pts), stroke(off(pts[0], pts[1], 0.15), off(pts[0], pts[1], 0.85)), line(at[0]), line(at[1])], count(at[1])));
+      expect(bondsOf(s)).toEqual(["C-C", "C-C", "C=C"]);
+      expect(refused(s, "6", "the two bonds its brackets cross are not of one order")).toBe(4);
+    });
+
+    it("what lies between its brackets joined to the rest another way", () => {
+      // (a chain whose bracketed C-C is in a triangle with the next atom: cut by the two bonds, still joined by the third)
+      const pts = zigzag(3);
+      const apex = step(pts[1], -90);
+      const at = [along(pts[0], pts[1], 0.5), along(pts[2], pts[3], 0.5)];
+      const s = read(figure([stroke(...pts), stroke(pts[1], apex, pts[3]), line(at[0]), line(at[1])], count(at[1])));
+      expect(refused(s, "6", "what lies between its brackets is not cut off from the rest by the two bonds they cross")).toBeGreaterThan(0);
+      expect(s.atoms).toHaveLength(5);
+    });
+  });
+
+  it("reads a double bond a bracket crosses, its two lines, as one bond - the unit's copies joined by it", () => {
+    // (C=C-C=C, its brackets across both double bonds, counted 2: hexa-1,3,5-triene)
+    const pts: P[] = [[40, 80]];
+    for (let k = 0; k < 3; k++) pts.push(step(pts[k], k % 2 ? 30 : -30));
+    // (each double bond's second line on the side the chain turns to: above the first, below the third)
+    const off = (p: P, q: P, side: number): [P, P] => [
+      [along(p, q, 0.15)[0], along(p, q, 0.15)[1] + side * 0.18 * L],
+      [along(p, q, 0.85)[0], along(p, q, 0.85)[1] + side * 0.18 * L],
+    ];
+    const h = 0.55 * L;
+    const line = ([x, y]: P) => stroke([x, y - h], [x, y + h]);
+    const at = [along(pts[0], pts[1], 0.5), along(pts[2], pts[3], 0.5)];
+    const s = read(figure([stroke(...pts), stroke(...off(pts[0], pts[1], -1)), stroke(...off(pts[2], pts[3], 1)), line(at[0]), line(at[1])], word("_2", [at[1][0] + 0.25 * L, at[1][1] + h])));
+    expect(saysRepeat(s)).toBe(false);
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C=C", "C=C", "C=C"]);
   });
 
   describe("is no bracket where one of its tests fails, each with a count by its lower end", () => {
@@ -1502,13 +1614,14 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     const h = 0.55 * L;
     const at = (k: number) => along(pts[k], pts[k + 1], 0.5);
     const line = ([x, y]: P) => stroke([x, y - h], [x, y + h]);
-    const f = figure([stroke(...pts), line(at(1)), line(at(2)), line(at(5))], [...word("_6", [at(1)[0] + 0.25 * L, at(1)[1] + h]), ...word("_n", [at(2)[0] + 0.25 * L, at(2)[1] + h])]);
+    // (counted with letters, read once each, so that what each pairs with shows in the atoms it marks)
+    const f = figure([stroke(...pts), line(at(1)), line(at(2)), line(at(5))], [...word("_m", [at(1)[0] + 0.25 * L, at(1)[1] + h]), ...word("_n", [at(2)[0] + 0.25 * L, at(2)[1] + h])]);
     const s = read(f);
     // (every bracket taken: the chain's seven bonds alone, none of the brackets' lines one)
     expect(s.bonds.length).toBe(7);
     expect(s.atoms.length).toBe(8);
     // (the first's count on its bond's atoms and its partner's - the third's - the second's on its own alone)
-    expect([marked(s, "6"), marked(s, "n")]).toEqual([4, 2]);
+    expect([marked(s, "m"), marked(s, "n")]).toEqual([4, 2]);
   });
 
   it("pairs a counted bracket with the nearer of two uncounted, the farther read as before", () => {
@@ -1535,8 +1648,9 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     const [x1, x2] = [along(pts[2], pts[3], 0.2), along(pts[2], pts[3], 0.8)];
     const s = read(figure([stroke(...pts), line(x1), line(x2)], [...word("O", p0), ...word("O", pts[4]), ...word("_6", [x2[0] + 0.25 * L, x2[1] + h])]));
     expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-O", "O-C"]);
-    expect(marked(s, "6")).toBe(2);
-    expect(s.atoms.map((a) => (a.unsure ?? []).filter((u) => u === REPEAT_UNREAD("6")).length).sort()).toEqual([0, 0, 0, 1, 1]);
+    const same = REPEAT_REFUSED("6", "its two brackets cross the same bond");
+    expect(refused(s, "6", "its two brackets cross the same bond")).toBe(2);
+    expect(s.atoms.map((a) => (a.unsure ?? []).filter((u) => u === same).length).sort()).toEqual([0, 0, 0, 1, 1]);
   });
 
   it("gives a count in reach of two brackets' feet to the nearer, the other its partner - neither left a bond", () => {
@@ -1549,7 +1663,7 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
     const [x1, x2] = [along(pts[2], pts[3], 0.3), along(pts[2], pts[3], 0.7)];
     const s = read(figure([stroke(...pts), line(x1), line(x2)], [...word("O", p0), ...word("O", pts[4]), ...word("_6", [x2[0] + 0.25 * L, x2[1] + h])]));
     expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-O", "O-C"]);
-    expect(marked(s, "6")).toBe(2);
+    expect(refused(s, "6", "its two brackets cross the same bond")).toBe(2);
   });
 
   it("reads a square bracket's ticks as no bonds, however long they are drawn short of half a bond", () => {
