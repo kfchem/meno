@@ -87,6 +87,17 @@ describe("a conversation, talked to from the page", () => {
     expect(doc.getState().conversations).toHaveLength(0);
   });
 
+  it("is never left talking where a turn cannot even begin - what was said not kept - however it fails", async () => {
+    const { store, doc, id } = page([{ text: "." }]);
+    const amend = doc.amend.bind(doc);
+    doc.amend = () => {
+      throw new Error("the file could not take it");
+    };
+    await expect(store.getState().sendToConversation(id, "Hello")).rejects.toThrow("the file could not take it");
+    doc.amend = amend;
+    expect(store.getState().talking[id].running).toBe(false);
+  });
+
   it("is taken away, and not while it talks", async () => {
     const { store, doc, id } = page();
     store.setState({ talking: { [id]: { running: true } } });
