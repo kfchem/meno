@@ -540,7 +540,8 @@ pub(crate) mod tests {
     fn the_plugins_set_up_before_are_those_with_a_stamp() {
         let data = temp("stamps");
         assert!(set_up_before(&data).is_empty());
-        for (host, file) in [("uv", "plugin-sketchkit.json"), ("uv", "plugin-tightbind.json"), ("pixi", "plugin-wavecalc.json"), ("pixi", "plugin-sketchkit.json")] {
+        // (one in pixi's that comes first by its id: in their ids' order, whichever folder each is in)
+        for (host, file) in [("uv", "plugin-sketchkit.json"), ("uv", "plugin-tightbind.json"), ("pixi", "plugin-wavecalc.json"), ("pixi", "plugin-sketchkit.json"), ("pixi", "plugin-alpha.json")] {
             fs::create_dir_all(data.join(host).join("stamps")).unwrap();
             fs::write(data.join(host).join("stamps").join(file), "{}").unwrap();
         }
@@ -549,7 +550,7 @@ pub(crate) mod tests {
         fs::write(data.join("uv/stamps/plugin-Bad_Id.json"), "{}").unwrap();
         fs::create_dir_all(data.join("uv/stamps/plugin-dir.json")).unwrap();
         fs::write(data.join("uv/stamps/plugin-quanta.json.tmp"), "{}").unwrap();
-        assert_eq!(set_up_before(&data), ["sketchkit", "tightbind", "wavecalc"]);
+        assert_eq!(set_up_before(&data), ["alpha", "sketchkit", "tightbind", "wavecalc"]);
         let _ = fs::remove_dir_all(&data);
     }
 

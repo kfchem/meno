@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useNetwork, type ConsentRequest } from "../net/network";
 import { DEFAULT_APP_SETTINGS, useAppSettings } from "../settings/appSettings";
-import { CATALOGUE_PURPOSE, type Catalogue, type CatalogueEntry } from "./catalogue";
+import { CATALOGUE_HOSTS, CATALOGUE_PURPOSE, type Catalogue, type CatalogueEntry } from "./catalogue";
 import { MANIFESTS } from "./known";
 import { useOnline } from "./online";
 import { getUsedBefore, type UsedBeforeDeps } from "./usedBefore";
@@ -80,7 +80,7 @@ describe("the plugins set up before they came online, got again", () => {
     expect(r.asked[0].detail).toBe("3 were set up here: alpha, beta and gone. Meno fetches the list of plugins online, then asks before it gets any of them.");
     expect(r.asked[0].parts).toBeUndefined();
     // (one no longer offered passed over; one for another Meno never got)
-    expect(r.asked[1]).toMatchObject({ purpose: CATALOGUE_PURPOSE, title: "Get these 2 again?", again: true });
+    expect(r.asked[1]).toMatchObject({ purpose: CATALOGUE_PURPOSE, title: "Get these 2 again?", again: true, hosts: CATALOGUE_HOSTS });
     expect(r.asked[1].detail).toContain("2 were set up here: Alpha interface and Beta interface.");
     expect(r.asked[1].parts).toEqual([
       { name: "Alpha interface", detail: "Its files: 39 KB.", sources: [] },
@@ -172,6 +172,14 @@ describe("the plugins set up before they came online, got again", () => {
     expect(next.asked).toHaveLength(1);
     expect(next.got).toEqual(["alpha", "beta"]);
     expect(asked()).toBe(true);
+  });
+
+  it("a list not fetched now is not taken for one, though an older one is still there: said, and asked again", async () => {
+    const r = deps({ list: async () => useOnline.setState({ state: "unlisted", catalogue: CATALOGUE, problem: undefined }) });
+    await getUsedBefore(r.say, r.d);
+    expect(r.got).toEqual([]);
+    expect(r.said).toEqual(["Plugins used before: The list of plugins online could not be fetched. Meno asks again as it next starts."]);
+    expect(asked()).toBeUndefined();
   });
 
   it("one that could not be got: said, the rest got, and asked again for those not here", async () => {
