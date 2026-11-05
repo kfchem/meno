@@ -42,7 +42,7 @@ const butene: Model = {
 };
 
 describe("marksOf", () => {
-  it("puts RDKit's answer on the atoms and bonds it is about, by id", () => {
+  it("puts RDKit's valence warnings and an axis's M or P on the atoms and bonds they are about, by id - its R, S, E and Z never: Meno's own are", () => {
     const marks = marksOf(butene, {
       atoms: [
         { index: 0, hydrogens: 3 },
@@ -50,11 +50,14 @@ describe("marksOf", () => {
         { index: 2, hydrogens: 0, valenceError: { valence: 5, most: 4 } },
         { index: 3, hydrogens: 3 },
       ],
-      bonds: [{ index: 1, cip: "E" }],
+      bonds: [
+        { index: 1, cip: "E" },
+        { index: 2, cip: "M" },
+      ],
     });
-    expect([...marks.centres]).toEqual([[11, "R"]]);
+    expect([...marks.centres]).toEqual([]);
     expect([...marks.valence]).toEqual([[12, { valence: 5, most: 4 }]]);
-    expect([...marks.doubleBonds]).toEqual([[21, "E"]]);
+    expect([...marks.doubleBonds]).toEqual([[22, "Ra"]]);
   });
 
   it("leaves a halogen bridging metals unmarked - μ-Cl in [Pd(allyl)Cl]2 drawn with plain bonds - and marks a real overload", () => {

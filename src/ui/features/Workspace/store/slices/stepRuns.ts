@@ -23,7 +23,7 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
-import { anyOpen, isomersToMake, openStereo, withChosen } from "../../chem/openStereo";
+import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
@@ -776,7 +776,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const got = (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(tries != null ? { count: tries } : {}), ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers[0];
-          made = got && partsSideBySide(keptMade(withChosen(got, which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
+          made = got && partsSideBySide(keptMade(withChosen(withOwnCip(got), which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)

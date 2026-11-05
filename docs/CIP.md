@@ -11,10 +11,10 @@ judgement about the structure, so it is Meno's to make, by the published
 rules, with no plugin added: the rules' own texts, read here, never a
 toolkit's code.
 
-`src/lib/chem/cip/` holds it, pure (no DOM, Tauri or network). It is not
-wired in yet: the labels on the page and on molecules in 3D still come as
-they did. Wiring it in, and rules 4 to 6, axes and cumulenes, come in steps
-of their own (*What it does not do yet*).
+`src/lib/chem/cip/` holds it, pure (no DOM, Tauri or network). The labels
+on the page and on molecules in 3D are its own (*Where it is used*); rule
+6, axes and cumulenes come in steps of their own (*What it does not do
+yet*).
 
 ## The rules it follows
 
@@ -186,6 +186,32 @@ tells the two apart (VS097, a centre beside an amidinate), the blend gives
 the opposite descriptor to the suite's, while every usual structure taken
 alone gives the suite's.
 
+## Where it is used
+
+- **On the drawing** (Workspace/chem/cipMarks, cipRun, cipWorker): each
+  structure holding an atom or a bond whose R or S, E or Z is asked for
+  (`stereoShown`) is read as identity reads it - its configuration from
+  its wedges and its double bonds' sides (lib/layout/drawn `readStereo`),
+  its labels drawn out - and only the units asked for are worked out, in
+  a worker, the last structures' answers kept. A unit asked for with none
+  says why while the pointer is on it (*No label, and why*); a Z or E that
+  turns in the mirror image says so.
+- **On a molecule in 3D** (lib/chem/cip/in3d): every candidate unit read
+  from where its atoms are - an atom of four bonds and a double bond by
+  its places (lib/chem/stereoOpen `configuredFrom`), an atom of three by
+  Meno's rule on lone pairs (lib/chem/lonePairsIn3d) - never the toolkit's
+  list of centres, and the CIP's own ranking deciding which have a
+  descriptor. A double bond in a ring of seven atoms or fewer has none of
+  its own. A stereoisomer made as its mirror image's reflection is read
+  after it is reflected.
+- **A protonated amine's N (R3NH+)** has none, on the drawing or in 3D:
+  in solution it gives its H up and takes one back, turning over as it
+  does - but where its amine's N keeps its configuration by Meno's rule on
+  lone pairs (a small cage's bridgehead), it keeps it too
+  (lib/chem/lonePairCentres `protonatedAmineHeld`).
+- **The plugin's labels are never read**, but an axis's Ra or Sa, until
+  Meno names axes.
+
 ## No label, and why
 
 A unit with no label always says why; none is ever guessed.
@@ -199,12 +225,14 @@ A unit with no label always says why; none is ever guessed.
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement (three bonds and no lone pair). |
 | large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |
 
+On the drawing two more: a unit asked for with no configuration drawn, and
+a protonated amine's N (*Where it is used*).
+
 ## What it does not do yet
 
 - **Rule 6**, the 2018 proposal: those units say `symmetric`.
 - **Axes and odd cumulenes** (Ra and Sa, M and P); a tie only one could
   break says `later`.
-- **Wiring in**: the drawing's labels and those of molecules in 3D.
 
 ## How it is checked
 

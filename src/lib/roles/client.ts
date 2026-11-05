@@ -170,6 +170,7 @@ export type Conformers = {
   how?: { label: string; text: string }[];
   /** How they were made, in one line - embedding, force field, and what was held that is no term of it: shown with them, kept with them. */
   method?: string;
+  /** The CIP labels, by atom and bond index: Meno's own, read from the places (Workspace/chem/openStereo `withOwnCip`) - what the plugin sends here is never read. */
   cip: { atoms: Record<string, string>; bonds: Record<string, string> };
   chosen: { atoms: Record<string, string>; bonds: Record<string, string> };
   smiles: string;
@@ -197,10 +198,11 @@ export type Analysis = {
      * be, when that is known.
      */
     valenceError?: { valence: number; most?: number };
+    /** Its R or S as the plugin says - never read: Meno's own are (Workspace/chem/cipMarks). */
     cip?: "R" | "S" | "r" | "s";
     aromatic?: boolean;
   }[];
-  /** A bond's CIP descriptor: E or Z, or an axis of chirality's M or P. */
+  /** A bond's CIP descriptor: E or Z, or an axis of chirality's M or P - only an axis's read, until Meno names axes (docs/CIP.md). */
   bonds: { index: number; aromatic?: boolean; cip?: "E" | "Z" | "M" | "P" }[];
 };
 

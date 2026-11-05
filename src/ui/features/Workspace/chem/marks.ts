@@ -1,7 +1,8 @@
 /**
- * What the plugin that does the checks says about a structure, as marks on
- * it: atoms with more bonds than they can have, R and S at stereocentres, E
- * and Z at double bonds, Ra and Sa at axes of chirality (BINAP's).
+ * Marks on a structure: atoms with more bonds than they can have, and Ra
+ * and Sa at axes of chirality (BINAP's), as the plugin that does the checks
+ * says; R and S at stereocentres and E and Z at double bonds, Meno's own
+ * (chem/cipMarks).
  * A ring round an atom with too many bonds is the editor's, never in a
  * picture of the drawing. R, S, E and Z are shown in pictures as the canvas
  * shows them - copied, saved and exported (`stereoPictureItems`): the
@@ -60,6 +61,8 @@ export type ChemMarks = {
   centres: Map<number, "R" | "S" | "r" | "s">;
   /** Stereogenic double bonds, and axes of chirality, by bond id. */
   doubleBonds: Map<number, "E" | "Z" | "Ra" | "Sa">;
+  /** What a stereocentre or double bond asked for says while the pointer is on it - why it has no descriptor, or that its Z or E turns in the mirror image - by `centre-<id>` or `bond-<id>` (chem/cipMarks). */
+  said?: Map<string, string>;
 };
 
 export const NO_MARKS: ChemMarks = {
@@ -68,7 +71,12 @@ export const NO_MARKS: ChemMarks = {
   doubleBonds: new Map(),
 };
 
-/** The plugin's answer about `model`, by the ids of its atoms and bonds. */
+/**
+ * The plugin's answer about `model`, by the ids of its atoms and bonds: its
+ * valence warnings, and its axes of chirality - R and S, E and Z are Meno's
+ * own (chem/cipMarks), the plugin's never read; an axis's are the plugin's
+ * until Meno names axes (docs/CIP.md, *What it does not do yet*).
+ */
 export function marksOf(model: Model, analysis: Analysis): ChemMarks {
   const { atoms, bonds } = molIndex(model);
   const marks: ChemMarks = {
@@ -81,13 +89,12 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
     if (!atom) continue;
     if (a.valenceError && !bridgesMetals(model, atom, a.valenceError) && !takesArrows(model, atom, a.valenceError))
       marks.valence.set(atom.id, a.valenceError);
-    if (a.cip) marks.centres.set(atom.id, a.cip);
   }
   for (const b of analysis.bonds) {
     const bond = bonds[b.index];
     // (an axis's helicity said as the descriptor its labels have, (R)-BINAP:
     // M is Ra and P is Sa, both read from the groups CIP ranks first)
-    if (bond && b.cip) marks.doubleBonds.set(bond.id, b.cip === "M" ? "Ra" : b.cip === "P" ? "Sa" : b.cip);
+    if (bond && (b.cip === "M" || b.cip === "P")) marks.doubleBonds.set(bond.id, b.cip === "M" ? "Ra" : "Sa");
   }
   return marks;
 }

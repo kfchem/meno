@@ -1,4 +1,5 @@
-import type { ChemClient, Like } from "../../../../lib/roles/client";
+import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
+import { cipIn3d } from "../../../../lib/chem/cip/in3d";
 import { configuredFrom, leftOver, MOST_ISOMERS, stereoGraphOf, stereoLeft, type Configuration, type IsomersMade, type StereoLeft } from "../../../../lib/chem/stereoOpen";
 
 /**
@@ -98,7 +99,16 @@ export async function isomersToMake(
   return { open, count: all.length, free: false, isomers: which === "one" ? all.slice(0, 1) : all };
 }
 
-/** A stereoisomer's conformers with which of its configurations were chosen (`chosen`): the CIP labels of the elements its drawing leaves open, those places made before gave among them. */
+/**
+ * A stereoisomer's conformers with their CIP labels Meno's own, read from
+ * the first conformer's places (lib/chem/cip/in3d): what the plugin sends
+ * is never read.
+ */
+export function withOwnCip<T extends Pick<Conformers, "atoms" | "bonds" | "frames" | "cip">>(c: T): T {
+  return { ...c, cip: cipIn3d({ atoms: c.atoms, bonds: c.bonds, xyz: c.frames[0] ?? [] }) };
+}
+
+/** A stereoisomer's conformers with which of its configurations were chosen (`chosen`): the CIP labels (`withOwnCip`) of the elements its drawing leaves open, those places made before gave among them. */
 export function withChosen<T extends { cip: { atoms: Record<string, string>; bonds: Record<string, string> } }>(c: T, open: OpenStereo): T & { chosen: T["cip"] } {
   const of = (labels: Record<string, string>, open: readonly number[]) => Object.fromEntries(open.flatMap((i) => (labels[String(i)] != null ? [[String(i), labels[String(i)]]] : [])));
   return { ...c, chosen: { atoms: of(c.cip.atoms, open.drawn.atoms), bonds: of(c.cip.bonds, open.drawn.bonds) } };

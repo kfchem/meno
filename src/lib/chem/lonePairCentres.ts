@@ -194,3 +194,33 @@ export function lonePairOfThree(el: string, charge: number, neighbours: number, 
 export function pyramidal(el: string, charge: number, neighbours: number, bondOrders: number, hs: number): boolean {
   return el !== "N" && lonePairOfThree(el, charge, neighbours, bondOrders, hs);
 }
+
+/**
+ * Which atoms that are a protonated amine's N - an N+ of four neighbours,
+ * an H among them, by index - keep a configuration of their own: in
+ * solution such an N gives its H up and takes one back, turning over as
+ * its amine does, so it keeps one only where its amine's N would by the
+ * rule (`lonePairCentres`) - a bridgehead of a small cage, a held
+ * aziridine's. Others are not asked of: `null`.
+ */
+export function protonatedAmineHeld(atoms: readonly PyramidAtom[], bonds: readonly PyramidBond[]): (at: number) => boolean | null {
+  const around: number[][] = atoms.map(() => []);
+  for (const b of bonds) {
+    if (b.a === b.b || !around[b.a] || !around[b.b]) continue;
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  const order = (x: number, y: number) => bonds.find((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x))?.order ?? 0;
+  return (at) => {
+    const a = atoms[at];
+    if (!a || a.el !== "N" || a.charge !== 1) return null;
+    const drawnH = around[at].filter((n) => atoms[n].el === "H");
+    const hs = (a.hs ?? 0) + drawnH.length;
+    if (hs < 1 || around[at].length + (a.hs ?? 0) !== 4 || around[at].some((n) => order(at, n) !== 1)) return null;
+    // (its amine: one H taken off, its charge with it)
+    const gone = drawnH[0];
+    const amineAtoms = atoms.map((x, i) => (i === at ? { ...x, charge: 0, hs: gone == null ? (x.hs ?? 0) - 1 : (x.hs ?? 0) } : x));
+    const amineBonds = gone == null ? bonds : bonds.filter((b) => b.a !== gone && b.b !== gone);
+    return lonePairCentres(amineAtoms, amineBonds)(at);
+  };
+}

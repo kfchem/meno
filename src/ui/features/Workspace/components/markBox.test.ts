@@ -42,12 +42,13 @@ describe("a mark's box as WebGL draws it", () => {
     expect(area(boxFill({ w: 2, h: 2, radius: 0, round: true }))).toBeCloseTo(Math.PI, 1);
   });
 
-  it("is what the canvas draws the marks with: no box nor R, S, E or Z in HTML over the page - only what a box says, pointed at", () => {
+  it("is what the canvas draws the marks with: no box nor R, S, E or Z in HTML over the page - only what a box, or a stereocentre or double bond with words of its own, says, pointed at", () => {
     const marks = readFileSync(join(process.cwd(), "src/ui/features/Workspace/components/ChemMarks2D.tsx"), "utf8");
     expect(marks).toContain("<MarkBoxes2D");
     expect(marks).toContain("<Texts2D");
-    expect(marks.match(/<PageHtml/g)).toHaveLength(1);
+    expect(marks.match(/<PageHtml/g)).toHaveLength(2);
     expect(marks).toMatch(/\{pointed && \(\s+<PageHtml/);
+    expect(marks).toMatch(/\{saidPointed && \(\s+<PageHtml/);
   });
 
   it("draws R, S, E and Z beside a molecule in 3D by WebGL too, placed frame by frame: no HTML for them", () => {

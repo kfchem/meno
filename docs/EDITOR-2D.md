@@ -1038,6 +1038,16 @@ All hover-based, as above.
     they look further off at that, and the maintainer asked for them
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
+  - **Meno's own** (docs/CIP.md): each worked out by Meno's reading of the
+    CIP rules, off the drawing's thread, only for the atoms and bonds they
+    are asked for on - no plugin needed. One asked for that has none says
+    why while the pointer is on it - its groups alike, none drawn, a
+    structure too large to work it out - and a Z or E that turns in the
+    mirror image (seqCis, seqTrans) says so there too. A protonated
+    amine's N (R3NH+) has none: it gives its H up and takes one back,
+    turning over as it does - but where its amine's N keeps its
+    configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
+    An axis's Ra or Sa is still the plugin's, until Meno names axes.
   - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
     before, one switch showed them all). Hidden unless asked for. The
     right-click menu of an atom that can be a stereocentre says *Show
