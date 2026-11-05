@@ -15,7 +15,7 @@ import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { readDrawnRecord, structureMember } from "./entries";
-import { readRefused } from "./programs";
+import { NAMED_KEPT, readRefused } from "./programs";
 import { leftOut, readEach } from "../utils/readNotes";
 import { isJobKey } from "../../../../lib/jobKeys";
 
@@ -177,7 +177,7 @@ function readRan(v: unknown): StepRan | undefined {
     // (a run the chemist keeps: never dropped while kept)
     ...(r.keep === true ? { keep: true as const } : {}),
     // (every seed its line counts but does not name, and each SMILES it could not read)
-    ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, 4000) } : {}),
+    ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, NAMED_KEPT) } : {}),
     ...(() => {
       const kept = readKeptJobs(r.kept, new Set(jobs));
       return kept.length ? { kept } : {};

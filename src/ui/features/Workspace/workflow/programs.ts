@@ -946,6 +946,9 @@ export function readKept(raw: unknown, count: number): number[] | string {
 /** How many SMILES not read a step names where its line is pointed at, the rest counted there. */
 export const NOT_READ_NAMED = 30;
 
+/** The most characters of what a step names where its line is pointed at (`StepRan.named`) a saved page keeps (workflow/saved). */
+export const NAMED_KEPT = 4000;
+
 /** Why a SMILES could not be read, from what the roles' `from_smiles` said: its words after "could not be read", else none known. */
 export function unreadWhy(said: string): string {
   const m = /could not be read: (.+?)\.?$/.exec(said.trim());
@@ -966,12 +969,24 @@ export function notReadSaid(notRead: readonly { smiles: string; why: string }[])
 /**
  * Each SMILES a step could not read, as it was given, and why - one to a
  * line, the first `NOT_READ_NAMED`, the rest counted - for where its line
- * is pointed at (`StepRan.named`): *C1CC: a ring left open*.
+ * is pointed at (`StepRan.named`): *C1CC: a ring left open*. Never more
+ * than `room` characters, so a saved page keeps every line whole
+ * (`NAMED_KEPT`): where long SMILES fill it first, fewer are named and the
+ * rest counted.
  */
-export function notReadNamed(notRead: readonly { smiles: string; why: string }[]): string {
-  const named = notRead.slice(0, NOT_READ_NAMED).map((x) => `${x.smiles}: ${x.why}`);
+export function notReadNamed(notRead: readonly { smiles: string; why: string }[], room = NAMED_KEPT): string {
+  const tail = (more: number) => (more ? `\nand ${more} more not read` : "");
+  const named: string[] = [];
+  let used = 0;
+  for (const x of notRead.slice(0, NOT_READ_NAMED)) {
+    const line = `${x.smiles}: ${x.why}`;
+    const after = used + (named.length ? 1 : 0) + line.length;
+    if (after + tail(notRead.length - named.length - 1).length > room) break;
+    named.push(line);
+    used = after;
+  }
   const more = notRead.length - named.length;
-  return [...named, ...(more ? [`and ${more} more not read`] : [])].join("\n");
+  return named.length ? named.join("\n") + tail(more) : `${more} not read`;
 }
 
 /** The most a step that makes them (Generate) brings in from one run. */

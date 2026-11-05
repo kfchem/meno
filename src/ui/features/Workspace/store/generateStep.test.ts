@@ -57,7 +57,7 @@ import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { setMembers } from "../workflow/entries";
 import { inputKey, resultOf, stateOf } from "../workflow/flow";
-import { NOT_READ_NAMED, notReadNamed, notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
+import { NAMED_KEPT, NOT_READ_NAMED, notReadNamed, notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
 import { pluginById } from "../../../../lib/calc/catalog";
 
 /** What Molgen's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one Sketchkit cannot read - each with its NLL and SMILES_state; and what made them. */
@@ -283,6 +283,19 @@ describe("what a Generate could not read, and its stereo not examined", () => {
     const lines = notReadNamed(many).split("\n");
     expect(lines).toHaveLength(NOT_READ_NAMED + 1);
     expect(lines[lines.length - 1]).toBe("and 3 more not read");
+    // (one past the most: exactly the most named, one counted)
+    const past = notReadNamed(Array.from({ length: NOT_READ_NAMED + 1 }, (_, i) => ({ smiles: `X${i}`, why: "w" }))).split("\n");
+    expect(past.slice(0, -1)).toEqual(Array.from({ length: NOT_READ_NAMED }, (_, i) => `X${i}: w`));
+    expect(past[past.length - 1]).toBe("and 1 more not read");
+    // (thirty long ones: as many named, whole, as a saved page keeps, the rest counted)
+    const long = Array.from({ length: NOT_READ_NAMED }, (_, i) => ({ smiles: `${"C".repeat(150)}${i}`, why: "w".repeat(100) }));
+    const kept = notReadNamed(long);
+    expect(kept.length).toBeLessThanOrEqual(NAMED_KEPT);
+    const keptLines = kept.split("\n");
+    expect(keptLines.slice(0, -1)).toEqual(long.slice(0, keptLines.length - 1).map((x) => `${x.smiles}: ${x.why}`));
+    expect(keptLines[keptLines.length - 1]).toBe(`and ${NOT_READ_NAMED - keptLines.length + 1} more not read`);
+    // (no room for one: counted)
+    expect(notReadNamed(long, 10)).toBe(`${NOT_READ_NAMED} not read`);
     const { st } = page();
     const step = st().addStep("generate", "molgen", 0, 0);
     run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[0], { smiles: "CC!", properties: {} }] });
