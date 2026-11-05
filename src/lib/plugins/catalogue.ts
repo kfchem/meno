@@ -237,3 +237,8 @@ export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>
     return { entry, offer: compareVersions(mine, entry.version) < 0 ? "update" : "here" };
   });
 }
+
+/** The plugins on offer that fill a role, for this system and this Meno, not here yet: what Meno offers where a role is asked of and no plugin here fills it. */
+export function offeredFor(role: RoleId, offers: readonly Offer[]): CatalogueEntry[] {
+  return offers.filter((o) => o.offer === "add" && o.entry.roles.includes(role)).map((o) => o.entry);
+}
