@@ -7,6 +7,7 @@
  * canvas's renderer: the key light (../components/KeyLight3D), which counts
  * the atoms, sets it; the molecules read it.
  */
+import * as THREE from "three";
 import type { WebGLRenderer } from "three";
 
 /** How many atoms on a canvas make it a very large drawing. */
@@ -77,4 +78,19 @@ export function ballSegmentsNext(want: number, have: number, settledMs: number):
 export function outlineSegments(balls: number, atoms: number, fineMost: number, coarse: number): [number, number] {
   if (atoms <= fineMost || balls <= coarse) return [balls, balls];
   return [coarse, coarse / 2];
+}
+
+/**
+ * A molecule's unit sphere for its balls at `segments` round and from pole
+ * to pole, with what each ball carries on the sphere it had (`was`) - its
+ * number, whether it is lined, where its number stands: every instanced
+ * attribute - carried over, so that going to more or fewer segments changes
+ * nothing else of how its balls are drawn.
+ */
+export function carriedSphere(segments: number, was: THREE.BufferGeometry | null): THREE.SphereGeometry {
+  const g = new THREE.SphereGeometry(1, segments, segments);
+  if (was) {
+    for (const [name, a] of Object.entries(was.attributes)) if (a instanceof THREE.InstancedBufferAttribute) g.setAttribute(name, a);
+  }
+  return g;
 }

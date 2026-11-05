@@ -41,7 +41,7 @@ import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
-import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, outlineSegments } from "../utils/largeDrawing";
+import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
@@ -403,6 +403,12 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // `ballSegmentsFor`): more at once as they grow, fewer once the zoom has
   // settled
   const [segments, setSegments] = useState(style.ballSegments);
+  // (its balls' sphere, made again at another number of segments with what
+  // each ball carries - its number, whether it is lined - carried over:
+  // utils/largeDrawing `carriedSphere`)
+  const ballGeo = useRef<THREE.SphereGeometry | null>(null);
+  const ballGeometry = useMemo(() => (ballGeo.current = carriedSphere(segments, ballGeo.current)), [segments]);
+  useEffect(() => () => ballGeometry.dispose(), [ballGeometry]);
   // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
   const biggest = useMemo(() => {
     const most = (r: Float32Array) => r.reduce((a, b) => Math.max(a, b), 0);
@@ -724,12 +730,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     {
       const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       const bs = ballSizing.current;
-      if (!bs.zoom || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
+      // (on its first frame, as many as it wants at once: nothing has been drawn to change)
+      const first = !bs.zoom;
+      if (first || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
         bs.zoom = zoom;
         bs.since = performance.now();
       }
       const want = ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments);
-      const next = ballSegmentsNext(want, segments, performance.now() - bs.since);
+      const next = ballSegmentsNext(want, segments, first ? Infinity : performance.now() - bs.since);
       if (next && "now" in next) setSegments(next.now);
       else if (next && !bs.timer) {
         bs.timer = window.setTimeout(() => {
@@ -1192,6 +1200,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       bn.shown.value = any ? 1 - share : 0;
       const ju = jointUniforms(jointMesh);
       ju.shown.value = any ? share : 0;
+      // (not drawn at all while it shows no number: a draw call a molecule saved)
+      jointMesh.visible = ju.shown.value > 0;
       if (any && share > 0) {
         ju.pxPer.value = 1 / px;
         ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * risen.current;
@@ -1686,7 +1696,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           }}
           onPointerOut={() => setHoverAtom(null)}
         >
-          <sphereGeometry args={[1, segments, segments]} />
+          <primitive object={ballGeometry} attach="geometry" dispose={null} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
         {/* atom numbers where the sticks meet, where there are no balls to carry them (utils/jointNumbers) */}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BALLS_SETTLE_MS, ballSegmentsFor, ballSegmentsNext, outlineSegments } from "./largeDrawing";
+import * as THREE from "three";
+import { BALLS_SETTLE_MS, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments } from "./largeDrawing";
 
 describe("a molecule's balls, by their size on the screen", () => {
   it("are given as many segments as their size on the screen wants: 32 from about 40 pixels across, down to 8 under about 8", () => {
@@ -54,5 +55,24 @@ describe("the line round the balls", () => {
   it("is the coarse one past them, unless the balls are coarser", () => {
     expect(outlineSegments(32, 3000, 2000, 16)).toEqual([16, 8]);
     expect(outlineSegments(12, 3000, 2000, 16)).toEqual([12, 12]);
+  });
+});
+
+describe("a molecule's balls made again at another number of segments", () => {
+  it("are a unit sphere of that many segments", () => {
+    const g = carriedSphere(12, null);
+    expect(g.parameters).toMatchObject({ radius: 1, widthSegments: 12, heightSegments: 12 });
+  });
+
+  it("keep what each ball carries - its number, whether it is lined - and nothing of the old sphere's shape", () => {
+    const was = carriedSphere(32, null);
+    const lined = new THREE.InstancedBufferAttribute(new Float32Array([1, 0, 1]), 1);
+    const numbers = new THREE.InstancedBufferAttribute(new Float32Array([1, 2, 3]), 1);
+    was.setAttribute("ballLined", lined);
+    was.setAttribute("ballNumber", numbers);
+    const now = carriedSphere(12, was);
+    expect(now.getAttribute("ballLined")).toBe(lined);
+    expect(now.getAttribute("ballNumber")).toBe(numbers);
+    expect(now.getAttribute("position").count).toBeLessThan(was.getAttribute("position").count);
   });
 });
