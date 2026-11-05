@@ -2198,8 +2198,11 @@ port is that exit's set's.
   on its left (look `stepGives`, kinds `exitPlace`): the first level with
   the first input. A kind has three exits at most (*Atom map*), and three
   fit on a card shut, as three inputs do.
-- **The line to an exit's set** leaves from that exit's port. Placing a
-  set keeps that line clear, as before (place `Self.exit`).
+- **The line to an exit's set** leaves from that exit's port (place
+  `exitStart`), and placing a set keeps that line clear, as before: the
+  exit is the set's own, read from it where it is made - run again, kept
+  under the first, made with its step (place `lineFrom`) - and said, as
+  its placing must, for one not made yet (place `placeFor`).
 - **A wire drawn out of an exit's port** is drawn out of its set: from
   the card's port as it is drawn, then from the set's own port, as every
   wire out of a set is. A wire drawn back from an input can be let go on

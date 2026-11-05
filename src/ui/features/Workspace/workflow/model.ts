@@ -16,7 +16,7 @@ import { canWire, resultOf, wireInto } from "./flow";
 import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
-import { placeBelow } from "./place";
+import { frameAt, placeBelow } from "./place";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -202,11 +202,13 @@ export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocu
   for (const exit of exitsOf(step.kind)) {
     const high = exit.of ? CARD_H / 2 : CARD_H;
     const was = resultOf(next, step.id, exit.id);
-    // (holding nothing yet: what lies under a new frame is not what its step made)
+    // (holding nothing yet: what lies under a new frame is not what its step made - made first, then placed as itself, its line
+    //  from its own exit's port: place `lineFrom`)
     if (!was) {
       const setId = next.nextWorkflowId ?? 1;
-      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id, exit: exit.id });
-      next = holdMembers(addSet(next, frame, { step: step.id, exit: exit.id }), setId, []);
+      next = holdMembers(addSet(next, frameAt(step.x + CARD_W + GAP, top, CARD_W, high), { step: step.id, exit: exit.id }), setId, []);
+      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id, set: setId });
+      next = resizeSet(next, setId, frame);
       top = frame.y0 - BETWEEN;
     } else top = was.y0 - BETWEEN;
   }

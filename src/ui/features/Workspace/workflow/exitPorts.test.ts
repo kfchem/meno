@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { emptyWorkspaceDocument } from "../document";
+import { appendModel, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import type { Model } from "../store/types";
+import { boxOf } from "../chem/make3d";
+import type { Frame } from "./entries";
 import { resultOf } from "./flow";
 import { exitPlace, exitsOf, inputsOf, KINDS } from "./kinds";
-import { CARD_H, CARD_W, portDown, setTakes, stepGives, stepTakes } from "./look";
+import { BETWEEN, CARD_H, CARD_W, nearWire, portDown, PX, setTakes, stepGives, stepTakes, wirePath } from "./look";
 import { addStep } from "./model";
+import { placeResults, type RunResults, type RunWith } from "./run";
+import type { Molecule3D } from "../store/types";
+import { clearOf, exitStart, frameAt, lineFrom, placeAgain } from "./place";
 
 describe("a step's exits' ports (docs/WORKFLOWS.md, *Exit ports*)", () => {
   it("stand down the card's right edge, each as far down as the input of its place on the left, all on the card shut - for every kind", () => {
@@ -46,5 +52,94 @@ describe("a step's exits' ports (docs/WORKFLOWS.md, *Exit ports*)", () => {
   it("are drawn on the ports layer, one for each exit with a set, its set's - a wire drawn out of it drawn out of that set, from the card", () => {
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/exits\.map\(\(x, k\) =>[\s\S]*data-give-set[\s\S]*drawFrom\(e, \{ set: b\.id \}, true\)[\s\S]*left: CARD_W \/ PX, top: portDown\(k\) \/ PX/);
+    // (its line to its set drawn from where placing measures it: `exitStart`, the layer rendered only in a WebGL page)
+    expect(layer).toMatch(/const exitGives = [\s\S]*?exitStart\(s, b\.made\.exit\)/);
+    expect(layer).toMatch(/key: `m\$\{b\.id\}`, p, q: setTakes/);
+  });
+});
+
+/** A step of two exits, `optimise`, at the page's origin: its card, as placing has it, and its exits' sets as `withExits` put them. */
+function twoExits(doc: WorkspaceDocument = emptyWorkspaceDocument()) {
+  const d = addStep(doc, "optimise", 0, 0);
+  const s = d.steps![d.steps!.length - 1];
+  return { doc: d, s, card: frameAt(s.x, s.y, CARD_W, CARD_H), first: resultOf(d, s.id)!, second: resultOf(d, s.id, "failed")! };
+}
+const frameOf = (f: Frame): Frame => ({ x0: f.x0, x1: f.x1, y0: f.y0, y1: f.y1 });
+/** A line from a card's port `p` to set `f`, as placing works it out and Workflow2D draws it (look `wirePath`, round `round`). */
+function lineTo(p: { x: number; y: number }, card: Frame, f: Frame, round: readonly Frame[]) {
+  const e = { from: card, to: f };
+  return wirePath(p, setTakes(f), e, nearWire(p, setTakes(f), e, round));
+}
+
+describe("a set's line, from its own exit's port, as placing keeps it clear (place `lineFrom`, `exitStart`)", () => {
+  it("leaves from the exit a set was made by - whatever else is said - from the exit said for one not made yet, else from the first", () => {
+    const { doc, s, first, second } = twoExits();
+    expect(lineFrom(doc, { step: s.id, set: second.id })).toEqual(stepGives(s, 1));
+    expect(lineFrom(doc, { step: s.id, set: second.id, exit: "out" })).toEqual(stepGives(s, 1));
+    expect(lineFrom(doc, { step: s.id, set: first.id, exit: "failed" })).toEqual(stepGives(s, 0));
+    expect(lineFrom(doc, { step: s.id, exit: "failed" })).toEqual(stepGives(s, 1));
+    expect(lineFrom(doc, { step: s.id })).toEqual(stepGives(s, 0));
+    expect(lineFrom(doc, { set: second.id })).toBeUndefined();
+    for (const { kind } of KINDS) for (const x of exitsOf(kind)) expect(exitStart({ ...s, kind }, x.id)).toEqual(stepGives(s, exitPlace(kind, x.id)));
+  });
+
+  it("is what a frame keeps clear of, another set's, as it leaves its own port: one beside the card, by the first port's line and not the second's, is clear where the second exit's set alone is drawn to", () => {
+    const { doc: made, s, card, first, second } = twoExits();
+    // (the first exit's set gone: the second's line alone leaves the card)
+    const doc = { ...made, sets: made.sets!.filter((b) => b.id !== first.id) };
+    const round = [...doc.sets!, card];
+    const f = { x0: card.x1 + BETWEEN + PX / 2, x1: card.x1 + BETWEEN + 8 * PX, y0: stepGives(s, 0).y + BETWEEN - 6 * PX, y1: stepGives(s, 0).y + BETWEEN + 2 * PX };
+    const near = (p: { x: number; y: number }) => p.x > f.x0 - BETWEEN && p.x < f.x1 + BETWEEN && p.y > f.y0 - BETWEEN && p.y < f.y1 + BETWEEN;
+    // (as the page stands: the first port's line to the second's set would reach it, the second's does not)
+    expect([lineTo(stepGives(s, 0), card, second, round).some(near), lineTo(stepGives(s, 1), card, second, round).some(near)]).toEqual([true, false]);
+    expect(clearOf(doc, f)).toBe(true);
+  });
+
+  it("keeps a later exit's set just under the first as that grows over it - itself no hindrance where it stood", () => {
+    const water = (dx: number): Omit<Molecule3D, "id" | "at"> =>
+      ({ atoms: [{ el: "O", x: dx, y: 0, z: 0 }, { el: "H", x: dx + 0.96, y: 0, z: 0 }, { el: "H", x: dx - 0.24, y: 0.93, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }] }) as never;
+    const { doc, s, second } = twoExits();
+    const h = second.y1 - second.y0;
+    // (each molecule's reach such that the first set grows over the second's top, by less than the second is tall and kept clear by)
+    for (let r = 0.2; r < 3; r += 0.05) {
+      const W: RunWith = { extentOf: () => ({ x0: -r, x1: r, y0: -r, y1: r }), byOf: () => "meno", now: 1 };
+      const ran = placeResults(doc, s, { molecules: [water(0)], rest: [], holds: "molecules" } as unknown as RunResults, W);
+      const [one, two] = [resultOf(ran, s.id)!, resultOf(ran, s.id, "failed")!];
+      const over = second.y1 - (one.y0 - BETWEEN);
+      if (over <= 0 || over >= h + BETWEEN) continue;
+      expect(two.y1).toBeCloseTo(one.y0 - BETWEEN, 9);
+      return;
+    }
+    throw new Error("no reach grew the first set over the second's top by less than its height");
+  });
+
+  it("is kept clear of what lies across it - its own, not the first port's: a short bond across the first port's line to where the second exit's set stands leaves it there, run again or made", () => {
+    const { doc: base, s, card, first, second } = twoExits();
+    const to = frameOf(second);
+    const round = [frameOf(first), card];
+    const lower = { ...to, y0: to.y0 - CARD_H / 2, y1: to.y1 - CARD_H / 2 };
+    const [l0, l1, l0lower] = [lineTo(stepGives(s, 0), card, to, round), lineTo(stepGives(s, 1), card, to, round), lineTo(stepGives(s, 0), card, lower, round)];
+    // (the first exit's own line, as it was placed: before the second's set was made)
+    const first0 = lineTo(stepGives(s, 0), card, frameOf(first), [card]);
+    // (a bond on the first port's line to it, far enough on that the first port's line half a card lower passes it - and the second's
+    //  line, and the first exit's own, clear of it)
+    let bond: Model | undefined;
+    for (const p of l0) {
+      if (p.x <= card.x1 + 2 * PX || p.x >= to.x0 - BETWEEN - 4 * PX) continue;
+      const at: Model = { atoms: [{ id: 900, el: "C", x: p.x, y: p.y - 3 * PX }, { id: 901, el: "C", x: p.x, y: p.y + 3 * PX }], bonds: [{ id: 902, a: 900, b: 901, order: 1 }] } as Model;
+      const ink = boxOf(at);
+      const across = (q: { x: number; y: number }) => q.x > ink.x0 && q.x < ink.x1 && q.y > ink.y0 && q.y < ink.y1;
+      if (l0.some(across) && !l1.some(across) && !l0lower.some(across) && !first0.some(across) && ink.x1 < to.x0 - BETWEEN) {
+        bond = at;
+        break;
+      }
+    }
+    expect(bond).toBeDefined();
+    // (run again: where it was, its own line clear)
+    const doc = appendModel(base, bond!);
+    expect(placeAgain(doc, s, second, to.x1 - to.x0, to.y1 - to.y0)).toEqual(to);
+    // (made, the bond there before its step: both its exits' sets where they would be without it)
+    const fresh = twoExits(appendModel(emptyWorkspaceDocument(), bond!));
+    expect([frameOf(fresh.first), frameOf(fresh.second)]).toEqual([frameOf(first), to]);
   });
 });

@@ -26,11 +26,12 @@ import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { exitPlace, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -795,10 +796,10 @@ export default function Workflow2D() {
     const b = setById.get(end.set);
     return b ? setGives(shownOf(b)) : null;
   };
-  /** Where a step's result set's exit gives on its card (look `stepGives`): the port the line to the set leaves from. */
+  /** Where a step's result set's exit gives on its card (place `exitStart`): the port the line to the set leaves from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
-    return s && b.made ? stepGives(s, exitPlace(s.kind, b.made.exit)) : null;
+    return s && b.made ? exitStart(s, b.made.exit) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
