@@ -298,7 +298,10 @@ function repeatsExpanded(given: FigureRead): { read: FigureRead; of: number[]; m
           [b.a, b.b],
           [b.b, b.a],
         ])
-          if (beyond.has(x) && !beyond.has(y) && !inUnit.has(y)) (beyond.add(y), (grew = true));
+          if (beyond.has(x) && !beyond.has(y) && !inUnit.has(y)) {
+            beyond.add(y);
+            grew = true;
+          }
     }
     const within = bonds.filter((b) => inUnit.has(b.a) && inUnit.has(b.b));
     const { repeat: _r, ...link } = bonds[crossing[1]];
