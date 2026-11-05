@@ -110,7 +110,8 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
     return {
       valence: plugin && valenceWarnings ? plugin.marks.valence : NO_MARKS.valence,
       centres: ours.centres,
-      doubleBonds: new Map([...ours.doubleBonds, ...axes]),
+      // (an axis Meno names itself - a biaryl's - its own; one it does not yet, the plugin's)
+      doubleBonds: new Map([...axes, ...ours.doubleBonds]),
       ...(own ? { said: own.marks.said } : {}),
     };
   }, [wanted, got, cipWanted, cip, valenceWarnings, stereoAsked, model]);

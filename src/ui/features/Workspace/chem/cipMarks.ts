@@ -25,7 +25,7 @@ export type CipJob = { input: IdentityInput; centres: { at: number; id: number }
 /** What the drawing's R and S, E and Z come to, by atom and bond id. */
 export type CipMarks = {
   centres: Map<number, "R" | "S" | "r" | "s">;
-  doubleBonds: Map<number, "E" | "Z">;
+  doubleBonds: Map<number, "E" | "Z" | "Ra" | "Sa" | "ra" | "sa">;
   /** Each unit's words for the tip over it, where it has any: why it has no descriptor, or that its Z or E turns in the mirror image - by `centre-<id>` or `bond-<id>`. */
   said: Map<string, string>;
 };
@@ -70,12 +70,21 @@ export function cipJobsOf(model: Model): CipJob[] {
 export function cipAnswersOf(job: CipJob): CipAnswer[] {
   const held = protonatedAmineHeld(job.input.atoms, job.input.bonds);
   const exchanges = new Set(job.centres.filter((c) => held(c.at) === false).map((c) => c.at));
-  const r = cipLabels(job.input, { centres: job.centres.map((c) => c.at).filter((at) => !exchanges.has(at)), bonds: job.bonds.map((b) => b.at) });
+  // (a bond that is an axis - a biaryl's - asked for as its axis)
+  const axisOf = (at: number) => {
+    const { a, b } = job.input.bonds[at];
+    return (job.input.axes ?? []).findIndex((x) => (x.atoms[0] === a && x.atoms[1] === b) || (x.atoms[0] === b && x.atoms[1] === a));
+  };
+  const axes = job.bonds.map((b) => axisOf(b.at));
+  const r = cipLabels(job.input, { centres: job.centres.map((c) => c.at).filter((at) => !exchanges.has(at)), bonds: job.bonds.map((b) => b.at), axes: axes.filter((k) => k >= 0) });
   return [
     ...job.centres.map((c): CipAnswer => (exchanges.has(c.at) ? { why: "exchanges" } : (r.centres.get(c.at) ?? { why: "undrawn" }))),
-    ...job.bonds.map((b): CipAnswer => r.bonds.get(b.at) ?? { why: "undrawn" }),
+    ...job.bonds.map((b, k): CipAnswer => r.bonds.get(b.at) ?? (axes[k] >= 0 ? r.axes.get(axes[k]) : undefined) ?? { why: "undrawn" }),
   ];
 }
+
+/** An axis's descriptor as the page shows it (docs/CIP.md, *Axes*). */
+const AXIS_SHOWN: Record<string, "Ra" | "Sa" | "ra" | "sa" | undefined> = { M: "Ra", P: "Sa", m: "ra", p: "sa" };
 
 /** The drawing's marks from its jobs and their answers (`cipAnswersOf`, each job's in its order). */
 export function cipMarksFrom(jobs: readonly CipJob[], answers: readonly (readonly CipAnswer[])[]): CipMarks {
@@ -86,13 +95,16 @@ export function cipMarksFrom(jobs: readonly CipJob[], answers: readonly (readonl
       const r = a[k];
       if (!r) return;
       if ("label" in r) {
-        if (r.label !== "E" && r.label !== "Z") out.centres.set(c.id, r.label);
+        if (r.label === "R" || r.label === "S" || r.label === "r" || r.label === "s") out.centres.set(c.id, r.label);
       } else out.said.set(`centre-${c.id}`, cipSaid(r.why, "centre"));
     });
     job.bonds.forEach((b, k) => {
       const r = a[job.centres.length + k];
       if (!r) return;
       if ("label" in r) {
+        // (an axis's M or P shown as its labels have it, (R)-BINAP: M is Ra and P is Sa - m and p, pseudoasymmetric, ra and sa)
+        const shown = AXIS_SHOWN[r.label];
+        if (shown) out.doubleBonds.set(b.id, shown);
         if (r.label !== "E" && r.label !== "Z") return;
         out.doubleBonds.set(b.id, r.label);
         if (r.turns) out.said.set(`bond-${b.id}`, turnsSaid(r.label));

@@ -60,7 +60,7 @@ export type ChemMarks = {
   /** Stereocentres, by atom id: R or S (r or s when pseudo-asymmetric). */
   centres: Map<number, "R" | "S" | "r" | "s">;
   /** Stereogenic double bonds, and axes of chirality, by bond id. */
-  doubleBonds: Map<number, "E" | "Z" | "Ra" | "Sa">;
+  doubleBonds: Map<number, "E" | "Z" | "Ra" | "Sa" | "ra" | "sa">;
   /** What a stereocentre or double bond asked for says while the pointer is on it - why it has no descriptor, or that its Z or E turns in the mirror image - by `centre-<id>` or `bond-<id>` (chem/cipMarks). */
   said?: Map<string, string>;
 };

@@ -35,9 +35,10 @@ export type CipWhy = "alike" | "open" | "later" | "unsure" | "large";
 /**
  * A unit's descriptor: R or S, or r or s for a pseudoasymmetric centre; E or
  * Z, `turns` where it turns in the mirror image (seqCis or seqTrans, Hanson
- * et al. 2018 p. 1761, shown as Z or E: docs/CIP.md) - or why it has none.
+ * et al. 2018 p. 1761, shown as Z or E: docs/CIP.md); an axis's M or P, m or
+ * p where pseudoasymmetric - or why it has none.
  */
-export type CipResult = { label: "R" | "S" | "r" | "s" | "E" | "Z"; turns?: true } | { why: CipWhy; bond?: number };
+export type CipResult = { label: "R" | "S" | "r" | "s" | "E" | "Z" | "M" | "P" | "m" | "p"; turns?: true } | { why: CipWhy; bond?: number };
 
 /**
  * A unit's result as worked out on one structure, with the unsure atom it
@@ -219,6 +220,60 @@ function doubleBond(p: Prepared, i: number): Said {
 }
 
 /**
+ * An axis's M or P (CIP 1966 pp. 395-396, helicity; the Blue Book via
+ * Hanson et al. 2018 pp. 1760-1761): its two groups at each end ranked by
+ * the rules on a digraph rooted at its ends, as a double bond's are - a
+ * biaryl's bond, or an allene's two ends, each end's groups but the one the
+ * axis runs on through - and the sense of the turn from the near end's
+ * higher group to the far end's: P where it is clockwise looking along the
+ * axis, else M. Rule 5 having decided it, m or p where the mirror image
+ * reads it the same. Shown on the page as Ra (M) or Sa (P).
+ */
+function axis(p: Prepared, k: number): Said {
+  const x = p.input.axes![k];
+  const [i, j] = x.atoms;
+  if (p.unsure[i] || p.unsure[j]) return no("unsure");
+  // (the neighbour each end runs on to the other through: the other end, a biaryl's; its cumulated double bond, an allene's)
+  const through = (end: number, other: number) => (p.around[end].includes(other) ? other : p.around[end].find((n) => (p.order.get(end < n ? `${end},${n}` : `${n},${end}`) ?? 1) >= 2));
+  const [ti, tj] = [through(i, j), through(j, i)];
+  if (ti == null || tj == null) return no("unsure");
+  const budget: Budget = { left: NODE_BUDGET, steps: STEP_BUDGET };
+  try {
+    const g = new Digraph(p, [i, j], budget);
+    const ends = [
+      [0, i, ti],
+      [1, j, tj],
+    ] as const;
+    for (const [r, , other] of ends) g.roots[r].kids = g.substituentsOf(g.roots[r], other);
+    // (P where, each end's higher group taken for its reference, the axis turns clockwise; and the last rule either end needed)
+    const sense = (rank: Ranker): { p: boolean; rule: number } | Said => {
+      const high: number[] = [];
+      let rule = -1;
+      for (const [r, end, other] of ends) {
+        const subs = g.roots[r].kids!.filter((n) => n.atom !== PHANTOM);
+        if (subs.length !== 2) return no("unsure");
+        const o = inOrder(rank, subs, [end, other]);
+        if (!("order" in o)) return o;
+        high.push(subs[o.order[0]].atom);
+        rule = Math.max(rule, o.rule);
+      }
+      const turned = (high[0] !== x.refs[0]) !== (high[1] !== x.refs[1]);
+      return { p: (x.sense > 0) !== turned !== rank.mirrored, rule };
+    };
+    const rank = new Ranker(p, budget);
+    const here = sense(rank);
+    if (!("p" in here)) return here;
+    if (here.rule < RULE_5) return { label: here.p ? "P" : "M" };
+    const m = sense(rank.mirror);
+    if (!("p" in m)) return m;
+    return { label: m.p === here.p ? (here.p ? "p" : "m") : here.p ? "P" : "M" };
+  } catch (e) {
+    if (e instanceof TooLarge) return no("large");
+    throw e;
+  }
+}
+
+/**
  * The most structures one unit is worked out on (`agreed`): the usual
  * structures of the mesomeric systems its ranking reaches, each with each.
  * A unit past it is unsure, never guessed.
@@ -255,10 +310,14 @@ function agreed(p: Prepared, unit: (q: Prepared) => Said, variants: (systems: nu
 }
 
 /**
- * The descriptors of a structure's configured centres (by atom index) and
- * double bonds (by bond index) - all of them, or those asked for.
+ * The descriptors of a structure's configured centres (by atom index),
+ * double bonds (by bond index) and axes (by their index in `axes`) - all
+ * of them, or those asked for.
  */
-export function cipLabels(input: IdentityInput, ask?: { centres?: Iterable<number>; bonds?: Iterable<number> }): { centres: Map<number, CipResult>; bonds: Map<number, CipResult> } {
+export function cipLabels(
+  input: IdentityInput,
+  ask?: { centres?: Iterable<number>; bonds?: Iterable<number>; axes?: Iterable<number> },
+): { centres: Map<number, CipResult>; bonds: Map<number, CipResult>; axes: Map<number, CipResult> } {
   const p = prepared(input);
   const made = new Map<string, Prepared>();
   // (the structure with each combination of usual structures of `systems` drawn, each made once)
@@ -289,18 +348,14 @@ export function cipLabels(input: IdentityInput, ask?: { centres?: Iterable<numbe
   const atomsAsked = ask?.centres ? [...ask.centres] : input.atoms.map((_, i) => i);
   const bondsAsked = ask?.bonds ? [...ask.bonds] : input.bonds.map((_, i) => i);
   for (const c of atomsAsked) {
-    if (input.atoms[c]?.tetra)
-      centres.set(
-        c,
-        agreed(p, (q) => centre(q, c), variants),
-      );
+    if (input.atoms[c]?.tetra) centres.set(c, agreed(p, (q) => centre(q, c), variants));
   }
   for (const i of bondsAsked) {
-    if (input.bonds[i]?.stereo)
-      bonds.set(
-        i,
-        agreed(p, (q) => doubleBond(q, i), variants),
-      );
+    if (input.bonds[i]?.stereo) bonds.set(i, agreed(p, (q) => doubleBond(q, i), variants));
   }
-  return { centres, bonds };
+  const axes = new Map<number, CipResult>();
+  for (const k of ask?.axes ? [...ask.axes] : (input.axes ?? []).map((_, k) => k)) {
+    if (input.axes?.[k]) axes.set(k, agreed(p, (q) => axis(q, k), variants));
+  }
+  return { centres, bonds, axes };
 }
