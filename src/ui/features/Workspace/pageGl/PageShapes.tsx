@@ -3,8 +3,14 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { packShapes, PER, type Packed, type Shape } from "./shapes";
 
-/** Over the drawing, the molecules and the marks' boxes, as the page's HTML was (`MarkBoxes2D` is 40). */
-export const PAGE_GL_ORDER = 50;
+/**
+ * Where the page's WebGL is drawn among the rest: after the drawing, the
+ * marks' boxes (`MarkBoxes2D`, 40) and the molecules in 3D (components/
+ * Molecule3DView `OVER_PAGE`, 100, and their joints after them) - over
+ * them all, as the page's HTML lay over the canvas. Drawn without its depth
+ * tested, it is not hidden by a molecule drawn before it.
+ */
+export const PAGE_GL_ORDER = 110;
 
 // language=GLSL
 const VERTEX = /* glsl */ `

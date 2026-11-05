@@ -203,3 +203,15 @@ describe("the page's layers of regions", () => {
     expect(all.at(25, 3, zoom)?.key).toBe("set:2");
   });
 });
+
+describe("where the page's WebGL is drawn", () => {
+  it("after the molecules in 3D and their joints, as the page's HTML lay over them all", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { PAGE_GL_ORDER } = await import("./PageShapes");
+    const view = readFileSync(join(__dirname, "../components/Molecule3DView.tsx"), "utf8");
+    const over = Number(/export const OVER_PAGE = (\d+);/.exec(view)![1]);
+    const most = Math.max(...[...view.matchAll(/renderOrder=\{OVER_PAGE \+ (\d+)\}/g)].map((m) => over + Number(m[1])), over);
+    expect(PAGE_GL_ORDER).toBeGreaterThan(most);
+  });
+});
