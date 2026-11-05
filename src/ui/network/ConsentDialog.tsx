@@ -4,6 +4,8 @@ import { FADE, RISE } from "../theme/motion";
 import { Leaving, QUESTION_ARRIVING_MS } from "../theme/leaving";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
 import { useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
+import { QUESTION_LAYER } from "../guide/layers";
 import { useAskedKeys } from "../layouts/asking";
 import { purposeName, useNetwork, type ConsentRequest } from "../../lib/net/network";
 import { questionKey } from "./questionKey";
@@ -22,13 +24,15 @@ export default function ConsentDialog() {
   useAskedKeys(boxRef, () => asking?.answer(false), !!asking);
   // Not fetching is the safe answer, so it is the one a stray Enter gives: each question's own as it comes.
   const focusNo = useCallback((el: HTMLButtonElement | null) => el?.focus(), []);
-  return (
+  if (typeof document === "undefined") return null;
+  // (in a layer of the window's own, over what is opened over a canvas: ../guide/layers)
+  return createPortal(
     // (one question gone before the next comes: neither shown over the other)
     <AnimatePresence mode="wait">
     {asking && (
     <Leaving key={questionKey(asking)} arriving={QUESTION_ARRIVING_MS}>
     {(held) => (
-    <motion.div {...FADE} {...held} className="absolute inset-0 z-[110] flex items-center justify-center bg-black/20">
+    <motion.div {...FADE} {...held} className="fixed inset-0 flex items-center justify-center bg-black/20" style={{ zIndex: QUESTION_LAYER }}>
       <motion.div
         ref={boxRef}
         {...RISE}
@@ -61,7 +65,8 @@ export default function ConsentDialog() {
     )}
     </Leaving>
     )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
