@@ -600,11 +600,23 @@ fn to_trash(dir: &Path) -> Result<(), String> {
     }
 }
 
-/// A folder moved to the Recycle Bin, where it can be put back from.
+/// A folder moved to the Recycle Bin, where it can be put back from - never
+/// deleted outright. A drive with no Recycle Bin (a network drive, many a
+/// USB one) is refused before anything is done; and where Windows would
+/// still destroy it rather than recycle it (a Bin set to delete at once, a
+/// folder past the Bin's size), it asks first (`FOF_WANTNUKEWARNING`), and
+/// a folder not taken - declined, or anything aborted - stays.
 #[cfg(windows)]
 fn to_trash(dir: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::UI::Shell::{SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW};
+    use windows_sys::Win32::UI::Shell::{SHFileOperationW, SHQueryRecycleBinW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING, FO_DELETE, SHFILEOPSTRUCTW, SHQUERYRBINFO};
+    // (its drive's root, as the Recycle Bin is asked of: C:\, or \\server\share\)
+    let root: Vec<u16> = dir.ancestors().last().unwrap_or(dir).as_os_str().encode_wide().chain([0]).collect();
+    let mut bin = SHQUERYRBINFO { cbSize: std::mem::size_of::<SHQUERYRBINFO>() as u32, i64Size: 0, i64NumItems: 0 };
+    // SAFETY: `root` is nul-ended and `bin` sized as the call asks; both live through it.
+    if unsafe { SHQueryRecycleBinW(root.as_ptr(), &mut bin) } < 0 {
+        return Err("its drive has no Recycle Bin".into());
+    }
     // (a list of paths, each ended by a nul, and the list by another)
     let from: Vec<u16> = dir.as_os_str().encode_wide().chain([0, 0]).collect();
     let mut op = SHFILEOPSTRUCTW {
@@ -612,7 +624,7 @@ fn to_trash(dir: &Path) -> Result<(), String> {
         wFunc: FO_DELETE,
         pFrom: from.as_ptr(),
         pTo: std::ptr::null(),
-        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as u16,
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING | FOF_NOERRORUI | FOF_SILENT) as u16,
         fAnyOperationsAborted: 0,
         hNameMappings: std::ptr::null_mut(),
         lpszProgressTitle: std::ptr::null(),

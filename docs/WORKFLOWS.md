@@ -1327,7 +1327,10 @@ is not held to one.
   that its folder holds nothing the record does not, and that the file
   saved has not changed meanwhile. It is moved to the system's Trash
   (the Recycle Bin on Windows), never deleted outright; where there is
-  no Trash Meno knows, it stays. Any that stays though finished is said
+  no Trash Meno knows, or on Windows its drive has no Recycle Bin (a
+  network drive, many a USB one), it stays - and where Windows would
+  destroy it rather than recycle it, Windows asks first, and declined, it
+  stays. Any that stays though finished is said
   once, with why, beside the save. What a later save keeps of a job
   whose folder went, and what *Show log* and *Show files* show, Meno
   reads from the file saved, as it does from a file opened (FILE-IO.md,
