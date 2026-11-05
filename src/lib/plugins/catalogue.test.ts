@@ -189,4 +189,17 @@ describe("what is offered for a role no plugin here fills", () => {
     // (one here already: nothing offered for it)
     expect(offeredFor("smiles", offersOf(listed, new Map([["sketch", "0.2.0"]]), "macos"))).toEqual([]);
   });
+
+  it("reads what brings presets for another, and the plugins no longer offered - each as Meno takes it, or the catalogue is refused", () => {
+    const ok = read(catalogue([entry(), entry({ id: "rdkit-presets", presetsFor: "rdkit" })], { retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }] })) as { catalogue: Catalogue };
+    expect(ok.catalogue.plugins[1].presetsFor).toBe("rdkit");
+    expect(ok.catalogue.retired).toEqual([{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }]);
+    expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.retired).toBeUndefined();
+    for (const bad of ["", "Not An Id", 3]) expect(why(catalogue([entry({ presetsFor: bad })])), String(bad)).toContain("the plugin it brings presets for");
+    expect(why(catalogue([entry({ presetsFor: entry().id })]))).toContain("the plugin it brings presets for");
+    for (const bad of [{}, [{ id: "wfx", name: "WFX" }], [{ id: "wfx", name: "WFX", why: "w" }, { id: "wfx", name: "WFX", why: "w" }], [{ id: "Bad Id", name: "n", why: "w" }]])
+      expect(why(catalogue([entry()], { retired: bad })), JSON.stringify(bad)).toBe("Its plugins no longer offered are not as Meno takes them");
+    expect(why(catalogue([entry()], { retired: [{ id: entry().id, name: "n", why: "w" }] }))).toBe("It offers a plugin it says is no longer offered");
+  });
 });
+

@@ -223,4 +223,45 @@ describe("the plugins set up before they came online, got again", () => {
     expect(r.asked[0].title).toBe("Get it again?");
     expect(r.asked[0].detail).toContain("One was set up here: Gamma interface.");
   });
+
+  it("says which are not got again and why - another Meno's, no longer offered as the list says, or not on it - and offers with one what brings its presets", async () => {
+    const listed: Catalogue = {
+      ...CATALOGUE,
+      plugins: [...CATALOGUE.plugins, entry("alpha-presets", "Alpha presets", 3_000, { presetsFor: "alpha" }), entry("beta-presets", "Beta presets", 3_000, { presetsFor: "beta" })],
+      retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }],
+    };
+    useNetwork.setState({ granted: [CATALOGUE_PURPOSE] });
+    // (beta's presets taken away by the chemist: never offered again)
+    useAppSettings.setState({ plugins: { ...DEFAULT_APP_SETTINGS.plugins, removed: ["beta-presets"] } });
+    const r = deps({ stamps: ["alpha", "beta", "later", "wfx", "gone"], listed });
+    await getUsedBefore(r.say, r.d);
+    expect(r.asked).toHaveLength(1);
+    expect(r.asked[0].title).toBe("Get these 3 again?");
+    expect(r.asked[0].detail).toContain("2 were set up here: Alpha interface and Beta interface.");
+    expect(r.asked[0].detail).toContain("With them, what brings presets for one of them, apart from it now: Alpha presets, for Alpha interface.");
+    expect(r.asked[0].detail).toContain("Not got again: Later: It is for a newer Meno; WFX reader: Meno reads these files itself now; gone: no longer among the plugins online.");
+    expect(r.asked[0].parts?.map((p) => [p.name, p.detail])).toEqual([
+      ["Alpha interface", "Its files: 39 KB."],
+      ["Beta interface", "Its files: 2.4 MB."],
+      ["Alpha presets", "Presets for Alpha interface. Its files: 2.9 KB."],
+    ]);
+    expect(r.got).toEqual(["alpha", "beta", "alpha-presets"]);
+  });
+
+  it("names them in the first question by the names a list kept from before gives them - else by their ids", async () => {
+    useOnline.setState({ state: "unlisted", catalogue: { ...CATALOGUE, retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }] } });
+    const r = deps({ stamps: ["alpha", "wfx", "unknown"] });
+    await getUsedBefore(r.say, r.d);
+    expect(r.asked[0].detail).toBe("3 were set up here: Alpha interface, WFX reader and unknown. Meno fetches the list of plugins online, then asks before it gets any of them.");
+  });
+
+  it("where none is got again, says why, once", async () => {
+    useNetwork.setState({ granted: [CATALOGUE_PURPOSE] });
+    const r = deps({ stamps: ["later", "gone"] });
+    await getUsedBefore(r.say, r.d);
+    expect(r.asked).toEqual([]);
+    expect(r.said).toEqual(["Plugins used before: None of them is got again: Later: It is for a newer Meno; gone: no longer among the plugins online."]);
+    expect(asked()).toBe(true);
+  });
 });
+

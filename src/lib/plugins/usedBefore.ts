@@ -13,7 +13,10 @@
  *   online, naming them as they were set up - a no asked again as Meno next
  *   starts, unless the chemist says not to;
  * - with the list fetched, whether to get them, each by its name and the size
- *   of its files - a no kept.
+ *   of its files - those not got again said, each with why (another system's,
+ *   a newer Meno's, or no longer offered, as the list says), and with them
+ *   what the list says brings presets for one of them (`presetsFor`): a
+ *   plugin's presets that came with it before, apart now - a no kept.
  *
  * A yes once all are got, a no to the second, or nothing to get: never asked
  * again. Offline, the list not fetched, or one not got: said, and asked again
@@ -24,7 +27,7 @@ import { askToConnect, formatBytes, useNetwork, type ConsentRequest } from "../n
 import { useAppSettings } from "../settings/appSettings";
 import { anyPluginById } from "../calc/catalog";
 import { addPlugin } from "../calc/workers";
-import { CATALOGUE_HOSTS, CATALOGUE_PURPOSE, offersOf, type CatalogueEntry } from "./catalogue";
+import { CATALOGUE_HOSTS, CATALOGUE_PURPOSE, offersOf, type CatalogueEntry, type Offer, type Retired } from "./catalogue";
 import { systemHere } from "./here";
 import { placeOf, refreshPlugins } from "./known";
 import { CATALOGUE_REQUEST, getPlugin, listOnline, useOnline } from "./online";
@@ -75,12 +78,14 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
     say(TITLE, "Meno now gets its plugins online, and is offline: it asks again as it next starts, or add them in Settings, Plugins.");
     return;
   }
-  // (1: the list fetched only where the network is allowed for it - else asked first, naming them as they were set up)
+  // (1: the list fetched only where the network is allowed for it - else asked first, naming them as they were set up: by their names where a list kept from before has them)
   if (!useNetwork.getState().granted.includes(CATALOGUE_PURPOSE)) {
+    const kept = useOnline.getState().catalogue;
+    const nameOf = (id: string) => kept?.plugins.find((p) => p.id === id)?.name ?? kept?.retired?.find((r) => r.id === id)?.name ?? id;
     const lookUp: ConsentRequest = {
       ...CATALOGUE_REQUEST,
       title: "Meno now gets its plugins online. Look them up?",
-      detail: `${setUpHere(ids)} Meno fetches the list of plugins online, then asks before it gets any of them.`,
+      detail: `${setUpHere(ids.map(nameOf))} Meno fetches the list of plugins online, then asks before it gets any of them.`,
       again: true,
     };
     if (!(await deps.ask(lookUp))) {
@@ -95,20 +100,33 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
     say(TITLE, `${online.problem ?? "The list of plugins online could not be fetched."} Meno asks again as it next starts.`);
     return;
   }
-  // (each set up before that is offered here; one no longer offered, or not for this system or this Meno, passed over)
-  const entries = offersOf(online.catalogue, new Map(), systemHere())
-    .filter((o) => o.offer === "add" && ids.includes(o.entry.id))
+  // (each set up before that is offered here; one no longer offered, or not for this system or this Meno, said with why)
+  const offers = offersOf(online.catalogue, new Map(), systemHere());
+  const again = offers.filter((o) => o.offer === "add" && ids.includes(o.entry.id)).map((o) => o.entry);
+  const notAgain = notGotAgain(ids, again, offers, online.catalogue.retired ?? []);
+  // (and what brings presets for one of them - those that came with it before, apart now - unless here, or taken away)
+  const presets = offers
+    .filter((o) => o.offer === "add" && o.entry.presetsFor && again.some((e) => e.id === o.entry.presetsFor) && !ids.includes(o.entry.id) && !placeOf(o.entry.id) && !plugins.removed.includes(o.entry.id))
     .map((o) => o.entry);
-  if (!entries.length) return answered();
+  const entries = [...again, ...presets];
+  if (!entries.length) {
+    if (notAgain.length) say(TITLE, `None of them is got again: ${notAgain.join("; ")}.`);
+    return answered();
+  }
   // (2: whether to get them, each by its name and its files' size - their environments' said as each is set up, where one is fetched)
+  const forName = (e: CatalogueEntry) => again.find((a) => a.id === e.presetsFor)?.name ?? "";
   const get: ConsentRequest = {
     purpose: CATALOGUE_PURPOSE,
     title: `Get ${entries.length === 1 ? "it" : `these ${entries.length}`} again?`,
-    detail: `${setUpHere(entries.map((e) => e.name))} Where a plugin's environment is the one it needs, it is kept, nothing of it fetched again. No, and you can add them in Settings, Plugins.`,
+    detail:
+      `${setUpHere(again.map((e) => e.name))}` +
+      (presets.length ? ` With them, what brings presets for one of them, apart from it now: ${listSaid(presets.map((e) => `${e.name}, for ${forName(e)}`))}.` : "") +
+      (notAgain.length ? ` Not got again: ${notAgain.join("; ")}.` : "") +
+      " Where a plugin's environment is the one it needs, it is kept, nothing of it fetched again. No, and you can add them in Settings, Plugins.",
     sources: CATALOGUE_REQUEST.sources,
     hosts: CATALOGUE_HOSTS,
     again: true,
-    parts: entries.map((e) => ({ name: e.name, detail: `Its files: ${formatBytes(e.source.bytes)}.`, sources: [] })),
+    parts: entries.map((e) => ({ name: e.name, detail: `${e.presetsFor ? `Presets for ${forName(e)}. ` : ""}Its files: ${formatBytes(e.source.bytes)}.`, sources: [] })),
   };
   if (!(await deps.ask(get))) {
     if (!useNetwork.getState().offline) answered();
@@ -125,6 +143,22 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
   }
   if (!failed.length) return answered();
   say(TITLE, `Not all were got: ${failed.join(" ")} Meno asks again, for those not here, as it next starts.`);
+}
+
+/**
+ * Those set up before that are not got again, each by its name - else its
+ * id - and why: not made for this system or this Meno (`offersOf`), no
+ * longer offered, as the list says why, or not on it at all.
+ */
+function notGotAgain(ids: readonly string[], again: readonly CatalogueEntry[], offers: readonly Offer[], retired: readonly Retired[]): string[] {
+  return ids
+    .filter((id) => !again.some((e) => e.id === id))
+    .map((id) => {
+      const o = offers.find((x) => x.entry.id === id);
+      if (o?.offer === "not-here") return `${o.entry.name}: ${o.why}`;
+      const r = retired.find((x) => x.id === id);
+      return r ? `${r.name}: ${r.why}` : `${id}: no longer among the plugins online`;
+    });
 }
 
 const DEPS: UsedBeforeDeps = {
