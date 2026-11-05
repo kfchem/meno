@@ -440,9 +440,9 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
 
   it("asks each structure in rounds where its plugin's search takes draws - each round a draw of its own - until one brings none new, and says how it ended", async () => {
     // (a search that takes draws: the window, Settings' own, the step starts from; the worker here gives the same one conformer each draw)
-    const rdkit = PLUGINS.find((p) => p.id === "rdkit") as unknown as { roleDraws: readonly string[] };
-    const was = rdkit.roleDraws;
-    rdkit.roleDraws = ["conformers"];
+    const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
+    const was = search.roleDraws;
+    search.roleDraws = ["conformers"];
     useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings, within3d: 3 } }));
     try {
       const { st } = await searched();
@@ -460,7 +460,7 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
         Array(2).fill(`2 rounds, ${2 * FEW_CONFORMERS} tried: the last brought no new conformer within 3 kcal/mol of the lowest`),
       );
     } finally {
-      rdkit.roleDraws = was;
+      search.roleDraws = was;
       useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings } }));
     }
   });
