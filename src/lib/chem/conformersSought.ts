@@ -340,6 +340,8 @@ export const WITHIN_NEEDED = "Give the window for new conformers, in kcal/mol";
 
 /** A search in rounds' own values, where a chemist has set them (Settings, or a step): its window for new conformers, its first round, the most it tries. */
 export type RoundsChosen = { within?: number; first?: number; most?: number };
+/** Settings' values for a search in rounds (lib/settings/appSettings `ChemistrySettings`), as `soughtOptions` takes them. */
+export const roundsChosen = (s: { within3d?: number; first3d?: number; most3d?: number }): RoundsChosen => ({ within: s.within3d, first: s.first3d, most: s.most3d });
 
 /**
  * How many conformers are sought, Meno's choice for any conformer search

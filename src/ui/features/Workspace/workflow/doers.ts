@@ -11,7 +11,7 @@ import { chosenFrom, presetOffer } from "../render/presets";
 import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
 import { valuesOf, type Option, type OptionValues } from "../../../../lib/options";
-import { RING_CONFORMERS, soughtOptions } from "../../../../lib/chem/conformersSought";
+import { RING_CONFORMERS, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
 import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
@@ -135,7 +135,7 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
   const meno = brought
     ? renderOptions("picture", [], true, [...(plugin!.roleLooks.render ?? []), ...brought.looks], undefined, undefined, brought.studios)
     : kind === "conformers" && plugin?.roleTries.includes("conformers")
-      ? soughtOptions(settled.sought3d ?? "needed", settled.count3d ?? RING_CONFORMERS)
+      ? soughtOptions(settled.sought3d ?? "needed", settled.count3d ?? RING_CONFORMERS, plugin.roleDraws.includes("conformers") ? roundsChosen(settled) : undefined)
       : (kindInfo(kind).own ?? []);
   return [...meno, ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
 }
