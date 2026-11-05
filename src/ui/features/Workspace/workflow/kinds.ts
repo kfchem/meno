@@ -1279,10 +1279,11 @@ export function optionsOf(options: readonly Option[], own: Record<string, string
   return values;
 }
 
-/** What a step's result set is called, its options' values put in. */
+/** What a step's result set is called, its options' values put in - or, where a number it is called by is none yet (an Energy window's window, the chemist's to give), its kind's name. */
 export function madeName(kind: StepKind, options: readonly Option[], own: Record<string, string | number | boolean> | undefined): string {
   const values = optionsOf(options, own);
-  const { made, madeOne } = kindInfo(kind);
+  const { made, madeOne, name } = kindInfo(kind);
+  if ([...made.matchAll(/\{([a-z0-9-]+)\}/g)].some(([, id]) => typeof values[id] === "number" && !Number.isFinite(values[id]))) return name;
   if (madeOne && Number(values[madeOne.option]) === 1) return madeOne.name;
   return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }

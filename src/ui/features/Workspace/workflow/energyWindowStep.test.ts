@@ -5,7 +5,7 @@ import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from ".
 import type { Molecule3D } from "../store/types";
 import { setMolecules } from "./entries";
 import { resultOf } from "./flow";
-import { howOf, kindInfo, needsOf, WINDOW_GUIDE } from "./kinds";
+import { howOf, kindInfo, madeName, needsOf, WINDOW_GUIDE } from "./kinds";
 import { addSet, addStep, connect } from "./model";
 import { runStep, type RunWith } from "./run";
 import { SET_ASIDE } from "./structureSteps";
@@ -111,6 +111,9 @@ describe("Energy window, of the lowest in each value of a property", () => {
     for (const options of given) expect(needsOf({ kind: "energy-window", options })).toBe("Give the window, in kcal/mol");
     expect(howOf(info.options!, {}, info.how)).toBe("Give the window, in kcal/mol");
     expect(needsOf({ kind: "energy-window", options: { window: 0 } })).toBeUndefined();
+    // (what it makes named by its kind until then, never by a window that is none; then by its window)
+    expect(madeName("energy-window", info.options!, {})).toBe("Energy window");
+    expect(madeName("energy-window", info.options!, { window: 2.5 })).toBe("Within 2.5 kcal/mol");
     // (a page whose window was never given: not run, said so)
     const doc = runStep(windowed([water(0, 0), water(9, 2)], {}), 2, W);
     expect(ran(doc)).toMatchObject({ ok: false, said: "Give the window, in kcal/mol" });
