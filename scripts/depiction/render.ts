@@ -61,7 +61,7 @@ function fromFile(path: string, format: "mol" | "sdf" | "xyz"): Structure {
       a2,
       order: (b.order ?? 1) as 1 | 2 | 3,
       stereo: (b.stereo ?? "none") as Bond["stereo"],
-      ...(b.stereoOrient ? { stereoOrient: b.stereoOrient } : {}),
+      ...(b.narrow != null && index.has(b.narrow) ? { narrow: index.get(b.narrow)! } : {}),
       ...(b.dative ? { dative: true } : {}),
     });
   }

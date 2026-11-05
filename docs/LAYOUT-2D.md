@@ -331,6 +331,28 @@ they hang from.
   from too. A bond axial to any chair or boat of the solid is drawn along
   that ring's upright as laid - straight up or down where the ring stands
   as the template does - up or down as the solid has it.
+- **A closed surface**: a ring system of more than twenty atoms that
+  closes on itself as a polyhedron does - C60, C70, a larger fullerene -
+  is drawn as its Schlegel diagram (`schlegel.ts`): seen through one face,
+  that face round the outside and every other inside it, no bond crossing
+  another. Its faces are its smallest rings and the one they leave out: on
+  a closed surface every bond lies in two faces, so the bonds in only one
+  ring go round that last face, no bond in three; and every atom has three
+  bonds or more in it, a polyhedron's corner - so no flat system, whose
+  edge round its rings has atoms of two, is one. (Euler's count, a
+  sphere's, then follows: a system's smallest rings are one fewer than its
+  faces.) The largest face is set as a
+  regular polygon and every other atom at the mean of its neighbours
+  (W. T. Tutte, *How to draw a graph*, Proc. London Math. Soc. 13, 743
+  (1963)), which for a polyhedron's graph crosses no bond; then, Tutte's
+  drawing crowding the faces deep inside into its middle, each atom's
+  distance from the middle r is taken to r^p, its order round the middle
+  and out from it kept, for the evenest bonds of those powers that cross
+  none and put no atom on a bond. Such a system is not laid flat with each
+  of its smallest sets of rings to choose among (`ringSets.ts`): seen
+  through a face, they are alike. Before, C60 came out tangled - fifteen
+  bonds crossing - after seconds. One of twenty atoms or fewer (cubane,
+  dodecahedrane) is laid out as before, a cage or flat.
 - **A system that will not lie flat** (2026-10-11, from natural products
   outside the benchmark): where every flat drawing of it has a fault - an
   atom on another or on a bond, a bond crossing one not behind it, or an

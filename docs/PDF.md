@@ -1331,7 +1331,8 @@ it where it lies out of view.
     a bond to two and a half long that crosses a line of the figure
     square enough, away from both their ends, its own ends free - at no
     other line's end but its ticks', and into no label - with its count
-    by its lower end; its partner is the nearest other such line or curve,
+    by its lower end (a count in reach of two brackets' lower ends is the
+    nearer's); its partner is the nearest other such line or curve,
     uncounted. A line across a bond with no count is read as before, and a
     number by no bracket - a compound's - is left as it was. A label
     written as one word, (CH2)6, is not read either (above). A picture
@@ -1638,9 +1639,9 @@ words are: by itself, not by a box drawn round it.
 The pointer on a compound's number in a PDF's text - "12", "3a", "compound
 12" - is to bring up that compound's structure, read from the figure it is
 numbered in, wherever in the PDF that is: the compound-number lens, built in
-three parts. The first, built: which number names which structure, and each
-PDF's index of them. The words that mention a number, and the card, come
-next.
+three parts - which number names which structure, and each PDF's index of
+them; each letter's weight (*Each page's letters*); and the words that
+mention a number, and the card.
 
 - **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
   word of a figure - drawn in it, or the page's own words within it - of a
@@ -1667,7 +1668,37 @@ next.
   whole PDF in idle time (`indexPdf`): a page, then the window's next idle
   moment, then the next, each page's figures read as the column reads them
   (`pdfPageLabels`), never holding up what is shown; a page that could not
-  be read is gone through again the next time.
+  be read is gone through again the next time. It starts the first time
+  the pointer moves over the PDF's words, in the column or on the page
+  (`utils/compoundLens` `indexOnce`).
+- **A number mentioned** (`utils/compoundMentions`): the word under the
+  pointer, of a compound number's shape, set as a compound's number is -
+  bold, as most journals set one in their text, or after a word that names
+  a compound ("compound 12", "products 3, 4 and 5": compound, product,
+  intermediate, substrate, adduct, derivative, past other numbers and "and",
+  "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
+  with ⌥ (Alt) held, every number of that shape is.
+- **The card** (`components/CompoundCard`): the pointer resting on a number
+  mentioned (350 ms) whose structure the PDF's figures number, a calm card
+  by its word - over its line, covering only what has been read, its left
+  edge on the word's and a little gap above the letters; under the line
+  only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
+  and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
+  in and out (`DURATION.base`), lingering a moment so the pointer can come
+  onto it. Its drawing dragged onto the canvas puts the structure there as
+  one dragged out of its figure is (*Structures picked from a PDF*: the same
+  reading, its note and unsure marks). Its page clicked shows the figure in
+  the column, the structure marked a moment. A number no structure is set
+  by, or one of a structure not read, has no card.
+- **In the column and on the page alike** (`utils/compoundLens`
+  `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
+  a PDF's words bring a card where they can be read - at the size a long
+  press there selects them (`READABLE_PX_PER_PT`), not as an icon or seen
+  too small - its word's box taken through the view to the window. Not on a
+  structure of a figure, which is the structure's own, as in the column. As
+  the view moves, the card goes - its word is no longer where it stood -
+  and comes again by the word's new place once the pointer rests there. ⌥
+  pressed or let go over a number reads it again, in both.
 
 ### A picture read (part B, built 2026-10-11)
 

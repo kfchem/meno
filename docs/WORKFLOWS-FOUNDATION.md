@@ -1033,9 +1033,10 @@ space: the group goes where the hydrogen was.
   the configuration it had. A wedge with three bonds in the page reads
   otherwise than a wedge with the hydrogen left out, so the old wedge alone
   would invert it.
-- **Every wedge keeps its narrow end.** A bond added to an atom changes how
-  the drawing counts its bonds, and with them which end of a wedge reads as
-  narrow, so a wedge would move to the next atom.
+- **Every wedge keeps its narrow end.** A wedge is narrow at an atom, kept
+  by id (EDITOR-2D, *A wedge's narrow end is kept by atom*), so the group's
+  bond added to an atom does not move a wedge to the next atom; a product's
+  wedge without one is given the template's.
 - **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads

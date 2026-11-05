@@ -33,8 +33,12 @@ pub const HOSTS: [&str; 3] = ["github.com", "objects.githubusercontent.com", "re
 const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue.json";
 
 /// The keys the catalogue is signed with (minisign, base64): the one in use, and the next, so that one is
-/// changed for the other by a Meno that carries both first. Until one is carried, no catalogue is taken.
-const KEYS: &[&str] = &[];
+/// changed for the other by a Meno that carries both first. Only the public key is here; the secret one that
+/// signs the catalogue is kept by the maintainer, never in the repository.
+const KEYS: &[&str] = &[
+    // (key id 2F17AB3E9FB8307D)
+    "RWR9MLifPqsXL86AyrBHekSl4CsDiTA8jJneU+l/xIP6jWeVrzIV0GBe",
+];
 
 /// The most the catalogue, its signature, a plugin's archive, its files unpacked, and their number may be.
 const LIST_MOST: u64 = 4 * 1024 * 1024;
@@ -549,6 +553,27 @@ mod tests {
         assert!(checked(&changed, SERIAL3_A, &[KEY_A], None).is_err());
         assert!(checked(SERIAL2, SERIAL3_A, &[KEY_A], None).is_err());
         assert!(checked(SERIAL3, b"not a signature", &[KEY_A], None).is_err());
+    }
+
+    #[test]
+    fn meno_carries_its_key_and_takes_no_list_signed_with_another() {
+        use base64::Engine;
+        // (each key one minisign reads, an Ed25519 key - its id as minisign prints it, and the one in use first)
+        for k in KEYS {
+            assert!(PublicKey::from_base64(k).is_ok(), "{k}");
+        }
+        let ids: Vec<String> = KEYS
+            .iter()
+            .map(|k| {
+                let raw = base64::engine::general_purpose::STANDARD.decode(k).unwrap();
+                assert_eq!((raw.len(), &raw[..2]), (42, &b"Ed"[..]));
+                format!("{:016X}", u64::from_le_bytes(raw[2..10].try_into().unwrap()))
+            })
+            .collect();
+        assert_eq!(ids[0], "2F17AB3E9FB8307D");
+        // (a list signed with a key made for the tests alone - its secret one not kept - is refused, whichever)
+        assert_eq!(checked(SERIAL3, SERIAL3_A, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
+        assert_eq!(checked(SERIAL4, SERIAL4_C, KEYS, None).unwrap_err(), "the list is not signed with Meno's key");
     }
 
     #[test]
