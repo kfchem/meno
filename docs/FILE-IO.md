@@ -132,8 +132,9 @@ that differ, it is given none, and says why.
   2026-11-01): its headings and the heads of its columns, never a
   structure's name, and its columns in turn - the Gaussian interface's
   orientation tables, a row of centre, atomic number, type, x, y, z. Only
-  where that plugin is added: where only a plugin not added declares it,
-  none of the table is read - its rows read as nothing else either - and
+  where that plugin is added: where only a plugin not added declares it -
+  one here, or one on offer online, by its catalogue entry
+  (`quotedTables`, PLUGINS.md, *Plugins online*) - none of the table is read - its rows read as nothing else either - and
   the card says so, naming the plugin (*A table as its program prints it:
   the Gaussian interface plugin reads it, once added in Settings,
   Plugins*), not to be placed.
@@ -266,9 +267,13 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
 - The comment is the molecule's name (the file's own name where it has
   none), then, where there are several frames, `frame i/n`, then, where the
   frame's energy is known, `E = <hartrees to ten decimals> Eh`: for
-  example `water frame 2/3 E = -76.0261000000 Eh`. On one line, and plain
-  text, which programs that read the layout take as a comment. No method
-  is written: Meno does not hold one for an energy.
+  example `water frame 2/3 E = -76.0261000000 Eh`. Where the frame did
+  not finish - it failed, or its marks of which frames failed did not
+  read - why, after it, as an SD file's `> <Failed>` says it:
+  `oh frame 2/2 E = -75.3900000000 Eh failed: not converged: stopped at
+  200 cycles`, so that no reader takes its energy for a result. On one
+  line, and plain text, which programs that read the layout take as a
+  comment. No method is written: Meno does not hold one for an energy.
 - The writer's option *Molecules in 3D* says the frame shown (one block a
   molecule) or every frame (a block each, in order). Several molecules
   selected are written as SDF export writes them: one after another, each as
@@ -545,9 +550,9 @@ How these behave:
 - **Open uses the system's dialog through Tauri**, so Meno has the file's
   path. It reads bytes, and decodes the text kinds. It offers `.meno`,
   text, and the kinds something reads: Meno, or a plugin added - and,
-  the kinds the plugins Meno carries but not added read (PLUGINS.md, *A
-  plugin to suggest for a file*). A file whose reader is not added says
-  which plugins would read it, with Add. What a plugin added
+  the kinds the plugins here or on offer online but not added read
+  (PLUGINS.md, *A plugin to suggest for a file*). A file whose reader is
+  not added says which plugins would read it, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
 - **A file's text is read as its bytes are written** (2026-10-13,
@@ -756,6 +761,17 @@ As this part of step 5 was built (#155, from main beside step 3):
     as before.
     In an SD file the choice holds for its records in 3D too, and is
     offered where the page holds molecules in 3D alone.
+  - **A ring or chain bound to a metal through all its atoms** in a
+    molecule in 3D (`Molecule3D.centres`) is written as a file holds one
+    ("CTfile Formats", a multi-centre bond): a star atom (*) at its atoms'
+    centre in that frame, after the molecule's own atoms, and a coordination
+    bond from the metal to it whose endpoints are the ring's atoms, bound to
+    all of them (`ENDPTS`, `ATTACH=ALL`; `withRingStars`, lib/chem/molWriter)
+    - in V3000, which V2000 cannot hold, in an SD file and a molfile copied
+    alike. That the bond is a coordination bond (type 9) is Meno's own
+    choice, not the format's: it is the type Meno's 2D writer gives a
+    drawing's ring bound to a metal, and the one its reader reads back.
+    Without it, the ring was written as if it were not bound at all.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`). Beside it: why a frame did not finish
@@ -1028,6 +1044,13 @@ work.meno (zip)
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.
+- **What a molecule in 3D was made from** is written with it, on the
+  page or in a large result set's collection, and read back
+  (`Molecule3D.madeOf`): the entries it was made from, by id - its
+  lineage (WORKFLOWS.md, *Lineage in 3D*). It is not the molecule a
+  step's entry is a frame of (`SetEntry.from`), which is where the entry
+  is, not what it came from. An entry record's lineage (lib/entry
+  `Entry.from`) is `madeOf` where there is one.
 - **What does not read is left out, counted and said - never silently.**
   A workspace's file, or Meno's own record of a copy, can hold something
   that does not read: damaged, or written by hand. Only an atom or a bond
@@ -1045,7 +1068,8 @@ work.meno (zip)
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
     results and its notes of what could not be read, and each property of
-    a frame (`Molecule3D.properties`) that does not read. Within a
+    a frame (`Molecule3D.properties`) that does not read, and each entry
+    it was made from that is no text. Within a
     structure a step gave a set: each property of its record, and each
     entry it was made from. Within a set holding a table:
     a column that does not read (with its cells), a row not of the table's
@@ -1637,18 +1661,14 @@ As step 3 was built:
   NWChem, ORCA, Psi4, Q-Chem, Turbomole, xTB - each told by its banner as
   cclib tells it; PySCF's the Molden file. With no plugin added, *Files*
   lists Meno's own kinds only.
-  - Each program's banner is checked on a real output of it, one per
-    program from cclib's regression data (`scripts/calc/samples.json`;
-    kept out of the repository in `calc-samples/`), and cclib's worker
-    gives each one's molecule. The tests skip a file that is not there.
-  - Psi3 is left out, with no output of it to test with.
+  - Psi3 is left out.
   - `probe` is in place, and tested with made-up plugins.
 - **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
   *Several plugins, one role*): its manifest declares ORCA's output as its
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
-  file opened by hand alike. Written from the ORCA 6.1 manual and ORCA's
-  own outputs (ORCA 6.1.1, `scripts/calc/test_reader_orca.py`), it gives:
+  file opened by hand alike. Written from the ORCA 6.1 manual and the
+  program's printed forms (`scripts/calc/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry

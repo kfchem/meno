@@ -781,7 +781,7 @@ Not yet, and where it comes:
 ### Step 3: text and search (2026-10-09)
 
 Built:
-- **Each page's letters, as PDFium reads them** (`pdf_text`). Each comes with its box, in points from the page's top left as it is drawn; the letters PDFium adds itself (a space, a line's end) have none. `lib/pdf/text` keeps them a page at a time and works out:
+- **Each page's letters, as PDFium reads them** (`pdf_text`). Each comes with its box, in points from the page's top left as it is drawn; the letters PDFium adds itself (a space, a line's end) have none. Each says too whether it is set bold (2026-11-04, for a compound's number, which most journals set bold) - as its font says of itself, nothing measured from the glyphs: its font's weight 600 or more, as the font says it, or its font's name saying Bold, Black or Heavy (Semibold and Demibold among them) after a subset's tag - the name for a font whose weight is not given, or not given right, as pdfium-render warns of built-in fonts (`set_bold`). `lib/pdf/text` keeps them a page at a time and works out:
   - the place between letters nearest the pointer;
   - a word, and a line;
   - the boxes that mark a selection;
@@ -1319,6 +1319,25 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
+  - **a repeat unit in brackets, counted** (2026-11-05): a pair of
+    brackets drawn across bonds - square, a line and its ticks, or round,
+    a curve - with a count at the foot of one: digits, as (CH2)6 drawn
+    out, or a small letter, a polymer's n. Meno does not read the count
+    yet. So that the unit, drawn once, is never taken for the whole, its
+    brackets are read as no bonds and its count as no word, and the atoms
+    of each bond a bracket crosses are marked ("A repeat unit in brackets,
+    counted 6, is not read: it is drawn here once.";
+    lib/figure/read `repeatBrackets`). A bracket is a line or a curve half
+    a bond to two and a half long that crosses a line of the figure
+    square enough, away from both their ends, its own ends free - at no
+    other line's end but its ticks', and into no label - with its count
+    by its lower end (a count in reach of two brackets' lower ends is the
+    nearer's); its partner is the nearest other such line or curve,
+    uncounted. A line across a bond with no count is read as before, and a
+    number by no bracket - a compound's - is left as it was. A label
+    written as one word, (CH2)6, is not read either (above). A picture
+    read by a model (part B) comes with no brackets nor counts: there,
+    nothing tells one yet;
   - a label that writes more or fewer hydrogens than its atom's bonds leave
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
@@ -1615,6 +1634,72 @@ words are: by itself, not by a box drawn round it.
 - the pointer takes the nearest within a third of a bond of one of its
   bonds or labels, and none where an arrow, a "+" or words lie nearer.
 
+### A compound's number (2026-11-04, under way)
+
+The pointer on a compound's number in a PDF's text - "12", "3a", "compound
+12" - is to bring up that compound's structure, read from the figure it is
+numbered in, wherever in the PDF that is: the compound-number lens, built in
+three parts - which number names which structure, and each PDF's index of
+them; each letter's weight (*Each page's letters*); and the words that
+mention a number, and the card.
+
+- **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
+  word of a figure - drawn in it, or the page's own words within it - of a
+  compound number's shape (12, 3a, 12b, 7', in parentheses or not:
+  `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
+  round all of it, as a number is set under a structure as a whole, however
+  its lowest bonds lie - under or over it (its middle within the
+  structure's breadth) or beside it (within its height); where two
+  structures' boxes are as near - the word within both, a ring's within a
+  macrocycle's - the one whose bonds or labels are nearer. The page's own
+  words in the figure are joined where a PDF sets each glyph apart: on one
+  line (their middles within 0.3 of a glyph's height), left to right, no
+  more than 0.2 of a glyph's height between them; the figure's drawn words
+  first. It is the nearest structure's, and none where an arrow or a
+  "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
+  much shorter than the figure's other words (under 0.7 of their usual
+  height: a superscript, a footnote's mark) is none, and a structure not
+  read takes none. Written as Meno writes it: its parentheses and spaces
+  set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
+- **Each PDF's index** (`utils/compoundIndex`): each number, and every
+  structure it is set by - its page, its figure and its key there - in the
+  order of the pages, so that a compound drawn again in a later scheme keeps
+  each place. Kept as figures are read, by the pointer on one or through the
+  whole PDF in idle time (`indexPdf`): a page, then the window's next idle
+  moment, then the next, each page's figures read as the column reads them
+  (`pdfPageLabels`), never holding up what is shown; a page that could not
+  be read is gone through again the next time. It starts the first time
+  the pointer moves over the PDF's words, in the column or on the page
+  (`utils/compoundLens` `indexOnce`).
+- **A number mentioned** (`utils/compoundMentions`): the word under the
+  pointer, of a compound number's shape, set as a compound's number is -
+  bold, as most journals set one in their text, or after a word that names
+  a compound ("compound 12", "products 3, 4 and 5": compound, product,
+  intermediate, substrate, adduct, derivative, past other numbers and "and",
+  "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
+  with ⌥ (Alt) held, every number of that shape is.
+- **The card** (`components/CompoundCard`): the pointer resting on a number
+  mentioned (350 ms) whose structure the PDF's figures number, a calm card
+  by its word - over its line, covering only what has been read, its left
+  edge on the word's and a little gap above the letters; under the line
+  only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
+  and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
+  in and out (`DURATION.base`), lingering a moment so the pointer can come
+  onto it. Its drawing dragged onto the canvas puts the structure there as
+  one dragged out of its figure is (*Structures picked from a PDF*: the same
+  reading, its note and unsure marks). Its page clicked shows the figure in
+  the column, the structure marked a moment. A number no structure is set
+  by, or one of a structure not read, has no card.
+- **In the column and on the page alike** (`utils/compoundLens`
+  `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
+  a PDF's words bring a card where they can be read - at the size a long
+  press there selects them (`READABLE_PX_PER_PT`), not as an icon or seen
+  too small - its word's box taken through the view to the window. Not on a
+  structure of a figure, which is the structure's own, as in the column. As
+  the view moves, the card goes - its word is no longer where it stood -
+  and comes again by the word's new place once the pointer rests there. ⌥
+  pressed or let go over a number reads it again, in both.
+
 ### A picture read (part B, built 2026-10-11)
 
 *Read as structure* reads, by the plugin chosen for the role *Structures
@@ -1752,6 +1837,10 @@ drawn beside its figure and tied to it.
 - **Annotating a PDF** (highlights, notes on its pages). Notes go on the
   page beside it instead.
 - **Opening a PDF from the web**, by its address or its DOI.
+- **A repeat unit's count read** (2026-11-05): a unit in brackets,
+  counted, is marked as not read (*A figure read*, *Marked as unsure*),
+  never expanded. Reading it - the unit written out as many times as its
+  count says, or a polymer's held as one - comes after.
 
 ## Questions
 

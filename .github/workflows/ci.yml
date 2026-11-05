@@ -81,6 +81,10 @@ jobs:
           - plugin: crem
             needs: crem
             tests: scripts/calc/test_plugin_crem.py
+          # (the programs' outputs aside: never committed, its tests that read them skipped here)
+          - plugin: cclib
+            needs: cclib
+            tests: scripts/calc/test_reader_cclib.py
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Its environment, from its lock

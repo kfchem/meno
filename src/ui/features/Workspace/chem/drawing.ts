@@ -28,19 +28,40 @@ export function degrees(bonds: readonly Pick<Bond, "a" | "b">[]): Map<number, nu
   return degree;
 }
 
-/** Which end of a wedged bond is narrow: its stereocentre. */
-export function narrowEnd(b: Bond, degree: Map<number, number>): number {
-  return wedgeNarrowAtom({ a1: b.a, a2: b.b, order: b.order, stereoOrient: b.stereoOrient }, degree);
+/** Which end of a wedged bond is narrow: its stereocentre (`Bond.narrow`; none given, the end with more bonds by `degree`). */
+export function narrowEnd(b: Pick<Bond, "a" | "b" | "narrow">, degree: Map<number, number>): number {
+  return wedgeNarrowAtom({ a1: b.a, a2: b.b, narrow: b.narrow }, degree);
 }
 
-/** Which way round a wedge narrow at `narrow` is held, the drawing counting bonds as `degree` does. */
-export function orientFor(
-  b: Pick<Bond, "a" | "b" | "order">,
-  narrow: number,
-  degree: Map<number, number>,
-): NonNullable<Bond["stereoOrient"]> {
-  const usual = wedgeNarrowAtom({ a1: b.a, a2: b.b, order: b.order, stereoOrient: "principle" }, degree);
-  return usual === narrow ? "principle" : "reverse";
+/** Whether a bond is drawn narrow at one end: a wedge or hashed wedge, or a ring's bond in perspective toward the viewer. */
+export function isWedge(b: Pick<Bond, "stereo" | "display">): boolean {
+  return b.stereo === "up" || b.stereo === "down" || b.display === "wedge";
+}
+
+/**
+ * The model with every wedge's narrow end given by atom (`Bond.narrow`), so
+ * that a bond added or taken away beside a wedge does not move it to the
+ * other end, as the end with more bonds, counted again after each edit,
+ * did. A wedge whose narrow end is one of its atoms keeps it. Any other -
+ * one the edit made, or whose narrow atom the edit took from it - is narrow
+ * where the drawing had it before the edit (`before`, the bond by id) while
+ * that is still one of its ends, and otherwise at its end with more bonds.
+ */
+export function wedgesHeld(model: Model, before?: Model): Model {
+  // (no bond changed: none counted otherwise, so none read otherwise - an atom dragged)
+  if (model.bonds === before?.bonds) return model;
+  const loose = (b: Bond) => isWedge(b) && b.narrow !== b.a && b.narrow !== b.b;
+  if (!model.bonds.some(loose)) return model;
+  const now = degrees(model.bonds);
+  const was = before ? degrees(before.bonds) : now;
+  const old = new Map((before?.bonds ?? []).map((b) => [b.id, b]));
+  const bonds = model.bonds.map((b) => {
+    if (!loose(b)) return b;
+    const p = old.get(b.id);
+    const kept = p && isWedge(p) ? narrowEnd(p, was) : undefined;
+    return { ...b, narrow: kept === b.a || kept === b.b ? kept : narrowEnd(b, now) };
+  });
+  return { ...model, bonds };
 }
 
 /** The H an atom carries and the drawing does not show: by its valence, for an element; none for a label. */
@@ -76,6 +97,7 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
     y: a.y,
     el: a.el,
     hs: hs.get(a.id) ?? 0,
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.stereoCentre ? { centre: true } : {}),
   }));
@@ -111,7 +133,8 @@ export function forFlatReaders(model: Model): WriterModel {
   const ids = model.atoms.map((a) => a.id);
   let next = Math.max(0, greatest(ids), greatest(model.bonds.map((b) => b.id))) + 1;
   const outAtoms = [...model.atoms];
-  const outBonds: Bond[] = [...model.bonds];
+  // (each wedge there is held where it is narrow, before an H is added beside it)
+  const outBonds: Bond[] = [...wedgesHeld(model).bonds];
   const hydrogen = new Map<number, number>();
   for (const h of flat.hydrogens) {
     const id = next++;
@@ -119,14 +142,13 @@ export function forFlatReaders(model: Model): WriterModel {
     outBonds.push({ id: next++, a: ids[h.on], b: id, order: 1 });
     hydrogen.set(h.on, id);
   }
-  const degree = degrees(outBonds);
   for (const w of flat.wedges) {
     const from = ids[w.from];
     const to = w.to === -1 ? hydrogen.get(w.from)! : ids[w.to];
     const k = outBonds.findIndex((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
     if (k < 0) continue;
     const b = outBonds[k];
-    outBonds[k] = { ...b, stereo: w.stereo, stereoOrient: orientFor(b, from, degree) };
+    outBonds[k] = { ...b, stereo: w.stereo, narrow: from };
   }
   return { atoms: outAtoms, bonds: outBonds };
 }

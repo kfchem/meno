@@ -19,6 +19,8 @@ line on stdin, one per line back on stdout, as every plugin's:
         "wavefunction": {"kind": "wfx", "file": "wavefunction.wfx", "name": "water.wfx"}}]}}
     {"id": 6, "op": "read", "name": "water.log", "text": "..."}
     {"id": 6, "ok": true, "result": {"schema": 1, "atoms": [...], "frames": [...], ...}}
+    {"id": 7, "op": "ask", "kind": "gaussian-fchk", "key": "expansion", "name": "water.fchk", "text": "..."}
+    {"id": 7, "ok": true, "result": {"expansion": {"nuclei": [...], "centres": [...], ...}}}
     {"id": 3, "ok": false, "error": "..."}
 
 It writes what it is given and nothing else - no file of its own choosing,
@@ -39,7 +41,10 @@ for a step that takes one (Multiwfn's NCI) - or, where the job failed,
 why, as the output says, judged as `read` judges it (reader.run_of).
 
 `read` reads a Gaussian output - a job's log, or a file opened by hand,
-the one reading for both - in Meno's general form (reader.py).
+the one reading for both - in Meno's general form (reader.py). `ask`
+gives what a formatted checkpoint's reading promised: its wavefunction,
+whole (`expansion`), its basis and orbitals as Meno's general form has
+them, from which Meno draws each orbital itself.
 
 The input is laid out as Gaussian's own reference has it (gaussian.com,
 "About Gaussian 16 Input", "Link 0 Commands", "Molecule Specifications"),
@@ -85,7 +90,7 @@ import sys
 
 import reader
 
-VERSION = "0.4.2"
+VERSION = "0.5.1"
 
 # The elements by atomic number, from 1: what an atom's element may be.
 SYMBOLS = (
@@ -392,6 +397,20 @@ def op_read(m):
         raise Refused(str(e)) from e
 
 
+def op_ask(m):
+    """A promise a reading made, kept: a formatted checkpoint's wavefunction, whole (`expansion`; reader.py
+    `fchk_expansion`), for Meno to draw its orbitals from."""
+    text = m.get("text")
+    if m.get("key") != "expansion":
+        raise Refused(f"it made no promise {m.get('key')!r}")
+    if not isinstance(text, str) or not reader.is_fchk(text):
+        raise Refused("only a formatted checkpoint holds its wavefunction")
+    try:
+        return {"expansion": reader.fchk_expansion(text)}
+    except ValueError as e:
+        raise Refused(str(e)) from e
+
+
 def finite(value):
     """`value` with each number that is not one - not a number, or infinite - as not known: JSON has neither."""
     if isinstance(value, float):
@@ -403,7 +422,7 @@ def finite(value):
     return value
 
 
-OPS = {"write": op_write, "prepare": op_prepare, "collect": op_collect, "read": op_read}
+OPS = {"write": op_write, "prepare": op_prepare, "collect": op_collect, "read": op_read, "ask": op_ask}
 
 
 def answer(line):
@@ -426,6 +445,8 @@ def what(m):
     """How a refusal begins: a file written, a file read, or a step."""
     if m.get("op") == "read":
         return "It could not be read as Gaussian's output"
+    if m.get("op") == "ask":
+        return "Its wavefunction could not be given"
     return "The Gaussian input could not be written" if m.get("op") == "write" else "Gaussian"
 
 

@@ -5,9 +5,13 @@
  * own, so that a set that holds two configurations is seen to, not named
  * for its first. Kept here for the session by what the entry is and where
  * its atoms are, so that a conformer is asked once; derived from the page,
- * never saved with it.
+ * never saved with it. A centre of three bonds, a lone pair its fourth
+ * group, that the plugin leaves unspecified - its toolkit fixes no
+ * phosphine's P from a geometry - is read by Meno from where its atoms are
+ * (lib/chem/lonePairsIn3d).
  */
-import { geometryKey, type EntryStereo } from "../../../../lib/entry";
+import { lonePairsIn3d } from "../../../../lib/chem/lonePairsIn3d";
+import { geometryKey, type EntryStereo, type StereoElement } from "../../../../lib/entry";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Configured } from "../../../../lib/roles/client";
 import type { SetEntry } from "./entries";
@@ -34,6 +38,35 @@ const molblockOf = (e: Geometry) =>
     e.atoms.map((a, i) => ({ el: a.el, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2], ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) })),
     e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),
   );
+
+/**
+ * What the plugin answered of an entry, with each centre of three bonds it
+ * left unspecified taken by Meno's rule on lone pairs and read from the
+ * entry's geometry (lib/chem/lonePairsIn3d): one read is specified, and its
+ * configuration is in the key - the plugin's key, then Meno's for those
+ * centres - so that two stereoisomers that differ there are told apart,
+ * and one is not taken for unspecified; one too close to flat stays
+ * unspecified, and says so (`flat`); one whose lone pair keeps no
+ * configuration (a plain N-alkyl aziridine's N) is no centre, and goes.
+ */
+export function withLonePairs(e: Geometry, answer: { elements: StereoElement[]; key: string }): { elements: StereoElement[]; key: string } {
+  const one = (el: StereoElement) => el.kind === "centre" && !el.specified && el.atoms.length === 1;
+  const open = answer.elements.flatMap((el) => (one(el) ? el.atoms : []));
+  if (!open.length) return answer;
+  const { read, flat, none, key } = lonePairsIn3d(e.atoms, e.bonds, e.xyz, open);
+  if (!read.size && !flat.size && !none.size) return answer;
+  return {
+    elements: answer.elements.flatMap((el): StereoElement[] => {
+      if (!one(el)) return [el];
+      const c = el.atoms[0];
+      if (none.has(c)) return [];
+      if (read.has(c)) return [{ ...el, specified: true }];
+      if (flat.has(c)) return [{ ...el, flat: flat.get(c)! }];
+      return [el];
+    }),
+    key: key == null ? answer.key : `${answer.key}|${key}`,
+  };
+}
 
 /**
  * Those of `entries` not yet known asked, all at once, and what each is
@@ -64,7 +97,7 @@ export async function perceiveStereo(entries: readonly Geometry[], asker: Asker)
     again.delete(keyOf(e));
     known.set(
       keyOf(e),
-      !a ? { perceived: false, why: "It gave no answer for this molecule" } : "error" in a ? { perceived: false, why: a.error } : { perceived: true, elements: a.elements, key: a.key, by },
+      !a ? { perceived: false, why: "It gave no answer for this molecule" } : "error" in a ? { perceived: false, why: a.error } : { perceived: true, ...withLonePairs(e, a), by },
     );
   });
 }

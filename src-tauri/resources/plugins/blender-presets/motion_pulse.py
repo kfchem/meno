@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "pulse" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "pulse" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Pulse: a wave of energy runs out from the nitrogens (else the middle) along the bonds; on white, a cobalt wave that throws a pool of blue light onto the paper.
 

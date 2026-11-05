@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { extensionOf, kindOf, kinds, offeredKinds, probeCandidates, quotedEnergies, quotedTables, registerKinds, registered } from "./kinds";
+import { broughtBy, cataloguedKinds, extensionOf, kindOf, kinds, offeredKinds, probeCandidates, quotedEnergies, quotedTables, registerKinds, registered } from "./kinds";
 import { acceptManifest, type Manifest } from "../plugins/manifest";
+import type { CatalogueEntry } from "../plugins/catalogue";
 import { MANIFESTS } from "../plugins/known";
 import { pluginOf, readerFor, type ReaderPlugin } from "../calc/catalog";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
@@ -268,6 +269,41 @@ describe("kinds only plugins not added read", () => {
     const asked = reader("asks", { id: "asked", name: "Asked", extensions: [".a"], marks: [], probe: true });
     const greedy = reader("greedy", { id: "greedy", name: "Greedy", extensions: [], marks: [{ text: "RDKit 2D" }] });
     expect(offeredKinds([asked, greedy], [])).toEqual([]);
+  });
+
+  it("are told by those of the plugins on offer online, not got, as their entries say them - the plugins here first", () => {
+    const onOffer = (id: string, kind: Record<string, unknown>) => ({ id, name: id, reads: [kind.id], fileKinds: [kind], quotedTables: [] }) as unknown as CatalogueEntry;
+    const online = [onOffer("nbo", { ...out, writtenBy: "nbo" }), onOffer("far", { id: "far-out", name: "Far output", extensions: [".far"], marks: [{ text: "F A R   P R O G R A M" }] })];
+    registerKinds([], [reader("lite", out)], online);
+    expect(cataloguedKinds().map((k) => [k.id, k.suggest, k.extensions])).toEqual([
+      ["nbo-out", ["nbo", "lite"], [".nbo"]],
+      ["far-out", ["far"], [".far"]],
+    ]);
+    // (an output: read by its readers, once one is added)
+    expect(kindOf("x", "head\nF A R   P R O G R A M\n", cataloguedKinds())?.output).toEqual({});
+    // (one here as well as on offer: the one here is the one told by)
+    registerKinds([], [reader("far", { id: "far-out", name: "Far, here", extensions: [".far"], marks: [{ text: "F A R   P R O G R A M" }] })], online.slice(1));
+    // (once: its entry online is not a second plugin that reads it)
+    expect(cataloguedKinds().map((k) => [k.name, k.suggest])).toEqual([["Far, here", ["far"]]]);
+    // (and none suggested for a kind a plugin added reads)
+    expect(offeredKinds(online.map(broughtBy), [reader("x", { ...out, id: "far-out" })]).map((k) => k.id)).toEqual(["nbo-out"]);
+    registerKinds([]);
+  });
+
+  it("say whose a table of atoms is that only a plugin on offer online declares - its entry's name - one here first", () => {
+    const table = { id: "orientation", headings: ["Far orientation:"], heads: [], columns: ["element", "x", "y", "z"] as ("element" | "x" | "y" | "z")[] };
+    const entry = { id: "far", name: "Far interface", reads: [], fileKinds: [], quotedTables: [table] } as unknown as CatalogueEntry;
+    registerKinds([], [], [entry]);
+    expect(quotedTables().offered).toEqual([{ ...table, plugin: "Far interface" }]);
+    const here = acceptManifest({ id: "far", name: "Far, here", version: "1", environment: "uv", reads: ["far-out"], kinds: [{ id: "far-out", name: "Far output", extensions: [".far"], marks: [{ text: "F A R   P R O G R A M" }] }], quotedTables: [table] })!;
+    registerKinds([], [here], [entry]);
+    expect(quotedTables().offered.map((t) => t.plugin)).toEqual(["Far, here"]);
+    // (added - whether or not among those here - its entry's tables are not said to be another's)
+    registerKinds([here], [], [entry]);
+    expect([quotedTables().offered, quotedTables().added.map((t) => t.plugin)]).toEqual([[], ["Far, here"]]);
+    registerKinds([here], [here], [entry]);
+    expect([quotedTables().offered, quotedTables().added.map((t) => t.plugin)]).toEqual([[], ["Far, here"]]);
+    registerKinds([]);
   });
 
   it("of the plugins Meno carries, name for each output a plugin added does not read the plugins that read it", () => {

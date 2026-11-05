@@ -18,10 +18,10 @@ import type { StyleChoice } from "../../../../lib/chem/style";
 import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
 import { identityInputOf } from "../chem/identityOf";
-import { degrees, narrowEnd } from "../chem/drawing";
+import { degrees, narrowEnd, wedgesHeld } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
 import { resolve, type Reading } from "../chem/resolve";
-import { changedAt, wedgesHeld } from "./stereoKept";
+import { changedAt } from "./stereoKept";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
 export const MOST_COMBINATIONS = 10_000;
@@ -184,7 +184,7 @@ export function templateRs(template: Model): { rs: Map<number, number[]>; proble
     rs.set(n, [...(rs.get(n) ?? []), a.id]);
   }
   const unread = identityInputOf(template).unread;
-  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration)`);
+  for (const id of unread) problems.push(`The wedges at ${template.atoms.find((a) => a.id === id)!.el} do not say a configuration (drawn crossed, or at an atom of three bonds that keeps no configuration of its own - an amine's N, a plain N-alkyl aziridine's, a B - where a wedge states none)`);
   return { rs, problems };
 }
 
@@ -243,7 +243,7 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
   };
   for (let number = 1; number <= count; number++) {
     // (each wedge narrow where it was, and the product's configurations read back and held to the template's: stereoKept)
-    const drawnNow = wedgesHeld(template, joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style));
+    const drawnNow = wedgesHeld(joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style), template);
     const how = numbers.map((n, k) => `R${n} = ${label(options[k][choice[k]])}`).join(", ");
     const changed = changedAt(template, drawnNow, new Map());
     if (changed.length) refused.push(`${how}: would change the configuration at ${changed.map(atomName).join(", ")}`);

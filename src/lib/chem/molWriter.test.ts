@@ -1,6 +1,6 @@
 import { readSDfile } from "./ctfile";
 import { describe, expect, it } from "vitest";
-import { overBonded, writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type Atom3D, type Bond3D, type WriterModel } from "./molWriter";
+import { overBonded, writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type Atom3D, type Bond3D, type WriterModel, needsV3000In3d, withRingStars } from "./molWriter";
 import { readMolfile, readRxnfile } from "./ctfile";
 import { NOMINAL_BOND_LENGTH } from "./acs";
 import {
@@ -27,7 +27,7 @@ const model: WriterModel = {
     { a: 10, b: 12, order: 1, stereo: "down" },
     { a: 10, b: 13, order: 1, stereo: "wavy" },
     { a: 11, b: 14, order: 2 },
-    { a: 14, b: 15, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a: 14, b: 15, order: 1, stereo: "up", narrow: 15 },
     { a: 14, b: 16, order: 1 },
   ],
 };
@@ -79,7 +79,7 @@ describe("writeMolfile", () => {
     const flipped = back.bonds.find((b) => b.stereo === "up" && b.order === 1 && byIndex(back, b.a) !== 0)!;
     const narrowFirst = byIndex(back, flipped.a);
     expect(narrowFirst).toBe(5);
-    expect(flipped.stereoOrient).toBe("reverse");
+    expect(flipped.narrow).toBe(flipped.a);
     // the shape is kept too: the same bond lengths once scaled back
     const d = (m: any, i: number, j: number) =>
       Math.hypot(m.atoms[i].x - m.atoms[j].x, m.atoms[i].y - m.atoms[j].y);
@@ -707,5 +707,26 @@ describe("a label bonded more than once, written out", () => {
     // (straight out: the ring's centre behind the N, the Boc's carbon level with it)
     expect(boc.x).toBeGreaterThan(r.atoms[0].x);
     expect(boc.y).toBeCloseTo(r.atoms[0].y, 2);
+  });
+});
+
+describe("a molecule in 3D with a ring bound to a metal through all its atoms", () => {
+  it("is written with a star at the ring's centre and a bond to its atoms, which only V3000 holds - whatever the bond's type", () => {
+    const atoms = [{ el: "Fe", x: 0, y: 0, z: 0 }, ...[0, 1, 2].map((k) => ({ el: "C", x: Math.cos((2 * Math.PI * k) / 3), y: Math.sin((2 * Math.PI * k) / 3), z: 1.6 }))];
+    const w = withRingStars(atoms, [], [{ metal: 0, atoms: [1, 2, 3] }]);
+    expect(w.atoms[4]).toMatchObject({ el: "*" });
+    expect(w.atoms[4].z).toBeCloseTo(1.6, 9);
+    expect(w.bonds).toEqual([{ a1: 0, a2: 4, order: 9, endpoints: [1, 2, 3] }]);
+    // (a bond to several atoms at once is V3000's alone, of a type V2000 has or not)
+    expect(needsV3000In3d(atoms, [{ a1: 0, a2: 1, order: 1, endpoints: [1, 2, 3] }])).toBe(true);
+    expect(writeMolfile3d(w.atoms, w.bonds)).toContain("M  V30 1 9 1 5 ENDPTS=(3 2 3 4) ATTACH=ALL");
+  });
+
+  it("is written as given where the ring or its metal names an atom the molecule has not, or the ring has no atoms", () => {
+    const atoms = [{ el: "Fe", x: 0, y: 0, z: 0 }, ...[0, 1, 2].map((k) => ({ el: "C", x: Math.cos((2 * Math.PI * k) / 3), y: Math.sin((2 * Math.PI * k) / 3), z: 1.6 }))];
+    const bonds = [{ a1: 1, a2: 2, order: 1 }];
+    for (const c of [{ metal: 0, atoms: [1, 2, 7] }, { metal: 9, atoms: [1, 2, 3] }, { metal: 0, atoms: [] }]) {
+      expect(withRingStars(atoms, bonds, [c])).toEqual({ atoms, bonds });
+    }
   });
 });

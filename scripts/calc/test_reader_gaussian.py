@@ -9,14 +9,13 @@ No output of a real run is kept here (docs/WORKSPACE.md, stage 3): the
 lines below are written as Gaussian 16 prints them, laid out as its own
 reference (gaussian.com: the keyword pages, "Molecule Specification",
 "About Gaussian 16 Input", "Vibrational Analysis in Gaussian",
-"Thermochemistry in Gaussian") and its outputs have them, with made-up
-numbers. Where a run of Gaussian's own output for one of `INPUTS` is in
-calc-samples/Gaussian-gaussian/ under its name, it is read too; those
-tests are skipped where it is not.
+"Thermochemistry in Gaussian") lays them out, with made-up numbers:
+hand-written fragments only.
 """
 
 import importlib.util
 import json
+import math
 import pathlib
 import sys
 import unittest
@@ -35,8 +34,6 @@ finally:
     sys.path.remove(str(PLUGIN))
     sys.modules.pop("reader", None)
 reader = worker.reader
-
-SAMPLES = ROOT / "calc-samples/Gaussian-gaussian"
 
 RULE = " " + "-" * 69
 
@@ -81,7 +78,7 @@ def head(route_text, charge=0, multiplicity=1):
         " /g16/l1.exe \"/tmp/Gau-1.inp\" -scrdir=\"/tmp/\"",
         " Entering Link 1 = /g16/l1.exe PID=      9552.",
         " ******************************************",
-        " Gaussian 16:  ES64L-G16RevA.03  25-Dec-2016",
+        " Gaussian 16:  ES64L-G16RevZ.01   1-Jan-2020",
         "                 1-Nov-2026 ",
         " ******************************************",
         *route(route_text),
@@ -133,7 +130,7 @@ def frequencies():
         "                      1                      2                      3",
         "                     A1                     A1                     B2",
         " Frequencies --   1700.1234              3700.5678              3800.9012",
-        " Red. masses --      1.0800                 1.0450                 1.0800",
+        " Red. masses --      1.1000                 1.0500                 1.1000",
         " Frc consts  --      1.8000                 8.4000                 9.2000",
         " IR Inten    --     70.1000                 4.2000                45.3000",
         "  Atom  AN      X      Y      Z        X      Y      Z        X      Y      Z",
@@ -150,11 +147,11 @@ def frequencies():
         " Zero-point correction=                           0.021000 (Hartree/Particle)",
         " Thermal correction to Energy=                    0.024000",
         " Thermal correction to Enthalpy=                  0.025000",
-        " Thermal correction to Gibbs Free Energy=         0.003500",
+        " Thermal correction to Gibbs Free Energy=         0.004000",
         " Sum of electronic and zero-point Energies=            -76.389000",
         " Sum of electronic and thermal Energies=               -76.386000",
-        " Sum of electronic and thermal Enthalpies=             -76.385000",
-        " Sum of electronic and thermal Free Energies=          -76.406500",
+        " Sum of electronic and thermal Enthalpies=             -76.380000",
+        " Sum of electronic and thermal Free Energies=          -76.400000",
         "",
         "                     E (Thermal)             CV                S",
         "                      KCal/Mol        Cal/Mol-Kelvin    Cal/Mol-Kelvin",
@@ -166,7 +163,7 @@ def frequencies():
 def archive(nimag=0, sep="\\"):
     """An archive entry, wrapped at 70 characters, each line begun by a space."""
     body = sep.join(["1", "1", "GINC-HOST", "Freq", "RB3LYP", "6-31G(d)", "H2O1", "USER", "1-Nov-2026", "0", "", "#p b3lyp/6-31G(d) freq",
-                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevA.03", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
+                     "", "water", "", "0,1", "O,0.,0.,0.119", "", "Version=ES64L-G16RevZ.01", "State=1-A1", f"HF=-76.41", f"NImag={nimag}", "", "@"])
     return [" " + body[i : i + 70] for i in range(0, len(body), 70)]
 
 
@@ -216,7 +213,7 @@ class TheRoute(unittest.TestCase):
     def test_solvation_as_the_route_says_it(self):
         gas = head("#p b3lyp/6-31G(d) opt")
         self.assertEqual(reader.solvation_of(reader.routes(gas), gas), "none")
-        smd = head("#p b3lyp/6-31G(d) scrf=(smd,solvent=water) opt") + [" Solvent              : Water, Eps=  78.355300 Eps(inf)=   1.777849"]
+        smd = head("#p b3lyp/6-31G(d) scrf=(smd,solvent=water) opt") + [" Solvent              : Water, Eps=  78.400000 Eps(inf)=   1.800000"]
         self.assertEqual(reader.solvation_of(reader.routes(smd), smd), "SMD(Water)")
         # (a model named alone takes the manual's default solvent, water; none named, IEFPCM)
         cpcm = head("#p b3lyp/6-31G(d) scrf=cpcm")
@@ -234,9 +231,9 @@ class TheRun(unittest.TestCase):
     def test_normal_error_and_cut(self):
         normal = " Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n Normal termination of Gaussian 16 at Tue Oct 13.\n"
         self.assertEqual(reader.run_of(normal), ("normal", None, [True]))
-        error = (" Entering Gaussian System\n The combination of multiplicity 2 and    10 electrons is impossible.\n"
+        error = (" Entering Gaussian System\n A made-up reason the input cannot be run.\n"
                  " Error termination via Lnk1e in /g16/l301.exe at Tue Oct 13.\n")
-        self.assertEqual(reader.run_of(error)[:2], ("error", "The combination of multiplicity 2 and    10 electrons is impossible."))
+        self.assertEqual(reader.run_of(error)[:2], ("error", "A made-up reason the input cannot be run."))
         self.assertEqual(reader.run_of(" Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n")[0], "cut")
 
     def test_an_scf_that_did_not_converge(self):
@@ -245,16 +242,16 @@ class TheRun(unittest.TestCase):
 
     def test_a_job_that_ended_normally_with_its_scf_not_converged_says_so_and_gives_no_energy(self):
         text = "\n".join(head("#p ub3lyp/6-31G(d) scf=(maxcycle=3)", 0, 3) + orientation(WATER) + [" >>>>>>>>>> Convergence criterion not met."]
-                         + scf(-39.1495, "UB3LYP") + [" Normal termination of Gaussian 16 at Sat Oct 31 19:58:17 2026."])
+                         + scf(-39.15, "UB3LYP") + [" Normal termination of Gaussian 16 at Sun Nov  1 10:00:00 2026."])
         o = reader.read("w.log", text)
         self.assertIsNone(o["energies"])
         self.assertEqual((results(o)["run"]["label"], results(o)["run"]["value"]), ("SCF", "not converged"))
 
     def test_an_optimisation_out_of_steps_says_so_not_the_quotation_before_its_end(self):
-        text = ("\n Optimization stopped.\n    -- Number of steps exceeded,  NStep=   2\n    -- Flag reset to prevent archiving.\n"
+        text = ("\n Optimization stopped.\n    -- a made-up reason, in its words\n    -- more made-up words\n"
                 " SOME WORDS OF WISDOM.\n\n                       -- AN AUTHOR\n Error termination request processed by link 9999.\n"
-                " Error termination via Lnk1e in /g16/l9999.exe at Sat Oct 31 19:58:16 2026.\n Job cpu time:       0 days\n")
-        self.assertEqual(reader.run_of(text)[:2], ("error", "Optimization stopped. -- Number of steps exceeded,  NStep=   2"))
+                " Error termination via Lnk1e in /g16/l9999.exe at Sun Nov  1 10:00:00 2026.\n Job cpu time:       0 days\n")
+        self.assertEqual(reader.run_of(text)[:2], ("error", "Optimization stopped. -- a made-up reason, in its words"))
 
     def test_an_opt_freq_cut_in_its_frequencies_did_not_come_to_its_end(self):
         text = opt_freq()
@@ -276,7 +273,7 @@ class AnOptFreq(unittest.TestCase):
 
     def test_what_the_calculation_was(self):
         o = self.out
-        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision A.03", "B3LYP", "6-31G(d)"))
+        self.assertEqual((o["program"], o["version"], o["method"], o["basis"]), ("Gaussian", "16, Revision Z.01", "B3LYP", "6-31G(d)"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
         self.assertEqual(o["atoms"], ["O", "H", "H"])
         self.assertEqual(o["masses"], [15.9949146, 1.007825, 1.007825])
@@ -299,11 +296,11 @@ class AnOptFreq(unittest.TestCase):
 
     def test_its_thermochemistry_as_printed(self):
         r = results(self.out)
-        self.assertEqual(r["thermo.free-energy"]["value"], -76.4065)
+        self.assertEqual(r["thermo.free-energy"]["value"], -76.4)
         self.assertEqual(r["thermo.free-energy"]["rank"], 1)
-        self.assertEqual(r["thermo.enthalpy"]["value"], -76.385)
+        self.assertEqual(r["thermo.enthalpy"]["value"], -76.38)
         self.assertEqual(r["thermo.zpve"]["value"], 0.021)
-        self.assertEqual(r["thermo.g-correction"]["value"], 0.0035)
+        self.assertEqual(r["thermo.g-correction"]["value"], 0.004)
         self.assertEqual(r["thermo.entropy"]["value"], 45.1)
         self.assertEqual((r["thermo.temperature"]["value"], r["thermo.pressure"]["value"]), (298.15, 1.0))
         self.assertEqual((r["thermo.point-group"]["value"], r["thermo.symmetry-number"]["value"]), ("C2V", 2))
@@ -312,7 +309,7 @@ class AnOptFreq(unittest.TestCase):
         v = results(self.out)["vibrations"]
         self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "Reduced mass", "IR intensity"])
         self.assertEqual(v["columns"][1]["quantity"], "symmetry")
-        self.assertEqual(v["rows"][0]["cells"], [1, "A1", 1700.1234, 1.08, 70.1])
+        self.assertEqual(v["rows"][0]["cells"], [1, "A1", 1700.1234, 1.1, 70.1])
         self.assertEqual(v["rows"][2]["move"], [0.0, 0.07, 0.0, 0.0, -0.56, 0.43, 0.0, -0.56, -0.43])
         self.assertEqual(self.out["imaginary"], [])
 
@@ -393,15 +390,16 @@ class CutShort(unittest.TestCase):
 
 class Energies(unittest.TestCase):
     def test_the_most_correlated_each_geometry_has_as_printed(self):
+        # (made-up numbers in the printed layout: an SCF of -74.96, its MP2 correction -0.04, a CCSD(T) a little lower)
         text = "\n".join(head("#p mp2/sto-3g") + orientation(WATER) + scf(-74.96, "RHF")
-                         + [" E2 =    -0.3795333610D-01 EUMP2 =    -0.75002282127454D+02"] + [" Normal termination of Gaussian 16"])
-        self.assertEqual(reader.read("w.log", text)["energies"], [-75.002282127454])
-        text = text.replace(" Normal", " CCSD(T)= -0.75012345678D+02\n Normal")
-        self.assertEqual(reader.read("w.log", text)["energies"], [-75.012345678])
+                         + [" E2 =    -0.4000000000D-01 EUMP2 =    -0.75000000000000D+02"] + [" Normal termination of Gaussian 16"])
+        self.assertEqual(reader.read("w.log", text)["energies"], [-75.0])
+        text = text.replace(" Normal", " CCSD(T)= -0.75010000000D+02\n Normal")
+        self.assertEqual(reader.read("w.log", text)["energies"], [-75.01])
 
     def test_a_field_too_narrow_for_its_number_is_not_known(self):
         self.assertIsNone(reader.number("**********"))
-        self.assertEqual(reader.numbers("-10.02022-10.02017 *******"), [-10.02022, -10.02017, None])
+        self.assertEqual(reader.numbers("-10.10000-10.05000 *******"), [-10.1, -10.05, None])
 
 
 class OpenShell(unittest.TestCase):
@@ -459,12 +457,12 @@ class OtherCharges(unittest.TestCase):
             "                Natural  -----------------------------------------------",
             "    Atom  No    Charge         Core      Valence    Rydberg      Total",
             " -----------------------------------------------------------------------",
-            "      O    1   -0.91800      1.99986     6.90920    0.00922     8.91800",
-            "      H    2    0.45900      0.00000     0.53921    0.00179     0.54100",
-            "      H    3    0.45900      0.00000     0.53921    0.00179     0.54100",
+            "      O    1   -0.90000      2.00000     6.88000    0.02000     8.90000",
+            "      H    2    0.45000      0.00000     0.54000    0.01000     0.55000",
+            "      H    3    0.45000      0.00000     0.54000    0.01000     0.55000",
             " =======================================================================",
         ])
-        self.assertEqual(results(reader.read("w.log", text))["charges.natural"]["values"], [-0.918, 0.459, 0.459])
+        self.assertEqual(results(reader.read("w.log", text))["charges.natural"]["values"], [-0.9, 0.45, 0.45])
 
 
 class Paths(unittest.TestCase):
@@ -573,7 +571,7 @@ Mulliken Charges                           R   N=           3
 Dipole Moment                              R   N=           3
   0.00000000E+00  0.00000000E+00 -8.00000000E-01
 Gaussian Version                           C   N=           2
-ES64L-G16RevA.03
+ES64L-G16RevZ.01
 """
 
 
@@ -592,7 +590,7 @@ class AFormattedCheckpoint(unittest.TestCase):
         o = self.out
         self.assertEqual(o["atoms"], ["O", "H", "H"])
         self.assertAlmostEqual(o["frames"][0][4], 1.44 * reader.BOHR)
-        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision A.03"))
+        self.assertEqual((o["energies"], o["method"], o["basis"], o["version"]), ([-76.41], "B3LYP", "6-31G(d)", "16, Revision Z.01"))
         self.assertEqual((o["charge"], o["multiplicity"]), (0, 1))
 
     def test_its_charges_dipole_in_debye_and_orbitals(self):
@@ -607,6 +605,178 @@ class AFormattedCheckpoint(unittest.TestCase):
         self.assertNotIn("orbitals", r)
 
 
+def fchk_item(label, kind, values):
+    """An item as "Interfacing to Gaussian 16" lays one out: its label (A40), its type, and "N=" and its values after,
+    six integers (I12) or five reals (E16.8) to a line."""
+    per, form = (6, "{:12d}") if kind == "I" else (5, "{:16.8E}")
+    lines = [f"{label:<40}  {kind}   N={len(values):12d}"]
+    lines += ["".join(form.format(v) for v in values[i : i + per]) for i in range(0, len(values), per)]
+    return lines
+
+
+# (made up: two hydrogens 1.4 bohr apart; on the first an s shell and an sp shell of two primitives each - the sp
+#  shell's p coefficients not its s ones - and a pure d shell of one, on the second an s shell - 1 + 4 + 5 + 1
+#  functions - and two orbitals of each spin)
+BASIS = {
+    "Shell types": ("I", [0, -1, -2, 0]),
+    "Number of primitives per shell": ("I", [2, 2, 1, 1]),
+    "Shell to atom map": ("I", [1, 1, 1, 2]),
+    "Primitive exponents": ("R", [3.4, 0.6, 0.8, 0.25, 1.1, 0.6]),
+    "Contraction coefficients": ("R", [0.15, 0.9, 0.3, 0.8, 1.0, 1.0]),
+    "P(S=P) Contraction coefficients": ("R", [0.0, 0.0, 0.6, 0.5, 0.0, 0.0]),
+}
+
+
+def basis_fchk(beta=False, **changed):
+    items = {
+        "Atomic numbers": ("I", [1, 1]),
+        "Current cartesian coordinates": ("R", [0.0, 0.0, 0.0, 0.0, 0.0, 1.4]),
+        **BASIS,
+        "Alpha Orbital Energies": ("R", [-0.5, 0.2]),
+        "Alpha MO coefficients": ("R", [float(i) for i in range(22)]),
+        **({"Beta Orbital Energies": ("R", [-0.4, 0.3]), "Beta MO coefficients": ("R", [float(-i) for i in range(22)])} if beta else {}),
+        **changed,
+    }
+    lines = ["h2", "SP        UHF                           made-up", "Number of atoms                            I                2",
+             "Number of basis functions                  I               11",
+             f"Number of alpha electrons                  I                1", f"Number of beta electrons                   I                {0 if beta else 1}"]
+    for label, item in items.items():
+        if item is not None:
+            lines += fchk_item(label, *item)
+    return "\n".join(lines) + "\n"
+
+
+def self_overlap(e, f, g=None):
+    """Two functions' overlap from their primitives, all on one centre: x^p e^(-a r^2) and x^q e^(-b r^2) overlap as the
+    product, over x, y and z, of the integral of x^(p + q) e^(-(a + b) x^2)."""
+    g = f if g is None else g
+    return sum(c * d * math.prod(reader.moment(e["powers"][i][k] + e["powers"][j][k], e["exponents"][i] + e["exponents"][j]) for k in range(3))
+               for i, c in zip(f["primitives"], f["coefficients"]) for j, d in zip(g["primitives"], g["coefficients"]))
+
+
+class AFormattedCheckpointSWavefunction(unittest.TestCase):
+    """Its basis and orbitals given whole, in Meno's general form (src/lib/calc/expansion.ts): Meno draws the orbitals,
+    checking them orthonormal first."""
+
+    def test_its_primitives_functions_and_orbitals(self):
+        e = reader.fchk_expansion(basis_fchk())
+        self.assertEqual(e["nuclei"], [0.0, 0.0, 0.0, 0.0, 0.0, 1.4])
+        # (the s shell's two primitives; the sp shell's s of each of its exponents, then its p; the d shell's six Cartesian ones)
+        self.assertEqual(e["centres"], [0] * 16 + [1])
+        self.assertEqual(e["powers"][:10], [[0, 0, 0]] * 4 + [[1, 0, 0], [0, 1, 0], [0, 0, 1]] * 2)
+        self.assertEqual(e["exponents"], [3.4, 0.6, 0.8, 0.25] + [0.8] * 3 + [0.25] * 3 + [1.1] * 6 + [0.6])
+        self.assertEqual(len(e["functions"]), 11)
+        self.assertEqual(e["functions"][0]["primitives"], [0, 1])
+        self.assertEqual([f["primitives"] for f in e["functions"][1:5]], [[2, 3], [4, 7], [5, 8], [6, 9]])
+        # (orbital by orbital, each its coefficient of every function)
+        self.assertEqual(e["orbitals"], [[float(i) for i in range(11)], [float(i) for i in range(11, 22)]])
+
+    def test_each_primitive_normalised_times_its_coefficient_the_sp_shell_s_p_its_own(self):
+        e = reader.fchk_expansion(basis_fchk())
+        norm_s = lambda a: (2 * a / math.pi) ** 0.75
+        norm_p = lambda a: norm_s(a) * 2 * math.sqrt(a)
+        ratio = lambda f: f["coefficients"][0] / f["coefficients"][1]
+        # (the s shell: d1 N(a1) to d2 N(a2), whatever the function's own norm)
+        self.assertAlmostEqual(ratio(e["functions"][0]), 0.15 * norm_s(3.4) / (0.9 * norm_s(0.6)), places=12)
+        # (the sp shell: its s from the contraction coefficients, its p from the P(S=P) ones)
+        self.assertAlmostEqual(ratio(e["functions"][1]), 0.3 * norm_s(0.8) / (0.8 * norm_s(0.25)), places=12)
+        for f in e["functions"][2:5]:
+            self.assertAlmostEqual(ratio(f), 0.6 * norm_p(0.8) / (0.5 * norm_p(0.25)), places=12)
+
+    def test_each_function_normalised_and_a_shell_s_pure_functions_orthogonal(self):
+        e = reader.fchk_expansion(basis_fchk())
+        for f in e["functions"]:
+            self.assertAlmostEqual(self_overlap(e, f), 1.0, places=12)
+        d = e["functions"][5:10]
+        for i in range(5):
+            for j in range(i):
+                self.assertAlmostEqual(self_overlap(e, d[i], d[j]), 0.0, places=12)
+
+    def test_pure_functions_are_the_reference_s_polynomials_in_its_order(self):
+        def by(l, m, term):
+            """The solid harmonic's coefficients over its coefficient of `term`, which is positive."""
+            p = reader.solid_harmonic(l, m)
+            self.assertGreater(p[term], 0)
+            return {k: round(c / p[term], 12) for k, c in p.items()}
+        # (d: 3ZZ-RR, XZ, YZ, XX-YY, XY)
+        self.assertEqual(by(2, 0, (0, 0, 2)), {(0, 0, 2): 1.0, (2, 0, 0): -0.5, (0, 2, 0): -0.5})
+        self.assertEqual([reader.solid_harmonic(2, m).keys() for m in (1, -1, 2, -2)], [{(1, 0, 1)}, {(0, 1, 1)}, {(2, 0, 0), (0, 2, 0)}, {(1, 1, 0)}])
+        self.assertEqual(by(2, 2, (2, 0, 0)), {(2, 0, 0): 1.0, (0, 2, 0): -1.0})
+        # (f: ZZZ-ZRR, XZZ-XRR, YZZ-YRR, XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY - each its first term positive)
+        self.assertEqual(by(3, 0, (0, 0, 3)), {(0, 0, 3): 1.0, (2, 0, 1): -1.5, (0, 2, 1): -1.5})
+        self.assertEqual(by(3, 1, (1, 0, 2)), {(1, 0, 2): 1.0, (3, 0, 0): -0.25, (1, 2, 0): -0.25})
+        self.assertEqual(by(3, -1, (0, 1, 2)), {(0, 1, 2): 1.0, (2, 1, 0): -0.25, (0, 3, 0): -0.25})
+        self.assertEqual(by(3, 2, (2, 0, 1)), {(2, 0, 1): 1.0, (0, 2, 1): -1.0})
+        self.assertEqual(by(3, -2, (1, 1, 1)), {(1, 1, 1): 1.0})
+        self.assertEqual(by(3, 3, (3, 0, 0)), {(3, 0, 0): 1.0, (1, 2, 0): -3.0})
+        self.assertEqual(by(3, -3, (2, 1, 0)), {(2, 1, 0): 1.0, (0, 3, 0): round(-1 / 3, 12)})
+        # (g's last two: x^4 - 6x^2y^2 + y^4 and x^3y - xy^3, its labels' +4 and -4)
+        self.assertEqual(by(4, 4, (4, 0, 0)), {(4, 0, 0): 1.0, (2, 2, 0): -6.0, (0, 4, 0): 1.0})
+        self.assertEqual(by(4, -4, (3, 1, 0)), {(3, 1, 0): 1.0, (1, 3, 0): -1.0})
+
+    def test_a_pure_shell_s_functions_laid_out_in_the_format_s_order(self):
+        def shell_functions(t):
+            """The functions of one pure shell of type `t` on a lone atom, as the polynomial each is over the primitives'
+            powers: each coefficient over its largest."""
+            n = {-2: 5, -3: 7, -4: 9}[t]
+            text = "\n".join(["one shell", "SP        RHF                           made-up", "Number of atoms                            I                1",
+                              f"Number of basis functions                  I   {n:14d}", "Number of alpha electrons                  I                1",
+                              "Number of beta electrons                   I                1"]
+                             + fchk_item("Atomic numbers", "I", [1]) + fchk_item("Current cartesian coordinates", "R", [0.0, 0.0, 0.0])
+                             + fchk_item("Shell types", "I", [t]) + fchk_item("Number of primitives per shell", "I", [1])
+                             + fchk_item("Shell to atom map", "I", [1]) + fchk_item("Primitive exponents", "R", [0.7])
+                             + fchk_item("Contraction coefficients", "R", [1.0]) + fchk_item("Alpha Orbital Energies", "R", [0.0] * n)
+                             + fchk_item("Alpha MO coefficients", "R", [0.0] * n * n)) + "\n"
+            e = reader.fchk_expansion(text)
+            out = []
+            for f in e["functions"]:
+                terms = {tuple(e["powers"][i]): c for i, c in zip(f["primitives"], f["coefficients"])}
+                top = max(terms.values(), key=abs)
+                out.append({k: round(c / top, 9) for k, c in terms.items()})
+            return out
+        # (d: 3ZZ-RR, XZ, YZ, XX-YY, XY)
+        self.assertEqual(shell_functions(-2), [
+            {(0, 0, 2): 1.0, (2, 0, 0): -0.5, (0, 2, 0): -0.5}, {(1, 0, 1): 1.0}, {(0, 1, 1): 1.0}, {(2, 0, 0): 1.0, (0, 2, 0): -1.0}, {(1, 1, 0): 1.0}])
+        # (f: ZZZ-ZRR, XZZ-XRR, YZZ-YRR, XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY)
+        f = shell_functions(-3)
+        self.assertEqual([sorted(x) for x in f], [
+            [(0, 0, 3), (0, 2, 1), (2, 0, 1)], [(1, 0, 2), (1, 2, 0), (3, 0, 0)], [(0, 1, 2), (0, 3, 0), (2, 1, 0)],
+            [(0, 2, 1), (2, 0, 1)], [(1, 1, 1)], [(1, 2, 0), (3, 0, 0)], [(0, 3, 0), (2, 1, 0)]])
+        # (each over its largest coefficient, its sign with it: x^3 - 3xy^2 over its -3)
+        self.assertEqual((f[3][(2, 0, 1)], f[5][(3, 0, 0)], f[6][(2, 1, 0)]), (1.0, round(-1 / 3, 9), 1.0))
+        # (g: m = 0, +1, -1, ... +4, -4 - their powers of z falling, a cosine-like then a sine-like one each |m|)
+        g = shell_functions(-4)
+        self.assertEqual([max(k[2] for k in x) for x in g], [4, 3, 3, 2, 2, 1, 1, 0, 0])
+        self.assertEqual([all(k[1] % 2 == (i % 2 == 0 and i > 0) for k in x) for i, x in enumerate(g)], [True] * 9)
+        # (each over its largest coefficient, its sign with it: x^4 - 6x^2y^2 + y^4 over its -6)
+        self.assertEqual(g[7], {(4, 0, 0): round(-1 / 6, 9), (2, 2, 0): 1.0, (0, 4, 0): round(-1 / 6, 9)})
+        self.assertEqual(g[8], {(3, 1, 0): 1.0, (1, 3, 0): -1.0})
+
+    def test_cartesian_functions_in_gaussian_s_order(self):
+        names = lambda L: [("X" * p[0] + "Y" * p[1] + "Z" * p[2]) or "S" for p in reader.CARTESIAN[L]]
+        self.assertEqual(names(2), ["XX", "YY", "ZZ", "XY", "XZ", "YZ"])
+        self.assertEqual(names(3), ["XXX", "YYY", "ZZZ", "XYY", "XXY", "XXZ", "XZZ", "YZZ", "YYZ", "XYZ"])
+        self.assertEqual(names(4)[:3] + names(4)[-2:], ["ZZZZ", "YZZZ", "YYZZ", "XXXY", "XXXX"])
+
+    def test_its_orbitals_promise_their_surfaces_alpha_then_beta(self):
+        o = reader.read_jobs("h2.fchk", basis_fchk(beta=True))["orbitals"]
+        self.assertEqual([(x["spin"], x["surface"]["ask"]) for x in o], [("alpha", "expansion:0"), ("alpha", "expansion:1"), ("beta", "expansion:2"), ("beta", "expansion:3")])
+        e = reader.fchk_expansion(basis_fchk(beta=True))
+        self.assertEqual(e["orbitals"][2], [float(-i) for i in range(11)])
+        # (a restricted calculation's, open shell or not: one set, of both spins)
+        self.assertEqual(len(reader.fchk_expansion(basis_fchk())["orbitals"]), 2)
+
+    def test_none_given_where_its_basis_is_not_all_there_or_past_g(self):
+        for changed in ({"Shell types": ("I", [0, -1, 5, 0])}, {"Alpha MO coefficients": ("R", [0.0] * 21)}, {"Primitive exponents": None},
+                        {"P(S=P) Contraction coefficients": None}, {"Shell to atom map": ("I", [1, 1, 1, 3])}):
+            text = basis_fchk(**changed)
+            with self.assertRaises(ValueError):
+                reader.fchk_expansion(text)
+            self.assertTrue(all("surface" not in x for x in reader.read_jobs("h2.fchk", text)["orbitals"]))
+        with self.assertRaisesRegex(ValueError, "l = 5"):
+            reader.fchk_expansion(basis_fchk(**{"Shell types": ("I", [0, -1, 5, 0])}))
+
+
 class TheWorker(unittest.TestCase):
     def test_read_answers_meno_s_form(self):
         r = worker.answer(json.dumps({"id": 6, "op": "read", "name": "water.log", "text": opt_freq()}))
@@ -618,145 +788,19 @@ class TheWorker(unittest.TestCase):
         r = worker.answer(json.dumps({"id": 7, "op": "read", "name": "notes.log", "text": " Entering Gaussian System, Link 0=g16\n"}))
         self.assertEqual(r, {"id": 7, "ok": False, "error": "It could not be read as Gaussian's output: it holds no molecule."})
 
+    def test_ask_gives_a_formatted_checkpoint_s_wavefunction_and_nothing_else(self):
+        r = worker.answer(json.dumps({"id": 8, "op": "ask", "kind": "gaussian-fchk", "key": "expansion", "name": "h2.fchk", "text": basis_fchk()}))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(len(r["result"]["expansion"]["functions"]), 11)
+        r = worker.answer(json.dumps({"id": 9, "op": "ask", "kind": "gaussian-fchk", "key": "orbital:0", "name": "h2.fchk", "text": basis_fchk()}))
+        self.assertEqual(r, {"id": 9, "ok": False, "error": "Its wavefunction could not be given: it made no promise 'orbital:0'."})
+        r = worker.answer(json.dumps({"id": 10, "op": "ask", "kind": "gaussian", "key": "expansion", "name": "water.log", "text": opt_freq()}))
+        self.assertEqual(r["error"], "Its wavefunction could not be given: only a formatted checkpoint holds its wavefunction.")
+
     def test_collect_judges_a_run_as_read_does(self):
         cut = opt_freq()[: opt_freq().index(" Harmonic frequencies")]
         self.assertFalse(worker.ended_well(cut))
         self.assertTrue(worker.ended_well(opt_freq()))
-
-
-# Gaussian 16 inputs whose outputs, run on them (g16 NAME.gjf NAME.log), are read whole where they are in
-# calc-samples/Gaussian-gaussian/ under that name - with the formatted checkpoints formchk makes of 01's and 02's
-# checkpoints (water_optfreq.fchk, hcn_irc.fchk): each runs in seconds. Jobs 14 and 15 end in error, as meant.
-INPUTS = {
-    '01_water_optfreq_d3': '%Chk=water_optfreq.chk\n# B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt Freq\n\nwater opt freq, D3BJ (also the fchk sample: formchk water_optfreq.chk)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '02_hcn_ts_irc': '%Chk=hcn_irc.chk\n# B3LYP/6-31G(d) Opt=(TS,CalcFC,NoEigenTest) Freq\n\nHCN/HNC transition state\n\n0 1\nC     0.000000    0.000000    0.000000\nN     0.000000    0.000000    1.180000\nH     1.150000    0.000000    0.550000\n\n--Link1--\n%Chk=hcn_irc.chk\n# B3LYP/6-31G(d) IRC=(RCFC,MaxPoints=10,StepSize=10) Geom=Check Guess=Read\n\nHCN/HNC IRC from the TS (also: formchk hcn_irc.chk)\n\n0 1\n\n',
-    '03_h2o2_relaxed_scan': '# HF/3-21G Opt=ModRedundant\n\nH2O2 relaxed scan of the HOOH dihedral\n\n0 1\nO     0.000000    0.700000    0.000000\nO     0.000000   -0.700000    0.000000\nH     0.900000    0.900000    0.300000\nH    -0.900000   -0.900000    0.300000\n\nD 3 1 2 4 S 6 30.0\n\n',
-    '04_water_rigid_scan': '# HF/3-21G Scan\n\nwater rigid scan of one OH bond\n\n0 1\nO\nH 1 R1\nH 1 R2 2 A\n\nR1 0.90 4 0.05\nR2 0.96\nA 104.5\n\n',
-    '05_water_td': '# B3LYP/6-31+G(d) TD(NStates=5)\n\nwater TD-DFT single point\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '06_h2co_td_opt': '# B3LYP/6-31G(d) TD(Root=1,NStates=3) Opt\n\nformaldehyde excited-state optimisation\n\n0 1\nC     0.000000    0.000000   -0.528000\nO     0.000000    0.000000    0.680000\nH     0.000000    0.940000   -1.110000\nH     0.000000   -0.940000   -1.110000\n\n',
-    '07_water_link1': '%Chk=water_link1.chk\n# HF/STO-3G Opt\n\nwater opt, job 1 of 2\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n--Link1--\n%Chk=water_link1.chk\n# B3LYP/6-31G(d) SP Geom=Check Guess=Read\n\nwater single point, job 2 of 2\n\n0 1\n\n',
-    '08_water_ghost': '# B3LYP/6-31G(d) SP\n\nwater with a ghost helium (Bq)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\nHe-Bq 0.000000    0.000000    3.000000\n\n',
-    '09_he2_counterpoise': '# MP2/aug-cc-pVDZ Counterpoise=2\n\nhelium dimer counterpoise\n\n0 1 0 1 0 1\nHe(Fragment=1)  0.000000  0.000000  0.000000\nHe(Fragment=2)  0.000000  0.000000  3.000000\n\n',
-    '10_ch2_triplet_optfreq': '# UB3LYP/6-31G(d) Opt Freq\n\nmethylene triplet, open shell\n\n0 3\nC     0.000000    0.000000    0.100000\nH     0.000000    0.990000   -0.300000\nH     0.000000   -0.990000   -0.300000\n\n',
-    '11_water_pop_nbo': '# B3LYP/6-31G(d) Pop=NBO\n\nwater NBO\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '12_water_pop_hirshfeld': '# B3LYP/6-31G(d) Pop=Hirshfeld\n\nwater Hirshfeld and CM5\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '13_h3o_cation_chelpg': "# B3LYP/6-31G(d) Pop=CHELPG\n\nhydronium CHELPG, a charged molecule's dipole\n\n1 1\nO     0.000000    0.000000    0.100000\nH     0.000000    0.940000   -0.170000\nH     0.814000   -0.470000   -0.170000\nH    -0.814000   -0.470000   -0.170000\n\n",
-    '14_error_multiplicity': '# B3LYP/6-31G(d) SP\n\na deliberate error: water as a doublet\n\n0 2\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '15_opt_steps_exceeded': '# HF/3-21G Opt=(MaxCycles=2)\n\nan optimisation stopped after 2 steps\n\n0 1\nO     0.000000    0.000000    0.300000\nH     0.000000    1.100000   -0.600000\nH     0.000000   -0.900000   -0.400000\n\n',
-    '16_scf_not_converged': '# UB3LYP/6-31G(d) SCF=(MaxCycle=3) SP\n\nan SCF that does not converge\n\n0 3\nC     0.000000    0.000000    0.100000\nH     0.000000    0.990000   -0.300000\nH     0.000000   -0.990000   -0.300000\n\n',
-    '17_water_mp2_opt': '# MP2/6-31G(d) Opt\n\nwater MP2 optimisation (EUMP2 per step)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '18_water_ccsdt_sp': '# CCSD(T)/6-31G(d) SP\n\nwater CCSD(T) single point\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '19_water_nosymm_opt': '# HF/3-21G Opt NoSymm\n\nwater opt with NoSymm (input orientation only)\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '20_water_smd_optfreq': '# B3LYP/6-31G(d) SCRF=(SMD,Solvent=Water) Opt Freq\n\nwater opt freq in SMD water\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '21_water_raman': '# HF/3-21G Freq=Raman\n\nwater frequencies with Raman activities\n\n0 1\nO     0.000000    0.000000    0.117300\nH     0.000000    0.757200   -0.469200\nH     0.000000   -0.757200   -0.469200\n\n',
-    '22_co2_optfreq': '# HF/3-21G Opt Freq\n\ncarbon dioxide, linear (D-infinity-h): its point group and species as printed\n\n0 1\nC     0.000000    0.000000    0.000000\nO     0.000000    0.000000    1.160000\nO     0.000000    0.000000   -1.160000\n\n',
-    '23_hcn_optfreq': '# HF/3-21G Opt Freq\n\nhydrogen cyanide, linear (C-infinity-v): its point group and species as printed\n\n0 1\nH     0.000000    0.000000   -1.070000\nC     0.000000    0.000000    0.000000\nN     0.000000    0.000000    1.150000\n\n',
-}
-
-
-class WholeOutputs(unittest.TestCase):
-    """Gaussian 16's own outputs of `INPUTS`, read whole."""
-
-    def sample(self, name):
-        path = SAMPLES / name
-        if not path.exists():
-            raise unittest.SkipTest(f"no Gaussian-gaussian/{name} in calc-samples/")
-        return reader.read_jobs(path.name, path.read_text(errors="replace"))
-
-    def test_an_opt_freq_its_point_one_entry_and_its_thermochemistry(self):
-        o = self.sample("01_water_optfreq_d3.log")
-        self.assertEqual((o["atoms"], o["method"], o["basis"], o["solvation"]), (["O", "H", "H"], "B3LYP", "6-31G(d)", "none"))
-        self.assertTrue(o["optimised"])
-        self.assertEqual((sum(o["converged"]), o["converged"][-1]), (1, True))
-        self.assertEqual(o["imaginary"], [])
-        # (each atom's mass as its thermochemistry took it)
-        self.assertEqual(o["masses"], [15.99491, 1.00783, 1.00783])
-        r = results(o)
-        self.assertEqual((r["thermo.free-energy"]["value"], r["thermo.g-correction"]["value"]), (-76.406032, 0.003496))
-        self.assertEqual(len(r["vibrations"]["rows"]), 3)
-
-    def test_a_transition_state_then_its_reaction_path_two_jobs(self):
-        o = self.sample("02_hcn_ts_irc.log")
-        ts, path = o["jobs"]
-        self.assertEqual((ts["job"]["kind"], path["job"]["kind"]), ("Optimisation and frequencies", "Reaction path"))
-        self.assertEqual(len(ts["imaginary"]), 1)
-        self.assertEqual((len(path["frames"]), path["unmarked"], results(path)["run.path"]["value"]), (20, "path", "20 points"))
-        # (in the order of the reaction coordinate: from the reverse path's far end down to the start and on)
-        e = path["energies"]
-        k = e.index(max(e))
-        self.assertTrue(all(a < b for a, b in zip(e[:k], e[1 : k + 1])) and all(a > b for a, b in zip(e[k:], e[k + 1 :])))
-
-    def test_a_relaxed_scan_each_point_converged_and_a_rigid_one_a_path(self):
-        relaxed = self.sample("03_h2o2_relaxed_scan.log")
-        self.assertEqual((sum(relaxed["converged"]), results(relaxed)["run.path"]["value"]), (7, "7 points"))
-        rigid = self.sample("04_water_rigid_scan.log")
-        self.assertEqual((len(rigid["frames"]), rigid["unmarked"], results(rigid)["run.path"]["label"]), (5, "path", "Scan"))
-
-    def test_an_excited_state_s_optimisation_its_energies_unread(self):
-        o = self.sample("06_h2co_td_opt.log")
-        self.assertIsNone(o["energies"])
-        self.assertEqual(results(o)["run.energies"]["value"], "energies not read")
-
-    def test_link1_two_jobs_each_its_own_level(self):
-        o = self.sample("07_water_link1.log")
-        self.assertEqual([(j["method"], j["basis"], j["job"]["kind"]) for j in o["jobs"]], [("HF", "STO-3G", "Optimisation"), ("B3LYP", "6-31G(d)", "Single point")])
-
-    def test_a_ghost_atom_left_out(self):
-        self.assertEqual(self.sample("08_water_ghost.log")["atoms"], ["O", "H", "H"])
-
-    def test_an_open_shell_its_spins_and_each_spin_s_orbitals(self):
-        o = self.sample("10_ch2_triplet_optfreq.log")
-        r = results(o)
-        self.assertEqual(o["multiplicity"], 3)
-        self.assertAlmostEqual(sum(r["spins.mulliken"]["values"]), 2.0, places=3)
-        self.assertEqual({x["spin"] for x in o["orbitals"]}, {"alpha", "beta"})
-
-    def test_natural_hirshfeld_cm5_and_chelpg_charges(self):
-        self.assertIn("charges.natural", results(self.sample("11_water_pop_nbo.log")))
-        r = results(self.sample("12_water_pop_hirshfeld.log"))
-        self.assertIn("charges.cm5", r)
-        o = self.sample("13_h3o_cation_chelpg.log")
-        self.assertAlmostEqual(sum(results(o)["charges.chelpg"]["values"]), 1.0, places=3)
-        # (a cation's dipole as printed, with the point it was taken about: Meno takes it about the centre of mass)
-        self.assertEqual((o["charge"], results(o)["dipole"]["origin"]), (1, [0.0, 0.0, 0.0]))
-
-    def test_errors_said_in_gaussian_s_words(self):
-        o = self.sample("14_error_multiplicity.log")
-        self.assertEqual(results(o)["run.why"]["value"], "The combination of multiplicity 2 and 10 electrons is impossible.")
-        o = self.sample("15_opt_steps_exceeded.log")
-        self.assertFalse(o["optimised"])
-        self.assertTrue(results(o)["run.why"]["value"].startswith("Optimization stopped. -- Number of steps exceeded"))
-
-    def test_an_scf_not_converged_in_a_job_that_ended_normally(self):
-        o = self.sample("16_scf_not_converged.log")
-        self.assertIsNone(o["energies"])
-        self.assertEqual(results(o)["run"]["value"], "not converged")
-
-    def test_correlated_energies_each_geometry_s_most_correlated(self):
-        self.assertEqual(self.sample("17_water_mp2_opt.log")["method"], "MP2")
-        o = self.sample("18_water_ccsdt_sp.log")
-        self.assertEqual((o["method"], o["energies"]), ("CCSD(T)", [-76.207532123]))
-
-    def test_nosymm_smd_and_raman(self):
-        self.assertTrue(self.sample("19_water_nosymm_opt.log")["optimised"])
-        self.assertEqual(self.sample("20_water_smd_optfreq.log")["solvation"], "SMD(Water)")
-        o = self.sample("21_water_raman.log")
-        self.assertIsNone(o["optimised"])
-        self.assertIn("Raman activity", [c["label"] for c in results(o)["vibrations"]["columns"]])
-
-    def test_linear_molecules_in_standard_notation(self):
-        r = results(self.sample("22_co2_optfreq.log"))
-        self.assertEqual(r["thermo.point-group"]["value"], "D\u221eh")
-        self.assertEqual(r["vibrations"]["rows"][0]["cells"][1], "\u03a0u")
-        self.assertEqual(results(self.sample("23_hcn_optfreq.log"))["thermo.point-group"]["value"], "C\u221ev")
-
-    def test_formatted_checkpoints(self):
-        o = self.sample("water_optfreq.fchk")
-        self.assertEqual((o["atoms"], o["method"], o["basis"], o["solvation"]), (["O", "H", "H"], "B3LYP", "6-31G(d)", "none"))
-        v = results(o)["vibrations"]
-        self.assertEqual([row["cells"][1] for row in v["rows"]], [1713.64424, 3727.27748, 3848.81508])
-        self.assertEqual(len(v["rows"][0]["move"]), 9)
-        self.assertEqual(self.sample("hcn_irc.fchk")["atoms"], ["C", "N", "H"])
 
 
 if __name__ == "__main__":
