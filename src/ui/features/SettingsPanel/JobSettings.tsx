@@ -34,20 +34,23 @@ export default function JobSettings() {
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
+    // (a finished job's folder, once a workspace's file holds all of it: taken away on its own, unless kept - workflow/keptJobs `clearSavedJobs`)
+    { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: false },
   ];
-  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}) };
+  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), "keep-folders": calculations.keepJobFolders === true };
   const change = (v: OptionValues) => {
     const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
     // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
     const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
     const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
     const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
-    const { cores: _c, coresAll: _a, memoryAll: _m, ...rest } = calculations;
+    const { cores: _c, coresAll: _a, memoryAll: _m, keepJobFolders: _k, ...rest } = calculations;
     setCalculations({
       ...rest,
       ...(cores != null ? { cores } : {}),
       ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
       ...(memory != null ? { memoryAll: memory } : {}),
+      ...(v["keep-folders"] === true ? { keepJobFolders: true } : {}),
     });
   };
 

@@ -12,7 +12,8 @@
  * a job was given, what was read back of it, and its logs; what it leaves
  * out, or what is not to be had, each job's record names, with its size.
  */
-import { fileNow, jobKept, type KeptJobFile } from "../../../../lib/jobs";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { fileNow, jobKept, removeJob, writeJobBack, type KeptJobFile } from "../../../../lib/jobs";
 import type { Appended } from "../../../../lib/io/writeDocument";
 import { JOB_FILE_MEDIA, MOST_FILE, MOST_WORKSPACE_FILE, type KeptData, type KeptFile, type MenoFile } from "../../../../lib/doc/menoFile";
 import { kindInfo } from "./kinds";
@@ -40,8 +41,11 @@ export type JobsKept = {
 /** A step's jobs, of its run and the runs it keeps, each once. */
 export const jobsOfStep = (s: WorkflowStep): string[] => [...new Set([s.ran, ...(s.runs ?? [])].flatMap((r) => r?.jobs ?? []))];
 
-/** What the file a workspace was opened from kept of a job. */
-const recordOf = (s: WorkflowStep, job: string): KeptJob | undefined => [s.ran, ...(s.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
+/** The records of the jobs whose folders this session's saves took away once the file held them whole, by job id: read as a file opened keeps them. */
+const cleared = new Map<string, KeptJob>();
+
+/** What is kept of a job, where its folder is not here: what the file a workspace was opened from kept of it, or what a save this session kept of it before its folder was taken away. */
+export const recordOf = (s: WorkflowStep, job: string): KeptJob | undefined => [s.ran, ...(s.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job) ?? cleared.get(job);
 
 /** A workspace's file opened this session, where it was: its path, and its size and when it was written as it was opened. */
 export type OpenedFrom = { path: string; size: number; mtime: number | null };
@@ -65,6 +69,64 @@ export async function heldJobSource(sha256: string, now: (path: string) => Promi
   return is && is.size === from.size && is.mtime === from.mtime ? from.path : null;
 }
 
+
+/**
+ * The jobs a save holds every file of, each added from its folder: none of
+ * its files left out (a step's *Don't keep raw outputs*, or not had), and
+ * none kept again from another file - the jobs whose folders may go once
+ * the file is written (docs/WORKFLOWS.md, *A job's folder*).
+ */
+export function clearableJobs(jobs: JobsKept): string[] {
+  const fromFolder = new Set(jobs.appended.filter((a) => !a.from).map((a) => a.sha256));
+  return [...jobs.records.values()].filter((r) => !r.left?.length && r.files.length > 0 && r.files.every((f) => fromFolder.has(f.sha256))).map((r) => r.job);
+}
+
+/**
+ * After a save to `path`: the folders of the jobs it holds whole
+ * (`clearableJobs`) taken away - finished jobs' alone, as Meno's backend
+ * takes one - each job's record held for the session, and the file noted as
+ * where its files are, so that the next save keeps them from it, and Show
+ * log and Show files read them there. None where the file cannot be looked
+ * at as it is now. The jobs whose folders went.
+ */
+export async function clearSavedJobs(
+  path: string,
+  jobs: JobsKept,
+  now: (path: string) => Promise<{ size: number; mtime: number | null } | null> = fileNow,
+  remove: (job: string) => Promise<unknown> = removeJob,
+): Promise<string[]> {
+  const ids = clearableJobs(jobs);
+  if (!ids.length) return [];
+  const is = await now(path).catch(() => null);
+  if (!is) return [];
+  const from: OpenedFrom = { path, size: is.size, mtime: is.mtime };
+  const gone: string[] = [];
+  for (const id of ids) {
+    const record = jobs.records.get(id)!;
+    cleared.set(id, record);
+    for (const f of record.files) held.set(f.sha256, { read: held.get(f.sha256)?.read ?? (() => null), from });
+    try {
+      await remove(id);
+      gone.push(id);
+    } catch {
+      // (not taken away - unfinished, or held: its folder still there, read from as before)
+    }
+  }
+  return gone;
+}
+
+/** A job's log as the workspace's file holds it, where the job's folder is not here: written back out (`jobs-kept`) and read; none where the file holds none, or it cannot be had. */
+export async function keptLogOf(job: string, record: KeptJob | undefined): Promise<string | null> {
+  const log = record?.files.find((f) => f.name === "log.txt");
+  if (!log) return null;
+  const from = await heldJobSource(log.sha256);
+  const bytes = from ? null : heldJobFile(log.sha256);
+  if (!from && !bytes) return null;
+  const back = await writeJobBack(job, log.name, log.sha256, from ? { from } : { bytes: bytes! }).catch(() => null);
+  if (!back) return null;
+  // (written beside its work folder, as its folder had it)
+  return readTextFile(back.work.replace(/[\\/]work[\\/]?$/, "") + (back.work.includes("\\") ? "\\" : "/") + "log.txt").catch(() => null);
+}
 
 /**
  * What a save keeps of `steps`' jobs: each job's files listed from its

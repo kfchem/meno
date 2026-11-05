@@ -5,7 +5,7 @@ import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow } from "../../../lib/jobs";
 import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
-import { jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
@@ -886,6 +886,9 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       );
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
+      // (its jobs' folders, every file of them held by the file just written: taken away - unless Settings keeps them -
+      //  docs/WORKFLOWS.md, *A job's folder*)
+      if (!useAppSettings.getState().calculations.keepJobFolders) void clearSavedJobs(kept, at.jobs);
       naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
       const keptAs = old && fileNameOf(old);

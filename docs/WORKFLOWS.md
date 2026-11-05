@@ -1315,6 +1315,17 @@ is not held to one.
   take their own folders away: a Render job, once its picture is on the
   page, and a job started for a step deleted before its run began - none
   of them taken up again from another run.
+- **Once the workspace is saved, a finished job's folder goes** where the
+  file just written holds every file of it, each from that folder - none
+  left out by *Don't keep raw outputs*, none kept again from another file
+  (2026-11-06; decided 2026-10-16) - unless *Settings, Calculations, Keep
+  job folders once saved* is on. What a later save keeps of the job, and
+  what *Show log* and *Show files* show, Meno reads from that file, as it
+  does from a file opened (FILE-IO.md, *A step's jobs*); where it has
+  changed since, a later save says those files are not to be had. A job
+  whose folder went is run again where it would have been taken up
+  (*Job keys*). Where the file cannot be looked at as it is, or the
+  backend refuses (a job not finished), the folder stays.
 - **A saved workspace keeps its jobs' files**, raw outputs included,
   unless the step says *Don't keep raw outputs*; opened elsewhere, *Show
   files* writes them back out (docs/FILE-IO.md, *A step's jobs*).
@@ -2267,10 +2278,8 @@ Its second part:
   what Meno would give it), and output Meno cannot account for stops its
   step (*Job keys*); still, choose a folder only you write in.
 
-Not yet: job folders cleaned once their files are in the `.meno` unless
-*Keep job folders* is chosen (that waits for raw outputs kept in the
-`.meno`, #9b); *Show files*, on a step's menu, opens a job's folder, and
-an entry's menu does not yet.
+Not yet: *Show files*, on a step's menu, opens a job's folder, and an
+entry's menu does not yet.
 
 ### Job keys, and a job taken up again (2026-10-22)
 
