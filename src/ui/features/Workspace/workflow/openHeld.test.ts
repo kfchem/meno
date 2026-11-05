@@ -6,7 +6,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
 import { setMembers } from "./entries";
 import { resultOf } from "./flow";
-import { isHeld } from "./held";
+import { isHeld } from "./onPage";
 import { addStep, connect, openedSet } from "./model";
 import { placeResults, type RunResults, type RunWith } from "./run";
 

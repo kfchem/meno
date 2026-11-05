@@ -14,7 +14,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { byOf, kindsOf, optionsFor } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
-import { heldSets } from "../../workflow/held";
+import { heldSets } from "../../workflow/onPage";
 import { appendParts, partsBounds } from "../../workflow/parts";
 import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
