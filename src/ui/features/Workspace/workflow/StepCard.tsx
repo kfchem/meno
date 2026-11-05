@@ -33,7 +33,13 @@ export const HAIR = "var(--hair, 1px)";
  * nothing inside moves.
  */
 export const HAIR_LINE = "inset-ring-[length:var(--hair,1px)]";
-/** A port, centred where it stands in its parent: a small ring, a pixel thick. `of`: its set's or card's height, on the page, in px. */
+/**
+ * A port, centred where it stands in its parent: a small ring, a pixel
+ * thick. `of`: its set's or card's height, on the page, in px. HTML, not
+ * drawn by WebGL as the page's placed objects are: the step cards are HTML
+ * over the page's canvas, and a port half on a card must be drawn, and
+ * taken hold of, over it.
+ */
 export function Port({
   look,
   style,
