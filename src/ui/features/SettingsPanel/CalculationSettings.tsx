@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { Fragment } from "react";
 import { noDefault, rememberable, valuesOf, type Option, type OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
@@ -84,14 +85,14 @@ export function partsOf(options: readonly Option[]): Option[][] {
  * window, the chemist's own: its guide, and *Clear* where the chemist has
  * given one, which empties it again (`keep` given what is left).
  */
-export function OwnValues({ options, own, keep }: { options: readonly Option[]; own: OptionValues | undefined; keep: (values: OptionValues) => void }) {
+export function OwnValues({ options, own, keep, indent = true }: { options: readonly Option[]; own: OptionValues | undefined; keep: (values: OptionValues) => void; indent?: boolean }) {
   return (
     <>
       {options.filter(noDefault).map((o) => {
         const given = own?.[o.id];
         const { [o.id]: _, ...rest } = own ?? {};
         return (
-          <div key={o.id} className="pl-8 pr-3 pb-2.5 flex items-start gap-3 text-xs text-gh-gray">
+          <div key={o.id} className={clsx("pr-3 pb-2.5 flex items-start gap-3 text-xs text-gh-gray", indent ? "pl-8" : "pl-3")}>
             <p className="flex-1 max-w-2xl leading-snug">{o.note}</p>
             {typeof given === "number" && Number.isFinite(given) && (
               <button type="button" className="ml-auto h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base" onClick={() => keep(rest)}>

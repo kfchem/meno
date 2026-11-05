@@ -7,7 +7,9 @@ import {
   WINDOW_3D_MOST,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
-import { shownOptions, type Option, type OptionValues } from "../../../lib/options";
+import { Fragment } from "react";
+import { noDefault, shownOptions, type Option, type OptionValues } from "../../../lib/options";
+import { OwnValues, partsOf } from "./CalculationSettings";
 import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
@@ -116,21 +118,59 @@ export default function ChemistrySettings() {
  * (lib/chem/conformersSought): shown only where the one chosen does.
  */
 function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemistry: (c: Settings) => void }) {
-  if (!rolePlugin("conformers")?.roleTries.includes("conformers")) return null;
-  const values: OptionValues = { sought: chemistry.sought3d ?? "needed", count: chemistry.count3d ?? RING_CONFORMERS };
-  const change = (v: OptionValues) => {
-    const { sought3d: _s, count3d: _c, ...rest } = chemistry;
-    const n = typeof v.count === "number" && Number.isFinite(v.count) ? Math.min(Math.max(1, Math.round(v.count)), MOST_CONFORMERS) : RING_CONFORMERS;
-    setChemistry({ ...rest, ...(v.sought === "fixed" ? { sought3d: "fixed" as const } : {}), ...(n !== RING_CONFORMERS ? { count3d: n } : {}) });
-  };
+  const plugin = rolePlugin("conformers");
+  if (!plugin?.roleTries.includes("conformers")) return null;
+  // (as many as the molecule needs, in rounds, where its search takes draws: their window - the chemist's own, none until given - first round and most)
+  const rounds = plugin.roleDraws.includes("conformers");
+  const values = soughtValues(chemistry, rounds);
+  const change = (v: OptionValues) => setChemistry(soughtChosen(chemistry, v));
+  const shown = shownOptions(soughtOptions("needed", RING_CONFORMERS, rounds ? {} : undefined), values);
   return (
     <div className="mt-2 rounded-lg border border-gh-line bg-white">
-      <OptionRows options={shownOptions(soughtOptions(), values)} values={values} onChange={change} />
+      {/* (the window with its guide and Clear under it, as one row: Settings, Calculations does the same) */}
+      {partsOf(shown).map((part, k) =>
+        part.some(noDefault) ? (
+          <div key={k}>
+            <OptionRows options={part} values={values} onChange={change} />
+            <OwnValues options={part} own={{ within: values.within }} keep={() => change({ ...values, within: Number.NaN })} indent={false} />
+          </div>
+        ) : (
+          <Fragment key={k}>
+            <OptionRows options={part} values={values} onChange={change} />
+          </Fragment>
+        ),
+      )}
       <p className="px-3 pb-2.5 text-xs leading-snug text-gh-gray max-w-2xl">
         How many conformers are tried of a structure made in 3D here. A workflow's Conformers step says its own, starting from this.
       </p>
     </div>
   );
+}
+
+/** Settings' conformers sought as the page's options show them (`soughtOptions`): with a search in rounds' own, where its search takes draws - a window that is none shown empty. */
+export function soughtValues(chemistry: Settings, rounds: boolean): OptionValues {
+  return {
+    sought: chemistry.sought3d ?? "needed",
+    count: chemistry.count3d ?? RING_CONFORMERS,
+    ...(rounds ? { within: chemistry.within3d ?? Number.NaN, first: chemistry.first3d ?? 0, most: chemistry.most3d ?? MOST_CONFORMERS } : {}),
+  };
+}
+
+/** Settings with the page's conformers sought as `v` chose them: each kept to what it may be, and none kept that is Meno's own default - or, a window, none. */
+export function soughtChosen(chemistry: Settings, v: OptionValues): Settings {
+  const { sought3d: _s, count3d: _c, within3d: _w, first3d: _f, most3d: _m, ...rest } = chemistry;
+  const many = (x: unknown, none: number) => (typeof x === "number" && Number.isFinite(x) ? Math.min(Math.max(1, Math.round(x)), MOST_CONFORMERS) : none);
+  const n = many(v.count, RING_CONFORMERS);
+  const first = typeof v.first === "number" && v.first >= 1 ? many(v.first, 0) : 0;
+  const most = many(v.most, MOST_CONFORMERS);
+  return {
+    ...rest,
+    ...(v.sought === "fixed" ? { sought3d: "fixed" as const } : {}),
+    ...(n !== RING_CONFORMERS ? { count3d: n } : {}),
+    ...(typeof v.within === "number" && Number.isFinite(v.within) && v.within >= 0 ? { within3d: v.within } : {}),
+    ...(first ? { first3d: first } : {}),
+    ...(most !== MOST_CONFORMERS ? { most3d: most } : {}),
+  };
 }
 
 const WINDOW: Option[] = [{ id: "window", label: "Keep conformers within", type: "number", default: WINDOW_3D, min: 0, max: WINDOW_3D_MOST, step: 5, unit: "kcal/mol" }];
