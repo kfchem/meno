@@ -11,7 +11,7 @@ import { BETWEEN, CARD_H, CARD_W, nearWire, portDown, PX, setTakes, stepGives, s
 import { addStep } from "./model";
 import { placeResults, type RunResults, type RunWith } from "./run";
 import type { Molecule3D } from "../store/types";
-import { clearOf, exitStart, frameAt, lineFrom, placeAgain } from "./place";
+import { clearOf, exitStart, frameAt, lineFrom, placeAgain, placeFor } from "./place";
 
 describe("a step's exits' ports (docs/WORKFLOWS.md, *Exit ports*)", () => {
   it("stand down the card's right edge, each as far down as the input of its place on the left, all on the card shut - for every kind", () => {
@@ -71,6 +71,29 @@ function lineTo(p: { x: number; y: number }, card: Frame, f: Frame, round: reado
   return wirePath(p, setTakes(f), e, nearWire(p, setTakes(f), e, round));
 }
 
+/**
+ * A short bond on the line from a card's first port to frame `to` - far
+ * enough along that the first port's line half a card lower passes it,
+ * and clear of the second port's line to `to` and of the first exit's own
+ * line to `first`: a set placed for the second exit at `to` stays there
+ * only where its line is measured from the second port.
+ */
+function bondAcross(s: { x: number; y: number }, card: Frame, first: Frame, to: Frame): Model {
+  const round = [first, card];
+  const lower = { ...to, y0: to.y0 - CARD_H / 2, y1: to.y1 - CARD_H / 2 };
+  const [l0, l1, l0lower] = [lineTo(stepGives(s, 0), card, to, round), lineTo(stepGives(s, 1), card, to, round), lineTo(stepGives(s, 0), card, lower, round)];
+  // (the first exit's own line, as it was placed: before the second's set was made)
+  const first0 = lineTo(stepGives(s, 0), card, first, [card]);
+  for (const p of l0) {
+    if (p.x <= card.x1 + 2 * PX || p.x >= to.x0 - BETWEEN - 4 * PX) continue;
+    const at: Model = { atoms: [{ id: 900, el: "C", x: p.x, y: p.y - 3 * PX }, { id: 901, el: "C", x: p.x, y: p.y + 3 * PX }], bonds: [{ id: 902, a: 900, b: 901, order: 1 }] } as Model;
+    const ink = boxOf(at);
+    const across = (q: { x: number; y: number }) => q.x > ink.x0 && q.x < ink.x1 && q.y > ink.y0 && q.y < ink.y1;
+    if (l0.some(across) && !l1.some(across) && !l0lower.some(across) && !first0.some(across) && ink.x1 < to.x0 - BETWEEN) return at;
+  }
+  throw new Error("no place on the first port's line for a bond clear of the others");
+}
+
 describe("a set's line, from its own exit's port, as placing keeps it clear (place `lineFrom`, `exitStart`)", () => {
   it("leaves from the exit a set was made by - whatever else is said - from the exit said for one not made yet, else from the first", () => {
     const { doc, s, first, second } = twoExits();
@@ -116,30 +139,22 @@ describe("a set's line, from its own exit's port, as placing keeps it clear (pla
   it("is kept clear of what lies across it - its own, not the first port's: a short bond across the first port's line to where the second exit's set stands leaves it there, run again or made", () => {
     const { doc: base, s, card, first, second } = twoExits();
     const to = frameOf(second);
-    const round = [frameOf(first), card];
-    const lower = { ...to, y0: to.y0 - CARD_H / 2, y1: to.y1 - CARD_H / 2 };
-    const [l0, l1, l0lower] = [lineTo(stepGives(s, 0), card, to, round), lineTo(stepGives(s, 1), card, to, round), lineTo(stepGives(s, 0), card, lower, round)];
-    // (the first exit's own line, as it was placed: before the second's set was made)
-    const first0 = lineTo(stepGives(s, 0), card, frameOf(first), [card]);
-    // (a bond on the first port's line to it, far enough on that the first port's line half a card lower passes it - and the second's
-    //  line, and the first exit's own, clear of it)
-    let bond: Model | undefined;
-    for (const p of l0) {
-      if (p.x <= card.x1 + 2 * PX || p.x >= to.x0 - BETWEEN - 4 * PX) continue;
-      const at: Model = { atoms: [{ id: 900, el: "C", x: p.x, y: p.y - 3 * PX }, { id: 901, el: "C", x: p.x, y: p.y + 3 * PX }], bonds: [{ id: 902, a: 900, b: 901, order: 1 }] } as Model;
-      const ink = boxOf(at);
-      const across = (q: { x: number; y: number }) => q.x > ink.x0 && q.x < ink.x1 && q.y > ink.y0 && q.y < ink.y1;
-      if (l0.some(across) && !l1.some(across) && !l0lower.some(across) && !first0.some(across) && ink.x1 < to.x0 - BETWEEN) {
-        bond = at;
-        break;
-      }
-    }
-    expect(bond).toBeDefined();
+    const bond = bondAcross(s, card, frameOf(first), to);
     // (run again: where it was, its own line clear)
-    const doc = appendModel(base, bond!);
+    const doc = appendModel(base, bond);
     expect(placeAgain(doc, s, second, to.x1 - to.x0, to.y1 - to.y0)).toEqual(to);
     // (made, the bond there before its step: both its exits' sets where they would be without it)
-    const fresh = twoExits(appendModel(emptyWorkspaceDocument(), bond!));
+    const fresh = twoExits(appendModel(emptyWorkspaceDocument(), bond));
     expect([frameOf(fresh.first), frameOf(fresh.second)]).toEqual([frameOf(first), to]);
+  });
+
+  it("is kept clear for a set not made yet from the exit it is placed for: placed for the second exit, a bond across the first port's line to where it goes leaves it there", () => {
+    const { doc: made, s, card, first, second } = twoExits();
+    // (the second exit's set not made: placed for it, as a run's result is where its step was read without it)
+    const doc = { ...made, sets: made.sets!.filter((b) => b.id !== second.id) };
+    const [w, h] = [second.x1 - second.x0, second.y1 - second.y0];
+    const to = placeFor(doc, s, "failed", w, h);
+    const bond = bondAcross(s, card, frameOf(first), to);
+    expect(placeFor(appendModel(doc, bond), s, "failed", w, h)).toEqual(to);
   });
 });
