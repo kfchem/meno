@@ -2,6 +2,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { DURATION } from "../../../theme/motion";
+import { useEditor } from "../store";
 import { wordsReadAt } from "../utils/pageScale";
 import type { Region } from "./hits";
 import { usePageHits, type HitHandlers } from "./PageHits";
@@ -18,9 +19,11 @@ export type Drawn = { shapes: readonly Shape[]; texts: readonly PageText[]; regi
  * chip, hanging below the molecule as it turns - drawn by WebGL with every
  * other such thing at once (`PagePlaced`): where `anchor` is on the page, as
  * `draw` draws it there; its words gone where the page's words are too small
- * to read, as its HTML's were (`words`); told of the pointer by `on`.
+ * to read, as its HTML's were (`words`); gone while a talk is given, where
+ * it is something to work the page with (`control`: a frames chip - App.css
+ * `.meno-control-chip`, docs/PRESENTING.md); told of the pointer by `on`.
  */
-export type Placed = { key: string; anchor: THREE.Object3D; draw: (at: { x: number; y: number }) => Drawn; words?: boolean; on?: HitHandlers };
+export type Placed = { key: string; anchor: THREE.Object3D; draw: (at: { x: number; y: number }) => Drawn; words?: boolean; control?: boolean; on?: HitHandlers };
 
 type Registry = { set: (key: string, p: Placed | null) => void };
 const Placements = createContext<Registry | null>(null);
@@ -54,7 +57,8 @@ const at = new THREE.Vector3();
  * of boxes, one of words, one layer of places taking the pointer - each
  * where its anchor is now: read every frame, drawn again only where one has
  * moved, or one has come or gone, or the page's words have switched; those
- * whose words are read faded in and out with them, over Meno's quick time.
+ * whose words are read faded in and out with them, over Meno's quick time;
+ * those that work the page faded out while a talk is given, and back after.
  */
 export default function PagePlaced({ children }: { children?: ReactNode }) {
   const { camera, invalidate } = useThree();
@@ -79,13 +83,27 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
   // (whether the page's words are read, and how far shown they are: switched past their threshold, faded over a short time)
   const read = useRef(true);
   const shown = useRef(1);
+  // (whether a talk is given, and how far shown what works the page is: faded out over a short time as one begins, and back)
+  const talking = useEditor((s) => s.presenting != null);
+  const controls = useRef(talking ? 0 : 1);
+  useEffect(() => invalidate(), [talking, invalidate]);
+  /** `now` a frame of `dt` seconds nearer `to`, over Meno's quick time. */
+  const toward = (now: number, to: number, dt: number) => {
+    const step = Math.min(dt, 1 / 20) / DURATION.quick;
+    return to > now ? Math.min(to, now + step) : Math.max(to, now - step);
+  };
   useFrame((_, dt) => {
     const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
     read.current = wordsReadAt(zoom, read.current);
     const to = read.current ? 1 : 0;
     if (shown.current !== to) {
-      const step = Math.min(dt, 1 / 20) / DURATION.quick;
-      shown.current = to > shown.current ? Math.min(1, shown.current + step) : Math.max(0, shown.current - step);
+      shown.current = toward(shown.current, to, dt);
+      dirty.current = true;
+      invalidate();
+    }
+    const controlsTo = talking ? 0 : 1;
+    if (controls.current !== controlsTo) {
+      controls.current = toward(controls.current, controlsTo, dt);
       dirty.current = true;
       invalidate();
     }
@@ -111,7 +129,7 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
       const w = where.current.get(key);
       if (!w) continue;
       const d = p.draw(w);
-      const fade = p.words ? shown.current : 1;
+      const fade = (p.words ? shown.current : 1) * (p.control ? controls.current : 1);
       if (fade <= 0) continue;
       for (const s of d.shapes) shapes.push(fade < 1 ? { ...s, opacity: (s.opacity ?? 1) * fade } : s);
       for (const t of d.texts) texts.push(fade < 1 ? { ...t, opacity: (t.opacity ?? 1) * fade } : t);

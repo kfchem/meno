@@ -1695,6 +1695,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           key: chipKey,
           anchor: pill.current,
           words: true,
+          control: true,
           draw: (at) =>
             shutChip(
               chipKey,
