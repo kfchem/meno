@@ -247,9 +247,9 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
   };
   /** The three opened in the order P, R, TS - as files named so come - in a set wired into an Energy diagram with `options`. */
   function rtp(options?: Record<string, string>) {
-    let doc = addMolecule3d(emptyWorkspaceDocument(), opened("P.out", 0, -93.375824209007, -93.37984432));
-    doc = addMolecule3d(doc, opened("R.out", 4, -93.399651434575, -93.40279161));
-    doc = addMolecule3d(doc, opened("TS.out", 8, -93.324592691836, -93.33491231));
+    let doc = addMolecule3d(emptyWorkspaceDocument(), opened("P.out", 0, -93.376, -93.382));
+    doc = addMolecule3d(doc, opened("R.out", 4, -93.4, -93.405));
+    doc = addMolecule3d(doc, opened("TS.out", 8, -93.325, -93.337));
     const set = doc.nextWorkflowId ?? 1;
     doc = addSet(doc, { x0: -2, y0: -2, x1: 10, y1: 2 });
     const step = doc.nextWorkflowId!;
@@ -263,27 +263,27 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
     const ran = runStep(doc, step, W);
     expect(levelsOf(ran, step)).toEqual([
       ["P", 0],
-      ["R", -14.95],
-      ["TS", 32.15],
+      ["R", -15.06],
+      ["TS", 32],
     ]);
   });
 
-  it("draws them as listed, R, TS, P relative to R - ΔE 47.10 and 14.95 kcal/mol, ΔG 42.59 and 14.40, by hand from ORCA's own", () => {
+  it("draws them as listed, R, TS, P relative to R - ΔE 47.06 and 15.06 kcal/mol, ΔG 42.67 and 14.43, by hand", () => {
     const { doc, step } = rtp({ levels: "R\nTS\nP", reference: "R" });
     const ran = runStep(doc, step, W);
     expect(levelsOf(ran, step)).toEqual([
       ["R", 0],
-      ["TS", 47.1],
-      ["P", 14.95],
+      ["TS", 47.06],
+      ["P", 15.06],
     ]);
     expect(ran.steps!.find((x) => x.id === step)!.ran?.said).toBe("3 levels · relative to R");
     // (by hand: the free energies' differences, x 627.509)
-    expect([((-93.33491231 + 93.40279161) * KCAL).toFixed(2), ((-93.37984432 + 93.40279161) * KCAL).toFixed(2)]).toEqual(["42.59", "14.40"]);
+    expect([((-93.337 + 93.405) * KCAL).toFixed(2), ((-93.382 + 93.405) * KCAL).toFixed(2)]).toEqual(["42.67", "14.43"]);
     const g = runStep(updateStep(doc, step, { options: { levels: "R = HCN\nTS\nP = HNC", reference: "R", quantity: "thermo.free-energy" } }), step, W);
     expect(levelsOf(g, step)).toEqual([
       ["HCN", 0],
-      ["TS", 42.59],
-      ["HNC", 14.4],
+      ["TS", 42.67],
+      ["HNC", 14.43],
     ]);
     expect([diagramOf(g, step)!.axis.name, diagramOf(g, step)!.reference]).toEqual(["ΔG", "HCN"]);
   });

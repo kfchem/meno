@@ -29,13 +29,15 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
-import { undrawnHydrogens } from "./drawing";
+import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
 import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
+import { partsOf, partsSideBySide } from "./partsApart";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -151,7 +153,10 @@ export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Mod
       const bare = !standsForMolecule(part);
       const asked = etaBound(bare ? { ...part, atoms: part.atoms.map((a) => ({ ...a, valence: a.valence ?? 0 })) } : part);
       const index = molIndex(asked);
-      const molblock = chemMolblock(asked);
+      // (a centre the drawing shows by depth alone - a cage in perspective, no wedge - given the wedge that says it, as a file is:
+      //  chem/drawing `forFlatReaders`. It adds an H where the engine drew one, after every atom and bond of the part and its
+      //  stars, so the places the part's atoms and bonds hold in the block - those `index` and `atoms` name - stay as they are)
+      const molblock = chemMolblock(forFlatReaders(asked));
       const centres = centresIn(molblock);
       // (a dative arrow or a coordination bond between two atoms - not a multi-centre bond's to its star, which is none of the molecule's bonds)
       const coordination = index.bonds.flatMap((b, i) => ((b.dative || b.coordination) && !b.endpoints?.length ? [i] : []));
@@ -533,7 +538,9 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
  * the first, alike atoms in like places (`asThePageShows`, in a worker of
  * its own: `shownConformers`). `onPage` asks the plugin to make one of two
  * enantiomers as the other's mirror image (docs/PLUGINS.md); a workflow's
- * *Conformers* step never sends it, and is given the program's own.
+ * *Conformers* step never sends it, and is given the program's own. A metal
+ * is held as Meno holds it (lib/chem/metalHolds), and those made that its
+ * checks set aside are.
  */
 export async function conformersOf(
   chem: ChemClient,
@@ -545,8 +552,12 @@ export async function conformersOf(
 ): Promise<Conformers[]> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
-  const got = await chem.request("conformers", { molblock: block.molblock, isomers: made.isomers, ...tries, options, onPage: true }, CONFORMERS_MS);
-  return shownConformers(got.isomers.map((c) => withChosen(c, made.open)));
+  // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
+  const holds = metalHoldsOf(block.molblock);
+  const got = await chem.request("conformers", { molblock: block.molblock, isomers: made.isomers, ...tries, ...(holds ? { holds } : {}), options, onPage: true }, CONFORMERS_MS);
+  const checks = madeChecksOf(block.molblock, holds);
+  // (a structure of more than one part: its parts side by side - chem/partsApart)
+  return shownConformers(got.isomers.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

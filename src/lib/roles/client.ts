@@ -1,6 +1,6 @@
 /**
  * Asking the worker of a plugin that fills the chemistry roles (lib/plugins/
- * roles; RDKit's, for now: resources/plugins/rdkit/worker.py): one JSON
+ * roles): one JSON
  * object a line each way, answers matched to questions by id. The worker
  * answers a fixed set of requests - these, the roles' contract - and runs
  * nothing else. Molecules go to it, and come back, as MOL blocks.
@@ -11,6 +11,7 @@
 import type { OptionValues } from "../options";
 import type { SmilesRead } from "../chem/smilesWhy";
 import type { Configuration, IsomersMade, StereoElement } from "../chem/stereoOpen";
+import type { MetalHolds } from "../chem/metalHolds";
 import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
@@ -66,8 +67,9 @@ export type ChemRequests = {
    * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of each
    * stereoisomer `isomers` names - its configuration of what the drawing
    * leaves open, which Meno chose (Workspace/chem/openStereo) - or, none
-   * named, of the structure as drawn. On the page, of two enantiomers one is
-   * made as the other's mirror image.
+   * named, of the structure as drawn; a molecule with metals held as `holds`
+   * says (lib/chem/metalHolds). On the page, of two enantiomers one is made
+   * as the other's mirror image.
    */
   conformers: {
     /**
@@ -76,7 +78,7 @@ export type ChemRequests = {
      * (of two enantiomers, one made as the other's mirror image -
      * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; options?: OptionValues; onPage?: true };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; holds?: MetalHolds; options?: OptionValues; onPage?: true };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**
@@ -88,7 +90,7 @@ export type ChemRequests = {
   drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; perceived?: boolean } };
   /**
    * A molecule in 3D whose file gives no bond orders given them from a
-   * SMILES of the same molecule (RDKit's AssignBondOrdersFromTemplate): its
+   * SMILES of the same molecule: its
    * atoms in their order, its bonds' orders and charges the SMILES's.
    */
   orders_from_smiles: { args: { molblock: string; smiles: string }; result: { molblock: string } };
@@ -97,7 +99,7 @@ export type ChemRequests = {
    * it (docs/PDF.md, *Stage 5*): see `PictureRead`.
    */
   read_picture: { args: { picture: string }; result: PictureRead };
-  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
+  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (placed by geometry): its atoms in their order, the hydrogens after. */
   add_hydrogens: { args: { molblock: string; hydrogens?: number[] }; result: { molblock: string } };
 };
 

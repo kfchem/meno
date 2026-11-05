@@ -164,6 +164,15 @@ describe("kekuleOrders", () => {
     expect([1, 2, 3, 5, 6, 7, 8, 9, 10, 11].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
   });
 
+  it("gives porphine written with no H on its nitrogens two N-H: 26 pi electrons over its ring system whole, not 24", () => {
+    // (how many N carry an H is counted over the ring system whole. By the rule's rings and pairs (lib/chem/aromaticity),
+    //  all four N double-bonded would pass too: each pyrrole with the inner ring makes 18 - two hydrogens fewer)
+    const s = readSmiles("c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3");
+    const { orders, hChosen } = kekulized(s.atoms, s.bonds);
+    expect(orders.filter((o) => o === 2)).toHaveLength(11);
+    expect(hChosen.map((i) => s.atoms[i].el)).toEqual(["N", "N"]);
+  });
+
   it("leaves benzotriazole one N-H, its benzene ring whole", () => {
     // (c1ccc2[nH]nnc2c1, no hydrogen stated: carbons 0-3, 7, 8; nitrogens 4-6)
     const m = mol("C C C C N N N C C", [[0, 1, A], [1, 2, A], [2, 3, A], [3, 4, A], [4, 5, A], [5, 6, A], [6, 7, A], [7, 3, A], [7, 8, A], [8, 0, A]]);

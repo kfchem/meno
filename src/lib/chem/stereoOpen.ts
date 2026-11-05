@@ -8,6 +8,7 @@
 import { smallestRings } from "../layout/rings";
 import { flatRingAtoms } from "./conformersSought";
 import { readMolfile } from "./ctfile";
+import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
 
 /** An atom as the rules read it: its element and charge, and its hydrogens where they are given (else by its valence). */
@@ -25,6 +26,42 @@ export const MOVING_CN = {
   cation: "an amidinium or guanidinium bond, shared with the N beside it",
 } as const;
 export type MovingWhy = keyof typeof MOVING_CN;
+
+/** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule). */
+function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
+  const sum = atoms.map(() => 0);
+  for (const b of bonds) {
+    const o = b.order === 4 ? 1.5 : b.order <= 3 ? b.order : 0;
+    sum[b.a] += o;
+    sum[b.b] += o;
+  }
+  return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0));
+}
+
+/**
+ * The centres the toolkit perceives that are no centres under Meno's rule
+ * on lone pairs (lib/chem/lonePairCentres): an atom of three neighbours and
+ * a lone pair - an amine's N, a plain N-alkyl aziridine's - whose lone pair
+ * keeps no configuration.
+ */
+function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): (at: number) => boolean {
+  const hs = implicitOf(atoms, bonds);
+  const around = atoms.map(() => 0);
+  const orders = atoms.map(() => 0);
+  for (const b of bonds) {
+    const o = b.order === 4 ? 1.5 : b.order <= 3 ? b.order : 0;
+    if (!o) continue;
+    around[b.a]++;
+    around[b.b]++;
+    orders[b.a] += o;
+    orders[b.b] += o;
+  }
+  const keeps = lonePairCentres(
+    atoms.map((a, i) => ({ ...a, hs: hs[i] })),
+    bonds.filter((b) => b.order === 4 || (b.order >= 1 && b.order <= 3)),
+  );
+  return (at) => lonePairOfThree(atoms[at].el, atoms[at].charge ?? 0, around[at], orders[at], hs[at]) && !keeps(at);
+}
 
 /** Each atom's hydrogens: those given, or those its valence leaves (lib/chem/molecule), and the hydrogen atoms bonded to it. */
 function hydrogensOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
@@ -188,7 +225,9 @@ export type IsomersMade =
 /**
  * What a structure leaves open, as Meno decides it: its stereocentres and
  * double bonds drawn without a configuration, or with one drawn as not
- * known, by index - but a C=N whose E/Z is none of its own (`movingCN`),
+ * known, by index - but an atom of three neighbours whose lone pair keeps
+ * no configuration (lib/chem/lonePairCentres: an amine's N), which is no
+ * centre, and a C=N whose E/Z is none of its own (`movingCN`),
  * which is never enumerated nor chosen (`notEnumerated`, and `said` in a
  * line); the open double bonds that are cumulated (`cumulenes`: an
  * allene's axis, whose stereoisomers are not given) and the runs they make
@@ -206,8 +245,9 @@ export function stereoLeft(elements: readonly StereoElement[], atoms: readonly S
   const notEnumerated = doubles.filter((i) => moving.has(i)).sort(byIndex);
   const left = doubles.filter((i) => !moving.has(i)).sort(byIndex);
   const cumulenes = openCumulenes(bonds, left);
+  const none = notCentres(atoms, bonds);
   return {
-    atoms: open.filter((e) => e.kind === "centre").map((e) => e.at).sort(byIndex),
+    atoms: open.filter((e) => e.kind === "centre" && !none(e.at)).map((e) => e.at).sort(byIndex),
     bonds: left,
     cumulenes,
     cumulated: cumulatedRuns(bonds, cumulenes),

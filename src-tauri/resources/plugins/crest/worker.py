@@ -45,8 +45,8 @@ nothing else:
 The solvation is as the run said it, never taken from the options: CREST
 echoes each option it was given as it starts ("--alpb water : implicit
 solvation"), and says no more of it - "ALPB(water)"; with none of the
-options that ask for a model, "none". Where that is not what was asked,
-the job is refused.
+options that ask for a model, "none". Whether that is what was asked is
+Meno's to say, as of any program's step (the manifest's `solvation`).
 
 A lone atom - an ion of a salt, say - has no conformers to search for and
 nothing to optimise. The manifest says CREST is given none (`noLoneAtom`),
@@ -278,13 +278,9 @@ def solvation_of(log):
     return None
 
 
-def solvated(out, options, log):
-    """An output with its solvation as the run said it - refused where that is not what was asked."""
-    solvent = options.get("solvent", "none")
+def solvated(out, log):
+    """An output with its solvation as the run said it, where it said one."""
     solvation = solvation_of(log)
-    as_asked = solvation == "none" if solvent == "none" else solvation is not None and f"({solvent})" in solvation
-    if solvation is not None and not as_asked:
-        raise Refused(f"CREST ran with solvation {solvation}, not as asked ({solvent})")
     return {**out, **({"solvation": solvation} if solvation is not None else {})}
 
 
@@ -444,7 +440,7 @@ def op_collect(m):
         outputs = optimised_of(entries, options, files, log)
     else:
         outputs = [output_of(e, options, files, log) for e in entries]
-    return {"outputs": [solvated(o, options, log) for o in outputs]}
+    return {"outputs": [solvated(o, log) for o in outputs]}
 
 
 OPS = {"prepare": op_prepare, "collect": op_collect}

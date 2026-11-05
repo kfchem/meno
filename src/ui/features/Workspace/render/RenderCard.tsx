@@ -7,7 +7,7 @@ import OptionsForm from "../../../options/OptionsForm";
 import { presetsFor, type PythonPlugin } from "../../../../lib/calc/catalog";
 import { useReaders } from "../../../../lib/calc/workers";
 import type { Motion, RenderAsk } from "./renderScene";
-import { askOf, bySection, filmLength, looksOffered, remembered, renderContext, renderOptions, withFixed, type Kind } from "./renderOptions";
+import { askOf, fixedChosen, bySection, filmLength, looksOffered, remembered, renderContext, renderOptions, withFixed, type Kind } from "./renderOptions";
 import { handOff, notOfferedSaid, presetOffer, presetOptionsKey, presetOptionsShown } from "./presets";
 import { PLAIN_STUDIO } from "../../../../lib/plugins/manifest";
 import { OPTION_SECTIONS, type OptionSection } from "../../../../lib/options";
@@ -69,8 +69,8 @@ export default function RenderCard({
   const theirValues = chosenTheirs ?? valuesOf(plugin.roleOptions.render ?? [], saved[roleOptionsRole("render")]);
   // (a film no shorter than its motion can be read in - for a change, its changes' - a length chosen before raised to it)
   const { length, values: lengthened } = filmLength(kind, picked, declared, molecules);
-  // (what the motion is always made with, shown so and said why, whatever was chosen: Meno's own choices and the renderer's)
-  const fixed = kind === "film" ? declared?.find((d) => d.id === lengthened.motion)?.fixed : undefined;
+  // (what the motion is always made with, and the background a studio is itself - shown so and said why, whatever was chosen)
+  const fixed = fixedChosen(kind, lengthened, declared, offer.studios);
   const mine = withFixed(renderOptions(kind, motions, surfaces, looks, declared, length, offer.studios), lengthened, fixed);
   const yours = withFixed(theirs, theirValues, fixed);
   const values = mine.values;
