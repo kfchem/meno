@@ -439,12 +439,42 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
   });
 
-  it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps", () => {
-    // (forty methanes beside the isopropanol: the search cannot finish)
+  it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps before it found them", () => {
+    // (forty methanes beside the isopropanol: the search cannot finish, and the methyls' swap is not among what it found)
     const methanes = Array(40).fill("C").join(".");
     const found = identity(fromSmiles(`${methanes}.C[C@H](C)O`));
     expect(found.complete).toBe(false);
     expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.CC(C)O`)).text);
+  });
+
+  it("is set aside where a search that ran out of steps still found its groups alike: what it finds alike is", () => {
+    // (forty methanes beside a CHF2Cl: the search cannot finish, but takes the two F onto each other before it stops)
+    const methanes = Array(40).fill("C").join(".");
+    expect(identity(fromSmiles(`${methanes}.F[C@H](F)Cl`)).text).toBe(identity(fromSmiles(`${methanes}.FC(F)Cl`)).text);
+  });
+
+  it("is ignored on an axis whose one end has two alike groups: a 2,6-dimethylphenyl's, against a 2-chlorophenyl", () => {
+    // (ring A 0-5, ring B 6-11, the axis 0-6; a methyl 12 on 1 and, where both, 14 on 5; a Cl 13 on 7)
+    const biaryl = (both: boolean, sense?: 1 | -1): LayoutInput => {
+      const atoms: LayoutAtom[] = [];
+      const bonds: LayoutBond[] = [];
+      for (const at of [0, 6]) {
+        for (let k = 0; k < 6; k++) atoms.push({ el: "C", hs: k < 2 || (both && at === 0 && k === 5) ? 0 : 1 });
+        for (let k = 0; k < 6; k++) bonds.push({ a: at + k, b: at + ((k + 1) % 6), order: k % 2 ? 1 : 2 });
+      }
+      atoms.push({ el: "C", hs: 3 }, { el: "Cl", hs: 0 });
+      bonds.push({ a: 0, b: 6, order: 1 }, { a: 1, b: 12, order: 1 }, { a: 7, b: 13, order: 1 });
+      if (both) {
+        atoms.push({ el: "C", hs: 3 });
+        bonds.push({ a: 5, b: 14, order: 1 });
+      }
+      return { atoms, bonds, ...(sense ? { axes: [{ atoms: [0, 6], refs: [1, 7], sense }] } : {}) };
+    };
+    expect(identityText(biaryl(true, 1))).toBe(identityText(biaryl(true)));
+    expect(identityText(biaryl(true, -1))).toBe(identityText(biaryl(true)));
+    // (one methyl: an axis of chirality, its two senses two structures)
+    expect(identityText(biaryl(false, 1))).not.toBe(identityText(biaryl(false, -1)));
+    expect(identityText(biaryl(false, 1))).not.toBe(identityText(biaryl(false)));
   });
 
   it("does not depend on the order of the atoms", () => {

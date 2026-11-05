@@ -268,8 +268,10 @@ type StereoUnit = { centre: number } | { bond: number } | { axis: number };
  * atoms where they are: 1,4-dimethylcyclohexane's ring arms at one centre
  * are alike until the other centre's configuration is counted, and its cis
  * and trans stay apart. Each is tried in turn, again after each one taken
- * out, until none is. Where a search for the orbits ran out of steps, the
- * configuration is kept, as drawn, and `complete` says so.
+ * out, until none is. A search for the orbits that ran out of steps still
+ * joins only atoms an automorphism found takes onto each other, so groups
+ * it finds alike are; where it did not find them alike, the configuration
+ * is kept, as drawn, and `complete` says so.
  */
 export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; complete: boolean } {
   const around: number[][] = input.atoms.map(() => []);
@@ -309,11 +311,11 @@ export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; compl
       // onto another atom alike - 1,3-dichloro-2,4-dimethylcyclobutane's two CHCl, one open, swapped by a half turn)
       const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : g.axes![u.axis].atoms);
       const found = orbitsAsDrawn({ ...left, atoms: left.atoms.map((a, i) => (own.has(i) ? { ...a, el: `${a.el}*` } : a)) });
-      if (!found.complete) complete = false;
-      else if (sides(g, u).some((side) => alike(found.orbit, side))) {
+      if (sides(g, u).some((side) => alike(found.orbit, side))) {
         next = left;
         break;
       }
+      if (!found.complete) complete = false;
     }
     if (!next) return { input: g, complete };
     g = next;
