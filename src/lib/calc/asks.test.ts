@@ -118,3 +118,27 @@ describe("a promise", () => {
     expect(calcShowing(calc, grids, null)).toBe(calc);
   });
 });
+
+describe("an orbital of a wavefunction its reader gives whole", () => {
+  it("is drawn by Meno: the wavefunction asked for once, the orbitals offered checked, then each orbital drawn", async () => {
+    const source = await rememberOutput("job.fchk", "a checkpoint's text", "some-checkpoint");
+    // (a reader Meno knows of: one of the plugins it carries, played here by the test)
+    const calc = { ...calcOf(source, "pyscf"), readers: ["pyscf 1.0"] };
+    const n = (2 * 0.8 / Math.PI) ** 0.75;
+    const expansion = {
+      nuclei: [0, 0, 0, 0, 0, 1.4],
+      centres: [0, 1],
+      powers: [[0, 0, 0], [0, 0, 0]],
+      exponents: [0.8, 0.8],
+      functions: [{ primitives: [0], coefficients: [n] }, { primitives: [1], coefficients: [n] }],
+      orbitals: [[1, 0], [0, 1]],
+    };
+    const r = reader((key) => (key === "expansion" ? { expansion } : null));
+    const first = (await askFor(calc, "pyscf", "expansion:0", async () => r, undefined, undefined, [0])) as { signed?: boolean; quantity?: string };
+    expect(first).toMatchObject({ signed: true, quantity: "orbital" });
+    await askFor(calc, "pyscf", "expansion:1", async () => r, undefined, undefined, [1]);
+    // (the whole wavefunction asked for once)
+    expect(r.asked).toEqual(["some-checkpoint expansion"]);
+  });
+});
+

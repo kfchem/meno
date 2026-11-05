@@ -13,6 +13,7 @@ import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shap
 import { swallowPress, togglesOn } from "./utils/press";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
+import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -20,7 +21,6 @@ import { FormulaText } from "../../abbreviations/FormulaText";
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
-type QuickPanel = "none" | "calculations" | "smiles" | "scheme" | "marks";
 const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "scheme", "marks"];
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
@@ -328,7 +328,7 @@ export default function QuickAdd({
                 c.id === "chain" || (c.id === "arrow" && onArrow)
                   ? undefined
                   : opens(c.id)
-                    ? (e) => togglesOn(e.detail) && setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
+                    ? (e) => togglesOn(e.detail) && setOpen((o) => toggledPanel(o, c.id as QuickPanel))
                     : () => onChoose(c.id as QuickAddChoice)
               }
               className={`relative rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${opens(c.id) && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}

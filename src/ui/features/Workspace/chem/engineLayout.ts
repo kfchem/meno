@@ -17,7 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
-import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
+import { readStereo, sameConfiguration, straightEnds } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
 import { allylCurve } from "../../../../lib/chem/allylArc";
@@ -58,8 +58,10 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
  * The atoms, by their places in the drawing, with a wedge that could make
  * them a stereocentre but says nothing that can be read: wedge and hashes
  * drawn opposite each other, or an atom of three bonds at which a wedge
- * states no configuration - an N, a B, a selenoxide's Se (a sulfoxide's S
- * is read, lib/layout/drawn).
+ * states no configuration - an amine's N, a plain N-alkyl aziridine's, a B:
+ * none whose lone pair
+ * keeps one (lib/chem/lonePairCentres; a sulfoxide's S, a phosphine's P,
+ * an aziridine's N are read, lib/layout/drawn).
  */
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
   const bondsOf = bondsAt(drawing.bonds);
@@ -93,6 +95,9 @@ export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const { tetra, cisTrans, axes } = stereo;
+  // (a double bond drawn straight at an end, its configuration not given: that end kept straight - IUPAC 2006 ST-4.4 - so that
+  //  what is laid out leaves it unsaid too, rather than saying one or the other)
+  const straight = straightEnds(drawing.atoms, drawing.bonds);
   const bondsOf = bondsAt(drawing.bonds);
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
@@ -100,7 +105,7 @@ export function layoutJob(part: Model): LayoutJob {
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
-        "(drawn crossed, with two of its bonds in line or on top of each other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge states no configuration), so nothing was moved",
+        "(drawn crossed, with two of its bonds in line or on top of each other, or at an atom of three bonds that keeps no configuration of its own - an amine's N, a plain N-alkyl aziridine's, a B - where a wedge states none), so nothing was moved",
     );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own
@@ -140,6 +145,7 @@ export function layoutJob(part: Model): LayoutJob {
         hs: drawing.atoms[i].hs + (folded.get(at.get(i)!)?.length ?? 0),
         ...(t ? { tetra: t } : {}),
         ...(pi.has(i) ? { pi: pi.get(i)! } : {}),
+        ...(straight.has(i) ? { linear: true } : {}),
       };
     }),
     bonds: drawing.bonds.flatMap((b, k) => {

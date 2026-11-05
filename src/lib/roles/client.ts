@@ -1,6 +1,6 @@
 /**
  * Asking the worker of a plugin that fills the chemistry roles (lib/plugins/
- * roles; RDKit's, for now: resources/plugins/rdkit/worker.py): one JSON
+ * roles): one JSON
  * object a line each way, answers matched to questions by id. The worker
  * answers a fixed set of requests - these, the roles' contract - and runs
  * nothing else. Molecules go to it, and come back, as MOL blocks.
@@ -10,6 +10,8 @@
  */
 import type { OptionValues } from "../options";
 import type { SmilesRead } from "../chem/smilesWhy";
+import type { Configuration, IsomersMade, StereoElement } from "../chem/stereoOpen";
+import type { MetalHolds } from "../chem/metalHolds";
 import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
@@ -25,12 +27,35 @@ export type ChemRequests = {
   /** What the toolkit makes of each structure drawn, its parts as MOL blocks, as facts (`StructureFacts`) for Meno's *Check structures* to decide on. */
   structure_facts: { args: { structures: { molblocks: string[] }[] }; result: { structures: StructureFacts[] } };
   /**
-   * The stereocentres and double bonds left open, by index, and how many
-   * stereoisomers they make - but for those `like` gives a configuration.
+   * Every element of a structure that could be stereogenic, as the toolkit
+   * perceives it - its parts' atoms and bonds in their order, one after
+   * another - and how each is drawn (lib/chem/stereoOpen `StereoElement`):
+   * what is left open is Meno's to say. One it cannot read: `read` false;
+   * one it cannot make sense of: its `problem`, in its words.
    */
-  open_stereo: { args: { molblock: string; like?: Like }; result: OpenStereo };
-  /** Only which stereocentres and double bonds are left open, by index - none of `open_stereo`'s trying each stereoisomer in 3D. */
-  stereo_left_open: { args: { molblock: string }; result: { atoms: number[]; bonds: number[]; cumulated?: number[][] } };
+  stereo_elements: { args: { molblocks: string[] }; result: { read: boolean; problem?: string; elements?: StereoElement[] } };
+  /**
+   * A structure's stereoisomers as Meno asks for them (Workspace/chem/
+   * openStereo `stereoisomersOf`): `configured` made first, the rest of what
+   * is unassigned given each configuration - tried in 3D where `inThreeD` -
+   * the C=N bonds `notEnumerated` passed by; at most `most`, refused whole
+   * past it where `whole`; within `withinMs`. Each made: its configuration of
+   * the `open` elements, its SMILES, and with `drawings` a drawing of it.
+   */
+  stereoisomers: {
+    args: {
+      molblocks: string[];
+      open: { atoms: number[]; bonds: number[] };
+      configured?: Configuration;
+      notEnumerated: number[];
+      most: number;
+      whole?: boolean;
+      withinMs?: number;
+      inThreeD: boolean;
+      drawings?: boolean;
+    };
+    result: IsomersMade;
+  };
   /**
    * Which stereoisomer each molecule in 3D is, read from its own geometry:
    * its elements that could be stereogenic and a key that two molecules
@@ -39,10 +64,12 @@ export type ChemRequests = {
    */
   configurations: { args: { molblocks: string[] }; result: { molecules: Configured[] } };
   /**
-   * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of the first
-   * of its stereoisomers, or of each, where some of its stereo is left open
-   * - and `like` does not give it. Of two enantiomers, one is made as the
-   * other's mirror image.
+   * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of each
+   * stereoisomer `isomers` names - its configuration of what the drawing
+   * leaves open, which Meno chose (Workspace/chem/openStereo) - or, none
+   * named, of the structure as drawn; a molecule with metals held as `holds`
+   * says (lib/chem/metalHolds). On the page, of two enantiomers one is made
+   * as the other's mirror image.
    */
   conformers: {
     /**
@@ -51,8 +78,8 @@ export type ChemRequests = {
      * (of two enantiomers, one made as the other's mirror image -
      * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
      */
-    args: { molblock: string; isomers?: "one" | "all"; count?: number; like?: Like; options?: OptionValues; onPage?: true };
-    result: { isomers: Conformers[] };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; holds?: MetalHolds; options?: OptionValues; onPage?: true };
+    result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**
    * A molecule in 3D as a formula to draw: its heavy atoms in their order,
@@ -63,7 +90,7 @@ export type ChemRequests = {
   drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; perceived?: boolean } };
   /**
    * A molecule in 3D whose file gives no bond orders given them from a
-   * SMILES of the same molecule (RDKit's AssignBondOrdersFromTemplate): its
+   * SMILES of the same molecule: its
    * atoms in their order, its bonds' orders and charges the SMILES's.
    */
   orders_from_smiles: { args: { molblock: string; smiles: string }; result: { molblock: string } };
@@ -72,7 +99,7 @@ export type ChemRequests = {
    * it (docs/PDF.md, *Stage 5*): see `PictureRead`.
    */
   read_picture: { args: { picture: string }; result: PictureRead };
-  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
+  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (placed by geometry): its atoms in their order, the hydrogens after. */
   add_hydrogens: { args: { molblock: string; hydrogens?: number[] }; result: { molblock: string } };
 };
 
@@ -103,7 +130,6 @@ export type PictureRead = {
  * not counted); and whether none of its stereoisomers embeds with its
  * stereo held - made then as the embedding places it.
  */
-export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number; cumulenes?: number[]; cumulated?: number[][]; free?: boolean };
 
 /** One molecule's configuration, as the plugin answers it: its elements and key, or why it has none. */
 export type Configured = { elements: { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean }[]; key: string } | { error: string };

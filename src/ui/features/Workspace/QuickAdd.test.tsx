@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
 import { CALC_MOST, CALC_ROW, LIST_LEAST, LIST_MOST, calcHeight, listWidth, stepsMost } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
+import { toggledPanel } from "./quickAddPanel";
 import { registerKinds } from "../../../lib/io/kinds";
 import { MANIFESTS } from "../../../lib/plugins/known";
 import { resolve } from "./chem/resolve";
@@ -44,6 +45,34 @@ describe("Quick Add", () => {
     expect(html).toMatch(new RegExp(`<form class="[^"]*border-t[^"]*" style="width:${row}px"`));
     expect(html).toMatch(new RegExp(`aria-label="Scheme" class="[^"]*border-t[^"]*" style="width:${row}px"`));
     expect(html).toMatch(new RegExp(`aria-label="Marks on the page" class="[^"]*border-t[^"]*" style="width:${row}px"`));
+  });
+});
+
+describe("Quick Add's groups", () => {
+  const html = () =>
+    renderToString(<QuickAdd x={10} y={10} within={{ width: 800, height: 600 }} steps={[]} onChoose={none} onChain={none} onArrow={none} onShape={none} onSmiles={async () => {}} onStep={none} onClose={none} />);
+
+  it("open one row at a time: a group pressed opens its own in place of another's, and pressed again shuts it", () => {
+    expect(toggledPanel("none", "scheme")).toBe("scheme");
+    expect(toggledPanel("scheme", "marks")).toBe("marks");
+    expect(toggledPanel("marks", "marks")).toBe("none");
+    expect(toggledPanel("smiles", "scheme")).toBe("scheme");
+  });
+
+  it("say they open and are shut, mark only themselves as opening a row, and keep a shut row out of the keys' reach", () => {
+    const h = html();
+    // (each of the first row's buttons, by name: what it says of opening, and whether it carries the corner mark)
+    const buttons = [...h.matchAll(/<button ([^>]*)>(.*?)<\/button>/g)].map((m) => ({
+      name: /aria-label="([^"]+)"/.exec(m[1])?.[1],
+      expanded: /aria-expanded="(true|false)"/.exec(m[1])?.[1],
+      mark: m[2].includes('viewBox="0 0 6 4"'),
+    }));
+    const of = (name: string) => buttons.find((b) => b.name === name)!;
+    expect(of("Scheme")).toMatchObject({ expanded: "false", mark: true });
+    expect(of("Marks on the page")).toMatchObject({ expanded: "false", mark: true });
+    for (const name of ["Bond", "Chain", "Text", "Arrow"]) expect(of(name), name).toMatchObject({ expanded: undefined, mark: false });
+    // (a shut row is inert: hidden, it takes no focus)
+    for (const name of ["Scheme", "Marks on the page"]) expect(h, name).toMatch(new RegExp(`inert=""><div role="group" aria-label="${name}"`));
   });
 });
 

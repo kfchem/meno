@@ -59,7 +59,7 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
       ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
       ...Object.fromEntries(Object.entries(geometry.properties).flatMap(([k, p]) => (k === "restraints" ? [] : [[k, { ...p }]]))),
       ...(bonding.properties.restraints ? { restraints: { ...bonding.properties.restraints } } : {}),
-      group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", status: "computed" },
+      group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", label: true, status: "computed" },
     },
     status: "done",
   };
@@ -67,7 +67,10 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
   if (geometry.properties.restraints)
     said.push(`The geometry's restraints were dropped: restraints hold a bonding's bonds, and the entry takes ${bonding.properties.restraints ? "the bonding's" : "the bonding's, which has none"}.`);
   // (values of the structure either was, now another: kept, marked, and said - never shown as current)
-  const { entry, stale } = restructured(made, "Re-bond");
+  const { entry, stale, unknown } = restructured(made, "Re-bond");
   if (stale.length) said.push(`${stale.join(", ")} ${stale.length === 1 ? "was" : "were"} worked out on another structure, so ${stale.length === 1 ? "it is" : "they are"} marked not applicable.`);
+  // (and those not known to be of the entry's structure now: not shown as standing)
+  if (unknown.length)
+    said.push(`${unknown.join(", ")} ${unknown.length === 1 ? "is" : "are"} not known to be of the structure after Re-bond, so ${unknown.length === 1 ? "it is" : "they are"} marked not applicable.`);
   return { entry, said };
 }

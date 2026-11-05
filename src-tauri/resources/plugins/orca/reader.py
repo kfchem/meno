@@ -1,8 +1,7 @@
 """ORCA's output, read into Meno's form (docs/PLUGINS.md, *The contract*; src/lib/calc/output.ts).
 
 The ORCA plugin's own reading of what ORCA wrote: a job's output and a file opened by hand alike, one reading for
-both. Written from the ORCA 6.1 manual (faccts.de) and from ORCA's own outputs - ORCA 6.1.1's, run on small
-molecules for its tests (scripts/calc/test_reader_orca.py) - and from nothing else. Python alone, no package:
+both. Written from the ORCA 6.1 manual (faccts.de) and the program's printed forms, and from nothing else. Python alone, no package:
 each function is given the text and gives back plain data; nothing here reads a file of its own choosing.
 
 What it gives, in Meno's units: the atoms and each geometry ORCA wrote, in angstroms; each geometry's energy as
@@ -25,11 +24,10 @@ CAL_PER_HARTREE = 627509.474
 
 # --- the run as a whole ---------------------------------------------------------------------------------------------
 
-#: The version in ORCA's banner: "Program Version 6.1.1  -  RELEASE   -".
+#: The version in ORCA's banner: "Program Version 9.8.7  -  RELEASE   -".
 VERSION = re.compile(r"^\s*Program Version (\S+)", re.M)
 #: What ORCA prints where it came to its end, and where it stopped on an error ("ORCA finished by error termination in
-#: LEANSCF"), and its error lines ("[file ...]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged...",
-#: "[file ...]: Error : multiplicity (1) is odd and number of electrons (9) is odd -> impossible").
+#: <its part>"), and its error lines ("[file ...]: Error (...): <its message>").
 NORMAL = "****ORCA TERMINATED NORMALLY****"
 ERROR_TERMINATION = re.compile(r"error termination", re.I)
 ERROR_LINE = re.compile(r"^(?:\[file [^\]]*\]:\s*)?(Error\b.*\S)\s*$", re.M)
@@ -51,11 +49,10 @@ def run_of(text, followed=False):
 
 
 def why_of(text):
-    """Why ORCA stopped, in its words: its error's own message ("Error (ORCA_LEANSCF): unfortunately, the SCF has not
-    converged. ..." - the words after it), else the line it says it ended by an error on, else the first that begins
+    """Why ORCA stopped, in its words: its error's own message (the words after "Error (...):"), else the line it says it ended by an error on, else the first that begins
     "ERROR" or "FATAL ERROR", else the first of its other error words ("INPUT ERROR", "... aborting the run"); else - where
     it stopped with no word of an error, as a run brought down does - the last thing it said. Not every line with
-    "error" in it: its SCF settings print one ("Startup error   DIISStart   ....  0.200000")."""
+    "error" in it: its SCF settings table has a "Startup error" row."""
     found = ERROR_LINE.search(text or "")
     if found:
         said = re.sub(r"^Error\s*(?:\([^)]*\))?\s*:\s*", "", found.group(1)).strip()
@@ -403,7 +400,7 @@ def input_geometry(text):
 
 #: ORCA's own statement of a geometry's whole electronic energy, after it: the SCF's and every term the method adds -
 #: dispersion, gCP, a composite method's others, a correlated method's correlation ("FINAL SINGLE POINT ENERGY
-#: -93.399651434575").
+#: -93.312345678901").
 FINAL = re.compile(r"^FINAL SINGLE POINT ENERGY\s+(\S+)\s*$", re.M)
 #: What the energies are, said with them.
 FINAL_SAID = "ORCA final single-point energy (includes dispersion and gCP where the method has them)"
@@ -558,9 +555,9 @@ def xtb_said(text):
 # --- thermochemistry ------------------------------------------------------------------------------------------------
 
 #: The last thermochemistry ORCA printed, each value as it prints it ("Temperature         ...   298.15 K", "Zero point
-#: energy                ...      0.02160239 Eh", "Total Enthalpy                    ...    -76.36089187 Eh", "Final
-#: entropy term                ...      0.02142887 Eh", "Final Gibbs free energy         ...    -76.38232074 Eh",
-#: "G-E(el)                           ...      0.00395222 Eh"), the symmetry it took ("Point Group:  C2v, Symmetry
+#: energy                ...      0.02134567 Eh", "Total Enthalpy                    ...    -76.31234567 Eh", "Final
+#: entropy term                ...      0.02187654 Eh", "Final Gibbs free energy         ...    -76.33456789 Eh",
+#: "G-E(el)                           ...      0.00412345 Eh"), the symmetry it took ("Point Group:  C2v, Symmetry
 #: Number:   2"), and how it treated the low vibrations ("Quasi RRHO          ...    False"; "Vibrational entropy computed
 #: according to the QRRHO of S. Grimme ... using a reference frequency of 100.0 cm-1").
 THERMO_START = re.compile(r"^THERMOCHEMISTRY AT", re.M)
@@ -629,10 +626,10 @@ def thermo_of(text):
 
 # --- vibrations -----------------------------------------------------------------------------------------------------
 
-#: The last list of frequencies ("     6:    1720.29 cm**-1", "     6:    -819.83 cm**-1  ***imaginary mode***" - and, where
-#: the run used its symmetry, each mode's irreducible representation, numbered: "     6:      43.87 cm**-1    2-Au"), and the
-#: normal modes after it; the IR spectrum ("  6:   1720.29   0.017645   89.17  0.003201  (...)", its Int in km/mol) and
-#: the Raman spectrum ("   6:      1610.82      6.135129      0.525512", its Activity).
+#: The last list of frequencies ("     6:    1712.34 cm**-1", "     6:    -812.34 cm**-1  ***imaginary mode***" - and, where
+#: the run used its symmetry, each mode's irreducible representation, numbered: "     6:      41.23 cm**-1    2-Au"), and the
+#: normal modes after it; the IR spectrum ("  6:   1712.34   0.012345   62.34  0.002345  (...)", its Int in km/mol) and
+#: the Raman spectrum ("   6:      1612.34      5.123456      0.412345", its Activity).
 FREQ_START = "VIBRATIONAL FREQUENCIES"
 FREQ_ROW = re.compile(r"^\s*(\d+):\s+(-?\d+\.\d+)\s+cm\*\*-1(\s+\*\*\*imaginary mode\*\*\*)?(?:\s+\d+-(\S+))?\s*$")
 IR_ROW = re.compile(r"^\s*(\d+):\s+(-?\d+\.\d+)\s+(\S+)\s+(\S+)\s")
@@ -756,8 +753,8 @@ def vibrations_of(text, n, ghosts):
 # --- the dipole, partial charges, orbitals --------------------------------------------------------------------------
 
 #: The dipole moment block: the method and state it is of, its total in atomic units ("Total Dipole Moment    :
-#: -0.000000000      -0.000000000      -0.841064215"), and its magnitude in both ("Magnitude (a.u.)       :      0.841064215",
-#: "Magnitude (Debye)      :      2.137815339"); and the point it was taken about, said before it ("Position of electric
+#: -0.000000000      -0.000000000      -0.812345678"), and its magnitude in both ("Magnitude (a.u.)       :      0.812345678",
+#: "Magnitude (Debye)      :      2.064791234"); and the point it was taken about, said before it ("Position of electric
 #: origin ...  0.000000 -0.000000 -0.000000", or "... (  0.0000,  0.0000,  0.1086)"), in bohr.
 DIPOLE_BLOCK = re.compile(r"^DIPOLE MOMENT\s*\n-+\s*\n(.*?)^Magnitude \(Debye\)[^\n]*", re.M | re.S)
 DIPOLE_TOTAL = re.compile(r"^Total Dipole Moment\s*:\s*(\S+)\s+(\S+)\s+(\S+)\s*$", re.M)
@@ -768,7 +765,7 @@ STATE = re.compile(r"^State\s*:\s*(\d+)", re.M)
 METHOD_SCF = re.compile(r"^Method\s*:\s*SCF\b", re.M)
 #: The relaxed density's population analysis of an excited state: "RELAXED CIS/TDA DENSITY POPULATION ANALYSIS" over "IROOT 1".
 ROOT_POPULATION = re.compile(r"DENSITY POPULATION ANALYSIS\s*\n\s*IROOT\s+(\d+)")
-#: The excited states a TD-DFT or CIS job worked out ("STATE  1:  E=   0.148157 au ...").
+#: The excited states a TD-DFT or CIS job worked out ("STATE  1:  E=   0.151234 au ...").
 EXCITED = re.compile(r"^STATE\s+\d+:\s+E=", re.M)
 
 
@@ -823,9 +820,9 @@ def dipole_of(text):
 
 
 #: Each scheme's partial charges as ORCA prints them, the last of each: "MULLIKEN ATOMIC CHARGES" (and spin populations,
-#: "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS", a column each), "LOEWDIN ...", rows "   0 O :   -0.824032"; the
-#: Hirshfeld and MBIS analyses' tables ("  ATOM     CHARGE      SPIN", rows "   0 O   -0.318868    0.000000"); CHELPG's
-#: ("CHELPG Charges", rows "  0   O   :      -0.720605").
+#: "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS", a column each), "LOEWDIN ...", rows "   0 O :   -0.812345"; the
+#: Hirshfeld and MBIS analyses' tables ("  ATOM     CHARGE      SPIN", rows "   0 O   -0.323456    0.000000"); CHELPG's
+#: ("CHELPG Charges", rows "  0   O   :      -0.734567").
 SCHEMES = [
     ("mulliken", "Mulliken", re.compile(r"^MULLIKEN ATOMIC CHARGES(?: AND SPIN POPULATIONS)?\s*$", re.M), "colon"),
     ("lowdin", "Löwdin", re.compile(r"^LOEWDIN ATOMIC CHARGES(?: AND SPIN POPULATIONS)?\s*$", re.M), "colon"),
@@ -887,8 +884,8 @@ def charges_of(text, n, ghosts):
 
 
 #: The orbital energies: under "ORBITAL ENERGIES", each orbital's number, occupation and energy in hartrees and in eV
-#: ("   4   2.0000      -0.391615       -10.6564") - and, where the run used its symmetry, its irreducible representation,
-#: numbered ("   0   2.0000     -10.017320      -272.5851    1-Bu"); an open shell's under "SPIN UP ORBITALS" and "SPIN DOWN
+#: ("   4   2.0000      -0.412345       -11.2205") - and, where the run used its symmetry, its irreducible representation,
+#: numbered ("   0   2.0000     -10.123456      -275.4730    1-Bu"); an open shell's under "SPIN UP ORBITALS" and "SPIN DOWN
 #: ORBITALS".
 ORBITAL_ROW = re.compile(r"^\s*(\d+)\s+(\d+\.\d+)\s+(\S+)\s+(\S+)(?:\s+\d+-(\S+))?\s*$")
 
@@ -1131,7 +1128,7 @@ def finite(value):
 # --- a path's own files: a band's images and the point it refined, a reaction path's points ------------------------
 
 #: The files ORCA writes a path's points to, after its input's base name (the job's "input.inp"): a reaction path's, end
-#: to end; a band's images, and the point it refined (ORCA 6.1.1).
+#: to end; a band's images, and the point it refined.
 BASE = "input"
 IRC_FULL = f"{BASE}_IRC_Full_trj.xyz"
 MEP = f"{BASE}_MEP_trj.xyz"
@@ -1191,7 +1188,7 @@ def irc_output(atoms, files, log, method=None, basis=None):
 
 
 def xyz_frames(text, n):
-    """An XYZ file's frames, each its places and the energy its comment line gives ("... E -4.426151532280"), as ORCA
+    """An XYZ file's frames, each its places and the energy its comment line gives ("... E -4.412345678901"), as ORCA
     writes a path's images and the point it refines; none where it does not read as frames of `n` atoms."""
     lines = text.splitlines()
     frames = []
@@ -1250,8 +1247,8 @@ def frequencies_of(log):
     return found
 
 
-#: What ORCA says where an image's SCF did not converge ("Error (ORCA_LEANSCF): unfortunately, the SCF has not converged.
-#: ..."), after which it carries on with the band.
+#: The marker words of an image's SCF that did not converge ("... SCF has not converged ..."), after which ORCA carries
+#: on with the band.
 IMAGE_SCF_FAILED = re.compile(r"^.*\bSCF has not converged\b.*$", re.M)
 
 

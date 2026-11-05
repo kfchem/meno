@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "change-ring" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "change-ring" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Ring: A's atoms gather into a ring and land as B. A's bonds let go as the atoms lift, in a wave round the molecule; the
 atoms rise into one ring about it, which turns, slows, and lets them fall into B's places - each keeping its own colour and

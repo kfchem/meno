@@ -18,6 +18,7 @@ pattern, with made-up numbers.
     read(name, text, followed=False) -> dict    one job
     jobs(text) -> [str]                         a file's jobs (Link1), each a text of its own
     read_jobs(name, text) -> dict               a file: one job, or each of several; or a formatted checkpoint
+    fchk_expansion(text) -> dict                a formatted checkpoint's wavefunction, whole
     run_of(text) -> (ended, why, scf)           how a run went, as Gaussian says it
 """
 
@@ -41,7 +42,7 @@ SYMBOLS = (
 
 
 def number(token):
-    """A number as Gaussian prints it - "-0.75002282127454D+02" with a Fortran D, "-382.308266602" - or None where it
+    """A number as Gaussian prints it - "-0.76400000000000D+02" with a Fortran D, "-76.400000000" - or None where it
     is not one: a field too narrow for its value, which Fortran fills with asterisks ("**********"), is not known."""
     try:
         v = float(token.replace("D", "E").replace("d", "e"))
@@ -50,7 +51,7 @@ def number(token):
     return v if math.isfinite(v) else None
 
 
-# a number in a line, where several may stand with no space between them ("-10.02022-10.02017"), or a field of
+# a number in a line, where several may stand with no space between them ("-10.10000-10.05000"), or a field of
 # asterisks in its place
 NUMBERS = re.compile(r"[-+]?\d+\.\d*(?:[DdEe][-+]?\d+)?|\*{2,}")
 
@@ -91,7 +92,7 @@ def jobs(text):
     return ["\n".join(lines[: starts[1]])] + ["\n".join([lines[0]] + lines[a:b]) for a, b in zip(starts[1:], ends)]
 
 
-# " Normal termination of Gaussian 16 at Fri Jul  4 15:55:16 2025."; " Error termination via Lnk1e in /g16/l9999.exe ..."
+# " Normal termination of Gaussian 16 at Sun Nov  1 10:00:00 2026."; " Error termination via Lnk1e in /g16/l9999.exe ..."
 NORMAL = "Normal termination of Gaussian"
 ERROR = "Error termination"
 # an SCF that did not converge, before its "SCF Done": " >>>>>>>>>> Convergence criterion not met."
@@ -100,7 +101,7 @@ SCF_DONE = re.compile(r"^ SCF Done:\s+E\((\S+)\)\s+=\s+(\S+)")
 
 
 # an optimisation that stopped short of its point (Opt), and why, on the line after:
-# " Optimization stopped.", "    -- Number of steps exceeded,  NStep=   2"; its job then ends in error in link 9999,
+# " Optimization stopped.", "    -- <why, in its words>"; its job then ends in error in link 9999,
 # which prints a quotation before it says so
 OPT_STOPPED = "Optimization stopped."
 
@@ -209,7 +210,7 @@ def options_of(word):
 # --- what the calculation was --------------------------------------------------------
 
 
-# " Gaussian 16:  ES64L-G16RevA.03  25-Dec-2016"
+# " Gaussian 16:  ES64L-G16RevZ.01   1-Jan-2020" (a made-up revision)
 VERSION = re.compile(r"^ Gaussian (\d+):\s+\S*?Rev([A-Z]\.\d+)")
 # " Charge =  0 Multiplicity = 1", " Charge =  0 Multiplicity = 1 in supermolecule" (a counterpoise job's whole)
 CHARGE = re.compile(r"^ Charge =\s*(-?\d+) Multiplicity =\s*(\d+)(?: in supermolecule)?\s*$")
@@ -247,7 +248,7 @@ def level_of(route_list, lines):
     return method or None, standard or basis or None
 
 
-# the solvent Gaussian says it took, in its block on the continuum model: " Solvent              : Water, Eps=  78.355300 Eps(inf)=   1.777849"
+# the solvent Gaussian says it took, in its block on the continuum model: " Solvent              : Water, Eps=  78.400000 Eps(inf)=   1.800000"
 PCM_SOLVENT = re.compile(r"^ Solvent\s+:\s+([^,]+),\s+Eps=")
 # the models SCRF names among its options (gaussian.com, SCRF), each as it is written
 SCRF_MODELS = {"pcm": "IEFPCM", "iefpcm": "IEFPCM", "cpcm": "CPCM", "smd": "SMD", "ipcm": "IPCM", "scipcm": "SCIPCM", "dipole": "Dipole"}
@@ -291,7 +292,7 @@ def orientation_blocks(lines, title):
          Center     Atomic      Atomic             Coordinates (Angstroms)
          Number     Number       Type             X           Y           Z
          ---------------------------------------------------------------------
-              1          6           0        0.269445    1.410118    0.000000
+              1          6           0        0.250000    1.400000    0.000000
          ---------------------------------------------------------------------
     """
     out = []
@@ -406,8 +407,8 @@ def without(result, gone):
 
 
 # a correlated energy after an SCF's, each method's own line (gaussian.com, MP2, MP4, CCSD, QCISD):
-# " E2 =    -0.3795333610D-01 EUMP2 =    -0.75002282127454D+02", " UMP4(SDTQ)=   -0.76112D+02",
-# " CCSD(T)= -0.76241D+02", " QCISD(T)= -0.76241D+02"
+# " E2 =    -0.4000000000D-01 EUMP2 =    -0.76440000000000D+02", " UMP4(SDTQ)=   -0.76450D+02",
+# " CCSD(T)= -0.76300D+02", " QCISD(T)= -0.76300D+02"
 MP_ENERGY = re.compile(r"(?:EUMP2|EUMP3|UMP4\(DQ\)|UMP4\(SDQ\)|UMP4\(SDTQ\)|MP5)\s*=\s*(\S+)")
 CC_ENERGY = re.compile(r"^\s*(?:CCSD\(T\)|QCISD\(T\)|QCISD|CCSD)\s*=\s*(\S+)")
 
@@ -445,7 +446,7 @@ def frame_energies(lines, frames, ends):
 
 # where an optimisation found its point (gaussian.com, Opt): " Optimization completed.", "    -- Stationary point found."
 COMPLETED = " Optimization completed."
-# where it stopped without one: " Optimization stopped.", "    -- Number of steps exceeded,  NStep=   2"
+# where it stopped without one: " Optimization stopped.", "    -- <why, in its words>"
 STOPPED = " Optimization stopped."
 # a relaxed scan's summary (gaussian.com, Scan; Opt=ModRedundant): " Summary of Optimized Potential Surface Scan"
 RELAXED_SCAN = "Summary of Optimized Potential Surface Scan"
@@ -559,7 +560,7 @@ def last_block(lines, start, stop=None):
 
 
 def atom_rows(block, n, columns=1):
-    """Each atom's values in a block that lists them - "     1  C   -0.004504" - as many as its atoms, else None: the
+    """Each atom's values in a block that lists them - "     1  C   -0.004000" - as many as its atoms, else None: the
     first `columns` numbers after the element."""
     rows = []
     for line in block[2:]:
@@ -630,7 +631,7 @@ def charges(lines, n, route_list):
         if scheme:
             add("charges", scheme, [r[0] for r in rows])
     # " Summary of Natural Population Analysis:" over two lines of headings and a rule, rows
-    # "      O    1   -0.91828      1.99986     6.90920    0.00922     8.91828"
+    # "      O    1   -0.90000      2.00000     6.88000    0.02000     8.90000"
     k = max((i for i, line in enumerate(lines) if "Summary of Natural Population Analysis:" in line), default=None)
     rule = next((j for j in range(k + 1, min(k + 8, len(lines))) if lines[j].strip().startswith("---")), None) if k is not None else None
     if rule is not None:
@@ -666,7 +667,7 @@ def dipole(lines):
     }]
 
 
-# " Alpha  occ. eigenvalues --  -10.02022 -10.02017", "  Beta virt. eigenvalues --    0.03742"
+# " Alpha  occ. eigenvalues --  -10.10000 -10.05000", "  Beta virt. eigenvalues --    0.04000"
 EIGENVALUES = re.compile(r"^\s+(Alpha|Beta)\s+(occ\.|virt\.) eigenvalues --(.*)$")
 
 
@@ -733,8 +734,8 @@ def orbitals(lines):
 
 
 # a vibration's values as Gaussian lists them, three to a block (gaussian.com, Freq; "Vibrational Analysis in
-# Gaussian"): over "                     AU                     BG", " Frequencies --     53.1981   84.7415",
-# " Red. masses --      3.2266", " Frc consts  --      0.0054", " IR Inten    --      0.0342", " Raman Activ --",
+# Gaussian"): over "                     AU                     BG", " Frequencies --     50.0000   80.0000",
+# " Red. masses --      3.2000", " Frc consts  --      0.0050", " IR Inten    --      0.0300", " Raman Activ --",
 # then "  Atom  AN      X      Y      Z        X      Y      Z" and a row to each atom
 HARMONIC = " Harmonic frequencies (cm**-1)"
 FREQ_ROWS = {"Frequencies": "freq", "Red. masses": "mass", "Frc consts": "force", "IR Inten": "ir", "Raman Activ": "raman"}
@@ -885,16 +886,16 @@ def nimag_of(text):
 # " Temperature   298.150 Kelvin.  Pressure   1.00000 Atm."
 TEMPERATURE = re.compile(r"^ Temperature\s+(\S+) Kelvin\.\s+Pressure\s+(\S+) Atm\.")
 THERMO_LINES = {
-    # " Zero-point correction=                           0.177132 (Hartree/Particle)"
+    # " Zero-point correction=                           0.020000 (Hartree/Particle)"
     "thermo.zpve": re.compile(r"^ Zero-point correction=\s+(\S+)"),
-    # " Thermal correction to Gibbs Free Energy=         0.143352"
+    # " Thermal correction to Gibbs Free Energy=         0.010000"
     "thermo.g-correction": re.compile(r"^ Thermal correction to Gibbs Free Energy=\s+(\S+)\s*$"),
-    # " Sum of electronic and thermal Enthalpies=            -382.121307"
+    # " Sum of electronic and thermal Enthalpies=             -76.380000"
     "thermo.enthalpy": re.compile(r"^ Sum of electronic and thermal Enthalpies=\s+(\S+)"),
-    # " Sum of electronic and thermal Free Energies=         -382.164915"
+    # " Sum of electronic and thermal Free Energies=          -76.400000"
     "thermo.free-energy": re.compile(r"^ Sum of electronic and thermal Free Energies=\s+(\S+)"),
 }
-# the table of E (Thermal), CV and S, its row of totals: " Total                  116.727             33.556             91.781"
+# the table of E (Thermal), CV and S, its row of totals: " Total                   13.000              6.000             45.000"
 THERMO_TOTAL = re.compile(r"^ Total\s+(\S+)\s+(\S+)\s+(\S+)\s*$")
 # " Full point group                 C2H     NOp   4"; " Rotational symmetry number  2."
 POINT_GROUP = re.compile(r"^ Full point group\s+(\S+)")
@@ -974,7 +975,7 @@ def rms_gradients(lines, frames, ends):
 # --- excited states -----------------------------------------------------------------------
 
 
-# " Excited State   1:      Singlet-A1     8.1234 eV  152.63 nm  f=0.0123  <S**2>=0.000" (gaussian.com, TD)
+# " Excited State   1:      Singlet-A1     7.0000 eV  177.12 nm  f=0.0100  <S**2>=0.000" (gaussian.com, TD)
 EXCITED = re.compile(r"^ Excited State\s+\d+:")
 # the density Gaussian's population analysis - its charges, its dipole - is of: " Population analysis using the SCF density."
 DENSITY = re.compile(r"Population analysis using the (\S+) density", re.I)
@@ -1206,16 +1207,177 @@ def fchk_modes(items, n):
 def fchk_orbitals(items):
     """A formatted checkpoint's orbitals in Meno's general form (`orbitals`): its "Alpha Orbital Energies" - of both
     spins where it holds no beta ones - and for an unrestricted calculation its beta ones, each spin's first as many
-    occupied as its electrons ("Number of alpha electrons", "Number of beta electrons"); none where it holds none."""
+    occupied as its electrons ("Number of alpha electrons", "Number of beta electrons"); none where it holds none.
+    Each promises its surface (`expansion:<its place>`) where its wavefunction can be given whole (`fchk_expansion`)."""
     alpha, beta = items.get("Alpha Orbital Energies"), items.get("Beta Orbital Energies")
     na, nb = items.get("Number of alpha electrons"), items.get("Number of beta electrons")
     if not isinstance(alpha, list) or not alpha or not isinstance(na, int) or not isinstance(nb, int):
         return None
     if not isinstance(beta, list) or not beta:
-        return [{"spin": "both", "energy": e, "occupation": float((i < na) + (i < nb))} for i, e in enumerate(alpha)]
-    return [{"spin": "alpha", "energy": e, "occupation": float(i < na)} for i, e in enumerate(alpha)] + [
-        {"spin": "beta", "energy": e, "occupation": float(i < nb)} for i, e in enumerate(beta)
-    ]
+        out = [{"spin": "both", "energy": e, "occupation": float((i < na) + (i < nb))} for i, e in enumerate(alpha)]
+    else:
+        out = [{"spin": "alpha", "energy": e, "occupation": float(i < na)} for i, e in enumerate(alpha)] + [
+            {"spin": "beta", "energy": e, "occupation": float(i < nb)} for i, e in enumerate(beta)
+        ]
+    try:
+        fchk_basis(items)
+        drawn = len(orbital_coefficients(items)) == len(out)
+    except ValueError:
+        drawn = False
+    if drawn:
+        for k, o in enumerate(out):
+            o["surface"] = {"ask": f"expansion:{k}"}
+    return out
+
+
+# --- a formatted checkpoint's wavefunction ------------------------------------------------------
+#
+# Its basis and orbitals given whole, in Meno's general form of a wavefunction (src/lib/calc/expansion.ts): the nuclei
+# (bohr); the primitives - each one's centre, powers of x, y and z, and exponent, unnormalised, x^l y^m z^n e^(-a r^2);
+# each basis function's coefficients of them; each orbital's coefficients of the functions. Meno checks the orbitals
+# orthonormal over the primitives before it draws any, which catches most conventions taken wrong here in a molecule,
+# though not all (a sign turned on every function of one l and m of a lone atom keeps them orthonormal).
+#
+# From Gaussian's reference ("Interfacing to Gaussian 16" > "Structure of the Formatted Checkpoint File"): "Shell
+# types" (0 s, 1 p, -1 sp, 2 6d, -2 5d, 3 10f, -3 7f), "Number of primitives per shell", "Shell to atom map",
+# "Primitive exponents", the "Contraction coefficients" of each normalized primitive shell and, of an sp shell's p,
+# "P(S=P) Contraction coefficients"; and each shell's functions in its order: Cartesian S, X, Y, Z, XX, YY, ZZ, XY, XZ,
+# YZ, XXX, YYY, ZZZ, XYY, XXY, XXZ, XZZ, YZZ, YYZ, XYZ; pure d 3ZZ-RR, XZ, YZ, XX-YY, XY, f ZZZ-ZRR, XZZ-XRR, YZZ-YRR,
+# XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY. And, facts of the file format the page leaves unsaid - the order and scale of a
+# shell's functions in the file:
+# - the orbitals' coefficients ("Alpha MO coefficients", "Beta MO coefficients") lie orbital by orbital, each its
+#   coefficient of every function;
+# - each Cartesian primitive is normalised on its own (xx and xy alike: each to one), and the function so contracted;
+# - a pure shell's functions are the real solid harmonics of its l, in the order m = 0, +1, -1, +2, -2, ... (the page's
+#   d and f polynomials are in it; a pure g shell's nine follow it), each primitive normalised;
+# - g shells are 4 (15 Cartesian functions) and -4 (9 pure); a Cartesian g shell's functions are in the order of
+#   CARTESIAN[4]: x's power rising slowest, then y's (ZZZZ first, XXXX last);
+# - an unrestricted calculation has its beta orbitals' coefficients apart, a restricted open shell's none.
+# Shells past g (h and up) are not given: their functions' order in the file is not known here.
+
+# each Cartesian shell's functions, as their powers of x, y and z, in Gaussian's order
+CARTESIAN = {
+    L: [(t.count("X"), t.count("Y"), t.count("Z")) for t in order.split()]
+    for L, order in {
+        0: "S",
+        1: "X Y Z",
+        2: "XX YY ZZ XY XZ YZ",
+        3: "XXX YYY ZZZ XYY XXY XXZ XZZ YZZ YYZ XYZ",
+        4: "ZZZZ YZZZ YYZZ YYYZ YYYY XZZZ XYZZ XYYZ XYYY XXZZ XXYZ XXYY XXXZ XXXY XXXX",
+    }.items()
+}
+# the highest l Gaussian's functions are given for
+L_MOST = 4
+
+
+def solid_harmonic(l, m):
+    """The real solid harmonic of l and m as x, y and z's powers and their coefficients, up to a factor (each primitive
+    is normalised after): sum over t, u and v of (-1)^(t + v - vm) (1/4)^t C(l, t) C(l - t, |m| + t) C(t, u) C(|m|, 2v)
+    x^(2t + |m| - 2(u + v)) y^(2(u + v)) z^(l - 2t - |m|), t from 0 to (l - |m|)/2, u from 0 to t, v from vm to
+    |m|/2 in steps of one - vm 0 where m >= 0 (the cosine-like ones), 1/2 where m < 0 (the sine-like ones)."""
+    am = abs(m)
+    vm2 = 0 if m >= 0 else 1
+    out = {}
+    for t in range((l - am) // 2 + 1):
+        for u in range(t + 1):
+            for v2 in range(vm2, am + 1, 2):
+                c = (-1) ** (t + (v2 - vm2) // 2) * 0.25**t * math.comb(l, t) * math.comb(l - t, am + t) * math.comb(t, u) * math.comb(am, v2)
+                p = (2 * t + am - 2 * u - v2, 2 * u + v2, l - 2 * t - am)
+                out[p] = out.get(p, 0) + c
+    return {p: c for p, c in out.items() if c}
+
+
+def moment(n, a):
+    """The integral over all x of x^n e^(-a x^2)."""
+    if n % 2:
+        return 0.0
+    return math.prod(range(n - 1, 0, -2)) / (2 * a) ** (n // 2) * math.sqrt(math.pi / a)
+
+
+def overlap(p, q, a):
+    """The integral over space of two polynomials ({powers: coefficient}) times e^(-a r^2)."""
+    return sum(cp * cq * moment(i[0] + j[0], a) * moment(i[1] + j[1], a) * moment(i[2] + j[2], a) for i, cp in p.items() for j, cq in q.items())
+
+
+def fchk_basis(items):
+    """A formatted checkpoint's primitives and functions: (centres, powers, exponents, functions), each function its
+    primitives' places and its coefficients of them. Raises ValueError, saying why, where the basis is not all there or
+    has a shell past g."""
+    types, counts, atoms = items.get("Shell types"), items.get("Number of primitives per shell"), items.get("Shell to atom map")
+    exponents, contraction = items.get("Primitive exponents"), items.get("Contraction coefficients")
+    sp = items.get("P(S=P) Contraction coefficients")
+    n_atoms = items.get("Number of atoms")
+    if not all(isinstance(x, list) and x for x in (types, counts, atoms, exponents, contraction)) or not isinstance(n_atoms, int):
+        raise ValueError("it holds no basis set")
+    if not len(types) == len(counts) == len(atoms) or sum(counts) != len(exponents) or len(contraction) != len(exponents):
+        raise ValueError("its basis set is not as many shells and primitives as it says")
+    if None in exponents or None in contraction or any(not 0 < a < n_atoms + 1 for a in atoms):
+        raise ValueError("its basis set is not all numbers")
+    centres, powers, primitive_exponents, functions = [], [], [], []
+    k = 0
+    for t, n, atom in zip(types, counts, atoms):
+        if abs(t) > L_MOST:
+            raise ValueError(f"its basis has shells of l = {abs(t)}, whose functions' order is not known here")
+        a = exponents[k : k + n]
+        # (an sp shell: its s, then its p, of the same exponents)
+        if t == -1:
+            if not isinstance(sp, list) or len(sp) != len(exponents) or None in sp[k : k + n]:
+                raise ValueError("its sp shells have no p coefficients")
+            parts = [(0, contraction[k : k + n]), (1, sp[k : k + n])]
+        else:
+            parts = [(abs(t), contraction[k : k + n])]
+        k += n
+        for L, d in parts:
+            # (the shell's primitives: each exponent, each Cartesian power of its l)
+            first = len(centres)
+            for e in a:
+                for pw in CARTESIAN[L]:
+                    centres.append(atom - 1)
+                    powers.append(list(pw))
+                    primitive_exponents.append(e)
+            place = {pw: i for i, pw in enumerate(CARTESIAN[L])}
+            polys = [solid_harmonic(L, m) for m in [0] + [s * j for j in range(1, L + 1) for s in (1, -1)]] if t < -1 else [{pw: 1.0} for pw in CARTESIAN[L]]
+            for poly in polys:
+                # each primitive normalised, times its contraction coefficient; then the function itself normalised
+                weights = [dj / math.sqrt(overlap(poly, poly, 2 * e)) for e, dj in zip(a, d)]
+                norm = sum(wi * wj * overlap(poly, poly, ei + ej) for wi, ei in zip(weights, a) for wj, ej in zip(weights, a))
+                if not norm > 0:
+                    raise ValueError("its basis set has a function of no size")
+                prims, coefs = [], []
+                for j, wj in enumerate(weights):
+                    for pw, c in poly.items():
+                        prims.append(first + j * len(CARTESIAN[L]) + place[pw])
+                        coefs.append(wj * c / math.sqrt(norm))
+                functions.append({"primitives": prims, "coefficients": coefs})
+    if len(functions) != items.get("Number of basis functions"):
+        raise ValueError("its basis set is not as many functions as it says")
+    return centres, powers, primitive_exponents, functions
+
+
+def orbital_coefficients(items):
+    """Each orbital's coefficients of the functions, in the order `fchk_orbitals` gives the orbitals: alpha (or both
+    spins'), then beta. Raises ValueError where they are not as many as the orbitals and functions."""
+    nbasis = items.get("Number of basis functions")
+    out = []
+    for spin in ("Alpha", "Beta"):
+        energies, c = items.get(f"{spin} Orbital Energies"), items.get(f"{spin} MO coefficients")
+        if spin == "Beta" and not energies:
+            break
+        if not isinstance(nbasis, int) or not isinstance(energies, list) or not isinstance(c, list) or len(c) != len(energies) * nbasis or None in c:
+            raise ValueError(f"its {spin.lower()} orbitals' coefficients are not as many as its orbitals and functions")
+        out += [c[i * nbasis : (i + 1) * nbasis] for i in range(len(energies))]
+    return out
+
+
+def fchk_expansion(text):
+    """A formatted checkpoint's wavefunction whole, in Meno's general form (`expansion`). Raises ValueError, saying why,
+    where it cannot be given."""
+    _, items = fchk_items(text)
+    xyz = items.get("Current cartesian coordinates")
+    if not isinstance(xyz, list) or not xyz or None in xyz or len(xyz) != 3 * (items.get("Number of atoms") or 0):
+        raise ValueError("it holds no molecule")
+    centres, powers, exponents, functions = fchk_basis(items)
+    return {"nuclei": xyz, "centres": centres, "powers": powers, "exponents": exponents, "functions": functions, "orbitals": orbital_coefficients(items)}
 
 
 # --- a job, read ----------------------------------------------------------------------------------

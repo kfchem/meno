@@ -76,6 +76,7 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
     y: a.y,
     el: a.el,
     hs: hs.get(a.id) ?? 0,
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.stereoCentre ? { centre: true } : {}),
   }));
