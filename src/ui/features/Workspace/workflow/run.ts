@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -745,7 +745,11 @@ function fillExit(
  * off the page (`WorkflowSet.drawnCollection`). With how many did not read
  * from a file (`unread`), where any.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, given: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, gave: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
+  // (each with its lasting id: the one the step carried on with it, else one of its own by its place at this exit - entries `structureIdAt`; checked
+  //  to be of the same structure as it is put on the page, `placedRecord`)
+  const idAt = (i: number) => (drawing: string) => structureIdAt(`step ${step.id} ${exit}`, i, drawing);
+  const given = gave.map((m, i) => (m.record?.id ? m : { ...m, record: { ...m.record, id: idAt(i)(drawingKey(m, m.atoms.map((a) => a.id))) } }));
   // (each about the middle of its box)
   const boxes = given.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
@@ -766,9 +770,9 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, giv
     // (each with its record, where the step gave it one: of that structure, as it is drawn now)
     return {
       doc: d,
-      members: made.map((m) => {
+      members: made.map((m, k) => {
         const ids = added.slice(from, (from += m.atoms.length));
-        return structureMember(ids, m.record && recordOn(m.record, d.model, ids));
+        return structureMember(ids, m.record && placedRecord(m.record, d.model, ids, idAt(k)));
       }),
       put: added,
     };

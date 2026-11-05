@@ -114,13 +114,14 @@ async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", r
   st().connect({ set }, step);
   await st().runStep(step);
   const d = doc.getState();
-  // (each record as compared: without what it is of - each one placed is of its own structure, which its key says)
+  // (each record as compared: without what it is of - each one placed is of its own structure, which its key says - nor its lasting id, each one
+  //  given one: workflow/lasting.test)
   const exit = (id: string) => {
     const b = resultOf(d, step, id);
     if (!b) return null;
     const held = setMembers(d, b);
-    for (const [i, r] of held.records.entries()) if (r) expect(r.of).toBe(drawnHash(d.model, held.structures[i]));
-    return { ...held, records: held.records.map((r) => r && (({ of: _of, ...rest }) => rest)(r)) };
+    for (const [i, r] of held.records.entries()) if (r) expect([r.of, typeof r.id]).toEqual([drawnHash(d.model, held.structures[i]), "string"]);
+    return { ...held, records: held.records.map((r) => r && (({ of: _of, id: _id, ...rest }) => (Object.keys(rest).length ? rest : undefined))(r)) };
   };
   return { step: d.steps!.find((s) => s.id === step)!, out: exit("out"), rest: exit("rest"), model: d.model };
 }

@@ -2847,16 +2847,18 @@ structure and its geometry, in 2D, so the record holds the rest
   template's - a template a step gave; one drawn on the page has no id, so
   its products name none. Each also carries the values of the one it was
   made from as that one's (`made_from.nll`), never as its own, so that a
-  Filter on a parent's value reaches what was made from it. *Conformers*
-  gives each conformer it makes of the structure the same entries, as its
-  lineage in 3D (*Lineage in 3D*, below).
+  Filter on a parent's value reaches what was made from it.
 - `properties`: by name, each a `Property` as lib/entry has it, with its
   value, its unit from Meno's units table or "none", its status, and what
   worked it out. Enumerate's `number` and `made.how` are kept here, and so
   is a generative model's value for each structure.
 - `status`: done, failed, or set aside, with why (`{ aside: "a radical" }`).
+- `id`: the structure's lasting id, which what is made of it names it by:
+  *Conformers* names it as what each conformer it makes of it was made of
+  (*Lineage in 3D*, below).
 
-All of it is optional. A structure the chemist drew has none.
+All of it is optional but `id`. A structure the chemist drew in a set has
+its `id` alone.
 
 - **Where it is kept.** A set's member keeps it beside the structure's
   atoms (`Member.structure` and `.record`). A step's entries carry it in
@@ -2866,6 +2868,26 @@ All of it is optional. A structure the chemist drew has none.
   held off the page (`WorkflowSet.drawnCollection`).
 - **It stays with the structure** as the set's members settle again,
   moved whole or turned.
+- **Its lasting id is given as the structure is first put in a set**,
+  worked out from where it is put and how it is drawn (`structureIdAt`):
+  - a structure a step gives, from the step's exit and its place there
+    and its drawing, as the step puts it in its exit's set - so that a
+    step run again on what it ran on before gives the same structures the
+    same ids, and nothing after it is taken to have changed. Kept from
+    then on, moved, saved and opened again, and given on by a step that
+    gives on the structure as it came (a Filter's). Put on the page, it is
+    checked against what the record was of (`placedRecord`): a step that
+    gives another structure with it gives that one an id of its own;
+  - one the chemist draws, or drops, into a set, from the set, its first
+    atom and its drawing (`memberRecord`), worked out again each time the
+    set's members settle: the same while it is drawn the same - moved or
+    turned whole - and another once it is drawn as another: an atom, a
+    charge, a bond, a wedge or a group's label changed, a double bond's
+    side or a wedged centre's neighbours turned round. Its identity, which
+    costs far more to work out, is never worked out for it: a page of a
+    thousand structures settles as fast as before.
+  A structure saved before 2026-11-05 has none until its set's members
+  settle again, as the page is next edited.
 - **It is of the structure it was given for.** The record keeps which
   (`of`: the structure's identity, as Duplicates and identity read one -
   chem/identity - hashed). Each label that stands for atoms is read as
@@ -2890,17 +2912,23 @@ All of it is optional. A structure the chemist drew has none.
   what it came from is kept. Undone, the structure is the one they were
   for again, and the record is as it was. Two such structures joined into
   one keep what each came from, and the properties of neither.
+  Edited into another - or two joined into one - a structure a step gave
+  loses its lasting id with its properties, and is given one as the
+  chemist's are; undone, it has its own again. What was made of it before
+  the edit names the one it was.
   The identity is worked out once for each structure as drawn, and again
   only when its drawing's key (`drawnKey`, with what its labels hold)
   changes.
 - **It is in what a step after it is keyed by** (`inputKey`): all of the
   record but `of`, which the structure's own key says. The same structure
   with another value from the step before has not been run on, and the
-  step's card says it has changed.
+  step's card says it has changed - and so with another lasting id: what
+  the step made names the one it had.
 - **A copy of its set carries it.** A set copied goes without its members,
   and put down holds what then lies inside it. Each structure that had a
   record, pasted whole, takes it up again (`WorkflowSet.carried`, by its
-  atoms' ids as pasted), of the structure as pasted.
+  atoms' ids as pasted), of the structure as pasted - but not its lasting
+  id: a copy is another structure, and is given its own.
 - **In the file** it is written with the member, and read back as data
   (`readDrawnRecord`). Each property is read as lib/entry reads one
   (`propertyIn`): one whose value is not a number, a text or true/false,
@@ -2918,10 +2946,13 @@ look alike and mean different things:
 - `from` is the molecule in 3D it is a frame of, by id, with `frame`:
   where the entry is, so that what a step makes of it is laid over it.
   It is not lineage.
-- `madeOf` is its lineage: the entries it was made from, by id, as a
-  structure drawn's record keeps them (`DrawnRecord.from`). *Conformers*
-  gives each conformer it makes of a structure drawn that structure's:
-  the conformers are that structure, in 3D.
+- `madeOf` is its lineage: what it was made of, by id. *Conformers*
+  names the structure drawn each conformer it makes is made of, by the
+  structure's lasting id (`DrawnRecord.id`, as "structure:<id>"): the
+  conformers are that structure, in 3D. What the structure was made from
+  in turn (`DrawnRecord.from`) is its own lineage, in its record. Until
+  2026-11-05 *Conformers* gave each conformer those entries instead; a
+  file saved before keeps them.
 
 Its entry record (lib/entry `Entry.from`, `entryOfSet`) takes `madeOf`
 where it has one, else names the molecule and frame it is

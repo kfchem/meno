@@ -107,7 +107,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
 import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
-import { entryOfSet, setEntries, setMembers } from "../workflow/entries";
+import { entryOfSet, setEntries, setMembers, structureLineage } from "../workflow/entries";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
@@ -200,17 +200,28 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     ]);
   });
 
-  it("carries what each structure drawn was made from onto each of its conformers - their lineage, as their entries give it - and keeps it in the workspace's file", async () => {
+  it("names each structure drawn itself, by the lasting id its set gave it, as what each of its conformers was made of - not what it was made from - and keeps it in the workspace's file", async () => {
+    // (what each was made from in turn, its record's `from`, is the structure's own lineage: not its conformers')
     const { st } = await searched(undefined, [{ from: ["a#1"] }, { from: ["b#1"] }, { from: ["c#2", "d#1"] }]);
+    const ids = setMembers(st(), st().sets.find((b) => !b.made)!).records.map((r) => r!.id!);
     const made = st().molecules3d.filter((m) => m.conformerSet);
-    // (water and methanol made - ethane cannot be here - each with its own structure's)
-    expect(made.map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
-    expect(setEntries(made, "conformers").map((e) => entryOfSet(e, "x").from)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    // (water and methanol made - ethane cannot be here - each named by its own structure)
+    const lineage = [[structureLineage(ids[0])], [structureLineage(ids[2])]];
+    expect(lineage[0][0]).toBe(`structure:${ids[0]}`);
+    expect(made.map((m) => m.madeOf)).toEqual(lineage);
+    expect(setEntries(made, "conformers").map((e) => entryOfSet(e, "x").from)).toEqual(lineage);
     const again = createWorkspaceDocument();
     const opened = createEditorStore(again);
     connectStoreToDocument(opened, again);
     opened.getState().openWorkspace(readWorkspace(workspaceText(st()))!, true);
-    expect(opened.getState().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    expect(opened.getState().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual(lineage);
+  });
+
+  it("names a structure the chemist drew by the lasting id its set gave it", async () => {
+    const { st } = await searched();
+    const ids = setMembers(st(), st().sets.find((b) => !b.made)!).records.map((r) => r?.id);
+    expect(new Set(ids.filter(Boolean)).size).toBe(3);
+    expect(st().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual([[structureLineage(ids[0]!)], [structureLineage(ids[2]!)]]);
   });
 
   it("writes what was worked out of each structure drawn into an SD file with each of its conformers, as its record says it", async () => {
