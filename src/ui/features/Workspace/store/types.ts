@@ -642,6 +642,13 @@ export type WordPlace = { page: number; at: number };
 /** A structure of a PDF's figure (utils/pageStructures): which PDF, which page, which figure there by its box, and its key among the page's structures. */
 export type PdfStructurePick = { id: number; page: number; figure: [number, number, number, number]; key: string };
 /**
+ * A compound's number in a PDF's text under the pointer (docs/PDF.md, *A
+ * compound's number*): which PDF, what the number says, and where its word
+ * lies in the window - its card shown by it, once the pointer has rested
+ * there (`since`).
+ */
+export type PdfLens = { id: number; sha256: string; label: string; word: { left: number; top: number; right: number; bottom: number }; since: number };
+/**
  * A structure carried out of a PDF (docs/PDF.md, *Structures picked from a
  * PDF*): Meno's drawing of it (SVG, its size in the drawing's units), where
  * it lay in the window when it was pressed, where it was pressed, when it
@@ -1118,6 +1125,9 @@ export type EditorState = {
   /** The structure of a PDF's figure under the pointer, lit whole (docs/PDF.md, *Structures picked from a PDF*). */
   pdfStructureLit: PdfStructurePick | null;
   setPdfStructureLit: (pick: PdfStructurePick | null) => void;
+  /** A compound's number in a PDF's text under the pointer, its structure's card by it (components/CompoundCard). */
+  pdfLens: PdfLens | null;
+  setPdfLens: (lens: PdfLens | null) => void;
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
