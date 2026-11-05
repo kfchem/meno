@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Drawn, Model } from "../store/types";
+import { readMolfile } from "../../../../lib/chem/ctfile";
 import { centredAt, clipItems, drawsPicture, looksLikeSmiles, PASTE_STEP, pastePlace, partToCopy, readRecord, recordText, schemeAmong } from "./copyPaste";
 import { middleOf } from "./selection";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
@@ -501,3 +502,35 @@ function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
   });
   return { list, reads: () => n };
 }
+
+describe("molecules in 3D copied as a molfile", () => {
+  it("writes each ring bound to a metal through all its atoms as a file holds one, its atoms numbered after those before it", () => {
+    const water = {
+      id: 1,
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.96, y: 0, z: 0 },
+        { el: "H", x: -0.24, y: 0.93, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      at: { x: 0, y: 0 },
+    };
+    // (Fe and a five-ring of carbons round the z axis above it, bound through all of them: synthetic)
+    const cpfe = {
+      id: 2,
+      atoms: [{ el: "Fe", x: 0, y: 0, z: 0 }, ...[0, 1, 2, 3, 4].map((k) => ({ el: "C", x: 1.2 * Math.cos((2 * Math.PI * k) / 5), y: 1.2 * Math.sin((2 * Math.PI * k) / 5), z: 1.65 }))],
+      bonds: [0, 1, 2, 3, 4].map((k) => ({ a1: 1 + k, a2: 1 + ((k + 1) % 5), order: k === 0 || k === 2 ? 2 : 1 })),
+      centres: [{ metal: 0, atoms: [1, 2, 3, 4, 5] }],
+      at: { x: 10, y: 0 },
+    };
+    const mol = clipItems({ atoms: [], bonds: [], molecules3d: [water, cpfe] } as unknown as Model).find((c) => c.flavor === "mol")!.text!;
+    const ct = readMolfile(mol)!;
+    // (the water's three atoms, then the Fe and its ring, then the ring's star)
+    expect(ct.atoms.map((a) => a.symbol)).toEqual(["O", "H", "H", "Fe", "C", "C", "C", "C", "C", "*"]);
+    const eta = ct.bonds.find((b) => b.endpoints?.length)!;
+    expect([eta.a1, eta.a2, eta.endpoints]).toEqual([3, 9, [4, 5, 6, 7, 8]]);
+  });
+});

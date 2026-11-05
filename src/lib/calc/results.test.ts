@@ -124,8 +124,8 @@ describe("a result's values, as Meno writes them", () => {
 describe("where results are said", () => {
   const results = readResults(
     [
-      { id: "g", on: "molecule", group: "Thermochemistry", label: "Gibbs free energy", quantity: "energy", value: -381.911145, rank: 1 },
-      { id: "h", on: "molecule", group: "Thermochemistry", label: "Enthalpy", quantity: "energy", value: -381.868235 },
+      { id: "g", on: "molecule", group: "Thermochemistry", label: "Gibbs free energy", quantity: "energy", value: -381.912345, rank: 1 },
+      { id: "h", on: "molecule", group: "Thermochemistry", label: "Enthalpy", quantity: "energy", value: -381.867654 },
       { id: "d", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", value: 0, rank: 2 },
       { id: "q", on: "atoms", group: "Partial charges", label: "Mulliken", quantity: "charge", values: [0] },
       { id: "s", on: "molecule", group: "Thermochemistry", label: "Temperature", unit: "K", value: 298.15 },
@@ -137,10 +137,10 @@ describe("where results are said", () => {
 
   it("in the chip's line: what it says first, then the ranked, as many as the line holds", () => {
     expect(chipLine(["ORCA 6.0.1 · DFT/STO-3G", "−382.055090 Eh"], results, 110)).toBe(
-      "ORCA 6.0.1 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.911145 Eh · Dipole moment 0.00 D",
+      "ORCA 6.0.1 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.912345 Eh · Dipole moment 0.00 D",
     );
     expect(chipLine(["ORCA 6.0.1 · DFT/STO-3G", "−382.055090 Eh"], results, 80)).toBe(
-      "ORCA 6.0.1 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.911145 Eh",
+      "ORCA 6.0.1 · DFT/STO-3G · −382.055090 Eh · Gibbs free energy −381.912345 Eh",
     );
     expect(chipLine(["", "−1.000000 Eh"], undefined)).toBe("−1.000000 Eh");
   });

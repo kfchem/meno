@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl, MotionDecl } from "../../../../lib/plugins/manifest";
-import { askOf, bySection, filmLength, finishEntry, finishOf, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderContext, renderOptions, shortestFilm } from "./renderOptions";
+import { askOf, fixedChosen, bySection, filmLength, finishEntry, finishOf, lengthNote, tooShort, withFixed, looksOffered, motionEntry, partsOf, renderContext, renderOptions, shortestFilm } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -194,6 +194,12 @@ describe("the card's parts: Look, Render, Scene, Motion", () => {
     expect(fixed.options[0]).toMatchObject({ choices: [{ value: "cycles", label: "Cycles" }], note: "This motion is made with light traced" });
     // (none fixed: as they were)
     expect(withFixed(theirs, { engine: "eevee" }, undefined)).toEqual({ options: theirs, values: { engine: "eevee" } });
+    // (what is fixed: a film's motion's, and the studio's chosen - a picture's motion none; nothing chosen that fixes, none)
+    const motions = [{ id: "glow", label: "Glow", fixed: [{ id: "engine", value: "cycles", why: "Light traced" }] }];
+    const studios = [{ id: "attic", fixed: [{ id: "background", value: "white", why: "The attic is the background" }] }, { id: "yard" }];
+    expect(fixedChosen("film", { motion: "glow", studio: "attic" }, motions, studios)?.map((f) => f.id)).toEqual(["engine", "background"]);
+    expect(fixedChosen("picture", { motion: "glow", studio: "attic" }, motions, studios)?.map((f) => f.id)).toEqual(["background"]);
+    expect(fixedChosen("picture", { studio: "yard" }, motions, studios)).toBeUndefined();
     // (a renderer's option that says no part: its own)
     expect(bySection([{ ...theirs[0], section: undefined }]).own.map((o) => o.id)).toEqual(["engine"]);
   });

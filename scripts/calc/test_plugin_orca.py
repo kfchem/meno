@@ -183,11 +183,11 @@ class Prepare(unittest.TestCase):
             self.assertEqual(asked, [name])
 
     def test_frequencies_treat_low_vibrations_as_orca_does_unless_asked_harmonic(self):
-        # (ORCA's own, its default: nothing written - Grimme's quasi-RRHO, as ORCA 6.1.1 prints "Quasi RRHO ... True")
+        # (ORCA's own, its default: nothing written)
         own = ask("prepare", step="frequencies", entries=[WATER], options=defaults("frequencies"), cores=1)["jobs"][0]["files"][0]["text"]
         self.assertNotIn("%freq", own)
         self.assertEqual(defaults("frequencies")["vibrations"], "none")
-        # (harmonic: the rigid-rotor harmonic oscillator alone, ORCA's %freq QuasiRRHO false - checked against ORCA 6.1.1)
+        # (harmonic: the rigid-rotor harmonic oscillator alone, ORCA's %freq QuasiRRHO false)
         rrho = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "rrho", "maxcore": 2000}, cores=1)["jobs"][0]["files"][0]["text"].splitlines()
         self.assertEqual(rrho[0], "! B3LYP def2-SVP D3BJ FREQ")
         self.assertEqual(rrho[1:3], ["%maxcore 2000", "%freq QuasiRRHO false end"])
@@ -198,7 +198,7 @@ class Prepare(unittest.TestCase):
             ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "vibrations": "mrrho"})
 
     def test_frequencies_at_orcas_own_xtb_are_asked_for_numerically_and_said_to_be(self):
-        # (ORCA 6.1.1 has no analytic Hessian for its own xTB, and stops a FREQ run of one: NUMFREQ it runs)
+        # (at ORCA's own xTB, its frequencies asked for numerically: NUMFREQ)
         native = {**defaults("frequencies"), "method": "NATIVE-XTB2", "basis": "", "dispersion": "none"}
         prepared = ask("prepare", step="frequencies", entries=[WATER], options=native)
         self.assertEqual(prepared["jobs"][0]["files"][0]["text"].splitlines()[0], "! NATIVE-XTB2 NUMFREQ")
@@ -253,7 +253,7 @@ class Prepare(unittest.TestCase):
         self.assertIn("99O", said["error"])
 
     def test_a_job_running_an_xtb_method_through_the_xtb_program_asks_for_the_xtb_plugins_and_no_other_does(self):
-        # (each keyword ORCA 6.1.1 runs through the xtb program, in the method or the keywords, any case; its native ones not)
+        # (each keyword ORCA runs through the xtb program, in the method or the keywords, any case; its native ones not)
         for method, keywords in [("XTB2", ""), ("gfn2-xtb", ""), ("XTB0", ""), ("XTB1", ""), ("GFN1-XTB", ""), ("XTB", ""), ("GFN0-XTB", ""), ("B3LYP", "GFN-FF"), ("XTBFF", "")]:
             job = ask("prepare", step="optimise", entries=[WATER], options={**defaults("optimise"), "method": method, "basis": "", "dispersion": "none", "keywords": keywords})["jobs"][0]
             self.assertEqual(job.get("needs"), ["xtb"], (method, keywords))
@@ -297,7 +297,7 @@ class Prepare(unittest.TestCase):
 ENDED = "ORCA output\n                             ****ORCA TERMINATED NORMALLY****\n"
 
 
-# (a path search's files, as ORCA 6.1.1 writes them, made up for these tests: three images of a diatomic and the point it
+# (a path search's files, in ORCA's form, made up for these tests: three images of a diatomic and the point it
 #  refined between the second and the third, and a log whose path summary and frequencies say so)
 def xyz(frames):
     return "".join(f"2\nCoordinates from ORCA-job x E {e:.12f}\n  H 0.0 0.0 0.0\n  H {d:.6f} 0.0 0.0\n" for d, e in frames)
@@ -329,16 +329,16 @@ Number of SCF / gradient calculations:
 
                              ****ORCA TERMINATED NORMALLY****
 """
-# (what ORCA 6.1.1 says where a band did not converge in the iterations it allows: it then ends by an error return)
+# (a band that did not converge, as its marker words say it: made up around them)
 NOT_CONVERGED_LOG = """
-NEB not converged. Skipping NEB-TS run here.
+NEB not converged. (made-up words after the marker)
 Number of iterations:
      NEB                               ... 3  100.0%
 Number of SCF / gradient calculations:
 [file orca_main/run.cpp, line 1557]: ORCA finished with error return - aborting the run
 """
 # (and where one image's SCF did not converge, ORCA carrying on with the band)
-SCF_FAILED = "[file orca_leanscf/orca_leanscf.cpp, line 306]: Error (ORCA_LEANSCF): unfortunately, the SCF has not converged. There may be a way out but we have to stop here \n"
+SCF_FAILED = "[file made_up/made_up.cpp, line 1]: Error (MADE_UP): made-up words, the SCF has not converged, more made-up words \n"
 def irc_log(capped=()):
     """ORCA's log of a reaction path, in its form: each side, then the path summary - the point it started from marked."""
     side = lambda name: f"""
@@ -502,11 +502,11 @@ class PathSearch(unittest.TestCase):
         #  properties, there ending by an error that says nothing of it, or ending normally: said plainly, nothing read -
         #  not even the band; no point refined, no entry)
         refining = PATH_LOG.replace("     TS optimization                   ... 4  44.4%", "     TS optimization                   ... 1001  91.2%")
-        refining = ("       The optimization did not converge but reached the maximum number of\n       optimization cycles.\n" + refining)
-        said = ('Its band converged in 5 iterations, but refining its highest point did not converge in 1001 steps ("The optimization '
-                'did not converge but reached the maximum number of optimization cycles"): raise Steps for refining its highest point, '
+        refining = ("       Made-up words: did not converge but reached the maximum number of\n       optimization cycles. More made-up words.\n" + refining)
+        said = ('Its band converged in 5 iterations, but refining its highest point did not converge in 1001 steps ("did not '
+                'converge but reached the maximum number of optimization cycles"): raise Steps for refining its highest point, '
                 'or give ends nearer the path')
-        props = refining.replace("****ORCA TERMINATED NORMALLY****", "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\nORCA finished by error termination in PROPERTIES")
+        props = refining.replace("****ORCA TERMINATED NORMALLY****", "ERROR (MADE-UP): a made-up failure\nORCA finished by error termination in PROPERTIES")
         for log, ended in ((props, "done"), (props, "failed"), (refining, "done")):
             self.assertEqual(ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options={}, files=PATH_FILES, log=log, ended=ended),
                              {"why": said, "kind": "not-converged"})
@@ -514,7 +514,7 @@ class PathSearch(unittest.TestCase):
         warned = ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options=defaults("path-search"), files=PATH_FILES, log=SCF_FAILED + PATH_LOG, ended="done")["outputs"][0]
         self.assertEqual(warned["energies"], [-1.17, -1.10, -1.09, -1.12])
         self.assertEqual(warned["warnings"][0]["kind"], "other")
-        self.assertTrue(warned["warnings"][0]["text"].startswith("1 of the band's SCF calculations did not converge, ORCA carrying on: [file orca_leanscf"))
+        self.assertTrue(warned["warnings"][0]["text"].startswith("1 of the band's SCF calculations did not converge, ORCA carrying on: [file made_up"))
         # (ended - exit 0 - where ORCA's log does not say it ended normally: not read)
         cut = ask("collect", step="path-search", entries=[{**H2, "end": H2_END}], options={}, files=PATH_FILES, log=PATH_LOG.replace("ORCA TERMINATED NORMALLY", ""), ended="done")
         self.assertIn("does not say it ended normally", cut["why"])
@@ -537,19 +537,18 @@ class Collect(unittest.TestCase):
         self.assertEqual(said["read"][0]["wavefunction"], {"kind": "wfx", "file": "input.wfx", "name": "water.wfx"})
 
     def test_says_why_a_job_failed(self):
-        log = "\n ... \nORCA finished by error termination in SCF\nCalling Command: orca_scf input.gbw b input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
+        log = "\n ... \nORCA finished by error termination in SCF\n[a made-up line]\n  .... aborting the run\n"
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=log, ended="failed"), {"why": "ORCA finished by error termination in SCF"})
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log="", ended="stopped"), {"why": "ORCA said nothing"})
         # (one brought down under way says no error: not its settings' "Startup error" line, but where it got to)
-        down = "   Startup error        DIISStart       ....  0.200000\n ... \n               ***  Starting incremental Fock matrix formation  ***\n"
-        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=down, ended="failed"), {"why": "ORCA stopped without saying why, after: ***  Starting incremental Fock matrix formation  ***"})
-        # (its error's own message, the words after "Error (ORCA_LEANSCF):", as its output is read: reader `why_of`)
+        down = "   Startup error        MadeUpSetting   ....  1.000000\n ... \n               ***  a made-up step under way  ***\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=down, ended="failed"), {"why": "ORCA stopped without saying why, after: ***  a made-up step under way  ***"})
+        # (its error's own message, the words after "Error (...):", as its output is read: reader `why_of`)
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=SCF_FAILED, ended="failed")["why"], SCF_FAILED.split("): ", 1)[1].strip())
-        # (a line that begins ERROR - ORCA 6.1.1's programs print such, "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY" one - or
-        #  FATAL ERROR is its own words, before any other line that says error)
-        unitary = "   Startup error        DIISStart       ....  0.200000\nERROR IN SCHMIDT-MATRIX IS NOT UNITARY\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
-        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=unitary, ended="failed")["why"], "ERROR IN SCHMIDT-MATRIX IS NOT UNITARY")
-        fatal = "   Startup error        DIISStart       ....  0.200000\nFATAL ERROR in the integrals\n  .... aborting the run\n"
+        # (a line that begins ERROR - or FATAL ERROR - is its own words, before any other line that says error)
+        unitary = "   Startup error        MadeUpSetting   ....  1.000000\nERROR IN A MADE-UP CHECK\n[a made-up line]\n  .... aborting the run\n"
+        self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=unitary, ended="failed")["why"], "ERROR IN A MADE-UP CHECK")
+        fatal = "   Startup error        MadeUpSetting   ....  1.000000\nFATAL ERROR in the integrals\n  .... aborting the run\n"
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=fatal, ended="failed")["why"], "FATAL ERROR in the integrals")
 
     def test_an_optimisation_that_stopped_under_way_is_read_for_where_it_got_to(self):
@@ -561,16 +560,13 @@ class Collect(unittest.TestCase):
         self.assertNotIn("partial", ask("collect", step="energy", entries=[WATER], options={}, files={}, log=cycle, ended="failed"))
 
     def test_an_optimisation_that_took_the_most_cycles_orca_allows_is_said_not_converged_however_orca_ended_after(self):
-        # (ORCA 6.1.1's words, in their box over two lines - then, going on to its properties, an error that says nothing
-        #  of it, or a normal end)
+        # (the marker words, over two lines, made up around them - then an error that says nothing of it, or a normal end)
         warned = ("GEOMETRY OPTIMIZATION CYCLE  49\n ... \nGEOMETRY OPTIMIZATION CYCLE  50\n ... \n"
-                  "                                  WARNING !!!\n"
-                  "       The optimization did not converge but reached the maximum number of\n"
-                  "       optimization cycles.\n"
-                  "       Please check your results very carefully.\n")
-        props = warned + "ERROR (SHARK): Failed to read input file (input.SHARKINP.tmp)\n\nORCA finished by error termination in PROPERTIES\n  .... aborting the run\n"
+                  "       Made-up words: did not converge but reached the maximum number of\n"
+                  "       optimization cycles. More made-up words.\n")
+        props = warned + "ERROR (MADE-UP): a made-up failure\n\nORCA finished by error termination in PROPERTIES\n  .... aborting the run\n"
         normal = warned + "FINAL SINGLE POINT ENERGY -76.4\n                             ****ORCA TERMINATED NORMALLY****\n"
-        said = ('The optimisation did not converge in 50 cycles, the most it was allowed ("The optimization did not converge but '
+        said = ('The optimisation did not converge in 50 cycles, the most it was allowed ("did not converge but '
                 'reached the maximum number of optimization cycles"): run it again to go on from the geometry it reached')
         for log, ended in ((props, "done"), (props, "failed"), (normal, "done")):
             # (never read as a result: the geometry it reached read for a run again alone, as one that stopped is)
@@ -583,8 +579,8 @@ class Collect(unittest.TestCase):
         self.assertEqual(ask("collect", step="energy", entries=[WATER], options={}, files={}, log=props, ended="done"), {"why": "ORCA finished by error termination in PROPERTIES"})
 
     def test_a_job_that_exited_0_but_ended_by_error_termination_failed_and_only_one_that_terminated_normally_is_read(self):
-        # (as ORCA 6.1.1 ends a parallel run whose MPI is not there: its exit code 0, read as done)
-        startup = "%pal nprocs 4 end\nsh: mpirun: command not found\nORCA finished by error termination in Startup\nCalling Command: mpirun -np 4 orca_startup_mpi input.int.tmp input\n[file orca_tools/qcmsg.cpp, line 394]:\n  .... aborting the run\n"
+        # (a parallel run whose MPI is not there, its exit code 0 all the same: read as done)
+        startup = "%pal nprocs 4 end\nsh: mpirun: command not found\nORCA finished by error termination in Startup\n[a made-up line]\n  .... aborting the run\n"
         # (said plainly, with what to do: Open MPI is what ORCA runs in parallel with, its manual's 2.5.2.1)
         self.assertEqual(ask("collect", step="optimise", entries=[WATER], options={}, files={}, log=startup, ended="done"), {"why": worker.NO_MPI_SAID})
         self.assertTrue(worker.NO_MPI_SAID.startswith("ORCA runs on more than one core only with Open MPI"))

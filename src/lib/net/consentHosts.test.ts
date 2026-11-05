@@ -3,10 +3,11 @@ import type { ConsentRequest } from "./network";
 import { CCD_CONSENT } from "./components";
 import { UPDATE_CONSENT } from "../update";
 import { filesSetUp, pixiSetUp, uvSetUp, type SetUpFile } from "../plugins/setUpSources";
+import { CATALOGUE_REQUEST } from "../plugins/online";
 
 // What every consent says, against the hosts its task is kept to
 // (src-tauri/src/net.rs): every plugin's set-up and files, keeping Meno up
-// to date, and the wwPDB's dictionary. (Meno has no environment of its own
+// to date, the wwPDB's dictionary, and the plugins online. (Meno has no environment of its own
 // to set up: the console's and the workflows' went, 2026-10-13.)
 const manifests = import.meta.glob<{ id: string; environment?: string; downloads?: SetUpFile[] }>("/src-tauri/resources/plugins/*/manifest.json", { eager: true, import: "default" });
 const uvLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/requirements.lock", { eager: true, query: "?raw", import: "default" });
@@ -39,6 +40,7 @@ function consents(): [string, Pick<ConsentRequest, "sources" | "hosts">][] {
   const all: [string, Pick<ConsentRequest, "sources" | "hosts">][] = [
     ["keeping Meno up to date", UPDATE_CONSENT],
     ["the wwPDB's dictionary", CCD_CONSENT],
+    ["the plugins online", CATALOGUE_REQUEST],
   ];
   for (const m of Object.values(manifests)) {
     const downloads = m.downloads ?? [];

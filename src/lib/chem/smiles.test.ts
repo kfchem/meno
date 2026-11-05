@@ -46,12 +46,26 @@ describe("a double bond's cis or trans, read from SMILES", () => {
     expect(tetra("C[N@+](CC)(CCC)c1ccccc1")).toEqual([[1, [0, 2, 4, 7], 1]]);
   });
 
+  it("reads an N its ring holds, a selenoxide's Se and a stibine's Sb, by the one rule on lone pairs (./lonePairCentres)", () => {
+    const tetra = (smiles: string) => readSmiles(smiles).atoms.flatMap((a, i) => (a.tetra ? [[i, a.tetra.neighbours, a.tetra.volume]] : []));
+    // (an N-chloro aziridine's N, an oxaziridine's; a selenoxide's Se - each as RDKit's 3D embeddings have it, five
+    //  seeds each)
+    expect(tetra("C1[N@@](Cl)C1(C)C")).toEqual([[1, [0, 2, 3], -1]]);
+    expect(tetra("CC1[N@](C)O1")).toEqual([[2, [1, 3, 4], 1]]);
+    expect(tetra("C[Se@](=O)c1ccccc1")).toEqual([[1, [0, 2, 3], 1]]);
+    // (a stibine's Sb, by the same rule for its lone pair: RDKit holds no configuration of an Sb to check it against)
+    expect(tetra("C[Sb@](CC)c1ccccc1")).toEqual([[1, [0, 2, 4], 1]]);
+  });
+
   it("refuses, saying why, a configuration it cannot read - never reading past it", () => {
     // (a lone pair's centre written first: the H's rule and RDKit's reading disagree)
     expect(() => readSmiles("[S@](C)(=O)c1ccc(C)cc1")).toThrow(/lone pair written first/);
-    // (an amine's nitrogen; a mark other than @ and @@; a carbon of three)
-    expect(() => readSmiles("C[N@]1CC1C")).toThrow(/N centre of three neighbours and a lone pair is not read here/);
-    expect(() => readSmiles("C[Te@](=O)CC")).toThrow(/Te centre of three neighbours and a lone pair is not read here/);
+    // (an amine's nitrogen, a plain N-methyl aziridine's, an N-aryl aziridine's: no configuration of their own; a mark
+    // other than @ and @@; a carbon of three)
+    expect(() => readSmiles("C[N@](CC)CCC")).toThrow(/N of three neighbours keeps no configuration of its own/);
+    expect(() => readSmiles("C1[N@](C)C1C")).toThrow(/N of three neighbours keeps no configuration of its own/);
+    expect(() => readSmiles("C1[N@](c2ccccc2)C1C")).toThrow(/N of three neighbours keeps no configuration of its own/);
+    expect(() => readSmiles("C[O@+](CC)CCC")).toThrow(/O of three neighbours keeps no configuration of its own/);
     expect(() => readSmiles("F[C@@@](Cl)(Br)I")).toThrow(/only @ and @@ are read/);
     expect(() => readSmiles("C[C@](=C)C")).toThrow(/not four/);
   });

@@ -285,9 +285,17 @@ export type PageMade = { objects: readonly PageObject[]; wordsIn?: (box: Box) =>
  * lies outside that figure beside it - so a structure the figures cut in two
  * is refused, never read in half - and what else each figure has drawn.
  */
-export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnOf: (k: number) => FigureDrawn | null, sha256: string, page: number, known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks[] } {
+export function pageStructuresOf(
+  made: PageMade,
+  figures: readonly Box[],
+  drawnOf: (k: number) => FigureDrawn | null,
+  sha256: string,
+  page: number,
+  known?: readonly GlyphShape[],
+): { structures: PageStructure[]; marks: PageMarks[]; labels: CompoundLabel[] } {
   const structures: PageStructure[] = [];
   const marks: PageMarks[] = [];
+  const labels: CompoundLabel[] = [];
   figures.forEach((box, k) => {
     const drawn = drawnOf(k);
     if (!drawn) return;
@@ -299,10 +307,14 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
     // (and the words of the page within this figure that are none of a structure's labels, at one of its open ends: a label
     // its figure's drawing did not hold, the structure refused - a compound's number aside)
     const own = made.objects.filter((o) => o.kind === "text" && centreWithin(o.box, box));
-    structures.push(...read.structures.map((st) => endWordsChecked(st, own, made.wordsIn)));
+    const checked = read.structures.map((st) => endWordsChecked(st, own, made.wordsIn));
+    structures.push(...checked);
     marks.push(read.marks);
+    // (the compounds' numbers by them: of the words the figure's drawing holds, and the page's own words within it)
+    const ownWords = made.wordsIn ? wordsJoined(own.map((o) => ({ text: made.wordsIn!(o.box), box: o.box })), read.words) : [];
+    labels.push(...compoundLabelsOf(checked, [...read.words, ...ownWords], read.marks));
   });
-  return { structures, marks };
+  return { structures, marks, labels };
 }
 
 /** A box turned back to where it lies on the page. */
@@ -312,9 +324,9 @@ const boxBack = (b: Box, back: (p: Point) => Point): Box => {
 };
 
 /** One figure of a page: its structures (`structuresOf`), and what else it has drawn - its arrows, "+" signs and words - where the pointer takes none. */
-export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, beside: readonly Beside[], known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks } {
+export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, beside: readonly Beside[], known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks; words: PageWord[] } {
   const { back, read } = schemeDrawn(given, known);
-  if (read.tooMany) return { structures: [], marks: { segments: [], points: [], boxes: [] } };
+  if (read.tooMany) return { structures: [], marks: { segments: [], points: [], boxes: [] }, words: [] };
   const marks: PageMarks = {
     segments: read.arrows.flatMap((a) => {
       const path = [a.tail, ...a.corners, a.point].map(back);
@@ -332,7 +344,11 @@ export function figureOn(given: FigureDrawn, figure: number, sha256: string, pag
     }),
     pluses: read.pluses,
   };
-  return { structures: structuresHere(read.figure, back, figure, sha256, page, words, apart).map((st) => besideChecked(atEndChecked(st, read.figure, read.words, back), beside, read.figure.bond)), marks };
+  return {
+    structures: structuresHere(read.figure, back, figure, sha256, page, words, apart).map((st) => besideChecked(atEndChecked(st, read.figure, read.words, back), beside, read.figure.bond)),
+    marks,
+    words: read.words.map((w) => ({ text: w.text, box: boxBack(w.box, back) })),
+  };
 }
 
 /** The structures of a figure read - each refused where letters of the figure no atom took, or words it read, lie within it. */
@@ -421,7 +437,95 @@ function lineOfWords(f: FigureRead): string | null {
 }
 
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */
-const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
+export const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
+
+/** A word on a page: what it says, and where it lies, in the page's points from its top left. */
+export type PageWord = { text: string; box: Box };
+
+/** A compound's number set by a structure (docs/PDF.md, *A compound's number*): what it says, as `labelText` writes it; where it lies; and the structure's key. */
+export type CompoundLabel = { label: string; box: Box; key: string };
+
+/** How near a compound's number must lie to a structure to be its: a bond from the box round all of it - a number is set
+ *  under a structure as a whole, centred on it, however its lowest bonds lie. */
+const LABEL_REACH = 1;
+/** How much shorter than the figure's other words a word may be and still be a compound's number set on its line: below, a superscript. */
+const SUPERSCRIPT = 0.7;
+
+/** A compound's number as Meno writes it - its parentheses and spaces set aside, its primes as ' - where words are one; else none. */
+export function labelText(text: string): string | null {
+  const t = text.trim().replace(/^\(\s+/, "(").replace(/\s+\)$/, ")");
+  if (!COMPOUND_NUMBER.test(t)) return null;
+  return t.replace(/^\(|\)$/g, "").replace(/\u2032/g, "'");
+}
+
+/** How far a box lies from a structure's ink - its bonds, its atoms and its labels. */
+function inkTo(st: PageStructure, b: Box): number {
+  return Math.min(Infinity, ...st.bonds.map(([p, q]) => segmentToBox(p, q, b)), ...st.atoms.map((a) => toBox(a, b)), ...st.labels.map((l) => boxToBox(l, b)));
+}
+
+/** How far apart a word's glyphs may be set and be one word, and how far apart their middles may be and be one line: fractions of a glyph's height. */
+const GLYPHS_APART = 0.2;
+const LINE_SAME = 0.3;
+
+/**
+ * A figure's own words on its page as words: letters set apart - a PDF may
+ * set each glyph as a thing of its own - joined where they stand on one line
+ * with no more than a fifth of their height between them, and none where the
+ * figure's drawing holds words there already (its own read first).
+ */
+export function wordsJoined(own: readonly PageWord[], drawn: readonly PageWord[]): PageWord[] {
+  // (left to right, each glyph onto a word of its line that ends just before it)
+  const free = own.filter((o) => o.text.trim() && !drawn.some((d) => boxToBox(d.box, o.box) === 0)).sort((p, q) => p.box[0] - q.box[0] || p.box[1] - q.box[1]);
+  const out: PageWord[] = [];
+  for (const w of free) {
+    const h = w.box[3] - w.box[1];
+    const mid = (w.box[1] + w.box[3]) / 2;
+    const word = out.find((o) => Math.abs((o.box[1] + o.box[3]) / 2 - mid) <= LINE_SAME * h && w.box[0] - o.box[2] <= GLYPHS_APART * h && w.box[0] - o.box[2] >= -GLYPHS_APART * h);
+    if (word) {
+      word.text += w.text;
+      word.box = [word.box[0], Math.min(word.box[1], w.box[1]), Math.max(word.box[2], w.box[2]), Math.max(word.box[3], w.box[3])];
+    } else out.push({ text: w.text, box: [...w.box] as Box });
+  }
+  return out;
+}
+
+/**
+ * The compounds' numbers of a figure: each word of a compound number's
+ * shape (`COMPOUND_NUMBER`) that lies within a bond of a structure - of the
+ * box round all of it - under or over it, its middle within the structure's
+ * breadth, or beside it, within its height - and is the nearest structure's,
+ * no arrow nor "+" nearer it. A structure not read takes none; a word much shorter than the
+ * figure's others (a superscript, a footnote's mark) is none.
+ */
+export function compoundLabelsOf(structures: readonly PageStructure[], words: readonly PageWord[], marks: PageMarks): CompoundLabel[] {
+  const heights = words.map((w) => w.box[3] - w.box[1]).sort((a, b) => a - b);
+  const usual = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
+  const out: CompoundLabel[] = [];
+  for (const w of words) {
+    const label = labelText(w.text);
+    if (!label || w.box[3] - w.box[1] < SUPERSCRIPT * usual) continue;
+    const mid = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
+    // (the nearest box; where two are as near - the word within both, a ring's within a macrocycle's - the one whose ink is nearer)
+    let best: PageStructure | null = null;
+    let near = Infinity;
+    let ink = Infinity;
+    for (const st of structures) {
+      const d = boxToBox(st.box, w.box);
+      if (d > near) continue;
+      const i: number = inkTo(st, w.box);
+      if (d < near || i < ink) [best, near, ink] = [st, d, i];
+    }
+    if (!best || "none" in best.read || near > LABEL_REACH * (best.reach / REACH)) continue;
+    const under = mid.x >= best.box[0] && mid.x <= best.box[2];
+    const level = mid.y >= best.box[1] && mid.y <= best.box[3];
+    if (!under && !level) continue;
+    // (an arrow or a "+" nearer: a scheme's conditions, "2", or a step's number - none of the structure's)
+    const other = Math.min(Infinity, ...marks.segments.map(([p, q]) => segmentToBox(p, q, w.box)), ...marks.points.map((q) => toBox(q, w.box)));
+    if (other < near) continue;
+    if (!out.some((l) => l.key === best!.key && l.label === label)) out.push({ label, box: w.box, key: best.key });
+  }
+  return out;
+}
 /** How near a bond's open end words of its figure may come before they are taken for a label not read: a bond. */
 const AT_END = 1;
 

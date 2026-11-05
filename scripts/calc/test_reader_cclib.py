@@ -67,7 +67,7 @@ class Energies(unittest.TestCase):
         # (an energy in electronvolts, back in hartrees by the same factor: as it was, to the last digit)
         from cclib.parser.utils import convertor
 
-        for printed in (-76.0105049953, -1.1167593073, -2573.987654321098):
+        for printed in (-76.0123456789, -1.1167593073, -2573.987654321098):
             self.assertAlmostEqual(worker.hartrees(convertor(printed, "hartree", "eV")), printed, delta=1e-10)
 
 

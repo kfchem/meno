@@ -48,7 +48,7 @@ built* below.
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
 | **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved - its one true path, however the path it came by was written (*One file, one tab*) - brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
 | **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
-| **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page - and, where it leaves stereocentres or double bonds without a configuration, said where a paste says what it left out: "1 stereocentre not specified", "2 stereocentres and 1 double bond not specified", "1 axis not specified" - a run of cumulated double bonds one element, an allene's axis or a butatriene's cis or trans (`stereoOpenSaid`, by the worker's `stereo_left_open` - the one definition a step refusing a structure for open stereo uses; asked of the same worker as the structure is drawn, nothing said where it cannot be asked or has not answered within 3 s). Drawn as it is, nothing chosen for it; a word made into a structure from Meno's own dictionary is not looked at |
+| **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page - and, where it leaves stereocentres or double bonds without a configuration, said where a paste says what it left out: "1 stereocentre not specified", "2 stereocentres and 1 double bond not specified", "1 axis not specified" - a run of cumulated double bonds one element, an allene's axis or a butatriene's cis or trans (`stereoOpenSaid`, by Meno's rules on the worker's `stereo_elements` - chem/openStereo, the one definition a step refusing a structure for open stereo uses; asked of the same worker as the structure is drawn, nothing said where it cannot be asked or has not answered within 3 s). Drawn as it is, nothing chosen for it; a word made into a structure from Meno's own dictionary is not looked at |
 
 ### Structure formats
 
@@ -266,9 +266,13 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
 - The comment is the molecule's name (the file's own name where it has
   none), then, where there are several frames, `frame i/n`, then, where the
   frame's energy is known, `E = <hartrees to ten decimals> Eh`: for
-  example `water frame 2/3 E = -76.0261000000 Eh`. On one line, and plain
-  text, which programs that read the layout take as a comment. No method
-  is written: Meno does not hold one for an energy.
+  example `water frame 2/3 E = -76.0261000000 Eh`. Where the frame did
+  not finish - it failed, or its marks of which frames failed did not
+  read - why, after it, as an SD file's `> <Failed>` says it:
+  `oh frame 2/2 E = -75.3900000000 Eh failed: not converged: stopped at
+  200 cycles`, so that no reader takes its energy for a result. On one
+  line, and plain text, which programs that read the layout take as a
+  comment. No method is written: Meno does not hold one for an energy.
 - The writer's option *Molecules in 3D* says the frame shown (one block a
   molecule) or every frame (a block each, in order). Several molecules
   selected are written as SDF export writes them: one after another, each as
@@ -756,6 +760,17 @@ As this part of step 5 was built (#155, from main beside step 3):
     as before.
     In an SD file the choice holds for its records in 3D too, and is
     offered where the page holds molecules in 3D alone.
+  - **A ring or chain bound to a metal through all its atoms** in a
+    molecule in 3D (`Molecule3D.centres`) is written as a file holds one
+    ("CTfile Formats", a multi-centre bond): a star atom (*) at its atoms'
+    centre in that frame, after the molecule's own atoms, and a coordination
+    bond from the metal to it whose endpoints are the ring's atoms, bound to
+    all of them (`ENDPTS`, `ATTACH=ALL`; `withRingStars`, lib/chem/molWriter)
+    - in V3000, which V2000 cannot hold, in an SD file and a molfile copied
+    alike. That the bond is a coordination bond (type 9) is Meno's own
+    choice, not the format's: it is the type Meno's 2D writer gives a
+    drawing's ring bound to a metal, and the one its reader reads back.
+    Without it, the ring was written as if it were not bound at all.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`). Beside it: why a frame did not finish
@@ -1028,6 +1043,13 @@ work.meno (zip)
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.
+- **What a molecule in 3D was made from** is written with it, on the
+  page or in a large result set's collection, and read back
+  (`Molecule3D.madeOf`): the entries it was made from, by id - its
+  lineage (WORKFLOWS.md, *Lineage in 3D*). It is not the molecule a
+  step's entry is a frame of (`SetEntry.from`), which is where the entry
+  is, not what it came from. An entry record's lineage (lib/entry
+  `Entry.from`) is `madeOf` where there is one.
 - **What does not read is left out, counted and said - never silently.**
   A workspace's file, or Meno's own record of a copy, can hold something
   that does not read: damaged, or written by hand. Only an atom or a bond
@@ -1045,7 +1067,8 @@ work.meno (zip)
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
     results and its notes of what could not be read, and each property of
-    a frame (`Molecule3D.properties`) that does not read. Within a
+    a frame (`Molecule3D.properties`) that does not read, and each entry
+    it was made from that is no text. Within a
     structure a step gave a set: each property of its record, and each
     entry it was made from. Within a set holding a table:
     a column that does not read (with its cells), a row not of the table's
@@ -1637,21 +1660,14 @@ As step 3 was built:
   NWChem, ORCA, Psi4, Q-Chem, Turbomole, xTB - each told by its banner as
   cclib tells it; PySCF's the Molden file. With no plugin added, *Files*
   lists Meno's own kinds only.
-  - Each program's banner is checked on an output of it, one per
-    program from cclib's regression data (`scripts/calc/samples.json`;
-    kept out of the repository in `calc-samples/`) - none of ORCA's or
-    Gaussian's, read by their own plugins and tested on hand-written
-    lines - and cclib's worker gives each one's molecule. The tests skip
-    a file that is not there.
-  - Psi3 is left out, with no output of it to test with.
+  - Psi3 is left out.
   - `probe` is in place, and tested with made-up plugins.
 - **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
   *Several plugins, one role*): its manifest declares ORCA's output as its
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
   file opened by hand alike. Written from the ORCA 6.1 manual and the
-  program's printed forms, tested on hand-written lines
-  (`scripts/calc/test_reader_orca.py`), it gives:
+  program's printed forms (`scripts/calc/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry
