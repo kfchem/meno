@@ -2,10 +2,11 @@
  * R/S and E/Z by Meno's own reading of the CIP rules (docs/CIP.md), from a
  * structure's configuration as drawn (lib/layout/drawn `readStereo`) or as
  * read: the descriptors of its centres and its double bonds, or why one
- * has none. Rules 1a to 3 so far, as Hanson et al. 2018 propose them on BB
- * 2013; a tie only rules 4 and 5 could break (a pseudoasymmetric centre, a
- * seqCis/seqTrans double bond) or only the proposed rule 6 (a centre on an
- * axis of symmetry) is said not worked out, never guessed.
+ * has none. Rules 1a to 5, as Hanson et al. 2018 state them on BB 2013:
+ * R and S, r and s for a pseudoasymmetric centre, E and Z - seqCis and
+ * seqTrans said as Z and E that turn in the mirror image (`turns`). A tie
+ * only the proposed rule 6 could break (a centre on an axis of symmetry),
+ * or an axis's M or P, is said not worked out, never guessed.
  *
  * Which atoms and bonds are units is the configuration's to say (what
  * perception reads): this ranks what it is given, and tells whether the
@@ -14,15 +15,15 @@
  */
 import { isMetal } from "../../layout/perceive";
 import type { IdentityInput } from "../identity";
-import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, TooLarge, type Budget, type CipNode } from "./digraph";
+import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, STEP_BUDGET, TooLarge, type Budget, type CipNode } from "./digraph";
 import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
-import { Ranker, Unknown } from "./rank";
+import { parity, Ranker, RULE_5, Unknown } from "./rank";
 
 /**
  * Why a unit has no descriptor:
  * - `alike`: two of its ligands are alike, by every rule (no centre);
  * - `open`: it hangs on a double bond the drawing leaves open (`bond`);
- * - `later`: only rules 4 and 5 could tell two ligands apart - not worked out yet;
+ * - `later`: only an axis's M or P could tell two ligands apart - not worked out yet;
  * - `symmetric`: only the proposed rule 6 could - not worked out yet;
  * - `unsure`: a ligand it would have to look past cannot be told from the
  *   drawing - a charged or radical mesomeric system whose usual structures
@@ -32,7 +33,12 @@ import { Ranker, Unknown } from "./rank";
  * - `large`: its digraph grows past what is worked out.
  */
 export type CipWhy = "alike" | "open" | "later" | "symmetric" | "unsure" | "large";
-export type CipResult = { label: "R" | "S" | "E" | "Z" } | { why: CipWhy; bond?: number };
+/**
+ * A unit's descriptor: R or S, or r or s for a pseudoasymmetric centre; E or
+ * Z, `turns` where it turns in the mirror image (seqCis or seqTrans, Hanson
+ * et al. 2018 p. 1761, shown as Z or E: docs/CIP.md) - or why it has none.
+ */
+export type CipResult = { label: "R" | "S" | "r" | "s" | "E" | "Z"; turns?: true } | { why: CipWhy; bond?: number };
 
 /** A unit's result as worked out on one structure, with the unsure atom it stopped at, if it did (`agreed`). */
 type Said = CipResult & { at?: number };
@@ -40,48 +46,34 @@ type Said = CipResult & { at?: number };
 const no = (why: CipWhy, bond?: number): CipResult => (bond == null ? { why } : { why, bond });
 const fromUnknown = (u: Unknown): Said => (u.at == null ? no(u.why, u.bond) : { ...no(u.why, u.bond), at: u.at });
 
-/** The parity of a permutation of 0..n-1: 1 even, -1 odd. */
-function parity(perm: readonly number[]): 1 | -1 {
-  const seen = perm.map(() => false);
-  let sign = 1;
-  for (let i = 0; i < perm.length; i++) {
-    if (seen[i]) continue;
-    let len = 0;
-    for (let j = i; !seen[j]; j = perm[j]) {
-      seen[j] = true;
-      len++;
-    }
-    if (len % 2 === 0) sign = -sign;
-  }
-  return sign as 1 | -1;
-}
-
 /**
  * Ligands put in order, highest first, by every rule; or why they cannot
  * be: a comparison that cannot be made, or two alike - and then whether
  * rules 4 and 5, or rule 6, might yet tell them apart.
  */
-function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]): number[] | Said {
+function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]): { order: number[]; rule: number } | Said {
   const order = ligands.map((_, i) => i);
+  let rule = -1;
   for (let i = 1; i < order.length; i++) {
     for (let j = i; j > 0; j--) {
-      const c = rank.ranked(ligands[order[j - 1]], ligands[order[j]]);
-      if (c instanceof Unknown) return fromUnknown(c);
-      if (c === 0) return tied(rank, ligands, [order[j - 1], order[j]], root);
-      if (c > 0) break;
+      const d = rank.decided(ligands[order[j - 1]], ligands[order[j]]);
+      if (d instanceof Unknown) return fromUnknown(d);
+      if (d.c === 0) return tied(rank, ligands, [order[j - 1], order[j]], root);
+      rule = Math.max(rule, d.rule);
+      if (d.c > 0) break;
       [order[j - 1], order[j]] = [order[j], order[j - 1]];
     }
   }
-  return order;
+  return { order, rule };
 }
 
-/** Why two ligands alike by rules 1a to 3 leave no descriptor: alike, or for a rule not worked out yet. */
+/** Why two ligands alike by every rule leave no descriptor: alike, or for an axis or rule 6, not worked out yet. */
 function tied(rank: Ranker, ligands: readonly CipNode[], two: readonly number[], root: readonly number[]): CipResult {
   const blocked = new Set(root);
   const atoms = two.map((i) => ligands[i].atom);
   const around = rank.region(atoms, blocked);
-  // (a configuration in them: rules 4 and 5 might tell them apart - a pseudoasymmetric centre, a seqCis double bond)
-  if (rank.configured(around, { atoms: root })) return no("later");
+  // (an axis or a cumulene configured in them: its M or P might tell them apart)
+  if (rank.configured(around)) return no("later");
   // (three paths or more back to the root: the proposed rule 6 might - Hanson et al. 2018 p. 1762)
   const back = ligands.filter((l) => l.atom >= 0 && ligands.some((m) => m !== l && m.atom >= 0 && rank.region([l.atom], blocked).has(m.atom)));
   return back.length >= 3 ? no("symmetric") : no("alike");
@@ -104,20 +96,31 @@ function refusedCentre(p: Prepared, c: number): boolean {
 function centre(p: Prepared, c: number): Said {
   const t = p.input.atoms[c].tetra!;
   if (refusedCentre(p, c)) return no("unsure");
-  const budget: Budget = { left: NODE_BUDGET };
+  const budget: Budget = { left: NODE_BUDGET, steps: STEP_BUDGET };
   try {
     const g = new Digraph(p, [c], budget);
     const subs = g.substituentsOf(g.roots[0], null);
+    // (the root's ligands kept on it, for an auxiliary unit's way back through it - digraph `rootwardOf`)
+    g.roots[0].kids = subs;
     const h = subs.find((s) => s.atom === HYDROGEN);
     const lone = subs.find((s) => s.atom === PHANTOM);
     const ligands = t.neighbours.map((n) => (n === -1 ? h! : subs.find((s) => !s.dup && s.atom === n)!));
     if (t.neighbours.length === 3) ligands.push(lone!);
-    const order = inOrder(new Ranker(p, budget), ligands, [c]);
-    if (!Array.isArray(order)) return order;
+    const rank = new Ranker(p, budget);
     // (the configuration's volume, its first three as drawn, turned to the order of rank by the permutation's parity: R where, the
     //  lowest away, the three highest turn clockwise - the volume they span, seen from the centre, negative)
-    const volume = t.volume * parity(order);
-    return { label: volume < 0 ? "R" : "S" };
+    const sense = (r: Ranker): boolean | Said => {
+      const o = inOrder(r, ligands, [c]);
+      return "order" in o ? r.volumeOf(c) * parity(o.order) < 0 : o;
+    };
+    const o = inOrder(rank, ligands, [c]);
+    if (!("order" in o)) return o;
+    const up = rank.volumeOf(c) * parity(o.order) < 0;
+    if (o.rule < RULE_5) return { label: up ? "R" : "S" };
+    // (decided by rule 5: pseudoasymmetric, r or s, where the mirror image reads it the same - Hanson et al. 2018 p. 1761)
+    const m = sense(rank.mirror);
+    if (typeof m !== "boolean") return m;
+    return { label: m === up ? (up ? "r" : "s") : up ? "R" : "S" };
   } catch (e) {
     if (e instanceof TooLarge) return no("large");
     throw e;
@@ -131,23 +134,38 @@ function doubleBond(p: Prepared, i: number): Said {
   const k = b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`;
   if (p.order.get(k) !== 2 && !p.blended.has(k)) return no("unsure");
   if (p.unsure[b.a] || p.unsure[b.b]) return no("unsure");
-  const budget: Budget = { left: NODE_BUDGET };
+  const budget: Budget = { left: NODE_BUDGET, steps: STEP_BUDGET };
   try {
     const g = new Digraph(p, [b.a, b.b], budget);
-    const rank = new Ranker(p, budget);
-    const high: number[] = [];
-    for (const [k, end, other] of [
+    const ends = [
       [0, b.a, b.b],
       [1, b.b, b.a],
-    ] as const) {
-      const subs = g.substituentsOf(g.roots[k], other);
-      if (subs.length !== 2) return no("unsure");
-      const order = inOrder(rank, subs, [end, other]);
-      if (!Array.isArray(order)) return order;
-      high.push(subs[order[0]].atom);
-    }
-    const cis = (stereo.cis !== (high[0] !== stereo.refs[0])) !== (high[1] !== stereo.refs[1]);
-    return { label: cis ? "Z" : "E" };
+    ] as const;
+    // (each end's two groups, kept on it for an auxiliary unit's way back through it - digraph `rootwardOf`)
+    for (const [k, , other] of ends) g.roots[k].kids = g.substituentsOf(g.roots[k], other);
+    // (cis where, each end's higher group taken for its reference, the drawing's sides say so; and the last rule either end needed)
+    const sense = (rank: Ranker): { cis: boolean; rule: number } | Said => {
+      const high: number[] = [];
+      let rule = -1;
+      for (const [k, end, other] of ends) {
+        const subs = g.roots[k].kids!;
+        if (subs.length !== 2) return no("unsure");
+        const o = inOrder(rank, subs, [end, other]);
+        if (!("order" in o)) return o;
+        high.push(subs[o.order[0]].atom);
+        rule = Math.max(rule, o.rule);
+      }
+      return { cis: (stereo.cis !== (high[0] !== stereo.refs[0])) !== (high[1] !== stereo.refs[1]), rule };
+    };
+    const rank = new Ranker(p, budget);
+    const here = sense(rank);
+    if (!("cis" in here)) return here;
+    const label = here.cis ? "Z" : "E";
+    if (here.rule < RULE_5) return { label };
+    // (decided by rule 5 at an end: seqCis or seqTrans where the mirror image reads it the other way - Hanson et al. 2018 p. 1761)
+    const m = sense(rank.mirror);
+    if (!("cis" in m)) return m;
+    return m.cis === here.cis ? { label } : { label, turns: true };
   } catch (e) {
     if (e instanceof TooLarge) return no("large");
     throw e;
@@ -183,7 +201,7 @@ function agreed(p: Prepared, unit: (q: Prepared) => Said, variants: (systems: nu
     if (reached.reduce((t, i) => t * p.systems[i].structures.length, 1) > MOST_VARIANTS) return no("unsure");
     results = variants(reached).map(unit);
   }
-  const plain = (r: Said): CipResult => ("label" in r ? { label: r.label } : no(r.why, r.bond));
+  const plain = (r: Said): CipResult => ("label" in r ? (r.turns ? { label: r.label, turns: true } : { label: r.label }) : no(r.why, r.bond));
   const said = new Set(results.map((r) => JSON.stringify(plain(r))));
   return said.size === 1 ? plain(results[0]) : no("unsure");
 }

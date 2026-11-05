@@ -73,14 +73,18 @@ duplicate, and ends its branch. A duplicate's own ligands are phantoms, so
 it loses to its real atom only one sphere further out: there is no rule
 that a real atom outranks a duplicate (Hanson 2018 p. 1757, Fig. 1).
 
-A unit's digraphs stop at 200,000 nodes. Past that, the unit gets no label,
-and says why (*No label, and why*).
+A unit's digraphs stop at 400,000 nodes, and its ranking at a million
+comparisons of two nodes. Past either, the unit gets no label, and says
+why (*No label, and why*). Rules 4 and 5 read every configured unit in a
+digraph, each ranked on it in turn, so a cage of centres (cubane) or a
+macrocycle of them takes longest: the validation suite's costliest
+labelled case needs some 600,000 comparisons for each of its two units.
 
 ### The rules, in order (`rank.ts`)
 
-The rules are applied exhaustively and in turn, 1a, 1b, 2, then 3: two
-branches are compared by one rule through their whole depth before the
-next rule is asked (PH 1982 pp. 573-574; Hanson 2018 p. 1757). Within a
+The rules are applied exhaustively and in turn, 1a, 1b, 2, 3, 4a, 4b, 4c,
+then 5: two branches are compared by one rule through their whole depth
+before the next rule is asked (PH 1982 pp. 573-574; Hanson 2018 p. 1757). Within a
 rule, sphere by sphere, the ligands of the higher-ranked atom are compared
 first (PH 1982 p. 574, Fig. 14).
 
@@ -96,15 +100,49 @@ first (PH 1982 p. 574, Fig. 14).
   atom of a given isotope has that isotope's mass, any other atom its
   element's standard atomic weight, and a duplicate 0.
 - **3: Z precedes E, which precedes a double bond that is no stereogenic
-  unit** (the Blue Book, via Hanson 2018 p. 1759). A double bond within a
-  ligand has its E or Z worked out on the same digraph, from the outside
-  in (Hanson 2018 p. 1757): at its far end, by all the rules; at its near
-  end, its ligand back toward the root against the other by rule 1a, on a
-  digraph rooted at that end.
+  unit** (the Blue Book, via Hanson 2018 p. 1759). A double bond that
+  turns in the mirror image (seqCis or seqTrans, below) is left to rules 4a
+  and 5, which Hanson 2018 (p. 1760) says rule 3 leaves them: rule 3 reads
+  it as none.
+- **4a: a chiral unit (R, S, seqCis, seqTrans) precedes a pseudoasymmetric
+  one (r, s, an ordinary Z or E), which precedes none** (the Blue Book, via
+  Hanson 2018 p. 1760; PH 1982 p. 578).
+- **4b: like precedes unlike** (the Blue Book via Hanson 2018 p. 1760; PH
+  1982 p. 577), as Hanson 2018 reads it for machines (p. 1760, Figs. 8 and
+  9). Each ligand's chiral descriptors - R, M and seqCis taken as R - are
+  read in the order of their places, sphere by sphere and then step by step
+  on the way out: by rank under rules 1a to 4a, and, ranks alike, a step
+  like the reference before one unlike it. Each ligand is read once against
+  R and once against S, as bits (like 1); the ligand whose higher reading
+  is the higher precedes. Rule 4b compares two ligands whole: it leaves the
+  order a later rule goes through their branches in to that rule, as rule
+  4c sorts r before s (Hanson 2018 p. 1761, Fig. 10).
+- **4c: r precedes s** (the Blue Book via Hanson 2018 p. 1761).
+- **5: R precedes S, and seqCis seqTrans** (the Blue Book via Hanson 2018
+  p. 1761; CIP 1966 p. 391).
 
-R or S follows from the order of a centre's four ligands and its
-configuration, E or Z from each end's higher ligand and the double bond's
-cis or trans.
+**Auxiliary descriptors** (Hanson 2018 p. 1757; PH 1982 p. 575). Rules 3 to
+5 read the configured units within a ligand: each centre and double bond
+met in the digraph gets its descriptor on that digraph, from the outside
+in. Its ligands in the digraph are ranked by all the rules; its ligand
+back toward the root is the digraph seen from it, ranked by rule 1a alone
+(the path back to the root being unique in its atoms, Hanson 2018
+p. 1757). A double bond's descriptor is carried by its end nearer the root
+(Hanson 2018 p. 1760).
+
+**R or r, Z or seqCis.** R or S follows from the order of a centre's four
+ligands and its configuration, E or Z from each end's higher ligand and the
+double bond's cis or trans. Where rule 5 decided the order, the unit is
+worked out again on its mirror image, as Hanson 2018 (p. 1761) proposes: a
+centre that reads the same there is pseudoasymmetric, r or s; a double bond
+that reads the other way is seqCis or seqTrans. Rule 5 is the one rule a
+reflection turns, so where it decided nothing the unit is R or S, or an
+ordinary E or Z.
+
+**seqCis and seqTrans are shown as Z and E**: capitals, as an ordinary Z
+or E, with the difference said in the hover - it turns in the mirror image, its two groups being each
+other's mirror image. Lower case stays r and s alone, the descriptors that
+do not turn. (The validation suite writes them z and e.)
 
 ### Charged and radical mesomeric systems: Meno's own rule
 
@@ -156,17 +194,16 @@ A unit with no label always says why; none is ever guessed.
 |---|---|
 | alike | Two of its ligands are alike by every rule: no centre, or no E/Z. |
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
-| later | Only rules 4 and 5 could tell two ligands apart: a centre or an axis in them, R against S. Not worked out yet. |
+| later | Only an axis's M or P could tell two ligands apart. Not worked out yet. |
 | symmetric | Only the proposed rule 6 could: a spiro atom, or a centre on an axis of symmetry. Not worked out yet. |
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement (three bonds and no lone pair). |
-| large | Its digraph grows past 200,000 nodes. |
+| large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |
 
 ## What it does not do yet
 
-- **Rules 4a to 4c and 5, and r and s** (pseudoasymmetric centres, and a
-  double bond's seqCis and seqTrans): those units say `later`.
 - **Rule 6**, the 2018 proposal: those units say `symmetric`.
-- **Axes and odd cumulenes** (Ra and Sa, M and P).
+- **Axes and odd cumulenes** (Ra and Sa, M and P); a tie only one could
+  break says `later`.
 - **Wiring in**: the drawing's labels and those of molecules in 3D.
 
 ## How it is checked
@@ -174,8 +211,8 @@ A unit with no label always says why; none is ever guessed.
 - **Each rule and convention pinned by a pair** (`cip.test.ts`): two
   structures alike but for what the rule reads, with one answer for one
   and another, or none, for the other; and what must not change a label -
-  numbering the atoms another way, the mirror image (R and S swap, E and Z
-  stay), a drawing's wedges put on other bonds.
+  numbering the atoms another way, the mirror image (R and S swap, r, s,
+  E and Z stay), a drawing's wedges put on other bonds.
 - **Cases of Hanson 2018's validation suite** (`cipCases.test.ts`), each
   redrawn here from its structure and cited by its number, its figure in
   the paper, and the Blue Book section the suite gives for it.

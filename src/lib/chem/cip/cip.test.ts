@@ -83,6 +83,40 @@ describe("rule 3: seqcis (Z) precedes seqtrans (E), which precedes a double bond
   });
 });
 
+describe("rules 4a, 4b, 4c and 5: configurations in the ligands", () => {
+  it("4a: a configured centre in a ligand precedes an unconfigured one - the two ligands' places swapped, the label turns", () => {
+    expect(cipOf("O[C@H]([C@H](C)Cl)C(C)Cl")).toEqual(["C1:S", "C2:S"]);
+    expect(cipOf("O[C@H](C(C)Cl)[C@H](C)Cl")).toEqual(["C1:R", "C5:S"]);
+  });
+
+  it("4b: a ligand whose two centres are like (R,R or S,S) precedes one whose are unlike - a chiral centre, R or S", () => {
+    expect(cipOf("O[C@H]([C@H](Cl)[C@H](C)Cl)[C@H](Cl)[C@@H](C)Cl")).toEqual(["C1:S", "C2:S", "C4:S", "C7:S", "C9:R"]);
+  });
+
+  it("4c: a ligand with an r centre precedes one with an s - and with two s centres, none", () => {
+    expect(cipOf("O[C@H]([C@H]([C@H](C)Cl)[C@@H](C)Cl)[C@@H]([C@H](C)Cl)[C@@H](C)Cl")).toEqual(["C1:S", "C2:r", "C3:S", "C6:R", "C9:s", "C10:S", "C13:R"]);
+    expect(cipOf("O[C@H]([C@@H]([C@H](C)Cl)[C@@H](C)Cl)[C@@H]([C@H](C)Cl)[C@@H](C)Cl")[0]).toEqual("C1:alike");
+  });
+
+  it("5: an R group precedes its mirror image, S - a pseudoasymmetric centre, r or s, the same in the mirror image; R and R, none", () => {
+    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@@H](Cl)C")).toEqual(["C1:R", "C3:r", "C5:S"]);
+    expect(cipOf("C[C@H](Cl)[C@@H](O)[C@H](Cl)C")).toEqual(["C1:S", "C3:r", "C5:R"]);
+    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@H](Cl)C")).toEqual(["C1:R", "C3:alike", "C5:R"]);
+    // (two enantiomorphic ligands, each the other's mirror image, against a like and an unlike pair: rule 5, r or s)
+    expect(cipOf("O[C@H]([C@@H](Cl)[C@H](C)Cl)[C@H](Cl)[C@@H](C)Cl")[0]).toEqual("C1:s");
+  });
+
+  it("5 at a double bond: its two groups each other's mirror image - seqTrans or seqCis, Z or E that turns in the mirror image", () => {
+    expect(cipOf("Cl[C@H](C)/C(=C/C)[C@H](C)Cl")).toEqual(["C1:R", "C6:S", "C3=C4:E turns"]);
+    expect(cipOf("Cl[C@@H](C)/C(=C/C)[C@@H](C)Cl")).toEqual(["C1:S", "C6:R", "C3=C4:Z turns"]);
+  });
+
+  it("3 leaves a double bond that turns in the mirror image to rules 4a and 5, reading it as none: here it goes on to the Z bonds further out", () => {
+    // (the first ligand's double bond seqTrans, its groups CH(Cl)CH=CHCH3 with E bonds, R and S; the second's, unconfigured, with Z bonds, no unit)
+    expect(cipOf(String.raw`O[C@H](/C=C(\[C@H](Cl)/C=C/C)[C@@H](Cl)/C=C/C)C=C(C(Cl)/C=C\C)C(Cl)/C=C\C`).slice(0, 4)).toEqual(["C1:R", "C4:R", "C9:S", "C2=C3:E turns"]);
+  });
+});
+
 describe("what gives no label, and why", () => {
   it("says a ligand's double bond left open in the drawing, by its bond", () => {
     const input = cipInput("CC=C[C@H](O)/C=C/C");
@@ -93,17 +127,7 @@ describe("what gives no label, and why", () => {
     });
   });
 
-  it("says a tie only rules 4 and 5 could break is not worked out yet: a pseudoasymmetric centre between an R and an S group", () => {
-    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@@H](Cl)C")).toEqual(["C1:R", "C3:later", "C5:S"]);
-  });
-
-  it("says so too where the tie is met in a ligand: a double bond whose two groups differ only by their centres", () => {
-    // (the first double bond's groups, each CH(Cl)CH=CHCH3 with an E bond, R against S: rule 3 cannot read it; the second's, unconfigured
-    //  and with Z bonds, is no unit - without the first's 'later', rule 3 would go on to the Z bonds further out and give a label)
-    expect(cipOf(String.raw`O[C@H](/C=C(\[C@H](Cl)/C=C/C)[C@@H](Cl)/C=C/C)C=C(C(Cl)/C=C\C)C(Cl)/C=C\C`).slice(0, 4)).toEqual(["C1:later", "C4:R", "C9:S", "C2=C3:later"]);
-  });
-
-  it("says so where an axis is drawn in two alike ligands, and calls them alike where none is", () => {
+  it("says a tie only an axis could break is not worked out yet: an axis drawn in two alike ligands - and calls them alike where none is", () => {
     // (two 2'-methylbiphenyl-2-yl groups, each with its axis between its rings: bonds 7-8 and 20-21)
     const input = cipInput("O[C@H](c1ccccc1-c1ccccc1C)c1ccccc1-c1ccccc1C");
     expect(cipSaid(input)).toEqual(["C1:alike"]);

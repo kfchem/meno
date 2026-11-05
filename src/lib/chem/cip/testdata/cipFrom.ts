@@ -30,10 +30,10 @@ export function cipInput(smiles: string): IdentityInput {
   };
 }
 
-/** What the CIP says of each configured centre and double bond, as "C3:R", "C1=C2:Z" or "C3:alike": by element and atom index. */
+/** What the CIP says of each configured centre and double bond, as "C3:R", "C3:r", "C1=C2:Z", "C1=C2:Z turns" (seqCis) or "C3:alike": by element and atom index. */
 export function cipSaid(input: IdentityInput): string[] {
   const { centres, bonds } = cipLabels(input);
-  const said = (x: { label: string } | { why: string }) => ("label" in x ? x.label : x.why);
+  const said = (x: { label: string; turns?: true } | { why: string }) => ("label" in x ? x.label + (x.turns ? " turns" : "") : x.why);
   const el = (a: number) => `${input.atoms[a].el}${a}`;
   return [...[...centres].map(([a, x]) => `${el(a)}:${said(x)}`), ...[...bonds].map(([i, x]) => `${el(input.bonds[i].a)}=${el(input.bonds[i].b)}:${said(x)}`)];
 }
