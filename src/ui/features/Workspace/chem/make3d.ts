@@ -545,7 +545,7 @@ export type PageRounds = { window: number; first: number; most: number };
  * tries. None where it is asked once: a number of the chemist's own, or a
  * search that takes no draws.
  */
-export function pageRounds(block: Pick<Block, "molblock">, chosen: ChemistrySettings, draws: boolean): PageRounds | { needs: string } | null {
+export function pageRounds(block: Pick<Block, "molblock">, chosen: Pick<ChemistrySettings, "sought3d" | "within3d" | "first3d" | "most3d">, draws: boolean): PageRounds | { needs: string } | null {
   if (!draws) return null;
   const values = { sought: chosen.sought3d ?? "needed", within: chosen.within3d ?? Number.NaN, first: chosen.first3d ?? 0, most: chosen.most3d ?? MOST_CONFORMERS };
   const asked = roundsAsked(values, () => conformersSoughtOf(block.molblock));
