@@ -700,7 +700,7 @@ export function passedSaid(kind: StepKind, count: number): string | null {
 /**
  * How far, in Å, an atom held where it stood may end from where it was before it is taken for one that moved (`workedOf`):
  * 1e-4 Å - far above what the programs' printed coordinates round to (six decimals or more), far below any step an
- * optimisation takes (CORR's review, 2026-11-06).
+ * optimisation takes (found in review, 2026-11-06).
  */
 const HELD_MOVED_MOST = 1e-4;
 
