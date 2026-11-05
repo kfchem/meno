@@ -561,6 +561,14 @@ cores and memory fit what is free, and keeps the order they were asked
 for: a job never jumps ahead of an earlier one. A job's cores and memory
 are what its plugin declares; what the runner may use is capped in
 Settings, all cores and three quarters of the memory by default.
+It keeps the computer from sleeping for want of use while a job's
+program runs, so that a calculation left overnight is not cut short:
+each job's runner holds it from when its program starts until it and the
+programs after it end, whether Meno is open or not (macOS: the system's
+`caffeinate`; Windows: the runner's thread saying the system is needed;
+elsewhere nothing). The display may still turn off, and a lid closed or
+a sleep asked for is the person's. Settings, *Calculations*, can turn it
+off (`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
