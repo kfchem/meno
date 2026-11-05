@@ -21,9 +21,6 @@ export const COLORS = {
   hairline: "#d1d9e0",
   // A port pointed at, filled (--color-accel-lightbase; pageGl ports)
   lightBase: "#cfe7ee",
-  // (FrameTabs' names for the same three, until one set of names is agreed - local merge only)
-  text: "#1f2328",
-  line: "#d1d9e0",
 
   // Base drawing colors (kept here for centralization)
   bond: "#000000",
