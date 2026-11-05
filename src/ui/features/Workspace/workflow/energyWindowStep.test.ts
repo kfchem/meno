@@ -106,7 +106,10 @@ describe("Energy window, of the lowest in each value of a property", () => {
     expect(window.type === "number" && Number.isNaN(window.default)).toBe(true);
     expect(window.note).toBe(WINDOW_GUIDE);
     // (its two numbers one with the other: RT ln 100 at the temperature it says is the window it says, to the places it gives)
-    const [, kelvin, kcal, ratio, logOf] = /at ([\d.]+) K one ([\d.]+) kcal\/mol above the lowest weighs 1\/(\d+) as much \(RT ln (\d+)\)/.exec(WINDOW_GUIDE)!;
+    const [, kelvin, kcal, ratio, logOf] = /at ([\d.]+) K one ([\d.]+)\skcal\/mol above the lowest weighs 1\/(\d+) as much \(RT\sln\s(\d+)\)/.exec(WINDOW_GUIDE)!;
+    // (its number and unit, and RT ln 100, each one unbroken: no-break spaces)
+    expect(WINDOW_GUIDE).toContain("2.73\u00a0kcal/mol");
+    expect(WINDOW_GUIDE).toContain("(RT\u00a0ln\u00a0100)");
     expect(logOf).toBe(ratio);
     expect((GAS_CONSTANT_HARTREE * Number(kelvin) * Math.log(Number(ratio)) * factor("Eh", "kcal/mol")).toFixed(2)).toBe(kcal);
     expect([kelvin, kcal, ratio]).toEqual(["298.15", "2.73", "100"]);

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import type { ReactNode } from "react";
 import { MANY_CHOICES, type Option, type OptionValues } from "../../lib/options";
 import Checkbox from "../controls/Checkbox";
 import NumberField from "../controls/NumberField";
@@ -15,12 +16,15 @@ export default function OptionRows({
   values,
   onChange,
   indent = false,
+  before,
 }: {
   options: readonly Option[];
   values: OptionValues;
   onChange: (values: OptionValues) => void;
   /** Set in under what they belong to. */
   indent?: boolean;
+  /** What a number's or a text's row shows just before its field, where it shows anything: a Clear of the chemist's own value (Settings, Calculations) - the field staying where it is. */
+  before?: (o: Option) => ReactNode;
 }) {
   const set = (id: string, v: string | number | boolean) => onChange({ ...values, [id]: v });
   return (
@@ -51,6 +55,7 @@ export default function OptionRows({
             <Checkbox label={o.label} checked={values[o.id] === true} onChange={(v) => set(o.id, v)} />
           ) : (
             <span className="shrink-0 flex items-center gap-1.5">
+              {before?.(o)}
               {o.type === "number" ? (
                 <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
               ) : (
