@@ -61,10 +61,10 @@ describe("a yes to a network question, the app slow to hear of it", () => {
   it("counts at once: what was asked for, used straight after, is not asked of again", async () => {
     const yes = answeringYes();
     try {
-      expect(await ask("python-env:plugin-rdkit", true)).toBe(true);
-      expect(useNetwork.getState().granted).toContain("python-env:plugin-rdkit");
-      expect(await ask("python-env:plugin-rdkit")).toBe(true);
-      expect(yes.titles).toEqual(["Set up python-env:plugin-rdkit?"]);
+      expect(await ask("python-env:plugin-sketchkit", true)).toBe(true);
+      expect(useNetwork.getState().granted).toContain("python-env:plugin-sketchkit");
+      expect(await ask("python-env:plugin-sketchkit")).toBe(true);
+      expect(yes.titles).toEqual(["Set up python-env:plugin-sketchkit?"]);
     } finally {
       yes.stop();
     }
@@ -74,8 +74,8 @@ describe("a yes to a network question, the app slow to hear of it", () => {
     slow.fails = true;
     const yes = answeringYes();
     try {
-      expect(await ask("python-env:plugin-xtb")).toBe(true);
-      expect(useNetwork.getState().granted).toContain("python-env:plugin-xtb");
+      expect(await ask("python-env:plugin-tightbind")).toBe(true);
+      expect(useNetwork.getState().granted).toContain("python-env:plugin-tightbind");
     } finally {
       yes.stop();
     }

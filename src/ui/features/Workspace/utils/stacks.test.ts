@@ -69,7 +69,7 @@ describe("a file's molecules in 3D, opened", () => {
   it("stand as a stack - an SD file's records - but side by side where they are an output's jobs", () => {
     expect(openedAsStack([{}, {}])).toBe(true);
     expect(openedAsStack([{}])).toBe(false);
-    const job = (number: number) => ({ calc: { readers: ["cclib"], job: { number, of: 2 } } });
+    const job = (number: number) => ({ calc: { readers: ["manyread"], job: { number, of: 2 } } });
     expect(openedAsStack([job(1), job(2)])).toBe(false);
   });
 });

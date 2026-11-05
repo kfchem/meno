@@ -4,9 +4,9 @@ import { locate, lookFor, lookForAll, tooOld, useInstalled, whereIs } from "./in
 
 vi.mock("./here", () => ({ systemHere: () => "macos" }));
 
-const ORCA = { name: "orca", label: "ORCA", files: { macos: "orca", linux: "orca" }, path: [], env: {}, places: {} };
-const G16W = { name: "g16", label: "Gaussian", files: { windows: "g16.exe" }, path: [], env: {}, places: {} };
-const BLENDER = { name: "blender", label: "Blender", files: { macos: "Blender" }, path: [], env: {}, places: {} };
+const QUANTA = { name: "quanta", label: "Quanta", files: { macos: "quanta", linux: "quanta" }, path: [], env: {}, places: {} };
+const ORBITRONW = { name: "orbitron", label: "Orbitron", files: { windows: "orbitron.exe" }, path: [], env: {}, places: {} };
+const LUMEN = { name: "lumen", label: "Lumen", files: { macos: "Lumen" }, path: [], env: {}, places: {} };
 
 /** Meno's backend, as a test has it: a program is where it was located, if that is it; else where `onPath` says. */
 function backend(onPath: Record<string, string> = {}) {
@@ -28,76 +28,76 @@ beforeEach(() => {
 
 describe("a program installed separately", () => {
   it("is looked for where it was located, else where the system finds programs - and where it is, kept", async () => {
-    const { ask, asked } = backend({ orca: "/usr/local/bin/orca" });
-    expect(whereIs("orca", "orca")).toBeUndefined();
-    expect(await lookFor("orca", "orca", ask)).toBe("/usr/local/bin/orca");
-    expect(asked[0]).toEqual({ plugin: "orca", name: "orca", located: null });
-    expect(whereIs("orca", "orca")).toBe("/usr/local/bin/orca");
+    const { ask, asked } = backend({ quanta: "/usr/local/bin/quanta" });
+    expect(whereIs("quanta", "quanta")).toBeUndefined();
+    expect(await lookFor("quanta", "quanta", ask)).toBe("/usr/local/bin/quanta");
+    expect(asked[0]).toEqual({ plugin: "quanta", name: "quanta", located: null });
+    expect(whereIs("quanta", "quanta")).toBe("/usr/local/bin/quanta");
     // located, it is asked for there
-    useAppSettings.setState({ plugins: { ...useAppSettings.getState().plugins, programs: { "orca:orca": "/Applications/orca_6/orca" } } });
-    expect(await lookFor("orca", "orca", ask)).toBe("/Applications/orca_6/orca");
+    useAppSettings.setState({ plugins: { ...useAppSettings.getState().plugins, programs: { "quanta:quanta": "/Applications/quanta_6/quanta" } } });
+    expect(await lookFor("quanta", "quanta", ask)).toBe("/Applications/quanta_6/quanta");
     // found nowhere: null
-    expect(await lookFor("gaussian", "g16", backend().ask)).toBeNull();
-    expect(whereIs("gaussian", "g16")).toBeNull();
+    expect(await lookFor("orbitron", "orbitron", backend().ask)).toBeNull();
+    expect(whereIs("orbitron", "orbitron")).toBeNull();
   });
 
   it("is looked for only where it is made for the system Meno runs on", async () => {
     const { ask, asked } = backend();
-    await lookForAll([{ id: "orca", installed: [ORCA] }, { id: "gaussian", installed: [G16W] }], ask);
-    expect(asked).toEqual([{ plugin: "orca", name: "orca", located: null }]);
+    await lookForAll([{ id: "quanta", installed: [QUANTA] }, { id: "orbitron", installed: [ORBITRONW] }], ask);
+    expect(asked).toEqual([{ plugin: "quanta", name: "quanta", located: null }]);
   });
 
   it("is located by picking its file - taken only where it is that program, and kept in Settings", async () => {
     const { ask } = backend();
-    expect(await locate("orca", ORCA, async () => "/Applications/orca_6/orca", ask)).toBe("/Applications/orca_6/orca");
-    expect(useAppSettings.getState().plugins.programs).toEqual({ "orca:orca": "/Applications/orca_6/orca" });
-    expect(whereIs("orca", "orca")).toBe("/Applications/orca_6/orca");
+    expect(await locate("quanta", QUANTA, async () => "/Applications/quanta_6/quanta", ask)).toBe("/Applications/quanta_6/quanta");
+    expect(useAppSettings.getState().plugins.programs).toEqual({ "quanta:quanta": "/Applications/quanta_6/quanta" });
+    expect(whereIs("quanta", "quanta")).toBe("/Applications/quanta_6/quanta");
     // nothing picked: nothing changes
-    expect(await locate("orca", ORCA, async () => null, ask)).toBeNull();
+    expect(await locate("quanta", QUANTA, async () => null, ask)).toBeNull();
     // another file: refused, saying what it should be
-    await expect(locate("orca", ORCA, async () => "/Applications/orca_6/orca_scf", ask)).rejects.toThrow(/not ORCA: its program is the file called orca/);
-    expect(useAppSettings.getState().plugins.programs).toEqual({ "orca:orca": "/Applications/orca_6/orca" });
+    await expect(locate("quanta", QUANTA, async () => "/Applications/quanta_6/quanta_scf", ask)).rejects.toThrow(/not Quanta: its program is the file called quanta/);
+    expect(useAppSettings.getState().plugins.programs).toEqual({ "quanta:quanta": "/Applications/quanta_6/quanta" });
   });
 
   it("keeps where it was located, whatever a look begun before answers after", async () => {
     // (the window coming back as the file dialog closes: a look begun with nothing located yet, answering late)
     let late: (v: unknown) => void = () => {};
     const slow = ((_cmd: string, a?: Record<string, unknown>) => (a?.located ? Promise.resolve({ path: a.located }) : new Promise((go) => (late = go)))) as never;
-    const looking = lookFor("orca", "orca", slow);
-    expect(await locate("orca", ORCA, async () => "/Applications/orca_6/orca", slow)).toBe("/Applications/orca_6/orca");
+    const looking = lookFor("quanta", "quanta", slow);
+    expect(await locate("quanta", QUANTA, async () => "/Applications/quanta_6/quanta", slow)).toBe("/Applications/quanta_6/quanta");
     late(null);
     await looking;
-    expect(whereIs("orca", "orca")).toBe("/Applications/orca_6/orca");
+    expect(whereIs("quanta", "quanta")).toBe("/Applications/quanta_6/quanta");
   });
 
   it("is located on macOS by picking the app that holds it: the program inside it kept", async () => {
-    const inside = "/Applications/Blender.app/Contents/MacOS/Blender";
+    const inside = "/Applications/Lumen.app/Contents/MacOS/Lumen";
     const asked: unknown[] = [];
-    const ask = (async (_cmd: string, a?: Record<string, unknown>) => (asked.push(a), a?.located === "/Applications/Blender.app" ? { path: inside, version: "5.2.2" } : null)) as never;
-    expect(await locate("blender", BLENDER, async () => "/Applications/Blender.app", ask)).toBe(inside);
-    expect(useAppSettings.getState().plugins.programs["blender:blender"]).toBe(inside);
+    const ask = (async (_cmd: string, a?: Record<string, unknown>) => (asked.push(a), a?.located === "/Applications/Lumen.app" ? { path: inside, version: "5.2.2" } : null)) as never;
+    expect(await locate("lumen", LUMEN, async () => "/Applications/Lumen.app", ask)).toBe(inside);
+    expect(useAppSettings.getState().plugins.programs["lumen:lumen"]).toBe(inside);
     // (what was picked alone is asked for - never another copy found elsewhere - and its version kept)
-    expect(asked).toEqual([{ plugin: "blender", name: "blender", located: "/Applications/Blender.app", exact: true }]);
-    expect(useInstalled.getState().chosen["blender:blender"]).toEqual({ path: inside, version: "5.2.2" });
+    expect(asked).toEqual([{ plugin: "lumen", name: "lumen", located: "/Applications/Lumen.app", exact: true }]);
+    expect(useInstalled.getState().chosen["lumen:lumen"]).toEqual({ path: inside, version: "5.2.2" });
     // (an app that holds something else is not it)
-    const elsewhere = (async () => ({ path: "/Applications/Other.app/x/Blender" })) as never;
-    await expect(locate("blender", BLENDER, async () => "/Applications/Blender.app", elsewhere)).rejects.toThrow(/not Blender/);
+    const elsewhere = (async () => ({ path: "/Applications/Other.app/x/Lumen" })) as never;
+    await expect(locate("lumen", LUMEN, async () => "/Applications/Lumen.app", elsewhere)).rejects.toThrow(/not Lumen/);
   });
 
   it("where its plugin says how to ask, is of a version Meno takes: an older one said, and not run", async () => {
-    const why = "Meno needs Blender 5.0 or later; this one is 4.1.1";
-    const old = "/Applications/Blender 4.1.app/Contents/MacOS/Blender";
+    const why = "Meno needs Lumen 5.0 or later; this one is 4.1.1";
+    const old = "/Applications/Lumen 4.1.app/Contents/MacOS/Lumen";
     const ask = (async () => ({ path: old, version: "4.1.1", why })) as never;
     // looked for: none to run, and why
-    expect(await lookFor("blender", "blender", ask)).toBeNull();
-    expect(whereIs("blender", "blender")).toBeNull();
-    expect(tooOld("blender", "blender")).toBe(why);
+    expect(await lookFor("lumen", "lumen", ask)).toBeNull();
+    expect(whereIs("lumen", "lumen")).toBeNull();
+    expect(tooOld("lumen", "lumen")).toBe(why);
     // located: refused, saying why, and not kept
-    await expect(locate("blender", BLENDER, async () => "/Applications/Blender 4.1.app", ask)).rejects.toThrow(`${why}.`);
-    expect(useAppSettings.getState().plugins.programs["blender:blender"]).toBeUndefined();
+    await expect(locate("lumen", LUMEN, async () => "/Applications/Lumen 4.1.app", ask)).rejects.toThrow(`${why}.`);
+    expect(useAppSettings.getState().plugins.programs["lumen:lumen"]).toBeUndefined();
     // a newer one found later: run, and nothing said against it
-    const now = (async () => ({ path: "/Applications/Blender.app/Contents/MacOS/Blender", version: "5.2.2" })) as never;
-    expect(await lookFor("blender", "blender", now)).toBe("/Applications/Blender.app/Contents/MacOS/Blender");
-    expect(tooOld("blender", "blender")).toBeUndefined();
+    const now = (async () => ({ path: "/Applications/Lumen.app/Contents/MacOS/Lumen", version: "5.2.2" })) as never;
+    expect(await lookFor("lumen", "lumen", now)).toBe("/Applications/Lumen.app/Contents/MacOS/Lumen");
+    expect(tooOld("lumen", "lumen")).toBeUndefined();
   });
 });

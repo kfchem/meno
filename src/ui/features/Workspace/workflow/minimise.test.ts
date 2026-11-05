@@ -26,7 +26,7 @@ const restraints = (start?: number[]): Property => ({
   status: "computed",
 });
 const out = (optimised: boolean): ReaderOutput =>
-  ({ schema: 1, program: "RDKit", method: "MMFF94, restrained", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0.97, 0, 0, -0.3, 0.95, 0]], energies: [-0.01], optimised, results: [] }) as unknown as ReaderOutput;
+  ({ schema: 1, program: "Sketchkit", method: "KF1, restrained", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0.97, 0, 0, -0.3, 0.95, 0]], energies: [-0.01], optimised, results: [] }) as unknown as ReaderOutput;
 const held = (w: Worked) => w.properties?.restraints?.value as { start?: number[] };
 
 describe("Minimise with restraints", () => {

@@ -166,8 +166,8 @@ describe("a workspace file", () => {
     expect(readWorkspace(json)!.drawn.molecules3d![0].calc!.source).toEqual({ name: "water.cube", sha256: source.sha256, kind: "cube" });
     expect((await outputOf(readWorkspace(json)!.drawn.molecules3d![0].calc!.source!))?.text).toBe(text);
     // (one not to be had - held nowhere, not where it was - is not kept, keeps where it was, and is named)
-    const gone = { name: "gone.out", sha256: "e".repeat(64), kind: "orca", path: "/data/gone.out" };
-    store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 9, y: 0 }, calc: { readers: ["cclib"], source: gone } as never }] });
+    const gone = { name: "gone.out", sha256: "e".repeat(64), kind: "quanta", path: "/data/gone.out" };
+    store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 9, y: 0 }, calc: { readers: ["manyread"], source: gone } as never }] });
     const saved = await workspaceFile(store.getState());
     const both = readMenoFile(saved.bytes);
     expect(both.files.map((f) => f.name)).toEqual(["water.cube"]);
@@ -186,11 +186,11 @@ describe("a workspace file", () => {
 
   it("keeps its texts - each once, an output's too, where they were said nowhere - and opens with them, its column as it was", async () => {
     const output = "an output's text";
-    const source = await rememberOutput("run.out", output, "orca", "/data/run.out");
+    const source = await rememberOutput("run.out", output, "quanta", "/data/run.out");
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
-    store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 0, y: 0 }, calc: { readers: ["cclib"], source } as never }] });
+    store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 0, y: 0 }, calc: { readers: ["manyread"], source } as never }] });
     store.getState().addTexts([
       { name: "job.inp", text: "! B3LYP def2-SVP\n", path: "/data/job.inp" },
       { name: "run.out", text: output, path: "/data/run.out" },
@@ -276,7 +276,7 @@ describe("a workspace with what is no entry in its lists", () => {
   const STRAYS: unknown[] = [null, 0, 7, "", "C", [], [1, 2], true];
   const job = "0f8fad5b-d9cb-469f-a165-70867728950e";
   const ink = { pen: "pen", strokes: [{ points: [0, 0, 0.5, 1, 1, 0.5] }] };
-  const molecule = { ...water3d, made: { method: "ETKDG v3 + MMFF94", how: [{ label: "Optimised", text: "MMFF94" }] } };
+  const molecule = { ...water3d, made: { method: "ETKDG v3 + KF1", how: [{ label: "Optimised", text: "KF1" }] } };
   // (a cyclopropane, its ring filled, an electron-pushing arrow on it - and one of everything else a workspace holds)
   const WHOLE = {
     format: "meno-workspace",

@@ -371,7 +371,7 @@ describe("a wire going round what is in its way", () => {
 
 describe("a wire never runs on past its ends and back", () => {
   it("is drawn from a step to its set below, a set beside the step: down and in level, never past the set and back up", () => {
-    // (as the maintainer's page had it, in page pixels: xTB's card, its Energies set to its right and above, its Failed set below; the gap
+    // (as the maintainer's page had it, in page pixels: Tightbind's card, its Energies set to its right and above, its Failed set below; the gap
     //  between the card and Energies under a bond, so that every way down passes nearer Energies than half a bond)
     const card: Frame = { x0: 21.8 * PX, x1: 229.8 * PX, y0: -366.9 * PX, y1: -290.9 * PX };
     const energies: Frame = { x0: 277.1 * PX, x1: 642.2 * PX, y0: -407.3 * PX, y1: -65.5 * PX };

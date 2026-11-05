@@ -388,7 +388,7 @@ describe("editor store over a document", () => {
 
   it("shuts a step's options card, and forgets a set chosen, when an undo takes it away", () => {
     const { doc, state } = editor();
-    const step = state().addStep("energy" as never, "xtb", 0, 0);
+    const step = state().addStep("energy" as never, "tightbind", 0, 0);
     state().setWorkflowView({ openStep: step });
     doc.undo();
     expect(state().openStep).toBeNull();

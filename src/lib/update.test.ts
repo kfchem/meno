@@ -39,7 +39,7 @@ describe("keeping Meno up to date", () => {
 
   it("hides only a look's notice where the user turned it off - the look that finds a newer Meno shows its notice from the download's start; every other task's always shows", () => {
     const look = { id: "app-update-1", purpose: UPDATE_PURPOSE, label: "Keeping Meno up to date", started: 1 };
-    const fetch = { id: "env-1", purpose: "plugin-env", label: "Setting up cclib", started: 1 };
+    const fetch = { id: "env-1", purpose: "plugin-env", label: "Setting up manyread", started: 1 };
     useNetwork.setState({ tasks: { [look.id]: look, [fetch.id]: fetch } });
     const phase = (p: UpdateState["phase"]) => useUpdate.setState({ current: "0.1.16", phase: p, version: p === "checking" ? null : "0.1.17", notes: null, checked: null, error: null, held: 0 }, true);
     // (looking: hidden where turned off, shown where not; the other task shown either way)

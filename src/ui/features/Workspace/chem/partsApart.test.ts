@@ -14,7 +14,7 @@ describe("a structure of more than one part, made in 3D", () => {
   });
 
   it("has its parts set side by side along x, largest first, the facing atoms their van der Waals contact apart, and says so", () => {
-    const made = { atoms, frames: [[0, 0, 0, ...acetate]], how: [{ label: "Kept", text: "1 of 1 embedded (10 sought)" }, { label: "Made by", text: "RDKit" }] };
+    const made = { atoms, frames: [[0, 0, 0, ...acetate]], how: [{ label: "Kept", text: "1 of 1 embedded (10 sought)" }, { label: "Made by", text: "Sketchkit" }] };
     const out = partsSideBySide(made, partsOf(atoms, bonds));
     const f = out.frames[0];
     // (the acetate's furthest O at x 0.7 + 1.5, the sodium 2.5 beyond: x 0.7 + 1.5 + 2.5)

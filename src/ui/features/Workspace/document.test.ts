@@ -587,7 +587,7 @@ describe("what readers reading an output as well found", () => {
     ],
     bonds: [],
     at: { x: 0, y: 0 },
-    calc: { readers: ["cclib 1.9rc1"], source: { name: "w.out", sha256: sha, kind: "orca" } },
+    calc: { readers: ["manyread 1.9rc1"], source: { name: "w.out", sha256: sha, kind: "quanta" } },
   };
   const withWater = () => ops.addMolecule3d(emptyWorkspaceDocument(), water3d);
   const charges = { id: "npa", on: "atoms", group: "Partial charges", label: "Natural", quantity: "charge", values: [-0.9, 0.45, 0.45] };
@@ -596,7 +596,7 @@ describe("what readers reading an output as well found", () => {
   it("is joined to each molecule read from that output, as its own reader's, once", () => {
     const d = ops.withReadings(withWater(), { [sha]: [found] });
     const calc = d.molecules3d![0].calc!;
-    expect(calc.readers).toEqual(["cclib 1.9rc1", "nbo 7"]);
+    expect(calc.readers).toEqual(["manyread 1.9rc1", "nbo 7"]);
     expect(calc.results!.map((r) => [r.id, r.from])).toEqual([["npa", "nbo"]]);
     // (joined again: nothing new)
     expect(ops.withReadings(d, { [sha]: [found] })).toBe(d);
@@ -605,12 +605,12 @@ describe("what readers reading an output as well found", () => {
   it("says a reader that could not read it, or read other atoms", () => {
     const d = ops.withReadings(withWater(), {
       [sha]: [
-        { from: "pyscf", why: "no basis set in it" },
+        { from: "wavecalc", why: "no basis set in it" },
         { ...found, from: "other", output: { ...found.output, atoms: ["O", "H"] } },
       ],
     });
     expect(d.molecules3d![0].calc!.unread).toEqual([
-      { from: "pyscf", why: "no basis set in it" },
+      { from: "wavecalc", why: "no basis set in it" },
       { from: "other", why: "it read other atoms" },
     ]);
   });
@@ -624,7 +624,7 @@ describe("what readers reading an output as well found", () => {
     expect(d.molecules3d!.map((m) => m.calc!.results!.map((r) => (r as { values: number[] }).values[0]))).toEqual([[-0.9], [-0.8]]);
     // (read as one: its end, the last job's)
     const asOne = ops.withReadings(two(), { [sha]: [found] });
-    expect(asOne.molecules3d!.map((m) => m.calc!.readers)).toEqual([["cclib 1.9rc1"], ["cclib 1.9rc1", "nbo 7"]]);
+    expect(asOne.molecules3d!.map((m) => m.calc!.readers)).toEqual([["manyread 1.9rc1"], ["manyread 1.9rc1", "nbo 7"]]);
     expect(ops.readingOfJob(found, undefined)).toBe(found);
   });
 

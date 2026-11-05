@@ -18,9 +18,9 @@ const nh3 = (z = 0.1): SetEntry =>
     xyz: [0, 0, z, 1.01, 0, 0, -0.505, 0.8747, 0, -0.505, -0.8747, 0],
   }) as unknown as SetEntry;
 
-/** What ORCA's OptTS read back: its way there, frame by frame, its energies, and whether it converged. */
+/** What Quanta's OptTS read back: its way there, frame by frame, its energies, and whether it converged. */
 const optts = (frames: readonly (readonly number[])[], optimised: boolean): ReaderOutput =>
-  ({ schema: 1, program: "ORCA", method: "GFN2-xTB", atoms: ["N", "H", "H", "H"], frames: frames.map((f) => [...f]), energies: frames.map((_, k) => -4.4169 + k * 1e-4), optimised }) as unknown as ReaderOutput;
+  ({ schema: 1, program: "Quanta", method: "TB2", atoms: ["N", "H", "H", "H"], frames: frames.map((f) => [...f]), energies: frames.map((_, k) => -4.4169 + k * 1e-4), optimised }) as unknown as ReaderOutput;
 
 describe("Optimise to a saddle point", () => {
   it("takes guesses, and a reactant and a product side - both or neither", () => {
@@ -33,20 +33,20 @@ describe("Optimise to a saddle point", () => {
 
   it("gives each guess its optimisation: its way there as frames, its last geometry its entry", () => {
     const frames = [nh3(0.1).xyz, nh3(0.05).xyz, nh3(0.0).xyz];
-    const w = workedOf("saddle-point", nh3(), optts(frames, true), ["cclib 1.9rc1"]) as Worked;
+    const w = workedOf("saddle-point", nh3(), optts(frames, true), ["manyread 1.9rc1"]) as Worked;
     expect(isFailure(w)).toBe(false);
     expect([w.xyz[2], w.path?.length, w.failed]).toEqual([0, 2, undefined]);
   });
 
   it("keeps an optimisation that did not converge, at the last geometry it reached, out of Failed", () => {
     const frames = [nh3(0.1).xyz, nh3(0.07).xyz];
-    const w = workedOf("saddle-point", nh3(), optts(frames, false), ["cclib 1.9rc1"]) as Worked;
+    const w = workedOf("saddle-point", nh3(), optts(frames, false), ["manyread 1.9rc1"]) as Worked;
     expect([w.xyz[2], w.failed?.kind]).toEqual([0.07, "not-converged"]);
   });
 
   it("never passes on as converged an optimisation whose reader could not say whether it converged", () => {
     const { optimised: _, ...unsaid } = optts([nh3(0.1).xyz, nh3(0.0).xyz], true) as ReaderOutput & { optimised?: boolean };
-    const w = workedOf("saddle-point", nh3(), unsaid as ReaderOutput, ["cclib 1.9rc1"]) as Worked;
+    const w = workedOf("saddle-point", nh3(), unsaid as ReaderOutput, ["manyread 1.9rc1"]) as Worked;
     expect([w.failed?.kind, w.failed?.why]).toEqual(["failed", "Whether the optimisation converged could not be read"]);
   });
 
@@ -72,7 +72,7 @@ describe("Optimise to a saddle point, paired each with each", () => {
       doc = addSet(doc, { x0: -2, y0: 10 * s - 2, x1: 3 * n, y1: 10 * s + 2 });
     });
     const step = (doc.sets?.length ?? 0) + 1;
-    doc = addStep(doc, kind, 100, 0, { pairs: "each" }, "orca");
+    doc = addStep(doc, kind, 100, 0, { pairs: "each" }, "quanta");
     const ports = inputsOf(kind).map((p) => p.id);
     counts.forEach((_, s) => (doc = connect(doc, { set: s + 1 }, step, ports[s])));
     return doc;

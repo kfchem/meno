@@ -39,7 +39,7 @@ describe("a result set of many molecules", () => {
       bonds: [{ a1: 0, a2: 1, order: 1 }],
     });
     const extentOf: RunWith["extentOf"] = (m) => ({ x0: m.atoms[0].x, x1: m.atoms[1].x, y0: -2, y1: 2 });
-    const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind");
     const d = placeResults(doc, doc.steps![0], { molecules: Array.from({ length: 42 }, (_, k) => molecule(k)), rest: [], holds: "molecules" }, { extentOf });
     const set = d.sets![0];
     const aspect = (set.x1 - set.x0) / (set.y1 - set.y0);

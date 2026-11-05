@@ -430,7 +430,7 @@ describe("a molecule's calculation's lists", () => {
   // displacements given - and its orbitals, a list with no motion
   const disp = (z: number) => [0, 0, z, 0, -0.43, -0.56, 0, 0.43, -0.56, 0, 0, 0, 0, 0, 0];
   const calc: CalcInfo = {
-    readers: ["cclib 1.9rc1"],
+    readers: ["manyread 1.9rc1"],
     results: [
       {
         id: "vibrations",
@@ -472,7 +472,7 @@ describe("a molecule's calculation's lists", () => {
     const { doc, state } = calcEditor();
     state().openList3d(1, "vibrations");
     state().chooseRow3d(1, 1);
-    doc.edit("forget", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m) => (m.id === 1 ? { ...m, calc: { readers: ["cclib"] } } : m)) }));
+    doc.edit("forget", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m) => (m.id === 1 ? { ...m, calc: { readers: ["manyread"] } } : m)) }));
     expect(state().lists3d).toEqual({});
     const again = calcEditor();
     again.state().openList3d(1, "orbitals");

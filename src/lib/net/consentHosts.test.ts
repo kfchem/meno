@@ -79,7 +79,7 @@ describe("the hosts a consent names, and those its task may reach", () => {
       ".hf.co",
       "us.aws.cdn.hf.co",
     ]);
-    expect(named(["Blender 5.2.2 LTS, from download.blender.org"])).toEqual(["download.blender.org"]);
+    expect(named(["Lumen 5.2.2 LTS, from download.lumen.example"])).toEqual(["download.lumen.example"]);
     expect(named(["The Chemical Component Dictionary: files.wwpdb.org"])).toEqual(["files.wwpdb.org"]);
     expect(named(["github.com"])).toEqual(["github.com"]);
   });

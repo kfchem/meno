@@ -150,15 +150,15 @@ describe("a large set's chart, where its energies are not all alike", () => {
 
   it("sets energies against one another by the program, its version and the level that worked them out - not by each one's job or state", () => {
     // (two compounds from jobs 1 and 2 of one run: one method, one chart)
-    const job = (number: number, charge: number): Partial<Molecule3D> => ({ made: undefined, calc: { readers: ["prog"], program: "prog", version: "6.7", method: "GFN2-xTB", job: { number, of: 2 }, charge } });
+    const job = (number: number, charge: number): Partial<Molecule3D> => ({ made: undefined, calc: { readers: ["prog"], program: "prog", version: "6.7", method: "TB2", job: { number, of: 2 }, charge } });
     const chart = chartOf([waters([-76, -76 + KCAL], job(1, 0)), waters([-80, -80 + KCAL], job(2, -1))], "conformers");
     if ("none" in chart) throw new Error(chart.none);
-    expect([chart.by, chart.counted, chart.left]).toEqual(["prog 6.7 \u00b7 GFN2-xTB", 4, []]);
+    expect([chart.by, chart.counted, chart.left]).toEqual(["prog 6.7 \u00b7 TB2", 4, []]);
     // (another version of the program: another way, counted, not charted with them)
     const older = { ...job(2, 0), calc: { ...job(2, 0).calc!, version: "6.6" } };
     const two = chartOf([waters([-76, -76 + KCAL], job(1, 0)), waters([-80, -80 + KCAL, -80 + 2 * KCAL], older)], "conformers");
     if ("none" in two) throw new Error(two.none);
-    expect([two.by, two.counted, two.left]).toEqual(["prog 6.6 \u00b7 GFN2-xTB", 3, [{ count: 2, why: "worked out another way" }]]);
+    expect([two.by, two.counted, two.left]).toEqual(["prog 6.6 \u00b7 TB2", 3, [{ count: 2, why: "worked out another way" }]]);
   });
 });
 

@@ -106,7 +106,7 @@ describe("a Rank step", () => {
 
   // (what it ranked by is its card's to say; its line says only what came of it - each value's level, solvent and temperature stay on its record)
   it("says only what came of it, each value kept as its record says it was worked out", () => {
-    const g = (value: number): Property => ({ value, unit: "kcal/mol", at: { geometry: "g", kelvin: 298.15, solvent: "SMD(chloroform)" }, by: { program: "Gaussian", method: "wB97X-D", basis: "6-311+G(d,p)" }, status: "computed" });
+    const g = (value: number): Property => ({ value, unit: "kcal/mol", at: { geometry: "g", kelvin: 298.15, solvent: "SMD(chloroform)" }, by: { program: "Orbitron", method: "wB97X-D", basis: "6-311+G(d,p)" }, status: "computed" });
     const doc = runStep(ranking([water([-1, -1, -1], {}, [{ dg: g(2) }, { dg: g(0.5) }, { dg: g(1) }])], { property: "dg" }), 2, W);
     expect(ran(doc)?.said).toBe("1 of 3 entries kept · rest 2");
     expect(out(doc)[0].numbers).toEqual([2]);

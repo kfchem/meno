@@ -4,7 +4,7 @@ import { readTable, type Table } from "./table";
 import { factor } from "./units";
 
 const KCAL = factor("Eh", "kcal/mol");
-const BY = { program: "prog", method: "GFN2-xTB" };
+const BY = { program: "prog", method: "TB2" };
 
 /** Molecules seen as a table: a reactant, a saddle point of two conformers (#2 the lower), a product - energies in hartrees. */
 function levels(rows: [string, number, number | null][], columns: Table["columns"] = []): Table {
@@ -197,7 +197,7 @@ describe("an energy diagram's levels as Levels lists them", () => {
 
 describe("the energies an energy diagram may be drawn by", () => {
   it("are those its levels carry, each by its symbol, in words, and what worked it out and where - never a correction", () => {
-    const by = { program: "ORCA", method: "r2SCAN-3c" };
+    const by = { program: "Quanta", method: "r2SCAN-3c" };
     const t: Table = {
       columns: [
         { name: "id", kind: "entry" },
@@ -214,13 +214,13 @@ describe("the energies an energy diagram may be drawn by", () => {
       left: [],
     };
     expect(diagramQuantities(t)).toEqual([
-      { value: "energy", label: "\u0394E \u00b7 electronic energy \u00b7 ORCA \u00b7 r2SCAN-3c" },
-      { value: "thermo.free-energy", label: "\u0394G \u00b7 Gibbs free energy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15\u00a0K \u00b7 1\u00a0atm" },
-      { value: "thermo.enthalpy", label: "\u0394H \u00b7 enthalpy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15\u00a0K" },
+      { value: "energy", label: "\u0394E \u00b7 electronic energy \u00b7 Quanta \u00b7 r2SCAN-3c" },
+      { value: "thermo.free-energy", label: "\u0394G \u00b7 Gibbs free energy \u00b7 Quanta \u00b7 r2SCAN-3c \u00b7 298.15\u00a0K \u00b7 1\u00a0atm" },
+      { value: "thermo.enthalpy", label: "\u0394H \u00b7 enthalpy \u00b7 Quanta \u00b7 r2SCAN-3c \u00b7 298.15\u00a0K" },
       { value: "barrier", label: "\u0394barrier" },
     ]);
     // (one worked out two ways: each a column, named for how)
-    expect(diagramQuantities({ columns: [{ name: "energy \u00b7 GFN2-xTB", kind: "number", unit: "Eh" }] })).toEqual([{ value: "energy \u00b7 GFN2-xTB", label: "\u0394E \u00b7 electronic energy \u00b7 GFN2-xTB" }]);
+    expect(diagramQuantities({ columns: [{ name: "energy \u00b7 TB2", kind: "number", unit: "Eh" }] })).toEqual([{ value: "energy \u00b7 TB2", label: "\u0394E \u00b7 electronic energy \u00b7 TB2" }]);
   });
 });
 

@@ -47,7 +47,7 @@ describe("a step's entry read as Meno's entry record", () => {
 describe("the fixed numbering, on the steps there are", () => {
   // (docs/WORKFLOWS-FOUNDATION.md, *The numbering is fixed*: no step renumbers an entry's atoms. Each perceived
   //  first, as a run asks it - water, no stereo - for the steps that need to know which stereoisomer it is)
-  const stereo = { perceived: true as const, elements: [], key: "O", by: { plugin: "rdkit", version: "0.1.7" } };
+  const stereo = { perceived: true as const, elements: [], key: "O", by: { plugin: "sketchkit", version: "0.1.7" } };
   const set = [water(1, 0, -76.40, { stereo }), water(2, 0.3, -76.399, { stereo }), water(3, 0.6, -76.39, { stereo })];
   const kinds: StepKind[] = ["as-conformers", "energy-window", "duplicates", "populations", "choose"];
   for (const kind of kinds) {
@@ -89,10 +89,10 @@ describe("a calculation's thermochemistry as the entry's properties", () => {
   /** What a reading is, as a plugin gives it: of the molecule, an energy in hartrees, or with its own unit. */
   const reading = (id: string, value: number | string, measure: Record<string, unknown> = { quantity: "energy" }) =>
     ({ id, on: "molecule", group: "Thermochemistry", label: id, value, ...measure }) as never;
-  const xtb = {
-    readers: ["xtb 6.7.1"],
-    program: "xtb",
-    method: "GFN2-xTB",
+  const tightbind = {
+    readers: ["tightbind 6.7.1"],
+    program: "tightbind",
+    method: "TB2",
     solvation: "ALPB(water), reference state gsolv [1 M gas/solution]",
     results: [
       reading("thermo.free-energy", -5.0623),
@@ -106,35 +106,35 @@ describe("a calculation's thermochemistry as the entry's properties", () => {
   };
 
   it("takes each as the program said it: in hartrees, at the temperature and in the solvation it used, by what, with its treatment", () => {
-    const e = water(1, 0, -5.07, { calc: xtb });
+    const e = water(1, 0, -5.07, { calc: tightbind });
     const p = entryOfSet(e, "x").properties;
     const at = { geometry: geometryKey(e.xyz), kelvin: 298.15, solvent: "ALPB(water), reference state gsolv [1 M gas/solution]" };
-    const by = { plugin: "xtb", program: "xtb", method: "GFN2-xTB", treatment: "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1" };
+    const by = { plugin: "tightbind", program: "tightbind", method: "TB2", treatment: "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1" };
     expect(p["thermo.free-energy"]).toEqual({ value: -5.0623, unit: "Eh", at, by, status: "computed" });
     expect(p["thermo.enthalpy"]).toMatchObject({ value: -5.0428, unit: "Eh", at, by });
     expect(p["thermo.zpve"]).toMatchObject({ value: 0.0213, at, by });
     expect(p["thermo.g-correction"]).toMatchObject({ value: 0.0047, at, by });
-    // (xtb says no pressure: none is said for it - never one assumed)
+    // (tightbind says no pressure: none is said for it - never one assumed)
     expect(p["thermo.free-energy"].at).not.toHaveProperty("atm");
     // (only those agreed as properties: the rest stay readings)
     expect(p).not.toHaveProperty("thermo.h-correction");
     // (the energy: in the solvation it was worked out in, by what - no temperature, which is not its)
-    expect(p.energy).toEqual({ value: -5.07, unit: "Eh", at: { geometry: geometryKey(e.xyz), solvent: xtb.solvation }, by: { plugin: "xtb", program: "xtb", method: "GFN2-xTB" }, status: "computed" });
+    expect(p.energy).toEqual({ value: -5.07, unit: "Eh", at: { geometry: geometryKey(e.xyz), solvent: tightbind.solvation }, by: { plugin: "tightbind", program: "tightbind", method: "TB2" }, status: "computed" });
   });
 
   it("says the pressure where the program said one, the gas phase where it said none, and nothing where it said nothing", () => {
-    const orca = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", basis: "def2-SVP", solvation: "none", results: [reading("thermo.free-energy", -76.4), reading("thermo.temperature", 298.15, { unit: "K" }), reading("thermo.pressure", 1, { unit: "atm" })] };
-    const p = entryOfSet(water(1, 0, -76.42, { calc: orca }), "x").properties;
+    const quanta = { readers: ["manyread 1.9rc1"], program: "Quanta", method: "B3LYP", basis: "def2-SVP", solvation: "none", results: [reading("thermo.free-energy", -76.4), reading("thermo.temperature", 298.15, { unit: "K" }), reading("thermo.pressure", 1, { unit: "atm" })] };
+    const p = entryOfSet(water(1, 0, -76.42, { calc: quanta }), "x").properties;
     expect(p["thermo.free-energy"].at).toMatchObject({ kelvin: 298.15, atm: 1, solvent: "none" });
-    expect(p["thermo.free-energy"].by).toEqual({ plugin: "cclib", program: "ORCA", method: "B3LYP", basis: "def2-SVP" });
-    const unsaid = entryOfSet(water(1, 0, -76.42, { calc: { ...orca, solvation: undefined } }), "x").properties;
+    expect(p["thermo.free-energy"].by).toEqual({ plugin: "manyread", program: "Quanta", method: "B3LYP", basis: "def2-SVP" });
+    const unsaid = entryOfSet(water(1, 0, -76.42, { calc: { ...quanta, solvation: undefined } }), "x").properties;
     expect(unsaid["thermo.free-energy"].at).not.toHaveProperty("solvent");
   });
 
   it("gives each thermochemical property the symmetry it was worked out with, as the program printed it - and none where it printed none", () => {
-    const orca = {
-      readers: ["cclib 1.9rc1"],
-      program: "ORCA",
+    const quanta = {
+      readers: ["manyread 1.9rc1"],
+      program: "Quanta",
       method: "B3LYP",
       results: [
         reading("thermo.free-energy", -56.53),
@@ -146,16 +146,16 @@ describe("a calculation's thermochemistry as the entry's properties", () => {
         reading("thermo.symmetry-number", 3, { unit: "none" }),
       ],
     };
-    const p = entryOfSet(water(1, 0, -56.55, { calc: orca }), "x").properties;
-    const by = { plugin: "cclib", program: "ORCA", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 };
+    const p = entryOfSet(water(1, 0, -56.55, { calc: quanta }), "x").properties;
+    const by = { plugin: "manyread", program: "Quanta", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 };
     for (const id of ["thermo.free-energy", "thermo.g-correction", "thermo.enthalpy", "thermo.zpve"]) expect(p[id].by).toEqual(by);
     // (the electronic energy has none: it counts no rotation)
-    expect(p.energy.by).toEqual({ plugin: "cclib", program: "ORCA", method: "B3LYP" });
+    expect(p.energy.by).toEqual({ plugin: "manyread", program: "Quanta", method: "B3LYP" });
     // (none printed: none said, never one assumed; one that is no whole number of 1 or more, none)
-    const unprinted = entryOfSet(water(1, 0, -56.55, { calc: { ...orca, results: orca.results.slice(0, 5) } }), "x").properties;
+    const unprinted = entryOfSet(water(1, 0, -56.55, { calc: { ...quanta, results: quanta.results.slice(0, 5) } }), "x").properties;
     expect(unprinted["thermo.free-energy"].by).not.toHaveProperty("symmetryNumber");
     expect(unprinted["thermo.free-energy"].by).not.toHaveProperty("pointGroup");
-    const odd = entryOfSet(water(1, 0, -56.55, { calc: { ...orca, results: [...orca.results.slice(0, 6), reading("thermo.symmetry-number", 0, { unit: "none" })] } }), "x").properties;
+    const odd = entryOfSet(water(1, 0, -56.55, { calc: { ...quanta, results: [...quanta.results.slice(0, 6), reading("thermo.symmetry-number", 0, { unit: "none" })] } }), "x").properties;
     expect(odd["thermo.free-energy"].by).not.toHaveProperty("symmetryNumber");
   });
 
@@ -175,24 +175,24 @@ describe("a calculation's vibrations as the entry's properties", () => {
 
   it("takes each frequency in cm-1, an imaginary one negative, in the program's order - and the modes where every one gives them", () => {
     const move = (k: number) => Array.from({ length: 9 }, (_, i) => (i === k ? 0.7 : 0));
-    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", results: [list([{ cells: [1, -35.2], move: move(0) }, { cells: [2, 1595.4], move: move(1) }, { cells: [3, 3657.1], move: move(2) }])] };
+    const calc = { readers: ["manyread 1.9rc1"], program: "Quanta", method: "B3LYP", results: [list([{ cells: [1, -35.2], move: move(0) }, { cells: [2, 1595.4], move: move(1) }, { cells: [3, 3657.1], move: move(2) }])] };
     const e = water(1, 0, -76.4, { calc });
     const p = entryOfSet(e, "x").properties;
     expect(p.vibrations).toEqual({
       value: { table: { columns: [FREQUENCY], rows: [[-35.2], [1595.4], [3657.1]] } },
       unit: "none",
       at: { geometry: geometryKey(e.xyz) },
-      by: { plugin: "cclib", program: "ORCA", method: "B3LYP" },
+      by: { plugin: "manyread", program: "Quanta", method: "B3LYP" },
       status: "computed",
     });
     expect(p.modes.value).toEqual({ modes: [move(0), move(1), move(2)] });
   });
 
   it("gives no modes where any vibration gives none, or only a promise of them; and nothing where no column is a frequency", () => {
-    const calc = (results: unknown[]) => ({ readers: ["xtb 6.7.1"], program: "xtb", method: "GFN2-xTB", results }) as never;
-    const xtb = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590] }, { cells: [2, 3650] }])]) }), "x").properties;
-    expect(xtb.vibrations.value).toEqual({ table: { columns: [FREQUENCY], rows: [[1590], [3650]] } });
-    expect(xtb).not.toHaveProperty("modes");
+    const calc = (results: unknown[]) => ({ readers: ["tightbind 6.7.1"], program: "tightbind", method: "TB2", results }) as never;
+    const tightbind = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590] }, { cells: [2, 3650] }])]) }), "x").properties;
+    expect(tightbind.vibrations.value).toEqual({ table: { columns: [FREQUENCY], rows: [[1590], [3650]] } });
+    expect(tightbind).not.toHaveProperty("modes");
     const asked = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590], move: { ask: "m1" } }])]) }), "x").properties;
     expect(asked).not.toHaveProperty("modes");
     const odd = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590] }], [{ label: "Mode", quantity: "number" }, { label: "Shift", unit: "ppm" }] as never)]) }), "x").properties;

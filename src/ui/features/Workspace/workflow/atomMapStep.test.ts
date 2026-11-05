@@ -72,7 +72,7 @@ describe("Atom map, as a step: a reaction's products onto its reactants", () => 
     const o = ok(runMenoPair("atom-map", { entries: [unfinished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
     expect(o.kept).toEqual([]);
     expect(o.aside.map((e) => [String(e.properties?.set_aside?.value), e.energy])).toEqual([["not finished: not converged", -5.5]]);
-    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { program: "xtb", readers: ["xtb 1"] } } as unknown as SetEntry;
+    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { program: "tightbind", readers: ["tightbind 1"] } } as unknown as SetEntry;
     const f = ok(runMenoPair("atom-map", { entries: [finished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
     expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([-5.5, [-412.3], undefined]);
     expect(f.said).toBe("1 of 1 mapped, its calculation not carried");

@@ -66,16 +66,16 @@ function workspaceWith(seed: string) {
   const figure = png(`figure ${seed}`);
   const other = png(`other ${seed}`);
   const notes = `notes, ${seed}\n`;
-  const log = strToU8(` Entering Gaussian System, ${seed}\n`.repeat(200));
+  const log = strToU8(` Entering Orbitron System, ${seed}\n`.repeat(200));
   const { st } = editor();
   const picture = (name: string, bytes: Uint8Array, x: number) => st().putPicture({ name, sha256: sha(bytes), media: "image/png", px: [64, 32], x, y: 0, w: 4, h: 2 });
   picture("figure.png", figure, 0);
   picture("other.png", other, 10);
   st().addTexts([{ name: "notes.txt", text: notes }]);
-  const source = { name: "run.log", sha256: sha(log), kind: "gaussian" };
+  const source = { name: "run.log", sha256: sha(log), kind: "orbitron" };
   st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["meno"], source } as never }] });
   const kept: KeptData[] = [
-    { sha256: sha(log), name: "run.log", kind: "gaussian", media: "text/plain", data: log },
+    { sha256: sha(log), name: "run.log", kind: "orbitron", media: "text/plain", data: log },
     { sha256: sha(strToU8(notes)), name: "notes.txt", media: "text/plain", data: strToU8(notes) },
     { sha256: sha(figure), name: "figure.png", media: "image/png", data: figure },
     { sha256: sha(other), name: "other.png", media: "image/png", data: other },
@@ -203,7 +203,7 @@ describe("a save that cannot keep a file the workspace has", () => {
     pdfsHeld.set(sha(pdf), pdf);
     st().addPdfs([{ name: "kept.pdf", sha256: sha(pdf), pages: [[595, 842]] }], { x: 0, y: 40 });
     st().addPdfs([{ name: "paper.pdf", sha256: "c".repeat(64), pages: [[595, 842]] }], { x: 40, y: 40 });
-    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["cclib"], source: { name: "gone.out", sha256: "e".repeat(64), kind: "orca" } } as never }] });
+    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["manyread"], source: { name: "gone.out", sha256: "e".repeat(64), kind: "quanta" } } as never }] });
     const saved = await workspaceFile(st());
     expect(saved.notKept).toEqual(["gone.out", "paper.pdf", "lost.png"]);
     expect(notKeptSaid(saved.notKept)).toBe("Saved, but gone.out, paper.pdf and lost.png are not in the file: they could not be read.");
@@ -249,13 +249,13 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
   function savedBefore(seed: string, path: string | null) {
     const pdf = strToU8(`%PDF-1.7\n% ${seed}\n%%EOF\n`);
     const picture = png(`saved before ${seed}`);
-    const log = strToU8(` Entering Gaussian System, saved before ${seed}\n`.repeat(100));
+    const log = strToU8(` Entering Orbitron System, saved before ${seed}\n`.repeat(100));
     const { st } = editor();
     st().addPdfs([{ name: "locked.pdf", sha256: sha(pdf), pages: [[595, 842]] }], { x: 0, y: 40 });
     st().putPicture({ name: "figure.png", sha256: sha(picture), media: "image/png", px: [64, 32], x: 0, y: 0, w: 4, h: 2 });
-    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["meno"], source: { name: "run.log", sha256: sha(log), kind: "gaussian" } } as never }] });
+    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["meno"], source: { name: "run.log", sha256: sha(log), kind: "orbitron" } } as never }] });
     const kept: KeptData[] = [
-      { sha256: sha(log), name: "run.log", kind: "gaussian", media: "text/plain", data: log },
+      { sha256: sha(log), name: "run.log", kind: "orbitron", media: "text/plain", data: log },
       { sha256: sha(pdf), name: "locked.pdf", media: "application/pdf", data: pdf },
       { sha256: sha(picture), name: "figure.png", media: "image/png", data: picture },
     ];
@@ -275,7 +275,7 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
     expect(file.listDamaged).toBe(false);
     expect(file.files).toEqual(
       expect.arrayContaining([
-        { sha256: sha(w.log), name: "run.log", kind: "gaussian", media: "text/plain", size: w.log.length },
+        { sha256: sha(w.log), name: "run.log", kind: "orbitron", media: "text/plain", size: w.log.length },
         { sha256: sha(w.pdf), name: "locked.pdf", media: "application/pdf", size: w.pdf.length },
         { sha256: sha(w.picture), name: "figure.png", media: "image/png", size: w.picture.length },
       ]),

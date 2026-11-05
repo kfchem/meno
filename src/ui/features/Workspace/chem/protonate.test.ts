@@ -11,7 +11,7 @@ import { isSkeleton } from "../utils/completeness";
 import { readCarried3D } from "../utils/copyPaste";
 import { addHydrogensAsChosen, addHydrogensFromDictionary, keptAsDictionary, protonatedSpecies, protonationOf } from "./protonate";
 
-/** How many hydrogens the plugin leaves off, as these tests have it answer: 0, every one it is asked for - or, asked for none, its valence leaves room for - as RDKit adds them. */
+/** How many hydrogens the plugin leaves off, as these tests have it answer: 0, every one it is asked for - or, asked for none, its valence leaves room for - as Sketchkit adds them. */
 let short = 0;
 /** What happens to the workspace while the plugin is at work, as a test has it: nothing, else this. */
 let meanwhile: (() => void) | null = null;

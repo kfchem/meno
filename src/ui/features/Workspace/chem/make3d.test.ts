@@ -25,7 +25,7 @@ const ethanol: Model = {
   ],
 };
 
-/** What RDKit answers for it: the drawn atoms, then two of the hydrogens, two conformers. */
+/** What Sketchkit answers for it: the drawn atoms, then two of the hydrogens, two conformers. */
 const answer: Conformers = {
   atoms: [{ el: "C", charge: 0 }, { el: "C", charge: 0 }, { el: "O", charge: 0 }, { el: "H", charge: 0 }, { el: "H", charge: 0 }],
   bonds: [
@@ -39,7 +39,7 @@ const answer: Conformers = {
     [0, 0, 0.1, 1.3, 0.75, 0, 2.6, 0, 0.2, -0.9, 0.5, 0, 3.4, 0.5, 0],
   ],
   energies: [-0.001, 0.002],
-  field: "MMFF94",
+  field: "KF1",
   cip: { atoms: {}, bonds: {} },
   chosen: { atoms: {}, bonds: {} },
   smiles: "CCO",
@@ -133,7 +133,7 @@ describe("making a drawn structure in 3D", () => {
     expect(blocksStill(blocks, { ...ethanol, bonds: ethanol.bonds.slice(1) })).toBe(false);
   });
 
-  it("asks RDKit about each structure the atoms are in, its atoms and bonds known by their ids", () => {
+  it("asks Sketchkit about each structure the atoms are in, its atoms and bonds known by their ids", () => {
     const [block] = blocksOf(ethanol, [12]);
     expect(block.atoms).toEqual([11, 12, 13]);
     expect(block.bonds).toEqual([21, 22]);
@@ -149,15 +149,15 @@ describe("making a drawn structure in 3D", () => {
     expect(m.drawnFrom).toEqual([11, 12, 13, null, null]);
     expect(m.stereo).toEqual({ atoms: {}, bonds: {} });
     // (what its energies are: the force field the plugin named, as it named it)
-    expect(m.made).toEqual({ how: [], energies: "MMFF94" });
+    expect(m.made).toEqual({ how: [], energies: "KF1" });
     // (none named - "none" - or no energies: nothing said of them, and nothing kept where the plugin says nothing else)
     expect(moleculeOf({ ...answer, field: "none" }, blocksOf(ethanol, [11])[0]).made).toBeUndefined();
     expect(moleculeOf({ ...answer, energies: undefined }, blocksOf(ethanol, [11])[0]).made).toBeUndefined();
-    const how = [{ label: "Optimised", text: "MMFF94s, at most 300 steps" }];
-    expect(moleculeOf({ ...answer, how }, blocksOf(ethanol, [11])[0]).made).toEqual({ how, energies: "MMFF94" });
+    const how = [{ label: "Optimised", text: "KF1, at most 300 steps" }];
+    expect(moleculeOf({ ...answer, how }, blocksOf(ethanol, [11])[0]).made).toEqual({ how, energies: "KF1" });
     // (and its method, the one line the plugin says it in, kept with it)
-    const method = "ETKDG v3 + MMFF94";
-    expect(moleculeOf({ ...answer, how, method }, blocksOf(ethanol, [11])[0]).made).toEqual({ method, how, energies: "MMFF94" });
+    const method = "ETKDG v3 + KF1";
+    expect(moleculeOf({ ...answer, how, method }, blocksOf(ethanol, [11])[0]).made).toEqual({ method, how, energies: "KF1" });
   });
 
   it("keeps each centre's label, and - made with the other stereoisomers - which were left open, so that they are told apart", () => {
@@ -167,7 +167,7 @@ describe("making a drawn structure in 3D", () => {
     expect(moleculeOf(iso, blocksOf(ethanol, [11])[0]).stereo).toEqual({ atoms: { 1: "R" }, bonds: {} });
   });
 
-  it("made again, gives RDKit the atoms the one before has where it has them, by their index in the block", () => {
+  it("made again, gives Sketchkit the atoms the one before has where it has them, by their index in the block", () => {
     const before = moleculeOf(answer, blocksOf(ethanol, [11])[0]);
     // (the drawing grown by a chlorine on the carbon, which the one before has not)
     const grown: Model = {
@@ -371,14 +371,14 @@ describe("a molecule in 3D drawn as a formula", () => {
 });
 
 describe("withinWindow", () => {
-  // (four conformers, lowest first, as the plugin gives them: 0, 1.2, 66 and 77 kcal/mol up - cyclooctane's two trapped MMFF94 minima)
+  // (four conformers, lowest first, as the plugin gives them: 0, 1.2, 66 and 77 kcal/mol up - cyclooctane's two trapped KF1 minima)
   const kcal = factor("kcal/mol", "Eh");
   const made = (energies?: number[]): Conformers => ({
     atoms: [{ el: "C", charge: 0 }],
     bonds: [],
     frames: [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]],
     ...(energies ? { energies } : {}),
-    field: energies ? "MMFF94" : "none",
+    field: energies ? "KF1" : "none",
     how: [{ label: "Embedded", text: "ETKDG v3" }],
     cip: { atoms: {}, bonds: {} },
     chosen: { atoms: {}, bonds: {} },
@@ -496,7 +496,7 @@ describe("conformers made for the page", () => {
       bonds: [{ a1: 0, a2: 1, order: 1 }],
       frames: [[0, 0, 0, 1.47, 0, 0, 1.47, 0.7, 0]],
       energies: [-0.01],
-      field: "MMFF94",
+      field: "KF1",
       how: [{ label: "Kept", text: "1 of 1 embedded (1 sought)" }],
       cip: { atoms: {}, bonds: {} },
       smiles: "C[NH3+].[Cl-]",

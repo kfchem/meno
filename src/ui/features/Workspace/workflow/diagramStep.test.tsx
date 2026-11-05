@@ -19,7 +19,7 @@ const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: (
 const KCAL = factor("Eh", "kcal/mol");
 
 /** A water called `title` at `x`, of the energies given (hartrees) - several, a conformer set - worked out by `method`. */
-function water(title: string, x: number, energies: number[], method = "GFN2-xTB"): Omit<Molecule3D, "id"> {
+function water(title: string, x: number, energies: number[], method = "TB2"): Omit<Molecule3D, "id"> {
   return {
     at: { x, y: 0 },
     title,
@@ -39,7 +39,7 @@ function water(title: string, x: number, energies: number[], method = "GFN2-xTB"
 }
 
 /** A page with R, TS (two conformers, the second lower) and P in a set (its id), wired into an Energy diagram step (its id) - and its options. */
-function page(tsMethod = "GFN2-xTB", options?: Record<string, string>): { doc: WorkspaceDocument; set: number; step: number } {
+function page(tsMethod = "TB2", options?: Record<string, string>): { doc: WorkspaceDocument; set: number; step: number } {
   let doc = addMolecule3d(emptyWorkspaceDocument(), water("R", 0, [-76.4]));
   doc = addMolecule3d(doc, water("TS", 4, [-76.375, -76.38], tsMethod));
   doc = addMolecule3d(doc, water("P", 8, [-76.42]));
@@ -185,7 +185,7 @@ describe("an Energy diagram step", () => {
   it("says which level's energy was worked out otherwise - and makes nothing", () => {
     const { doc, step } = page("B3LYP");
     const ran = runStep(doc, step, W);
-    expect(ran.steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: 'Its levels\' E was not worked out one way: "energy · GFN2-xTB" for R, P; "energy · B3LYP" for TS' });
+    expect(ran.steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: 'Its levels\' E was not worked out one way: "energy · TB2" for R, P; "energy · B3LYP" for TS' });
     expect(diagramOf(ran, step)).toBeUndefined();
   });
 
@@ -213,7 +213,7 @@ describe("an energy diagram, in its set's frame", () => {
   it("draws each level with its name and value, the axis its quantity, unit and what worked it out, and says what it is", () => {
     const d: DiagramValue = {
       kind: "diagram",
-      axis: { name: "ΔG", unit: "kcal/mol", by: { program: "prog", method: "GFN2-xTB" }, at: { geometry: "own", kelvin: 298.15 } },
+      axis: { name: "ΔG", unit: "kcal/mol", by: { program: "prog", method: "TB2" }, at: { geometry: "own", kelvin: 298.15 } },
       reference: "R",
       levels: [
         { name: "R", value: 0, lowestOf: 1, lowest: { row: 0 } },
@@ -230,7 +230,7 @@ describe("an energy diagram, in its set's frame", () => {
     // (the axis its quantity and unit alone; what worked it out on the line under it, a number and its unit never apart)
     expect(html).toContain('data-axis="y">ΔG (kcal/mol)</span>');
     for (const t of [">R<", ">TS<", ">P<", ">0.0<", ">+12.3<", ">−5.1<"]) expect(html).toContain(t);
-    expect(html).toContain("3 levels · relative to R · prog · GFN2-xTB · 298.15\u00a0K · 1 left (1 of &quot;TS&quot; with no G)");
+    expect(html).toContain("3 levels · relative to R · prog · TB2 · 298.15\u00a0K · 1 left (1 of &quot;TS&quot; with no G)");
     // (and what was left named, pointed at)
     expect(html).toContain('1 of &quot;TS&quot; with no G: molecule:2#1 (conformer 2 of 3)');
     expect(html.match(/stroke-dasharray/g)?.length).toBe(2);
@@ -238,12 +238,12 @@ describe("an energy diagram, in its set's frame", () => {
 });
 
 describe("an Energy diagram of outputs opened, its levels as its card lists them", () => {
-  // HCN, its isomerisation's saddle point and HNC as ORCA 6.1.1 gave them (r2SCAN-3c, Opt Freq): each FINAL SINGLE POINT ENERGY
+  // HCN, its isomerisation's saddle point and HNC as Quanta 6.1.1 gave them (r2SCAN-3c, Opt Freq): each FINAL SINGLE POINT ENERGY
   // and Final Gibbs free energy (298.15 K, 1 atm), in hartrees - each molecule called by the file it came from, as one opened is
   const reading = (id: string, value: number) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, quantity: "energy" }) as never;
   const opened = (name: string, x: number, e: number, g: number): Omit<Molecule3D, "id"> => {
     const { title: _, ...m } = water(name, x, [e], "r2SCAN-3c");
-    return { ...m, name, calc: { readers: ["cclib 1.9rc1"], program: "ORCA", method: "r2SCAN-3c", results: [reading("thermo.free-energy", g), reading("thermo.temperature", 298.15)] } };
+    return { ...m, name, calc: { readers: ["manyread 1.9rc1"], program: "Quanta", method: "r2SCAN-3c", results: [reading("thermo.free-energy", g), reading("thermo.temperature", 298.15)] } };
   };
   /** The three opened in the order P, R, TS - as files named so come - in a set wired into an Energy diagram with `options`. */
   function rtp(options?: Record<string, string>) {
@@ -297,8 +297,8 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
       type: "choice",
       default: "energy",
       choices: [
-        { value: "energy", label: "ΔE · electronic energy · ORCA · r2SCAN-3c" },
-        { value: "thermo.free-energy", label: "ΔG · Gibbs free energy · ORCA · r2SCAN-3c · 298.15\u00a0K" },
+        { value: "energy", label: "ΔE · electronic energy · Quanta · r2SCAN-3c" },
+        { value: "thermo.free-energy", label: "ΔG · Gibbs free energy · Quanta · r2SCAN-3c · 298.15\u00a0K" },
       ],
     });
     expect(byId("levels")).toMatchObject({ type: "lines", default: "P\nR\nTS" });

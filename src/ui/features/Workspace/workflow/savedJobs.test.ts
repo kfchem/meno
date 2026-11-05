@@ -4,7 +4,7 @@ import { readWorkflow } from "./saved";
 /** A workflow of one step, running the jobs given, as a file keeps it. */
 const running = (ids: string[]) => ({
   sets: [],
-  steps: [{ id: 1, kind: "optimise", x: 0, y: 0, by: "xtb", running: { at: 1, input: "k", options: {}, jobs: ids.map((id) => ({ id, entries: [0], reads: [] })) } }],
+  steps: [{ id: 1, kind: "optimise", x: 0, y: 0, by: "tightbind", running: { at: 1, input: "k", options: {}, jobs: ids.map((id) => ({ id, entries: [0], reads: [] })) } }],
   wires: [],
 });
 
@@ -21,7 +21,7 @@ describe("a running step's jobs, as a file keeps them", () => {
 describe("how a run's jobs ended, as a file keeps them", () => {
   const job = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
   const statesOf = (states: unknown, jobs = [job(1), job(2), job(3)]) =>
-    readWorkflow({ sets: [], wires: [], steps: [{ id: 1, kind: "optimise", by: "xtb", x: 0, y: 0, ran: { at: 1, ok: false, said: "", input: "", jobs, states } }] })!.steps[0].ran!.states;
+    readWorkflow({ sets: [], wires: [], steps: [{ id: 1, kind: "optimise", by: "tightbind", x: 0, y: 0, ran: { at: 1, ok: false, said: "", input: "", jobs, states } }] })!.steps[0].ran!.states;
 
   it("reads one for each job, each a job's state - and anything else as none", () => {
     expect(statesOf(["done", "failed", "gone"])).toEqual(["done", "failed", "gone"]);
