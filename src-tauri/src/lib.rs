@@ -397,6 +397,13 @@ fn plugins_installed(app: AppHandle) -> Result<Vec<installed::InstalledPlugin>, 
     Ok(installed::described(&installed::root(&local_data_dir(&app)?)))
 }
 
+/// The plugins whose environments were set up on this computer (installed.rs `set_up_before`), by id: those a
+/// Meno that carried its plugins had set up, asked about once as one that does not first starts (lib/plugins/usedBefore).
+#[tauri::command]
+fn plugins_set_up_before(app: AppHandle) -> Result<Vec<String>, String> {
+    Ok(installed::set_up_before(&local_data_dir(&app)?))
+}
+
 /// Whether a job of plugin `id` is waiting or running, in any of the jobs' folders - asked before a version of it
 /// no longer in use is taken away. Jobs record their plugin, not its version: a job of any version of it counts.
 #[tauri::command]
@@ -1218,6 +1225,7 @@ pub fn run() {
             ccd::ccd_components,
             plugfiles::plugin_files,
             plugins_installed,
+            plugins_set_up_before,
             plugin_jobs_running,
             // the window given over to a talk
             present::present_window,

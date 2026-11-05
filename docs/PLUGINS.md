@@ -606,8 +606,10 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   *Duplicates* step does.
 - **Minimise with restraints, and a search that holds them.** The RDKit
   plugin fills *Minimise with restraints*: each entry minimised in MMFF94
-  (or MMFF94s, or UFF, as the step asks; UFF where MMFF has no
-  parameters; refused, said, where neither has), its restraints held by
+  (or MMFF94s, or UFF, as the step asks; where MMFF has no parameters,
+  UFF in its place, or the entry refused, as the step's *Where MMFF has no
+  parameters* says - UFF unless chosen otherwise; refused, said, where
+  neither has), its restraints held by
   RDKit's own constraints as the entry record states them:
   - a distance by RDKit's distance constraint, ½ k d², the record's k as
     it is (kcal mol⁻¹ Å⁻²);
@@ -810,8 +812,9 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   other's conformers are its reflections, each checked to have the
   configuration asked for (one that has not is asked for itself). So a
   molecule with one shape can come back as many frames of it: [OsCl6]2-,
-  ten embeddings sought, gives nine, its octahedron and eight relabellings
-  of it (the tenth is dropped below the floor); the page keeps one, and a
+  ten embeddings sought, gives ten, its octahedron and eight relabellings
+  of it, and one with two ligands under the floor, which Meno sets aside
+  (lib/chem/metalHolds `keptMade`); the page keeps one, and a
   *Duplicates* step after a workflow's *Conformers* keeps one. Where it
   embedded from random coordinates (an η complex, or a crowded cage that
   would not embed otherwise), its *Embedded* row says so.
@@ -1590,8 +1593,11 @@ its signature, and fetching, checking and unpacking a plugin's files -
 comes in its own pull request.
 
 - **The catalogue.** One file, its signature beside it: its form
-  (`schema`, 1), when it was issued, a serial that only grows, and its
-  plugins. Each plugin on offer gives:
+  (`schema`, 1), when it was issued (`issued`), and its plugins - no
+  counter (the maintainer, 2026-11-05). `issued` is UTC, to the second,
+  in one form alone - `2026-11-05T13:04:09Z` - and a real time, so that
+  its order as text is its order in time; each list released is issued
+  later than the last. Each plugin on offer gives:
   - its id, version (three numbers), name, licence, and - where its program asks - its terms and what to cite; a description and home page where it has them;
   - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
@@ -1599,9 +1605,11 @@ comes in its own pull request.
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
 - **Read strictly, whole.** The backend checks the signature before
-  anything of it is read, and its serial against the one kept: one lower
-  is refused, and the one kept stays, so that an older list replayed
-  never undoes a plugin taken off it. What comes to Settings is read again
+  anything of it is read, and when it was issued against the one kept:
+  one issued earlier is refused, and one issued the same second is taken
+  only where it is that very list, byte for byte (its SHA-256 kept with
+  it); the one kept stays, so that an older list replayed never undoes a
+  plugin taken off it. A list that still carries a serial is refused. What comes to Settings is read again
   as data (`acceptCatalogue`). One entry Meno cannot read, or a plugin
   offered twice, refuses the whole of it, as it is signed whole, and says
   why. A list is not refused for its age: Settings shows the day it was
@@ -1648,6 +1656,35 @@ comes in its own pull request.
   is fetched once a launch as Settings does - and no plugin is added of
   itself. Each entry says the roles it fills
   (`roles`), which is what it is offered for (`offeredFor`).
+
+### Plugins used before
+
+A Meno that carried its plugins set each up where it was asked for, and
+kept its environment's stamp (`uv/stamps/plugin-<id>.json`,
+`pixi/stamps/plugin-<id>.json`: `lib/pyEnv`). A Meno that carries none
+starts with none in place. As it first starts, it offers to get those again
+(`lib/plugins/usedBefore`):
+
+- **Which.** Each with a stamp (installed.rs `set_up_before`), none the
+  chemist took away in Settings, none in place already, and of those only
+  the ones the list online offers for this system and this Meno. A plugin
+  that sets up no environment of its own has no stamp, and is not among
+  them.
+- **Two questions at most.**
+  - Where the network is not allowed for the list yet: whether to look
+    them up online, naming them as they were set up. A no is said in the
+    corner of the window, and asked again as Meno next starts, unless the
+    chemist chooses *Don't ask again* there.
+  - With the list fetched: whether to get them, each by its name and the
+    size of its files. A no is kept.
+- **Got as Settings gets them**, one after another. An environment whose
+  lock is the one its stamp was made for is kept, and nothing of it is
+  fetched again. One whose lock changed is set up as any plugin's is,
+  asking first.
+- **Never asked again** once all are got, after a no to getting them, or
+  where there is nothing to get. Offline, where the list could not be
+  fetched, or where one could not be got, it says so and asks again as
+  Meno next starts, for those not in place.
 
 ## Decided
 

@@ -27,7 +27,7 @@ describe("a file no plugin added reads", () => {
   it("names the plugins that would - on offer online, not got, too - each to add; or none, saying so", () => {
     const told = { ...kind, suggest: ["far"] };
     expect((whoReads(told, "a.out", new Set(), none, []) as NotRead).message).toBe("No plugin added reads a.out.");
-    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [{ id: "far", name: "Far interface" }] } as unknown as Catalogue });
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [{ id: "far", name: "Far interface" }] } as unknown as Catalogue });
     const said = whoReads(told, "a.out", new Set(), none, []) as NotRead;
     expect([said.message, said.suggest]).toEqual(["a.out (Made-up output): Far interface would read it.", ["far"]]);
     useOnline.setState({ state: "unlisted", catalogue: undefined });

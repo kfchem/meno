@@ -18,7 +18,7 @@ const entry = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const catalogue = (plugins: unknown[], over: Record<string, unknown> = {}) => ({ schema: 1, issued: "2026-11-10T00:00:00Z", serial: 12, plugins, ...over });
+const catalogue = (plugins: unknown[], over: Record<string, unknown> = {}) => ({ schema: 1, issued: "2026-11-10T00:00:00Z", plugins, ...over });
 
 const read = (raw: unknown) => acceptCatalogue(raw);
 const why = (raw: unknown) => (read(raw) as { why?: string }).why;
@@ -30,7 +30,6 @@ describe("a catalogue of plugins online, read", () => {
       catalogue: {
         schema: 1,
         issued: "2026-11-10T00:00:00Z",
-        serial: 12,
         plugins: [
           {
             id: "sketch",
@@ -144,13 +143,19 @@ describe("a catalogue of plugins online, read", () => {
     expect(at("https://github.com/x.tar.gz", HEX, 1.5)).toMatch(/size/);
   });
 
-  it("reads only the form it knows, and one with its serial, date and plugins", () => {
+  it("reads only the form it knows, saying when it was issued - UTC, to the second, a real time - with its plugins, and no serial", () => {
     expect(why(catalogue([], { schema: 2 }))).toMatch(/newer Meno/);
-    expect(why(catalogue([], { serial: 0 }))).toMatch(/serial/);
-    expect(why(catalogue([], { issued: "soon" }))).toMatch(/serial/);
-    expect(why(catalogue([], { plugins: {} }))).toMatch(/serial/);
+    for (const issued of ["2026-11-10T00:00:00.5Z", "2026-11-10T00:00Z", "2026-11-10T00:00:00+00:00", "2026-11-10T00:00:00", "2026-11-10", "2026-02-29T00:00:00Z", "2026-11-31T00:00:00Z", "2026-11-10T24:00:00Z", "2026-11-10T00:60:00Z", "2026-11-10T00:00:60Z", "1900-02-29T00:00:00Z", "2026-11-00T00:00:00Z", "2026-00-10T00:00:00Z", "2026-04-31T00:00:00Z", "soon", 20261110, undefined]) {
+      expect(why(catalogue([], { issued })), String(issued)).toBe("When it was issued, or its plugins, are not as Meno takes them");
+    }
+    expect(why(catalogue([], { plugins: {} }))).toBe("When it was issued, or its plugins, are not as Meno takes them");
+    // (one that still carries a serial: refused, never read as the other)
+    expect(why(catalogue([], { serial: 12 }))).toBe("It carries a serial, which this Meno does not read");
     expect(why(null)).toBe("It is not a catalogue");
-    expect(read(catalogue([]))).toEqual({ catalogue: { schema: 1, issued: "2026-11-10T00:00:00Z", serial: 12, plugins: [] } });
+    for (const issued of ["2028-02-29T23:59:59Z", "2000-02-29T00:00:00Z", "2026-12-31T00:00:00Z", "2026-04-30T00:00:00Z", "0001-01-01T00:00:00Z"]) {
+      expect(read(catalogue([], { issued })), issued).toEqual({ catalogue: { schema: 1, issued, plugins: [] } });
+    }
+    expect(read(catalogue([]))).toEqual({ catalogue: { schema: 1, issued: "2026-11-10T00:00:00Z", plugins: [] } });
   });
 });
 
