@@ -357,10 +357,12 @@ Given only where the person has let the conversation propose changes
 - `put_structure` draws a SMILES by Meno's own reader and layout engine
   and puts it down after the scheme's last piece, on its line, where that
   lies wholly inside the frame; else clear of what is there (`clearSpot`);
-  else, the frame full, in its middle, saying so (`placeIn`);
+  else - the frame full - nothing: it is refused, saying the frame has no
+  room left (`NO_ROOM`). Nothing is ever put over what lies there (a piece
+  over another reads as a mistake), nor outside the frame;
 - `put_arrow`, `put_plus` and `put_text` likewise;
 - `add_step` adds a step, with Settings' defaults, of a kind its doer fills,
-  in the frame's room, or its middle, saying so;
+  in the frame's room, or is refused likewise;
 - `wire` wires a set to a step, both in scope;
 - `set_options` sets a step's options, checked as its card checks them.
 

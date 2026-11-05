@@ -53,7 +53,7 @@ function taken(d: WorkspaceDocument): { x: number; y: number }[] {
 /**
  * Where something `w` by `h` is put down: the first place inside `frame`,
  * row by row from its top left, with nothing on the page in it or near it;
- * where there is none, its middle - and said to be over what lies there.
+ * where there is none, its middle, not clear: the caller then puts nothing down (`NO_ROOM`).
  */
 export function clearSpot(d: WorkspaceDocument, frame: { x0: number; y0: number; x1: number; y1: number }, w: number, h: number): { at: { x: number; y: number }; clear: boolean } {
   const points = taken(d);
@@ -77,16 +77,17 @@ type Box = { x0: number; y0: number; x1: number; y1: number };
  * Where a piece `w` by `h` goes in `frame`: after the scheme's last piece
  * (`after`), where it lies wholly inside the frame; else the first clear
  * room in it (`clearSpot`); else its middle, said to be over what lies
- * there. Never outside the frame: the frame is the person's, and what a
- * conversation sees - nothing it puts down moves it, nor reaches past it.
+ * there, not clear - and then nothing is put down (`NO_ROOM`). Never over
+ * what lies there, nor outside the frame: the frame is the person's, and
+ * what a conversation sees - nothing it puts down moves it, nor reaches past it.
  */
 export function placeIn(d: WorkspaceDocument, frame: Box, after: { x: number; y: number } | null, w: number, h: number): { at: { x: number; y: number }; clear: boolean } {
   if (after && after.x - w / 2 >= frame.x0 && after.x + w / 2 <= frame.x1 && after.y - h / 2 >= frame.y0 && after.y + h / 2 <= frame.y1) return { at: after, clear: true };
   return clearSpot(d, frame, w, h);
 }
 
-/** What a change says of a place with no room: put down over what lies there. */
-const OVER = { over: "put down over what lies there: the frame has no room left" } as const;
+/** Why a change is not made where the frame has no room for it: nothing is put over what lies there, nor past the frame. */
+export const NO_ROOM = "The frame has no room left for it: nothing is put over what lies there, nor outside the frame. Ask the person to make the frame larger, or to clear room in it.";
 
 /** A structure's box as it is drawn in `style`: its atoms' points, and as far as its labels' letters reach (utils/freePlace `labelBoxes`) - OH's H too. */
 export function inkBox(model: Model, style: DrawingStyle): Box {
@@ -223,27 +224,30 @@ export function changeTool(
       const off = { x: (Math.min(...xs) + Math.max(...xs)) / 2 - (box.x0 + box.x1) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 - (box.y0 + box.y1) / 2 };
       // (after the scheme's last piece, on its line - a product after its arrow - where that is inside the frame; else where there is room)
       const spot = placeIn(page, frame, nextInScheme(page, scope, w), w, h);
+      if (!spot.clear) return { ok: false, why: NO_ROOM };
       const first = page.nextId;
       calls.pasteModel(centredAt(drawn, { x: spot.at.x + off.x, y: spot.at.y + off.y }));
       // (put down, not chosen: what the person has selected is theirs - a paste selects what it puts down)
       calls.clearSel();
       if (d().nextId === first) return { ok: false, why: "It could not be put down" };
-      return { ok: true, value: { id: seenId("structure", first), ...(spot.clear ? {} : OVER) } };
+      return { ok: true, value: { id: seenId("structure", first) } };
     }
     case "put_arrow": {
       // (as long as an arrow is drawn, lying across)
       const length = NOMINAL_BOND_LENGTH * ARROW_LENGTH_BONDS;
       // (after the last reactant, on its line: the scheme's own spacing)
       const spot = placeIn(page, frame, nextInScheme(page, scope, length), length, 1);
+      if (!spot.clear) return { ok: false, why: NO_ROOM };
       // (kept by its middle)
       const id = calls.addArrow(spot.at.x, spot.at.y, 0, length);
-      return { ok: true, value: { id: seenId("arrow", id), ...(spot.clear ? {} : OVER) } };
+      return { ok: true, value: { id: seenId("arrow", id) } };
     }
     case "put_plus": {
       const r = NOMINAL_BOND_LENGTH * 0.3;
       const spot = placeIn(page, frame, nextInScheme(page, scope, 2 * r), 2 * r, 2 * r);
+      if (!spot.clear) return { ok: false, why: NO_ROOM };
       const id = calls.addPlus(spot.at.x, spot.at.y);
-      return { ok: true, value: { id: seenId("plus", id), ...(spot.clear ? {} : OVER) } };
+      return { ok: true, value: { id: seenId("plus", id) } };
     }
     case "put_text": {
       const name = str("name", 200) ?? "Notes";
@@ -251,8 +255,9 @@ export function changeTool(
       if (text == null) return { ok: false, why: 'Give its words: {"name", "text"}' };
       const before = page.nextTextId ?? 1;
       const spot = clearSpot(page, frame, 12, 8);
+      if (!spot.clear) return { ok: false, why: NO_ROOM };
       calls.addTexts([{ name, text }], spot.at);
-      return d().nextTextId === before ? { ok: false, why: "It could not be put down" } : { ok: true, value: { id: seenId("text", before), ...(spot.clear ? {} : OVER) } };
+      return d().nextTextId === before ? { ok: false, why: "It could not be put down" } : { ok: true, value: { id: seenId("text", before) } };
     }
     case "add_step": {
       const kind = str("kind", 60);
@@ -261,7 +266,8 @@ export function changeTool(
       if (!info || !by) return { ok: false, why: 'Give a kind of step and who does it: {"kind", "by"}' };
       if (!kindsOf(by).includes(info.kind as StepKind)) return { ok: false, why: `${by} does not do ${info.name}` };
       const spot = clearSpot(page, frame, 10, 6);
-      return { ok: true, value: { id: seenId("step", calls.addStep(info.kind as StepKind, by, spot.at.x, spot.at.y)), ...(spot.clear ? {} : OVER) } };
+      if (!spot.clear) return { ok: false, why: NO_ROOM };
+      return { ok: true, value: { id: seenId("step", calls.addStep(info.kind as StepKind, by, spot.at.x, spot.at.y)) } };
     }
     case "wire": {
       const from = readSeenId(args.from);
