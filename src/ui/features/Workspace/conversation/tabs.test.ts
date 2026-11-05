@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { conversationTabs } from "./ConversationFrames";
+import { conversationTabs } from "./tabs";
 import { setConnectionMaker } from "./connections";
 import { scriptedModel } from "./scripted";
 import { NEW_RIGHTS, type Conversation } from "./types";

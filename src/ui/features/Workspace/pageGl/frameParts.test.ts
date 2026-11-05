@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameTabParts, tabWidthPx, type FrameTab } from "./FrameTabs";
+import { FRAME_COLORS, FRAME_PX, frameTabParts, tabWidthPx, type FrameTab } from "./frameParts";
 import { NAME_DOWN, SET_PAD } from "../workflow/look";
 import { pagePx } from "./units";
 import { textWidth } from "./texts";
