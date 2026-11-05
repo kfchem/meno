@@ -1,3 +1,6 @@
+import RoleOffer from "./RoleOffer";
+import { NoPlugin } from "../../../lib/roles/worker";
+import type { RoleId } from "../../../lib/plugins/roles";
 import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
@@ -476,6 +479,8 @@ function SmilesField({
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // (a SMILES no plugin here reads: the plugins online that do, each to add - RoleOffer)
+  const [needs, setNeeds] = useState<RoleId | null>(null);
   const [busy, setBusy] = useState(false);
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
@@ -504,8 +509,12 @@ function SmilesField({
         reading.current = true;
         setBusy(true);
         setError(null);
+        setNeeds(null);
         onSmiles(smiles)
-          .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+          .catch((err: unknown) => {
+            setError(err instanceof Error ? err.message : String(err));
+            if (err instanceof NoPlugin) setNeeds(err.role);
+          })
           .finally(() => {
             reading.current = false;
             setBusy(false);
@@ -519,6 +528,7 @@ function SmilesField({
           setText(e.target.value);
           setChoice(0);
           setError(null);
+          setNeeds(null);
         }}
         onKeyDown={(e) => {
           if (offered.length < 2 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
@@ -543,6 +553,17 @@ function SmilesField({
       />
       {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
+      {needs && (
+        <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
+          <RoleOffer
+            role={needs}
+            done={() => {
+              setError(null);
+              setNeeds(null);
+            }}
+          />
+        </div>
+      )}
     </form>
   );
 }

@@ -121,7 +121,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
               <button
                 onClick={() => {
                   n.action!.run();
-                  dismissNotice(n.id);
+                  if (!n.action!.keeps) dismissNotice(n.id);
                 }}
                 className="h-6 px-2 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base"
               >

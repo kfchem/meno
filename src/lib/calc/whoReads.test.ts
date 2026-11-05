@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { NotRead, whoReads } from "./read";
 import type { PythonPlugin, ReaderPlugin } from "./catalog";
+import { useOnline } from "../plugins/online";
+import type { Catalogue } from "../plugins/catalogue";
 
 // (two made-up plugins that read one made-up kind, as no two plugins Meno carries read one undecided)
 const reader = (id: string, name: string): ReaderPlugin => ({ id, name, reads: ["made-up"], profile: `plugin-${id}` }) as unknown as PythonPlugin;
@@ -18,5 +20,16 @@ describe("a file two added plugins read, with nothing saying which", () => {
   it("is read by the one chosen, or by the one added", () => {
     expect((whoReads(kind, "a.out", new Set(["one", "two"]), { read: { "made-up": "two" }, also: {} }, readers) as { reader: ReaderPlugin }).reader.id).toBe("two");
     expect((whoReads(kind, "a.out", new Set(["one"]), none, readers) as { reader: ReaderPlugin }).reader.id).toBe("one");
+  });
+});
+
+describe("a file no plugin added reads", () => {
+  it("names the plugins that would - on offer online, not got, too - each to add; or none, saying so", () => {
+    const told = { ...kind, suggest: ["far"] };
+    expect((whoReads(told, "a.out", new Set(), none, []) as NotRead).message).toBe("No plugin added reads a.out.");
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [{ id: "far", name: "Far interface" }] } as unknown as Catalogue });
+    const said = whoReads(told, "a.out", new Set(), none, []) as NotRead;
+    expect([said.message, said.suggest]).toEqual(["a.out (Made-up output): Far interface would read it.", ["far"]]);
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
   });
 });

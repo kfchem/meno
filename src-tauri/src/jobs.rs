@@ -4470,8 +4470,8 @@ mod tests {
 
     #[test]
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
-        // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
-        let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
+        // (another plugin's program, told in a variable: the xTB plugin's xtb, in XTBEXE)
+        let orca = serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=0.1.4 <0.2.0", "programs": [{"program": "xtb", "env": "XTBEXE"}]}]});
         assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
         assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
         // (one used only for some of its work: its programs needed by the jobs that say so, as any)

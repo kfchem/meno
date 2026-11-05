@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { useAppSettings } from "../../../lib/settings/appSettings";
-import { setInUse } from "../../../lib/chem/palette";
+import { forFillsOnly, setInUse } from "../../../lib/chem/palette";
 import { useEditor, useEditorStore } from "./store";
 import { colourTargetGone } from "./utils/menuTarget";
 import { stylesOf } from "../../../lib/chem/captions";
@@ -15,6 +15,10 @@ export type ColourTarget = { atoms: number[]; bonds: number[]; rings: string[]; 
 
 type Row = "color" | "highlight" | "ring" | "line" | "fill" | "tint";
 const ROW_NAME: Record<Row, string> = { color: "Colour", highlight: "Highlight", ring: "Fill ring", line: "Line", fill: "Fill", tint: "Light fill" };
+/** The rows that colour lines and letters, where a colour for fills alone is not offered (palette `fillsOnly`). */
+const INK_ROWS: readonly Row[] = ["color", "line"];
+/** A swatch struck through: a colour not offered here. */
+const STRUCK = "linear-gradient(145deg, transparent 46%, var(--color-gh-gray) 46%, var(--color-gh-gray) 54%, transparent 54%)";
 /** How far toward white a light fill is: a quarter of its colour. */
 const TINT = 0.25;
 /** Each swatch's square, in px. */
@@ -179,16 +183,21 @@ export default function ColourCard({
               className={`shrink-0 rounded-full border border-gh-line bg-white transition-shadow duration-150 ease-meno ${ring(null)}`}
               style={own ? { width: SWATCH, height: SWATCH, background: own } : { width: SWATCH, height: SWATCH, backgroundImage: "linear-gradient(135deg, transparent 46%, #c0c0c0 46%, #c0c0c0 54%, transparent 54%)" }}
             />
-            {swatches.map((c) => (
-              <button
-                key={c}
-                aria-label={c}
-                title={c}
-                onClick={() => give(row, c)}
-                className={`shrink-0 rounded-full transition-shadow duration-150 ease-meno ${ring(c)}`}
-                style={{ width: SWATCH, height: SWATCH, background: c }}
-              />
-            ))}
+            {swatches.map((c) => {
+              // (a colour for fills alone, in a row of lines and letters: shown, struck through, not given)
+              const struck = INK_ROWS.includes(row) && forFillsOnly(set, c);
+              return (
+                <button
+                  key={c}
+                  aria-label={struck ? `${c}, for fills and highlights only` : c}
+                  title={struck ? `${c}: for fills and highlights only` : c}
+                  disabled={struck}
+                  onClick={() => give(row, c)}
+                  className={`shrink-0 rounded-full transition-shadow duration-150 ease-meno ${struck ? "cursor-default" : ""} ${ring(c)}`}
+                  style={{ width: SWATCH, height: SWATCH, backgroundColor: c, ...(struck ? { backgroundImage: STRUCK } : {}) }}
+                />
+              );
+            })}
             {/* any other, by the system's own chooser */}
             {row !== "tint" && (
             <label

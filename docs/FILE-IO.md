@@ -132,8 +132,9 @@ that differ, it is given none, and says why.
   2026-11-01): its headings and the heads of its columns, never a
   structure's name, and its columns in turn - the Gaussian interface's
   orientation tables, a row of centre, atomic number, type, x, y, z. Only
-  where that plugin is added: where only a plugin not added declares it,
-  none of the table is read - its rows read as nothing else either - and
+  where that plugin is added: where only a plugin not added declares it -
+  one here, or one on offer online, by its catalogue entry
+  (`quotedTables`, PLUGINS.md, *Plugins online*) - none of the table is read - its rows read as nothing else either - and
   the card says so, naming the plugin (*A table as its program prints it:
   the Gaussian interface plugin reads it, once added in Settings,
   Plugins*), not to be placed.
@@ -549,9 +550,9 @@ How these behave:
 - **Open uses the system's dialog through Tauri**, so Meno has the file's
   path. It reads bytes, and decodes the text kinds. It offers `.meno`,
   text, and the kinds something reads: Meno, or a plugin added - and,
-  the kinds the plugins Meno carries but not added read (PLUGINS.md, *A
-  plugin to suggest for a file*). A file whose reader is not added says
-  which plugins would read it, with Add. What a plugin added
+  the kinds the plugins here or on offer online but not added read
+  (PLUGINS.md, *A plugin to suggest for a file*). A file whose reader is
+  not added says which plugins would read it, with Add. What a plugin added
   writes or colours - a Gaussian or ORCA input - it offers as text, to be
   read and changed in a workspace's column (2026-10-07).
 - **A file's text is read as its bytes are written** (2026-10-13,
@@ -1474,7 +1475,7 @@ Each step is a pull request from main.
    - kinds registered: Meno's own, and each added plugin's from its
      manifest while it is added; marks as data, tried on Meno's samples;
      `probe`; a file no plugin added reads naming the plugin that would
-     (from what each plugin Meno carries says it reads: PLUGINS.md);
+     (from what each plugin Meno knows of says it reads: PLUGINS.md);
    - each plugin a folder of its own, found by Meno and named by none of
      its code;
    - ids, and the kind sent with each request;
@@ -1643,7 +1644,7 @@ As step 7's writer was built - decided with the maintainer on
 
 As step 3 was built:
 
-- **Each plugin is a folder of its own**, `src-tauri/resources/plugins/<id>/`:
+- **Each plugin is a folder of its own**, `meno-plugins/plugins/<id>/`:
   its manifest, its worker and its lock (uv's `requirements.lock`, or
   pixi's `pixi.toml` and `pixi.lock`). Meno finds the folders it carries
   and reads each manifest as data, by the same check a fetched one would
@@ -1667,7 +1668,7 @@ As step 3 was built:
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
   file opened by hand alike. Written from the ORCA 6.1 manual and the
-  program's printed forms (`scripts/calc/test_reader_orca.py`), it gives:
+  program's printed forms (`meno-plugins/tests/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry
