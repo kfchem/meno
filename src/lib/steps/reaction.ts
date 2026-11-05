@@ -43,7 +43,9 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
     if (typeof v !== "object") return v;
     if ("list" in v) return v.per === "atom" && v.list.length === n ? { ...v, list: order.map((j) => v.list[j]) } : v;
     if ("modes" in v) return { modes: v.modes.map((m) => (m.length === 3 * n ? xyzBy(m) : m)) };
-    if ("restraints" in v) return { restraints: v.restraints.map((r) => ({ ...r, atoms: r.atoms.map((a) => now[a]) })) };
+    // (its restraints, each atom as numbered now - and where they were first held, by atom in turn as it is now)
+    if ("restraints" in v)
+      return { restraints: v.restraints.map((r) => ({ ...r, atoms: r.atoms.map((a) => now[a]) })), ...(v.start && v.start.length === 3 * n ? { start: xyzBy(v.start) } : {}) };
     return v;
   };
   const property = (p: Property): Property => ({ ...p, value: value(p.value), ...(p.at && keys.has(p.at.geometry) ? { at: { ...p.at, geometry: keys.get(p.at.geometry)! } } : {}) });

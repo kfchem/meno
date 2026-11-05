@@ -23,10 +23,11 @@ import { convergedAt, convergedOf } from "./converged";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
+import { HOLDS_RESTRAINTS, type HeldKind } from "../../../../lib/plugins/steps";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
-import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
+import { HOLD_OPTION, inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
 import { keptFrames, keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "../chem/partsApart";
 
@@ -434,7 +435,7 @@ function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | nul
  * geometry, as far as it came, is the entry of the step's Failed exit -
  * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | Failure {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = []): Worked | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
@@ -444,7 +445,10 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   // (an optimisation's way there - to a minimum, or to a saddle point - its frames before its last)
   const optimising = kind === "optimise" || kind === "saddle-point";
   const path = optimising && frames.length > 1 ? frames.slice(0, -1) : undefined;
-  const calc = calcOf(out, readers, source);
+  // (atoms held where they stood as it optimised, where it was asked to: said in its calculation's line - and in how it converged)
+  const holding = (kind === "optimise" || kind === "saddle-point") && held.length ? [...held] : undefined;
+  const read = calcOf(out, readers, source);
+  const calc = read && holding ? { ...read, held: holding } : read;
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
@@ -461,11 +465,15 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const converged = failed
     ? undefined
     : kind === "optimise" && out.optimised === true
-      ? convergedAt("optimisation", last)
+      ? holding
+        ? convergedAt("optimisation with atoms held", last, holding)
+        : convergedAt("optimisation", last)
       : kind === "saddle-point" && out.optimised === true
-        ? convergedAt("saddle point optimisation", last)
+        ? holding
+          ? convergedAt("saddle point optimisation with atoms held", last, holding)
+          : convergedAt("saddle point optimisation", last)
         : kind === "frequencies" && was && sameShape(entry.xyz, last)
-          ? convergedAt(was.how, last)
+          ? convergedAt(was.how, last, was.held)
           : undefined;
   return {
     // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
@@ -683,6 +691,34 @@ export function passedSaid(kind: StepKind, count: number): string | null {
   const is = LONE_ATOM_IS[kind];
   if (!is || count < 1) return null;
   return count === 1 ? is : is.replace("one atom: its", "one atom: each its").replace("one atom:", `${count} lone atoms:`);
+}
+
+/** The kinds of restraint a step of `kind` is asked to hold (`HOLD_OPTION`): none, or its atoms fixed. */
+export const heldAsked = (kind: StepKind, options: OptionValues): HeldKind[] => (HOLDS_RESTRAINTS.includes(kind) && options[HOLD_OPTION.id] === "fixed" ? ["fixed"] : []);
+
+/** An entry's restraints, as Restraints and Torsion restraints left them (lib/entry `Restraint`): none where it carries none. */
+function restraintsCarried(e: SetEntry): readonly Restraint[] {
+  const held = e.properties?.restraints;
+  return held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value.restraints : [];
+}
+
+/** The atoms an entry's restraints fix where they stand, from 0, each once and in order: none where they fix none. */
+export const fixedAtoms = (e: SetEntry): number[] => [...new Set(restraintsCarried(e).flatMap((r) => (r.kind === "fixed" ? r.atoms : [])))].sort((a, b) => a - b);
+
+/** A kind of restraint by what it holds, as a chemist says it. */
+const RESTRAINT_SAID: Record<Restraint["kind"], string> = { distance: "distances", dihedral: "torsions", fixed: "atoms fixed" };
+
+/**
+ * Why a step asked to hold an entry's restraints (`heldAsked`) refuses it: a
+ * kind of restraint it carries that the step does not hold - its distances,
+ * its torsions - named, never left unheld unsaid. None where it may run:
+ * nothing asked held, or all it carries held.
+ */
+export function heldRefused(e: SetEntry, held: readonly HeldKind[]): string | null {
+  if (!held.length) return null;
+  const not = [...new Set(restraintsCarried(e).map((r) => r.kind))].filter((k) => !(held as readonly string[]).includes(k));
+  if (!not.length) return null;
+  return `Its restraints hold ${not.map((k) => RESTRAINT_SAID[k]).join(" and ")}, which this step does not hold - only atoms fixed: take them off (Restraints), or hold none`;
 }
 
 /**

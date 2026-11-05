@@ -1130,6 +1130,27 @@ are. A molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the
 states an undo goes back to as well.
 
+### Hold its restraints
+
+An optimisation - to a minimum, or to a saddle point - may hold an entry's
+atoms fixed where they stand as its program runs, where its plugin says its
+program can (PLUGINS.md, `steps`, `restraints`): *Hold its restraints*, a
+choice of Meno's on the step's card, beside the plugin's (the maintainer,
+2026-11-06; ConfoTS's optimisation with its reacting atoms fixed).
+
+- **No, by default**: the entry optimised free of its restraints, which
+  ride along as ever - a restrained search's conformers optimised freely.
+- **Atoms fixed**: the atoms its restraints fix (*Restraints*, atoms fixed,
+  typed from 1) held where they stand; an entry that fixes none optimised as
+  any is. Its calculation's line says them ("atoms 1, 4, 7 held"), and how
+  it converged too: "optimisation with atoms held".
+- **Never left unheld unsaid**: an entry whose restraints hold what the step
+  does not - distances, torsions - is refused, out of *Failed*, saying which.
+- **No stationary point**: an entry optimised with atoms held is refused by
+  what takes one - Frequencies, Populations, Energy window, Choose one,
+  Duplicates' ranking, Barrier - saying which atoms it held, until it is
+  optimised free of them.
+
 ### Solvation as asked
 
 A step's options may ask for a solvation - xTB's and CREST's solvent, say.
