@@ -298,7 +298,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | levels, the lowest few within a bracket (drawn) | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound - or of its value of a property, across compounds - kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted as one; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
+| Duplicates | two squares, one over the other | molecules in 3D, or structures drawn (*Duplicates on structures drawn*, below) | each unlike the others of its compound - or of its value of a property, across compounds - kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted as one; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | a pie, one slice drawn out (drawn) | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | Take frames | frames taken along a path (drawn) | molecules in 3D with frames - a path a step found, an optimisation's way down, a scan | **molecules in 3D**: the frames asked for, each a molecule of its one geometry - the highest in energy, the first, the last, its entry frame (what a set takes of it otherwise: a path's last), or the highest and as many either side - each with all its frame held (its energy, marks, properties) and the molecule and frame it came from - and, of what its molecule holds (on its entry frame), only what *Keep from its molecule* names, one name to a line, as it is: none, unless named, so that a value worked out for the molecule never reaches its frames unasked; a frame that holds one of them itself, of another value, keeps its own, the line saying so once; a name a molecule does not hold, said, with how many ("path not on 2 molecules", "pc not on any molecule") (2026-10-30); the highest of a molecule whose frames do not all have an energy refused, naming it, never the highest of those that do; of frames equally high the first taken, the step's line naming them all - nothing chosen silently (`workflow/takeFrames.ts`) |
 | As conformers | a ring, the others behind it, kept together in a bracket (drawn) | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
@@ -3158,6 +3158,49 @@ number** shows it with its unit, and what worked it out.
 columns or more, every row - offers *Put on the page as a table* on its
 menu: a set holding it, named for the text, beside it. Prose is not
 offered.
+
+### Duplicates on structures drawn (2026-11-06)
+
+*Duplicates* takes structures drawn too: a generative model hands on every
+SMILES it samples, the same one among them more than once, for Meno's own
+steps to keep or set aside (PLUGINS.md, *Generate*). One step does it, as on
+molecules in 3D - *Check structures* keeps its own job (workflow/meno
+`duplicatesDrawn`).
+
+- **Alike is the same structure**, as Meno's identity reads each drawing:
+  the same atoms, bonds and charges, and the same configurations as the
+  drawing shows them - not where it lies, which wedges say them, whether
+  an H is drawn, or a group written by its label. So two drawings of one
+  structure are alike, however each is drawn; its two enantiomers, drawn
+  with their configurations, are not; one that leaves a centre open is not
+  alike one that gives it, and two that leave the same centre open are.
+  Tautomers, protonation states and salts are the structures they are:
+  nothing is made alike that is not drawn alike.
+- **The first of each is kept**, in the order they came; the rest go out
+  of *Alike*, each saying which it is the same as - "Same as 3": by the
+  number their records carry where every one carries one (an
+  *Enumerate*'s), else by its place in what came in, from 1; never a place
+  beside numbers. Where an earlier step left a why on its record, it is
+  said first.
+- **Never set aside unsure**: one whose identity cannot be worked out in
+  full, or whose wedges do not read, is kept, and counted on the line as
+  not compared, with why ("2 not compared (2: wedges that do not read)").
+  A duplicate may be missed so; nothing that is not one is set aside.
+- **Compared within**: *Each compound*, on structures drawn, compares every
+  structure with every other - each is its own compound. *Each value of a
+  property* compares those of one value only (by seed, say); those
+  without it are compared among themselves, and said ("2 without seed,
+  compared among themselves").
+- **Mirror images** *Counted in* is refused, in words: structures drawn keep
+  their configurations - an enantiomer drawn is another structure.
+- **A set of structures drawn and molecules in 3D together** is refused, in
+  words: one comparison is not the other's, and the set is never split
+  unsaid.
+- **Its line** is Duplicates' own: "45 of 52 entries kept · rest 7", with
+  those not compared and those without the property named after it.
+- **Done in turns**, as on molecules in 3D: a thousand structures take a
+  few seconds, the page going on meanwhile, its card saying how far it is,
+  and stopped as any step is.
 
 ### Filter (2026-10-22)
 

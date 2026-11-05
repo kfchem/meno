@@ -42,7 +42,7 @@ import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDr
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
+import { DRAWN_AND_3D, runDuplicatesDrawnInTurns, runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
@@ -451,21 +451,25 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, "meno");
     const input = inputOf(d, id)!;
-    // (worked in turns on molecules in 3D alone: structures drawn refused here, where it is relied on)
-    if (input.holds === "structures") return void fail(id, ON_DRAWN, at, key);
-    const holds = input.holds;
-    const entries = setEntries(input.molecules, holds);
+    // (structures drawn and molecules in 3D together: one comparison is not the other's - refused, never split unsaid)
+    if (input.holds === "structures" && input.molecules.length) return void fail(id, DRAWN_AND_3D, at, key);
+    const drawn = input.holds === "structures" ? inputEntries(d.model, input) : null;
+    const holds = input.holds === "structures" ? "molecules" : input.holds;
+    const entries = drawn ? [] : setEntries(input.molecules, holds);
+    const total = drawn ? drawn.length : entries.length;
     const working = (patch: { done: number } | null) =>
       set((prev) => {
         const rest = { ...prev.menoWorking };
-        if (patch) rest[id] = { since: at, total: entries.length, ...patch };
+        if (patch) rest[id] = { since: at, total, ...patch };
         else delete rest[id];
         return { ...prev, menoWorking: rest };
       });
     working({ done: 0 });
     let outcome;
     try {
-      outcome = await runMenoInTurns(step.kind, entries, holds, step.options, energiesBy(input.molecules), { onDone: (done) => working({ done }), stopped: () => menoStops.has(id) }, energyLevels(input.molecules));
+      const how = { onDone: (done: number) => working({ done }), stopped: () => menoStops.has(id) };
+      // (structures drawn: by their identity, Meno's own; molecules in 3D: by their shapes)
+      outcome = drawn ? await runDuplicatesDrawnInTurns(drawn, step.options, how) : await runMenoInTurns(step.kind, entries, holds, step.options, energiesBy(input.molecules), how, energyLevels(input.molecules));
     } finally {
       working(null);
       menoStops.delete(id);

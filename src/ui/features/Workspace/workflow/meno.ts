@@ -8,7 +8,8 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, recordNumber, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
 import { alikeIn, entries as countEntries, workedOutAs, workedOutDiffer } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
@@ -181,6 +182,12 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
       const options = optionsOf(kindInfo(kind).options ?? [], own);
       return filteredDrawn(entries, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
     }
+    case "duplicates": {
+      const options = optionsOf(kindInfo(kind).options ?? [], own);
+      const refused = duplicatesDrawnRefused(options);
+      if (refused) return { ok: false, said: refused };
+      return drain(duplicatesDrawn(entries, never, options.within === "each value" ? String(options.groupBy ?? "") : undefined));
+    }
     default:
       return { ok: false, said: "Meno does not do this itself on structures drawn" };
   }
@@ -204,12 +211,35 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
 export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}, levels?: ReadonlyMap<number, CalcLevel>): Promise<Outcome3D | null> {
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy, levels);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
+  return inTurns((due) => duplicates(entries, holds, mirrorsOf(options), due, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels), how);
+}
+
+/**
+ * Duplicates on structures drawn done in turns, as on molecules in 3D
+ * (`runMenoInTurns`): a thousand a model made take seconds. Refused, at
+ * once, where it refuses (`duplicatesDrawnRefused`); given up where it is
+ * stopped: null.
+ */
+export async function runDuplicatesDrawnInTurns(entries: readonly DrawnEntry[], own?: OptionValues, how: Turns = {}): Promise<DrawnOutcome | null> {
+  if (!entries.length) return { ok: false, said: "Nothing came in" };
+  const options = optionsOf(kindInfo("duplicates").options ?? [], own);
+  const refused = duplicatesDrawnRefused(options);
+  if (refused) return { ok: false, said: refused };
+  return inTurns((due) => duplicatesDrawn(entries, due, options.within === "each value" ? String(options.groupBy ?? "") : undefined), how);
+}
+
+/**
+ * Work done in turns that let the page go on between them (`make`, told
+ * when its turn is up: `due`), saying after each how many entries it has
+ * been through, and given up between two where it is stopped: null.
+ */
+async function inTurns<T>(make: (due: () => boolean) => Generator<number, T>, how: Turns): Promise<T | null> {
   const now = how.now ?? (() => performance.now());
   const least = how.slice ?? TURN_MS;
   let slice = least;
   let began = now();
   let told = began;
-  const turns = duplicates(entries, holds, mirrorsOf(options), () => now() - began >= slice, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels);
+  const turns = make(() => now() - began >= slice);
   for (;;) {
     const turn = turns.next();
     if (turn.done) return turn.value;
@@ -412,6 +442,78 @@ function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all
     return { ...was, record: { ...was.record, status: { aside: before && !now.includes(before) ? `${before}; ${now}` : now } } };
   });
   return { ok: true, holds: "structures", kept, aside, said: out.said };
+}
+
+/** Why Duplicates refuses to count mirror images in on structures drawn: what is drawn keeps its configurations. */
+export const MIRRORS_ON_DRAWN = "Mirror images are counted in only for molecules in 3D: structures drawn keep their configurations";
+/** Why Duplicates refuses a set of structures drawn and molecules in 3D together. */
+export const DRAWN_AND_3D = "Structures drawn and molecules in 3D together: compare them in separate steps";
+
+/**
+ * *Duplicates* on structures drawn (docs/WORKFLOWS.md, *Duplicates on
+ * structures drawn*): those alike - the same identity with configuration,
+ * Meno's own (chem `identityOfDrawn`, each label drawn out, as Enumerate
+ * sets aside "Same as n") - the first kept, in the order they came, the
+ * rest set aside saying which they are the same as: by the number their
+ * records carry, where every one carries one (Enumerate's), else by their
+ * place in what came in. Within each value of a property (`groupBy`) where
+ * one is named; those without it compared among themselves, and said. One
+ * whose identity could not be worked out in full, or whose wedges do not
+ * read, is never set aside as alike: kept, and counted as not compared.
+ */
+/** Why Duplicates refuses structures drawn with its options as they are - mirror images counted in - or none. */
+function duplicatesDrawnRefused(options: OptionValues): string | null {
+  return mirrorsOf(options) === "counted" ? MIRRORS_ON_DRAWN : null;
+}
+
+function* duplicatesDrawn(entries: readonly DrawnEntry[], due: () => boolean, groupBy?: string): Generator<number, DrawnOutcome> {
+  const by = groupBy?.trim();
+  if (groupBy != null && !by) return { ok: false, said: "Name the property whose values are the groups" };
+  const numbered = entries.every((e) => recordNumber(e.record) != null);
+  const name = (e: DrawnEntry) => String(numbered ? recordNumber(e.record)! : e.place + 1);
+  const valueOf = (e: DrawnEntry): string | null => {
+    const v = by ? e.record?.properties?.[by]?.value : undefined;
+    return v == null ? null : JSON.stringify(v);
+  };
+  const first = new Map<string, DrawnEntry>();
+  const kept: DrawnEntry[] = [];
+  const aside: DrawnEntry[] = [];
+  const notCompared = new Map<string, number>();
+  let without = 0;
+  let done = 0;
+  for (const e of entries) {
+    if (done > 0 && due()) yield done;
+    done++;
+    const found = identityOfDrawn(labelsDrawnOut(e.drawn));
+    const why = found.unread.length ? "wedges that do not read" : !found.complete ? "its identity not worked out in full" : null;
+    if (by && valueOf(e) == null) without++;
+    const { status: _status, ...rest } = e.record ?? {};
+    const { record: _record, ...drawn } = e;
+    const asCame = Object.keys(rest).length ? { ...drawn, record: rest } : drawn;
+    if (why) {
+      notCompared.set(why, (notCompared.get(why) ?? 0) + 1);
+      kept.push(asCame);
+      continue;
+    }
+    const key = `${by ? valueOf(e) : ""}|${found.text}`;
+    const one = first.get(key);
+    if (!one) {
+      first.set(key, e);
+      kept.push(asCame);
+      continue;
+    }
+    // (set aside: which it is the same as, on its record - after an earlier step's why, where one gave it)
+    const now = `Same as ${name(one)}`;
+    const before = typeof e.record?.status === "object" ? ("aside" in e.record.status ? e.record.status.aside : e.record.status.failed) : "";
+    aside.push({ ...e, record: { ...e.record, status: { aside: before ? `${before}; ${now}` : now } } });
+  }
+  const not = [...notCompared].map(([w, n]) => `${n}: ${w}`).join("; ");
+  const said =
+    `${kept.length} of ${countEntries(entries.length)} kept` +
+    (aside.length ? ` \u00b7 rest ${aside.length}` : "") +
+    (notCompared.size ? ` \u00b7 ${[...notCompared.values()].reduce((a, b) => a + b, 0)} not compared (${not})` : "") +
+    (without ? ` \u00b7 ${without} without ${by}, compared among themselves` : "");
+  return { ok: true, holds: "structures", kept, aside, said };
 }
 
 /** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */

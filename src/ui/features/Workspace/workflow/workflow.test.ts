@@ -23,6 +23,7 @@ import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
+import { DRAWN_AND_3D } from "./meno";
 import { inputsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -958,7 +959,7 @@ describe("Quick Add's calculations", () => {
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
     useReaders.setState({ state: { sketchkit: "added", confsweep: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["filter", "check-structures", "stereoisomers", "enumerate", "chart"]]]);
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["duplicates", "filter", "check-structures", "stereoisomers", "enumerate", "chart"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { quanta: "added" }, problem: {} });
     expect(offered(doc)[0]).toEqual(["Quanta", ["optimise", "energy", "frequencies", "path-search", "saddle-point", "reaction-path"]]);
@@ -977,6 +978,26 @@ describe("Quick Add's calculations", () => {
     expect(canWire(gen, { set: 1 }, id)).toBe(false);
     expect(connect(gen, { set: 1 }, id)).toBe(gen);
     expect(inputsOf("generate")).toEqual([]);
+  });
+});
+
+describe("Duplicates on a set of structures drawn and molecules in 3D together", () => {
+  const inputOfSet = (doc: WorkspaceDocument) => {
+    const set = doc.sets![doc.sets!.length - 1];
+    const m = setMembers(doc, set);
+    return { structures: m.structures.length, molecules: m.molecules.length };
+  };
+  it("refuses it in words - one comparison is not the other's - never splitting it unsaid", () => {
+    // (a molecule in 3D in the set's frame, and a structure drawn beside it in the same frame)
+    let doc = addMolecule3d(emptyWorkspaceDocument(), bent({ x: 0, y: 0 }));
+    doc = { ...doc, model: { atoms: [{ id: 101, x: 1, y: 1, r: 0.9, el: "C" }, { id: 102, x: 2.2, y: 1, r: 0.9, el: "O" }], bonds: [{ id: 103, a: 101, b: 102, order: 1 }] } };
+    doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
+    expect(inputOfSet(doc)).toEqual({ structures: 1, molecules: 1 });
+    doc = addStep(doc, "duplicates", 8, 0);
+    const id = lastStep(doc);
+    doc = connect(doc, { set: 1 }, id);
+    const ran = runStep(doc, id, W).steps!.find((s) => s.id === id)!.ran;
+    expect(ran).toMatchObject({ ok: false, said: DRAWN_AND_3D });
   });
 });
 
