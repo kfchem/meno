@@ -20,6 +20,8 @@ export type Geometry = {
   edges: readonly Edge[];
   /** Bond orders, where known: a triple bond, or two double bonds, sit in a line. */
   orders?: readonly number[];
+  /** Atoms asked to sit in a line too, by index (`LayoutAtom.linear`: a double bond's end, its configuration not given). */
+  straight?: readonly boolean[];
   /** Which bonds carry a wedge or hashes, by index. */
   wedged?: readonly number[];
   /** Which atoms are drawn with a label (O, N, a charged C...): labels need room. */
@@ -989,7 +991,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     let ideal = TAU / nb.length;
     if (nb.length === 2) {
       const o = nb.map((b) => orderOf.get(pair(a, b)) ?? 1);
-      const linear = o.includes(3) || (o[0] === 2 && o[1] === 2) || nb.every(cross);
+      const linear = o.includes(3) || (o[0] === 2 && o[1] === 2) || nb.every(cross) || !!g.straight?.[a];
       ideal = linear ? Math.PI : (2 * Math.PI) / 3;
       // either way round: the smaller gap against the ideal
       const off = Math.abs(deg(Math.min(...gaps) - (linear ? Math.PI : ideal)));

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "scan" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "scan" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Scan: a sheet of light passes down the molecule, a hologram above it and the solid below.
 

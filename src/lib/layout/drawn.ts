@@ -115,6 +115,47 @@ function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y
   return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || apart(u, w) > Math.PI - IN_LINE)));
 }
 
+/**
+ * The ends of the double bonds a drawing draws straight - an end's one group
+ * straight on from it, within `IN_LINE` - so that it states neither cis nor
+ * trans though the bond could have either (IUPAC 2006, ST-4.4: the linear
+ * depiction of a double bond of unspecified configuration): each such end,
+ * by atom index. Not a double bond with nothing on an end, in a ring of
+ * seven atoms or fewer, cumulated, or with a wavy bond at an end - none of
+ * those has a cis or trans to leave unsaid - nor an end with two groups,
+ * whose other group states it. Clean-up keeps these ends straight
+ * (`LayoutAtom.linear`), so that what it lays out leaves the bond unsaid too.
+ */
+export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
+  const neighbours: number[][] = atoms.map(() => []);
+  const bondOf = new Map<string, DrawnBond>();
+  bonds.forEach((b) => {
+    if (b.a === b.b || bondOf.has(key(b.a, b.b))) return;
+    neighbours[b.a].push(b.b);
+    neighbours[b.b].push(b.a);
+    bondOf.set(key(b.a, b.b), b);
+  });
+  const out = new Set<number>();
+  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
+  const straightOn = (end: number, other: number, n: number) =>
+    apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
+  for (const bond of bonds) {
+    if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) continue;
+    const { a, b } = bond;
+    const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
+    if (!groups(a, b).length || !groups(b, a).length || inSmallRing(neighbours, a, b) || cumulated(a, b) || cumulated(b, a)) continue;
+    if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
+    for (const [end, other] of [
+      [a, b],
+      [b, a],
+    ]) {
+      const g = groups(end, other);
+      if (g.length === 1 && straightOn(end, other, g[0])) out.add(end);
+    }
+  }
+  return out;
+}
+
 export function readStereo(
   atoms: readonly DrawnAtom[],
   bonds: readonly DrawnBond[],

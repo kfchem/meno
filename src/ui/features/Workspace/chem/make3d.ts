@@ -36,6 +36,8 @@ import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
 import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
+import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "./partsApart";
 
@@ -536,11 +538,12 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
  * (`pageCount`), with the options the plugin takes for the role, as chosen
  * in Settings - as the page shows them: lowest first, each once, laid over
  * the first, alike atoms in like places (`asThePageShows`, in a worker of
- * its own: `shownConformers`). `onPage` asks the plugin to make one of two
- * enantiomers as the other's mirror image (docs/PLUGINS.md); a workflow's
- * *Conformers* step never sends it, and is given the program's own. A metal
- * is held as Meno holds it (lib/chem/metalHolds), and those made that its
- * checks set aside are.
+ * its own: `shownConformers`). Of two enantiomers, the one Meno chooses is
+ * made, and the other as its mirror image (chem/pageMirror): the plugin
+ * makes each as it is asked, and a workflow's *Conformers* step is given
+ * the program's own. A metal is held as Meno holds it (lib/chem/metalHolds),
+ * the drawing's or its mirror image's, and those made that its checks set
+ * aside are.
  */
 export async function conformersOf(
   chem: ChemClient,
@@ -552,12 +555,48 @@ export async function conformersOf(
 ): Promise<Conformers[]> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
-  // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
-  const holds = metalHoldsOf(block.molblock);
-  const got = await chem.request("conformers", { molblock: block.molblock, isomers: made.isomers, ...tries, ...(holds ? { holds } : {}), options, onPage: true }, CONFORMERS_MS);
+  // (a metal's holds, Meno's - of the block asked for, the drawing or its mirror image - and which of what was made stand:
+  //  lib/chem/metalHolds)
+  const holdsOf = new Map<string, ReturnType<typeof metalHoldsOf>>();
+  const held = (molblock: string) => {
+    if (!holdsOf.has(molblock)) holdsOf.set(molblock, metalHoldsOf(molblock));
+    return holdsOf.get(molblock)!;
+  };
+  const once = async (molblock: string, isomers: Configuration[]) => {
+    const holds = held(molblock);
+    return (await chem.request("conformers", { molblock, isomers, ...tries, ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers;
+  };
+  // (each one's conformers by its place among those asked for: where the plugin answers other than one for each of
+  //  several, each asked for alone)
+  const ask = async (molblock: string, isomers: Configuration[]): Promise<(Omit<Conformers, "chosen"> | undefined)[]> => {
+    if (!isomers.length) return [];
+    const got = await once(molblock, isomers);
+    return got.length === isomers.length || isomers.length === 1 ? got : Promise.all(isomers.map(async (iso) => (await once(molblock, [iso]))[0]));
+  };
+  // (of two enantiomers, the one whose identity comes first made, the other its mirror image's reflection; one
+  //  whose reflection does not have its configuration after all made itself - chem/pageMirror)
+  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const mine = made.isomers.filter((_, i) => as[i] === "itself");
+  const twins = made.isomers.filter((_, i) => as[i] === "mirror");
+  const own = await ask(block.molblock, mine);
+  const mirrorBlock = twins.length ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
+  const reflected = (await ask(mirrorBlock, twins.map(mirroredConfiguration))).map((c) => c && reflectedConformers(c));
+  const missed = twins.filter((iso, k) => !reflected[k] || !hasConfiguration(reflected[k]!, block.part, iso));
+  const again = await ask(block.molblock, missed);
+  let [o, r, m] = [0, 0, 0];
+  // (in the order asked for: each the plugin answered)
+  const got = made.isomers
+    .map((iso, i) => {
+      if (as[i] === "itself") return own[o++];
+      const c = reflected[r++];
+      return missed.includes(iso) ? again[m++] : c;
+    })
+    .filter((c): c is Omit<Conformers, "chosen"> => c != null);
+  // (which of each one's stand, by the drawing's checks - a reflection's lengths and angles are its twin's; and a structure of
+  //  more than one part, its parts side by side - chem/partsApart)
+  const holds = held(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
-  // (a structure of more than one part: its parts side by side - chem/partsApart)
-  return shownConformers(got.isomers.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

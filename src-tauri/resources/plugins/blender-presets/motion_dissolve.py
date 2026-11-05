@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "dissolve" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "dissolve" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Dissolve: the molecule burns away from one side into embers (on white, amber grains cooling to graphite dust) that drift off.
 

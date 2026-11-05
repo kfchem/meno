@@ -66,6 +66,8 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
 | Molecules in 3D | pictures and films of them, rendered (RENDER.md) | Blender (a job: Blender, Meno's own copy, fetched as the plugin is set up) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
+| Later | a language model, in a conversation on the page ([CONVERSATIONS.md](CONVERSATIONS.md)) | - |
+| Later | a program outside Meno, connecting to a conversation on the page (*outside entrance*, CONVERSATIONS.md) | - |
 | Later | fingerprints, similarity | - |
 | Later | structure search in outside databases | - |
 | Later | running a calculation, an input written and an output read back | - |
@@ -281,8 +283,13 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 A plugin that does nothing - reads, writes, fills, colours, guides and
 suggests nothing - is none. Options are in the general form (`lib/options`:
 a choice, a number, a text or a switch, each with a label and a default it
-takes; a number's `min`, `max`, `step`, `unit`; `from` the molecule's
-charge, multiplicity or name, for a writer's).
+takes; a number's `min`, `max`, `step`, `unit`, and `whole` (true: a
+whole number alone - a count, a seed, a charge - its field refusing one
+with a fraction as it refuses one out of range, and a remembered value
+with one none it takes: what a plugin is sent is in range and whole, so
+it refuses nothing itself; a whole number's step is whole, or the option
+is left out); `from` the molecule's charge, multiplicity or name, for a
+writer's).
 
 A step's options are saved with its workspace, and a workspace may come
 from someone else: whatever a text option holds runs, as the plugin
@@ -432,6 +439,12 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
 - **NCI**: built (2026-10-11) - the kind of step *NCI*, a surface
   coloured by another grid as a general form, a step's `files`, and the
   NCIPLOT and Multiwfn interfaces: [`NCI.md`](./NCI.md).
+- **A language model** (designed 2026-11-04): a new kind of role, for
+  a conversation on the page. The plugin calls its service and converts,
+  and is the only way a conversation is sent anywhere; the conversation,
+  its tools, its scope and keeping its key are core's. A program outside
+  Meno connects through a plugin too (*outside entrance*):
+  [`CONVERSATIONS.md`](./CONVERSATIONS.md).
 
 ## Several plugins, one role
 
@@ -788,9 +801,12 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   own page and for a workflow's *Conformers* step alike. Which are the
   same, which comes first and how they lie over each other are Meno's
   (WORKSPACE.md, *The page's conformers*; a workflow's *Duplicates* and
-  *Rank*). Of two enantiomers, one is made as the other's mirror image for
-  Meno's own page alone, which asks for that (`onPage`): the core sends it
-  with *3D structure* alone, and no option of the step's carries it. So a
+  *Rank*). Each stereoisomer is made as it is asked for. Of two
+  enantiomers, which one Meno's own page makes and which it gives as that
+  one's mirror image is Meno's (Workspace/chem/pageMirror): the one whose
+  identity with its configuration comes first is asked for, and the
+  other's conformers are its reflections, each checked to have the
+  configuration asked for (one that has not is asked for itself). So a
   molecule with one shape can come back as many frames of it: [OsCl6]2-,
   ten embeddings sought, gives nine, its octahedron and eight relabellings
   of it (the tenth is dropped below the floor); the page keeps one, and a
@@ -818,7 +834,7 @@ A plugin may use other plugins, as a library uses libraries (the maintainer, 202
 - **Stopped** is a plugin added that a plugin it needs is not added for, or one it uses - optionally or not - added of a version it does not work with, or with an interface it uses of a version it does not work with ("Needs Blender's preset interface from 1.0.0 to before 2.0.0; 2.0.0 is added"): Settings says so on it ("Stopped: needs xTB, which is not added."), and its steps run nothing, saying the same ("ORCA interface is stopped. Needs xTB from 0.1.4 to before 0.2.0; 0.2.0 is added."); a job of it that would run that plugin's program is refused by the backend too, reading that plugin's version from its own folder, never from what the job's spec says ("orca needs xTB >=0.1.4 <0.2.0; 0.2.0 is here").
 - **A kind of file of another's** that a step takes (`kinds`: Multiwfn's NCI, the Gaussian interface's formatted checkpoint) is taken only while that plugin is added, of a version it works with; used for some of its work, as Multiwfn uses it, it stops nothing - not added, or of a version it does not work with: an entry read from such a file is given none, and Settings says why on the plugin ("Gaussian formatted checkpoint is not taken: Needs Gaussian interface from 0.4.0 to before 1.0.0; 1.2.0 is added.").
 - **Settings** shows, on each plugin, the plugins it uses with their versions and the interfaces of each it uses ("Uses the plugin xTB, from 0.1.4 to before 0.2.0, for some steps, where it is added.") and those that use it ("Used by ORCA interface."); on a plugin that brings presets, what it brings, and to which ("For Blender: 12 looks, 2 studios and 8 motions.").
-- **One that runs nothing** - a plugin that brings presets - uses another as any plugin does: that one is set up first as it is added, asked of the network in one question ("Add Blender looks and motions, with Blender?"), and it is taken away with that one.
+- **One that runs nothing** - a plugin that brings presets - uses another as any plugin does: that one is set up first as it is added, asked of the network in one question ("Add Film looks and motions, with Blender?"), and it is taken away with that one.
 - **Asked once** for several, a set-up is not asked again for what it fetches having grown; but where Meno went offline since, or that leave was withdrawn, it is asked - or refused - as anything that uses the network is; and a question it did not ask then (a file found changed since) is asked as ever.
 
 ## Interfaces
@@ -833,7 +849,7 @@ A plugin may bring another plugin presets through that one's interface (2026-11-
 |---|---|
 | `interface` | The interface it brings them through: one its `depends` uses, of exactly one plugin - the one they are for. |
 | `looks` | Each as a render role declares a look (*Looks*, below), with its `file`. |
-| `studios` | Each `{id, label, description?, file}`: a scene a render is made in. `asked` is the card's plain scene, and no studio's id. |
+| `studios` | Each `{id, label, description?, file, fixed?}`: a scene a render is made in. `asked` is the card's plain scene, and no studio's id. `fixed`, as a motion's (*Motions*): what the studio is made with whatever was chosen - a studio that is itself the background fixes the renderer's background - shown on the card as that one choice, said, with why beneath it. |
 | `motions` | Each as a render role declares a motion (*Motions*, below), with its `file`. |
 | `files` | The files those share, each a path in its folder. |
 | `options` | Its options, in the general form (`lib/options`), each `when` it says - of its own options, or the card's `look`, `studio` or `motion`. |
@@ -1051,15 +1067,14 @@ The same for every plugin and for Meno's own parts:
     configuration of the `open` elements, its SMILES and, with `drawings`,
     a drawing of it - or why it cannot be one - and `free` where none
     holds in 3D); `conformers {molblock, isomers?, count,
-    holds?, options, onPage?}` (structures in 3D and their conformers - of
+    holds?, options}` (structures in 3D and their conformers - of
     each configuration `isomers` gives, which Meno chose, or of the
     structure as drawn; a metal complex held as `holds` says, lib/chem/
     metalHolds - `count`
     tried - Meno's number, where the role says `tries` - with the role's
     options: every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
-    `modelEnergies`; `onPage`, of two enantiomers one made as the other's
-    mirror image);
+    `modelEnergies` - each stereoisomer made itself);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
@@ -1535,7 +1550,14 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
     (the maintainer, 2026-10-12). Cancel leaves the plugin and its jobs
     as they are.
 
-  Meno is not in it.
+  Meno is not in it. Above the plugins, the list online (*Plugins
+  online*, below): when it was listed, or why it is not here, and *List
+  them* or *Look again*. A plugin here with a newer version online says
+  *Update to x.y.z* beside Remove, and the terms and what to cite that
+  the list gives; those online not here yet follow, under *Online, not
+  here yet*, each with what it does, its licence, its size to download,
+  its terms and what to cite, and *Add* - or why it is not for here: for
+  another system, or for a newer Meno.
 - **Files.** The tab named for files (FILE-IO.md) holds, for each kind
   of file, who reads it, who else adds to it, and who writes it. Meno's
   own parts show there as "Meno".
@@ -1554,6 +1576,61 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   with the one chosen, and says to add it again.
 - **What, never how** (the maintainer's rule): a choice names the program
   and the method a chemist would name, never how Meno talks to it.
+
+## Plugins online (2026-11-04)
+
+Plugins are to leave Meno's repository and its installer, and to be got
+from a list online: a catalogue, signed, that names every plugin Meno may
+get. Meno names none of them; the catalogue does. Built so far: the
+catalogue read, and Settings' side of it (`lib/plugins/catalogue`,
+`lib/plugins/online`). Meno's backend - fetching the catalogue, checking
+its signature, and fetching, checking and unpacking a plugin's files -
+comes in its own pull request.
+
+- **The catalogue.** One file, its signature beside it: its form
+  (`schema`, 1), when it was issued, a serial that only grows, and its
+  plugins. Each plugin on offer gives:
+  - its id, version (three numbers), name, licence, and - where its program asks - its terms and what to cite; a description and home page where it has them;
+  - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
+  - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
+  - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
+- **Read strictly, whole.** The backend checks the signature before
+  anything of it is read, and its serial against the one kept: one lower
+  is refused, and the one kept stays, so that an older list replayed
+  never undoes a plugin taken off it. What comes to Settings is read again
+  as data (`acceptCatalogue`). One entry Meno cannot read, or a plugin
+  offered twice, refuses the whole of it, as it is signed whole, and says
+  why. A list is not refused for its age: Settings shows the day it was
+  issued, beside when it was listed.
+- **Where a plugin's files may be.** On https, at the hosts the plugins'
+  releases are at - each exactly, its letters made small, nothing only
+  like one, nor one with a dot at its end - with no port and no name or
+  password. Any repository there: the signature makes the choice the
+  signer's. The backend follows redirects to those hosts alone, and
+  fetches no more than the entry's size, nor than a most of its own.
+- **When it is fetched.** Under a purpose of its own, `plugin-catalogue`,
+  asked once as any first use of the network is: whenever the chemist
+  asks (*List them*, *Look again*), and, where the network was allowed
+  for it, as Settings' *Plugins* opens, once a launch - the one kept from
+  before after that. Where it was never allowed, nothing is fetched or
+  shown until the chemist asks. Offline, or where a fetch fails, the one
+  kept from before is shown, saying it is.
+- **What is offered** (`offersOf`): a plugin not here, *Add*; one here at
+  an older version, *Update to x.y.z*; one here at that version or a
+  newer one, nothing; one for another system or a newer Meno, why not.
+- **Got.** A plugin's files are staged by the backend - fetched, checked
+  against the catalogue's fingerprint and size, unpacked apart from the
+  plugins in use, and its manifest checked against the catalogue's
+  fingerprint of it, all before it answers; anything not as the
+  catalogue gave refuses the whole. Then its manifest is checked again,
+  by its fingerprint, and read as any plugin's is. Only where it is the
+  plugin and version the catalogue offered are its files taken into use;
+  else they are thrown away and nothing of them is used. Nothing of a plugin
+  runs before all that. It is then added as any plugin is: its
+  environment set up, asked of first.
+- **Updated.** The newer version is got the same way, and set up again
+  only where it was added and its environment is no longer the one it
+  needs.
 
 ## Decided
 

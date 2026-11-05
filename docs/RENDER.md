@@ -389,7 +389,7 @@ uv, no package), and the script Blender runs, `render.py`.
 - **Looks, studios and motions of Blender's own** come from preset plugins
   that use the renderer through its interface `preset` (docs/plugins/
   blender-presets.md); the renderer itself has none. Meno carries one,
-  **Blender looks and motions** (`blender-presets`), described below. The
+  **Film looks and motions** (`blender-presets`), described below. The
   renderer runs a preset's chosen file inside its Blender, after it has
   built Meno's scene, against what the interface hands it: the request,
   and Meno's molecules as the scene's tags give them.
@@ -432,7 +432,7 @@ uv, no package), and the script Blender runs, `render.py`.
   is written in the glTF. Blender finds its own shadows and hollows as it
   lights the scene; the shadows' softness is the plugin's own option.
 
-### Blender looks and motions
+### Film looks and motions
 
 A preset plugin of Meno's, for the Blender plugin (it uses Blender from 0.7.0 to before 0.8.0, its interface `preset` from
 1.0.0 to before 2.0.0). It runs nothing of its own: Meno puts its files in the render job, and Blender runs the chosen ones.
@@ -459,13 +459,14 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
   copper 0.95 0.64 0.54, linear.
 - **Its studios**: the Scene's *Studio* choice offers them after *As
   asked*, the plain scene. **Paper sweep**: a floor curving up into a wall
-  behind, in the background's colour, big soft lights and a soft source
-  overhead pooling light on the floor; where Meno's camera looks level, the
-  floor lies below what it frames. **Dark cyclorama**: a wall far behind,
-  lit as a pool by its own light and seen by the camera alone, a key, a
-  fill, a top light and two coloured rims. A studio is the backdrop chosen:
-  on a transparent background the paper is white, and the cyclorama's
-  wall dark.
+  behind, white, big soft lights and a soft source overhead pooling light
+  on the floor; where Meno's camera looks level, the floor lies below what
+  it frames. **Dark cyclorama**: a dark wall far behind, lit as a pool by
+  its own light and seen by the camera alone, a key, a fill, a top light
+  and two coloured rims. A studio is the backdrop chosen: while one is,
+  the card shows the Background as the studio sets it - white for the
+  paper, black for the cyclorama - said, with why beneath it (`fixed`),
+  and a picture is that backdrop all over.
   Each is built round Meno's molecules at their own size, its lights as
   strong as the key light asked for, and as soft as the shadows' softness;
   a molecule in either reads as bright as Meno lights it with no studio.
