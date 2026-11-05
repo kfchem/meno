@@ -266,9 +266,13 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
 - The comment is the molecule's name (the file's own name where it has
   none), then, where there are several frames, `frame i/n`, then, where the
   frame's energy is known, `E = <hartrees to ten decimals> Eh`: for
-  example `water frame 2/3 E = -76.0261000000 Eh`. On one line, and plain
-  text, which programs that read the layout take as a comment. No method
-  is written: Meno does not hold one for an energy.
+  example `water frame 2/3 E = -76.0261000000 Eh`. Where the frame did
+  not finish - it failed, or its marks of which frames failed did not
+  read - why, after it, as an SD file's `> <Failed>` says it:
+  `oh frame 2/2 E = -75.3900000000 Eh failed: not converged: stopped at
+  200 cycles`, so that no reader takes its energy for a result. On one
+  line, and plain text, which programs that read the layout take as a
+  comment. No method is written: Meno does not hold one for an energy.
 - The writer's option *Molecules in 3D* says the frame shown (one block a
   molecule) or every frame (a block each, in order). Several molecules
   selected are written as SDF export writes them: one after another, each as
@@ -756,6 +760,17 @@ As this part of step 5 was built (#155, from main beside step 3):
     as before.
     In an SD file the choice holds for its records in 3D too, and is
     offered where the page holds molecules in 3D alone.
+  - **A ring or chain bound to a metal through all its atoms** in a
+    molecule in 3D (`Molecule3D.centres`) is written as a file holds one
+    ("CTfile Formats", a multi-centre bond): a star atom (*) at its atoms'
+    centre in that frame, after the molecule's own atoms, and a coordination
+    bond from the metal to it whose endpoints are the ring's atoms, bound to
+    all of them (`ENDPTS`, `ATTACH=ALL`; `withRingStars`, lib/chem/molWriter)
+    - in V3000, which V2000 cannot hold, in an SD file and a molfile copied
+    alike. That the bond is a coordination bond (type 9) is Meno's own
+    choice, not the format's: it is the type Meno's 2D writer gives a
+    drawing's ring bound to a metal, and the one its reader reads back.
+    Without it, the ring was written as if it were not bound at all.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
     (`> <Energy (Eh)>`). Beside it: why a frame did not finish

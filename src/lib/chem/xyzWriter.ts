@@ -18,11 +18,13 @@ export type XyzFrame = { atoms: readonly { el: string; x: number; y: number; z: 
  */
 export const MENO_XYZ_ENERGY = { id: "meno", pattern: "\\bE = (-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?) Eh\\b", unit: "hartree" as const };
 
-/** The comment a frame gets: its name, then - where there are several frames - which it is of how many, then its energy in hartrees, where it is known; on one line. */
-export function xyzComment(name: string, frame?: { i: number; of: number }, energy?: number): string {
+/** The comment a frame gets: its name, then - where there are several frames - which it is of how many, then its energy in hartrees, where it is known, then why it did not finish, where it did not; on one line. */
+export function xyzComment(name: string, frame?: { i: number; of: number }, energy?: number, failed?: string | null): string {
   const parts = [name.replace(/[\r\n]+/g, " ").trim()];
   if (frame && frame.of > 1) parts.push(`frame ${frame.i + 1}/${frame.of}`);
   if (energy != null && Number.isFinite(energy)) parts.push(`E = ${energy.toFixed(10)} Eh`);
+  // (where the frame did not finish, why - on its one line, so that no reader takes its energy for a result)
+  if (failed) parts.push(`failed: ${failed.replace(/\s+/g, " ").trim().slice(0, 200)}`);
   return parts.filter(Boolean).join(" ");
 }
 
