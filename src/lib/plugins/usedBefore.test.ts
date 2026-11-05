@@ -18,6 +18,8 @@ const entry = (id: string, name: string, bytes: number, over: Partial<CatalogueE
   roles: [],
   kinds: [],
   reads: [],
+  fileKinds: [],
+  quotedTables: [],
   source: { url: `https://github.com/example/plugins/releases/download/${id}-v1.0.0/${id}-1.0.0.tar.gz`, sha256: HEX, bytes },
   manifestSha256: HEX,
   ...over,
