@@ -225,7 +225,10 @@ group of each, and whether the two are on one side (`Cumulated`).
   (Hanson 2018 p. 1761) - and m before p by rule 4c.
 - **From SMILES**, as OpenSMILES writes them: an allene's @ or @@ on its
   middle atom, the run "collapsed" into one tetrahedral centre whose four
-  neighbours are its ends' groups (*Tetrahedral Allene-like Systems*); an
+  neighbours are its ends' groups (*Tetrahedral Allene-like Systems*) -
+  an end's implicit H where a bracket atom's H would be, after the atom
+  before it, a place the specification leaves open and Meno reads as the
+  validation suite does; an
   odd cumulene's / and \ on its ends' bonds (*Cis/Trans configuration of
   double bonds*). An @ not on the middle of an even run, or at an end with
   two hydrogens, is refused with the reason.

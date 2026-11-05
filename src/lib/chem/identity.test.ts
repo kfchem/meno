@@ -574,6 +574,11 @@ describe("an allene's axis and an odd cumulene's cis or trans, in a structure's 
     expect(one("CC=[C@]=C1CC[C@H](CC1)CC", "CC[C@H]1CCC(=[C@@]=CC)CC1", "CC[C@@H]1CCC(=[C@]=CC)CC1")).toBe(true);
   });
 
+  it("sets nothing where an end's two groups are alike: an allene's or a cumulene's drawn so is the same structure as drawn without", () => {
+    expect(one("CC(C)=[C@]=CF", "CC(C)=[C@@]=CF", "CC(C)=C=CF")).toBe(true);
+    expect(one("C/C(C)=C=C=C/F", "C\\C(C)=C=C=C/F", "CC(C)=C=C=CF")).toBe(true);
+  });
+
   it("tells an allene from its mirror image, E from Z, and either from none drawn", () => {
     expect(one("CC=[C@]=CC", "CC=[C@@]=CC")).toBe(false);
     expect(one("CC=[C@]=CC", "CC=C=CC")).toBe(false);

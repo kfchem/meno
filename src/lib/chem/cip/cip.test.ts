@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { measured } from "../../../testing/timeouts";
 import { readStereo, type DrawnAtom, type DrawnBond } from "../../layout/drawn";
 import type { IdentityInput } from "../identity";
 import { cipLabels, MOST_VARIANTS } from "./index";
@@ -196,7 +197,7 @@ describe("what gives no label, and why", () => {
   it("gives up past its node budget, and says so, rather than freezing: a centre between two cages tied far out", () => {
     expect(prismsCentre(4)).toEqual({ why: "alike" });
     expect(prismsCentre(12)).toEqual({ why: "large" });
-  });
+  }, measured(1100));
 });
 
 describe("charged and radical mesomeric systems: a label only where every usual structure gives it", () => {

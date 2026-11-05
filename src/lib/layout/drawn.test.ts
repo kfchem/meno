@@ -524,6 +524,35 @@ describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
     expect(allene("up").cisTrans.size).toBe(0);
   });
 
+  it("reads an allene wedged at both ends where the two agree, and none where they say opposite ways - and says why", () => {
+    // (the far end's methyl wedged too: up or down, at its end C3)
+    const both = (near: "up" | "down", far: "up" | "down") => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0 },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1, wedge: { narrow: 1, stereo: near } },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1, wedge: { narrow: 3, stereo: far } },
+      ];
+      return { atoms, bonds, read: readStereo(atoms, bonds) };
+    };
+    const sense = (near: "up" | "down", far: "up" | "down") => both(near, far).read.axes.map((x) => x.sense);
+    // (each read alone, then together: where the two agree, the one sense; where they do not, none)
+    const alone = allene("up").axes[0].sense;
+    const agreeing = (["up", "down"] as const).find((far) => sense("up", far).length === 1)!;
+    expect(sense("up", agreeing)).toEqual([alone]);
+    const other = agreeing === "up" ? "down" : "up";
+    expect(sense("up", other)).toEqual([]);
+    const { atoms, bonds } = both("up", other);
+    expect(unreadWhy(atoms, bonds, 1)).toBe("the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it");
+  });
+
   it("reads an odd cumulene's cis or trans from its ends' groups across the line through it, and none where an end is straight on or wavy", () => {
     expect(butatriene(0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
     expect(butatriene(-0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);

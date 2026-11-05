@@ -68,8 +68,8 @@ export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: Retu
   const out = new Set<number>();
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
-    // (an axis of chirality's end: its wedge says how the axis turns)
-    if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms[0] === c)) continue;
+    // (an axis of chirality's end, either: its wedge says how the axis turns)
+    if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms.includes(c))) continue;
     if ((bondsOf.get(c)?.length ?? 0) >= 3 && drawing.atoms[c].hs <= 1) out.add(c);
   }
   return [...out];

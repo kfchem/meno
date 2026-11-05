@@ -306,18 +306,19 @@ export function readStereo(
       if (run.length % 2 === 1) {
         // an allene's (an even number of double bonds): a wedge out of one end
         // to a group of it, the other end's groups in the page, read as a
-        // biaryl's axis is - its ends not bonded, the turn the same
-        for (const [e, f, en, fn] of [
-          [i, j, near, far],
-          [j, i, far, near],
-        ] as const) {
+        // biaryl's axis is - its ends not bonded, the turn the same; wedged at
+        // both ends, the two read alike, else none (unreadWhy says why)
+        const read = ([e, f, en, fn]: readonly [number, number, number[], number[]]) => {
           const lifted = en.find((n) => lift(e, n) !== 0);
-          if (lifted == null) continue;
+          if (lifted == null) return null;
           const refs: [number, number] = [Math.min(...en), Math.min(...fn)];
-          const sense = drawnAxisSense((k) => atoms[k], { atoms: [e, f], refs }, lifted, lift(e, lifted) as 1 | -1);
-          if (sense) axes.push({ atoms: [e, f], refs, sense });
-          break;
-        }
+          return { atoms: [e, f] as [number, number], refs, sense: drawnAxisSense((k) => atoms[k], { atoms: [e, f], refs }, lifted, lift(e, lifted) as 1 | -1) };
+        };
+        const [one, two] = [read([i, j, near, far]), read([j, i, far, near])];
+        const first = one ?? two;
+        // (read from the other end, against the same two groups, an axis turns the same way)
+        const agree = !one || !two || one.sense === two.sense;
+        if (first && first.sense && agree) axes.push({ atoms: first.atoms, refs: first.refs, sense: first.sense });
         continue;
       }
       // an odd cumulene's (an odd number of double bonds): each end's group
@@ -365,6 +366,10 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
   const atom = atoms[c];
   if (mine.some((b) => b.either)) return "a wavy bond at it says it is either";
+  // (an allene's end: its wedge says how the allene turns - or, wedged at both ends, the two say opposite ways)
+  const doubles = (x: number) => bonds.filter((b) => b.order === 2 && (b.a === x || b.b === x));
+  const run = doubles(c).map((b) => (b.a === c ? b.b : b.a)).find((m) => doubles(m).length === 2);
+  if (run != null) return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
