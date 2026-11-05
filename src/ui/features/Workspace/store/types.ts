@@ -1705,6 +1705,8 @@ export type EditorState = {
   removeWire: (id: number) => void;
   /** A step's result set held off the page opened to be seen on it, or closed again: an edit. */
   openHeld: (id: number, open: boolean) => void;
+  /** A click on a step's exit's port, no wire drawn from it: its result set, wired on, shown on the page or held off it again (`openHeld`); nothing where its exit is wired on to none. */
+  exitPortClicked: (set: number) => void;
   /** A step's atoms chosen on the drawing from `option`, or no longer (null): what comes into it held off the page opened first. */
   chooseAtomsFor: (step: number, option: string | null) => void;
   /**

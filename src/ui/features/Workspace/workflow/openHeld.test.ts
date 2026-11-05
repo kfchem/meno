@@ -57,9 +57,18 @@ describe("a held set opened and closed (docs/WORKFLOWS.md, *Held results*)", () 
   });
 
   it("is shown or held by a click on its exit's port, and its menu is on that port - its frame drawn nowhere while held", () => {
-    // (the ports are HTML, in a WebGL page: read as written)
+    const { d, st } = stored(page());
+    st().exitPortClicked(2);
+    expect([set2(d.getState()).opened, setMembers(d.getState(), set2(d.getState())).molecules.length]).toEqual([true, 2]);
+    st().exitPortClicked(2);
+    expect([set2(d.getState()).opened, isHeld(d.getState(), set2(d.getState()))]).toEqual([undefined, true]);
+    // (an exit wired on to none has nothing to show or hold: its port is clicked to no end - set 3, the Filter's rest)
+    const was = d.getState();
+    st().exitPortClicked(3);
+    expect(d.getState()).toBe(was);
+    // (the ports are HTML, in a WebGL page: read as written - a click on one asks the store, its menu is the set's)
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer).toMatch(/if \(!moved\) \{[\s\S]*?b\?\.made && st\.wires\.some\(\(w\) => w\.from\.set === b\.id\)\) st\.openHeld\(b\.id, !b\.opened\)/);
+    expect(layer).toMatch(/if \(!moved\) \{\s*st\.exitPortClicked\(from\.set\);\s*return;/);
     expect(layer).toMatch(/exits\.map\([\s\S]*?onContextMenu=\{menuOf\("set", b\.id\)\}/);
   });
 

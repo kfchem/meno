@@ -208,6 +208,12 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     openHeld: (id: number, open: boolean) => {
       doc.edit(open ? "open results" : "close results", (d) => wf.openedSet(d, id, open));
     },
+    exitPortClicked: (id: number) => {
+      const d = doc.getState();
+      const b = d.sets?.find((x) => x.id === id);
+      // (what the page draws the port with calls this alone: the rule is here, whatever draws it)
+      if (b?.made && d.wires?.some((w) => w.from.set === id)) get().openHeld(id, !b.opened);
+    },
     /**
      * A step's atoms chosen on the drawing, or no longer (`choosingAtoms`):
      * what comes into it held off the page opened first, in one edit - its

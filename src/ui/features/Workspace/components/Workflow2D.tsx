@@ -621,8 +621,7 @@ export default function Workflow2D() {
         st.setWorkflowView({ wireDrag: null });
         // (a click, no wire drawn: a step's result set whose exit is wired on shown on the page, or held off it again - workflow/held)
         if (!moved) {
-          const b = st.sets.find((x) => x.id === from.set);
-          if (b?.made && st.wires.some((w) => w.from.set === b.id)) st.openHeld(b.id, !b.opened);
+          st.exitPortClicked(from.set);
           return;
         }
         const there = dropTarget(ev);
