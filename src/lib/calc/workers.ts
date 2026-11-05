@@ -124,8 +124,12 @@ const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join(""
 export async function addPlugin(p: Plugin): Promise<void> {
   if (!forThisSystem(p)) throw new Error(`${p.name} is not made for this system.`);
   // (a plugin it needs that is not got yet - one the list of plugins online offers: got first, as Settings gets one, of a
-  //  version it works with; the plugins in place then read again, so that it is set up with it below)
-  for (const d of (manifestOf(p.id)?.depends ?? []).filter((d) => !d.optional && !anyPluginById(d.plugin))) {
+  //  version it works with; the plugins in place then read again, so that it is set up with it below - and so on, for
+  //  those that one needs in turn)
+  const needed = (id: string) => (manifestOf(id)?.depends ?? []).filter((d) => !d.optional && !anyPluginById(d.plugin));
+  const toGet = needed(p.id);
+  for (let d = toGet.shift(); d; d = toGet.shift()) {
+    if (anyPluginById(d.plugin)) continue;
     const entry = onlineEntry(d.plugin);
     const why = !entry
       ? `${p.name} was not added: it needs ${pluginName(d.plugin)}, which is neither here nor among the plugins online.`
@@ -143,6 +147,7 @@ export async function addPlugin(p: Plugin): Promise<void> {
       setState(p.id, "absent", said);
       throw e;
     }
+    toGet.push(...needed(d.plugin));
   }
   // (one that runs nothing uses others too: a preset plugin, the plugin that runs its files)
   const first = pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added");
