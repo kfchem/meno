@@ -106,6 +106,48 @@ R or S follows from the order of a centre's four ligands and its
 configuration, E or Z from each end's higher ligand and the double bond's
 cis or trans.
 
+### Charged and radical mesomeric systems: Meno's own rule
+
+A carboxylate, an enolate, an amidinate, an allyl ion, a
+cyclopentadienide: a system whose charge, lone pair, empty place or
+unpaired electron its usual structures put on different atoms. The Blue
+Book's averaging covers only mancude rings; Hanson 2018 (p. 1758) asks
+what should happen in acyclic cases such as an allyl anion or an
+acetoacetate, and leaves the question open. So this is Meno's own rule:
+
+- **A unit whose ranking reaches such a system is worked out again with
+  each usual structure of the system drawn**, and of each further system
+  that reaching it leads to. It gets a label where every one of those
+  structures gives the same label, and `unsure` where they differ. So a
+  label never hangs on which usual structure was drawn: a lactate anion
+  and a zwitterionic amino acid are labelled as the neutral forms are, and
+  a centre beside an amidinate the same whichever N carries the charge.
+- **The usual structures** (`prepare.ts`, `mesomericSystems`): as many
+  double bonds as drawn, on the system's bonds, each atom in one at most,
+  with no more formal charges than drawn (CIP 1966 convention (c),
+  p. 391). Where the system meets a ring blended under convention (d), its
+  structures keep that ring as it is (CIP 1966 p. 394, "maximally retain
+  primary systems"): a phenolate's charge stays on its O.
+- **A cap:** at most 64 usual structures for one system
+  (`MOST_STRUCTURES`), and at most 64 combinations of them for one unit
+  (`MOST_VARIANTS`). A carboxylate, an enolate or an amidinate has two or
+  three structures and a cyclopentadienide five, so 64 is far past any
+  ordinary case. The cap keeps each unit's work bounded. A unit past it is
+  `unsure`, never guessed. Only the systems a unit's ranking actually
+  reaches are counted: a peptide with many carboxylates labels each of its
+  centres at once.
+
+**The alternative not taken: CIP 1966's blend of such systems** (convention
+(d)'s "secondary field", pp. 393-394). That blend divides the phantom atom
+for the charge equally between its positions, so each atom gets a
+duplicate of fractional atomic number: a carboxylate's O gets (1/2)·C, and
+a cyclopentadienide's C gets (4/5)·C. It is a published convention, but
+not the rule version Meno follows: the 2013 recommendations, as Hanson
+2018 states them, do not take it up. On the one validation-suite case that
+tells the two apart (VS097, a centre beside an amidinate), the blend gives
+the opposite descriptor to the suite's, while every usual structure taken
+alone gives the suite's.
+
 ## No label, and why
 
 A unit with no label always says why; none is ever guessed.
@@ -116,7 +158,7 @@ A unit with no label always says why; none is ever guessed.
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
 | later | Only rules 4 and 5 could tell two ligands apart: a centre or an axis in them, R against S. Not worked out yet. |
 | symmetric | Only the proposed rule 6 could: a spiro atom, or a centre on an axis of symmetry. Not worked out yet. |
-| unsure | A ligand it would have to look past cannot be told from the drawing - a carboxylate, an enolate or another charged or radical system the conventions leave with several structures, a metal, a star - or it is no centre the rules can complement (three bonds and no lone pair). |
+| unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement (three bonds and no lone pair). |
 | large | Its digraph grows past 200,000 nodes. |
 
 ## What it does not do yet
@@ -125,10 +167,6 @@ A unit with no label always says why; none is ever guessed.
   double bond's seqCis and seqTrans): those units say `later`.
 - **Rule 6**, the 2018 proposal: those units say `symmetric`.
 - **Axes and odd cumulenes** (Ra and Sa, M and P).
-- **The blend of a charged or radical mesomeric system** (CIP 1966 p. 393,
-  the "secondary field": a carboxylate, an enolate, an allyl ion, a
-  cyclopentadienide). A centre that would have to look past one says
-  `unsure`.
 - **Wiring in**: the drawing's labels and those of molecules in 3D.
 
 ## How it is checked

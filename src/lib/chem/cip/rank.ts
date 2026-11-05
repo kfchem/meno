@@ -50,6 +50,8 @@ export class Unknown {
   constructor(
     readonly why: "open" | "unsure" | "later",
     readonly bond?: number,
+    /** An unsure atom it would have had to look past, where it is one. */
+    readonly at?: number,
   ) {}
 }
 export type Compared = number | Unknown;
@@ -159,7 +161,7 @@ export class Ranker {
     if (memo?.[r]) return memo[r];
     let out: Sorted;
     if (n.dup || n.atom < 0 || !n.parent) out = { kids: [], ambiguous: new Map() };
-    else if (this.p.unsure[n.atom]) out = new Unknown("unsure");
+    else if (this.p.unsure[n.atom]) out = new Unknown("unsure", undefined, n.atom);
     else {
       const kids = [...n.graph.children(n)];
       const ambiguous = new Map<CipNode, Unknown>();

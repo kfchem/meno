@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readStereo, type DrawnAtom, type DrawnBond } from "../../layout/drawn";
 import type { IdentityInput } from "../identity";
-import { cipLabels } from "./index";
+import { cipLabels, MOST_VARIANTS } from "./index";
 import { cipInput, cipOf, cipSaid } from "./testdata/cipFrom";
 
 /**
@@ -114,8 +114,7 @@ describe("what gives no label, and why", () => {
     expect(cipSaid({ ...input, axes })).toEqual(["C1:later"]);
   });
 
-  it("says a ligand it would have to look past cannot be told from the drawing: a carboxylate's, a metal's, a star's", () => {
-    expect(cipOf("[O-]C(=O)[C@H](O)C(=O)O")).toEqual(["C3:unsure"]);
+  it("says a ligand it would have to look past cannot be told from the drawing: a metal's, a star's", () => {
     expect(cipOf("C[C@H](O)[Fe]")).toEqual(["C1:unsure"]);
     expect(cipOf("C[C@H](O)*")).toEqual(["C1:unsure"]);
   });
@@ -143,6 +142,53 @@ describe("what gives no label, and why", () => {
   it("gives up past its node budget, and says so, rather than freezing: a centre between two cages tied far out", () => {
     expect(prismsCentre(4)).toEqual({ why: "alike" });
     expect(prismsCentre(12)).toEqual({ why: "large" });
+  });
+});
+
+describe("charged and radical mesomeric systems: a label only where every usual structure gives it", () => {
+  it("labels a lactate anion's centre as the acid's, and a zwitterionic amino acid's as the neutral one's", () => {
+    expect(cipOf("C[C@H](O)C(=O)[O-]")).toEqual(["C1:S"]);
+    expect(cipOf("C[C@H](O)C(=O)O")).toEqual(["C1:S"]);
+    // (L-alanine: S, as its zwitterion)
+    expect(cipOf("C[C@@H](C(=O)[O-])[NH3+]")).toEqual(["C1:S"]);
+    expect(cipOf("C[C@@H](C(=O)O)N")).toEqual(["C1:S"]);
+  });
+
+  it("labels a centre beside an amidinate, drawn with its charge on either N", () => {
+    expect(cipOf("C[C@H](N)C(=N)[N-]C")).toEqual(["C1:S"]);
+    expect(cipOf("C[C@H](N)C(=NC)[NH-]")).toEqual(["C1:S"]);
+  });
+
+  it("keeps a phenolate's charge on its O, its ring as blended: labelled as the phenol is", () => {
+    expect(cipOf("C[C@H](O)C1=CC=C([O-])C=C1")).toEqual(cipOf("C[C@H](O)C1=CC=C(O)C=C1"));
+    expect(cipOf("F[C@H](C1=CC=CC=C1[O-])C1=CC=CC=C1O")).toEqual(["C1:R"]);
+  });
+
+  it("ranks a carboxylate against an acid the same in both its usual structures: the acid's OH above the anion's O-", () => {
+    expect(cipOf("[O-]C(=O)[C@H](O)C(=O)O")).toEqual(["C3:S"]);
+    expect(cipOf("O=C([O-])[C@H](O)C(=O)O")).toEqual(["C3:S"]);
+  });
+
+  it("says unsure where its usual structures disagree: an allyl anion's end, above a propyl drawn C=C, below it drawn C-", () => {
+    expect(cipOf("F[C@H](C=C[CH2-])CCC")).toEqual(["C1:unsure"]);
+    expect(cipOf("F[C@H]([CH-]C=C)CCC")).toEqual(["C1:unsure"]);
+    // (neutral, a propenyl: (C,C,H) above a propyl's (C,H,H))
+    expect(cipOf("F[C@H](C=CC)CCC")).toEqual(["C1:S"]);
+  });
+
+  it("takes an empty place only on a C: an allyl cation's moves, so its ends disagree; a C+ beside C=O has the one usual structure", () => {
+    expect(cipOf("F[C@H]([CH+]C=C)CCC")).toEqual(["C1:unsure"]);
+    // (C=C-O+ would leave the O six electrons: no usual structure)
+    expect(cipOf("F[C@H]([CH+]C=O)CCC")).toEqual(["C1:R"]);
+  });
+
+  it("works out only the systems a ranking reaches - eleven carboxylates on a chain, one centre labelled at once - and past MOST_VARIANTS says unsure", () => {
+    const asp = "NC(CC(=O)[O-])C(=O)";
+    expect(cipOf(`C[C@H](O)C(=O)${asp.repeat(10)}NCC(=O)[O-]`)).toEqual(["C1:S"]);
+    // (two arms tied far out, each with three branches of two carboxylates: their structures 2^12 together)
+    const x = "C(CC(=O)[O-])CC(=O)[O-]";
+    expect(cipOf(`F[C@H](C(${x})(${x})${x})C(${x})(${x})CCC`)).toEqual(["C1:unsure"]);
+    expect(MOST_VARIANTS).toBeLessThan(2 ** 12);
   });
 });
 

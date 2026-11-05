@@ -112,6 +112,9 @@ const CASES: Case[] = [
     smiles: String.raw`OC(=O)C1=CC2=CC=C1/C=C\C1=CC(Br)=C(/C=C\2)C=C1`,
     said: ["C9=C10:Z", "C16=C17:Z"],
   },
+  // (an amidinate's charge drawn on either N: each usual structure gives R, so does the case)
+  { vs: "VS097", smiles: String.raw`N#C[C@H]1C(=O)NC(=O)N=C1[N-]C1=CC=CC=C1`, said: ["C2:R"] },
+  { vs: "VS097", smiles: String.raw`N#C[C@H]1C(=O)NC(=O)[N-]C1=NC1=CC=CC=C1`, said: ["C2:R"] },
   // rule 1b
   {
     vs: "VS171",

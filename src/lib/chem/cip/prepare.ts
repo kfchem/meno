@@ -25,14 +25,15 @@
  *   each multiple bond, then phantom atoms of atomic number 0 up to four,
  *   for lone pairs and incomplete shells.
  *
- * What the conventions leave with more than one usual structure, and what
- * they cannot complement at all, is marked unsure: a mesomeric system with
- * a charge, a lone pair or a radical carried along it (a carboxylate, a
- * nitro group, an enolate, an amidinium, a cyclopentadienide - blended in
- * 1966 too, p. 393, but not yet here), a metal, a star, an element with no
- * symbol, an atom still past its octet. A ranking that would have to look
- * past an unsure atom says so, and gives no label: it never takes the
- * structure as drawn for the blend.
+ * A mesomeric system with a charge, a lone pair, an empty place or an
+ * unpaired electron carried along it - a carboxylate, a nitro group, an
+ * enolate, an amidinium, a cyclopentadienide - is not blended (`Mesomeric`):
+ * its usual structures are found, and its atoms marked unsure, to be asked
+ * about again with each of those structures drawn (index.ts `agreed`).
+ * What the conventions cannot complement at all is marked unsure too: a
+ * metal, a star, an element with no symbol, an atom still past its octet.
+ * A ranking that would have to look past an unsure atom says so, and gives
+ * no label: it never takes the structure as drawn for its blend.
  */
 import { isMetal } from "../../layout/perceive";
 import { elementOf } from "../elements";
@@ -98,7 +99,20 @@ export type Prepared = {
   dups: { z: number; of: number }[][];
   /** Whether an atom's ligands cannot be told from the drawing: see above. */
   unsure: boolean[];
+  /** Its charged or radical mesomeric systems (`Mesomeric`), and each atom's, by index; -1 for none. */
+  systems: Mesomeric[];
+  systemOf: number[];
 };
+
+/**
+ * A mesomeric system with a charge, a lone pair, an empty place or an
+ * unpaired electron that its usual structures put on different atoms - a
+ * carboxylate, an enolate, an amidinate, an allyl ion: its atoms, and its
+ * usual structures, each the order of each of its bonds and the charge of
+ * each of its atoms. None where it has more than `MOST_STRUCTURES`, or is
+ * of a kind not worked out: then it is unsure whatever is asked.
+ */
+export type Mesomeric = { atoms: number[]; structures: { orders: Map<string, number>; charges: Map<number, number> }[] };
 
 /** Each atom's bond orders summed, with its hydrogens. */
 function valences(n: number, hs: readonly number[], order: ReadonlyMap<string, number>): number[] {
@@ -119,7 +133,13 @@ function octetValence(el: string, charge: number): number | null {
   return Math.min(e, 8 - e);
 }
 
-export function prepared(input: IdentityInput): Prepared {
+/**
+ * `input` made ready for the rules. Its charged or radical mesomeric
+ * systems are unsure (index.ts asks again with each of their usual
+ * structures drawn, `asDrawn` the atoms of those taken as drawn) - but one
+ * with a single usual structure, which is as drawn.
+ */
+export function prepared(input: IdentityInput, asDrawn: ReadonlySet<number> = new Set()): Prepared {
   const n = input.atoms.length;
   const atoms = input.atoms;
   const charge = atoms.map((a) => a.charge ?? 0);
@@ -198,12 +218,18 @@ export function prepared(input: IdentityInput): Prepared {
   }
   for (const k of blended) order.set(k, 1);
 
-  // what the conventions leave with more than one usual structure: unsure
-  const marked = mesomeric(input, around, order, blended, hs, charge);
-  for (const a of marked) unsure[a] = true;
+  // a charged or radical mesomeric system: unsure, but where it has one usual structure or is asked as drawn (index.ts `agreed`)
+  const systems = mesomericSystems(input, around, order, blended, hs, charge, mesomeric(input, around, order, blended, hs, charge));
+  const systemOf = atoms.map(() => -1);
+  systems.forEach((m, i) => {
+    for (const a of m.atoms) {
+      systemOf[a] = i;
+      if (!m.structures.length || (m.structures.length > 1 && !asDrawn.has(a))) unsure[a] = true;
+    }
+  });
 
   const mass = atoms.map((a) => (a.isotope ? (isotopeMass(a.el, a.isotope) ?? NaN) : (standardWeight(a.el) ?? NaN)));
-  return { input, z, mass, hs, around, charge, order, bondAt, blended, dups, unsure };
+  return { input, z, mass, hs, around, charge, order, bondAt, blended, dups, unsure, systems, systemOf };
 }
 
 /** An atom's lone pairs after the conventions, from its valence electrons, charge and bonds: none for an element not listed. */
@@ -266,4 +292,154 @@ function mesomeric(input: IdentityInput, around: readonly number[][], order: Rea
     }
   }
   return out;
+}
+
+/**
+ * The most usual structures one mesomeric system is taken in: past it, the
+ * system is unsure. A carboxylate, an enolate or an amidinate has two or
+ * three, a cyclopentadienide five; 64 is far past any ordinary system, and
+ * keeps a structure's work bounded, each of its units asked again at most
+ * that many times (index.ts `MOST_VARIANTS`).
+ */
+export const MOST_STRUCTURES = 64;
+
+/**
+ * The charged or radical mesomeric systems of a structure (`mesomeric`'s
+ * atoms, joined through bonds of no closed-conjugated ring), each with its
+ * usual structures: as many double bonds as drawn, on the system's bonds,
+ * each atom in one at most, what moves - a lone pair, an empty place, an
+ * unpaired electron - held by the atoms left, and no more formal charges
+ * than drawn (CIP 1966 convention (c), p. 391).
+ *
+ * Where a system meets a closed-conjugated ring (blended before), its
+ * structures keep that ring as it is, as CIP 1966 has it for overlapped
+ * systems (p. 394, "maximally retain primary systems"): a phenolate's
+ * charge stays on its O, a fluorenylide's on C9, an indenylide's moves
+ * between C1 and C3 only.
+ */
+function mesomericSystems(
+  input: IdentityInput,
+  around: readonly number[][],
+  order: ReadonlyMap<string, number>,
+  blended: ReadonlySet<string>,
+  hs: readonly number[],
+  charge: readonly number[],
+  marked: ReadonlySet<number>,
+): Mesomeric[] {
+  const atoms = input.atoms;
+  const primary = new Set<number>();
+  for (const k of blended) for (const a of k.split(",").map(Number)) primary.add(a);
+  const free = new Set([...marked].filter((a) => !primary.has(a)));
+  const out: Mesomeric[] = [];
+  const seen = new Set<number>();
+  for (const start of [...free].sort((p, q) => p - q)) {
+    if (seen.has(start)) continue;
+    const system: number[] = [];
+    const queue = [start];
+    seen.add(start);
+    while (queue.length) {
+      const a = queue.pop()!;
+      system.push(a);
+      for (const b of around[a]) {
+        if (!free.has(b) || seen.has(b) || blended.has(pair(a, b))) continue;
+        seen.add(b);
+        queue.push(b);
+      }
+    }
+    system.sort((p, q) => p - q);
+    out.push({ atoms: system, structures: structuresOf(system) ?? [] });
+  }
+  return out;
+
+  /** A system's usual structures; null where it is of a kind not worked out, or has more than `MOST_STRUCTURES`. */
+  function structuresOf(system: number[]): Mesomeric["structures"] | null {
+    const inSystem = new Set(system);
+    const edges: [number, number][] = [];
+    const drawn = new Set<string>();
+    for (const a of system) {
+      for (const b of around[a]) {
+        const o = order.get(pair(a, b)) ?? 1;
+        if (!inSystem.has(b)) {
+          // (a double bond out of the system, or a triple bond: not one the conventions' examples show)
+          if (o >= 2 && !blended.has(pair(a, b))) return null;
+          continue;
+        }
+        if (o >= 3) return null;
+        if (a < b) {
+          edges.push([a, b]);
+          if (o === 2) drawn.add(pair(a, b));
+        }
+      }
+    }
+    const matchedDrawn = new Set([...drawn].flatMap((k) => k.split(",").map(Number)));
+    const holders = system.filter((a) => !matchedDrawn.has(a));
+    // (what moves: a lone pair, an empty place, or an unpaired electron - one kind in a system)
+    const kinds = new Set(holders.map(kindOf));
+    if (!holders.length || kinds.size !== 1 || kinds.has(null)) return null;
+    const kind = [...kinds][0]!;
+    const sign = kind === "pair" ? 1 : kind === "empty" ? -1 : 0;
+    const chargesDrawn = system.reduce((t, a) => t + Math.abs(charge[a]), 0);
+
+    const found: Mesomeric["structures"] = [];
+    const partner = new Map<number, number>();
+    let tooMany = false;
+    const usual = (): Mesomeric["structures"][number] | null => {
+      const charges = new Map<number, number>();
+      let count = 0;
+      for (const a of system) {
+        const now = partner.has(a) ? 1 : 0;
+        const was = matchedDrawn.has(a) ? 1 : 0;
+        if (!now && was && !canHold(a, kind)) return null;
+        const c = charge[a] + sign * (now - was);
+        charges.set(a, c);
+        count += Math.abs(c);
+      }
+      if (count > chargesDrawn) return null;
+      const orders = new Map(edges.map(([p, q]) => [pair(p, q), partner.get(p) === q ? 2 : 1]));
+      return { orders, charges };
+    };
+    const pick = (i: number, left: number) => {
+      if (tooMany) return;
+      if (left === 0) {
+        const s = usual();
+        if (s) found.push(s);
+        tooMany = found.length > MOST_STRUCTURES;
+        return;
+      }
+      if (system.slice(i).filter((a) => !partner.has(a)).length < 2 * left) return;
+      const a = system[i];
+      if (partner.has(a)) return pick(i + 1, left);
+      for (const [p, q] of edges) {
+        const b = p === a ? q : q === a ? p : -1;
+        if (b < a || partner.has(b)) continue;
+        partner.set(a, b).set(b, a);
+        pick(i + 1, left - 1);
+        partner.delete(a);
+        partner.delete(b);
+      }
+      // (a left with no double bond: it holds what moves)
+      pick(i + 1, left);
+    };
+    pick(0, drawn.size);
+    return tooMany ? null : found;
+  }
+
+  /** What an atom with no double bond in the system holds that one could take: a lone pair, an empty place (a C of six electrons), or an unpaired electron. */
+  function kindOf(a: number): "pair" | "empty" | "odd" | null {
+    const el = atoms[a].el;
+    const ve = VALENCE_ELECTRONS[el];
+    if (ve == null) return null;
+    const bonded = around[a].reduce((t, b) => t + (order.get(pair(a, b)) ?? 1), hs[a]);
+    const lone = ve - charge[a] - bonded;
+    if (atoms[a].radical || lone % 2 === 1) return "odd";
+    if (lone >= 2) return "pair";
+    if (el === "C" && lone === 0 && bonded === 3) return "empty";
+    return null;
+  }
+
+  /** Whether an atom could hold what moves, its double bond in the system gone: a lone pair a C, N, O or S; an empty place a C; an unpaired electron a C, N or O. */
+  function canHold(a: number, kind: "pair" | "empty" | "odd"): boolean {
+    const el = atoms[a].el;
+    return kind === "pair" ? ["C", "N", "O", "S"].includes(el) : kind === "empty" ? el === "C" : ["C", "N", "O"].includes(el);
+  }
 }

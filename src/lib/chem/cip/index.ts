@@ -15,7 +15,7 @@
 import { isMetal } from "../../layout/perceive";
 import type { IdentityInput } from "../identity";
 import { Digraph, HYDROGEN, NODE_BUDGET, PHANTOM, TooLarge, type Budget, type CipNode } from "./digraph";
-import { lonePairs, prepared, type Prepared } from "./prepare";
+import { lonePairs, MOST_STRUCTURES, prepared, type Prepared } from "./prepare";
 import { Ranker, Unknown } from "./rank";
 
 /**
@@ -25,15 +25,20 @@ import { Ranker, Unknown } from "./rank";
  * - `later`: only rules 4 and 5 could tell two ligands apart - not worked out yet;
  * - `symmetric`: only the proposed rule 6 could - not worked out yet;
  * - `unsure`: a ligand it would have to look past cannot be told from the
- *   drawing (a mesomeric system, a metal, a star), or it is no centre the
- *   rules can complement (three bonds and no lone pair);
+ *   drawing - a charged or radical mesomeric system whose usual structures
+ *   give different labels, or more of them than `MOST_VARIANTS`, a metal, a
+ *   star - or it is no centre the rules can complement (three bonds and no
+ *   lone pair);
  * - `large`: its digraph grows past what is worked out.
  */
 export type CipWhy = "alike" | "open" | "later" | "symmetric" | "unsure" | "large";
 export type CipResult = { label: "R" | "S" | "E" | "Z" } | { why: CipWhy; bond?: number };
 
+/** A unit's result as worked out on one structure, with the unsure atom it stopped at, if it did (`agreed`). */
+type Said = CipResult & { at?: number };
+
 const no = (why: CipWhy, bond?: number): CipResult => (bond == null ? { why } : { why, bond });
-const fromUnknown = (u: Unknown): CipResult => no(u.why, u.bond);
+const fromUnknown = (u: Unknown): Said => (u.at == null ? no(u.why, u.bond) : { ...no(u.why, u.bond), at: u.at });
 
 /** The parity of a permutation of 0..n-1: 1 even, -1 odd. */
 function parity(perm: readonly number[]): 1 | -1 {
@@ -56,7 +61,7 @@ function parity(perm: readonly number[]): 1 | -1 {
  * be: a comparison that cannot be made, or two alike - and then whether
  * rules 4 and 5, or rule 6, might yet tell them apart.
  */
-function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]): number[] | CipResult {
+function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]): number[] | Said {
   const order = ligands.map((_, i) => i);
   for (let i = 1; i < order.length; i++) {
     for (let j = i; j > 0; j--) {
@@ -96,7 +101,7 @@ function refusedCentre(p: Prepared, c: number): boolean {
   return t.neighbours.length !== 3 || lonePairs(p, c) < 1;
 }
 
-function centre(p: Prepared, c: number): CipResult {
+function centre(p: Prepared, c: number): Said {
   const t = p.input.atoms[c].tetra!;
   if (refusedCentre(p, c)) return no("unsure");
   const budget: Budget = { left: NODE_BUDGET };
@@ -119,7 +124,7 @@ function centre(p: Prepared, c: number): CipResult {
   }
 }
 
-function doubleBond(p: Prepared, i: number): CipResult {
+function doubleBond(p: Prepared, i: number): Said {
   const b = p.input.bonds[i];
   const stereo = b.stereo!;
   // (a double bond on a blended cycle is still the unit drawn: a cyclophane's bridge, its alternating cycle through both rings - Hanson et al. 2018 validation suite VS155)
@@ -150,16 +155,78 @@ function doubleBond(p: Prepared, i: number): CipResult {
 }
 
 /**
+ * The most structures one unit is worked out on (`agreed`): the usual
+ * structures of the mesomeric systems its ranking reaches, each with each.
+ * A unit past it is unsure, never guessed.
+ */
+export const MOST_VARIANTS = MOST_STRUCTURES;
+
+/**
+ * A unit's result where its ranking reaches a charged or radical mesomeric
+ * system - a carboxylate, an enolate, an amidinate: Meno's own rule where
+ * the Blue Book leaves the case open (Hanson et al. 2018 p. 1758; docs/
+ * CIP.md, *Charged and radical mesomeric systems*). The unit is worked out
+ * again with each usual structure of each system it reaches drawn, as many
+ * systems as it goes on to reach so; it has a label where every one of
+ * those gives the same, and is unsure where they differ, or where there
+ * are more of them than `MOST_VARIANTS`. So no label hangs on which of its
+ * usual structures was drawn.
+ */
+function agreed(p: Prepared, unit: (q: Prepared) => Said, variants: (systems: number[]) => Prepared[]): CipResult {
+  const first = unit(p);
+  const reached: number[] = [];
+  let results = [first];
+  for (;;) {
+    const next = results.map((r) => (r.at == null ? -1 : p.systemOf[r.at])).find((i) => i >= 0 && p.systems[i].structures.length > 1 && !reached.includes(i));
+    if (next == null) break;
+    reached.push(next);
+    if (reached.reduce((t, i) => t * p.systems[i].structures.length, 1) > MOST_VARIANTS) return no("unsure");
+    results = variants(reached).map(unit);
+  }
+  const plain = (r: Said): CipResult => ("label" in r ? { label: r.label } : no(r.why, r.bond));
+  const said = new Set(results.map((r) => JSON.stringify(plain(r))));
+  return said.size === 1 ? plain(results[0]) : no("unsure");
+}
+
+/**
  * The descriptors of a structure's configured centres (by atom index) and
  * double bonds (by bond index) - all of them, or those asked for.
  */
 export function cipLabels(input: IdentityInput, ask?: { centres?: Iterable<number>; bonds?: Iterable<number> }): { centres: Map<number, CipResult>; bonds: Map<number, CipResult> } {
   const p = prepared(input);
+  const made = new Map<string, Prepared>();
+  // (the structure with each combination of usual structures of `systems` drawn, each made once)
+  const variants = (systems: number[]): Prepared[] => {
+    let combos: number[][] = [[]];
+    for (const i of systems) combos = combos.flatMap((c) => p.systems[i].structures.map((_, k) => [...c, k]));
+    return combos.map((combo) => {
+      const key = systems.map((i, j) => `${i}:${combo[j]}`).join(" ");
+      let q = made.get(key);
+      if (!q) {
+        const atoms = input.atoms.map((a) => ({ ...a }));
+        const bonds = input.bonds.map((b) => ({ ...b }));
+        const asDrawn = new Set<number>();
+        systems.forEach((i, j) => {
+          const s = p.systems[i].structures[combo[j]];
+          for (const [a, c] of s.charges) atoms[a].charge = c;
+          for (const [k, o] of s.orders) bonds[p.bondAt.get(k)!].order = o;
+          for (const a of p.systems[i].atoms) asDrawn.add(a);
+        });
+        q = prepared({ ...input, atoms, bonds }, asDrawn);
+        made.set(key, q);
+      }
+      return q;
+    });
+  };
   const centres = new Map<number, CipResult>();
   const bonds = new Map<number, CipResult>();
   const atomsAsked = ask?.centres ? [...ask.centres] : input.atoms.map((_, i) => i);
   const bondsAsked = ask?.bonds ? [...ask.bonds] : input.bonds.map((_, i) => i);
-  for (const c of atomsAsked) if (input.atoms[c]?.tetra) centres.set(c, centre(p, c));
-  for (const i of bondsAsked) if (input.bonds[i]?.stereo) bonds.set(i, doubleBond(p, i));
+  for (const c of atomsAsked) {
+    if (input.atoms[c]?.tetra) centres.set(c, agreed(p, (q) => centre(q, c), variants));
+  }
+  for (const i of bondsAsked) {
+    if (input.bonds[i]?.stereo) bonds.set(i, agreed(p, (q) => doubleBond(q, i), variants));
+  }
   return { centres, bonds };
 }
