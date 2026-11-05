@@ -10,8 +10,9 @@
 //!
 //! What is in the plugins' folder (`<local data>/plugins`), and whose:
 //! `<id>/<version>/` and `<id>/current` are read by core as the plugins in
-//! use, and written here; `.staging/`, `catalogue.json`, its `.minisig` and
-//! `catalogue-state.json` are this module's alone. A version no longer
+//! use, and written here; `.staging/`, `catalogue-2.json`, its `.minisig` and
+//! `catalogue-2-state.json` - and those an earlier Meno kept, `catalogue.json`
+//! and its own - are this module's alone. A version no longer
 //! `current` is taken away at launch, where no job of it waits or runs - never
 //! here.
 
@@ -30,7 +31,24 @@ pub const PURPOSE: &str = "plugin-catalogue";
 pub const HOSTS: [&str; 3] = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 
 /// The catalogue, as the newest release of the plugins' repository has it; its signature beside it, `.minisig`.
-const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue.json";
+/// This Meno's generation of it (docs/PLUGINS.md, *Plugins online*): the whole list, `catalogue-2.json`, read
+/// by a Meno that lists a plugin made for a newer Meno as such - beside `catalogue.json`, the plugins every Meno
+/// still in use reads whole, which an earlier Meno fetches.
+const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue-2.json";
+
+/// Where a catalogue is kept in the plugins' folder: the list, its signature and its state.
+struct Kept {
+    list: &'static str,
+    sig: &'static str,
+    state: &'static str,
+}
+
+/// This Meno's: the whole list, kept with its own state - and so its own floor.
+const KEPT: Kept = Kept { list: "catalogue-2.json", sig: "catalogue-2.json.minisig", state: "catalogue-2-state.json" };
+
+/// An earlier Meno's, its subset of the list: read, and shown, only until this Meno's is first fetched - never
+/// a floor for it (the two of one release are issued the same second, and are not the same bytes).
+const KEPT_BEFORE: Kept = Kept { list: "catalogue.json", sig: "catalogue.json.minisig", state: "catalogue-state.json" };
 
 /// The keys the catalogue is signed with (minisign, base64): the one in use, and the next, so that one is
 /// changed for the other by a Meno that carries both first. Only the public key is here; the secret one that
@@ -181,9 +199,14 @@ fn put(path: &Path, bytes: &[u8]) -> Result<(), String> {
 /// The catalogue kept from before, checked again as it is read - never trusted for having been kept: it must
 /// be the very list its state was written for.
 fn kept(root: &Path, keys: &[&str]) -> Option<(Value, KeptState)> {
-    let list = std::fs::read(root.join("catalogue.json")).ok()?;
-    let sig = std::fs::read(root.join("catalogue.json.minisig")).ok()?;
-    let state: KeptState = serde_json::from_slice(&std::fs::read(root.join("catalogue-state.json")).ok()?).ok()?;
+    // (this Meno's; else, until it is first fetched, the one an earlier Meno kept)
+    kept_as(root, keys, &KEPT).or_else(|| kept_as(root, keys, &KEPT_BEFORE))
+}
+
+fn kept_as(root: &Path, keys: &[&str], at: &Kept) -> Option<(Value, KeptState)> {
+    let list = std::fs::read(root.join(at.list)).ok()?;
+    let sig = std::fs::read(root.join(at.sig)).ok()?;
+    let state: KeptState = serde_json::from_slice(&std::fs::read(root.join(at.state)).ok()?).ok()?;
     let (value, issued) = checked(&list, &sig, keys, None).ok()?;
     (issued == state.issued && fingerprint(&list) == state.sha256).then_some((value, state))
 }
@@ -192,16 +215,17 @@ fn kept(root: &Path, keys: &[&str]) -> Option<(Value, KeptState)> {
 /// and its fingerprint, what a later one is held to.
 fn keep(root: &Path, list: &[u8], sig: &[u8], issued: &str, fetched_at: &str) -> Result<(), String> {
     std::fs::create_dir_all(root).map_err(|e| format!("making {}: {e}", root.display()))?;
-    put(&root.join("catalogue.json"), list)?;
-    put(&root.join("catalogue.json.minisig"), sig)?;
+    put(&root.join(KEPT.list), list)?;
+    put(&root.join(KEPT.sig), sig)?;
     let state = KeptState { issued: issued.to_string(), sha256: fingerprint(list), fetched_at: fetched_at.to_string() };
-    put(&root.join("catalogue-state.json"), &serde_json::to_vec(&state).map_err(|e| e.to_string())?)
+    put(&root.join(KEPT.state), &serde_json::to_vec(&state).map_err(|e| e.to_string())?)
 }
 
 /// What a fetched catalogue is held to: the one kept's, signed or not - a catalogue kept whose signature no
-/// longer checks does not lower it.
+/// longer checks does not lower it. This Meno's alone: an earlier Meno's list is another file of the same
+/// release, issued the same second.
 fn floor(root: &Path) -> Option<Taken> {
-    let state: KeptState = serde_json::from_slice(&std::fs::read(root.join("catalogue-state.json")).ok()?).ok()?;
+    let state: KeptState = serde_json::from_slice(&std::fs::read(root.join(KEPT.state)).ok()?).ok()?;
     Some(Taken { issued: state.issued, sha256: state.sha256 })
 }
 
@@ -664,11 +688,31 @@ mod tests {
         assert_eq!((value["issued"].as_str(), state.fetched_at.as_str()), (Some("2026-11-03T00:00:00Z"), "2026-11-05T00:00:00Z"));
         assert_eq!(floor(&root), Some(Taken { issued: "2026-11-03T00:00:00Z".to_string(), sha256: fingerprint(LIST) }));
         // (one changed where it is kept - another list, signed, of the same second: not read)
-        std::fs::write(root.join("catalogue.json"), SAME_TIME).unwrap();
-        std::fs::write(root.join("catalogue.json.minisig"), SAME_TIME_A).unwrap();
+        std::fs::write(root.join(KEPT.list), SAME_TIME).unwrap();
+        std::fs::write(root.join(KEPT.sig), SAME_TIME_A).unwrap();
         assert!(kept(&root, &[KEY_A]).is_none());
         // (and the floor stays: a list signed but older is refused still)
         assert!(checked(EARLIER, EARLIER_A, &[KEY_A], floor(&root).as_ref()).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_earlier_menos_list_is_shown_until_this_menos_is_fetched_and_holds_it_to_nothing() {
+        let root = scratch("before");
+        // (an earlier Meno's kept list, and its state, as it wrote them)
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(KEPT_BEFORE.list), LIST).unwrap();
+        std::fs::write(root.join(KEPT_BEFORE.sig), LIST_A).unwrap();
+        let state = format!(r#"{{"issued":"2026-11-03T00:00:00Z","sha256":"{}","fetchedAt":"2026-11-05T00:00:00Z"}}"#, fingerprint(LIST));
+        std::fs::write(root.join(KEPT_BEFORE.state), state).unwrap();
+        // (shown, as the one kept - offline, the plugins online are still listed)
+        assert_eq!(kept(&root, &[KEY_A]).unwrap().0["issued"], "2026-11-03T00:00:00Z");
+        // (but no floor: this Meno's list of the same release, issued the same second, is another file - taken)
+        assert_eq!(floor(&root), None);
+        take_fetched(&root, SAME_TIME, SAME_TIME_A, &[KEY_A], "2026-11-06T00:00:00Z").unwrap();
+        // (from then on, this Meno's is the one kept, and its floor)
+        assert_eq!(kept(&root, &[KEY_A]).unwrap().1.sha256, fingerprint(SAME_TIME));
+        assert_eq!(floor(&root).unwrap().sha256, fingerprint(SAME_TIME));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -887,12 +931,12 @@ mod tests {
         keep(&root, LIST, LIST_A, "2026-11-03T00:00:00Z", "2026-11-05T00:00:00Z").unwrap();
         assert!(kept(&root, &[KEY_A]).is_some());
         let state = |issued: &str, sha256: &str| format!(r#"{{"issued":"{issued}","sha256":"{sha256}","fetchedAt":"2026-11-05T00:00:00Z"}}"#);
-        std::fs::write(root.join("catalogue-state.json"), state("2026-11-04T00:00:00Z", &fingerprint(LIST))).unwrap();
+        std::fs::write(root.join(KEPT.state), state("2026-11-04T00:00:00Z", &fingerprint(LIST))).unwrap();
         assert!(kept(&root, &[KEY_A]).is_none());
-        std::fs::write(root.join("catalogue-state.json"), state("2026-11-03T00:00:00Z", &"0".repeat(64))).unwrap();
+        std::fs::write(root.join(KEPT.state), state("2026-11-03T00:00:00Z", &"0".repeat(64))).unwrap();
         assert!(kept(&root, &[KEY_A]).is_none());
         // (a state as an earlier Meno wrote it, with a serial: not read)
-        std::fs::write(root.join("catalogue-state.json"), br#"{"serial":3,"fetchedAt":"2026-11-05T00:00:00Z"}"#).unwrap();
+        std::fs::write(root.join(KEPT.state), br#"{"serial":3,"fetchedAt":"2026-11-05T00:00:00Z"}"#).unwrap();
         assert!(kept(&root, &[KEY_A]).is_none() && floor(&root).is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -902,10 +946,10 @@ mod tests {
         let root = scratch("replay");
         let now = "2026-11-06T00:00:00Z";
         take_fetched(&root, LIST, LIST_A, &[KEY_A], "2026-11-05T00:00:00Z").unwrap();
-        let before: Vec<Vec<u8>> = ["catalogue.json", "catalogue.json.minisig", "catalogue-state.json"].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
+        let before: Vec<Vec<u8>> = [KEPT.list, KEPT.sig, KEPT.state].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
         assert!(take_fetched(&root, EARLIER, EARLIER_A, &[KEY_A], now).unwrap_err().contains("older"));
         assert!(take_fetched(&root, SAME_TIME, SAME_TIME_A, &[KEY_A], now).unwrap_err().contains("same second"));
-        let after: Vec<Vec<u8>> = ["catalogue.json", "catalogue.json.minisig", "catalogue-state.json"].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
+        let after: Vec<Vec<u8>> = [KEPT.list, KEPT.sig, KEPT.state].iter().map(|f| std::fs::read(root.join(f)).unwrap()).collect();
         assert_eq!(before, after);
         // (as the command gives it: the one kept, saying why the newer one was not taken)
         let given = got(&root, &[KEY_A], Some(Ok((EARLIER.to_vec(), EARLIER_A.to_vec()))), now).unwrap().unwrap();

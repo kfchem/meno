@@ -1601,7 +1601,15 @@ comes in its own pull request.
   manifest is a newer Meno's - its contract, environment, a role or a kind
   of step this Meno does not know - is not taken either, and adding it
   says it is for a newer Meno, not that it could not be read
-  (`lib/plugins/manifest` `newerOf`). A list is not refused for its age: Settings shows the day it was
+  (`lib/plugins/manifest` `newerOf`).
+- **Two lists of one release, one for each generation of reader.** Each
+  release of the plugins publishes `catalogue.json` - the plugins every
+  Meno still in use reads whole, which Menos up to 0.1.22 fetch, refusing
+  the whole for one they cannot - and `catalogue-2.json`, the whole list,
+  which this Meno fetches, and alone: one list, one signature and one
+  floor for each Meno. Both are signed with the same key and issued the
+  same second. When no Meno in use refuses the whole any more, the first
+  is no longer written (meno-plugins' README says by which rule). A list is not refused for its age: Settings shows the day it was
   issued, beside when it was listed.
 - **Where a plugin's files may be.** On https, at the hosts the plugins'
   releases are at - each exactly, its letters made small, nothing only
