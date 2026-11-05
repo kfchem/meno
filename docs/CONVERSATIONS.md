@@ -139,7 +139,7 @@ nothing, and its card says why in one line.
     - the *language model* and *outside entrance* roles are filled only by plugins of Meno's own catalogue - a plugin from elsewhere cannot fill them until a worker's network is confined by the system, or goes through Meno only: a later question;
     - those plugins' workers are reviewed to open no connection but to the hosts their consent names, and their tests - the scripted test model's too - check it;
     - adding one asks plainly: it names the service's host, and says the plugin sends what the conversation shares there, with the person's key, which goes to the plugin.
-  - The key is the person's own, typed by them in Settings. Core keeps it in the system's keychain (the Keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux), by the `keyring` crate, and hands it to that plugin's worker in memory for each request: never in its arguments or environment, never in the .meno, a log, the send log, a job folder or any file Meno writes. Where the system has no keychain, no model plugin is run, saying why; the key is never kept in a file instead.
+  - The key is the person's own, typed by them in Settings. Core keeps it in the system's keychain (the Keychain on macOS, the Credential Manager on Windows), by the `keyring` crate, and hands it to that plugin's worker in memory for each request: never in its arguments or environment, never in the .meno, Meno's log, the send log, a job folder or any file Meno writes. Where the system has no keychain Meno trusts, no key is kept, saying why; never in a file instead.
 - **A program outside Meno**, connecting by the model-tool protocol, reaches
   the same tools through a plugin of its own kind, *outside entrance*.
   Without it added, nothing listens.
@@ -430,3 +430,52 @@ which its card and its column are built:
 - **What was said, as rows** (`conversation/said`): each person's and
   model's words, each tool called with what came of it on its line - what
   a column shows, as words, never drawn as a page.
+
+### Talking through a plugin (2026-11-05)
+
+**The role.** *Talking with a model, in a conversation* (`language-model`,
+lib/plugins/roles) is filled by a plugin that names, in its manifest, the
+hosts it talks to: each a host's name exactly, 1 to 8, never a pattern, an
+address or a port (`hosts`, lib/plugins/manifest `hostsOf`). Without them
+the role is not its; no other role names any. Who fills it, and its
+options, are chosen in Settings, *Conversations*; Settings, *Plugins*,
+points there from the plugin's card.
+
+**Its way out.** The backend reads the hosts again from the plugin's
+manifest in place - never from the page - and starts the plugin's worker
+pointed at the network gate under a task of its own: purpose
+`model:<plugin id>`, those hosts alone (src-tauri/src/model.rs). The
+first time a conversation goes to it, Meno asks: "Send this conversation
+to *hosts*, for *plugin*? What is said in it, and what it is given, goes
+there." A yes is remembered, as any purpose's, and withdrawn in Settings,
+*Network*; a no sends nothing. A worker started before the yes went out
+nowhere: it is started again, now that it may.
+
+**A turn, sent.** A request goes to the worker as `converse` - Meno's
+words to the model, what has been said, the tools and the plugin's
+options - by the one way the backend takes it (`ext_converse`), which
+adds the person's key on the way. The page never holds the key: it can
+neither read it nor send a key of its own, nor send `converse` by the way
+other requests go. What the plugin answers is read strictly: its words,
+plain text, and the tools it calls, each by name with its arguments - or
+its error; anything else is refused, never guessed at
+(conversation/modelConnection `replyOf`).
+
+**The key.** Typed once in Settings, *Conversations*, and kept by the
+system's keychain under the service "Meno", one account a plugin
+(`model:<plugin id>`), so that *Forget* forgets that one alone. The page is
+told only whether one is kept. Where it is kept:
+- **macOS**: the person's login keychain. A Meno other than the one that
+  kept it - an update, a build made for testing; Meno's Mac builds are
+  signed ad hoc - is asked by the system before it reads the key, and the
+  person may allow it or not.
+- **Windows**: the Credential Manager, where any program running as the
+  person can read it - another build of Meno as well.
+- **Elsewhere**: no key is kept: "No safe place to keep a key on this
+  system".
+
+The key is never shown to the page or written to Meno's log. Should a
+worker say it back, the backend takes it out of what the worker says
+before the page or the log sees it - a safeguard, not a promise for the
+plugin: what a plugin does with the key is its review's to check.
+
