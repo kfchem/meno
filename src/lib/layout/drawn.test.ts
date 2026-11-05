@@ -336,6 +336,20 @@ describe("a centre with a lone pair for its fourth group", () => {
     };
   };
 
+  it("is said to read only by luck, as a centre with an H left out is, where its other bonds lie in a line - and not where they are spread", () => {
+    for (const el of ["S", "P"]) {
+      const { atoms, bonds } = sulfoxide(el, "up");
+      expect(unsureStereo(atoms, bonds).atoms).toEqual([]);
+      // (its O - or methyl - and its ring carbon in one line through it, its wedged methyl off it: either way round by luck)
+      const tee = atoms.map((a, i) => (i === 1 ? { ...a, x: -1, y: 0 } : i === 2 ? { ...a, x: 0, y: -1 } : i === 3 ? { ...a, x: 1, y: 0 } : a));
+      expect(unsureStereo(tee, bonds).atoms).toEqual([0]);
+    }
+    // (an atom of three bonds that keeps no configuration - an amine's N - is never asked)
+    const amine = sulfoxide("P", "up");
+    const n = amine.atoms.map((a, i) => (i === 0 ? { ...a, el: "N" } : i === 1 ? { ...a, x: -1, y: 0 } : i === 2 ? { ...a, x: 0, y: -1 } : i === 3 ? { ...a, x: 1, y: 0 } : a));
+    expect(unsureStereo(n, amine.bonds).atoms).toEqual([]);
+  });
+
   it("is read from its wedge where its lone pair keeps a configuration - a sulfoxide's S, a selenoxide's Se, a telluroxide's Te, a phosphine's P, an arsine's As, a stibine's Sb, a bismuthine's Bi - the two ways round told apart", () => {
     for (const el of ["S", "Se", "Te", "P", "As", "Sb", "Bi"]) {
       const up = readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.get(0);
