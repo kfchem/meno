@@ -9,7 +9,10 @@ import { holdJobFilesOf, type OpenedFrom } from "../features/Workspace/workflow/
 import { isMenoFile, menoKindOf, NotMenoFile, readMenoFile, readStyleFile } from "../../lib/doc/menoFile";
 import { readStyleFileText, type StyleFile } from "../../lib/chem/styleFile";
 import { useNotices } from "../notices";
-import { listOnline, useOnline } from "../../lib/plugins/online";
+import { listOnline, onlineEntry, useOnline } from "../../lib/plugins/online";
+import type { CatalogueEntry } from "../../lib/plugins/catalogue";
+import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
+import { addOnline, addPlugin } from "../../lib/calc/workers";
 import type { OpenedText } from "./texts";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */
@@ -24,33 +27,75 @@ const EXT_TEXT = new Set([
  * Files nothing told, opened as texts while the plugins online are not
  * listed (lib/plugins/online): one of them may read them. Said in the
  * corner, once for those opened together, with the button that lists them
- * - nothing fetched without it - and `again` given those of them a plugin
- * on offer now tells, once they are listed, to be read as that. A text of a
- * plain kind - a note, a table, code - is not said; a log is.
+ * - nothing fetched without it. Once they are listed, the same notice says,
+ * in its place, what each now told is and which plugin reads it, with Add:
+ * the plugin added - got first, where it is on offer online - and the file
+ * read again as what it is (`again`). A text of a plain kind - a note, a
+ * table, code - is not said; a log is.
  */
-export function sayNoneTold(names: readonly string[], again: (told: string[]) => void, tell: (name: string) => Promise<boolean>): void {
+export function sayNoneTold(names: readonly string[], again: (told: string[]) => void, tell: (name: string) => Promise<Kind | null>): void {
   const said = names.filter((n) => !EXT_TEXT.has(n.split(".").pop()?.toLowerCase() ?? "") || /\.log$/i.test(n));
   if (!said.length || useOnline.getState().state === "listed") return;
-  useNotices.getState().show({
-    id: "none-told",
-    title: "Opened as text",
+  const notices = useNotices.getState();
+  const id = "none-told";
+  const title = "Opened as text";
+  notices.show({
+    id,
+    title,
     text: `No plugin added reads ${said.join(", ")}.`,
     stays: true,
     action: {
       label: "List the plugins online",
-      run: () =>
+      keeps: true,
+      run: () => {
+        notices.show({ id, title, text: "Listing the plugins online…", stays: true });
         void listOnline(true).then(async () => {
           const s = useOnline.getState();
-          if (s.state !== "listed") {
-            if (s.problem) useNotices.getState().show({ id: "none-told", title: "Plugins online", text: s.problem });
-            return;
-          }
-          const told: string[] = [];
-          for (const n of said) if (await tell(n)) told.push(n);
-          if (told.length) again(told);
-        }),
+          if (s.state !== "listed") return notices.show({ id, title, text: s.problem ?? `No plugin added reads ${said.join(", ")}.` });
+          const offers = (await Promise.all(said.map(async (name) => ({ name, kind: await tell(name) })))).flatMap(({ name, kind }) => {
+            const by = kind ? whoWouldRead(kind) : null;
+            return kind && by ? [{ name, kind, by }] : [];
+          });
+          if (!offers.length) return notices.show({ id, title, text: `No plugin online reads ${said.join(", ")}.` });
+          // (each file told with the plugin that reads it: the first in the notice's place, the others beside it)
+          offers.forEach(({ name, kind, by }, k) => {
+            const its = k === 0 ? id : `${id} ${name}`;
+            notices.show({
+              id: its,
+              title,
+              text: `${name} is ${kind.name}: the ${by.name} plugin reads it.`,
+              stays: true,
+              action: {
+                label: `Add ${by.name}`,
+                keeps: true,
+                run: () => {
+                  notices.show({ id: its, title, text: `Adding ${by.name}…`, stays: true });
+                  (by.plugin ? addPlugin(by.plugin) : addOnline(by.entry!)).then(
+                    () => {
+                      notices.dismiss(its);
+                      again([name]);
+                    },
+                    (e: unknown) => notices.show({ id: its, title, text: e instanceof Error ? e.message : String(e) }),
+                  );
+                },
+              },
+            });
+          });
+        });
+      },
     },
   });
+}
+
+/** The plugin that reads a kind only plugins not added read: the first it names (lib/io/kinds `offeredKinds`) - here, or on offer online. */
+function whoWouldRead(kind: Kind): { name: string; plugin?: Plugin; entry?: CatalogueEntry } | null {
+  for (const id of kind.suggest ?? []) {
+    const plugin = anyPluginById(id);
+    if (plugin) return { name: plugin.name, plugin };
+    const entry = onlineEntry(id);
+    if (entry) return { name: entry.name, entry };
+  }
+  return null;
 }
 
 /**

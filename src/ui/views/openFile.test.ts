@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openable, openedAs, openedTexts, sayNoneTold, textsOf } from "./openFile";
 import { useNotices } from "../notices";
 import { useOnline } from "../../lib/plugins/online";
+import type { CatalogueEntry } from "../../lib/plugins/catalogue";
 import { registerKinds } from "../../lib/io/kinds";
 import { MANIFESTS } from "../../lib/plugins/known";
 
@@ -99,28 +100,56 @@ describe("texts nothing told, opened while the plugins online are not listed", (
   afterEach(() => {
     useNotices.setState({ notices: [] });
     useOnline.setState({ state: "unlisted", catalogue: undefined });
+    vi.restoreAllMocks();
   });
+  const none = async () => null;
 
   it("are said once, with the button that lists them - a plain text not - and nothing at all once they are listed", () => {
-    sayNoneTold(["water.out", "notes.txt", "run.log"], () => {}, async () => false);
+    sayNoneTold(["water.out", "notes.txt", "run.log"], () => {}, none);
     const [n] = useNotices.getState().notices;
-    expect([n.text, n.action?.label, n.stays]).toEqual(["No plugin added reads water.out, run.log.", "List the plugins online", true]);
+    expect([n.title, n.text, n.action?.label, n.stays]).toEqual(["Opened as text", "No plugin added reads water.out, run.log.", "List the plugins online", true]);
     useNotices.setState({ notices: [] });
-    sayNoneTold(["notes.txt", "table.csv"], () => {}, async () => false);
+    sayNoneTold(["notes.txt", "table.csv"], () => {}, none);
     expect(useNotices.getState().notices).toEqual([]);
     useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } });
-    sayNoneTold(["water.out"], () => {}, async () => false);
+    sayNoneTold(["water.out"], () => {}, none);
     expect(useNotices.getState().notices).toEqual([]);
   });
 
-  it("listed, are read again - those a plugin on offer now tells", async () => {
-    const again = vi.fn();
-    sayNoneTold(["water.out", "other.out"], again, async (name) => name === "water.out");
-    // (the list, as the backend gives it once the person clicks)
+  it("listed, say in the notice's place what each is and the plugin that reads it, with Add - added, the file read again", async () => {
     const online = await import("../../lib/plugins/online");
-    const listed = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } }));
-    useNotices.getState().notices[0].action!.run();
+    const workers = await import("../../lib/calc/workers");
+    const far = { id: "far", name: "Far" } as CatalogueEntry;
+    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [far] } }));
+    const added = vi.spyOn(workers, "addOnline").mockResolvedValue();
+    const again = vi.fn();
+    const kind = { id: "far-out", name: "Far output", extensions: [".far"], suggest: ["far"] };
+    useNotices.getState().show({ id: "other", title: "Other", text: "Before it." });
+    sayNoneTold(["water.out", "other.out"], again, async (name) => (name === "water.out" ? kind : null));
+    useNotices.getState().notices[1].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[1].action?.label).toBe("Add Far"));
+    // (in its place: after the one before it)
+    expect(useNotices.getState().notices.map((n) => [n.id, n.text])).toEqual([
+      ["other", "Before it."],
+      ["none-told", "water.out is Far output: the Far plugin reads it."],
+    ]);
+    useNotices.getState().notices[1].action!.run();
     await vi.waitFor(() => expect(again).toHaveBeenCalledWith(["water.out"]));
-    listed.mockRestore();
+    expect(added).toHaveBeenCalledWith(far);
+    expect(useNotices.getState().notices.map((n) => n.id)).toEqual(["other"]);
+  });
+
+  it("listed, say so where none of them is read by a plugin online - or why the list is not here", async () => {
+    const online = await import("../../lib/plugins/online");
+    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } }));
+    sayNoneTold(["water.out"], () => {}, none);
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("No plugin online reads water.out."));
+    listing.mockImplementation(async () => void useOnline.setState({ state: "failed", problem: "Listing them needs the network." }));
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    useNotices.setState({ notices: [] });
+    sayNoneTold(["water.out"], () => {}, none);
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("Listing them needs the network."));
   });
 });

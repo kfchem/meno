@@ -488,7 +488,7 @@ export default function App() {
       (told) => openStructureFiles(untold.filter((u) => told.includes(u.name)), stateRef.current.activeId),
       async (name) => {
         const u = untold.find((x) => x.name === name);
-        return !!u && (await kindOfFile(name, textOf(u.bytes))) != null;
+        return u ? kindOfFile(name, textOf(u.bytes)) : null;
       },
     );
   // Closing with unsaved changes: the tabs that hold them, and whether

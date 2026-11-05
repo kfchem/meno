@@ -482,7 +482,7 @@ export function useStructureEvents(
       store.getState().addTexts([{ name: f.name, text: await textOfFile(f) }], at);
       setImportError(null);
       // (nothing told it, and the plugins online not listed: said, with the button that lists them - and read again, where one tells it then)
-      if (again) sayNoneTold([f.name], again, async () => (await kindOfFile(f.name, head)) != null);
+      if (again) sayNoneTold([f.name], again, () => kindOfFile(f.name, head));
       return true;
     }
     const text = await textOfFile(f);
