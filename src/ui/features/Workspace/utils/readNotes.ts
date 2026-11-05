@@ -38,6 +38,7 @@ const NOUNS = {
   picture: ["picture", "pictures"],
   slide: ["slide", "slides"],
   cycle: ["catalytic cycle", "catalytic cycles"],
+  structureMap: ["atom map between structures", "atom maps between structures"],
   ink: ["piece of handwriting", "pieces of handwriting"],
   stroke: ["handwritten stroke", "handwritten strokes"],
   text: ["text", "texts"],

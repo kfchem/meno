@@ -21,6 +21,7 @@ import { collectionHash, setMembers } from "../workflow/entries";
 import { pdfBytes } from "../../../../lib/pdf/reader";
 import { readPdfsAt } from "./pdfItems";
 import { anyLeftOut, leftOut, noting, type LeftOut } from "./readNotes";
+import { readStructureMaps, type StructureMap } from "../chem/structureMaps";
 import { pictureBytes } from "../../../../lib/picture/held";
 import { placesRead, readDrawn } from "./copyPaste";
 import { calcShowing, heldOutput, outputsToKeep, sha256Of } from "../../../../lib/calc/asks";
@@ -58,6 +59,8 @@ export type Workspace = {
   pdfs: Omit<PdfItem, "id">[];
   /** Which of them its column showed, by its place among them - a text, or none, if it showed none of them. */
   pdfShown?: number;
+  /** Its atom maps between structures (chem/structureMaps), numbered from 1. */
+  structureMaps?: StructureMap[];
   /** What its file held that could not be read, and was left out (utils/readNotes); none where it read whole. */
   leftOut?: LeftOut;
 };
@@ -73,7 +76,7 @@ type Saved = Pick<
   Partial<Pick<EditorState, "docStyle" | "docStyle3d">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "stacksShown" | "fullModel" | "recordsShown">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "stacksShown" | "fullModel" | "recordsShown">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -187,6 +190,8 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.inks?.length ? { inks: state.inks } : {}),
       // (catalytic cycles: lib/chem/cycle)
       ...(state.cycles?.length ? { cycles: state.cycles } : {}),
+      // (atom maps between structures, each as it was made: chem/structureMaps)
+      ...(state.structureMaps?.length ? { structureMaps: state.structureMaps.map(({ map }) => ({ map })) } : {}),
     }) + "\n"
   );
 }
@@ -450,6 +455,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     textShown?: unknown;
     pdfs?: unknown;
     pdfShown?: unknown;
+    structureMaps?: unknown;
   };
   if (r?.format !== WORKSPACE || !READS.includes(r.version as number)) return null;
   // (what is drawn read at the point of the style it was drawn in)
@@ -496,6 +502,9 @@ function readWorkspaceNoting(text: string): Workspace | null {
   const pdfs = pdfsAt.map(({ pdf }) => pdf);
   const pdfShownAt = Number.isInteger(r.pdfShown) ? pdfsAt.findIndex(({ at }) => at === r.pdfShown) : -1;
   const pdfShown = pdfShownAt >= 0 && !!pdfs[pdfShownAt].reading;
+  // (its atom maps between structures: one that does not read is left out, and said)
+  const structureMaps = readStructureMaps(r.structureMaps);
+  for (let k = 0; k < structureMaps.left; k++) leftOut("structureMap");
   return {
     drawn,
     ...(workflow ? { workflow } : {}),
@@ -507,6 +516,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     ...(textShown != null ? { textShown } : {}),
     pdfs,
     ...(pdfShown ? { pdfShown: pdfShownAt } : {}),
+    ...(structureMaps.maps.length ? { structureMaps: structureMaps.maps } : {}),
   };
 }
 

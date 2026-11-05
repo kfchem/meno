@@ -4,6 +4,7 @@ import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
@@ -1357,6 +1358,8 @@ export type EditorState = {
   removeMeasure3d: (id: number, measure: number) => void;
   /** The electron-pushing arrows. */
   pushes: PushArrow[];
+  /** Atom maps between structures on the page, not on an arrow (chem/structureMaps). */
+  structureMaps: StructureMap[];
   /** The electron-pushing arrow under the pointer: its menu is the one a right-click opens. */
   hoveredPush: number | null;
   setHoveredPush: (id: number | null) => void;
@@ -2071,6 +2074,12 @@ export type EditorState = {
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
+  /** Maps between structures on the page added (chem/structureMaps), what they show put on the drawing and its molecules in 3D: one undo step. */
+  addStructureMaps: (maps: readonly ArrowAtomMap[], replacing?: readonly number[]) => void;
+  /** The maps between structures given, by id, shown or hidden: one step. */
+  showStructureMaps: (ids: readonly number[], shown: boolean) => void;
+  /** Each map between structures given, by id, showing its next map: one step. */
+  otherStructureMaps: (ids: readonly number[]) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

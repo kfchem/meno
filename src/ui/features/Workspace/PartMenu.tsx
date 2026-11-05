@@ -190,6 +190,7 @@ export default function PartMenu({
   onPush,
   push,
   arrow,
+  pageMap,
   onColour,
   onRender,
   picture,
@@ -372,6 +373,18 @@ export default function PartMenu({
       onExport: () => void;
     };
   };
+  /**
+   * Atom maps between structures on the page (docs/ATOM-MAPPING.md,
+   * *Between structures on the page*): made, where two or more structures
+   * are selected and one of them right-clicked - it Before, each other After;
+   * and those its structure is in, as one: how they stand, whether shown, how
+   * many maps the first steps through - and shown or hidden, the next map
+   * taken, the first written in 3D.
+   */
+  pageMap?: {
+    onMake?: () => void;
+    held?: { standing: "changed" | "incomplete" | "ready"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onExport: () => void; onAgain?: () => void };
+  };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
   /** The molecules in 3D right-clicked - or selected - rendered as a picture or a film (docs/RENDER.md); unset, where no plugin added renders. */
@@ -496,6 +509,26 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
+  // (atom maps between structures on the page: made from two or more selected; those its structure is in, shown or hidden, another taken, written in 3D)
+  const mapsHeld = pageMap?.held;
+  const pageMapItems: Item[] = [
+    ...(pageMap?.onMake ? [{ name: "Atom map", keys: "", run: pageMap.onMake, divider: true }] : []),
+    ...(mapsHeld?.standing === "ready"
+      ? [
+          { name: mapsHeld.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => mapsHeld.onShow(!mapsHeld.shown), divider: !pageMap?.onMake },
+          ...(mapsHeld.maps > 1 ? [{ name: "Other map", keys: `${mapsHeld.chosen + 1} of ${mapsHeld.maps}`, run: mapsHeld.onOther, keep: true }] : []),
+          { name: "Export reaction in 3D…", keys: "", run: mapsHeld.onExport },
+        ]
+      : mapsHeld?.standing === "incomplete"
+        ? [{ name: "Atom map incomplete", keys: "", run: () => {}, disabled: true, divider: !pageMap?.onMake }]
+        : mapsHeld?.standing === "changed"
+          ? [
+              // (of the structure as it was before an edit: it shows nothing - said, and made again)
+              { name: "Atom map of the structure before its edit", keys: "", run: () => {}, disabled: true, divider: !pageMap?.onMake },
+              ...(mapsHeld.onAgain ? [{ name: "Map again", keys: "", run: mapsHeld.onAgain }] : []),
+            ]
+          : []),
+  ];
   const stereoItem: Item[] = [
     ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
     ...(numbers
@@ -839,6 +872,7 @@ export default function PartMenu({
                 ...colour,
               ]
             : []),
+          ...pageMapItems,
           del("Delete selection"),
           // (an atom selected alone, right-clicked: its label, as on the atom's own menu)
           ...(target.kind === "atom" && onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
@@ -918,6 +952,7 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
           ...stackItem,

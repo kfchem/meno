@@ -14,8 +14,11 @@ import { mapAtoms, MappingStopped } from "./mapAtoms";
 
 type Store = { getState: () => EditorState };
 
-/** A mapping under way: the arrow it is for; whether its structures are being made in 3D or mapped; since when, and how many searches it has made. */
+/** A mapping under way: the arrow it is for (-1: structures on the page, chem/structureMaps); whether its structures are being made in 3D or mapped; since when, and how many searches it has made. */
 export type Mapping = { arrowId: number; phase: "3d" | "map"; since: number; searches: number };
+
+/** The arrow a mapping between structures on the page is under way for: none. */
+const ON_THE_PAGE = -1;
 
 /**
  * A drawn reaction's atom map made (docs/ATOM-MAPPING.md, *On a drawn
@@ -128,7 +131,78 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
     [store, setChemError, sideOf],
   );
 
+  /**
+   * Atom maps between structures on the page (chem/structureMaps): each of
+   * `afters` mapped onto `before`, each given by its drawn atoms' ids - as a
+   * reaction is mapped (`mapAtoms`), each in 3D. A structure with no
+   * molecule in 3D of its own yet is given one first, on the page beside it
+   * (`place3d`), so that the map's numbers are seen there too; kept, all as
+   * one step - in the place of the maps `replacing` (by id), where they are
+   * made again.
+   */
+  const makeStructureMaps = useCallback(
+    async (before: number[], afters: number[][], place3d: (ids: number[]) => Promise<void>, replacing: readonly number[] = []) => {
+      if (!before.length || !afters.length) return;
+      setChemError(null);
+      const ids = [before, ...afters].flat();
+      setMapping({ arrowId: ON_THE_PAGE, phase: "3d", since: Date.now(), searches: 0 });
+      let stopped = false;
+      const plugin = rolePlugin("conformers");
+      stopRef.current = () => {
+        stopped = true;
+        if (plugin) void stopWorker(plugin.id, `${plugin.name} was stopped while it made a map's 3D structures`);
+      };
+      try {
+        // (each structure in 3D on the page, where it has none: made as "3D structure" makes it, one conformer)
+        for (const structure of [before, ...afters]) {
+          const st = store.getState();
+          const atoms = new Set(structure);
+          const has = st.molecules3d.some((m) => linkOf(m, st.model) === "live" && m.drawnFrom!.some((id) => id != null && atoms.has(id)));
+          if (!has) await place3d(structure);
+          if (stopped) throw new MappingStopped();
+        }
+        const model = store.getState().model;
+        const drawnAs = signatureOf(model, ids);
+        const rs = await sideOf(model, [before]);
+        const made: ReturnType<typeof keptMap>[] = [];
+        setMapping((m) => (m && m.arrowId === ON_THE_PAGE ? { ...m, phase: "map", since: Date.now() } : m));
+        for (const after of afters) {
+          if (stopped) throw new MappingStopped();
+          const ps = await sideOf(model, [after]);
+          const job = mapAtoms(
+            rs.map((s) => s.molecule as Molecule),
+            ps.map((s) => s.molecule as Molecule),
+            (searches) => setMapping((m) => (m && m.arrowId === ON_THE_PAGE ? { ...m, searches } : m)),
+          );
+          stopRef.current = job.stop;
+          const result = await job.result;
+          if ("error" in result) throw new Error(result.message);
+          made.push(keptMap(model, result, rs, ps));
+        }
+        // (the structures changed meanwhile - an undo took them away - nothing is kept)
+        const now = store.getState();
+        if (signatureOf(now.model, ids) !== drawnAs) {
+          setChemError("The structures changed while their atoms were being mapped, so no map was kept.");
+          return;
+        }
+        now.addStructureMaps(made, replacing);
+        if (made.some((k) => !k.complete))
+          useNotices.getState().show({
+            id: "atom-map",
+            title: "Atom map",
+            text: "Not every atom has its counterpart in the other structure, so a map is incomplete and shows no numbers.",
+          });
+      } catch (e: unknown) {
+        if (!(e instanceof MappingStopped) && !stopped) setChemError(`No atom map could be made: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        stopRef.current = null;
+        setMapping(null);
+      }
+    },
+    [store, setChemError, sideOf],
+  );
+
   const stopMapping = useCallback(() => stopRef.current?.(), []);
 
-  return { mapping, makeAtomMap, stopMapping };
+  return { mapping, makeAtomMap, makeStructureMaps, stopMapping };
 }

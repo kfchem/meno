@@ -962,15 +962,16 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
 
   /**
    * A drawn reaction written in 3D, where its arrow's atom map is ready
-   * (chem/atomMap `mappedPairSdf`): an SD file of two records, the
-   * reactants and the product in the reactants' numbering, where the
-   * chemist says.
+   * (chem/atomMap `mappedPairSdf`) - or a map between structures on the
+   * page (chem/structureMaps), Before as the reactants, After as the
+   * product: an SD file of two records, the reactants and the product in
+   * the reactants' numbering, where the chemist says.
    */
   const exportReaction3d = useCallback(
-    (arrowId: number) =>
+    (of: { arrow: number } | { structureMap: number }) =>
       attempt("Export", async () => {
         const state = store.getState();
-        const map = state.arrows.find((a) => a.id === arrowId)?.atomMap;
+        const map = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow)?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
         if (!map || mapStanding({ atomMap: map }, state.model) !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
