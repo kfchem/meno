@@ -3,7 +3,7 @@ import { longPressMs } from "../longPress";
 import { PAGE_SIZED } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { DURATION, TAU } from "../../../theme/motion";
@@ -41,6 +41,7 @@ import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
+import { sameMoleculeProps } from "../utils/moleculeHandlers";
 import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
@@ -272,7 +273,7 @@ export type Molecule3DViewProps = {
  */
 /** The imaginary frequencies each of a molecule's `n` frames was judged to have: a conformer set's, frame by frame; a single geometry's, its calculation's, of its last. */
 
-export default function Molecule3DView(props: Molecule3DViewProps) {
+function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
   const solid = solidOf(m, style);
   const n = m.atoms.length;
@@ -2275,3 +2276,12 @@ function Changed({ onRemake }: { onRemake: () => void }) {
     </div>
   );
 }
+
+/**
+ * Drawn again only where its own props have changed (utils/moleculeHandlers
+ * `sameMoleculeProps`): the set of molecules drawn again for one of them -
+ * a frame chosen, a set laid out - leaves the rest as they are. Its
+ * handlers are kept the same for it (`moleculeHandlers`) so that they do
+ * not count as a change.
+ */
+export default memo(Molecule3DView, sameMoleculeProps);
