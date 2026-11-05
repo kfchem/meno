@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { noDefault, rememberable, valuesOf, type Option, type OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { useReaders } from "../../../lib/calc/workers";
@@ -39,15 +40,25 @@ export default function CalculationSettings() {
                     </span>
                     <span className="min-w-0 flex-1 text-sm text-gh-black">{k.name}</span>
                   </div>
-                  {options.length > 0 && (
-                    <OptionRows
-                      indent
-                      options={options}
-                      values={valuesOf(options, remembered[role])}
-                      onChange={(values) => rememberOptions(role, rememberable(options, values))}
-                    />
-                  )}
-                  <OwnValues options={options} own={remembered[role]} keep={(values) => rememberOptions(role, values)} />
+                  {/* (each option with no default - an Energy window's window - with its guide and Clear under it, as one row) */}
+                  {partsOf(options).map((part, k) => {
+                    const rows = (
+                      <OptionRows
+                        indent
+                        options={part}
+                        values={valuesOf(options, remembered[role])}
+                        onChange={(values) => rememberOptions(role, rememberable(options, values))}
+                      />
+                    );
+                    return part.some(noDefault) ? (
+                      <div key={k}>
+                        {rows}
+                        <OwnValues options={part} own={remembered[role]} keep={(values) => rememberOptions(role, values)} />
+                      </div>
+                    ) : (
+                      <Fragment key={k}>{rows}</Fragment>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -56,6 +67,16 @@ export default function CalculationSettings() {
       ))}
     </div>
   );
+}
+
+/** A kind's options in parts, each ending at an option with no default - which its guide follows - and the rest after. */
+export function partsOf(options: readonly Option[]): Option[][] {
+  const parts: Option[][] = [[]];
+  for (const o of options) {
+    parts[parts.length - 1].push(o);
+    if (noDefault(o)) parts.push([]);
+  }
+  return parts.filter((p) => p.length);
 }
 
 /**
@@ -73,7 +94,7 @@ export function OwnValues({ options, own, keep }: { options: readonly Option[]; 
           <div key={o.id} className="pl-8 pr-3 pb-2.5 flex items-start gap-3 text-xs text-gh-gray">
             <p className="flex-1 max-w-2xl leading-snug">{o.note}</p>
             {typeof given === "number" && Number.isFinite(given) && (
-              <button type="button" className="h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base" onClick={() => keep(rest)}>
+              <button type="button" className="ml-auto h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base" onClick={() => keep(rest)}>
                 Clear
               </button>
             )}
