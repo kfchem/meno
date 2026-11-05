@@ -1144,6 +1144,12 @@ choice of Meno's on the step's card, beside the plugin's (the maintainer,
   typed from 1) held where they stand; an entry that fixes none optimised as
   any is. Its calculation's line says them ("atoms 1, 4, 7 held"), and how
   it converged too: "optimisation with atoms held".
+- **Held, checked**: each atom held must end within 1e-4 Å of where it stood,
+  as its program gave it back - far above what the programs' printed
+  coordinates round to, far below any step an optimisation takes. One that
+  moved fails the entry ("Atom 3 moved though held"): a program, or an
+  optimiser of it, that does not hold atoms as asked is never taken for one
+  that did.
 - **Never left unheld unsaid**: an entry whose restraints hold what the step
   does not - distances, torsions - is refused, out of *Failed*, saying which.
 - **No stationary point**: an entry optimised with atoms held is refused by

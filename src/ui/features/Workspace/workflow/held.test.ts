@@ -29,7 +29,8 @@ const water = (restraints: Restraint[] = [], xyz = [0, 0, 0, 0.96, 0, 0, -0.24, 
     ...(restraints.length ? { properties: { restraints: { value: { restraints }, unit: "none", status: "computed" } } } : {}),
   }) as unknown as SetEntry;
 
-const MIN = [0, 0, 0, 0.97, 0, 0, -0.25, 0.94, 0];
+// (atom 2 moved, atoms 1 and 3 where they began)
+const MIN = [0, 0, 0, 0.97, 0, 0, -0.24, 0.93, 0];
 const output = (more: Partial<ReaderOutput> = {}): ReaderOutput =>
   ({ schema: 1, program: "Tightbind", method: "TB2", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], MIN], energies: [-5.07, -5.08], optimised: true, ...more }) as unknown as ReaderOutput;
 const worked = (w: ReturnType<typeof workedOf>): Worked => {
@@ -95,10 +96,20 @@ describe("holding an entry's restraints as it is optimised", () => {
     expect(convergedOf(freq)?.held).toEqual([0, 2]);
   });
 
-  it("is no minimum for a step that takes minima, until it is optimised free of them", () => {
+  it("fails an entry whose held atom moved, as its program gave it back - never passed on as held", () => {
     const e = water([{ kind: "fixed", atoms: [1] }]);
+    // (atom 2 at the end where it began, to well within 1e-4 Å: held)
+    const still = [0, 0, 0.001, 0.96, 0, 0.00005, -0.24, 0.93, 0];
+    expect(isFailure(workedOf("optimise", e, output({ frames: [e.xyz, still] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e)))).toBe(false);
+    // (moved by a thousandth of an ångström: not held)
+    const moved = [0, 0, 0, 0.961, 0, 0, -0.24, 0.93, 0];
+    expect(workedOf("optimise", e, output({ frames: [e.xyz, moved] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e))).toEqual({ kind: "failed", why: "Atom 2 moved though held" });
+  });
+
+  it("is no minimum for a step that takes minima, until it is optimised free of them", () => {
+    const e = water([{ kind: "fixed", atoms: [2] }]);
     const held = worked(workedOf("optimise", e, output(), ["tightbind 0.2.0"], undefined, fixedAtoms(e)));
-    expect(notAllMinima([held])).toBe("a #1: optimised with atom 2 held where it stood: no stationary point - optimise it free of it first");
+    expect(notAllMinima([held])).toBe("a #1: optimised with atom 3 held where it stood: no stationary point - optimise it free of it first");
     const again = worked(workedOf("optimise", held, output({ frames: [MIN, [0, 0, 0, 0.98, 0, 0, -0.25, 0.95, 0]] }), ["tightbind 0.2.0"]));
     expect(notAllMinima([again])).toBeNull();
   });

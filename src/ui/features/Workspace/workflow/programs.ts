@@ -449,6 +449,10 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const holding = (kind === "optimise" || kind === "saddle-point") && held.length ? [...held] : undefined;
   const read = calcOf(out, readers, source);
   const calc = read && holding ? { ...read, held: holding } : read;
+  // (each atom held where it stood, as the program gave it back: one moved - its program, or its optimiser, not holding it -
+  //  fails the entry, never passed on as held)
+  const moved = holding?.find((a) => Math.hypot(last[3 * a] - entry.xyz[3 * a], last[3 * a + 1] - entry.xyz[3 * a + 1], last[3 * a + 2] - entry.xyz[3 * a + 2]) > HELD_MOVED_MOST);
+  if (moved != null) return { kind: "failed", why: `Atom ${moved + 1} moved though held` };
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
@@ -692,6 +696,13 @@ export function passedSaid(kind: StepKind, count: number): string | null {
   if (!is || count < 1) return null;
   return count === 1 ? is : is.replace("one atom: its", "one atom: each its").replace("one atom:", `${count} lone atoms:`);
 }
+
+/**
+ * How far, in Å, an atom held where it stood may end from where it was before it is taken for one that moved (`workedOf`):
+ * 1e-4 Å - far above what the programs' printed coordinates round to (six decimals or more), far below any step an
+ * optimisation takes (CORR's review, 2026-11-06).
+ */
+const HELD_MOVED_MOST = 1e-4;
 
 /** The kinds of restraint a step of `kind` is asked to hold (`HOLD_OPTION`): none, or its atoms fixed. */
 export const heldAsked = (kind: StepKind, options: OptionValues): HeldKind[] => (HOLDS_RESTRAINTS.includes(kind) && options[HOLD_OPTION.id] === "fixed" ? ["fixed"] : []);

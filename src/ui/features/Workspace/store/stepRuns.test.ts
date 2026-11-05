@@ -89,7 +89,7 @@ const worker = {
     })),
   })),
   run: vi.fn(async (_step: string, entries: unknown[]) => ({ kept: entries.length > 1 ? [0] : [] })),
-  collect: vi.fn(async (_step: string, entries: { atoms: { el: string; x: number; y: number; z: number }[] }[], _o: unknown, files: Record<string, string>, _log: string, ended: string) =>
+  collect: vi.fn(async (_step: string, entries: { atoms: { el: string; x: number; y: number; z: number }[]; restraints?: { kind: string; atoms: number[] }[] }[], _o: unknown, files: Record<string, string>, _log: string, ended: string) =>
     ended !== "done"
       ? { why: "Some atoms are very close" }
       : {
@@ -99,7 +99,8 @@ const worker = {
             version: "1.0.0",
             method: "TB-2",
             atoms: e.atoms.map((a) => a.el),
-            frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z]), e.atoms.flatMap((a) => [a.x, a.y + 0.01, a.z])],
+            // (each atom moved a little - but those its restraints fix, where it was given some: held, as a program asked to holds them)
+            frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z]), e.atoms.flatMap((a, i) => [a.x, a.y + ((e.restraints ?? []).some((r) => r.kind === "fixed" && r.atoms.includes(i)) ? 0 : 0.01), a.z])],
             energies: [-5.0703, Number(files["tbopt.log"])],
             optimised: true,
           })),
