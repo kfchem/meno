@@ -1631,6 +1631,11 @@ comes in its own pull request.
 - **Updated.** The newer version is got the same way, and set up again
   only where it was added and its environment is no longer the one it
   needs.
+- **Its files taken away.** A plugin here and not added - one no plugin
+  added uses - has *Remove its files*, asking first: the version in use
+  unnamed, then its folder, as the plugins in place are read (`installed.rs`,
+  the backend's one rule for where they are); then they are read again,
+  and it is gone at once. It can be got again from the list.
 
 ## Decided
 

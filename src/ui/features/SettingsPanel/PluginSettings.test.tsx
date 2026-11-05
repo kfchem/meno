@@ -93,6 +93,12 @@ describe("Plugins in Settings, with the list online", () => {
     expect(html.split(`${HERE.name} <span`).length).toBe(2);
   });
 
+  it("offers to take the files of a plugin here, and not added, away - asking first", () => {
+    const html = drawn({ state: "unlisted" });
+    const card = html.slice(html.indexOf(`${HERE.name} <span`));
+    expect(card.slice(0, card.indexOf('<div class="rounded-lg border'))).toMatch(/>Remove its files</);
+  });
+
   it("says why there is no list, in Meno's warning colour, and how it is the one from before where it is", () => {
     expect(drawn({ state: "failed", problem: "The plugins online could not be listed: Its signature is not Meno's." })).toMatch(/text-accel-accent"[^>]*>The plugins online could not be listed: Its signature is not Meno&#x27;s\.</);
     const kept = drawn({ state: "listed", kept: "offline", fetchedAt: "2026-11-09T09:30:00Z", catalogue: { schema: 1, issued: "2026-11-09T00:00:00Z", serial: 3, plugins: [] } });

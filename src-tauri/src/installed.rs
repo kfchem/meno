@@ -24,7 +24,7 @@ pub const CURRENT: &str = "current";
 /// The mark of a version put in place from the plugins Meno carries, in that version's folder: what it was put from.
 pub const FROM_BUNDLE: &str = ".from-bundle";
 /// Where a version is made before it is put in place: never read as a plugin.
-const STAGING: &str = ".staging";
+pub const STAGING: &str = ".staging";
 
 /// The plugins' folder in Meno's local data folder `data`.
 pub fn root(data: &Path) -> PathBuf {
@@ -90,6 +90,11 @@ type Rename = dyn Fn(&Path, &Path) -> io::Result<()>;
 
 fn renamed(from: &Path, to: &Path) -> io::Result<()> {
     fs::rename(from, to)
+}
+
+/// Plugin `id`'s version in use set to `version`, at once: written beside, then renamed over the old.
+pub fn put_in_use(root: &Path, id: &str, version: &str) -> io::Result<()> {
+    set_current(root, id, version, &renamed)
 }
 
 /// Plugin `id`'s version in use set to `version`, at once: written beside, then renamed (`rename`) over the old.
