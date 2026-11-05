@@ -1703,6 +1703,10 @@ export type EditorState = {
   /** A wire from a set into a step's input - the first that takes it, where none is named - where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number, port?: string) => boolean;
   removeWire: (id: number) => void;
+  /** A step's result set held off the page opened to be seen on it, or closed again: an edit. */
+  openHeld: (id: number, open: boolean) => void;
+  /** A step's atoms chosen on the drawing from `option`, or no longer (null): what comes into it held off the page opened first. */
+  chooseAtomsFor: (step: number, option: string | null) => void;
   /**
    * A step run, and first the steps before it that need it - each step's
    * results coming in one step to undo. A step that runs a program waits

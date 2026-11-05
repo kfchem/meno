@@ -14,6 +14,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { byOf, kindsOf, optionsFor } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
+import { heldSets } from "../../workflow/held";
 import { appendParts, partsBounds } from "../../workflow/parts";
 import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
@@ -202,6 +203,24 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       const was = doc.getState();
       doc.edit("wire", (d) => wf.connect(d, from, to, port));
       return doc.getState() !== was;
+    },
+    /** A step's result set held off the page opened to be seen on it, or closed again (model `openedSet`, workflow/held): an edit, undone as one. */
+    openHeld: (id: number, open: boolean) => {
+      doc.edit(open ? "open results" : "close results", (d) => wf.openedSet(d, id, open));
+    },
+    /**
+     * A step's atoms chosen on the drawing, or no longer (`choosingAtoms`):
+     * what comes into it held off the page opened first, in one edit - its
+     * structures are where the atoms are chosen (workflow/held).
+     */
+    chooseAtomsFor: (step: number, option: string | null) => {
+      if (option) {
+        const d = doc.getState();
+        const held = heldSets(d);
+        const into = (d.wires ?? []).filter((w) => w.to.step === step && held.has(w.from.set)).map((w) => w.from.set);
+        if (into.length) doc.edit("open results", (s) => into.reduce((x, id) => wf.openedSet(x, id, true), s));
+      }
+      set({ choosingAtoms: option ? { step, option } : null });
     },
     removeWire: (id: number) => {
       if (doc.edit("delete wire", (d) => wf.removeWire(d, id)))

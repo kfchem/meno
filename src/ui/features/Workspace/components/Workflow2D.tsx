@@ -979,7 +979,7 @@ export default function Workflow2D() {
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
-            onChoose={(option) => store.getState().setWorkflowView({ choosingAtoms: option ? { step: s.id, option } : null })}
+            onChoose={(option) => store.getState().chooseAtomsFor(s.id, option)}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}

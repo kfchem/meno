@@ -131,6 +131,19 @@ export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): Work
   return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? (keep ? rest : { ...rest, keep: false as const }) : b)) };
 }
 
+/**
+ * `doc` with a step's result set opened to be seen on the page, or closed
+ * again (`WorkflowSet.opened`, workflow/held): its exit wired on, it is laid
+ * out as it opens and held as it closes, as the edit settles. A set no step
+ * made, as it was.
+ */
+export function openedSet(doc: WorkspaceDocument, id: number, open: boolean): WorkspaceDocument {
+  const set = doc.sets?.find((b) => b.id === id);
+  if (!set?.made || !!set.opened === open) return doc;
+  const { opened: _was, ...rest } = set;
+  return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? (open ? { ...rest, opened: true as const } : rest) : b)) };
+}
+
 /** A chemist's set named anew - a step's set is named for what made it - its name taken away where the new one is empty. */
 export function renameSet(doc: WorkspaceDocument, id: number, name: string): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
