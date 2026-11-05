@@ -46,13 +46,20 @@ describe("the third-party notices", () => {
     expect(entries.length).toBe(manifest.npm.length + manifest.crates.length);
   });
 
-  it("give every crate a licence text: its own, a standard one, or one read from its repository", () => {
+  it("give every crate and npm package a licence text: its own, a standard one, or one read from its repository", () => {
     expect(notices, "a crate with no licence text: read its licence from its repository into upstream.json").not.toContain("Its Cargo.toml gives its licence as");
-    // (each text read from a repository is for a crate built in, at its version: one for a version no longer built in is stale)
+    expect(notices, "an npm package with no licence text: read its licence from its repository into upstream.json").not.toContain("Its package.json gives its licence as");
+    // (each text read from a repository is for a crate or package built in, at its version: one for a version no longer built in is stale)
     const upstream = JSON.parse(readFileSync(join(ROOT, "scripts", "licenses", "upstream.json"), "utf8"));
+    const kept = (f) => existsSync(join(ROOT, "scripts", "licenses", "upstream", f));
     for (const t of upstream.texts) {
-      expect(manifest.crates.map(named), `upstream.json: ${t.for}@${t.version} is not built into Meno`).toContain(`${t.for}@${t.version}`);
-      for (const f of [t.file, ...(t.also ?? []).map((a) => a.file)]) expect(existsSync(join(ROOT, "scripts", "licenses", "upstream", f)), f).toBe(true);
+      const built = (t.kind === "npm" ? manifest.npm : manifest.crates).map(named);
+      expect(built, `upstream.json: ${t.for}@${t.version} is not built into Meno`).toContain(`${t.for}@${t.version}`);
+      for (const f of [t.file, ...(t.also ?? []).map((a) => a.file)]) expect(kept(f), f).toBe(true);
+    }
+    for (const c of upstream.carried ?? []) {
+      expect(manifest.npm.map(named), `upstream.json: what ${c.in}@${c.version} carries, which is not in Meno's window`).toContain(`${c.in}@${c.version}`);
+      if (c.file) expect(kept(c.file), c.file).toBe(true);
     }
   });
 
@@ -60,6 +67,8 @@ describe("the third-party notices", () => {
     expect(notices).not.toContain("\r");
     expect(notices.endsWith("\n") && !notices.endsWith("\n\n")).toBe(true);
     for (const name of ["PDFium-*", "pdfium-render-*", "IBM-Plex-OFL.txt", "Arimo-OFL.txt", "ACCeL-MIT.txt"]) expect(notices).toContain(`  ${name} `);
+    // (Meno carries no plugin: none named here - each one's licence is in its own folder, in the plugins' repository)
+    expect(notices).not.toMatch(/resources\/plugins\//);
   });
 
   it("are carried by the app on every system, where Settings reads them", () => {

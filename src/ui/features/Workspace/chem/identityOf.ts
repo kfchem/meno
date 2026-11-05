@@ -18,8 +18,9 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 /**
  * `part` as identity's input, its atoms in `part`'s order - and the atoms,
  * by id, whose wedges say nothing that can be read (drawn crossed, or at an
- * N, B, Se, Te or Sb atom with three bonds), so whose configuration the
- * input does not hold.
+ * atom of three bonds that keeps no configuration of its own,
+ * lib/chem/lonePairCentres), so whose configuration the input does not
+ * hold.
  */
 export function identityInputOf(part: Model): { input: IdentityInput; unread: number[] } {
   const drawing = drawingOf(part);
@@ -81,8 +82,8 @@ export function labelsDrawnOut(part: Model): Model {
     const ids = s.atoms.map((_, k) => (k === head ? a.id : next--));
     s.atoms.forEach(({ x, y, ...chem }, k) => atoms.push({ ...chem, id: ids[k], x: a.x + x, y: a.y + y, r: a.r }));
     for (const b of s.bonds) {
-      const { a1, a2, endpoints, ...rest } = b;
-      bonds.push({ ...rest, id: next--, a: ids[a1], b: ids[a2], stereo: b.stereo ?? "none", ...(endpoints ? { endpoints: endpoints.map((e) => ids[e]) } : {}) } as Model["bonds"][number]);
+      const { a1, a2, endpoints, narrow, ...rest } = b;
+      bonds.push({ ...rest, id: next--, a: ids[a1], b: ids[a2], stereo: b.stereo ?? "none", ...(narrow != null ? { narrow: ids[narrow] } : {}), ...(endpoints ? { endpoints: endpoints.map((e) => ids[e]) } : {}) } as Model["bonds"][number]);
     }
   }
   return { atoms, bonds };

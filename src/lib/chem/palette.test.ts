@@ -5,10 +5,12 @@ import {
   allSets,
   BUILT_IN_SETS,
   DEFAULT_COLOURS,
+  forFillsOnly,
   freshName,
   hexOf,
   MENO_SET,
   newSetId,
+  OKABE_ITO_SET,
   rgbOf,
   setInUse,
   SET_COLOURS_MOST,
@@ -66,5 +68,17 @@ describe("the ground ink", () => {
   it("is the palette's black in Meno's style, and pure black in a journal's", () => {
     expect([MENO.bondColor, MENO.labelColor]).toEqual(["#141414", "#141414"]);
     for (const s of [ACS_1996, RSC, NATURE, WILEY]) expect([s.bondColor, s.labelColor]).toEqual(["#000000", "#000000"]);
+  });
+});
+
+describe("a colour for fills alone", () => {
+  it("is Okabe and Ito's yellow, the set kept exactly theirs; none of Meno's, nor of a set of the user's own", () => {
+    expect(OKABE_ITO_SET.colours).toEqual(["#d55e00", "#e69f00", "#f0e442", "#009e73", "#56b4e9", "#0072b2", "#cc79a7"]);
+    expect(OKABE_ITO_SET.colours.filter((c) => forFillsOnly(OKABE_ITO_SET, c))).toEqual(["#f0e442"]);
+    expect(MENO_SET.colours.some((c) => forFillsOnly(MENO_SET, c))).toBe(false);
+    // (a set of the user's own, as the settings file keeps it: its colours alone)
+    const own = acceptColours({ use: "mine", sets: [{ id: "mine", name: "Mine", colours: ["#f0e442"], fillsOnly: ["#f0e442"] }] });
+    expect(own.sets[0].fillsOnly).toBeUndefined();
+    expect(forFillsOnly(own.sets[0], "#f0e442")).toBe(false);
   });
 });

@@ -54,7 +54,7 @@ page; a talk is a way through it.
   being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around
   these*: as wide as it needs, a little room about it), or from Quick Add
-  (*Slide*: a slide of what is seen, a little in from its edges); last in
+  (*Scheme*, *Slide*: a slide of what is seen, a little in from its edges); last in
   the talk.
 - **Only its edge and its number are the slide's.** A press inside it is
   on the page. A press on its edge is as on empty space - a drag moves the
@@ -151,10 +151,10 @@ Built on the words already on the page (`Caption`): typed in place, smart
 words, a width they break into lines at, and how their lines lie.
 
 - **A size of their own**, in points as the drawing's labels are (a bond is
-  14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
-  *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
-  down. Unset, the drawing's labels' size, as reaction conditions are now.
-- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  14.4 points in ACS 1996's style): 8, 10, 12, 14, 18 or 24 and any number
+  typed, in the words' menu under its icons; Ctrl/Cmd+Shift+> and < a step
+  up or down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, in the same menu:
   1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
   over the drawing style's. Unset, single and the drawing's labels'
   typeface.
@@ -194,7 +194,7 @@ words, a width they break into lines at, and how their lines lie.
   following the drawing's style as it changes) or 1 or 2 points of its
   own (kept whatever the style); dashed - **and their fill**, from the
   palette and its light tints.
-- **From Quick Add**: *Shapes* opens a second row, as *Calculations* does;
+- **From Quick Add**: *Marks on the page* opens a second row, as *Calculations* does - the shapes, then the pen;
   a shape is drawn from where Quick Add was opened by a drag, or by moving
   the pointer and clicking, as a chain is traced; Shift makes a square or a
   circle, and keeps a line to steps of 15 degrees. The selection's menu has
@@ -237,7 +237,7 @@ words, a width they break into lines at, and how their lines lie.
 
 - **A pen writes, always**, wherever it touches; its eraser end, or its
   button, erases. A mouse and fingers do as ever.
-- **With a mouse or a trackpad**, *Pen* in Quick Add - or *Write on it* in
+- **With a mouse or a trackpad**, *Pen* in Quick Add's *Marks on the page* - or *Write on it* in
   a PDF's menu - begins writing, and a pen's card opens: pen, marker,
   eraser, the palette's colours, three widths, Done. Escape or Done ends
   it; a right drag and the wheel still move and zoom the view. A pen
@@ -358,7 +358,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   it began, is not the click that ends it (`traceEndedBy`, utils/press;
   before, it ended the shape at once, too small to be kept, and nothing
   was drawn).
-- Quick Add's *Shapes* opens a row of the five; the shape's menu
+- Quick Add's *Marks on the page* opens a row of the shapes and the pen; the shape's menu
   (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin,
   regular or thick line, dashed, *Bring to front*, *Send to back*. The
   selection's menu has *Box around these*: a rounded rectangle a third of
@@ -475,10 +475,11 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points as the pointer gives them, kept whole (*A stroke is kept whole*).
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
   eraser, the colours of the set in use and the pen's own (a marker's own
-  being the set's first, shown once), three widths - a pen's first as
+  being the set's first, shown once; a colour for fills alone, Okabe and
+  Ito's yellow, the marker's only, struck through for the pen), three widths - a pen's first as
   wide as the drawing's bonds, following its style, then 1.5 and 3
   points (`lib/chem/ink` `INK_WIDTHS_PT`) - Done (or Escape).
-  Quick Add's *Pen* opens it; the pointer is a cross while it is open.
+  Quick Add's *Pen*, among the marks on the page, opens it; the pointer is a cross while it is open.
   Writing's menu: *Colour…* - whose card, for a marker's writing alone,
   shows the marker's own colour (the set's first) in place of *None*, as
   the pen's card does - and *Delete writing*.

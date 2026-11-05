@@ -1,0 +1,95 @@
+{
+  "id": "densitool",
+  "name": "Densitool interface",
+  "version": "0.2.0",
+  "description": "Shows weak interactions from a wavefunction with Densitool, a made-up program installed separately.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/densitool",
+  "environment": "uv",
+  "installed": [
+    {
+      "name": "densitool",
+      "label": "Densitool",
+      "files": {
+        "macos": "densitool",
+        "linux": "densitool",
+        "windows": "densitool.exe"
+      },
+      "env": {
+        "DENSITOOL_HOME": "{folder}"
+      }
+    }
+  ],
+  "depends": [
+    {
+      "plugin": "orbitron",
+      "versions": ">=0.3.0 <1.0.0",
+      "optional": true,
+      "kinds": [
+        "orbitron-checkpoint"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "nci"
+      ],
+      "programs": [
+        "densitool"
+      ],
+      "files": [
+        "molden",
+        "orbitron-checkpoint",
+        "wfx"
+      ],
+      "options": [
+        {
+          "id": "density",
+          "label": "Density",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "wavefunction",
+              "label": "From the wavefunction"
+            },
+            {
+              "value": "promolecular",
+              "label": "Promolecular"
+            }
+          ],
+          "default": "wavefunction"
+        },
+        {
+          "id": "grid",
+          "label": "Grid",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "coarse",
+              "label": "Coarse"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "fine",
+              "label": "Fine"
+            }
+          ],
+          "default": "medium"
+        },
+        {
+          "id": "isovalue",
+          "label": "Surface's value",
+          "type": "number",
+          "default": 0.5,
+          "min": 0.05,
+          "max": 1,
+          "step": 0.05
+        }
+      ]
+    }
+  ]
+}

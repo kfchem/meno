@@ -5,8 +5,9 @@ minimisation and conformer search, on synthetic molecules only.
 
     python measure_restraint_strengths.py [out.json] [--xtb PATH]
 
-Run by the RDKit plugin's Python (its environment has RDKit), from the
-repository's root or anywhere: the worker is found beside this script.
+Run by the RDKit plugin's Python (its environment has RDKit), from
+anywhere, with MENO_PLUGINS set to a checkout of the plugins' repository:
+the RDKit plugin's worker is found there.
 
 A: an acid held at its base by a distance restraint - its coordination
    bond left unbonded, as Restraints leaves it - at 0.9 of their van der
@@ -37,7 +38,9 @@ from rdkit.Chem import AllChem
 from rdkit.Chem import rdMolTransforms as T
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WORKER = os.path.join(HERE, "..", "..", "src-tauri", "resources", "plugins", "rdkit", "worker.py")
+if not os.environ.get("MENO_PLUGINS"):
+    sys.exit("set MENO_PLUGINS to a checkout of the plugins' repository: the RDKit plugin's worker is found there")
+WORKER = os.path.join(os.environ["MENO_PLUGINS"], "plugins", "rdkit", "worker.py")
 spec = importlib.util.spec_from_file_location("worker", WORKER)
 w = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(w)

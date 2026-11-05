@@ -1,6 +1,6 @@
 /**
  * Asking a plugin's worker that reads or writes files
- * (resources/plugins/<id>/worker.py): one JSON object a line each way,
+ * (plugins/<id>/<version>/worker.py): one JSON object a line each way,
  * answers matched to questions by id, as the worker of a plugin that fills
  * a role is asked (lib/roles/client). It reads what it is sent, and writes
  * what it is given, and nothing else.

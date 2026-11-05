@@ -44,12 +44,12 @@ vi.mock("@tauri-apps/api/path", async (actual) => ({
 }));
 vi.mock("../../../../lib/plugins/installed", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/plugins/installed")>()),
-  lookFor: async () => "/Applications/Blender.app/Contents/MacOS/Blender",
+  lookFor: async () => "/Applications/Lumen.app/Contents/MacOS/Lumen",
 }));
 
-/** The Blender plugin's worker, as the test has it: a job for the scene, and the film it made. */
+/** The Lumen plugin's worker, as the test has it: a job for the scene, and the film it made. */
 const worker = {
-  prepare: vi.fn(async () => ({ jobs: [{ entries: [0], program: "blender", args: ["-b", "-P", "render.py"], files: [{ name: "render.json", text: "{}" }], reads: [] }] })),
+  prepare: vi.fn(async () => ({ jobs: [{ entries: [0], program: "lumen", args: ["--batch", "--script", "render.py"], files: [{ name: "render.json", text: "{}" }], reads: [] }] })),
   collect: vi.fn(async () => ({ made: [{ entry: 0, file: "film.mp4", media: "video/mp4" }] })),
 };
 vi.mock("../../../../lib/calc/workers", async (actual) => ({
@@ -73,13 +73,13 @@ const LIT = { look: "meno", sticks: "shown", shading: "lit", outlines: "none", o
 
 describe("a render", () => {
   it("is as far as its job last said, in lines of its log", () => {
-    expect(progressOf("Blender 5.2\nprogress 0/240\nFra:1\nprogress 12/240\nFra:13 Mem: 30M\n")).toEqual({ done: 12, total: 240 });
+    expect(progressOf("Lumen 4.1\nprogress 0/240\nframe 1\nprogress 12/240\nframe 13 memory 30M\n")).toEqual({ done: 12, total: 240 });
     expect(progressOf("progress 1/1\n")).toEqual({ done: 1, total: 1 });
     // (as a Windows pipe leaves its lines - \r\n - and as a program's own redraw does - a lone \r)
-    expect(progressOf("Blender 5.2\r\nprogress 3/100\r\nFra: 1 | Sample 4/64\r\nprogress 7/100\r\n")).toEqual({ done: 7, total: 100 });
-    expect(progressOf("Fra: 1 | Sample 4/64\rprogress 42/100\rFra: 1 | Sample 9/64\r")).toEqual({ done: 42, total: 100 });
-    // (not a line that only ends with it, nor Blender's own sample lines)
-    expect(progressOf("Rendering progress 5/10 samples\nFra: 1 | Sample 9/64\n")).toBeNull();
+    expect(progressOf("Lumen 4.1\r\nprogress 3/100\r\nframe 1 | sample 4/64\r\nprogress 7/100\r\n")).toEqual({ done: 7, total: 100 });
+    expect(progressOf("frame 1 | sample 4/64\rprogress 42/100\rframe 1 | sample 9/64\r")).toEqual({ done: 42, total: 100 });
+    // (not a line that only ends with it, nor Lumen's own sample lines)
+    expect(progressOf("Rendering progress 5/10 samples\nframe 1 | sample 9/64\n")).toBeNull();
     // (nothing said, or what is not how far)
     expect(progressOf("Rendering\n")).toBeNull();
     expect(progressOf("progress 5/0\nprogress 9/4\n")).toBeNull();
@@ -134,7 +134,7 @@ describe("a workspace closing", () => {
     beginning = null;
     Object.assign(asked, { started: [], stopped: [], removed: [], looked: [], trimmed: [] });
     worker.collect.mockClear();
-    useReaders.setState({ state: { blender: "added" }, problem: {} });
+    useReaders.setState({ state: { lumen: "added" }, problem: {} });
   });
   afterEach(() => vi.useRealTimers());
 
@@ -209,7 +209,7 @@ describe("a workspace closing", () => {
     expect(asked.started).toEqual([]);
     expect(rendersOf(one.store).getState().list).toEqual([]);
   });
-  it("says why one failed, and puts it away with its job's folder kept - its log, all Blender said", async () => {
+  it("says why one failed, and puts it away with its job's folder kept - its log, all Lumen said", async () => {
     const one = workspace();
     const ran = startRender(one.store, [one.id], FILM, {});
     await vi.advanceTimersByTimeAsync(0);
@@ -261,7 +261,7 @@ describe("where a render lands", () => {
     nextJob = 1;
     beginning = null;
     Object.assign(asked, { started: [], stopped: [], removed: [], looked: [], trimmed: [] });
-    useReaders.setState({ state: { blender: "added" }, problem: {} });
+    useReaders.setState({ state: { lumen: "added" }, problem: {} });
   });
   afterEach(() => vi.useRealTimers());
 

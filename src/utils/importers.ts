@@ -48,11 +48,8 @@ export type EditorBond = BondChem & {
    * wavy bond beside it).
    */
   stereo?: "up" | "down" | "wavy" | "either" | "none";
-  /**
-   * Set when the file puts a wedge's narrow end where the drawing would not
-   * by itself - at the atom with fewer bonds.
-   */
-  stereoOrient?: "principle" | "reverse";
+  /** The atom (by id) a wedge is narrow at: its first in a MOL file. */
+  narrow?: number;
   /** A coordination bond (MOL bond type 9), drawn as an arrow from `a` to `b`. */
   dative?: boolean;
 };
@@ -232,6 +229,7 @@ export function buildEditorModelFromRXN(text: string, place: (mols: ParsedMol[])
           id: idCounter++,
           a: ids.get(b.a)!,
           b: ids.get(b.b)!,
+          ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}),
           ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!).filter((e) => e != null) } : {}),
         });
       }
@@ -469,7 +467,7 @@ function contractAbbreviations(
       const ib = ids.get(b.b);
       if (ia != null && ib != null) {
         // inside: into the structure, out of the drawing
-        structure.bonds.unshift({ a1: ia, a2: ib, order: b.order, stereo: b.stereo ?? "none", ...bondChem(b) });
+        structure.bonds.unshift({ a1: ia, a2: ib, order: b.order, stereo: b.stereo ?? "none", ...(b.narrow != null && ids.has(b.narrow) ? { narrow: ids.get(b.narrow)! } : {}), ...bondChem(b) });
         bonds.splice(k, 1);
       } else if (ia != null || ib != null) {
         // out of it: from its labelled atom - and where it goes to a pi system's star of it, bound through all that
@@ -487,7 +485,7 @@ function contractAbbreviations(
         }
         if (pi) bondedThrough.add(outer);
         const { endpoints: _endpoints, attach: _attach, coordination: _coordination, ...plain } = b;
-        bonds[k] = { ...(pi ? plain : b), ...(ia != null ? { a: head.id } : { b: head.id }) };
+        bonds[k] = { ...(pi ? plain : b), ...(ia != null ? { a: head.id } : { b: head.id }), ...(b.narrow === inner ? { narrow: head.id } : {}) };
       }
     }
     for (let k = atoms.length - 1; k >= 0; k--) {
@@ -518,7 +516,7 @@ function bondOf(
   m: ParsedMol,
   i: number,
   orders: (1 | 2 | 3)[],
-  reversed: boolean[],
+  first: number,
 ): Omit<EditorBond, "id" | "a" | "b"> {
   const b = m.bonds[i];
   const query = QUERY_OF[b.order];
@@ -531,7 +529,8 @@ function bondOf(
     // (a "double or aromatic" query is drawn double, the others single)
     order: query === "double-or-aromatic" ? 2 : orders[i],
     stereo: mapStereo(b),
-    ...(reversed[i] ? { stereoOrient: "reverse" as const } : {}),
+    // (a wedge narrow at its first atom, as MOL files have it)
+    ...(b.stereoCode === 1 || b.stereoCode === 6 ? { narrow: first } : {}),
     ...(b.order === COORDINATION_BOND ? (coord ? { coordination: true } : { dative: true }) : {}),
     ...(b.order === HYDROGEN_BOND ? { hydrogen: true } : {}),
     ...(query ? { query } : {}),
@@ -552,12 +551,11 @@ export function convertMolToEditorModel(m: ParsedMol, scale: number) {
   const bondIdBase = atoms.length;
   const { orders, hChosen } = kekulized(m.atoms, m.bonds);
   for (const i of hChosen) atoms[i].hChosen = true;
-  const reversed = wedgesNarrowAtFewerBonds(m.bonds);
   const bonds: EditorBond[] = m.bonds.map((b, i) => ({
     id: bondIdBase + i + 1,
     a: b.a1 + 1,
     b: b.a2 + 1,
-    ...bondOf(m, i, orders, reversed),
+    ...bondOf(m, i, orders, b.a1 + 1),
   }));
   contractAbbreviations(atoms, bonds, m, (i) => i + 1);
   markSgroups(atoms, bonds, m, (i) => i + 1, (i) => bondIdBase + i + 1, bondIdBase + m.bonds.length + 1);
@@ -620,7 +618,6 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
     }
     const { orders, hChosen } = kekulized(m.atoms, m.bonds);
     for (const i of hChosen) atoms[atoms.length - m.atoms.length + i].hChosen = true;
-    const reversed = wedgesNarrowAtFewerBonds(m.bonds);
     m.bonds.forEach((b, i) => {
       // Parsed indices are 0-based; our per-molecule atoms were assigned ids base..(base+atoms-1).
       // Therefore, map directly as base + index (no +1).
@@ -630,7 +627,7 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
         id: idCounter++,
         a: a1,
         b: a2,
-        ...bondOf(m, i, orders, reversed),
+        ...bondOf(m, i, orders, a1),
       });
     });
     const from = atoms.length - m.atoms.length;
@@ -691,26 +688,6 @@ function aliasLabel(alias: string): string {
   const s = alias.trim();
   if (!s) return "C";
   return s === s.toLowerCase() ? normalizeEl(s) : s;
-}
-
-/**
- * Which wedges a file draws with their narrow end on the atom with fewer
- * bonds. A MOL file puts a wedge's narrow end at its first atom; the drawing
- * puts it at the atom with more bonds unless told otherwise, so these are
- * the ones to tell.
- */
-function wedgesNarrowAtFewerBonds(
-  bonds: readonly { a1: number; a2: number; stereoCode?: number }[],
-): boolean[] {
-  const deg = new Map<number, number>();
-  for (const b of bonds) {
-    deg.set(b.a1, (deg.get(b.a1) ?? 0) + 1);
-    deg.set(b.a2, (deg.get(b.a2) ?? 0) + 1);
-  }
-  return bonds.map((b) => {
-    const wedge = b.stereoCode === 1 || b.stereoCode === 6;
-    return wedge && (deg.get(b.a1) ?? 0) < (deg.get(b.a2) ?? 0);
-  });
 }
 
 function mapStereo(
