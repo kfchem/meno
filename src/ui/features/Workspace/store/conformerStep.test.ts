@@ -109,7 +109,7 @@ import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
 import { entryOfSet, setEntries, setMembers } from "../workflow/entries";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
+import { bareLeft, notMade, ONE_ROUND_AS_JOBS, oneRoundAsJobs, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -436,6 +436,45 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
     // (a plugin whose search takes no number of tries is offered none)
     expect(optionsFor("conformers", "crest").map((o) => o.id)).not.toContain("sought");
+  });
+
+  it("asks each structure in rounds where its plugin's search takes draws - each round a draw of its own - until one brings none new, and says how it ended", async () => {
+    // (a search that takes draws: the window, Settings' own, the step starts from; the worker here gives the same one conformer each draw)
+    const rdkit = PLUGINS.find((p) => p.id === "rdkit") as unknown as { roleDraws: readonly string[] };
+    const was = rdkit.roleDraws;
+    rdkit.roleDraws = ["conformers"];
+    useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings, within3d: 3 } }));
+    try {
+      const { st } = await searched();
+      const sent = asked as unknown as { count?: number; draw?: number }[];
+      // (water, then ethane - which cannot be made: its first round alone - then methanol, each its own count first, then as many again)
+      expect(sent.map((a) => [a.count, a.draw])).toEqual([
+        [FEW_CONFORMERS, 0],
+        [FEW_CONFORMERS, 1],
+        [FEW_CONFORMERS, 0],
+        [FEW_CONFORMERS, 0],
+        [FEW_CONFORMERS, 1],
+      ]);
+      const made = st().molecules3d.filter((m) => m.conformerSet);
+      expect(made.map((m) => m.made?.how.find((r) => r.label === "Rounds")?.text)).toEqual(
+        Array(2).fill(`2 rounds, ${2 * FEW_CONFORMERS} tried: the last brought no new conformer within 3 kcal/mol of the lowest`),
+      );
+    } finally {
+      rdkit.roleDraws = was;
+      useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings } }));
+    }
+  });
+
+  it("says, run as jobs on molecules in 3D, that it asks each once where it was asked for as many as each needs in rounds", () => {
+    const needed = { sought: "needed", within: 3, first: 0, most: 5000 };
+    expect(oneRoundAsJobs(true, true, needed)).toBe(ONE_ROUND_AS_JOBS);
+    // (its window not given yet: rounds asked all the same)
+    expect(oneRoundAsJobs(true, true, { ...needed, within: Number.NaN })).toBe(ONE_ROUND_AS_JOBS);
+    expect(oneRoundAsJobs(true, true, { ...needed, sought: "fixed" })).toBeUndefined();
+    expect(oneRoundAsJobs(true, false, needed)).toBeUndefined();
+    expect(oneRoundAsJobs(false, true, needed)).toBeUndefined();
+    // (a search not offered rounds: no window among its options)
+    expect(oneRoundAsJobs(true, true, { sought: "needed", count: 50 })).toBeUndefined();
   });
 
   it("tries as many as each molecule needs, where the chemist asks for no number", async () => {

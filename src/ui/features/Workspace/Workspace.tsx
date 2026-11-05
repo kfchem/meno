@@ -206,7 +206,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageCount, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageCount, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -531,7 +531,11 @@ function WorkspaceContent({
           if (stopped) return;
           // (within the window Settings gives: a workflow's conformer step keeps every one - make3d withinWindow)
           const window3d = useAppSettings.getState().chemistry.window3d ?? WINDOW_3D;
-          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, useAppSettings.getState().chemistry))).map((c) => withinWindow(c, window3d));
+          // (as many as the molecule needs, in rounds, where its plugin's search takes draws: given a window first - make3d pageRounds)
+          const chosen = useAppSettings.getState().chemistry;
+          const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
+          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;

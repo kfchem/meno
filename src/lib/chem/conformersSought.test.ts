@@ -181,7 +181,10 @@ describe("as many as the molecule needs, asked in rounds", () => {
   });
 
   it("says its guide's numbers one with the other, and that its energies are the force field's", () => {
-    const [, kelvin, kcal, ratio, logOf] = /at ([\d.]+) K one ([\d.]+) kcal\/mol above the lowest weighs 1\/(\d+) as much \(RT ln (\d+)\)/.exec(WITHIN_GUIDE)!;
+    const [, kelvin, kcal, ratio, logOf] = /at ([\d.]+) K one ([\d.]+)\skcal\/mol above the lowest weighs 1\/(\d+) as much \(RT\sln\s(\d+)\)/.exec(WITHIN_GUIDE)!;
+    // (its number and unit, and RT ln 100, each one unbroken: no-break spaces, as the Energy window's guide has them)
+    expect(WITHIN_GUIDE).toContain("2.73\u00a0kcal/mol");
+    expect(WITHIN_GUIDE).toContain("(RT\u00a0ln\u00a0100)");
     expect(logOf).toBe(ratio);
     expect((GAS_CONSTANT_HARTREE * Number(kelvin) * Math.log(Number(ratio)) * factor("Eh", "kcal/mol")).toFixed(2)).toBe(kcal);
     expect(WITHIN_GUIDE).toContain("force field");

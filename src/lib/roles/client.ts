@@ -77,8 +77,12 @@ export type ChemRequests = {
      * roleOptions), as chosen in Settings. `onPage`: made for Meno's own page
      * (of two enantiomers, one made as the other's mirror image -
      * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
+     * `draw`: which set of `count` tries, where the search is asked in
+     * rounds (chem/conformerRounds) - each draw another set, the same draw
+     * and options the same set; sent only to a plugin whose role says it
+     * takes draws (lib/plugins/manifest `draws`).
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; holds?: MetalHolds; options?: OptionValues; onPage?: true };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues; onPage?: true };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**

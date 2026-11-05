@@ -33,7 +33,10 @@ import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothin
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
-import { conformersSought, conformersSoughtOf, soughtNumber } from "../../../../../lib/chem/conformersSought";
+import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from "../../../../../lib/chem/conformersSought";
+import type { Conformers } from "../../../../../lib/roles/client";
+import { inRounds, roundsSaid } from "../../chem/conformerRounds";
+import { roundsJudge } from "../../chem/roundsJudge";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
@@ -115,6 +118,12 @@ export function notMade(places: readonly number[], of: number): string {
 export function stereoOpen(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
 }
+
+/** What a conformer search of molecules in 3D, run as jobs, says where it was asked for as many as each molecule needs: one round, the molecule's own count - rounds are asked of structures drawn (chem/conformerRounds). */
+export const ONE_ROUND_AS_JOBS = "one round each, its own count: rounds are for structures drawn";
+
+/** What a step run as jobs adds to what it says of its search: `ONE_ROUND_AS_JOBS` where it is a search that takes a number of tries (`tries`) and draws (`draws`), asked for as many as each molecule needs in rounds; none else. */
+export const oneRoundAsJobs = (tries: boolean, draws: boolean, options: OptionValues): string | undefined => (tries && draws && roundsAsked(options, () => null) ? ONE_ROUND_AS_JOBS : undefined);
 
 /** Why a structure drawn was not made in 3D, as its record in the Failed exit says it: its stereo left open - so many centres, double bonds and axes, counted once each (`stereoOpenOf`) - to be given it first. */
 export function openWhy(open: StereoOpen | undefined): string {
@@ -773,9 +782,24 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same - the step's
           //  own number, or as many as the molecule needs: lib/chem/conformersSought)
           const tries = soughtNumber(options, () => conformersSoughtOf(block.molblock));
+          // (as many as the molecule needs, in rounds, where the plugin's search takes draws: until a round brings no conformer new within
+          //  the step's window - chem/conformerRounds; a workflow's search has no time it must end in)
+          const rounds = plugin.roleDraws.includes("conformers") ? roundsAsked(options, () => conformersSoughtOf(block.molblock)) : null;
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
-          const got = (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(tries != null ? { count: tries } : {}), ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers[0];
+          const ask = async (count: number | null, draw?: number) =>
+            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers[0];
+          let got = rounds ? undefined : await ask(tries);
+          if (rounds) {
+            const round = async (n: number, draw: number) => {
+              const c = await ask(n, draw);
+              if (!c) throw new Error("the search gave nothing for a round");
+              return c as Conformers;
+            };
+            const { made: all, run } = await inRounds(round, { ...rounds, draws: true }, (first) => roundsJudge(first, rounds.window));
+            got = { ...all, how: [...(all.how ?? []), { label: "Rounds", text: roundsSaid(run, rounds) }] };
+          }
           made = got && partsSideBySide(keptMade(withChosen(got, which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
         } catch {
           if (menoStops.has(id)) break;
@@ -1198,7 +1222,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const raw = await client.prepare(step.kind, sent, options, cores, Object.fromEntries(paths));
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
-      note = readNote(raw);
+      // (asked for as many as each molecule needs, where the search takes draws: of molecules in 3D, run as jobs, one round - said)
+      const once = oneRoundAsJobs(tries, plugin.roleDraws.includes("conformers"), options);
+      note = [readNote(raw), once].filter(Boolean).join(" \u00b7 ") || undefined;
       said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);

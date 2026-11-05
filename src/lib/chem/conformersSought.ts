@@ -301,7 +301,7 @@ export function conformersSoughtOf(molblock: string): number | null {
  * default - and what energies it is of.
  */
 export const WITHIN_GUIDE =
-  "Meno sets none: give your own. A round that brings no new conformer within this of the lowest is the last. As a guide, at 298.15 K one 2.73 kcal/mol above the lowest weighs 1/100 as much (RT ln 100). The energies are the search's own force field's.";
+  "Meno sets none: give your own. A round that brings no new conformer within this of the lowest is the last. As a guide, at 298.15 K one 2.73\u00a0kcal/mol above the lowest weighs 1/100 as much (RT\u00a0ln\u00a0100). The energies are the search's own force field's.";
 /** What a search in rounds given no window needs, wherever it is asked. */
 export const WITHIN_NEEDED = "Give the window for new conformers, in kcal/mol";
 
