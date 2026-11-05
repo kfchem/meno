@@ -132,8 +132,9 @@ that differ, it is given none, and says why.
   2026-11-01): its headings and the heads of its columns, never a
   structure's name, and its columns in turn - the Gaussian interface's
   orientation tables, a row of centre, atomic number, type, x, y, z. Only
-  where that plugin is added: where only a plugin not added declares it,
-  none of the table is read - its rows read as nothing else either - and
+  where that plugin is added: where only a plugin not added declares it -
+  one here, or one on offer online, by its catalogue entry
+  (`quotedTables`, PLUGINS.md, *Plugins online*) - none of the table is read - its rows read as nothing else either - and
   the card says so, naming the plugin (*A table as its program prints it:
   the Gaussian interface plugin reads it, once added in Settings,
   Plugins*), not to be placed.

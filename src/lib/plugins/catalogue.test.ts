@@ -43,6 +43,7 @@ describe("a catalogue of plugins online, read", () => {
             kinds: ["energy"],
             reads: [],
             fileKinds: [],
+            quotedTables: [],
             source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 12_345 },
             manifestSha256: HEX,
             description: "Draws.",
@@ -100,6 +101,28 @@ describe("a catalogue of plugins online, read", () => {
       [kind, kind],
     ]) {
       expect(why(catalogue([entry(), entry({ id: "other", fileKinds: bad })])), JSON.stringify(bad)).toMatch(/^It holds other: a kind of file/);
+    }
+  });
+
+  it("reads the tables of atoms an entry's program prints as its manifest keeps them - or refuses the whole list", () => {
+    const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
+    expect((read(catalogue([entry({ quotedTables: [table] })])) as { catalogue: Catalogue }).catalogue.plugins[0].quotedTables).toEqual([table]);
+    expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.plugins[0].quotedTables).toEqual([]);
+    for (const bad of [
+      {},
+      [{ ...table, id: "Orientation" }],
+      [{ ...table, headings: [] }],
+      [{ ...table, headings: [" Standard orientation:"] }],
+      [{ ...table, heads: ["x".repeat(81)] }],
+      [{ ...table, columns: ["x", "y", "z"] }],
+      [{ ...table, columns: ["element", "atomic-number", "x", "y", "z"] }],
+      [{ ...table, columns: ["element", "x", "x", "y", "z"] }],
+      [{ ...table, columns: ["element", "x", "y", "z", "charge"] }],
+      [{ ...table, pattern: ".*" }],
+      [table, table],
+      [1, 2, 3, 4, 5].map((k) => ({ ...table, id: `t${k}` })),
+    ]) {
+      expect(why(catalogue([entry(), entry({ id: "other", quotedTables: bad })])), JSON.stringify(bad).slice(0, 80)).toMatch(/^It holds other: a table of atoms/);
     }
   });
 

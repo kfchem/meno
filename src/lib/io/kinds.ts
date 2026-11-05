@@ -241,7 +241,10 @@ export function registerKinds(manifests: readonly Manifest[], offered: readonly 
   // (and their programs' lines and tables of atoms as papers quote them - and those of the plugins only offered, to say whose
   // a table is that none added reads)
   const tablesOf = (ms: readonly Manifest[]) => ms.flatMap((m) => (m.quotedTables ?? []).map((t) => ({ ...t, plugin: m.name })));
-  const quotedTables = { added: tablesOf(manifests), offered: tablesOf(offered.filter((o) => !manifests.some((m) => m.id === o.id))) };
+  const notAdded = offered.filter((o) => !manifests.some((m) => m.id === o.id));
+  // (and those of the plugins on offer online, not got, as their entries declare them: each with its entry's name)
+  const onlineTables = online.filter((e) => !offered.some((m) => m.id === e.id) && !manifests.some((m) => m.id === e.id)).flatMap((e) => e.quotedTables.map((t) => ({ ...t, plugin: e.name })));
+  const quotedTables = { added: tablesOf(manifests), offered: [...tablesOf(notAdded), ...onlineTables] };
   useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []), xyzSteps: manifests.flatMap((m) => m.xyzSteps ?? []), quotedEnergies: manifests.flatMap((m) => m.quotedEnergies ?? []), quotedTables });
 }
 

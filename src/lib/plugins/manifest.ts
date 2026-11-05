@@ -566,21 +566,28 @@ function acceptQuotedEnergies(v: unknown): QuotedEnergyDecl[] {
   return out;
 }
 
-/** A plugin's tables of atoms, as papers quote its program's, each checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; what is not understood left out. */
+/** How many tables of atoms a plugin declares at most, and lines heading one or its columns. */
+export const QUOTED_TABLES_MOST = 4;
+const QUOTED_LINES_MOST = 8;
+
+/** A table of atoms, as papers quote its program's, checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; none, where it is not that. */
+export function quotedTableOf(raw: unknown): QuotedTableDecl | null {
+  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, QUOTED_LINES_MOST);
+  const r = raw as Record<string, unknown> | null;
+  if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) return null;
+  const headings = lines(r.headings);
+  const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
+  if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) return null;
+  if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) return null;
+  return { id: r.id, headings, heads: lines(r.heads), columns };
+}
+
+/** A plugin's tables of atoms, as papers quote its program's, each checked (`quotedTableOf`); what is not understood left out. */
 function acceptQuotedTables(v: unknown): QuotedTableDecl[] {
-  const out: QuotedTableDecl[] = [];
-  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, 8);
-  for (const raw of list(v)) {
-    const r = raw as Record<string, unknown> | null;
-    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
-    const headings = lines(r.headings);
-    const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
-    if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) continue;
-    if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) continue;
-    out.push({ id: r.id, headings, heads: lines(r.heads), columns });
-    if (out.length >= 4) break;
-  }
-  return out;
+  return list(v)
+    .map(quotedTableOf)
+    .filter((t): t is QuotedTableDecl => t != null)
+    .slice(0, QUOTED_TABLES_MOST);
 }
 
 const LOOK_ID = /^[a-z][a-z0-9-]{0,39}$/;

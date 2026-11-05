@@ -9,7 +9,7 @@
  * of its plugins: the catalogue does.
  */
 import { compareVersions, versionParts } from "./depends";
-import { EXTENSION, markOf, PROGRAM, SYSTEMS, type Mark, type System } from "./manifest";
+import { EXTENSION, markOf, PROGRAM, QUOTED_TABLES_MOST, quotedTableOf, SYSTEMS, type Mark, type QuotedTableDecl, type System } from "./manifest";
 import { SYSTEM_NAMES } from "./here";
 import { isRole, type RoleId } from "./roles";
 
@@ -57,6 +57,8 @@ export type CatalogueEntry = {
   reads: string[];
   /** The kinds of file it reads that their marks tell, as its manifest says them: how a file only it would read is told, before it is got. */
   fileKinds: FileKind[];
+  /** The tables of atoms its program prints, as papers quote them, as its manifest declares them: so that one is said to be its to read, before it is got. */
+  quotedTables: QuotedTableDecl[];
   /** Its files: one archive, its fingerprint and its size. */
   source: { url: string; sha256: string; bytes: number };
   /** Its manifest's fingerprint, checked once its files are unpacked. */
@@ -86,6 +88,22 @@ function markIn(v: unknown): Mark | null {
   if (!m || typeof m !== "object" || Object.keys(m).some((k) => !["text", "at", "anyCase"].includes(k))) return null;
   if (("at" in m && m.at !== "line-start") || ("anyCase" in m && m.anyCase !== true)) return null;
   return markOf(m);
+}
+
+/** An entry's tables of atoms, read strictly: each exactly as a manifest's is kept - nothing of it dropped or trimmed - or null. */
+function quotedTablesOf(v: unknown): QuotedTableDecl[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v) || v.length > QUOTED_TABLES_MOST) return null;
+  const out: QuotedTableDecl[] = [];
+  for (const raw of v) {
+    const t = quotedTableOf(raw);
+    const r = raw as Record<string, unknown>;
+    const same = (a: readonly string[], b: unknown) => Array.isArray(b) && b.length === a.length && a.every((x, k) => x === b[k]);
+    if (!t || out.some((o) => o.id === t.id) || Object.keys(r).some((k) => !["id", "headings", "heads", "columns"].includes(k))) return null;
+    if (!same(t.headings, r.headings) || !same(t.heads, r.heads ?? [])) return null;
+    out.push(t);
+  }
+  return out;
 }
 
 /** The kinds of file an entry reads that marks tell, read strictly; null, where one is not as Meno takes it. */
@@ -141,6 +159,8 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   if (!roles || !kinds || !reads) return `${id}: a role or kind Meno does not take`;
   const fileKinds = fileKindsOf(e.fileKinds);
   if (!fileKinds) return `${id}: a kind of file it reads not as Meno takes it`;
+  const quotedTables = quotedTablesOf(e.quotedTables);
+  if (!quotedTables) return `${id}: a table of atoms not as Meno takes it`;
   const s = e.source as Record<string, unknown> | null;
   const url = sourceUrl(s?.url);
   const sha256 = typeof s?.sha256 === "string" && HEX64.test(s.sha256) ? s.sha256 : null;
@@ -165,6 +185,7 @@ function entryOf(raw: unknown): CatalogueEntry | string {
     kinds,
     reads,
     fileKinds,
+    quotedTables,
     source: { url, sha256, bytes },
     manifestSha256,
     ...(description ? { description } : {}),

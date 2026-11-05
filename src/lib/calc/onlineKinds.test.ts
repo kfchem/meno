@@ -19,6 +19,7 @@ const onOffer = (over: Partial<CatalogueEntry> = {}): CatalogueEntry => ({
   kinds: [],
   reads: ["far-out"],
   fileKinds: [{ id: "far-out", name: "Far output", extensions: [".far"], marks: [{ text: "F A R   P R O G R A M" }] }],
+  quotedTables: [],
   source: { url: "https://github.com/x/far.tar.gz", sha256: "a".repeat(64), bytes: 1 },
   manifestSha256: "a".repeat(64),
   ...over,

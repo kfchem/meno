@@ -123,7 +123,7 @@ const MANIFEST = { id: "sketch", name: "Sketch interface", version: "0.2.0", des
 const shaOf = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 /** The entry, with its manifest's fingerprint that of `manifest` as staged. */
-const entryFor = async (manifest: unknown) => ({ ...ENTRY, fileKinds: [], manifestSha256: await shaOf(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }) as CatalogueEntry;
+const entryFor = async (manifest: unknown) => ({ ...ENTRY, fileKinds: [], quotedTables: [], manifestSha256: await shaOf(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }) as CatalogueEntry;
 
 describe("a plugin got from the list", () => {
   beforeEach(() => useNetwork.setState({ granted: [CATALOGUE_PURPOSE] }));
@@ -144,7 +144,7 @@ describe("a plugin got from the list", () => {
 
   it("is thrown away where its manifest's fingerprint is not the one the list gave - the plugin and version right or not", async () => {
     const f = files(MANIFEST);
-    await expect(getPlugin({ ...ENTRY, fileKinds: [], manifestSha256: await shaOf(JSON.stringify({ ...MANIFEST, description: "Other." })) } as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
+    await expect(getPlugin({ ...ENTRY, fileKinds: [], quotedTables: [], manifestSha256: await shaOf(JSON.stringify({ ...MANIFEST, description: "Other." })) } as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
     expect(f.did).toEqual(["stage sketch 0.2.0", "discard s1"]);
   });
 

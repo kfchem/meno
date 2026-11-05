@@ -1581,6 +1581,7 @@ comes in its own pull request.
   - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
   - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
+  - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
 - **Read strictly, whole.** The backend checks the signature before
   anything of it is read, and its serial against the one kept: one lower
