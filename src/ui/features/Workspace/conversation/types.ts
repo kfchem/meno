@@ -25,7 +25,8 @@ export type ToolCall = { tool: string; args?: Record<string, unknown> };
 export type Said =
   | { by: "person"; text: string; at: number }
   | { by: "model"; text: string; calls?: ToolCall[]; at: number }
-  | { by: "tool"; tool: string; answer: unknown; ok: boolean; at: number }
+  /** A tool's answer, and the things of the page it gave, by their ids (`things`): not sent again once one lies outside the frame. */
+  | { by: "tool"; tool: string; answer: unknown; ok: boolean; things?: string[]; at: number }
   | { by: "meno"; text: string; at: number };
 
 /** What one turn sent, and where (*The send log*): each thing by its id and how many characters of it; the whole's characters; the connection, and its host where it has one. Never a key. */

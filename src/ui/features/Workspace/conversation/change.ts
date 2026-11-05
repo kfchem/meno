@@ -32,7 +32,7 @@ import { ARROW_LENGTH_BONDS, arrowEnds } from "../../../../lib/chem/reactionSche
 export type Changed = { ok: true; value: unknown } | { ok: false; why: string };
 
 /** The page's own calls a change tool makes. */
-export type PageCalls = Pick<EditorState, "pasteModel" | "addArrow" | "addPlus" | "addTexts" | "addStep" | "connect" | "updateStep" | "clearSel" | "updateConversation">;
+export type PageCalls = Pick<EditorState, "pasteModel" | "addArrow" | "addPlus" | "addTexts" | "addStep" | "connect" | "updateStep" | "clearSel">;
 
 const MARGIN = 1.5;
 
@@ -70,10 +70,23 @@ export function clearSpot(d: WorkspaceDocument, frame: { x0: number; y0: number;
 
 /** How far apart a scheme's pieces are put - a structure, an arrow, a "+" - ink to ink, in bonds. */
 export const SCHEME_GAP_BONDS = 1;
-/** How far inside its frame what a conversation puts down is kept, in bonds: the frame grows to keep it so. */
-export const FRAME_MARGIN_BONDS = 1;
 
 type Box = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * Where a piece `w` by `h` goes in `frame`: after the scheme's last piece
+ * (`after`), where it lies wholly inside the frame; else the first clear
+ * room in it (`clearSpot`); else its middle, said to be over what lies
+ * there. Never outside the frame: the frame is the person's, and what a
+ * conversation sees - nothing it puts down moves it, nor reaches past it.
+ */
+export function placeIn(d: WorkspaceDocument, frame: Box, after: { x: number; y: number } | null, w: number, h: number): { at: { x: number; y: number }; clear: boolean } {
+  if (after && after.x - w / 2 >= frame.x0 && after.x + w / 2 <= frame.x1 && after.y - h / 2 >= frame.y0 && after.y + h / 2 <= frame.y1) return { at: after, clear: true };
+  return clearSpot(d, frame, w, h);
+}
+
+/** What a change says of a place with no room: put down over what lies there. */
+const OVER = { over: "put down over what lies there: the frame has no room left" } as const;
 
 /** A structure's box as it is drawn in `style`: its atoms' points, and as far as its labels' letters reach (utils/freePlace `labelBoxes`) - OH's H too. */
 export function inkBox(model: Model, style: DrawingStyle): Box {
@@ -185,18 +198,9 @@ export function changeTool(
   scope: Scope,
   tool: string,
   args: Record<string, unknown> = {},
-  /** The conversation's frame grown to hold `box` with its margin, where it does not - as a set's grows round what is put in it. */
-  growFrame: (frame: Box) => void = () => {},
 ): Changed {
   const page = d();
   const frame = frameOf(page, scope);
-  const grow = (box: Box) => {
-    if (!("frame" in scope)) return;
-    const m = FRAME_MARGIN_BONDS * NOMINAL_BOND_LENGTH;
-    const f = scope.frame;
-    const next = { x0: Math.min(f.x0, box.x0 - m), y0: Math.min(f.y0, box.y0 - m), x1: Math.max(f.x1, box.x1 + m), y1: Math.max(f.y1, box.y1 + m) };
-    if (next.x0 !== f.x0 || next.y0 !== f.y0 || next.x1 !== f.x1 || next.y1 !== f.y1) growFrame(next);
-  };
   const seen = () => inScope(d(), scope);
   const str = (k: string, most = 100_000) => (typeof args[k] === "string" && (args[k] as string).length <= most ? (args[k] as string) : null);
   switch (tool) {
@@ -217,33 +221,29 @@ export function changeTool(
       const xs = drawn.atoms.map((a) => a.x);
       const ys = drawn.atoms.map((a) => a.y);
       const off = { x: (Math.min(...xs) + Math.max(...xs)) / 2 - (box.x0 + box.x1) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 - (box.y0 + box.y1) / 2 };
-      // (after the scheme's last piece, on its line - a product after its arrow - else where there is room)
-      const after = nextInScheme(page, scope, w);
-      const spot = after ? { at: after, clear: true } : clearSpot(page, frame, w + 2, h + 2);
+      // (after the scheme's last piece, on its line - a product after its arrow - where that is inside the frame; else where there is room)
+      const spot = placeIn(page, frame, nextInScheme(page, scope, w), w, h);
       const first = page.nextId;
       calls.pasteModel(centredAt(drawn, { x: spot.at.x + off.x, y: spot.at.y + off.y }));
       // (put down, not chosen: what the person has selected is theirs - a paste selects what it puts down)
       calls.clearSel();
       if (d().nextId === first) return { ok: false, why: "It could not be put down" };
-      grow({ x0: spot.at.x - w / 2, x1: spot.at.x + w / 2, y0: spot.at.y - h / 2, y1: spot.at.y + h / 2 });
-      return { ok: true, value: { id: seenId("structure", first), ...(spot.clear ? {} : { over: "put down over what lies there: the frame has no room left" }) } };
+      return { ok: true, value: { id: seenId("structure", first), ...(spot.clear ? {} : OVER) } };
     }
     case "put_arrow": {
       // (as long as an arrow is drawn, lying across)
       const length = NOMINAL_BOND_LENGTH * ARROW_LENGTH_BONDS;
       // (after the last reactant, on its line: the scheme's own spacing)
-      const at = nextInScheme(page, scope, length) ?? clearSpot(page, frame, length, 1).at;
+      const spot = placeIn(page, frame, nextInScheme(page, scope, length), length, 1);
       // (kept by its middle)
-      const id = calls.addArrow(at.x, at.y, 0, length);
-      grow({ x0: at.x - length / 2, x1: at.x + length / 2, y0: at.y, y1: at.y });
-      return { ok: true, value: { id: seenId("arrow", id) } };
+      const id = calls.addArrow(spot.at.x, spot.at.y, 0, length);
+      return { ok: true, value: { id: seenId("arrow", id), ...(spot.clear ? {} : OVER) } };
     }
     case "put_plus": {
       const r = NOMINAL_BOND_LENGTH * 0.3;
-      const at = nextInScheme(page, scope, 2 * r) ?? clearSpot(page, frame, 1, 1).at;
-      const id = calls.addPlus(at.x, at.y);
-      grow({ x0: at.x - r, x1: at.x + r, y0: at.y - r, y1: at.y + r });
-      return { ok: true, value: { id: seenId("plus", id) } };
+      const spot = placeIn(page, frame, nextInScheme(page, scope, 2 * r), 2 * r, 2 * r);
+      const id = calls.addPlus(spot.at.x, spot.at.y);
+      return { ok: true, value: { id: seenId("plus", id), ...(spot.clear ? {} : OVER) } };
     }
     case "put_text": {
       const name = str("name", 200) ?? "Notes";
@@ -252,7 +252,7 @@ export function changeTool(
       const before = page.nextTextId ?? 1;
       const spot = clearSpot(page, frame, 12, 8);
       calls.addTexts([{ name, text }], spot.at);
-      return d().nextTextId === before ? { ok: false, why: "It could not be put down" } : { ok: true, value: { id: seenId("text", before) } };
+      return d().nextTextId === before ? { ok: false, why: "It could not be put down" } : { ok: true, value: { id: seenId("text", before), ...(spot.clear ? {} : OVER) } };
     }
     case "add_step": {
       const kind = str("kind", 60);
@@ -261,7 +261,7 @@ export function changeTool(
       if (!info || !by) return { ok: false, why: 'Give a kind of step and who does it: {"kind", "by"}' };
       if (!kindsOf(by).includes(info.kind as StepKind)) return { ok: false, why: `${by} does not do ${info.name}` };
       const spot = clearSpot(page, frame, 10, 6);
-      return { ok: true, value: { id: seenId("step", calls.addStep(info.kind as StepKind, by, spot.at.x, spot.at.y)) } };
+      return { ok: true, value: { id: seenId("step", calls.addStep(info.kind as StepKind, by, spot.at.x, spot.at.y)), ...(spot.clear ? {} : OVER) } };
     }
     case "wire": {
       const from = readSeenId(args.from);

@@ -49,6 +49,13 @@ describe("conversations as a file keeps them", () => {
     expect(left).toBe(4);
     const odd = readConversations([{ ...saved, said: [...saved.said, { by: "someone", text: "x", at: 4 }, { by: "person", text: 7, at: 5 }] }], () => {});
     expect(odd[0].said).toHaveLength(3);
+    // (a tool's answer too large to have been Meno's, or what it gave not as Meno writes it: left out; what it gave, kept)
+    const tool = (over: Record<string, unknown>) => ({ by: "tool", tool: "read", ok: true, answer: "x", at: 6, ...over });
+    const big = readConversations([{ ...saved, said: [tool({ answer: "y".repeat(1_000_001) }), tool({ things: [7] }), tool({ things: ["text:1"] })] }], () => {});
+    expect(big[0].said).toEqual([{ by: "tool", tool: "read", ok: true, answer: "x", things: ["text:1"], at: 6 }]);
+    // (at most so many things said: the latest kept)
+    const many = readConversations([{ ...saved, said: Array.from({ length: 20_005 }, (_, k) => ({ by: "person", text: `${k}`, at: k })) }], () => {});
+    expect([many[0].said.length, (many[0].said[0] as { text: string }).text]).toEqual([20_000, "5"]);
   });
 });
 

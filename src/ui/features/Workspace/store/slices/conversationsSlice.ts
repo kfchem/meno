@@ -74,7 +74,13 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
       }
       const before = new Map((doc.getState().steps ?? []).map((s) => [s.id, s]));
       talk(id, { running: true, stop: undefined, changed: undefined, runsAgain: undefined, said: undefined });
-      const turn = await runTurn({ doc, calls: get(), id, words, connection, turn: `${Date.now()}`, stop: () => !!get().talking[id]?.stop });
+      let turn: Awaited<ReturnType<typeof runTurn>> = { sent: true };
+      try {
+        turn = await runTurn({ doc, calls: get(), id, words, connection, turn: `${Date.now()}`, stop: () => !!get().talking[id]?.stop });
+      } finally {
+        // (never left talking: whatever came of it, it may be sent to again, and taken away)
+        if (get().talking[id]?.running) talk(id, { running: false, stop: undefined });
+      }
       // (a step done before it whose options it changed: the next Run runs it again)
       const runsAgain = turn.changed
         ? (doc.getState().steps ?? []).filter((s) => {

@@ -3,7 +3,7 @@ import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { addConversation, updateConversation } from "./ops";
 import { scriptedModel } from "./scripted";
-import { LIMITS, NO_CONNECTION, runTurn, toolsFor } from "./turn";
+import { LIMITS, NO_CONNECTION, runTurn, toolsFor, WITHHELD } from "./turn";
 import { NO_SUCH } from "./tools";
 import { inkBox } from "./change";
 import { styleOf } from "../../../../lib/chem/style";
@@ -112,7 +112,7 @@ describe("a turn of a conversation", () => {
     expect(doc.getState().conversations![0].said.length).toBeGreaterThan(4);
   });
 
-  it("puts a scheme down as Meno lays one out: an arrow after the last reactant on its line, a product after its head - the frame grown to keep its margin", async () => {
+  it("puts a scheme down as Meno lays one out: an arrow after the last reactant on its line, a product after its head - inside the frame, which it never moves", async () => {
     const { turn, doc } = page(true);
     const before = { ...doc.getState().conversations![0] };
     await turn("Make the ester.", [{ text: "", calls: [{ tool: "put_arrow" }, { tool: "put_structure", args: { smiles: "CCOC(C)=O" } }] }, { text: "." }]).done;
@@ -128,19 +128,73 @@ describe("a turn of a conversation", () => {
     const head = to.x;
     const ester = d.model.atoms.filter((a) => a.id >= 30);
     expect(inkBox({ atoms: ester, bonds: d.model.bonds.filter((b) => b.a >= 30) }, styleOf(d.style)).x0).toBeCloseTo(head + 1.8, 5);
-    // (all of it inside the frame - grown where it had to be, in the same step: one undo takes both back)
+    // (all of it inside the frame - the person's, as it was)
     const c = d.conversations![0];
-    expect(ester.every((a) => a.x < c.x1 && a.y < c.y1 && a.y > c.y0)).toBe(true);
-    doc.undo();
-    expect(doc.getState().conversations![0]).toMatchObject({ x0: before.x0, x1: before.x1, y0: before.y0, y1: before.y1 });
+    expect(ester.every((a) => a.x < c.x1 && a.x > c.x0 && a.y < c.y1 && a.y > c.y0)).toBe(true);
+    expect(c).toMatchObject({ x0: before.x0, x1: before.x1, y0: before.y0, y1: before.y1 });
   });
 
-  it("grows its frame round what it puts down past its edge", async () => {
+  it("never reaches past its frame: what it puts down stays inside it - over what lies there, said, where there is no room - and what lies outside stays no such object", async () => {
+    const { turn, doc, said, store } = page(true);
+    // (an arrow just outside the frame, to its right: its middle at x = 80)
+    const outside = store.getState().addArrow(80, 0, 0, 10);
+    const twelve = Array.from({ length: 12 }, () => ({ tool: "put_structure", args: { smiles: "CCCCCC" } }));
+    await turn("Fill it.", [{ text: "", calls: twelve }, { text: "", calls: [{ tool: "list" }, { tool: "read", args: { id: `arrow:${outside}` } }] }, { text: "." }]).done;
+    const d = doc.getState();
+    expect(d.conversations![0]).toMatchObject({ x0: -5, y0: -5, x1: 60, y1: 40 });
+    expect(d.model.atoms.filter((a) => a.id >= 30).every((a) => a.x > -5 && a.x < 60 && a.y > -5 && a.y < 40)).toBe(true);
+    const tools = said().filter((x) => x.by === "tool");
+    expect(JSON.stringify(tools[12])).not.toContain(`arrow:${outside}`);
+    expect(tools[13]).toMatchObject({ tool: "read", ok: false, answer: NO_SUCH });
+  });
+
+  it("puts an arrow down inside a narrow frame, never past its edge", async () => {
     const { turn, doc } = page(true);
     doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6, y1: 5 } }));
     await turn("An arrow.", [{ text: "", calls: [{ tool: "put_arrow" }] }, { text: "." }]).done;
     const a = arrowEnds(doc.getState().arrows[0]);
-    expect(doc.getState().conversations![0].x1).toBeCloseTo(a.to.x + 1.8, 5);
+    expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, x1: 6 });
+    expect(Math.max(a.from.x, a.to.x)).toBeLessThanOrEqual(6);
+  });
+
+  it("puts down over what lies there, and says so, where the frame has no room left - never past it", async () => {
+    const { turn, doc, said } = page(true);
+    doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6, y1: 5 } }));
+    await turn("Two.", [{ text: "", calls: [{ tool: "put_structure", args: { smiles: "CCCCCCCC" } }, { tool: "put_structure", args: { smiles: "CCCCCCCC" } }] }, { text: "." }]).done;
+    const tools = said().filter((x) => x.by === "tool");
+    expect(tools.every((t) => JSON.stringify(t.answer).includes("over what lies there"))).toBe(true);
+    expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, y0: -5, x1: 6, y1: 5 });
+  });
+
+  it("does not send again what a tool gave once it lies outside the frame - the person's rows keep it", async () => {
+    const { turn, doc, store, said } = page();
+    store.getState().addTexts([{ name: "Notes", text: "A secret yield of 93%." }], { x: 10, y: 10 });
+    const { model, done } = turn("Read the notes.", [{ text: "", calls: [{ tool: "read", args: { id: "text:1" } }] }, { text: "Done." }]);
+    await done;
+    expect(JSON.stringify(model.asked[1].said)).toContain("secret yield");
+    // (moved out of the frame)
+    doc.edit("move out", (d) => ({ ...d, texts: (d.texts ?? []).map((t) => (t.id === 1 ? { ...t, at: { x: 500, y: 500 } } : t)) }));
+    const again = turn("And now?", [{ text: "Nothing." }]);
+    await again.done;
+    const sent = JSON.stringify(again.model.asked[0].said);
+    expect(sent).not.toContain("secret yield");
+    expect(sent).toContain(WITHHELD);
+    expect(JSON.stringify(said())).toContain("secret yield");
+  });
+
+  it("ends a turn that fails part way, saying why - never left talking; its changes kept to keep or discard", async () => {
+    const { doc, store, said } = page(true);
+    const calls = { ...store.getState(), addPlus: () => { throw new Error("the page refused it"); } };
+    const model = scriptedModel([{ text: "", calls: [{ tool: "put_structure", args: { smiles: "CCO" } }, { tool: "put_plus" }] }, { text: "." }]);
+    const turn = await runTurn({ doc, calls, id: 1, words: "Go.", connection: model, turn: "t9" });
+    expect(turn).toEqual({ sent: true, changed: "conversation:1:t9" });
+    expect(last(said())).toMatchObject({ by: "meno", text: "The turn stopped: the page refused it" });
+  });
+
+  it("takes a tool by its own name alone - never one an object has of itself", async () => {
+    const { turn, said } = page();
+    await turn("?", [{ text: "", calls: [{ tool: "toString" }, { tool: "constructor" }] }, { text: "." }]).done;
+    for (const t of said().filter((x) => x.by === "tool")) expect(String((t as { answer: unknown }).answer)).toMatch(/^There is no tool called/);
   });
 
   it("drops a turn's changes by its key, the person's steps as they were (Discard)", async () => {

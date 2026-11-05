@@ -8,6 +8,9 @@ import { leftOut } from "../utils/readNotes";
 import type { Conversation, Rights, Said, Sent, ToolCall } from "./types";
 
 const MOST_TEXT = 1_000_000;
+/** How many things said a conversation keeps at most, as saved, and how long a tool's answer may be, written out. */
+const MOST_SAID = 20_000;
+const MOST_ANSWER = 1_000_000;
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -38,7 +41,11 @@ function saidOf(v: unknown): Said | null {
     const calls = callsOf(s.calls);
     return text(s.text) && calls ? { by: "model", text: s.text, ...(calls.length ? { calls } : {}), at: s.at } : null;
   }
-  if (s.by === "tool") return text(s.tool, 100) && typeof s.ok === "boolean" && "answer" in s ? { by: "tool", tool: s.tool, answer: s.answer, ok: s.ok, at: s.at } : null;
+  if (s.by === "tool") {
+    const things = s.things == null ? [] : Array.isArray(s.things) && s.things.length <= MOST_SAID && s.things.every((t) => text(t, 40)) ? (s.things as string[]) : null;
+    const size = JSON.stringify(s.answer ?? null)?.length ?? 0;
+    return text(s.tool, 100) && typeof s.ok === "boolean" && "answer" in s && things && size <= MOST_ANSWER ? { by: "tool", tool: s.tool, answer: s.answer, ok: s.ok, ...(things.length ? { things } : {}), at: s.at } : null;
+  }
   return null;
 }
 
@@ -60,12 +67,13 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
       left();
       continue;
     }
-    const said = (Array.isArray(raw.said) ? raw.said : []).flatMap((s) => {
+    // (at most so many: the latest kept)
+    const said = (Array.isArray(raw.said) ? raw.said.slice(-MOST_SAID) : []).flatMap((s) => {
       const read = saidOf(s);
       if (!read) leftOut("conversationSaid");
       return read ? [read] : [];
     });
-    const sent = (Array.isArray(raw.sent) ? raw.sent : []).flatMap((s) => sentOf(s) ?? []);
+    const sent = (Array.isArray(raw.sent) ? raw.sent.slice(-MOST_SAID) : []).flatMap((s) => sentOf(s) ?? []);
     out.push({
       x0: raw.x0 as number,
       y0: raw.y0 as number,

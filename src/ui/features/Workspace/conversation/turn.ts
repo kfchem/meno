@@ -16,7 +16,7 @@ import type { WorkspaceDocument } from "../document";
 import { CHANGE_TOOLS, changeTool, type PageCalls } from "./change";
 import { addSaid } from "./ops";
 import { READ_TOOLS, callTool, listed } from "./tools";
-import { inScope, type Scope } from "./scope";
+import { inScope, SEEN_KINDS, seenId, type Scope } from "./scope";
 import { search } from "./search";
 import type { Conversation, Said, Sent, ToolCall } from "./types";
 
@@ -56,6 +56,20 @@ export function toolsFor(c: Pick<Conversation, "rights">): { name: string; does:
   return [...read, ...change].map(([name, does]) => ({ name, does }));
 }
 
+/** What a tool's answer is sent as, once a thing it gave lies outside the frame: it is not sent again. */
+export const WITHHELD = "What this gave lies outside the frame now: it is not sent again.";
+
+/**
+ * What the model is sent of what was said: all of it, but each tool's answer
+ * that gave a thing no longer in the frame - moved out, taken away - told
+ * as withheld. The person's rows keep it; what was sent before is gone.
+ */
+export function saidToSend(d: WorkspaceDocument, c: Conversation): Said[] {
+  const s = inScope(d, scopeOf(c));
+  const seen = new Set(SEEN_KINDS.flatMap((k) => s[k].map((id) => seenId(k, id) as string)));
+  return c.said.map((x) => (x.by === "tool" && x.things?.some((t) => !seen.has(t)) ? { ...x, answer: WITHHELD } : x));
+}
+
 export const scopeOf = (c: Pick<Conversation, "x0" | "y0" | "x1" | "y1" | "wholePage">): Scope => (c.wholePage ? { page: true } : { frame: { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 } });
 
 /** What one tool call answered, and the things of the page it gave, each by its id and its characters (for the send log). */
@@ -66,8 +80,10 @@ const chars = (v: unknown) => JSON.stringify(v ?? null).length;
 /** A tool called, as the conversation's rights and scope allow; a change made through the page's own calls (`act`). */
 function answer(d: () => WorkspaceDocument, c: Conversation, call: ToolCall, calls: PageCalls, act: (make: () => ReturnType<typeof changeTool>) => ReturnType<typeof changeTool>): Answered {
   const scope = scopeOf(c);
-  const isRead = call.tool in READ_TOOLS || call.tool in SEARCH_TOOL;
-  const isChange = call.tool in CHANGE_TOOLS;
+  // (a tool by its own name alone - never one an object has of itself, as "toString")
+  const own = (tools: object) => Object.prototype.hasOwnProperty.call(tools, call.tool);
+  const isRead = own(READ_TOOLS) || own(SEARCH_TOOL);
+  const isChange = own(CHANGE_TOOLS);
   if (isRead && !c.rights.read) return { ok: false, answer: "This conversation may not read the page", gave: [], changed: false };
   if (isChange && !c.rights.propose) return { ok: false, answer: "This conversation may not propose changes: the person has not let it", gave: [], changed: false };
   if (call.tool === "search") {
@@ -87,8 +103,8 @@ function answer(d: () => WorkspaceDocument, c: Conversation, call: ToolCall, cal
     if (a.ok && call.tool === "list") gave = listed(d(), inScope(d(), scope)).map((t) => ({ id: t.id, chars: t.line.length }));
     return { ok: a.ok, answer: value, gave, changed: false };
   }
-  // (its frame grown round what it puts down, in the same change set: Discard takes that back too)
-  const made = act(() => changeTool(d, calls, scope, call.tool, call.args, (frame) => calls.updateConversation(c.id, { frame })));
+  // (never its frame: that is the person's - what it puts down goes inside it)
+  const made = act(() => changeTool(d, calls, scope, call.tool, call.args));
   return { ok: made.ok, answer: made.ok ? made.value : made.why, gave: [], changed: made.ok };
 }
 
@@ -143,43 +159,49 @@ export async function runTurn(o: {
   // (what the page gave since the last go: sent with the next)
   let gave: { id: string; chars: number }[] = [];
   let calls = 0;
-  for (let replies = 0; ; replies++) {
-    const c = conversation();
-    if (!c) return { sent: true, stopped: "gone", ...(madeAny ? { changed: key } : {}) };
-    if (o.stop?.()) {
-      keep([{ by: "meno", text: "Stopped, as asked.", at: now() }]);
-      return { sent: true, stopped: "asked", ...(madeAny ? { changed: key } : {}) };
-    }
-    if (replies >= limits.replies) {
-      keep([{ by: "meno", text: `Stopped at the limit of ${limits.replies} replies for one message.`, at: now() }]);
-      return { sent: true, stopped: "limit", ...(madeAny ? { changed: key } : {}) };
-    }
-    const request: ModelRequest = { told: TOLD, said: c.said, tools: toolsFor(c) };
-    keep([], [{ at: now(), to: connection.to, things: gave, chars: chars(request.said) + request.told.length }]);
-    gave = [];
-    let reply: ModelReply;
-    try {
-      reply = await connection.send(request);
-    } catch (e) {
-      keep([{ by: "meno", text: `The model could not be reached: ${e instanceof Error ? e.message : String(e)}`, at: now() }]);
-      return { sent: true, ...(madeAny ? { changed: key } : {}) };
-    }
-    // (its words, as words: plain text - never drawn as a page, nothing fetched for them)
-    const text = typeof reply?.text === "string" ? reply.text : "";
-    const asked = Array.isArray(reply?.calls) ? reply.calls.filter((k): k is ToolCall => typeof k?.tool === "string") : [];
-    keep([{ by: "model", text, ...(asked.length ? { calls: asked } : {}), at: now() }]);
-    if (!asked.length) return { sent: true, ...(madeAny ? { changed: key } : {}) };
-    for (const call of asked) {
-      if (calls >= limits.calls) {
-        keep([{ by: "meno", text: `Stopped at the limit of ${limits.calls} tool calls for one message.`, at: now() }]);
+  // (a turn that fails part way - a tool that throws, a reply not as one is - ends there, saying why: its changes kept to keep or discard)
+  try {
+    for (let replies = 0; ; replies++) {
+      const c = conversation();
+      if (!c) return { sent: true, stopped: "gone", ...(madeAny ? { changed: key } : {}) };
+      if (o.stop?.()) {
+        keep([{ by: "meno", text: "Stopped, as asked.", at: now() }]);
+        return { sent: true, stopped: "asked", ...(madeAny ? { changed: key } : {}) };
+      }
+      if (replies >= limits.replies) {
+        keep([{ by: "meno", text: `Stopped at the limit of ${limits.replies} replies for one message.`, at: now() }]);
         return { sent: true, stopped: "limit", ...(madeAny ? { changed: key } : {}) };
       }
-      calls++;
-      const now_ = conversation();
-      if (!now_) return { sent: true, stopped: "gone", ...(madeAny ? { changed: key } : {}) };
-      const a = answer(() => doc.getState(), now_, call, o.calls, act);
-      gave.push(...a.gave);
-      keep([{ by: "tool", tool: call.tool.slice(0, 40), answer: a.answer, ok: a.ok, at: now() }]);
+      const request: ModelRequest = { told: TOLD, said: saidToSend(doc.getState(), c), tools: toolsFor(c) };
+      keep([], [{ at: now(), to: connection.to, things: gave, chars: chars(request.said) + request.told.length }]);
+      gave = [];
+      let reply: ModelReply;
+      try {
+        reply = await connection.send(request);
+      } catch (e) {
+        keep([{ by: "meno", text: `The model could not be reached: ${e instanceof Error ? e.message : String(e)}`, at: now() }]);
+        return { sent: true, ...(madeAny ? { changed: key } : {}) };
+      }
+      // (its words, as words: plain text - never drawn as a page, nothing fetched for them)
+      const text = typeof reply?.text === "string" ? reply.text : "";
+      const asked = Array.isArray(reply?.calls) ? reply.calls.filter((k): k is ToolCall => typeof k?.tool === "string") : [];
+      keep([{ by: "model", text, ...(asked.length ? { calls: asked } : {}), at: now() }]);
+      if (!asked.length) return { sent: true, ...(madeAny ? { changed: key } : {}) };
+      for (const call of asked) {
+        if (calls >= limits.calls) {
+          keep([{ by: "meno", text: `Stopped at the limit of ${limits.calls} tool calls for one message.`, at: now() }]);
+          return { sent: true, stopped: "limit", ...(madeAny ? { changed: key } : {}) };
+        }
+        calls++;
+        const now_ = conversation();
+        if (!now_) return { sent: true, stopped: "gone", ...(madeAny ? { changed: key } : {}) };
+        const a = answer(() => doc.getState(), now_, call, o.calls, act);
+        gave.push(...a.gave);
+        keep([{ by: "tool", tool: call.tool.slice(0, 40), answer: a.answer, ok: a.ok, ...(a.gave.length ? { things: [...new Set(a.gave.map((g) => g.id))] } : {}), at: now() }]);
+      }
     }
+  } catch (e) {
+    keep([{ by: "meno", text: `The turn stopped: ${e instanceof Error ? e.message : String(e)}`, at: now() }]);
+    return { sent: true, ...(madeAny ? { changed: key } : {}) };
   }
 }

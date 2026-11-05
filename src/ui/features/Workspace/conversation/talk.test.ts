@@ -77,6 +77,16 @@ describe("a conversation, talked to from the page", () => {
     expect(store.getState().talking[id].runsAgain).toEqual([String(step)]);
   });
 
+  it("is never left talking where a turn fails part way: sent to again, and taken away", async () => {
+    const { store, doc, id } = page([{ text: "", calls: [{ tool: "put_plus" }] }, { text: "." }]);
+    store.getState().updateConversation(id, { rights: { propose: true } });
+    store.setState({ addPlus: () => { throw new Error("the page refused it"); } });
+    await store.getState().sendToConversation(id, "A plus.");
+    expect(store.getState().talking[id].running).toBe(false);
+    store.getState().removeConversation(id);
+    expect(doc.getState().conversations).toHaveLength(0);
+  });
+
   it("is taken away, and not while it talks", async () => {
     const { store, doc, id } = page();
     store.setState({ talking: { [id]: { running: true } } });
