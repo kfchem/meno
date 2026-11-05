@@ -94,7 +94,7 @@ export function OwnValues({ options, own, keep }: { options: readonly Option[]; 
           <div key={o.id} className="pl-8 pr-3 pb-2.5 flex items-start gap-3 text-xs text-gh-gray">
             <p className="flex-1 max-w-2xl leading-snug">{o.note}</p>
             {typeof given === "number" && Number.isFinite(given) && (
-              <button type="button" className="h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base" onClick={() => keep(rest)}>
+              <button type="button" className="ml-auto h-6 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black hover:bg-gh-base" onClick={() => keep(rest)}>
                 Clear
               </button>
             )}
