@@ -20,7 +20,7 @@ import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
 const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "scheme", "marks"];
@@ -107,6 +107,12 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name:
         <circle cx="13" cy="7.5" r="4.5" />
       </>
     ),
+  },
+  {
+    id: "conversation",
+    name: "Conversation",
+    // (a word balloon: what is said, in a frame of its own)
+    icon: <path d="M3.5 5 H16.5 V13 H9.5 L6 16 V13 H3.5 Z" />,
   },
 ];
 

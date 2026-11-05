@@ -1,3 +1,5 @@
+import ConversationBody from "./conversation/ConversationBody";
+import type { Conversation } from "./conversation/types";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
@@ -89,11 +91,14 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   // (molecules in 3D a set holds off the page; or structures drawn, on the page and off it)
   const page = useEditorStore();
   const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && readAsTable(page.getState(), b))), [sets, setsRead, page]);
-  const table = tables.find((b) => b.id === tableId);
-  const pdf = table ? undefined : read.find((p) => p.id === pdfShownId);
-  const shown = pdf || table ? undefined : texts.find((t) => t.id === shownId);
+  // (a conversation read here: over all else - conversation/ConversationBody)
+  const talkId = useEditor((s) => s.conversationShown);
+  const talk = useEditor((s) => (talkId == null ? undefined : s.conversations.find((c) => c.id === talkId)));
+  const table = talk ? undefined : tables.find((b) => b.id === tableId);
+  const pdf = talk || table ? undefined : read.find((p) => p.id === pdfShownId);
+  const shown = talk || pdf || table ? undefined : texts.find((t) => t.id === shownId);
   // (one that could not be read, shown as what it is: no words, nothing to edit or copy)
-  const lostShown = pdf || table || shown ? undefined : lost.find((t) => t.id === shownId);
+  const lostShown = talk || pdf || table || shown ? undefined : lost.find((t) => t.id === shownId);
   // as wide as it was dragged - a text's, as it first opened; a PDF's, most of the canvas
   const [room, setRoom] = useState(0);
   const [roomEl, setRoomEl] = useState<HTMLDivElement | null>(null);
@@ -119,7 +124,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   // (how much of the canvas it covers, as it slides and as it is dragged: what is in view is the rest)
   const store = useEditorStore();
   // (the width the canvas lays a PDF out at in it - not changed as it shuts on what it showed)
-  const showing = open && !!(shown || pdf || table || lostShown);
+  const showing = open && !!(talk || shown || pdf || table || lostShown);
   // (going over to filling the workspace, or back: what it shows laid out at its width as it eases there, frame by
   // frame - laid out at once at the width it goes to, a page jumped to its new size first, and the column then eased)
   const easing = useRef(false);
@@ -158,7 +163,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
       {/* (the canvas's width, measured: what the column's share is of) */}
       <div ref={setRoomEl} aria-hidden className="absolute inset-0 pointer-events-none" />
       <AnimatePresence initial={slideIn}>
-        {open && (shown || pdf || table || lostShown) && (
+        {open && (talk || shown || pdf || table || lostShown) && (
           <motion.div
             key="texts"
             ref={setEl}
@@ -175,7 +180,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
             }}
             className={clsx("absolute top-0 right-0 z-20 h-full overflow-hidden", dragging && "select-none")}
           >
-            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} tables={tables} table={table} width={eased ?? width} />
+            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} tables={tables} table={table} talk={talk} width={eased ?? width} />
             {!filled && <Edge width={width} widest={widest} setWidth={setWidth} setDragging={setDragging} />}
           </motion.div>
         )}
@@ -193,6 +198,7 @@ function Column({
   pdf,
   tables,
   table,
+  talk,
   width,
 }: {
   texts: WorkspaceText[];
@@ -203,6 +209,7 @@ function Column({
   pdf?: PdfItem;
   tables: WorkflowSet[];
   table?: WorkflowSet;
+  talk?: Conversation;
   width: number;
 }) {
   const store = useEditorStore();
@@ -263,6 +270,7 @@ function Column({
           {read.map((p) => (
             <Name key={`pdf-${p.id}`} name={p.name} title={p.name} chosen={p.id === pdf?.id} onShow={() => showPdf(p.id)} onClose={() => stopReadingPdf(p.id)} />
           ))}
+          {talk && <Name key={`talk-${talk.id}`} name={talk.name ?? "Conversation"} title={talk.name ?? "Conversation"} chosen onShow={() => {}} onClose={() => store.getState().stopReadingConversation()} />}
           {tables.map((b) => (
             <Name key={`set-${b.id}`} name={setName(b, steps)} title={setName(b, steps)} chosen={b.id === table?.id} onShow={() => showSetTable(b.id)} onClose={() => stopReadingSetTable(b.id)} />
           ))}
@@ -340,6 +348,7 @@ function Column({
             </div>
           )}
         </AnimatePresence>
+        {talk && <ConversationBody key={`talk-${talk.id}`} conversation={talk} />}
         {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
         {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (

@@ -49,6 +49,7 @@ export default function FitToContent2D({
   const inks = useEditor((s) => s.inks);
   const texts = useEditor((s) => s.texts);
   const sets = useEditor((s) => s.sets);
+  const conversations = useEditor((s) => s.conversations);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
   const store = useEditorStore();
@@ -75,7 +76,7 @@ export default function FitToContent2D({
     const cam = camera as THREE.OrthographicCamera;
     if (autoFitSuspended) return; // skip while suspended
     const atoms = model.atoms;
-    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && cycles.length === 0 && inks.length === 0 && sets.length === 0 && steps.length === 0 && !texts.some((t) => t.at);
+    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && cycles.length === 0 && inks.length === 0 && sets.length === 0 && steps.length === 0 && conversations.length === 0 && !texts.some((t) => t.at);
     const firstView = !opened.current;
     opened.current = true;
     const firstContent = !held.current && !empty;
@@ -163,6 +164,11 @@ export default function FitToContent2D({
       if (!b) continue;
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
+    }
+    // and the conversations' frames, what each sees (one of the whole page has none: its tab, at its corner)
+    for (const c of conversations) {
+      bounds.min = { x: Math.min(bounds.min.x, c.x0), y: Math.min(bounds.min.y, c.y0) };
+      bounds.max = { x: Math.max(bounds.max.x, c.wholePage ? c.x0 : c.x1), y: Math.max(bounds.max.y, c.y1) };
     }
     // and the chips drawn over the page - a molecule's frames chip wider than the set it is in: each as large on the page at
     // any zoom (utils/pageScale), so where it lies now is where it lies after the fit (utils/fitExtent). The canvas's camera
@@ -257,6 +263,7 @@ export default function FitToContent2D({
     sets,
     steps,
     wires,
+    conversations,
     style,
     camera,
     size.width,
