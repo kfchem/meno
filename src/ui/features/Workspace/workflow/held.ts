@@ -17,8 +17,8 @@
 import { removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
 import type { DrawnModel, Molecule3D, Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { setMembers, setMolecules, entriesIn, LARGE_SET, type Frame } from "./entries";
-import { exitPlace } from "./kinds";
-import { setGives, stepGives } from "./look";
+import { setGives } from "./look";
+import { exitStart } from "./place";
 import { drawnEntries, laidOutAgain, type RunWith } from "./run";
 
 type Pt = { x: number; y: number };
@@ -54,7 +54,7 @@ export function setsOnPage<T extends Pick<WorkflowSet, "id">>(doc: Pick<Workspac
  */
 export function wireStart(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | "kind">[] | ReadonlyMap<number, Pick<WorkflowStep, "id" | "x" | "y" | "kind">>, set: Frame & Pick<WorkflowSet, "made">): Pt {
   const s = set.made ? ("get" in steps ? steps.get(set.made.step) : steps.find((x) => x.id === set.made!.step)) : undefined;
-  return s && set.made ? stepGives(s, exitPlace(s.kind, set.made.exit)) : setGives(set);
+  return s && set.made ? exitStart(s, set.made.exit) : setGives(set);
 }
 
 /**

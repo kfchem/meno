@@ -27,11 +27,12 @@ import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { exitPlace, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -793,10 +794,10 @@ export default function Workflow2D() {
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
-  /** Where a step's result set's exit gives on its card (look `stepGives`): the port its wires, and the line to the set where it is on the page, leave from. */
+  /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
-    return s && b.made ? stepGives(s, exitPlace(s.kind, b.made.exit)) : null;
+    return s && b.made ? exitStart(s, b.made.exit) : null;
   };
   /** Where a wire out of a set starts (held `wireStart`): a step's result set's at its exit's port on the card, held or not; a set the chemist made, at its frame's right side, as it is drawn. */
   const gives = (end: WireEnd): Pt | null => {
