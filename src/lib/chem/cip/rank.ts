@@ -250,8 +250,6 @@ export class Ranker {
     const partners = p.around[n.atom].filter((c) => p.order.get(pair(n.atom, c)) === 2);
     if (partners.length !== 1) return 0;
     const c = partners[0];
-    const roots = n.graph.roots.map((r) => r.atom);
-    if (roots.includes(n.atom) && roots.includes(c)) return 0;
     if (c === n.parent.atom) return n.parent.sphere === 0 ? 0 : this.aux(n.parent, n);
     const kid = n.graph.children(n).find((k) => !k.dup && k.atom === c);
     if (kid) return this.aux(n, kid);
@@ -305,7 +303,7 @@ export class Ranker {
     if (!stereo) return new Unknown("open", bond);
     const b = p.input.bonds[bond];
     const [refU, refV] = b.a === u ? stereo.refs : [stereo.refs[1], stereo.refs[0]];
-    const cis = stereo.cis !== (highNear !== refU) !== (highFar !== refV);
+    const cis = (stereo.cis !== (highNear !== refU)) !== (highFar !== refV);
     return cis ? SEQCIS : SEQTRANS;
   }
 }

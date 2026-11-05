@@ -225,14 +225,7 @@ export function lonePairs(p: Prepared, a: number): number {
  * along the conjugation from Z. An amide's N-C=O or an enol ether's O-C=C
  * is none: moving its pair makes two charges where there were none.
  */
-function mesomeric(
-  input: IdentityInput,
-  around: readonly number[][],
-  order: ReadonlyMap<string, number>,
-  blended: ReadonlySet<string>,
-  hs: readonly number[],
-  charge: readonly number[],
-): Set<number> {
+function mesomeric(input: IdentityInput, around: readonly number[][], order: ReadonlyMap<string, number>, blended: ReadonlySet<string>, hs: readonly number[], charge: readonly number[]): Set<number> {
   const atoms = input.atoms;
   const bondsOf = (a: number) => around[a].reduce((t, b) => t + (blended.has(pair(a, b)) ? 1.5 : (order.get(pair(a, b)) ?? 1)), hs[a]);
   const doubled = (y: number, not: number) => around[y].filter((z) => z !== not && (order.get(pair(y, z)) === 2 || blended.has(pair(y, z))));

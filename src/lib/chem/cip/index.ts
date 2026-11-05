@@ -87,7 +87,7 @@ function refusedCentre(p: Prepared, c: number): boolean {
   const t = p.input.atoms[c].tetra!;
   if (p.unsure[c] || p.dups[c].length) return true;
   // (bonded to a metal or a star: ligancy complementation says nothing of it)
-  if (p.around[c].some((b) => isMetal(p.input.atoms[b].el) || p.input.atoms[b].el === "*" || p.unsure[b] && !Number.isFinite(p.z[b]))) return true;
+  if (p.around[c].some((b) => isMetal(p.input.atoms[b].el) || p.input.atoms[b].el === "*" || (p.unsure[b] && !Number.isFinite(p.z[b])))) return true;
   const drawn = t.neighbours.filter((n) => n >= 0);
   const hs = t.neighbours.length - drawn.length;
   if (hs !== p.hs[c] || drawn.length !== p.around[c].length || drawn.some((n) => !p.around[c].includes(n))) return true;
@@ -141,7 +141,7 @@ function doubleBond(p: Prepared, i: number): CipResult {
       if (!Array.isArray(order)) return order;
       high.push(subs[order[0]].atom);
     }
-    const cis = stereo.cis !== (high[0] !== stereo.refs[0]) !== (high[1] !== stereo.refs[1]);
+    const cis = (stereo.cis !== (high[0] !== stereo.refs[0])) !== (high[1] !== stereo.refs[1]);
     return { label: cis ? "Z" : "E" };
   } catch (e) {
     if (e instanceof TooLarge) return no("large");

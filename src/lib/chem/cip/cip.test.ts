@@ -1,0 +1,275 @@
+import { describe, expect, it } from "vitest";
+import { readStereo, type DrawnAtom, type DrawnBond } from "../../layout/drawn";
+import type { IdentityInput } from "../identity";
+import { cipLabels } from "./index";
+import { cipInput, cipOf, cipSaid } from "./testdata/cipFrom";
+
+/**
+ * Each rule and convention pinned by a pair of structures alike but in what
+ * that rule reads: one answer for one, another (or none) for the other. The
+ * cases the published validation suite gives are in cipCases.test.ts.
+ */
+
+describe("rule 1a: higher atomic number precedes lower", () => {
+  it("ranks a centre's own neighbours by their atomic numbers - a neighbour above F or below it turns the label", () => {
+    // (Cl > F > C > H, and F > O > C > H: the same places, the order of two swapped)
+    expect(cipOf("F[C@H](Cl)C")).toEqual(["C1:R"]);
+    expect(cipOf("F[C@H](O)C")).toEqual(["C1:S"]);
+    expect(cipOf("Br[C@H](Cl)F")).toEqual(["C1:S"]);
+    expect(cipOf("Br[C@@H](Cl)F")).toEqual(["C1:R"]);
+  });
+
+  it("goes out sphere by sphere from the higher-ranked atom first: an OMe's C beats an OH's H before a CH2Br's Br is reached", () => {
+    // (each ligand C(O)(C)H: at their O the OMe wins; with OH on both, at their C the CH2Br does - the label turns)
+    expect(cipOf("F[C@H](C(O)CBr)C(OC)C")).toEqual(["C1:R"]);
+    expect(cipOf("F[C@H](C(O)CBr)C(O)C")).toEqual(["C1:S"]);
+  });
+
+  it("gives a multiple bond's atoms duplicates at both ends: an aldehyde's CHO above a CH2OH, an ethynyl above a tert-butyl, a vinyl below it", () => {
+    // ((R)-glyceraldehyde: CHO is (O,O,H), CH2OH (O,H,H))
+    expect(cipOf("O=C[C@H](O)CO")).toEqual(["C2:R"]);
+    // (C#CH is (C,C,C), then its C (C,C,H) against a methyl's (H,H,H); CH=CH2 is (C,C,H) against (C,C,C))
+    expect(cipOf("O[C@H](C#C)C(C)(C)C")).toEqual(["C1:S"]);
+    expect(cipOf("O[C@H](C=C)C(C)(C)C")).toEqual(["C1:R"]);
+  });
+
+  it("takes a lone pair as a phantom atom of atomic number 0, lowest of all: a sulfoxide's S, an N-oxide's N", () => {
+    expect(cipOf("C[S@](=O)CC")).toEqual(["S1:S"]);
+    expect(cipOf("C[S@@](=O)CC")).toEqual(["S1:R"]);
+  });
+
+  it("blends a ring's Kekulé structures: either drawing of a phenyl or a 2-pyridyl gives one label", () => {
+    expect(cipOf("F[C@H](Cl)C=1C=CC=CC1")).toEqual(cipOf("F[C@H](Cl)C1=CC=CC=C1"));
+    expect(cipOf("O[C@@H](C1=NC=CC=C1)C")).toEqual(["C1:R"]);
+    expect(cipOf("O[C@@H](C1=CC=CC=N1)C")).toEqual(["C1:R"]);
+  });
+});
+
+describe("the 1966 conventions, applied before any ranking", () => {
+  it("(b): an S=O, a P=O is a dipolar single bond with no duplicates - drawn S=O or S+-O-, P=O or P+-O-, one label", () => {
+    expect(cipOf("CO[S@](=O)C")).toEqual(["S2:S"]);
+    expect(cipOf("CO[S@+]([O-])C")).toEqual(["S2:S"]);
+    expect(cipOf("C[S@](=O)CC")).toEqual(cipOf("C[S@+]([O-])CC"));
+    expect(cipOf("C[P@](=O)(CC)c1ccccc1")).toEqual(["P1:S"]);
+    expect(cipOf("C[P@+]([O-])(CC)c1ccccc1")).toEqual(["P1:S"]);
+  });
+
+  it("(c): a nitro group drawn N(=O)=O, an N-oxide drawn N=O, is given its usual structure, N+ and O-: drawn any way, one label", () => {
+    expect(cipOf("O=N(=O)[C@H](C)CC")).toEqual(["C3:R"]);
+    expect(cipOf("O=[N+]([O-])[C@H](C)CC")).toEqual(["C3:R"]);
+    expect(cipOf("[O-][N+](=O)[C@H](C)CC")).toEqual(["C3:R"]);
+    expect(cipOf("CC[N@](=O)(C)c1ccccc1")).toEqual(cipOf("CC[N@+]([O-])(C)c1ccccc1"));
+  });
+});
+
+describe("rule 2: higher mass precedes lower", () => {
+  it("tells H from D, and D from T, by their isotopes' masses - no centre without them", () => {
+    expect(cipOf("[2H][C@H](C)O")).toEqual(["C1:R"]);
+    expect(cipOf("[3H][C@H]([2H])O")).toEqual(["C1:S"]);
+    expect(cipOf("[H][C@H](C)O")).toEqual(["C1:alike"]);
+  });
+});
+
+describe("rule 3: seqcis (Z) precedes seqtrans (E), which precedes a double bond that is no stereogenic unit", () => {
+  it("ranks a Z propenyl above an E one - two Z, and the centre is none", () => {
+    expect(cipOf(String.raw`C/C=C\[C@H](O)/C=C/C`)).toEqual(["C3:R", "C1=C2:Z", "C5=C6:E"]);
+    expect(cipOf(String.raw`C/C=C\[C@H](O)/C=C\C`)).toEqual(["C3:alike", "C1=C2:Z", "C5=C6:Z"]);
+  });
+
+  it("ranks a double bond with a Z and an E group on it above one with two Z groups - their Z and E rule 3's own, not left for rules 4 and 5", () => {
+    expect(cipOf(String.raw`C/C=C\C/C(=C\[C@H](C=C(C/C=C\C)C/C=C\C)O)/C/C=C/C`)).toEqual(["C6:S", "C1=C2:Z", "C4=C5:Z", "C10=C11:Z", "C14=C15:Z", "C19=C20:E"]);
+    // (with two Z groups on both, the two branches are alike; and so is a double bond with two alike groups)
+    expect(cipOf(String.raw`O[C@H](C=C(C/C=C\C)C/C=C\C)/C=C(/C/C=C\C)C/C=C\C`)).toEqual(["C1:alike", "C5=C6:Z", "C9=C10:Z", "C12=C13:alike", "C15=C16:Z", "C19=C20:Z"]);
+  });
+});
+
+describe("what gives no label, and why", () => {
+  it("says a ligand's double bond left open in the drawing, by its bond", () => {
+    const input = cipInput("CC=C[C@H](O)/C=C/C");
+    const r = cipLabels(input).centres.get(3)!;
+    expect(r).toEqual({
+      why: "open",
+      bond: input.bonds.findIndex((b) => b.order === 2 && !b.stereo),
+    });
+  });
+
+  it("says a tie only rules 4 and 5 could break is not worked out yet: a pseudoasymmetric centre between an R and an S group", () => {
+    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@@H](Cl)C")).toEqual(["C1:R", "C3:later", "C5:S"]);
+  });
+
+  it("says so too where the tie is met in a ligand: a double bond whose two groups differ only by their centres", () => {
+    // (the first double bond's groups, each CH(Cl)CH=CHCH3 with an E bond, R against S: rule 3 cannot read it; the second's, unconfigured
+    //  and with Z bonds, is no unit - without the first's 'later', rule 3 would go on to the Z bonds further out and give a label)
+    expect(cipOf(String.raw`O[C@H](/C=C(\[C@H](Cl)/C=C/C)[C@@H](Cl)/C=C/C)C=C(C(Cl)/C=C\C)C(Cl)/C=C\C`).slice(0, 4)).toEqual(["C1:later", "C4:R", "C9:S", "C2=C3:later"]);
+  });
+
+  it("says so where an axis is drawn in two alike ligands, and calls them alike where none is", () => {
+    // (two 2'-methylbiphenyl-2-yl groups, each with its axis between its rings: bonds 7-8 and 20-21)
+    const input = cipInput("O[C@H](c1ccccc1-c1ccccc1C)c1ccccc1-c1ccccc1C");
+    expect(cipSaid(input)).toEqual(["C1:alike"]);
+    const axes = [
+      { atoms: [7, 8] as const, refs: [6, 13] as const, sense: 1 as const },
+      { atoms: [20, 21] as const, refs: [19, 26] as const, sense: -1 as const },
+    ];
+    expect(cipSaid({ ...input, axes })).toEqual(["C1:later"]);
+  });
+
+  it("says a ligand it would have to look past cannot be told from the drawing: a carboxylate's, a metal's, a star's", () => {
+    expect(cipOf("[O-]C(=O)[C@H](O)C(=O)O")).toEqual(["C3:unsure"]);
+    expect(cipOf("C[C@H](O)[Fe]")).toEqual(["C1:unsure"]);
+    expect(cipOf("C[C@H](O)*")).toEqual(["C1:unsure"]);
+  });
+
+  it("says a double bond whose end is part of a charged system cannot be told: an enolate's C=C, unlike an enol's", () => {
+    expect(cipOf("C/C=C/[O-]")).toEqual(["C1=C2:unsure"]);
+    expect(cipOf("C/C=C/O")).toEqual(["C1=C2:E"]);
+  });
+
+  it("takes three bonds and a lone pair for a centre - a carbanion's, its lone pair counted with its charge - but three bonds and an empty place for none", () => {
+    // (CHFCl- and CHFCl+, configured as their three bonds stand: F, Cl and the H, a fourth place the lone pair's or empty)
+    const three = (smiles: string) => {
+      const input = cipInput(smiles);
+      return cipSaid({ ...input, atoms: input.atoms.map((a, i) => (i === 1 ? { ...a, tetra: { neighbours: [0, 2, -1], volume: 1 as const } } : a)) });
+    };
+    expect(three("F[CH-]Cl")).toEqual(["C1:R"]);
+    expect(three("F[CH+]Cl")).toEqual(["C1:unsure"]);
+  });
+
+  it("says where only the proposed rule 6 could tell: a spiro atom between two alike rings - but not a ring atom with two ways round its one ring", () => {
+    expect(cipOf("C1=CC[C@]2(C1)CCCCC2")).toEqual(["C3:symmetric"]);
+    expect(cipOf("O[C@H]1CCCCC1")).toEqual(["C1:alike"]);
+  });
+
+  it("gives up past its node budget, and says so, rather than freezing: a centre between two cages tied far out", () => {
+    expect(prismsCentre(4)).toEqual({ why: "alike" });
+    expect(prismsCentre(12)).toEqual({ why: "large" });
+  });
+});
+
+describe("what does not change it", () => {
+  /** `input` with its atoms put in another order: `perm[i]` the new index of atom i. */
+  function renumbered(input: IdentityInput, perm: number[]): IdentityInput {
+    const atoms = new Array(input.atoms.length);
+    input.atoms.forEach((a, i) => {
+      const t = a.tetra;
+      atoms[perm[i]] = {
+        ...a,
+        ...(t
+          ? {
+              tetra: {
+                ...t,
+                neighbours: t.neighbours.map((n) => (n < 0 ? n : perm[n])),
+              },
+            }
+          : {}),
+      };
+    });
+    const bonds = input.bonds.map((b) => ({
+      ...b,
+      a: perm[b.a],
+      b: perm[b.b],
+      ...(b.stereo
+        ? {
+            stereo: {
+              ...b.stereo,
+              refs: b.stereo.refs.map((n) => perm[n]) as [number, number],
+            },
+          }
+        : {}),
+    }));
+    return { atoms, bonds };
+  }
+  /** The labels of `input` by atom, its double bonds' at each end. */
+  function byAtom(input: IdentityInput, perm?: number[]): Map<number, string> {
+    const back = (i: number) => (perm ? perm.indexOf(i) : i);
+    const out = new Map<number, string>();
+    const r = cipLabels(input);
+    for (const [a, x] of r.centres) out.set(back(a), "label" in x ? x.label : x.why);
+    for (const [i, x] of r.bonds) for (const e of [input.bonds[i].a, input.bonds[i].b]) out.set(back(e), "label" in x ? x.label : x.why);
+    return out;
+  }
+  const smiles = [
+    "O=C[C@H](O)CO",
+    "F[C@H](C(O)CBr)C(OC)C",
+    String.raw`C/C=C\C/C(=C\[C@H](C=C(C/C=C\C)C/C=C\C)O)/C/C=C/C`,
+    "CO[S@](=O)C1=CC=C(C=C1)N(=O)=O",
+    "C1C=C[C@H]2C[C@@H]12",
+    "C[C@@H](Cl)[C@H](O)[C@@H](Cl)C",
+  ];
+
+  it("leaves every label where it was when the atoms are numbered another way", () => {
+    for (const s of smiles) {
+      const input = cipInput(s);
+      const n = input.atoms.length;
+      // (a fixed shuffle: each atom to 7i + 3 mod n, n prime to 7 - else reversed)
+      const perm = n % 7 ? input.atoms.map((_, i) => (7 * i + 3) % n) : input.atoms.map((_, i) => n - 1 - i);
+      expect(byAtom(renumbered(input, perm), perm), s).toEqual(byAtom(input));
+    }
+  });
+
+  it("turns R and S about in the mirror image, and keeps Z and E", () => {
+    const mirror = (l: string) => ({ R: "S", S: "R" })[l] ?? l;
+    for (const s of smiles) {
+      const input = cipInput(s);
+      const mirrored: IdentityInput = {
+        ...input,
+        atoms: input.atoms.map((a) => (a.tetra ? { ...a, tetra: { ...a.tetra, volume: -a.tetra.volume as 1 | -1 } } : a)),
+      };
+      expect(byAtom(mirrored), s).toEqual(new Map([...byAtom(input)].map(([a, l]) => [a, mirror(l)])));
+    }
+  });
+
+  it("gives one label to a drawing, however its wedges show the configuration", () => {
+    // (CHFClBr drawn with its H not drawn: Br up the page, Cl to the right below, F to the left)
+    const atoms: DrawnAtom[] = [
+      { x: 0, y: 0, el: "C", hs: 1 },
+      { x: 0, y: 1, el: "Br", hs: 0 },
+      { x: 0.87, y: -0.5, el: "Cl", hs: 0 },
+      { x: -0.87, y: -0.5, el: "F", hs: 0 },
+    ];
+    const bonds = (wedge: DrawnBond["wedge"], at: number): DrawnBond[] =>
+      [1, 2, 3].map((b) => ({
+        a: 0,
+        b,
+        order: 1,
+        ...(b === at ? { wedge } : {}),
+      }));
+    const said = (bs: DrawnBond[]) => {
+      const st = readStereo(atoms, bs);
+      return cipSaid({
+        atoms: atoms.map((a, i) => ({
+          el: a.el!,
+          hs: a.hs,
+          ...(st.tetra.get(i) ? { tetra: st.tetra.get(i)! } : {}),
+        })),
+        bonds: bs.map((b) => ({ a: b.a, b: b.b, order: b.order })),
+      });
+    };
+    // (a wedge to Br or to Cl: the H behind either way, Br, Cl and F clockwise - R; hashes to Br: the H in front - S)
+    const up = said(bonds({ narrow: 0, stereo: "up" }, 1));
+    expect(up).toEqual(["C0:R"]);
+    expect(said(bonds({ narrow: 0, stereo: "up" }, 2))).toEqual(up);
+    expect(said(bonds({ narrow: 0, stereo: "down" }, 1))).toEqual(["C0:S"]);
+  });
+});
+
+/**
+ * A centre C(H)(F) bonded to two [n]prismanes - two n-rings of CH joined
+ * rung by rung - each at one corner: its two cage branches alike all the
+ * way out, through paths that grow some threefold a sphere.
+ */
+function prismsCentre(n: number) {
+  const atoms: IdentityInput["atoms"][number][] = [
+    { el: "C", hs: 1, tetra: { neighbours: [1, 2, 2 + 2 * n, -1], volume: 1 } },
+    { el: "F", hs: 0 },
+  ];
+  const bonds = [{ a: 0, b: 1, order: 1 }];
+  for (const start of [2, 2 + 2 * n]) {
+    for (let i = 0; i < 2 * n; i++) atoms.push({ el: "C", hs: i === 0 ? 0 : 1 });
+    for (let i = 0; i < n; i++) {
+      bonds.push({ a: start + i, b: start + ((i + 1) % n), order: 1 }, { a: start + n + i, b: start + n + ((i + 1) % n), order: 1 }, { a: start + i, b: start + n + i, order: 1 });
+    }
+    bonds.push({ a: 0, b: start, order: 1 });
+  }
+  return cipLabels({ atoms, bonds }).centres.get(0);
+}
