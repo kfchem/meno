@@ -122,7 +122,9 @@ function centre(p: Prepared, c: number): CipResult {
 function doubleBond(p: Prepared, i: number): CipResult {
   const b = p.input.bonds[i];
   const stereo = b.stereo!;
-  if (p.order.get(b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`) !== 2) return no("unsure");
+  // (a double bond on a blended cycle is still the unit drawn: a cyclophane's bridge, its alternating cycle through both rings - Hanson et al. 2018 validation suite VS155)
+  const k = b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`;
+  if (p.order.get(k) !== 2 && !p.blended.has(k)) return no("unsure");
   if (p.unsure[b.a] || p.unsure[b.b]) return no("unsure");
   const budget: Budget = { left: NODE_BUDGET };
   try {

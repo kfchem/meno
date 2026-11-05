@@ -198,11 +198,20 @@ export class Ranker {
     return seen;
   }
 
-  /** Whether a configuration is drawn in `atoms`, but at `but`: a centre, or a double bond's cis or trans - what rules 4 and 5 would read. */
+  /**
+   * Whether a configuration rules 4 and 5 would read is drawn in `atoms`,
+   * but at `but`: a centre, an axis, or a cumulene's cis or trans. A double
+   * bond's own cis or trans is none of them: rule 3 has read it already, as
+   * seqcis or seqtrans, and rules 4b and 5 pass such descriptors by (BB 2013
+   * via Hanson et al. 2018 pp. 1760-1761: 4b reads R, S, M, P, seqCis and
+   * seqTrans, 4c r, s, m and p, 5 R, S, M, P, seqCis and seqTrans). Only a
+   * centre or an axis makes a double bond seqCis or seqTrans.
+   */
   configured(atoms: ReadonlySet<number>, but: { atoms?: readonly number[]; bond?: number } = {}): boolean {
     const input = this.p.input;
     for (const a of atoms) if (input.atoms[a].tetra && !but.atoms?.includes(a)) return true;
-    return input.bonds.some((b, i) => !!b.stereo && i !== but.bond && (atoms.has(b.a) || atoms.has(b.b)));
+    if ((input.axes ?? []).some((x) => x.atoms.some((a) => atoms.has(a)))) return true;
+    return input.bonds.some((b, i) => !!b.stereo && i !== but.bond && (atoms.has(b.a) || atoms.has(b.b)) && (this.cumulated(b.a) || this.cumulated(b.b)));
   }
 
   /** The size of the smallest ring through a bond, or Infinity. */

@@ -92,6 +92,8 @@ export type Prepared = {
   order: Map<string, number>;
   /** Each bond's index in the input, by its atoms. */
   bondAt: Map<string, number>;
+  /** The bonds of a blended system (convention (d)), by their atoms: each taken as single, its atoms' duplicate the blend's. */
+  blended: Set<string>;
   /** Each atom's duplicates, by the atomic number each stands for: one per multiple bond's extra order, of the atom at its other end; one for a blended system, of its neighbours' mean. */
   dups: { z: number; of: number }[][];
   /** Whether an atom's ligands cannot be told from the drawing: see above. */
@@ -201,7 +203,7 @@ export function prepared(input: IdentityInput): Prepared {
   for (const a of marked) unsure[a] = true;
 
   const mass = atoms.map((a) => (a.isotope ? (isotopeMass(a.el, a.isotope) ?? NaN) : (standardWeight(a.el) ?? NaN)));
-  return { input, z, mass, hs, around, charge, order, bondAt, dups, unsure };
+  return { input, z, mass, hs, around, charge, order, bondAt, blended, dups, unsure };
 }
 
 /** An atom's lone pairs after the conventions, from its valence electrons, charge and bonds: none for an element not listed. */
