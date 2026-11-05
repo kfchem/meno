@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { createWorkspaceDocument, emptyWorkspaceDocument, withoutAtoms, type WorkspaceDocument } from "../document";
 import { createEditorStore, connectStoreToDocument } from "../store";
 import type { DrawnModel, DrawnRecord, Molecule3D } from "../store/types";
 import { readWorkspace, workspaceText } from "../utils/workspace";
@@ -248,6 +248,21 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     expect(ws.workflow!.sets.find((b) => b.id === KEPT)!.collection).toHaveLength(2);
     const opened = heldSettled({ ...held, sets: held.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) }, held, extentOf);
     expect(readWorkspace(save(opened))!.workflow!.sets.find((b) => b.id === KEPT)!.opened).toBe(true);
+  });
+
+  it("not held, lays out what a run would: the shown structures of a large set deleted, the next come on in that edit's own step - one undo, all as it was", () => {
+    let start = addStep(emptyWorkspaceDocument(), "check-structures", 0, 0);
+    start = placeResults(start, start.steps![0], drawn(Array.from({ length: 53 }, (_, k) => ethanol(1 + 10 * k))), W);
+    const out = resultOf(start, 1)!.id;
+    const shown = setMembers(start, setOf(start, out)).structures;
+    const rest = setOf(start, out).drawnCollection!.length;
+    expect([shown.length > 0, rest > 0, shown.length + rest]).toEqual([true, true, 53]);
+    const d = documented(start);
+    d.edit("delete", (s) => withoutAtoms(s, shown.flat()));
+    const after = setOf(d.getState(), out);
+    expect([setMembers(d.getState(), after).structures.length, after.drawnCollection?.length ?? 0]).toEqual([rest, 0]);
+    d.undo();
+    expect([setMembers(d.getState(), setOf(d.getState(), out)).structures, setOf(d.getState(), out).drawnCollection!.length]).toEqual([shown, rest]);
   });
 
   it("holds nothing more where it is held already - each edit after it leaves it as it is", () => {

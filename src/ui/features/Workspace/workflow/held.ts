@@ -93,21 +93,36 @@ export function heldOff(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   return { ...out, sets: (out.sets ?? []).map((b) => (b.id === id ? held : b)) };
 }
 
+/** What is on a page, by id: its atoms, molecules in 3D and pictures - worked out once for an edit, where it is asked. */
+type OnPage = { atoms: ReadonlySet<number>; molecules: ReadonlySet<number>; pictures: ReadonlySet<number> };
+
 /**
- * Whether a set not held holds off the page what a run would lay out on it
- * (run `filled`) - and nothing on the page (its members, or what lies in
- * its frame where they are not known yet: entries `setMembers`): molecules
- * in 3D in its collection, no more entries than a set lays out
- * (`LARGE_SET`), or structures drawn in its drawn collection. What holding
- * it left; a set not held lays them out, as a run does.
+ * Whether any of a set's members is on the page still - an atom of one of
+ * its structures, one of its molecules or pictures - or, its members not
+ * known yet, anything lies in its frame (entries `setMembers`).
  */
-function laysOut(doc: WorkspaceDocument, set: WorkflowSet): boolean {
-  if (set.table || set.number || set.chart || set.members?.length || !(set.collection?.length || set.drawnCollection?.length)) return false;
-  // (its members not known yet: what lies in its frame)
+function showsAny(doc: WorkspaceDocument, set: WorkflowSet, on: () => OnPage): boolean {
   if (!set.members) {
     const own = setMembers(doc, set);
-    if (own.structures.length || own.molecules.length || own.pictures.length) return false;
+    return own.structures.length + own.molecules.length + own.pictures.length > 0;
   }
+  if (!set.members.length) return false;
+  const page = on();
+  return set.members.some((m) => ("structure" in m ? m.structure.some((a) => page.atoms.has(a)) : "molecule" in m ? page.molecules.has(m.molecule) : page.pictures.has(m.picture)));
+}
+
+/**
+ * Whether a set not held holds off the page what a run would lay out on it
+ * (run `filled`) - and nothing on the page (`showsAny`): molecules in 3D in
+ * its collection, no more entries than a set lays out (`LARGE_SET`), or
+ * structures drawn in its drawn collection. What holding it left - or what
+ * is left of a large set once those it showed were deleted, the next laid
+ * out in that edit's own step of the history; a set not held lays them
+ * out, as a run does.
+ */
+function laysOut(doc: WorkspaceDocument, set: WorkflowSet, on: () => OnPage): boolean {
+  if (set.table || set.number || set.chart || !(set.collection?.length || set.drawnCollection?.length)) return false;
+  if (showsAny(doc, set, on)) return false;
   return set.collection?.length ? set.collection.reduce((n, m) => n + entriesIn(m), 0) <= LARGE_SET : true;
 }
 
@@ -115,22 +130,35 @@ function laysOut(doc: WorkspaceDocument, set: WorkflowSet): boolean {
  * `doc` after an edit (`before`, none as a file opens), each set held off
  * the page or laid out on it as it is wired now (`heldSets`): one the edit
  * wired on holds what it held on the page (`heldOff`); one no longer
- * wired on, or opened, is laid out again (run `laidOutAgain`) - its
- * molecules in 3D only where their room on the page can be worked out
+ * wired on, or opened - or one that showed some and held the rest, those
+ * it showed deleted by the edit - is laid out again (run `laidOutAgain`):
+ * its molecules in 3D only where their room on the page can be worked out
  * (`extentOf`, the workspace's styles in 3D: none, they stay held, summed
  * up in its frame as a large set's are). Nothing to do where the edit
- * changed no set, step or wire.
+ * changed no set, step or wire, nor what is on the page.
  */
 export function heldSettled(doc: WorkspaceDocument, before: WorkspaceDocument | undefined, extentOf?: RunWith["extentOf"]): WorkspaceDocument {
   if (!doc.sets?.length) return doc;
-  if (before && doc.sets === before.sets && doc.wires === before.wires && doc.steps === before.steps) return doc;
+  const wiring = !before || doc.sets !== before.sets || doc.wires !== before.wires || doc.steps !== before.steps;
+  const page = !before || doc.model !== before.model || doc.molecules3d !== before.molecules3d || doc.pictures !== before.pictures;
+  if (!wiring && !page) return doc;
   const held = heldSets(doc);
+  // (what is on the page, by id: worked out once, where a set asks)
+  let seen: OnPage | undefined;
+  const on = () =>
+    (seen ??= {
+      atoms: new Set(doc.model.atoms.map((a) => a.id)),
+      molecules: new Set((doc.molecules3d ?? []).map((m) => m.id)),
+      pictures: new Set((doc.pictures ?? []).map((p) => p.id)),
+    });
   let out = doc;
   for (const set of doc.sets) {
+    // (an edit of what is on the page alone: only a set showing some and holding the rest can have been emptied by it)
+    if (!wiring && !(set.members?.length && (set.collection?.length || set.drawnCollection?.length))) continue;
     const now = out.sets === doc.sets ? set : out.sets?.find((b) => b.id === set.id);
     if (!now) continue;
     if (held.has(set.id)) out = heldOff(out, set.id);
-    else if (laysOut(out, now) && (!now.collection || extentOf)) out = laidOutAgain(out, set.id, extentOf);
+    else if (laysOut(doc, now, on) && (!now.collection || extentOf)) out = laidOutAgain(out, set.id, extentOf);
   }
   return out;
 }

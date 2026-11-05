@@ -890,7 +890,7 @@ export function laidOutAgain(doc: WorkspaceDocument, id: number, extentOf?: RunW
     const out: WorkspaceDocument = { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...added], nextMolecule3dId: next };
     return resizeSet(holdMembers(out, id, members, set.unread), id, frame);
   }
-  if (set.drawnCollection?.length && !set.members?.length) {
+  if (set.drawnCollection?.length) {
     const { made, middles, rooms, rest } = drawnRooms(set.drawnCollection);
     const l = lay(rooms);
     const frame = where(l.width, l.height);

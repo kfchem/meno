@@ -2251,6 +2251,10 @@ wired on, not one frame for every result.
   and is taken up again where it is as the held set is laid out.
 - **A run fills a held exit off the page**, whatever it gives - one
   entry or a thousand: its frame stays where it was, drawn nowhere.
+- **A set not held lays out what a run would**, derived, never marked:
+  the structures a large result set shows deleted, the next it holds
+  come on in that edit's own step of the history, and one undo gives back
+  all as it was (held.test).
 - **It lies nowhere on the page**: what finds sets by their frames -
   where a set or a card goes, a box or a lasso, the selection's own set,
   a molecule pasted beside a set - passes it by. A box that takes a step
