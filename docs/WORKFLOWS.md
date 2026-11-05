@@ -3187,7 +3187,7 @@ molecules in 3D - *Check structures* keeps its own job (workflow/meno
   not compared, with why ("2 not compared (2: wedges that do not read)").
   A duplicate may be missed so; nothing that is not one is set aside.
 - **Compared within**: *Each compound*, on structures drawn, compares every
-  structure with every other - each is its own compound. *Each value of a
+  structure with every other, all as one compound's would be. *Each value of a
   property* compares those of one value only (by seed, say); those
   without it are compared among themselves, and said ("2 without seed,
   compared among themselves").

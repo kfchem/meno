@@ -449,6 +449,11 @@ export const MIRRORS_ON_DRAWN = "Mirror images are counted in only for molecules
 /** Why Duplicates refuses a set of structures drawn and molecules in 3D together. */
 export const DRAWN_AND_3D = "Structures drawn and molecules in 3D together: compare them in separate steps";
 
+/** Why Duplicates refuses structures drawn with its options as they are - mirror images counted in - or none. */
+function duplicatesDrawnRefused(options: OptionValues): string | null {
+  return mirrorsOf(options) === "counted" ? MIRRORS_ON_DRAWN : null;
+}
+
 /**
  * *Duplicates* on structures drawn (docs/WORKFLOWS.md, *Duplicates on
  * structures drawn*): those alike - the same identity with configuration,
@@ -461,11 +466,6 @@ export const DRAWN_AND_3D = "Structures drawn and molecules in 3D together: comp
  * whose identity could not be worked out in full, or whose wedges do not
  * read, is never set aside as alike: kept, and counted as not compared.
  */
-/** Why Duplicates refuses structures drawn with its options as they are - mirror images counted in - or none. */
-function duplicatesDrawnRefused(options: OptionValues): string | null {
-  return mirrorsOf(options) === "counted" ? MIRRORS_ON_DRAWN : null;
-}
-
 function* duplicatesDrawn(entries: readonly DrawnEntry[], due: () => boolean, groupBy?: string): Generator<number, DrawnOutcome> {
   const by = groupBy?.trim();
   if (groupBy != null && !by) return { ok: false, said: "Name the property whose values are the groups" };
