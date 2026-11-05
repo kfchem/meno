@@ -335,7 +335,7 @@ picture for other programs.
 
 ## The Blender plugin
 
-`src-tauri/resources/plugins/blender/`: a worker in Python alone (made by
+`meno-plugins/plugins/blender/`: a worker in Python alone (made by
 uv, no package), and the script Blender runs, `render.py`.
 
 - **Meno's own Blender** (the maintainer, 2026-10-12): the plugin always
@@ -387,8 +387,8 @@ uv, no package), and the script Blender runs, `render.py`.
   the molecule however its shapes overlap. Meno's looks keep the picture's place
   and size.
 - **Looks, studios and motions of Blender's own** come from preset plugins
-  that use the renderer through its interface `preset` (docs/plugins/
-  blender-presets.md); the renderer itself has none. Meno carries one,
+  that use the renderer through its interface `preset` (meno-plugins/docs/
+  blender-presets.md); the renderer itself has none. The plugins online have one,
   **Film looks and motions** (`blender-presets`), described below. The
   renderer runs a preset's chosen file inside its Blender, after it has
   built Meno's scene, against what the interface hands it: the request,
@@ -515,12 +515,11 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
 
 ## Licences
 
-Meno is Apache-2.0. A script using Blender's Python API is under the GPL,
-so the Blender plugin is GPL-3.0-or-later: its folder carries the
-licence's text (`LICENSE`) and its files say so; it stands strictly apart
-- nothing of Meno's or of another plugin's takes anything from it, and it
-speaks to Meno only through files and arguments (docs/PLUGINS.md,
-*Licences*). README lists it with its licence.
+Meno is Apache-2.0. The Blender plugin is GPL-3.0-or-later: its folder
+carries the licence's text (`LICENSE`) and its files say so. Nothing of
+Meno's or of another plugin's takes anything from it, and it speaks to
+Meno only through files and arguments (docs/PLUGINS.md, *Licences*).
+README lists it with its licence.
 
 ## Decided
 

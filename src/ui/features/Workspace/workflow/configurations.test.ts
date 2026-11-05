@@ -1,6 +1,4 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { Configured } from "../../../../lib/roles/client";
 import { geometryKey, type Entry } from "../../../../lib/entry";
 import { convert } from "../../../../lib/units";
@@ -83,16 +81,6 @@ describe("which stereoisomer each entry is", () => {
     await perceiveStereo(setEntries([m], "conformers"), asker);
     const entries = setEntries([m], "conformers").map((e, i) => entryOfSet(e, `e${i}`));
     expect(entries.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(["R", "S"]);
-  });
-});
-
-describe("the RDKit the configurations were checked with", () => {
-  it("is the one the plugin's lock fixes: a new one runs the known cases again first (scripts/calc/test_plugin_rdkit.py, Configurations)", () => {
-    // (RDKit marks FindPotentialStereo experimental; its answers on the known cases passed with this version - when
-    // the lock moves, CI's plugins job runs those tests with the new one: once they pass, write it here)
-    const CHECKED_WITH = "2026.3.6";
-    const lock = readFileSync(resolve(__dirname, "../../../../../src-tauri/resources/plugins/rdkit/requirements.lock"), "utf8");
-    expect(lock.match(/^rdkit==(\S+)/m)?.[1]).toBe(CHECKED_WITH);
   });
 });
 
