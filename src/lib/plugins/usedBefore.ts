@@ -78,14 +78,21 @@ export async function getUsedBefore(say: Say, deps: UsedBeforeDeps = DEPS): Prom
     say(TITLE, "Meno now gets its plugins online, and is offline: it asks again as it next starts, or add them in Settings, Plugins.");
     return;
   }
-  // (1: the list fetched only where the network is allowed for it - else asked first, naming them as they were set up: by their names where a list kept from before has them)
+  // (1: the list fetched only where the network is allowed for it - else asked first, naming them as they were set up: by their names where a list kept from before has them, none it says is no longer offered)
   if (!useNetwork.getState().granted.includes(CATALOGUE_PURPOSE)) {
     const kept = useOnline.getState().catalogue;
-    const nameOf = (id: string) => kept?.plugins.find((p) => p.id === id)?.name ?? kept?.retired?.find((r) => r.id === id)?.name ?? id;
+    const retired = kept?.retired ?? [];
+    const nameOf = (id: string) => kept?.plugins.find((p) => p.id === id)?.name ?? id;
+    const toLookUp = ids.filter((id) => !retired.some((r) => r.id === id));
+    // (only those no longer offered: nothing to look up, nor to ask - said once, with why)
+    if (!toLookUp.length) {
+      say(TITLE, `None of them is got again: ${notGotAgain(ids, [], [], retired).join("; ")}.`);
+      return answered();
+    }
     const lookUp: ConsentRequest = {
       ...CATALOGUE_REQUEST,
       title: "Meno now gets its plugins online. Look them up?",
-      detail: `${setUpHere(ids.map(nameOf))} Meno fetches the list of plugins online, then asks before it gets any of them.`,
+      detail: `${setUpHere(toLookUp.map(nameOf))} Meno fetches the list of plugins online, then asks before it gets any of them.`,
       again: true,
     };
     if (!(await deps.ask(lookUp))) {

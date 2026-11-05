@@ -248,11 +248,21 @@ describe("the plugins set up before they came online, got again", () => {
     expect(r.got).toEqual(["alpha", "beta", "alpha-presets"]);
   });
 
-  it("names them in the first question by the names a list kept from before gives them - else by their ids", async () => {
+  it("names them in the first question by the names a list kept from before gives them - else by their ids - leaving out those it says are no longer offered", async () => {
     useOnline.setState({ state: "unlisted", catalogue: { ...CATALOGUE, retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }] } });
     const r = deps({ stamps: ["alpha", "wfx", "unknown"] });
     await getUsedBefore(r.say, r.d);
-    expect(r.asked[0].detail).toBe("3 were set up here: Alpha interface, WFX reader and unknown. Meno fetches the list of plugins online, then asks before it gets any of them.");
+    expect(r.asked[0].detail).toBe("2 were set up here: Alpha interface and unknown. Meno fetches the list of plugins online, then asks before it gets any of them.");
+  });
+
+  it("asks nothing where all of them are no longer offered, as a list kept from before says - said once, with why", async () => {
+    useOnline.setState({ state: "unlisted", catalogue: { ...CATALOGUE, retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }] } });
+    const r = deps({ stamps: ["wfx"] });
+    await getUsedBefore(r.say, r.d);
+    expect(r.asked).toEqual([]);
+    expect(r.listed()).toBe(0);
+    expect(r.said).toEqual(["Plugins used before: None of them is got again: WFX reader: Meno reads these files itself now."]);
+    expect(asked()).toBe(true);
   });
 
   it("where none is got again, says why, once", async () => {

@@ -1666,9 +1666,11 @@ starts with none in place. As it first starts, it offers to get those again
 - **Two questions at most.**
   - Where the network is not allowed for the list yet: whether to look
     them up online, naming them as they were set up - by their names where
-    a list kept from before has them, else by their ids. A no is said in
-    the corner of the window, and asked again as Meno next starts, unless
-    the chemist chooses *Don't ask again* there.
+    a list kept from before has them, else by their ids, and none that list
+    says is no longer offered (`retired`); where only such are left, nothing
+    is asked, and why is said once. A no is said in the corner of the
+    window, and asked again as Meno next starts, unless the chemist chooses
+    *Don't ask again* there.
   - With the list fetched: whether to get them, each by its name and the
     size of its files. Those not got again are said in it, each with why:
     another system's or a newer Meno's, no longer offered as the list says
