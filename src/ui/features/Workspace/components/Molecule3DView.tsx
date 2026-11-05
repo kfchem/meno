@@ -41,7 +41,7 @@ import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
-import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
+import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, outlineSegments } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
@@ -97,7 +97,8 @@ const LOOK_TAU = 0.08;
 /**
  * The line round the balls (utils/outlineMaterial) is a ball drawn again,
  * as smooth as the balls up to LINES_FINE_MOST atoms, and of LINES_COARSE
- * segments past them: measured on 10 648 atoms and 30 492 bonds, a frame
+ * segments past them, never more than the balls have (utils/largeDrawing
+ * `outlineSegments`): measured on 10 648 atoms and 30 492 bonds, a frame
  * took 14.0 ms with no line, 19.7 ms with lines as smooth as the balls (32
  * segments) and 16.4 ms with 16 - its rim strays from a circle by under a
  * pixel up to balls 40 pixels across.
@@ -397,10 +398,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   });
   // how far over to the secondary look it is drawn: 0 the primary, 1 the secondary
   const fill = useRef(look === "secondary" ? 1 : 0);
-  // the segments round its balls: as the style has them - or, on a canvas
-  // drawn lighter, as many as their size on the screen wants
-  // (utils/largeDrawing `ballSegmentsFor`): more at once as they grow, fewer
-  // once the zoom has settled
+  // the segments round its balls: as many as their size on the screen wants,
+  // never more than the style has them (utils/largeDrawing
+  // `ballSegmentsFor`): more at once as they grow, fewer once the zoom has
+  // settled
   const [segments, setSegments] = useState(style.ballSegments);
   // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
   const biggest = useMemo(() => {
@@ -719,26 +720,22 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     let moving = false;
-    // (its balls' segments, by their size on the screen where the canvas is drawn lighter; as the style has them otherwise, at once)
+    // (its balls' segments, by their size on the screen, never more than the style's)
     {
-      const lighter = largeOn(gl).lighter;
       const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       const bs = ballSizing.current;
       if (!bs.zoom || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
         bs.zoom = zoom;
         bs.since = performance.now();
       }
-      const want = lighter ? ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments) : style.ballSegments;
-      // (more at once, as balls grow on the screen - fewer only once the zoom has settled)
-      if (want !== segments) {
-        const left = lighter && want < segments ? BALLS_SETTLE_MS - (performance.now() - bs.since) : 0;
-        if (left <= 0) setSegments(want);
-        else if (!bs.timer) {
-          bs.timer = window.setTimeout(() => {
-            bs.timer = 0;
-            invalidate();
-          }, left + 5);
-        }
+      const want = ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments);
+      const next = ballSegmentsNext(want, segments, performance.now() - bs.since);
+      if (next && "now" in next) setSegments(next.now);
+      else if (next && !bs.timer) {
+        bs.timer = window.setTimeout(() => {
+          bs.timer = 0;
+          invalidate();
+        }, next.waitMs + 5);
       }
     }
     // another frame: its atoms go there
@@ -1696,7 +1693,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         <primitive object={jointMesh} renderOrder={OVER_PAGE + 1} />
         {/* the style's line round every ball (utils/outlineMaterial) */}
         <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
+          <sphereGeometry args={[1, ...outlineSegments(segments, n, LINES_FINE_MOST, LINES_COARSE)]} />
         </instancedMesh>
         {lineCount > 0 && (
           <instancedMesh
