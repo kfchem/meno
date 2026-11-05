@@ -173,6 +173,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   const handlersKept = useRef(new Map<number, MoleculeHandlers>());
   const remakeNow = useRef(remake);
   remakeNow.current = remake;
+  // (and those of a molecule gone, let go)
+  if (handlersKept.current.size > molecules.length) {
+    const here = new Set(molecules.map((m) => m.id));
+    for (const id of handlersKept.current.keys()) if (!here.has(id)) handlersKept.current.delete(id);
+  }
   // (R and S on, every molecule's labels; off, a stereoisomer's own, which tell it from the others)
   // (R and S on them as large as on the drawing, and written as it writes them)
   const drawingStyle = useDrawingStyle();
