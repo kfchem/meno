@@ -19,8 +19,8 @@ describe("the interface's colours in code and in CSS (docs/LOOK.md, Colours)", (
     expect(COLORS.base).toBe(token("accel-base"));
     expect(COLORS.attention).toBe(token("accel-accent"));
     expect(COLORS.stereo3d).toBe(token("accel-blue"));
-    expect(COLORS.text).toBe(token("gh-black"));
+    expect(COLORS.ink).toBe(token("gh-black"));
     expect(COLORS.quiet).toBe(token("gh-gray"));
-    expect(COLORS.line).toBe(token("gh-line"));
+    expect(COLORS.hairline).toBe(token("gh-line"));
   });
 });
