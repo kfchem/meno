@@ -274,7 +274,7 @@ export const STYLE_FIELDS: StyleField[] = [
     group: "Hashes and dashes",
     label: "Hashed wedge: widest hash",
     description:
-      "Where a hashed wedge's widest hash lies at an atom with no label: reaching the atom, or stopping a hash's gap short of it, so that the bonds on from the atom start there on their own.",
+      "Where a hashed wedge's widest hash lies at an atom with no label that bonds go on from: reaching the atom, or stopping a hash's gap short of it, so that the bonds on from the atom start there on their own. At a bare end with no bond going on, it always reaches the end.",
     kind: {
       type: "choice",
       options: [

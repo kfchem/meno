@@ -3001,7 +3001,10 @@ export function buildBondPrimitives(
       // hash spacing out from a bare atom, and run to the wide end or the
       // label there - or, where the style asks (`hashedWedgeShort`), stop
       // short of a bare atom there by a hash's own clear gap, the bonds on
-      // from it starting at the atom on their own.
+      // from it starting at the atom on their own. Only where bonds go on
+      // from it: at a bare end with none, the widest hash is the bond's
+      // end, or the wedge would have none and look short (the maintainer,
+      // 2026-11-05).
       const spacing = toWorld(opts.hashSpacingPx, zoom, units);
       const lw = pxToWorld(lwPx, zoom);
       const hashesTo = (end: number) =>
@@ -3021,7 +3024,11 @@ export function buildBondPrimitives(
       const reaching = hashesTo(L0 - trimWide);
       // (never below what the style asks for: where stopping short would leave fewer than its three - or than
       // reaching the atom gives, if that is fewer - or none at all on the very shortest, the hashes reach the atom)
-      const shortBy = opts.hashedWedgeShort && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
+      const wideIdx = baseAtP1 ? bond.a1 : bond.a2;
+      const bondsAtWide = deg?.get(wideIdx) ?? adjBonds?.get(wideIdx)?.length;
+      // (not known - no bonds told - as bonds going on, as it was)
+      const goesOn = bondsAtWide == null || bondsAtWide > 1;
+      const shortBy = opts.hashedWedgeShort && goesOn && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
       const stopped = shortBy > 0 ? hashesTo(L0 - trimWide - shortBy) : reaching;
       const count = (h: { lines: unknown[]; polys: unknown[] }) => h.lines.length + h.polys.length;
       const least = Math.max(1, Math.min(count(reaching), opts.fewestHashes ?? 1));

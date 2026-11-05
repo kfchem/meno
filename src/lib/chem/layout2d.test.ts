@@ -976,11 +976,16 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
-  it("stops a hashed wedge's widest hash short of a bare atom at its wide end, where the style asks", () => {
+  it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
     const o = opts();
-    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, deg).polys);
-    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys);
+    // (its wide end a chain's or a ring's atom: two more bonds go on from it)
+    const onward = new Map([
+      [0, 3],
+      [1, 3],
+    ]);
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, onward).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys);
     const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
     // (reaching the atom, as ever; short of it by a hash's clear gap - the widest hash as wide)
     expect(far(at)).toBeCloseTo(pair("C")[1].x, 9);
@@ -988,7 +993,45 @@ describe("a label must not change how a bond is drawn", () => {
     const widest = (h: { farWidth: number; far: number }[]) => h.reduce((p, q) => (q.far > p.far ? q : p)).farWidth;
     expect(widest(short)).toBeCloseTo(widest(at), 9);
     // (at a label it stops at the label, as ever)
-    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys));
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, onward).polys));
+  });
+
+  it("stops short at a wide end that one bond goes on from - a chain's carbon - as at one with more", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const two = new Map([
+      [0, 3],
+      [1, 2],
+    ]);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const o = opts();
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, two).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, two).polys);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+  });
+
+  it("counts the wide end's bonds from those bonded at each atom where no count is given, and stops short where neither is", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const on: Bond = { a1: 1, a2: 2, order: 1 };
+    const short = opts({ hashedWedgeShort: true });
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const drawn = (adj?: Map<number, Bond[]>) => far(hashesOf(buildBondPrimitives(pair("C"), bond, short, ZOOM, undefined, undefined, undefined, adj).polys));
+    // (no count given - the wide end the second atom, as the first is the narrow one on a tie: its bonds, this one alone, then one more)
+    expect(drawn(new Map([[1, [bond]]]))).toBeCloseTo(pair("C")[1].x, 9);
+    expect(drawn(new Map([[1, [bond, on]]]))).toBeLessThan(pair("C")[1].x - 1e-6);
+    // (nothing known of the wide end's bonds: as bonds going on, as it was drawn before)
+    expect(drawn()).toBeCloseTo(drawn(new Map([[1, [bond, on]]])), 9);
+  });
+
+  it("reaches a bare wide end that no bond goes on from, whatever the style asks: the widest hash is the bond's end", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    // (its wide end bonded to nothing else: `deg` has it at one bond)
+    for (const fewest of [undefined, FEWEST_HASHES]) {
+      const at = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ fewestHashes: fewest }), ZOOM, deg).polys);
+      const asked = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ fewestHashes: fewest, hashedWedgeShort: true }), ZOOM, deg).polys);
+      expect(asked).toEqual(at);
+      expect(far(asked)).toBeCloseTo(pair("C")[1].x, 9);
+    }
   });
 
   it("never stops short below what the style asks: three where it asks for three (or as many as reaching gives), and never none", () => {
