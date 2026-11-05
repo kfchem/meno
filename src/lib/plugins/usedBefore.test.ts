@@ -28,7 +28,6 @@ const entry = (id: string, name: string, bytes: number, over: Partial<CatalogueE
 const CATALOGUE: Catalogue = {
   schema: 1,
   issued: "2026-11-10T00:00:00Z",
-  serial: 3,
   plugins: [entry("alpha", "Alpha interface", 40_000), entry("beta", "Beta interface", 2_500_000), entry("gamma", "Gamma interface", 9_000), entry("later", "Later", 1, { contract: 99 })],
 };
 
