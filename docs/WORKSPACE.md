@@ -1017,6 +1017,14 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   densities worked out on a grid from a Molden file, read and worked out
   by PySCF - each grid a promise.
   No GPL library (iodata, gbasis).
+- **WFX files**, read by Meno itself: each orbital worked out from the
+  file's own primitives (`lib/calc/wfx.ts`).
+- **Gaussian formatted checkpoints**: the Gaussian interface gives the
+  file's basis and orbitals whole, in Meno's form of a wavefunction, and
+  Meno works out each orbital on its grid itself - once it has found the
+  orbitals a list offers orthonormal over that basis, which catches a
+  basis converted wrong in a molecule, though not every such mistake
+  (docs/PLUGINS.md, *Gives a wavefunction whole*).
 
 ### In order
 

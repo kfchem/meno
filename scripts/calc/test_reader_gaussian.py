@@ -17,6 +17,7 @@ tests are skipped where it is not.
 
 import importlib.util
 import json
+import math
 import pathlib
 import sys
 import unittest
@@ -607,6 +608,178 @@ class AFormattedCheckpoint(unittest.TestCase):
         self.assertNotIn("orbitals", r)
 
 
+def fchk_item(label, kind, values):
+    """An item as "Interfacing to Gaussian 16" lays one out: its label (A40), its type, and "N=" and its values after,
+    six integers (I12) or five reals (E16.8) to a line."""
+    per, form = (6, "{:12d}") if kind == "I" else (5, "{:16.8E}")
+    lines = [f"{label:<40}  {kind}   N={len(values):12d}"]
+    lines += ["".join(form.format(v) for v in values[i : i + per]) for i in range(0, len(values), per)]
+    return lines
+
+
+# (made up: two hydrogens 1.4 bohr apart; on the first an s shell and an sp shell of two primitives each - the sp
+#  shell's p coefficients not its s ones - and a pure d shell of one, on the second an s shell - 1 + 4 + 5 + 1
+#  functions - and two orbitals of each spin)
+BASIS = {
+    "Shell types": ("I", [0, -1, -2, 0]),
+    "Number of primitives per shell": ("I", [2, 2, 1, 1]),
+    "Shell to atom map": ("I", [1, 1, 1, 2]),
+    "Primitive exponents": ("R", [3.4, 0.6, 0.8, 0.25, 1.1, 0.6]),
+    "Contraction coefficients": ("R", [0.15, 0.9, 0.3, 0.8, 1.0, 1.0]),
+    "P(S=P) Contraction coefficients": ("R", [0.0, 0.0, 0.6, 0.5, 0.0, 0.0]),
+}
+
+
+def basis_fchk(beta=False, **changed):
+    items = {
+        "Atomic numbers": ("I", [1, 1]),
+        "Current cartesian coordinates": ("R", [0.0, 0.0, 0.0, 0.0, 0.0, 1.4]),
+        **BASIS,
+        "Alpha Orbital Energies": ("R", [-0.5, 0.2]),
+        "Alpha MO coefficients": ("R", [float(i) for i in range(22)]),
+        **({"Beta Orbital Energies": ("R", [-0.4, 0.3]), "Beta MO coefficients": ("R", [float(-i) for i in range(22)])} if beta else {}),
+        **changed,
+    }
+    lines = ["h2", "SP        UHF                           made-up", "Number of atoms                            I                2",
+             "Number of basis functions                  I               11",
+             f"Number of alpha electrons                  I                1", f"Number of beta electrons                   I                {0 if beta else 1}"]
+    for label, item in items.items():
+        if item is not None:
+            lines += fchk_item(label, *item)
+    return "\n".join(lines) + "\n"
+
+
+def self_overlap(e, f, g=None):
+    """Two functions' overlap from their primitives, all on one centre: x^p e^(-a r^2) and x^q e^(-b r^2) overlap as the
+    product, over x, y and z, of the integral of x^(p + q) e^(-(a + b) x^2)."""
+    g = f if g is None else g
+    return sum(c * d * math.prod(reader.moment(e["powers"][i][k] + e["powers"][j][k], e["exponents"][i] + e["exponents"][j]) for k in range(3))
+               for i, c in zip(f["primitives"], f["coefficients"]) for j, d in zip(g["primitives"], g["coefficients"]))
+
+
+class AFormattedCheckpointSWavefunction(unittest.TestCase):
+    """Its basis and orbitals given whole, in Meno's general form (src/lib/calc/expansion.ts): Meno draws the orbitals,
+    checking them orthonormal first."""
+
+    def test_its_primitives_functions_and_orbitals(self):
+        e = reader.fchk_expansion(basis_fchk())
+        self.assertEqual(e["nuclei"], [0.0, 0.0, 0.0, 0.0, 0.0, 1.4])
+        # (the s shell's two primitives; the sp shell's s of each of its exponents, then its p; the d shell's six Cartesian ones)
+        self.assertEqual(e["centres"], [0] * 16 + [1])
+        self.assertEqual(e["powers"][:10], [[0, 0, 0]] * 4 + [[1, 0, 0], [0, 1, 0], [0, 0, 1]] * 2)
+        self.assertEqual(e["exponents"], [3.4, 0.6, 0.8, 0.25] + [0.8] * 3 + [0.25] * 3 + [1.1] * 6 + [0.6])
+        self.assertEqual(len(e["functions"]), 11)
+        self.assertEqual(e["functions"][0]["primitives"], [0, 1])
+        self.assertEqual([f["primitives"] for f in e["functions"][1:5]], [[2, 3], [4, 7], [5, 8], [6, 9]])
+        # (orbital by orbital, each its coefficient of every function)
+        self.assertEqual(e["orbitals"], [[float(i) for i in range(11)], [float(i) for i in range(11, 22)]])
+
+    def test_each_primitive_normalised_times_its_coefficient_the_sp_shell_s_p_its_own(self):
+        e = reader.fchk_expansion(basis_fchk())
+        norm_s = lambda a: (2 * a / math.pi) ** 0.75
+        norm_p = lambda a: norm_s(a) * 2 * math.sqrt(a)
+        ratio = lambda f: f["coefficients"][0] / f["coefficients"][1]
+        # (the s shell: d1 N(a1) to d2 N(a2), whatever the function's own norm)
+        self.assertAlmostEqual(ratio(e["functions"][0]), 0.15 * norm_s(3.4) / (0.9 * norm_s(0.6)), places=12)
+        # (the sp shell: its s from the contraction coefficients, its p from the P(S=P) ones)
+        self.assertAlmostEqual(ratio(e["functions"][1]), 0.3 * norm_s(0.8) / (0.8 * norm_s(0.25)), places=12)
+        for f in e["functions"][2:5]:
+            self.assertAlmostEqual(ratio(f), 0.6 * norm_p(0.8) / (0.5 * norm_p(0.25)), places=12)
+
+    def test_each_function_normalised_and_a_shell_s_pure_functions_orthogonal(self):
+        e = reader.fchk_expansion(basis_fchk())
+        for f in e["functions"]:
+            self.assertAlmostEqual(self_overlap(e, f), 1.0, places=12)
+        d = e["functions"][5:10]
+        for i in range(5):
+            for j in range(i):
+                self.assertAlmostEqual(self_overlap(e, d[i], d[j]), 0.0, places=12)
+
+    def test_pure_functions_are_the_reference_s_polynomials_in_its_order(self):
+        def by(l, m, term):
+            """The solid harmonic's coefficients over its coefficient of `term`, which is positive."""
+            p = reader.solid_harmonic(l, m)
+            self.assertGreater(p[term], 0)
+            return {k: round(c / p[term], 12) for k, c in p.items()}
+        # (d: 3ZZ-RR, XZ, YZ, XX-YY, XY)
+        self.assertEqual(by(2, 0, (0, 0, 2)), {(0, 0, 2): 1.0, (2, 0, 0): -0.5, (0, 2, 0): -0.5})
+        self.assertEqual([reader.solid_harmonic(2, m).keys() for m in (1, -1, 2, -2)], [{(1, 0, 1)}, {(0, 1, 1)}, {(2, 0, 0), (0, 2, 0)}, {(1, 1, 0)}])
+        self.assertEqual(by(2, 2, (2, 0, 0)), {(2, 0, 0): 1.0, (0, 2, 0): -1.0})
+        # (f: ZZZ-ZRR, XZZ-XRR, YZZ-YRR, XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY - each its first term positive)
+        self.assertEqual(by(3, 0, (0, 0, 3)), {(0, 0, 3): 1.0, (2, 0, 1): -1.5, (0, 2, 1): -1.5})
+        self.assertEqual(by(3, 1, (1, 0, 2)), {(1, 0, 2): 1.0, (3, 0, 0): -0.25, (1, 2, 0): -0.25})
+        self.assertEqual(by(3, -1, (0, 1, 2)), {(0, 1, 2): 1.0, (2, 1, 0): -0.25, (0, 3, 0): -0.25})
+        self.assertEqual(by(3, 2, (2, 0, 1)), {(2, 0, 1): 1.0, (0, 2, 1): -1.0})
+        self.assertEqual(by(3, -2, (1, 1, 1)), {(1, 1, 1): 1.0})
+        self.assertEqual(by(3, 3, (3, 0, 0)), {(3, 0, 0): 1.0, (1, 2, 0): -3.0})
+        self.assertEqual(by(3, -3, (2, 1, 0)), {(2, 1, 0): 1.0, (0, 3, 0): round(-1 / 3, 12)})
+        # (g's last two: x^4 - 6x^2y^2 + y^4 and x^3y - xy^3, its labels' +4 and -4)
+        self.assertEqual(by(4, 4, (4, 0, 0)), {(4, 0, 0): 1.0, (2, 2, 0): -6.0, (0, 4, 0): 1.0})
+        self.assertEqual(by(4, -4, (3, 1, 0)), {(3, 1, 0): 1.0, (1, 3, 0): -1.0})
+
+    def test_a_pure_shell_s_functions_laid_out_in_the_format_s_order(self):
+        def shell_functions(t):
+            """The functions of one pure shell of type `t` on a lone atom, as the polynomial each is over the primitives'
+            powers: each coefficient over its largest."""
+            n = {-2: 5, -3: 7, -4: 9}[t]
+            text = "\n".join(["one shell", "SP        RHF                           made-up", "Number of atoms                            I                1",
+                              f"Number of basis functions                  I   {n:14d}", "Number of alpha electrons                  I                1",
+                              "Number of beta electrons                   I                1"]
+                             + fchk_item("Atomic numbers", "I", [1]) + fchk_item("Current cartesian coordinates", "R", [0.0, 0.0, 0.0])
+                             + fchk_item("Shell types", "I", [t]) + fchk_item("Number of primitives per shell", "I", [1])
+                             + fchk_item("Shell to atom map", "I", [1]) + fchk_item("Primitive exponents", "R", [0.7])
+                             + fchk_item("Contraction coefficients", "R", [1.0]) + fchk_item("Alpha Orbital Energies", "R", [0.0] * n)
+                             + fchk_item("Alpha MO coefficients", "R", [0.0] * n * n)) + "\n"
+            e = reader.fchk_expansion(text)
+            out = []
+            for f in e["functions"]:
+                terms = {tuple(e["powers"][i]): c for i, c in zip(f["primitives"], f["coefficients"])}
+                top = max(terms.values(), key=abs)
+                out.append({k: round(c / top, 9) for k, c in terms.items()})
+            return out
+        # (d: 3ZZ-RR, XZ, YZ, XX-YY, XY)
+        self.assertEqual(shell_functions(-2), [
+            {(0, 0, 2): 1.0, (2, 0, 0): -0.5, (0, 2, 0): -0.5}, {(1, 0, 1): 1.0}, {(0, 1, 1): 1.0}, {(2, 0, 0): 1.0, (0, 2, 0): -1.0}, {(1, 1, 0): 1.0}])
+        # (f: ZZZ-ZRR, XZZ-XRR, YZZ-YRR, XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY)
+        f = shell_functions(-3)
+        self.assertEqual([sorted(x) for x in f], [
+            [(0, 0, 3), (0, 2, 1), (2, 0, 1)], [(1, 0, 2), (1, 2, 0), (3, 0, 0)], [(0, 1, 2), (0, 3, 0), (2, 1, 0)],
+            [(0, 2, 1), (2, 0, 1)], [(1, 1, 1)], [(1, 2, 0), (3, 0, 0)], [(0, 3, 0), (2, 1, 0)]])
+        # (each over its largest coefficient, its sign with it: x^3 - 3xy^2 over its -3)
+        self.assertEqual((f[3][(2, 0, 1)], f[5][(3, 0, 0)], f[6][(2, 1, 0)]), (1.0, round(-1 / 3, 9), 1.0))
+        # (g: m = 0, +1, -1, ... +4, -4 - their powers of z falling, a cosine-like then a sine-like one each |m|)
+        g = shell_functions(-4)
+        self.assertEqual([max(k[2] for k in x) for x in g], [4, 3, 3, 2, 2, 1, 1, 0, 0])
+        self.assertEqual([all(k[1] % 2 == (i % 2 == 0 and i > 0) for k in x) for i, x in enumerate(g)], [True] * 9)
+        # (each over its largest coefficient, its sign with it: x^4 - 6x^2y^2 + y^4 over its -6)
+        self.assertEqual(g[7], {(4, 0, 0): round(-1 / 6, 9), (2, 2, 0): 1.0, (0, 4, 0): round(-1 / 6, 9)})
+        self.assertEqual(g[8], {(3, 1, 0): 1.0, (1, 3, 0): -1.0})
+
+    def test_cartesian_functions_in_gaussian_s_order(self):
+        names = lambda L: [("X" * p[0] + "Y" * p[1] + "Z" * p[2]) or "S" for p in reader.CARTESIAN[L]]
+        self.assertEqual(names(2), ["XX", "YY", "ZZ", "XY", "XZ", "YZ"])
+        self.assertEqual(names(3), ["XXX", "YYY", "ZZZ", "XYY", "XXY", "XXZ", "XZZ", "YZZ", "YYZ", "XYZ"])
+        self.assertEqual(names(4)[:3] + names(4)[-2:], ["ZZZZ", "YZZZ", "YYZZ", "XXXY", "XXXX"])
+
+    def test_its_orbitals_promise_their_surfaces_alpha_then_beta(self):
+        o = reader.read_jobs("h2.fchk", basis_fchk(beta=True))["orbitals"]
+        self.assertEqual([(x["spin"], x["surface"]["ask"]) for x in o], [("alpha", "expansion:0"), ("alpha", "expansion:1"), ("beta", "expansion:2"), ("beta", "expansion:3")])
+        e = reader.fchk_expansion(basis_fchk(beta=True))
+        self.assertEqual(e["orbitals"][2], [float(-i) for i in range(11)])
+        # (a restricted calculation's, open shell or not: one set, of both spins)
+        self.assertEqual(len(reader.fchk_expansion(basis_fchk())["orbitals"]), 2)
+
+    def test_none_given_where_its_basis_is_not_all_there_or_past_g(self):
+        for changed in ({"Shell types": ("I", [0, -1, 5, 0])}, {"Alpha MO coefficients": ("R", [0.0] * 21)}, {"Primitive exponents": None},
+                        {"P(S=P) Contraction coefficients": None}, {"Shell to atom map": ("I", [1, 1, 1, 3])}):
+            text = basis_fchk(**changed)
+            with self.assertRaises(ValueError):
+                reader.fchk_expansion(text)
+            self.assertTrue(all("surface" not in x for x in reader.read_jobs("h2.fchk", text)["orbitals"]))
+        with self.assertRaisesRegex(ValueError, "l = 5"):
+            reader.fchk_expansion(basis_fchk(**{"Shell types": ("I", [0, -1, 5, 0])}))
+
+
 class TheWorker(unittest.TestCase):
     def test_read_answers_meno_s_form(self):
         r = worker.answer(json.dumps({"id": 6, "op": "read", "name": "water.log", "text": opt_freq()}))
@@ -617,6 +790,15 @@ class TheWorker(unittest.TestCase):
     def test_read_refuses_in_words_what_holds_no_molecule(self):
         r = worker.answer(json.dumps({"id": 7, "op": "read", "name": "notes.log", "text": " Entering Gaussian System, Link 0=g16\n"}))
         self.assertEqual(r, {"id": 7, "ok": False, "error": "It could not be read as Gaussian's output: it holds no molecule."})
+
+    def test_ask_gives_a_formatted_checkpoint_s_wavefunction_and_nothing_else(self):
+        r = worker.answer(json.dumps({"id": 8, "op": "ask", "kind": "gaussian-fchk", "key": "expansion", "name": "h2.fchk", "text": basis_fchk()}))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(len(r["result"]["expansion"]["functions"]), 11)
+        r = worker.answer(json.dumps({"id": 9, "op": "ask", "kind": "gaussian-fchk", "key": "orbital:0", "name": "h2.fchk", "text": basis_fchk()}))
+        self.assertEqual(r, {"id": 9, "ok": False, "error": "Its wavefunction could not be given: it made no promise 'orbital:0'."})
+        r = worker.answer(json.dumps({"id": 10, "op": "ask", "kind": "gaussian", "key": "expansion", "name": "water.log", "text": opt_freq()}))
+        self.assertEqual(r["error"], "Its wavefunction could not be given: only a formatted checkpoint holds its wavefunction.")
 
     def test_collect_judges_a_run_as_read_does(self):
         cut = opt_freq()[: opt_freq().index(" Harmonic frequencies")]

@@ -18,6 +18,7 @@ pattern, with made-up numbers.
     read(name, text, followed=False) -> dict    one job
     jobs(text) -> [str]                         a file's jobs (Link1), each a text of its own
     read_jobs(name, text) -> dict               a file: one job, or each of several; or a formatted checkpoint
+    fchk_expansion(text) -> dict                a formatted checkpoint's wavefunction, whole
     run_of(text) -> (ended, why, scf)           how a run went, as Gaussian says it
 """
 
@@ -1206,16 +1207,177 @@ def fchk_modes(items, n):
 def fchk_orbitals(items):
     """A formatted checkpoint's orbitals in Meno's general form (`orbitals`): its "Alpha Orbital Energies" - of both
     spins where it holds no beta ones - and for an unrestricted calculation its beta ones, each spin's first as many
-    occupied as its electrons ("Number of alpha electrons", "Number of beta electrons"); none where it holds none."""
+    occupied as its electrons ("Number of alpha electrons", "Number of beta electrons"); none where it holds none.
+    Each promises its surface (`expansion:<its place>`) where its wavefunction can be given whole (`fchk_expansion`)."""
     alpha, beta = items.get("Alpha Orbital Energies"), items.get("Beta Orbital Energies")
     na, nb = items.get("Number of alpha electrons"), items.get("Number of beta electrons")
     if not isinstance(alpha, list) or not alpha or not isinstance(na, int) or not isinstance(nb, int):
         return None
     if not isinstance(beta, list) or not beta:
-        return [{"spin": "both", "energy": e, "occupation": float((i < na) + (i < nb))} for i, e in enumerate(alpha)]
-    return [{"spin": "alpha", "energy": e, "occupation": float(i < na)} for i, e in enumerate(alpha)] + [
-        {"spin": "beta", "energy": e, "occupation": float(i < nb)} for i, e in enumerate(beta)
-    ]
+        out = [{"spin": "both", "energy": e, "occupation": float((i < na) + (i < nb))} for i, e in enumerate(alpha)]
+    else:
+        out = [{"spin": "alpha", "energy": e, "occupation": float(i < na)} for i, e in enumerate(alpha)] + [
+            {"spin": "beta", "energy": e, "occupation": float(i < nb)} for i, e in enumerate(beta)
+        ]
+    try:
+        fchk_basis(items)
+        drawn = len(orbital_coefficients(items)) == len(out)
+    except ValueError:
+        drawn = False
+    if drawn:
+        for k, o in enumerate(out):
+            o["surface"] = {"ask": f"expansion:{k}"}
+    return out
+
+
+# --- a formatted checkpoint's wavefunction ------------------------------------------------------
+#
+# Its basis and orbitals given whole, in Meno's general form of a wavefunction (src/lib/calc/expansion.ts): the nuclei
+# (bohr); the primitives - each one's centre, powers of x, y and z, and exponent, unnormalised, x^l y^m z^n e^(-a r^2);
+# each basis function's coefficients of them; each orbital's coefficients of the functions. Meno checks the orbitals
+# orthonormal over the primitives before it draws any, which catches most conventions taken wrong here in a molecule,
+# though not all (a sign turned on every function of one l and m of a lone atom keeps them orthonormal).
+#
+# From Gaussian's reference ("Interfacing to Gaussian 16" > "Structure of the Formatted Checkpoint File"): "Shell
+# types" (0 s, 1 p, -1 sp, 2 6d, -2 5d, 3 10f, -3 7f), "Number of primitives per shell", "Shell to atom map",
+# "Primitive exponents", the "Contraction coefficients" of each normalized primitive shell and, of an sp shell's p,
+# "P(S=P) Contraction coefficients"; and each shell's functions in its order: Cartesian S, X, Y, Z, XX, YY, ZZ, XY, XZ,
+# YZ, XXX, YYY, ZZZ, XYY, XXY, XXZ, XZZ, YZZ, YYZ, XYZ; pure d 3ZZ-RR, XZ, YZ, XX-YY, XY, f ZZZ-ZRR, XZZ-XRR, YZZ-YRR,
+# XXZ-YYZ, XYZ, XXX-XYY, XXY-YYY. And, facts of the file format the page leaves unsaid - the order and scale of a
+# shell's functions in the file:
+# - the orbitals' coefficients ("Alpha MO coefficients", "Beta MO coefficients") lie orbital by orbital, each its
+#   coefficient of every function;
+# - each Cartesian primitive is normalised on its own (xx and xy alike: each to one), and the function so contracted;
+# - a pure shell's functions are the real solid harmonics of its l, in the order m = 0, +1, -1, +2, -2, ... (the page's
+#   d and f polynomials are in it; a pure g shell's nine follow it), each primitive normalised;
+# - g shells are 4 (15 Cartesian functions) and -4 (9 pure); a Cartesian g shell's functions are in the order of
+#   CARTESIAN[4]: x's power rising slowest, then y's (ZZZZ first, XXXX last);
+# - an unrestricted calculation has its beta orbitals' coefficients apart, a restricted open shell's none.
+# Shells past g (h and up) are not given: their functions' order in the file is not known here.
+
+# each Cartesian shell's functions, as their powers of x, y and z, in Gaussian's order
+CARTESIAN = {
+    L: [(t.count("X"), t.count("Y"), t.count("Z")) for t in order.split()]
+    for L, order in {
+        0: "S",
+        1: "X Y Z",
+        2: "XX YY ZZ XY XZ YZ",
+        3: "XXX YYY ZZZ XYY XXY XXZ XZZ YZZ YYZ XYZ",
+        4: "ZZZZ YZZZ YYZZ YYYZ YYYY XZZZ XYZZ XYYZ XYYY XXZZ XXYZ XXYY XXXZ XXXY XXXX",
+    }.items()
+}
+# the highest l Gaussian's functions are given for
+L_MOST = 4
+
+
+def solid_harmonic(l, m):
+    """The real solid harmonic of l and m as x, y and z's powers and their coefficients, up to a factor (each primitive
+    is normalised after): sum over t, u and v of (-1)^(t + v - vm) (1/4)^t C(l, t) C(l - t, |m| + t) C(t, u) C(|m|, 2v)
+    x^(2t + |m| - 2(u + v)) y^(2(u + v)) z^(l - 2t - |m|), t from 0 to (l - |m|)/2, u from 0 to t, v from vm to
+    |m|/2 in steps of one - vm 0 where m >= 0 (the cosine-like ones), 1/2 where m < 0 (the sine-like ones)."""
+    am = abs(m)
+    vm2 = 0 if m >= 0 else 1
+    out = {}
+    for t in range((l - am) // 2 + 1):
+        for u in range(t + 1):
+            for v2 in range(vm2, am + 1, 2):
+                c = (-1) ** (t + (v2 - vm2) // 2) * 0.25**t * math.comb(l, t) * math.comb(l - t, am + t) * math.comb(t, u) * math.comb(am, v2)
+                p = (2 * t + am - 2 * u - v2, 2 * u + v2, l - 2 * t - am)
+                out[p] = out.get(p, 0) + c
+    return {p: c for p, c in out.items() if c}
+
+
+def moment(n, a):
+    """The integral over all x of x^n e^(-a x^2)."""
+    if n % 2:
+        return 0.0
+    return math.prod(range(n - 1, 0, -2)) / (2 * a) ** (n // 2) * math.sqrt(math.pi / a)
+
+
+def overlap(p, q, a):
+    """The integral over space of two polynomials ({powers: coefficient}) times e^(-a r^2)."""
+    return sum(cp * cq * moment(i[0] + j[0], a) * moment(i[1] + j[1], a) * moment(i[2] + j[2], a) for i, cp in p.items() for j, cq in q.items())
+
+
+def fchk_basis(items):
+    """A formatted checkpoint's primitives and functions: (centres, powers, exponents, functions), each function its
+    primitives' places and its coefficients of them. Raises ValueError, saying why, where the basis is not all there or
+    has a shell past g."""
+    types, counts, atoms = items.get("Shell types"), items.get("Number of primitives per shell"), items.get("Shell to atom map")
+    exponents, contraction = items.get("Primitive exponents"), items.get("Contraction coefficients")
+    sp = items.get("P(S=P) Contraction coefficients")
+    n_atoms = items.get("Number of atoms")
+    if not all(isinstance(x, list) and x for x in (types, counts, atoms, exponents, contraction)) or not isinstance(n_atoms, int):
+        raise ValueError("it holds no basis set")
+    if not len(types) == len(counts) == len(atoms) or sum(counts) != len(exponents) or len(contraction) != len(exponents):
+        raise ValueError("its basis set is not as many shells and primitives as it says")
+    if None in exponents or None in contraction or any(not 0 < a < n_atoms + 1 for a in atoms):
+        raise ValueError("its basis set is not all numbers")
+    centres, powers, primitive_exponents, functions = [], [], [], []
+    k = 0
+    for t, n, atom in zip(types, counts, atoms):
+        if abs(t) > L_MOST:
+            raise ValueError(f"its basis has shells of l = {abs(t)}, whose functions' order is not known here")
+        a = exponents[k : k + n]
+        # (an sp shell: its s, then its p, of the same exponents)
+        if t == -1:
+            if not isinstance(sp, list) or len(sp) != len(exponents) or None in sp[k : k + n]:
+                raise ValueError("its sp shells have no p coefficients")
+            parts = [(0, contraction[k : k + n]), (1, sp[k : k + n])]
+        else:
+            parts = [(abs(t), contraction[k : k + n])]
+        k += n
+        for L, d in parts:
+            # (the shell's primitives: each exponent, each Cartesian power of its l)
+            first = len(centres)
+            for e in a:
+                for pw in CARTESIAN[L]:
+                    centres.append(atom - 1)
+                    powers.append(list(pw))
+                    primitive_exponents.append(e)
+            place = {pw: i for i, pw in enumerate(CARTESIAN[L])}
+            polys = [solid_harmonic(L, m) for m in [0] + [s * j for j in range(1, L + 1) for s in (1, -1)]] if t < -1 else [{pw: 1.0} for pw in CARTESIAN[L]]
+            for poly in polys:
+                # each primitive normalised, times its contraction coefficient; then the function itself normalised
+                weights = [dj / math.sqrt(overlap(poly, poly, 2 * e)) for e, dj in zip(a, d)]
+                norm = sum(wi * wj * overlap(poly, poly, ei + ej) for wi, ei in zip(weights, a) for wj, ej in zip(weights, a))
+                if not norm > 0:
+                    raise ValueError("its basis set has a function of no size")
+                prims, coefs = [], []
+                for j, wj in enumerate(weights):
+                    for pw, c in poly.items():
+                        prims.append(first + j * len(CARTESIAN[L]) + place[pw])
+                        coefs.append(wj * c / math.sqrt(norm))
+                functions.append({"primitives": prims, "coefficients": coefs})
+    if len(functions) != items.get("Number of basis functions"):
+        raise ValueError("its basis set is not as many functions as it says")
+    return centres, powers, primitive_exponents, functions
+
+
+def orbital_coefficients(items):
+    """Each orbital's coefficients of the functions, in the order `fchk_orbitals` gives the orbitals: alpha (or both
+    spins'), then beta. Raises ValueError where they are not as many as the orbitals and functions."""
+    nbasis = items.get("Number of basis functions")
+    out = []
+    for spin in ("Alpha", "Beta"):
+        energies, c = items.get(f"{spin} Orbital Energies"), items.get(f"{spin} MO coefficients")
+        if spin == "Beta" and not energies:
+            break
+        if not isinstance(nbasis, int) or not isinstance(energies, list) or not isinstance(c, list) or len(c) != len(energies) * nbasis or None in c:
+            raise ValueError(f"its {spin.lower()} orbitals' coefficients are not as many as its orbitals and functions")
+        out += [c[i * nbasis : (i + 1) * nbasis] for i in range(len(energies))]
+    return out
+
+
+def fchk_expansion(text):
+    """A formatted checkpoint's wavefunction whole, in Meno's general form (`expansion`). Raises ValueError, saying why,
+    where it cannot be given."""
+    _, items = fchk_items(text)
+    xyz = items.get("Current cartesian coordinates")
+    if not isinstance(xyz, list) or not xyz or None in xyz or len(xyz) != 3 * (items.get("Number of atoms") or 0):
+        raise ValueError("it holds no molecule")
+    centres, powers, exponents, functions = fchk_basis(items)
+    return {"nuclei": xyz, "centres": centres, "powers": powers, "exponents": exponents, "functions": functions, "orbitals": orbital_coefficients(items)}
 
 
 # --- a job, read ----------------------------------------------------------------------------------
