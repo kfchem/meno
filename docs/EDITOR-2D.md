@@ -234,6 +234,13 @@ let go while still zooming, it glides as a trackpad's pinch does. A second
 finger later than that, the first drawing or moving, is no press at all. A
 pen writes as before.
 
+On Windows Alt pressed and let go on its own does nothing. Windows would
+take it as the keyboard's way into the window's menu, which Meno's window
+does not show, and the next key would go to that menu and the page answer
+nothing until Esc; so the window does not pass that command on
+(`src-tauri/src/keymenu.rs`; F10 sends the same). Alt+Space still opens the
+window's menu, and Alt+F4 still closes it.
+
 On Windows a pinch - two fingers on a precision touchpad, as on a
 Surface's, or on its touch screen - is the user's only where WebView2's
 `IsPinchZoomEnabled` lets it be, and Meno's webview is made with it off
