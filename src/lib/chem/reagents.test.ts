@@ -269,6 +269,15 @@ describe("simple formulas, read by rule", () => {
     expect(abbreviationOf("BF3·Foo")).toBeUndefined();
   });
 
+  it("read a full stop typed for the middle dot as one, between two parts of a formula - but not a number's point, nor a SMILES's dot", () => {
+    expect(formula("Na2SO4.10H2O")).toBe(formula("Na2SO4·10H2O"));
+    expect(formula("BF3.OEt2")).toBe(formula("BF3·OEt2"));
+    expect(formula("CeCl3.7H2O")).toBe(formula("CeCl3·7H2O"));
+    // (a dictionary's own, listed with the middle dot)
+    expect(abbreviationOf("NaBO3.4H2O")?.name).toBe(abbreviationOf("NaBO3·4H2O")?.name);
+    for (const no of ["2.5", "CC.O", "O.O", "[Na+].[Cl-]", "c1ccccc1.O", "Na.Cl"]) expect(abbreviationOf(no), no).toBeUndefined();
+  });
+
   it("make a Buchwald precatalyst of its phosphine and its generation", () => {
     expect(formula("XPhos Pd G2")).toBe("C45H59ClNPPd");
     expect(formula("XPhos-Pd-G3")).toBe("C46H62NO3PPdS");

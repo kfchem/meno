@@ -367,7 +367,10 @@ Read by rule, besides, as whole molecules:
   own ion too ((Cl-)2, two chlorides; Cl- alone is read as an element
   with its charge is);
 - an adduct of known parts, a middle dot between them, each counted:
-  BF3·OEt2, CeCl3·7H2O, EDC·HCl;
+  BF3·OEt2, CeCl3·7H2O, EDC·HCl - or a full stop typed in its place,
+  between two parts of a formula (Na2SO4.10H2O, BF3.OEt2, and so the
+  dictionary's NaBO3·4H2O typed NaBO3.4H2O); a number's point (0.5) and
+  a SMILES's dot (CC.O) are none;
 - a Buchwald precatalyst named by its phosphine and generation - XPhos Pd
   G2, SPhos-Pd-G3, RuPhos Pd G4 - as its palladacycle: the phosphine, a
   2-aminobiphenyl's carbon and nitrogen, and a chloride (G2) or a mesylate
