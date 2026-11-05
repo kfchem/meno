@@ -366,10 +366,19 @@ export const WORKER = "worker.py";
 /** A program or library a plugin wraps, and the version its lock or pin fixes (a test checks it against them). */
 export type UsesDecl = { name: string; version: string };
 
+/**
+ * The plugin contracts this Meno speaks: a manifest says which it is written to (`contract`, unsaid: 1, the contract
+ * as docs/PLUGINS.md has it); one of a contract Meno does not speak is refused, as a catalogue's entry of one is not
+ * offered.
+ */
+export const CONTRACTS: readonly number[] = [1];
+
 /** A plugin's manifest, as Meno reads it. */
 export type Manifest = {
   id: string;
   name: string;
+  /** The plugin contract it is written to (`CONTRACTS`). */
+  contract: number;
   /** Its own version, semver, bumped whenever its files change (docs/PLUGINS.md, *Versions*). What it uses is `uses`, never this. */
   version: string;
   /** The programs and libraries it wraps, each with the version its lock or pin fixes: said beside its own version. */
@@ -1016,6 +1025,9 @@ export function acceptManifest(raw: unknown): Manifest | null {
   const name = text(m.name, 60);
   const version = text(m.version, 40);
   if (!id || !name || !version) return null;
+  // (the contract it is written to: one Meno speaks, or none)
+  const contract = m.contract === undefined ? 1 : m.contract;
+  if (typeof contract !== "number" || !CONTRACTS.includes(contract)) return null;
   if (m.environment !== undefined && m.environment !== "uv" && m.environment !== "pixi") return null;
   const environment = m.environment as Maker | undefined;
   const kinds = read(m.kinds, kindOf, (k) => k.id);
@@ -1090,6 +1102,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     id,
     name,
     version,
+    contract,
     uses: acceptUses(m.uses),
     description: text(m.description, 300) ?? "",
     licence: text(m.licence, 60) ?? "",

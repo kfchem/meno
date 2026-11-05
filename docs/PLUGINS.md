@@ -179,10 +179,29 @@ alone.
   Blender - and never a copy installed on the computer (`downloads`,
   `provides`; *A program Meno fetches*). It is not an interface: it is
   named by the program alone (*Blender*).
+- **Where plugins are** (2026-11-05): each in place in Meno's local data
+  folder, `plugins/<id>/<version>/` - its manifest, worker, lock and the
+  rest, as the plugin is - the version in use named by `plugins/<id>/current`
+  (the version alone, renamed into place at once). A version's folder
+  `current` does not name is no plugin Meno knows of. Only Meno's backend
+  puts them there (`src-tauri/src/installed.rs`): the page may not write
+  in `plugins/`. It gives the page each plugin in place - its manifest and
+  grammars - as Meno starts and again after one changes
+  (`plugins_installed`; `lib/plugins/known.ts`), and checks every path a
+  job or a worker names against the version in use: a lock, a worker, a
+  job's plugin. No code of Meno's names one.
 - **Meno carries some for now**, in `src-tauri/resources/plugins/`, and
-  finds them there: no code of Meno's names one. Those fetched over the
-  internet later will be folders of the same kind; how Meno trusts a list
-  fetched online is decided then.
+  puts each in place as it starts, marked as from Meno (`.from-bundle`):
+  one with none in place, or whose version in use came from Meno and is
+  not what Meno now carries - another version, or the same changed. Never
+  over one put in place otherwise, nor replacing one while a job of it
+  runs. As Meno starts, each version's folder its plugin's `current` does
+  not name - one an update replaced, one half put in place - is taken
+  away, but none of a plugin a job of which is waiting or running
+  (`tidy`; `plugin_jobs_running` asks the same). Plugins fetched from
+  a signed catalogue later are put in place beside them, as folders of the
+  same kind (`.staging/` and `catalogue*` in `plugins/` are the
+  catalogue's).
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's
