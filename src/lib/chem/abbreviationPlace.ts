@@ -52,9 +52,11 @@ export function picturedStructure(given: GroupStructure, bondLength: number): Ab
   // (a ligand's own picture has a star where it is bound)
   const bound = given.atoms.some((a, i) => a.el === "*" && !given.haptic?.some((h) => h.star === i));
   if (given.attach.length || bound) return placedStructure(given, null, bondLength);
+  // (a double bond's ends and refs too, as an axis's: its cis or trans never folded into a label)
   const keep = new Set([
     ...given.atoms.flatMap((a, i) => (a.tetra || a.isotope ? [i] : [])),
     ...(given.axes ?? []).flatMap((ax) => [...ax.atoms, ...ax.refs]),
+    ...given.bonds.flatMap((b) => (b.cisTrans ? [b.a1, b.a2, ...b.cisTrans.refs.filter((r) => r >= 0)] : [])),
   ]);
   const trials = contractionTrials(contractGraph(given.atoms, given.bonds), keep);
   let best: { given: GroupStructure; s: ReturnType<typeof drawnAsSaid>; laid: Layout2D; hidden: number } | null = null;
