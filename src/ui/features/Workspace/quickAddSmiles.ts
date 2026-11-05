@@ -18,3 +18,14 @@ export async function readSmiles(smiles: string, onSmiles: (smiles: string) => P
     return { error: err instanceof Error ? err.message : String(err), needs: err instanceof NoPlugin ? err.role : null };
   }
 }
+
+/**
+ * The plugin offered for the SMILES typed added (./RoleOffer `done`): what
+ * was typed read again, and drawn - unless the field is empty, or a read is
+ * under way already; then the offer and what it said only let go.
+ */
+export function afterAdded(typed: string, reading: boolean, read: (smiles: string) => void, letGo: () => void): void {
+  const smiles = typed.trim();
+  if (smiles && !reading) read(smiles);
+  else letGo();
+}

@@ -15,7 +15,7 @@ import { togglesOn } from "./utils/press";
 import { quickAddLeaves } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
-import { readSmiles } from "./quickAddSmiles";
+import { afterAdded, readSmiles } from "./quickAddSmiles";
 import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
@@ -554,14 +554,12 @@ function SmilesField({
           <RoleOffer
             role={needs}
             // (added: what was typed is read again, and drawn - not typed again)
-            done={() => {
-              const smiles = text.trim();
-              if (smiles && !reading.current) read(smiles);
-              else {
+            done={() =>
+              afterAdded(text, reading.current, read, () => {
                 setError(null);
                 setNeeds(null);
-              }
-            }}
+              })
+            }
           />
         </div>
       )}

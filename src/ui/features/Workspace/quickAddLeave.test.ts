@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { askKeys } from "../../layouts/asking";
 import { quickAddLeaves } from "./quickAddLeave";
-import { readSmiles } from "./quickAddSmiles";
+import { afterAdded, readSmiles } from "./quickAddSmiles";
 import { addOffered } from "./offerSteps";
 import { NoPlugin } from "../../../lib/roles/worker";
 import type { CatalogueEntry } from "../../../lib/plugins/catalogue";
@@ -58,6 +58,20 @@ describe("what closes Quick Add", () => {
       behind.done();
     }
   });
+
+  it("stays open where one question is asked in the tab in front and another waits in a tab behind", () => {
+    const close = vi.fn();
+    const leaves = quickAddLeaves((t) => t === inQuickAdd, close);
+    const behind = askKeys((t) => t === inQuestion, () => {}, () => false);
+    const here = askKeys((t) => t === inQuestion, () => {});
+    try {
+      leaves.outside(event("wheel", onPage));
+      expect(close).not.toHaveBeenCalled();
+    } finally {
+      here.done();
+      behind.done();
+    }
+  });
 });
 
 describe("a SMILES typed in Quick Add that no plugin here reads", () => {
@@ -74,5 +88,17 @@ describe("a SMILES typed in Quick Add that no plugin here reads", () => {
     await addOffered(entry, async () => void (again = await readSmiles("CCO", onSmiles)), () => {}, async () => void (added = true));
     await vi.waitFor(() => expect(again).toBeNull());
     expect(onSmiles.mock.calls).toEqual([["CCO"], ["CCO"]]);
+  });
+
+  it("the plugin added, Quick Add reads what was typed again - or, nothing typed or a read under way, only lets the offer go", () => {
+    const read = vi.fn();
+    const letGo = vi.fn();
+    afterAdded("  CCO ", false, read, letGo);
+    expect(read.mock.calls).toEqual([["CCO"]]);
+    expect(letGo).not.toHaveBeenCalled();
+    afterAdded("CCO", true, read, letGo);
+    afterAdded("  ", false, read, letGo);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(letGo).toHaveBeenCalledTimes(2);
   });
 });
