@@ -1342,3 +1342,39 @@ describe("a piece drawn as its own mirror image, with no ring that lies square",
     expect(Math.min(lineOf(x, y, 0, 1), 180 - lineOf(x, y, 0, 1))).toBeLessThan(0.5);
   });
 });
+
+describe("an end of a double bond asked to be straight (`LayoutAtom.linear`)", () => {
+  // F-CH=CH-CH3, the F's carbon (0) asked to be straight
+  const input = (linear: boolean): LayoutInput => ({
+    atoms: [{ el: "C", ...(linear ? { linear: true } : {}) }, { el: "C" }, { el: "F" }, { el: "C" }],
+    bonds: [
+      { a: 0, b: 1, order: 2 },
+      { a: 0, b: 2, order: 1 },
+      { a: 1, b: 3, order: 1 },
+    ],
+  });
+  // the F straight on from the C=C, or bent off it at 120 degrees
+  const at = (deg: number) => {
+    const t = (deg * Math.PI) / 180;
+    return new Map([
+      [0, { x: 0, y: 0 }],
+      [1, { x: 1, y: 0 }],
+      [2, { x: Math.cos(t), y: Math.sin(t) }],
+      [3, { x: 1.5, y: -Math.sqrt(3) / 2 }],
+    ]);
+  };
+
+  it("is scored best straight where it is asked to be, and bent where it is not", () => {
+    const asked = scorer(perceive(input(true)), [0, 1, 2, 3]);
+    expect(asked(at(180))).toBeLessThan(asked(at(120)));
+    const not = scorer(perceive(input(false)), [0, 1, 2, 3]);
+    expect(not(at(120))).toBeLessThan(not(at(180)));
+  });
+
+  it("is drawn straight, and the drawing measured with no fault there", () => {
+    const out = layout2D(input(true));
+    const t = Math.abs(Math.atan2(out.y[2] - out.y[0], out.x[2] - out.x[0]) - Math.atan2(out.y[0] - out.y[1], out.x[0] - out.x[1]));
+    expect(Math.min(t, 2 * Math.PI - t)).toBeLessThan((10 * Math.PI) / 180);
+    expect(measureLaidOut(input(true), out).angleError).toBeLessThan(measureLaidOut(input(false), out).angleError);
+  });
+});
