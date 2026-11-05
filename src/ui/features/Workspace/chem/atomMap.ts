@@ -154,8 +154,8 @@ export function unpairedSaid(map: ArrowAtomMap, sides: readonly [string, string]
   const words = (els: string[]) => {
     const n = new Map<string, number>();
     for (const el of els) n.set(el, (n.get(el) ?? 0) + 1);
-    // (in Hill's order: C, H, then the rest alphabetically)
-    const rank = (el: string) => (el === "C" ? "0" : el === "H" ? "1" : `2${el}`);
+    // (in Hill's order: with carbon, C, H, then the rest alphabetically; without, all alphabetically)
+    const rank = (el: string) => (n.has("C") ? (el === "C" ? "0" : el === "H" ? "1" : `2${el}`) : el);
     return [...n].sort(([p], [q]) => (rank(p) < rank(q) ? -1 : 1)).map(([el, k]) => (k > 1 ? `${k} ${el}` : el)).join(", ");
   };
   const before = map.reactant.atoms.flatMap((a, i) => (paired.has(i) ? [] : [a.el]));

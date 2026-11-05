@@ -312,5 +312,8 @@ describe("a partial atom map", () => {
     const hs = da.productOrder.flatMap((n, j) => (n.startsWith("H") ? [j] : [])).slice(0, 2);
     const two = { ...partial, maps: [partial.maps[0].map((r, j) => (hs.includes(j) ? -1 : r))], chosen: 0 };
     expect(unpairedSaid(two, ["Before", "After"])).toBe("Not mapped: C, 2 H of Before; C, 2 H of After");
+    // (with no carbon among them, all alphabetically, as Hill has it: H before O)
+    const noCarbon = { ...two, reactant: { ...two.reactant, atoms: two.reactant.atoms.map((a) => (a.el === "C" ? { ...a, el: "O" } : a)) }, product: { ...two.product, atoms: two.product.atoms.map((a) => (a.el === "C" ? { ...a, el: "O" } : a)) } };
+    expect(unpairedSaid(noCarbon, ["Before", "After"])).toBe("Not mapped: 2 H, O of Before; 2 H, O of After");
   });
 });
