@@ -66,3 +66,27 @@ export function useEasedValues(targets: ReadonlyMap<string, number>, ms = 150): 
   });
   return out;
 }
+
+/**
+ * How long each of `keys` has been here, in ms, from the first time it was
+ * - frame by frame while any is younger than `until` (a mark's moment): what
+ * fades a mark in and out over its time (pageGl/workflowMarks `memberPulse`).
+ */
+export function useAges(keys: readonly string[], until: number): ReadonlyMap<string, number> {
+  const born = useRef(new Map<string, number>());
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  const now = performance.now();
+  const out = new Map<string, number>();
+  for (const k of keys) {
+    if (!born.current.has(k)) born.current.set(k, now);
+    out.set(k, now - born.current.get(k)!);
+  }
+  for (const k of [...born.current.keys()]) if (!out.has(k)) born.current.delete(k);
+  const young = [...out.values()].some((a) => a < until);
+  useEffect(() => {
+    if (!young) return;
+    const id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  });
+  return out;
+}

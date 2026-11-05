@@ -9,7 +9,8 @@ import { COLORS } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame from "../workflow/SetFrame";
-import FrameTabs, { type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
+import FrameTabs, { FRAMES_ORDER, type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
+import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } from "../pageGl/workflowMarks";
 import StepCard, { shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
@@ -41,7 +42,7 @@ import PageLayer from "../pageGl/PageLayer";
 import { cardFace, type CardFaceOf } from "../pageGl/cardFace";
 import { portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
-import { useEasedValues, useFaded } from "../pageGl/faded";
+import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
 import type { Region, Side as Edge } from "../pageGl/hits";
 import type { PageIcon } from "../pageGl/icons";
@@ -401,6 +402,8 @@ function runRows(s: WorkflowStep): RunRow[] {
 const CARDS_ORDER = PAGE_GL_ORDER - 6;
 /** How close two presses on a set's tab come to name it anew, in ms: a double-click's. */
 const DOUBLE_MS = 400;
+/** Where a workflow's small marks are drawn: under the sets' frames (FrameTabs `FRAMES_ORDER`), as their HTML lay before the sets. */
+const MARKS_ORDER = FRAMES_ORDER - 0.9;
 /** Where the ports are drawn: over the molecules' chips (PAGE_GL_ORDER, their words + 1), under a chip opened over the rest (pageGl/PagePlaced RAISED_ORDER). */
 const PORTS_ORDER = PAGE_GL_ORDER + 4;
 const NO_TEXTS: readonly PageText[] = [];
@@ -534,6 +537,8 @@ export default function Workflow2D() {
   const [renaming, setRenaming] = useState<number | null>(null);
   // (a shut card's state pointed at: its words in full, in the page's tip)
   const [statePointed, setStatePointed] = useState<number | null>(null);
+  // (a structure's number pointed at: how it was made, in the page's tip)
+  const [recordPointed, setRecordPointed] = useState<string | null>(null);
   // (the port under the pointer: lit a little, as its HTML was on hover)
   const [portPointed, setPortPointed] = useState<string | null>(null);
   const read = useRef(true);
@@ -1066,6 +1071,27 @@ export default function Workflow2D() {
     }),
   ];
   const shownParts = usePresence(parts, (el) => String(el.key));
+  // what has just joined a set or left it - a moment, fading in and out - each position an Enumerate step chose, numbered, and each
+  // structure a step numbered, its number under it - how it was made in the page's tip as it is pointed at (pageGl/workflowMarks)
+  const markAges = useAges(memberMarks.map((k) => k.key), MEMBER_MS);
+  const marks = { shapes: [] as Shape[], texts: [] as PageText[], regions: [] as Region[], tip: null as PageTipAt | null };
+  for (const k of memberMarks) marks.shapes.push(memberMarkBox(`member:${k.key}`, k.frame, k.joined, memberPulse(markAges.get(k.key) ?? 0)));
+  for (const m of positions) {
+    const b = positionBadge(`position:${m.key}`, m.x, m.y, m.n, 2);
+    marks.shapes.push(b.shape);
+    marks.texts.push(b.text);
+  }
+  for (const n of numbered) {
+    const tip = [recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ");
+    const r = recordLabel(`record:${n.key}`, n.x, n.y - NOMINAL_BOND_LENGTH / 2, `#${recordNumber(n.record)}`, !!tip);
+    marks.texts.push(r.text);
+    if (r.region) marks.regions.push(r.region);
+    if (recordPointed === r.text.key && r.region) {
+      const q = "rect" in r.region ? r.region.rect : null;
+      if (q) marks.tip = { key: r.text.key, text: tip, x: (q.x0 + q.x1) / 2, y: (q.y0 + q.y1) / 2, w: q.x1 - q.x0, h: q.y1 - q.y0 };
+    }
+  }
+  const onMarks: HitHandlers = { hover: (key, _part, on) => setRecordPointed((was) => (on ? key : was === key ? null : was)) };
   // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top, its icon - what made it, or a set's
   // own - standing in for them where they are too small to read; its line darker while its tab is pointed at, Meno's colour chosen
   const setTabs: FrameTab[] = sets.map((b) => {
@@ -1251,6 +1277,8 @@ export default function Workflow2D() {
       })}
       {drawn && wirePoints.get("drawn") && <WireLine target={wirePoints.get("drawn")!} color={ACCENT} zoom={zoom} />}
 
+      {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
+      <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
       <FrameTabs items={tabsShown} on={onSetTabs} />
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
@@ -1261,30 +1289,6 @@ export default function Workflow2D() {
           selection's port - and not behind a layer of another's. */}
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[18, 18]} pointerEvents="none">
         <div ref={layer} style={{ position: "relative", width: 0, height: 0 }}>
-          {memberMarks.map((k) => (
-            <div key={k.key} style={onLayer(k.frame.x0, k.frame.y1)} className="meno-member-mark">
-              <div
-                className={k.joined ? "rounded-lg border border-accel-base bg-accel-base/5" : "rounded-lg border border-dashed border-gh-gray"}
-                style={{ width: (k.frame.x1 - k.frame.x0) / PX, height: (k.frame.y1 - k.frame.y0) / PX, pointerEvents: "none" }}
-              />
-            </div>
-          ))}
-          {positions.map((m) => (
-            <div key={`p${m.key}`} style={{ ...onLayer(m.x, m.y), transform: "translate(-50%, -50%)" }}>
-              <span className="block min-w-4 rounded-full border border-accel-base bg-white px-1 text-center text-[10px] leading-4 tabular-nums text-accel-base">{m.n}</span>
-            </div>
-          ))}
-          {numbered.map((n) => (
-            <div key={`n${n.key}`} style={{ ...onLayer(n.x, n.y - NOMINAL_BOND_LENGTH / 2), transform: "translateX(-50%)" }}>
-              <span
-                className="block whitespace-nowrap rounded px-1 text-[10px] leading-4 tabular-nums text-gh-gray"
-                style={{ pointerEvents: "auto" }}
-                title={[recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ")}
-              >
-                #{recordNumber(n.record)}
-              </span>
-            </div>
-          ))}
           {shownParts.map(({ key, item, leaving }) =>
             leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
