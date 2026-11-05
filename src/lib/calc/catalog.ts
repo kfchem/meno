@@ -13,7 +13,7 @@
  */
 import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type PresetsDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
-import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
+import { MANIFESTS, onPluginsChanged, PLUGINS_ROOT } from "../plugins/known";
 import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl, type InterfaceDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
@@ -127,34 +127,32 @@ export const pluginOf = (m: Manifest): Plugin => {
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
     roleUnsure: Object.fromEntries(m.roles.filter((r) => r.unsure).map((r) => [r.role, r.unsure!.below])),
     profile: `plugin-${m.id}`,
-    lock: `${PLUGINS_ROOT}/${m.id}/${lockOf(m.environment)}`,
-    worker: `${PLUGINS_ROOT}/${m.id}/${WORKER}`,
+    // (in the folder of its version in use, in Meno's local data folder: lib/plugins/known)
+    lock: `${PLUGINS_ROOT}/${m.id}/${m.version}/${lockOf(m.environment)}`,
+    worker: `${PLUGINS_ROOT}/${m.id}/${m.version}/${WORKER}`,
     ...(m.environment === "pixi" ? { env: "pixi" as const } : {}),
   };
 };
 
 /**
- * The plugins Meno carries refused for the plugins they use, each with why
+ * The plugins Meno knows of refused for the plugins they use, each with why
  * (lib/plugins/depends `dependsRefused`): one that uses a plugin Meno does
  * not know, or a program it does not declare, and every one of a circle.
  * Not offered.
  */
-export const DEPENDS_REFUSED: ReadonlyMap<string, string> = new Map([
-  ...filesRefused(MANIFESTS, new Set(Object.values(MENO_KINDS).map((k) => k.id as string))),
-  ...dependsRefused(MANIFESTS),
-]);
+export let DEPENDS_REFUSED: ReadonlyMap<string, string> = new Map();
 
 /** Every plugin Meno knows of, in Meno's order: those that run something, and those that bring data alone. */
-export const ALL_PLUGINS: readonly Plugin[] = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id)).map(pluginOf);
+export let ALL_PLUGINS: readonly Plugin[] = [];
 
 /** The plugins Meno knows of that run something, in Meno's order: each that reads or writes something, or fills a role or a kind of step. */
-export const PLUGINS: readonly PythonPlugin[] = ALL_PLUGINS.filter(runs).filter((p) => p.reads.length || p.roles.length || p.writes.length || p.steps.length);
+export let PLUGINS: readonly PythonPlugin[] = [];
 
 /** The plugins that read files. */
-export const READER_PLUGINS: readonly PythonPlugin[] = PLUGINS.filter((p) => p.reads.length);
+export let READER_PLUGINS: readonly PythonPlugin[] = [];
 
 /** The plugins that write files. */
-export const WRITER_PLUGINS: readonly PythonPlugin[] = PLUGINS.filter((p) => p.writes.length);
+export let WRITER_PLUGINS: readonly PythonPlugin[] = [];
 
 /** A plugin of that id, whether it runs something or not. */
 export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.find((p) => p.id === id);
@@ -163,7 +161,7 @@ export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.fin
 export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find((p) => p.id === id);
 
 /** The manifests of the plugins offered: what the use of plugins is worked out from. */
-const OFFERED = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id));
+let OFFERED: readonly Manifest[] = [];
 
 /** The plugins a plugin uses, and those they use in turn, in the order they are set up - each before any that uses it. */
 export const pluginsUsedBy = (id: string): Plugin[] => dependencyOrder(id, OFFERED).flatMap((m) => anyPluginById(m.id) ?? []);
@@ -248,7 +246,7 @@ export const manifestOf = (id: string): Manifest | undefined => MANIFESTS.find((
  * The marks of the plugins Meno carries refused - each would have claimed
  * one of Meno's own files - added or not: said in Settings, Plugins.
  */
-export const REFUSED = registered(MANIFESTS).refused;
+export let REFUSED: ReturnType<typeof registered>["refused"] = registered([]).refused;
 
 /** The kind of that id: registered, or else one the catalogue of a plugin added names. */
 export const anyKindById = (id: string): Kind | undefined => kindById(id) ?? kindById(id, cataloguedKinds());
@@ -272,7 +270,21 @@ export const MENO: MenoReader = {
 };
 
 /** Every reader: Meno's own, then the plugins, in Meno's order. */
-export const READERS: readonly ReaderPlugin[] = [MENO, ...READER_PLUGINS];
+export let READERS: readonly ReaderPlugin[] = [MENO];
+
+/** All of the above worked out again from the plugins Meno knows of now (lib/plugins/known): as it starts, and each time they change. */
+function workOut(): void {
+  DEPENDS_REFUSED = new Map([...filesRefused(MANIFESTS, new Set(Object.values(MENO_KINDS).map((k) => k.id as string))), ...dependsRefused(MANIFESTS)]);
+  ALL_PLUGINS = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id)).map(pluginOf);
+  PLUGINS = ALL_PLUGINS.filter(runs).filter((p) => p.reads.length || p.roles.length || p.writes.length || p.steps.length);
+  READER_PLUGINS = PLUGINS.filter((p) => p.reads.length);
+  WRITER_PLUGINS = PLUGINS.filter((p) => p.writes.length);
+  OFFERED = MANIFESTS.filter((m) => !DEPENDS_REFUSED.has(m.id));
+  REFUSED = registered(MANIFESTS).refused;
+  READERS = [MENO, ...READER_PLUGINS];
+}
+workOut();
+onPluginsChanged(workOut);
 
 /** The reader of that id. */
 export function readerById(id: string, readers: readonly ReaderPlugin[] = READERS): ReaderPlugin | undefined {

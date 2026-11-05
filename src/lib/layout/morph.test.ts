@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { coreMatches } from "./scaffold";
 import { commonAtoms, fitOnto, fitted, MATCH_MOST_ATOMS, matchedAtoms, morphAt, sameAtoms, unfitted, type MatchDrawing } from "./morph";
 
 /** Benzene drawn as a hexagon of side 1, its first atom at angle `turn` (radians), Kekulé bonds from atom `first`. */
@@ -68,6 +69,87 @@ describe("two drawings of one structure, matched", () => {
     const side = Math.hypot(half[1].x - half[0].x, half[1].y - half[0].y);
     expect(side).toBeCloseTo(1);
     expect(Math.abs(Math.atan2(f.sin, f.cos))).toBeLessThanOrEqual(Math.PI);
+  });
+
+  it("move a drawing that is not the other turned - a chain stretched, then curled - exactly from its places to its own, the turn half done half-way", () => {
+    const h = 1.299;
+    const stretched = [
+      { x: 0, y: 0 },
+      { x: 1.5, y: 0 },
+      { x: 2.25, y: h },
+      { x: 3.75, y: h },
+      { x: 4.5, y: 0 },
+    ];
+    // (curled, and turned 170 degrees as a whole: a turn the long way round would be 190)
+    const curl = [
+      { x: 0, y: 0 },
+      { x: 1.5, y: 0 },
+      { x: 2.25, y: h },
+      { x: 1.5, y: 2 * h },
+      { x: 2.25, y: 3 * h },
+    ];
+    const t170 = (170 * Math.PI) / 180;
+    const curled = curl.map((p) => ({ x: Math.cos(t170) * p.x - Math.sin(t170) * p.y + 7, y: Math.sin(t170) * p.x + Math.cos(t170) * p.y + 1 }));
+    const f = fitOnto(curled, stretched);
+    curled.forEach((p, i) => {
+      const start = morphAt(f, stretched[i], p, 0);
+      const end = morphAt(f, stretched[i], p, 1);
+      expect(start.x).toBeCloseTo(stretched[i].x, 9);
+      expect(start.y).toBeCloseTo(stretched[i].y, 9);
+      expect(end.x).toBeCloseTo(p.x, 9);
+      expect(end.y).toBeCloseTo(p.y, 9);
+    });
+    // (turned only - the stretched chain itself, 170 degrees round - half-way it has turned 85 degrees, the short way, not 95 the long)
+    const rigid = stretched.map((p) => ({ x: Math.cos(t170) * p.x - Math.sin(t170) * p.y + 7, y: Math.sin(t170) * p.x + Math.cos(t170) * p.y + 1 }));
+    const g = fitOnto(rigid, stretched);
+    const mid = rigid.map((p, i) => morphAt(g, stretched[i], p, 0.5));
+    const turn = (q: readonly { x: number; y: number }[]) => Math.atan2(q[1].y - q[0].y, q[1].x - q[0].x);
+    const by = Math.atan2(Math.sin(turn(mid) - turn(stretched)), Math.cos(turn(mid) - turn(stretched)));
+    expect(by).toBeCloseTo((85 * Math.PI) / 180, 6);
+  });
+
+  it("are matched up to as many atoms as the most - one more, and they are not", () => {
+    const chain = (n: number): MatchDrawing => ({
+      atoms: Array.from({ length: n }, (_, i) => ({ el: "C", x: i * 0.87, y: i % 2 ? 0.5 : 0 })),
+      bonds: Array.from({ length: n - 1 }, (_, i) => ({ a: i, b: i + 1, order: 1 })),
+    });
+    expect(sameAtoms(chain(MATCH_MOST_ATOMS), chain(MATCH_MOST_ATOMS))).not.toBeNull();
+    expect(sameAtoms(chain(MATCH_MOST_ATOMS + 1), chain(MATCH_MOST_ATOMS + 1))).toBeNull();
+  });
+
+  it("are fitted without a mirror where a mirror fits no better - a drawing as symmetric as its mirror", () => {
+    // (propane, C-C-C bent: its mirror across its own axis is itself - a tie, and the plain turn is taken)
+    const propane = [
+      { x: -0.87, y: 0 },
+      { x: 0, y: 0.5 },
+      { x: 0.87, y: 0 },
+    ];
+    const turned = propane.map((p) => ({ x: -p.y, y: p.x }));
+    expect(fitOnto(turned, propane, true)).toMatchObject({ mirror: 1 });
+  });
+});
+
+describe("a core found in a structure (scaffold.ts coreMatches)", () => {
+  /** Six carbons, bonded 0-1 ... 4-5, and 5-0 closing a ring of `closing` order where it is given. */
+  const six = (closing?: number) => ({
+    atoms: Array.from({ length: 6 }, () => ({ el: "C" })),
+    bonds: [...Array.from({ length: 5 }, (_, i) => ({ a: i, b: i + 1, order: 1 })), ...(closing ? [{ a: 5, b: 0, order: closing }] : [])],
+  });
+
+  it("is not found where a bond of it is missing - a ring against an open chain, each of whose middle atoms has as many bonds", () => {
+    // (eight carbons in a chain: six of them in a row have two bonds each, as each ring atom has - only the ring's closing bond is missing)
+    const chain = { atoms: Array.from({ length: 8 }, () => ({ el: "C" })), bonds: Array.from({ length: 7 }, (_, i) => ({ a: i, b: i + 1, order: 1 })) };
+    expect(coreMatches(six(1), chain)).toEqual([]);
+    expect(coreMatches(six(1), six())).toEqual([]);
+  });
+
+  it("is not found where a bond of it is there at another order - cyclohexene's double bond against cyclohexane's single", () => {
+    expect(coreMatches(six(2), six(1))).toEqual([]);
+  });
+
+  it("is found where every bond of it is there, as it is", () => {
+    expect(coreMatches(six(1), six(1)).length).toBeGreaterThan(0);
+    expect(coreMatches(six(2), six(2)).length).toBeGreaterThan(0);
   });
 });
 

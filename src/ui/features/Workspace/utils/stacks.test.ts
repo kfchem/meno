@@ -325,4 +325,23 @@ describe("a stack of drawings, lined up as it is opened", () => {
     const at = (id: number) => out.atoms.find((a) => a.id === id)!;
     expect(near(at(10), at(1)) && near(at(11), at(2)) && near(at(12), at(3))).toBe(true);
   });
+
+  it("only turns one with any mark a mirror would change - a bold or dashed line, a double bond to one side, a mark put by hand", () => {
+    // (each record mirrored in the file: lined up by a mirror it would lie exactly on the first; turned only, it cannot)
+    const marks: [string, (r: ReturnType<typeof ethanol>) => ReturnType<typeof ethanol>][] = [
+      ["bold", (r) => ({ ...r, bonds: r.bonds.map((b, i) => (i === 0 ? { ...b, display: "bold" as const } : b)) })],
+      ["dashed", (r) => ({ ...r, bonds: r.bonds.map((b, i) => (i === 0 ? { ...b, display: "dashed" as const } : b)) })],
+      ["double to one side", (r) => ({ ...r, bonds: r.bonds.map((b, i) => (i === 0 ? { ...b, doubleMode: "left" as const } : b)) })],
+      ["mark on a bond", (r) => ({ ...r, bonds: r.bonds.map((b, i) => (i === 0 ? { ...b, stereoAt: { x: 0, y: 0 } } : b)) })],
+      ["mark on an atom", (r) => ({ ...r, atoms: r.atoms.map((a, i) => (i === 1 ? { ...a, stereoAt: { x: 0, y: 0 } } : a)) })],
+    ];
+    for (const [what, mark] of marks) {
+      const first = mark(ethanol(1, 0, 0));
+      const out = alignedRecords(stacked(first, mark(ethanol(10, 1, 30, true))), [{ atoms: [1, 2, 3] }, { atoms: [10, 11, 12] }]);
+      const at = (id: number) => out.atoms.find((a) => a.id === id)!;
+      expect([0, 1, 2].every((i) => near(at(10 + i), at(1 + i))), what).toBe(false);
+      // (turned, not reshaped: each bond as long as it was)
+      expect(Math.hypot(at(10).x - at(11).x, at(10).y - at(11).y), what).toBeCloseTo(1, 1);
+    }
+  });
 });

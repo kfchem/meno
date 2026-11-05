@@ -25,6 +25,7 @@
  *   end, narrow there: that neighbour out of the page (or behind it, on
  *   hashes), the other end's neighbours in it.
  */
+import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
 import { freeCorners, solidOf } from "./cage";
 import { isMetal, key, perceive, type CisTrans } from "./perceive";
 import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Stereo, type Tetrahedral } from "./stereo";
@@ -34,6 +35,8 @@ export type DrawnAtom = {
   y: number;
   /** What it is: C unless said, for where an H drawn beside it can go. */
   el?: string;
+  /** Its charge, where it has one: for whether it has a lone pair (lib/chem/lonePairCentres). */
+  charge?: number;
   /** Its depth where the structure is drawn in perspective: nearer the viewer is larger. */
   z?: number;
   /** Hydrogens it carries but are not drawn as atoms. */
@@ -90,21 +93,6 @@ const WEDGE_LIFT = 0.8;
 const HAIR = 0.2;
 
 /**
- * The elements a stereocentre with three groups and a lone pair for its
- * fourth is of - a sulfoxide's S, a phosphine's P - as RDKit reads one:
- * such an atom at the end of a single bond is no axis's end.
- */
-const LONE_PAIR_CENTRES = new Set(["S", "Se", "Te", "P", "As", "Sb"]);
-
-/**
- * Of those, the ones whose configuration a drawing's wedge states as every
- * reader reads it - a sulfoxide's or a sulfonium's S, a phosphine's P, an
- * arsine's As; RDKit reads a selenoxide's Se, a telluride's Te or a
- * stibine's Sb as no centre from its wedge, so Meno does not either.
- */
-const READ_LONE_PAIR_CENTRES = new Set(["S", "P", "As"]);
-
-/**
  * How near two bonds' directions are taken to be one line, either way - in
  * line, or on top of each other: 10 degrees. IUPAC 2006 (Brecher, Pure Appl.
  * Chem. 78, 1897), ST-0.1: "linear" is "forming an angle between 170° and
@@ -127,6 +115,47 @@ function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y
   return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || apart(u, w) > Math.PI - IN_LINE)));
 }
 
+/**
+ * The ends of the double bonds a drawing draws straight - an end's one group
+ * straight on from it, within `IN_LINE` - so that it states neither cis nor
+ * trans though the bond could have either (IUPAC 2006, ST-4.4: the linear
+ * depiction of a double bond of unspecified configuration): each such end,
+ * by atom index. Not a double bond with nothing on an end, in a ring of
+ * seven atoms or fewer, cumulated, or with a wavy bond at an end - none of
+ * those has a cis or trans to leave unsaid - nor an end with two groups,
+ * whose other group states it. Clean-up keeps these ends straight
+ * (`LayoutAtom.linear`), so that what it lays out leaves the bond unsaid too.
+ */
+export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
+  const neighbours: number[][] = atoms.map(() => []);
+  const bondOf = new Map<string, DrawnBond>();
+  bonds.forEach((b) => {
+    if (b.a === b.b || bondOf.has(key(b.a, b.b))) return;
+    neighbours[b.a].push(b.b);
+    neighbours[b.b].push(b.a);
+    bondOf.set(key(b.a, b.b), b);
+  });
+  const out = new Set<number>();
+  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
+  const straightOn = (end: number, other: number, n: number) =>
+    apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
+  for (const bond of bonds) {
+    if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) continue;
+    const { a, b } = bond;
+    const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
+    if (!groups(a, b).length || !groups(b, a).length || inSmallRing(neighbours, a, b) || cumulated(a, b) || cumulated(b, a)) continue;
+    if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
+    for (const [end, other] of [
+      [a, b],
+      [b, a],
+    ]) {
+      const g = groups(end, other);
+      if (g.length === 1 && straightOn(end, other, g[0])) out.add(end);
+    }
+  }
+  return out;
+}
+
 export function readStereo(
   atoms: readonly DrawnAtom[],
   bonds: readonly DrawnBond[],
@@ -145,16 +174,19 @@ export function readStereo(
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
   };
+  // (which atoms of three bonds keep a configuration by their lone pair: Meno's rule, lib/chem/lonePairCentres)
+  const keepsPyramid = lonePairCentres(atoms, [...bondOf.values()]);
 
   const centres = (fits: Map<number, CageFit>) => {
     const found = new Map<number, Tetrahedral>();
     atoms.forEach((atom, c) => {
       const around = neighbours[c];
-      // (a sulfoxide's S, a phosphine's P, a sulfonium's S: three groups and
-      // a lone pair for the fourth, undrawn, read as a centre with its H
-      // left out is - its configuration the volume of the three, as the
+      // (a sulfoxide's S, a phosphine's P, an aziridine's N: three groups and
+      // a lone pair for the fourth, undrawn, where the lone pair keeps its
+      // configuration (lib/chem/lonePairCentres) - read as a centre with its
+      // H left out is, its configuration the volume of the three, as the
       // SMILES reader keeps one)
-      const lonePair = atom.hs === 0 && around.length === 3 && READ_LONE_PAIR_CENTRES.has(atom.el ?? "C");
+      const lonePair = atom.hs === 0 && around.length === 3 && keepsPyramid(c);
       if (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4)) return;
       if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
       const wedged = around.some((n) => lift(c, n) !== 0);
@@ -236,8 +268,11 @@ export function readStereo(
       const far = neighbours[j].filter((n) => n !== i);
       if (near.length !== 2 || far.length !== 2 || atoms[i].hs || atoms[j].hs || tetra.has(i)) continue;
       // (read as an axis's, the wedge from a sulfoxide's S to its methyl
-      // turned the S over: laid out, the axis was kept and the centre not)
-      if (LONE_PAIR_CENTRES.has(atoms[i].el ?? "C")) continue;
+      // turned the S over: laid out, the axis was kept and the centre not.
+      // A wedge at a pyramid of three is about the pyramid, whether or not
+      // that keeps a configuration - no axis's end)
+      const orders = neighbours[i].reduce((sum, n) => sum + (bondOf.get(key(i, n))!.order === 4 ? 1.5 : bondOf.get(key(i, n))!.order), 0);
+      if (keepsPyramid(i) || pyramidal(atoms[i].el ?? "C", atoms[i].charge ?? 0, 3, orders, atoms[i].hs)) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
       if (lifted == null || inRing(neighbours, i, j, (k) => isMetal(atoms[k].el ?? "C"))) continue;
       const refs: [number, number] = [Math.min(...near), Math.min(...far)];

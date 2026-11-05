@@ -49,7 +49,7 @@ import re
 SCHEMA = 1
 PROGRAM = "xtb"
 
-# a number as xtb prints one: "-5.070250039539", "0.1000000E-05", "0.159E+27"
+# a number as xtb prints one: "-5.012345678901", "0.1000000E-05", "0.159E+27"
 FLOAT = r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eEdD][-+]?\d+)?"
 # debye in an atomic unit of dipole (e bohr)
 DEBYE_PER_AU = 2.541746473
@@ -77,7 +77,7 @@ def last(pattern, text, flags=re.M):
 
 # --- what the run was ----------------------------------------------------------
 
-# "   * xtb version 6.7.1 (edcfbbe) compiled by 'someone' on 2026-01-01"
+# "   * xtb version 6.7.1 (abc1234) compiled by 'someone' on 2026-01-01"
 VERSION = re.compile(r"^\s*\*\s*xtb version\s+(\S+)", re.M)
 # the setup box: ":  Hamiltonian                  GFN2-xTB          :"
 HAMILTONIAN = re.compile(r"^\s*:\s*Hamiltonian\s+(\S+)\s*:", re.M)
@@ -192,7 +192,7 @@ def final_structure(text, elements):
 
 # --- energies ------------------------------------------------------------------
 
-# the closing summary: "| TOTAL ENERGY               -5.070250039539 Eh   |"; its SUMMARY's ":: total energy  -5.07 Eh ::"
+# the closing summary: "| TOTAL ENERGY               -5.012345678901 Eh   |"; its SUMMARY's ":: total energy  -5.07 Eh ::"
 TOTAL = re.compile(r"\|\s*TOTAL ENERGY\s+(" + FLOAT + r")\s+Eh\s*\|")
 SUMMARY_TOTAL = re.compile(r"::\s*total energy\s+(" + FLOAT + r")\s+Eh\s*::")
 
@@ -302,7 +302,7 @@ def solvation_of(text):
 def orbitals_of(text):
     """The orbitals xtb printed, in Meno's general form (src/lib/calc/orbitals.ts): each of both spins, its energy in
     hartrees, its occupation - none printed, none in it - and its number as xtb counts them, in xtb's order, from the
-    last "Orbital Energies and Occupations" table: "         4        2.0000           -0.4475113             -12.1774
+    last "Orbital Energies and Occupations" table: "         4        2.0000           -0.4412345             -12.0066
     (HOMO)". xtb prints those about the frontier and leaves the rest out between them ("...") - those it printed alone,
     by their numbers, none made up. Meno names them and works out the gap; none where it printed none."""
     at = text.rfind("Orbital Energies and Occupations")
@@ -324,9 +324,9 @@ def orbitals_of(text):
     return out
 
 
-# GFN2-xTB's property printout: "     #   Z          covCN         q      C6AA      α(0)" over rows "     1   8 O        1.610    -0.562    24.294     6.652"
+# GFN2-xTB's property printout: "     #   Z          covCN         q      C6AA      α(0)" over rows "     1   8 O        1.612    -0.534    23.456     6.789"
 GFN2_CHARGES = re.compile(r"^\s*#\s+Z\s+covCN\s+q\s+C6AA", re.M)
-# GFN1-xTB's: "  Mulliken/CM5 charges         n(s)   n(p)   n(d)" over rows "     1O    -0.66664 -0.99799   1.696  4.970  0.000"
+# GFN1-xTB's: "  Mulliken/CM5 charges         n(s)   n(p)   n(d)" over rows "     1O    -0.65432 -0.98765   1.678  4.987  0.000"
 GFN1_CHARGES = re.compile(r"^\s*Mulliken/CM5 charges", re.M)
 
 
@@ -368,13 +368,13 @@ GFN2_DIPOLE = re.compile(
 GFNFF_DIPOLE = re.compile(
     r"molecular dipole:[^\n]*\n[^\n]*\n\s*q only:\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s*\n(?!\s*full:)"
 )
-# GFN1-xTB's: "dipole moment from electron density (au)" over "     X       Y       Z   " and "   0.0000   0.0000  -1.1298  total (Debye):    2.872"
+# GFN1-xTB's: "dipole moment from electron density (au)" over "     X       Y       Z   " and "   0.0000   0.0000  -1.1234  total (Debye):    2.855"
 GFN1_DIPOLE = re.compile(
     r"dipole moment from electron density \(au\)[^\n]*\n[^\n]*\n\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+total \(Debye\):\s+(" + FLOAT + r")"
 )
 
 
-# the Geometry Summary xtb prints after an optimisation: "   center of mass at/Å    :        0.3964305       0.0011634       0.0000000"
+# the Geometry Summary xtb prints after an optimisation: "   center of mass at/Å    :        0.3912345       0.0012345       0.0000000"
 CENTRE = re.compile(r"^\s*center of mass at/Å\s*:\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s*$", re.M)
 
 
@@ -403,8 +403,8 @@ def dipole_of(text):
 
 
 def pairs_after(heading, text):
-    """The numbered values under a heading of the Frequency Printout, in order: "   1:  6.04   2: 11.69" (a wide
-    value may run into its number: "10:136.23"); one too wide for its field, which xtb prints as asterisks
+    """The numbered values under a heading of the Frequency Printout, in order: "   1:  6.12   2: 11.34" (a wide
+    value may run into its number: "10:134.56"); one too wide for its field, which xtb prints as asterisks
     ("9:******"), not known (None)."""
     at = text.rfind(heading)
     if at < 0:
@@ -501,7 +501,7 @@ def thermo_of(text):
         out.append({"id": id_, "on": "molecule", "group": "Thermochemistry", "label": label, "value": value, **measure, **({"rank": rank} if rank else {})})
 
     def summary(label):
-        # ":: total free energy          -7.170761723788 Eh   ::"
+        # ":: total free energy          -7.123456789012 Eh   ::"
         m = last(r"::\s*" + re.escape(label) + r"\s+(" + FLOAT + r")\s+Eh", text)
         return number(m.group(1)) if m else None
 
@@ -514,17 +514,17 @@ def thermo_of(text):
     contrib = summary("G(RRHO) contrib.")
     if contrib is not None:
         add("thermo.g-correction", "Correction to Gibbs free energy", contrib, quantity="energy")
-    # (the closing summary's: "| TOTAL ENTHALPY             -7.145932947130 Eh   |")
+    # (the closing summary's: "| TOTAL ENTHALPY             -7.101234567890 Eh   |")
     enthalpy = last(r"\|\s*TOTAL ENTHALPY\s+(" + FLOAT + r")\s+Eh", text)
     if enthalpy:
         add("thermo.enthalpy", "Enthalpy", number(enthalpy.group(1)), quantity="energy")
     # (the entropy of the whole, in cal/(mol K), its "TOT" row: enthalpy, heat capacity, entropy, entropy in J/(mol K) -
-    #  "         TOT                        2398.2572     8.5140    52.2566   218.6414")
+    #  "         TOT                        2345.6789     8.1234    51.2345   214.3651")
     tot = last(r"^\s*TOT\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s*$", text)
     if tot:
         add("thermo.entropy", "Entropy", number(tot.group(3)), unit="cal/(mol·K)", digits=2)
     # the table under its last heading: the row of the temperature used - marked "(used)", or the last
-    # ("    298.15    0.382187E-02    0.291612E-01    0.248288E-01    0.433241E-02")
+    # ("    298.15    0.371234E-02    0.281234E-01    0.241234E-01    0.421234E-02")
     at = text.rfind("H(0)-H(T)+PV")
     row = re.compile(r"^\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s*(\(used\))?\s*$")
     rows = []

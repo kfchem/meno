@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { takeOpening, useEditorStore } from "../store";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
-import { calculateNewBondPosition } from "../utils/geometry";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
 import { editorModelOf, openedPlace, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
 import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument } from "../document";
@@ -36,7 +35,6 @@ import { placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { heldEach } from "../utils/heldEach";
 import { greatest } from "../../../../lib/chem/lists";
-import { bondLengthFrom } from "../utils/magnified";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -239,8 +237,8 @@ export function useStructureEvents(
     if (store.getState().hovered3d || store.getState().hoveredMark || store.getState().hoveredMeasure3d) return;
     // (nor while a step's atoms are chosen: each click takes an atom or lets it go)
     if (store.getState().choosingAtoms) return;
-    // (Ctrl or ⌘, or Shift, clicked twice: the selection's, not a bond drawn)
-    if (addsToSelection(e) || e.shiftKey) return;
+    // (Ctrl or ⌘, or Shift, clicked twice: the selection's, not a bond drawn - and Option or Alt: each click drew its own, Atoms2D)
+    if (addsToSelection(e) || e.shiftKey || e.altKey) return;
     const stNow = store.getState();
     const nowMs =
       typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -269,13 +267,6 @@ export function useStructureEvents(
       return;
     }
     const atoms = st.model.atoms;
-    const bonds = st.model.bonds;
-
-    const id2 = new Map<number, { x: number; y: number }>();
-    for (const a of atoms) id2.set(a.id, { x: a.x, y: a.y });
-    // (as long as the bonds of the structure drawn on are shown)
-    const L = bondLengthFrom(atoms, st.hovered.atomId);
-
     const hoveredAtomId = st.hovered.atomId;
     if (hoveredAtomId != null) {
       const base = atoms.find((a) => a.id === hoveredAtomId);
@@ -294,34 +285,8 @@ export function useStructureEvents(
         ) {
           st.cancelLabelEdit();
         }
-        const neighbors: { x: number; y: number }[] = [];
-        for (const b of bonds) {
-          if (b.a === base.id || b.b === base.id) {
-            const otherId = b.a === base.id ? b.b : b.a;
-            const p = id2.get(otherId);
-            if (p) neighbors.push(p);
-          }
-        }
-
-        const newPos = calculateNewBondPosition(
-          base,
-          neighbors,
-          atoms,
-          { x: ndc.x, y: ndc.y },
-          L,
-        );
-        const nx = newPos.x;
-        const ny = newPos.y;
-
-        const near = store
-          .getState()
-          .findAtomNear(nx, ny, NOMINAL_BOND_LENGTH * 0.3, base.id);
-        // One gesture, one undo step: the atom and its bond together.
-        if (near != null) {
-          st.connectAtoms(base.id, near, 1);
-        } else {
-          st.addAtomBonded(base.id, nx, ny, "C", 1);
-        }
+        // (one bond where there is room, toward the pointer where the atom has no bond yet: the store's `bondOut`)
+        st.bondOut(base.id, { x: ndc.x, y: ndc.y });
         return;
       }
     }

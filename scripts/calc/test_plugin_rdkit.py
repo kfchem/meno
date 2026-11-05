@@ -858,10 +858,12 @@ class Configurations(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
-class OpenStereo(unittest.TestCase):
-    """What a structure drawn leaves open, and how many ways it can go in 3D (`op_open_stereo`): a step that cannot
-    ask which is meant refuses only where there is a choice - a bridgehead its rings fix is none - and never
-    misses an allene's axis, whose stereoisomers RDKit does not count."""
+class StereoRequests(unittest.TestCase):
+    """What the plugin gives of a structure's stereo, and makes of it as asked (`stereo_elements`, `stereoisomers`,
+    `conformers`): every element RDKit perceives and how it is drawn, none left out; the stereoisomers of what is
+    unassigned, those that can be made in 3D - a bridgehead its rings fix gives one - the C=N bonds named passed by,
+    at most as many as asked, refused whole or cut short as asked; and each configuration Meno gives, made RDKit's
+    tags and back. What is left open, and what is done with it, are Meno's (lib/chem/stereoOpen)."""
 
     @classmethod
     def setUpClass(cls):
@@ -869,66 +871,94 @@ class OpenStereo(unittest.TestCase):
         cls.worker = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.worker)
 
-    def drawn(self, smiles, hydrogens=False):
-        """`smiles` as a drawing: laid out in 2D, wedged where the SMILES gives a configuration."""
+    def block(self, smiles, hydrogens=False, either=False):
+        """`smiles` as a drawing: laid out in 2D, wedged where the SMILES gives a configuration - each double bond it
+        gives none for drawn of either configuration, with `either`, as Meno writes one Generate made (CFG=2)."""
         from rdkit.Chem import AllChem
 
         mol = Chem.MolFromSmiles(smiles)
         if hydrogens:
             mol = Chem.AddHs(mol)
         AllChem.Compute2DCoords(mol)
-        return self.worker.op_open_stereo({"molblock": Chem.MolToMolBlock(mol)})
+        if either:
+            for b in mol.GetBonds():
+                if b.GetBondType() == Chem.BondType.DOUBLE and b.GetStereo() == Chem.BondStereo.STEREONONE and not b.IsInRing():
+                    b.SetStereo(Chem.BondStereo.STEREOANY)
+            return Chem.MolToV3KMolBlock(mol)
+        return Chem.MolToMolBlock(mol)
 
-    def test_says_only_where_stereo_is_left_open_without_trying_it_in_3d(self):
-        """`stereo_left_open`: the centres and double bonds `open_stereo` finds open, by index - none of its
-        stereoisomers tried in 3D, so that a step marking many structures (Generate) is quick."""
+    def open_of(self, block):
+        """The centres and double bonds drawn without a configuration, or with one drawn as not known, by index."""
+        found = self.worker.op_stereo_elements({"molblock": block})["elements"]
+        left = [e for e in found if e["state"] != "specified"]
+        return {"atoms": [e["at"] for e in left if e["kind"] == "centre"], "bonds": [e["at"] for e in left if e["kind"] == "double"]}
+
+    def isomers(self, block, most=32, **asked):
+        return self.worker.op_stereoisomers({"molblock": block, "open": self.open_of(block), "most": most, "inThreeD": True, **asked})
+
+    def test_gives_every_element_and_how_it_is_drawn(self):
+        # (butan-2-ol flat: its carbinol carbon not given; wedged: given; a wavy bond on it: drawn as not known)
+        self.assertEqual(self.worker.op_stereo_elements({"molblock": self.block("CC(O)CC")}), {"read": True, "elements": [{"kind": "centre", "at": 1, "state": "unspecified"}]})
+        self.assertEqual(self.worker.op_stereo_elements({"molblock": self.block("C[C@H](O)CC")})["elements"][0]["state"], "specified")
         from rdkit.Chem import AllChem
 
-        for smiles in ["CC1=CCC2CC1C2(C)C", "CC=CC", "C[C@H](O)CC", "CC(O)C(O)CO", "CC=C=CC"]:
-            mol = Chem.MolFromSmiles(smiles)
-            AllChem.Compute2DCoords(mol)
-            block = Chem.MolToMolBlock(mol)
-            full = self.worker.op_open_stereo({"molblock": block})
-            calls = []
-            real = self.worker.EnumerateStereoisomers
-            self.worker.EnumerateStereoisomers = lambda *a, **k: calls.append(1) or real(*a, **k)
-            try:
-                left = self.worker.op_stereo_left_open({"molblock": block})
-            finally:
-                self.worker.EnumerateStereoisomers = real
-            # (and the open bonds that run on into one another, by run: an allene's two, one axis)
-            self.assertEqual(left, {"atoms": full["atoms"], "bonds": full["bonds"], "cumulated": [full["cumulenes"]] if full["cumulenes"] else []}, smiles)
-            self.assertEqual(calls, [], smiles)
-
-    def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
-        """`open_stereo` and then `conformers` of one structure, as a Conformers step asks them: the stereoisomers
-        tried in 3D once, not twice - the same answer both times, and copies, so that one caller's changes are
-        not another's."""
-        from rdkit.Chem import AllChem
-
-        mol = Chem.MolFromSmiles("CC1=CCC2CC1C2(C)C")
+        mol = Chem.MolFromSmiles("CC(O)CC")
         AllChem.Compute2DCoords(mol)
-        block = Chem.MolToMolBlock(mol)
-        calls = []
-        real = self.worker.EnumerateStereoisomers
+        mol.GetBondBetweenAtoms(1, 2).SetBondDir(Chem.BondDir.UNKNOWN)
+        self.assertEqual(self.worker.op_stereo_elements({"molblock": Chem.MolToMolBlock(mol)})["elements"][0]["state"], "unknown")
+        # (a double bond of either configuration, as Meno writes one; a C=N whose E/Z is none of its own among them - which
+        #  is Meno's to say)
+        got = self.worker.op_stereo_elements({"molblock": self.block("CN=C(N)NCC(O)C", either=True)})["elements"]
+        self.assertEqual(sorted((e["kind"], e["at"], e["state"]) for e in got), [("centre", 6, "unspecified"), ("double", 1, "unknown")])
+        # (its parts, one after another)
+        two = self.worker.op_stereo_elements({"molblocks": [self.block("CCO"), self.block("CC(O)CC")]})["elements"]
+        self.assertEqual([e["at"] for e in two], [4])
 
-        def counted(*args, **kwargs):
-            calls.append(1)
-            return real(*args, **kwargs)
+    def test_says_what_it_cannot_read_or_make_sense_of(self):
+        self.assertEqual(self.worker.op_stereo_elements({"molblocks": ["not a MOL block"]}), {"read": False})
+        five = Chem.RWMol()
+        n = five.AddAtom(Chem.Atom(7))
+        for _ in range(5):
+            five.AddBond(n, five.AddAtom(Chem.Atom(6)), Chem.BondType.SINGLE)
+        mol = five.GetMol()
+        mol.UpdatePropertyCache(strict=False)
+        self.assertEqual(self.worker.op_stereo_elements({"molblock": Chem.MolToMolBlock(mol)}), {"read": True, "problem": "SANITIZE_PROPERTIES"})
 
-        self.worker.EMBEDDABLE.clear()
-        self.worker.EnumerateStereoisomers = counted
-        try:
-            first = self.worker.op_open_stereo({"molblock": block})
-            again = self.worker.op_open_stereo({"molblock": block})
-            made = self.worker.op_conformers({"molblock": block, "isomers": "all", "count": 1})
-        finally:
-            self.worker.EnumerateStereoisomers = real
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(first, again)
-        self.assertEqual(len(made["isomers"]), first["isomers"])
-        self.worker.embeddable(self.worker.read(block))[0].SetProp("asked", "by one")
-        self.assertFalse(self.worker.embeddable(self.worker.read(block))[0].HasProp("asked"))
+    def test_reads_a_centre_as_rdkit_does_from_3d(self):
+        # (the tag `configured` gives a centre from the sign of its neighbours' volume is the one RDKit reads from 3D:
+        #  each centre of each structure, embedded three ways, its neighbours named in their bonds' order and turned)
+        import numpy as np
+        from rdkit.Chem import AllChem
+
+        for smiles in ["C[C@H](O)CC", "C[C@@H](O)CC", "F[C@](Cl)(Br)I", "N[C@@H](C)C(=O)O", "C1CC[C@H](C)[C@@H](O)C1", "OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O"]:
+            for seed in range(3):
+                made = Chem.AddHs(Chem.MolFromSmiles(smiles))
+                AllChem.EmbedMolecule(made, randomSeed=seed)
+                mol = Chem.RemoveHs(made)
+                Chem.AssignStereochemistryFrom3D(mol, replaceExistingTags=True)
+                pos = mol.GetConformer().GetPositions()
+                flat = Chem.Mol(mol)
+                for a in flat.GetAtoms():
+                    a.SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
+                for a in mol.GetAtoms():
+                    if a.GetChiralTag() not in (Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW):
+                        continue
+                    ns = self.worker.neighbours_of(a)
+                    named = ns[1:] + ns[:1] if seed == 1 else ns[::-1] if seed == 2 else ns
+                    u, v, w = (pos[n] - pos[a.GetIdx()] for n in named[:3])
+                    sense = 1 if u.dot(np.cross(v, w)) > 0 else -1
+                    got = self.worker.configured(flat, {"centres": [{"atom": a.GetIdx(), "neighbours": named, "sense": sense}]})
+                    self.assertEqual(got.GetAtomWithIdx(a.GetIdx()).GetChiralTag(), a.GetChiralTag(), (smiles, seed, a.GetIdx()))
+
+    def test_gives_each_stereoisomer_its_configuration_which_makes_it_again(self):
+        block = self.block("OC(C=CC)C=CC")
+        got = self.isomers(block)
+        self.assertEqual(got["free"], False)
+        self.assertEqual(len(got["isomers"]), 4)
+        base = self.worker.read(block)
+        for one in got["isomers"]:
+            self.assertEqual(Chem.MolToSmiles(self.worker.configured(base, one["configured"])), one["smiles"])
+        self.assertEqual(len({i["smiles"] for i in got["isomers"]}), 4)
 
     def test_a_cage_or_bridged_ring_its_rings_fix_is_one_way_only(self):
         for name, smiles, centres in [
@@ -937,51 +967,117 @@ class OpenStereo(unittest.TestCase):
             ("norbornane", "C1CC2CCC1C2", 2),
             ("bicyclo[1.1.0]butane", "C1C2C1C2", 2),
         ]:
-            got = self.drawn(smiles)
+            block = self.block(smiles)
             # (its bridgeheads are open, as drawn - and give one stereoisomer that can be made, so there is nothing to choose)
-            self.assertEqual(len(got["atoms"]), centres, name)
-            self.assertEqual((got["isomers"], got["cumulenes"], got["free"]), (1, [], False), name)
+            self.assertEqual(len(self.open_of(block)["atoms"]), centres, name)
+            got = self.isomers(block)
+            self.assertEqual((len(got["isomers"]), got["free"]), (1, False), name)
 
     def test_what_could_go_more_than_one_way_is_counted_so(self):
         # (camphor unwedged: its two enantiomers; 5-methylnorbornene, the methyl alone wedged: exo or endo, through the bridgeheads)
         for name, smiles in [("camphor", "CC1(C)C2CCC1(C)C(=O)C2"), ("5-methylnorbornene", "C[C@H]1CC2C=CC1C2"), ("2-butanol", "CC(O)CC")]:
-            self.assertEqual(self.drawn(smiles)["isomers"], 2, name)
+            self.assertEqual(len(self.isomers(self.block(smiles))["isomers"]), 2, name)
         # (the same, every centre wedged: nothing open)
-        self.assertEqual(self.drawn("C[C@@H]1C[C@@H]2C=C[C@H]1C2"), {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "cumulated": [], "free": False})
+        self.assertEqual(self.open_of(self.block("C[C@@H]1C[C@@H]2C=C[C@H]1C2")), {"atoms": [], "bonds": []})
 
-    def test_an_allenes_axis_left_open_is_said_as_cumulated(self):
-        got = self.drawn("CC=C=CC")
-        self.assertEqual(got["bonds"], [1, 2])
-        self.assertEqual(got["cumulenes"], [1, 2])
-        # (and the run they make, one: an allene's axis, as stereo_left_open gives it)
-        self.assertEqual(got["cumulated"], [[1, 2]])
-        # (a cumulene of three, and two allenes apart, each its own run)
-        self.assertEqual(self.drawn("CC=C=C=CC")["cumulated"], [[1, 2, 3]])
-        self.assertEqual(self.drawn("CC=C=CCC(F)CC=C=CCCC=CC")["cumulated"], [[1, 2], [8, 9]])
-        # (not counted: RDKit's enumeration does not give an allene's two forms - why the cumulated bonds are said)
-        self.assertEqual(got["isomers"], 1)
+    def test_an_allenes_double_bonds_are_given_as_double_bonds_and_not_enumerated(self):
+        # (an allene's axis is not one RDKit's enumeration gives: one, its two double bonds open - which is why Meno says
+        #  the cumulated ones)
+        block = self.block("CC=C=CC")
+        self.assertEqual(self.open_of(block), {"atoms": [], "bonds": [1, 2]})
+        self.assertEqual(len(self.isomers(block)["isomers"]), 1)
 
-    def test_a_cage_no_stereoisomer_of_which_embeds_is_made_with_its_stereo_free(self):
+    def test_a_cage_no_stereoisomer_of_which_embeds_is_answered_free(self):
         # (2-methylbicyclo[1.1.1]pentane: its bridgeheads and the methyl's carbon open, and no stereoisomer RDKit gives of
         #  them embeds with its stereo held - made all the same, as the embedding places it)
-        from rdkit.Chem import AllChem
-
         for hydrogens in (False, True):
-            got = self.drawn("C1C2CC1C2C", hydrogens)
-            self.assertEqual((got["isomers"], got["free"]), (1, True), hydrogens)
-        mol = Chem.MolFromSmiles("C1C2CC1C2C")
-        AllChem.Compute2DCoords(mol)
-        made = self.worker.op_conformers({"molblock": Chem.MolToMolBlock(mol), "isomers": "one", "count": 1})["isomers"]
+            got = self.isomers(self.block("C1C2CC1C2C", hydrogens))
+            self.assertEqual((got["isomers"], got["free"]), ([], True), hydrogens)
+        made = self.worker.op_conformers({"molblock": self.block("C1C2CC1C2C"), "count": 1})["isomers"]
         self.assertEqual(len(made), 1)
         self.assertTrue(made[0]["frames"])
-        # (prismane: free too - and no 3D structure of it at all, which the step says as it says any it cannot make)
-        self.assertTrue(self.drawn("C12C3C4C1C3C24")["free"])
+        # (prismane: free too)
+        self.assertTrue(self.isomers(self.block("C12C3C4C1C3C24"))["free"])
+
+    def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
+        # (asked twice, as the page asks what to make and then makes it: tried in 3D once - the same answer, and copies)
+        block = self.block("CC1=CCC2CC1C2(C)C")
+        calls = []
+        real = self.worker.EnumerateStereoisomers
+        self.worker.EMBEDDABLE.clear()
+        self.worker.EnumerateStereoisomers = lambda *a, **k: calls.append(1) or real(*a, **k)
+        try:
+            first, again = self.isomers(block), self.isomers(block)
+        finally:
+            self.worker.EnumerateStereoisomers = real
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(first, again)
+        mol = self.worker.read(block)
+        self.worker.embeddable(mol, [], 32)[0].SetProp("asked", "by one")
+        self.assertFalse(self.worker.embeddable(mol, [], 32)[0].HasProp("asked"))
+
+    def test_a_c_n_named_is_passed_by_and_left_as_it_came(self):
+        # (the guanidine a Generate made: 2 for its stereocentre, not 4 - its C=N, named, held while the rest are given)
+        block = self.block("CN=C(N)NCC(O)c1ccc(OC(F)F)cc1", either=True)
+        got = self.worker.op_stereoisomers({"molblock": block, "open": {"atoms": [6], "bonds": []}, "notEnumerated": [1], "most": 32, "inThreeD": True})
+        self.assertEqual(sorted(i["smiles"] for i in got["isomers"]), ["CN=C(N)NC[C@@H](O)c1ccc(OC(F)F)cc1", "CN=C(N)NC[C@H](O)c1ccc(OC(F)F)cc1"])
+        # (not named: given each way)
+        self.assertEqual(len(self.worker.op_stereoisomers({"molblock": block, "open": {"atoms": [6], "bonds": [1]}, "most": 32, "inThreeD": True})["isomers"]), 4)
+        # (and made in 3D with it as the embedding places it)
+        made = self.worker.op_conformers({"molblock": block, "isomers": [i["configured"] for i in got["isomers"]], "count": 1})["isomers"]
+        self.assertEqual(len(made), 2)
+
+    def test_refuses_whole_past_the_most_without_making_them_all(self):
+        got = self.isomers(self.block("CC(O)C(O)C(O)C(O)C(O)C(O)C"), whole=True)
+        self.assertEqual(got, {"tooMany": {"counted": 33, "bound": 64}})
+        # (not whole: the first so many)
+        self.assertEqual(len(self.isomers(self.block("CC(O)C(O)C(O)C(O)C(O)C(O)C"), most=8)["isomers"]), 8)
+        # (twenty stereocentres left open: a million stereoisomers, never each made to be counted - a Generate's
+        #  glycolipid, twenty left open, timed the step out counting them all for some 165 s)
+        started = time.monotonic()
+        got = self.isomers(self.block("C" + "CC(O)" * 20 + "CN"), whole=True)
+        self.assertLess(time.monotonic() - started, 20)
+        self.assertEqual(got, {"tooMany": {"counted": 33, "bound": 1048576}})
+
+    def test_answers_too_long_past_the_time_given_and_keeps_nothing_of_it(self):
+        # (stereoisomers slow to try in 3D - made so here, a fifth of a second each - past the time given)
+        worker = self.worker
+        enumerate_as_is = worker.EnumerateStereoisomers
+
+        def slow(mol, options=None):
+            for isomer in enumerate_as_is(mol, options=options):
+                time.sleep(0.2)
+                yield isomer
+
+        worker.EnumerateStereoisomers = slow
+        try:
+            got = self.isomers(self.block("CC(O)C(N)CC(F)CC"), withinMs=300)
+        finally:
+            worker.EnumerateStereoisomers = enumerate_as_is
+        self.assertEqual(got, {"tooLong": True})
+        # (not kept as worked out: given time, it is made whole)
+        self.assertEqual(len(self.isomers(self.block("CC(O)C(N)CC(F)CC"), withinMs=60000)["isomers"]), 8)
+
+    def test_gives_each_as_a_drawing_where_asked(self):
+        got = self.isomers(self.block("CC(O)CC"), drawings=True)
+        for one in got["isomers"]:
+            self.assertEqual(Chem.MolToSmiles(Chem.MolFromMolBlock(one["molblock"])), one["smiles"])
+        self.assertNotIn("molblock", self.isomers(self.block("CC(O)CC"))["isomers"][0])
+
+    def test_makes_the_conformers_of_each_configuration_given(self):
+        block = self.block("CC(O)C(N)C")
+        got = self.isomers(block)
+        made = self.worker.op_conformers({"molblock": block, "isomers": [i["configured"] for i in got["isomers"]], "count": 2})["isomers"]
+        self.assertEqual([m["smiles"] for m in made], [i["smiles"] for i in got["isomers"]])
+        self.assertEqual(len({tuple(sorted(m["cip"]["atoms"].items())) for m in made}), 4)
+        # (none given: the structure as drawn)
+        self.assertEqual(len(self.worker.op_conformers({"molblock": block, "count": 2})["isomers"]), 1)
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class StructureSteps(unittest.TestCase):
-    """*Check structures* and *Stereoisomers* on structures drawn (`op_run`): each structure kept as drawn, made anew
-    as its stereoisomers, or set aside saying why - never one changed, and nothing chosen for one."""
+    """Steps on structures drawn (`op_run`), and the facts *Check structures* decides on: each structure kept as
+    drawn, with what is worked out of it, or set aside saying why - never one changed."""
 
     @classmethod
     def setUpClass(cls):
@@ -1043,59 +1139,6 @@ class StructureSteps(unittest.TestCase):
         [got] = self.facts([{"molblocks": [Chem.MolToMolBlock(mol)]}])
         self.assertEqual((got["atoms"][0]["el"], got["atoms"][0]["valence"], got["atoms"][0]["most"]), ("N", 5, 3))
 
-    def test_stereoisomers_of_what_is_left_open_each_a_drawing_in_a_fixed_order(self):
-        got = self.run_step("stereoisomers", [self.entry("CCO"), self.entry("CC(O)CC"), self.entry("C[C@H](O)CC"), self.entry("C1CC2CCC1C2")])
-        self.assertEqual(got[0], {"as": "drawn"})
-        made = [Chem.MolToSmiles(Chem.MolFromMolBlock(b)) for b in got[1]["made"]]
-        self.assertEqual(made, sorted(made))
-        self.assertEqual(sorted(made), ["CC[C@@H](C)O", "CC[C@H](C)O"])
-        # (each one's own SMILES beside it, in the same order: the stereoisomer's, not the one it was made of)
-        self.assertEqual(got[1]["smiles"], [Chem.MolToSmiles(Chem.MolFromMolBlock(b)) for b in got[1]["made"]])
-        # (given, or a bridgehead its rings fix: nothing to make)
-        self.assertEqual(got[2:], [{"as": "drawn"}, {"as": "drawn"}])
-        # (the same every time)
-        self.assertEqual(self.run_step("stereoisomers", [self.entry("CC(O)CC")]), [got[1]])
-
-    def test_stereoisomers_set_aside_what_cannot_be_given_whole(self):
-        got = self.run_step("stereoisomers", [self.entry("CC=C=CC"), self.entry("CC(O)C(O)C(O)C(O)C(O)C(O)C")])
-        self.assertEqual(got[0], {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"})
-        self.assertEqual(got[1]["kind"], "too many")
-        self.assertEqual(got[1]["aside"], "more than the 32 stereoisomers made of one (up to 64)")
-        # (set aside, as the option says, where it would make them)
-        self.assertEqual(self.run_step("stereoisomers", [self.entry("CC(O)CC")], {"open": "aside"}), [{"aside": "stereo left open: 2 stereoisomers", "kind": "stereo open"}])
-
-    def test_stereoisomers_set_aside_without_making_them_all(self):
-        # (twenty stereocentres left open: a million stereoisomers, never each made to be counted - a Generate's
-        #  glycolipid, twenty left open, timed the step out counting them all for some 165 s)
-        chain = "C" + "CC(O)" * 20 + "CN"
-        started = time.monotonic()
-        got = self.run_step("stereoisomers", [self.entry(chain)])
-        self.assertLess(time.monotonic() - started, 20)
-        self.assertEqual(got, [{"aside": "more than the 32 stereoisomers made of one (up to 1048576)", "kind": "too many"}])
-
-    def test_stereoisomers_set_aside_alone_one_that_takes_too_long(self):
-        # (one structure whose stereoisomers are slow to try in 3D - made so here, a fifth of a second each - past
-        #  the time given: set aside alone, saying so, and nothing kept of it; the other made as before)
-        worker = self.worker
-        enumerate_as_is, examine = worker.EnumerateStereoisomers, worker.EXAMINE_S
-
-        def slow(mol, options=None):
-            for isomer in enumerate_as_is(mol, options=options):
-                if mol.GetNumAtoms() > 4:
-                    time.sleep(0.2)
-                yield isomer
-
-        worker.EnumerateStereoisomers, worker.EXAMINE_S = slow, 0.3
-        try:
-            got = self.run_step("stereoisomers", [self.entry("CC(O)C(N)CC(F)CC"), self.entry("CC(O)CC")])
-        finally:
-            worker.EnumerateStereoisomers, worker.EXAMINE_S = enumerate_as_is, examine
-        self.assertEqual(got[0], {"aside": "took more than 0.3 s to examine", "kind": "too long"})
-        self.assertEqual(len(got[1]["made"]), 2)
-        # (not kept as worked out: given time, it is made whole)
-        again = self.run_step("stereoisomers", [self.entry("CC(O)C(N)CC(F)CC")])
-        self.assertEqual(len(again[0]["made"]), 8)
-
     def test_descriptors_of_each_as_drawn_with_unit_and_how(self):
         got = self.run_step("descriptors", [self.entry("CC(=O)Nc1ccc(O)cc1"), self.entry("[H+]")])
         props = got[0]["properties"]
@@ -1128,96 +1171,9 @@ class StructureSteps(unittest.TestCase):
         self.assertNotIn("not_given", got[3]["properties"])
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
-class MovingCN(unittest.TestCase):
-    """C=N double bonds whose E/Z is none of their own (`moving_cn`), as the InChI Technical Manual (v1.04) takes
-    them: never enumerated, never counted as left open, and said so on the record - wherever stereo is counted or
-    made, one definition. A double bond drawn of either configuration, as Meno writes one the SMILES gave none for
-    (CFG=2), is left open as one drawn plain is."""
-
-    @classmethod
-    def setUpClass(cls):
-        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
-        cls.worker = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cls.worker)
-
-    def block(self, smiles):
-        """`smiles` as Meno gives a structure Generate made of it: laid out in 2D, a V3000 block, each double bond the
-        SMILES gives no E/Z for of either configuration."""
-        from rdkit.Chem import AllChem
-
-        mol = Chem.MolFromSmiles(smiles)
-        AllChem.Compute2DCoords(mol)
-        for b in mol.GetBonds():
-            if b.GetBondType() == Chem.BondType.DOUBLE and b.GetStereo() == Chem.BondStereo.STEREONONE and not b.IsInRing():
-                b.SetStereo(Chem.BondStereo.STEREOANY)
-        return Chem.MolToV3KMolBlock(mol)
-
-    def stereoisomers(self, smiles):
-        return self.worker.op_run({"step": "stereoisomers", "entries": [{"molblocks": [self.block(smiles)]}], "options": {}, "holds": "structures"})["structures"][0]
-
-    def note(self, got):
-        return got.get("properties", {}).get("stereo_not_enumerated", {}).get("value")
-
-    def test_a_guanidines_c_n_is_not_enumerated_its_stereocentre_is(self):
-        # (the guanidine a Generate made: 2 for its stereocentre, not 4 - its C=N's E/Z moves with the NH's hydrogen)
-        got = self.stereoisomers("CN=C(N)NCC(O)c1ccc(OC(F)F)cc1")
-        self.assertEqual(got["smiles"], ["CN=C(N)NC[C@@H](O)c1ccc(OC(F)F)cc1", "CN=C(N)NC[C@H](O)c1ccc(OC(F)F)cc1"])
-        self.assertEqual(self.note(got), "E/Z of 1 C=N not enumerated: its double bond moves with a hydrogen on an N, O or S beside it (an amidine, a guanidine, an imidic acid) - no configuration of its own")
-        self.assertEqual(got["properties"]["stereo_not_enumerated"]["unit"], "none")
-        # (each made leaves it of either configuration, as it came: read again, nothing left to choose but what was)
-        for block in got["made"]:
-            self.assertEqual(self.worker.op_open_stereo({"molblock": block})["bonds"], [])
-        opened = self.worker.op_open_stereo({"molblock": self.block("CN=C(N)NCC(O)c1ccc(OC(F)F)cc1")})
-        self.assertEqual((opened["atoms"], opened["bonds"], opened["isomers"]), ([6], [], 2))
-
-    def test_an_n_alkyl_imine_and_an_oxime_keep_theirs(self):
-        for smiles, made in [("CC(=NC)CC", ["CC/C(C)=N/C", "CC/C(C)=N\\C"]), ("CCC(C)=NO", ["CC/C(C)=N/O", "CC/C(C)=N\\O"])]:
-            got = self.stereoisomers(smiles)
-            self.assertEqual(got["smiles"], made, smiles)
-            self.assertIsNone(self.note(got), smiles)
-
-    def test_an_imidic_acid_an_n_acyl_amidine_and_an_amidinium_are_not_enumerated(self):
-        for smiles, why in [
-            ("CC(O)=NC", "its double bond moves with a hydrogen on an N, O or S beside it"),
-            ("CCC(N)=NC(C)=O", "its double bond moves with a hydrogen on an N, O or S beside it"),
-            ("CCN(C)C(C)=[N+](C)CC", "an amidinium or guanidinium bond, shared with the N beside it"),
-            ("CCC(C)=N", "its N carries a hydrogen"),
-        ]:
-            got = self.stereoisomers(smiles)
-            self.assertEqual(got["as"], "drawn", smiles)
-            self.assertIn(why, self.note(got), smiles)
-            self.assertEqual(self.worker.op_open_stereo({"molblock": self.block(smiles)})["bonds"], [], smiles)
-            self.assertEqual(self.worker.op_stereo_left_open({"molblock": self.block(smiles)}), {"atoms": [], "bonds": [], "cumulated": []}, smiles)
-
-    def test_one_drawn_with_its_e_z_keeps_it_and_nothing_is_said(self):
-        got = self.stereoisomers("CC/N=C(/N)NCC")
-        self.assertEqual(got, {"as": "drawn"})
-
-    def test_a_double_bond_or_centre_drawn_as_not_known_is_left_open(self):
-        # (either configuration - the double bond alone, or a wavy bond on the centre - as one drawn plain is: before,
-        #  counted as nothing open, then given each way the moment anything else was open)
-        got = self.stereoisomers("CC=CC(=O)O")
-        self.assertEqual(got["smiles"], ["C/C=C/C(=O)O", "C/C=C\\C(=O)O"])
-        from rdkit.Chem import AllChem
-
-        mol = Chem.MolFromSmiles("CC(O)CC")
-        AllChem.Compute2DCoords(mol)
-        bond = mol.GetBondBetweenAtoms(1, 2)
-        bond.SetBondDir(Chem.BondDir.UNKNOWN)
-        wavy = Chem.MolToMolBlock(mol)
-        self.assertEqual(self.worker.op_open_stereo({"molblock": wavy})["atoms"], [1])
-        self.assertEqual(self.worker.op_stereo_left_open({"molblock": wavy}), {"atoms": [1], "bonds": [], "cumulated": []})
-
-    def test_conformers_of_a_guanidine_choose_nothing_for_its_c_n(self):
-        # (one 3D structure of each of its two, its C=N as the embedding places it: never a configuration given it)
-        made = self.worker.op_conformers({"molblock": self.block("CN=C(N)NCC(O)C"), "isomers": "all", "count": 1})["isomers"]
-        self.assertEqual(len(made), 2)
-
-
-@unittest.skipUnless(Chem, "RDKit is not installed here")
 class SmilesStereoOpen(unittest.TestCase):
-    """A SMILES read (`from_smiles`), and what its drawing leaves without a configuration (`stereo_left_open`): what a
-    paste of it is told, by the one definition a step refusing a structure for it uses."""
+    """A SMILES read (`from_smiles`), and the elements its drawing gives no configuration (`stereo_elements`): what a
+    paste of it is told is Meno's rule on these (lib/chem/stereoOpen), as a step refusing a structure for it has it."""
 
     #: Paclitaxel, every one of its eleven stereocentres given (as PubChem's isomeric SMILES of CID 36314 gives them).
     PACLITAXEL = (
@@ -1233,8 +1189,8 @@ class SmilesStereoOpen(unittest.TestCase):
 
     def left(self, smiles):
         block = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
-        got = self.worker.op_stereo_left_open({"molblock": block})
-        return len(got["atoms"]), len(got["bonds"])
+        got = [e for e in self.worker.op_stereo_elements({"molblock": block})["elements"] if e["state"] != "specified"]
+        return sum(e["kind"] == "centre" for e in got), sum(e["kind"] == "double" for e in got)
 
     def test_paclitaxel_given_whole_leaves_none_open_and_one_mark_short_leaves_one(self):
         self.assertEqual(self.left(self.PACLITAXEL), (0, 0))
@@ -1245,14 +1201,6 @@ class SmilesStereoOpen(unittest.TestCase):
         self.assertEqual(self.left("CC=CC(=O)O"), (0, 1))
         self.assertEqual(self.left("C/C=C/C(=O)O"), (0, 0))
         self.assertEqual(self.left("CCO"), (0, 0))
-
-    def test_cumulated_double_bonds_left_open_are_one_run_each(self):
-        # (an allene's two bonds one axis, a butatriene's three one cis or trans, a pentatetraene's four one axis: the
-        #  runs say so, whatever RDKit lists each bond as)
-        for smiles, runs in [("CC=C=CC", [[1, 2]]), ("CC=C=C=CC", [[1, 2, 3]]), ("CC=C=C=C=CC", [[1, 2, 3, 4]]), ("CC=CC=CC", [])]:
-            block = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
-            self.assertEqual(self.worker.op_stereo_left_open({"molblock": block})["cumulated"], runs, smiles)
-
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class CoordinationBonds(unittest.TestCase):
@@ -1332,14 +1280,17 @@ class CoordinationBonds(unittest.TestCase):
         [facts] = self.worker.op_structure_facts({"structures": [{"molblocks": [silicon]}]})["structures"]
         self.assertTrue(any(a["valence"] > a["most"] for a in facts["atoms"] if "most" in a) or "problem" in facts)
 
+    def isomers_drawn(self, block):
+        return self.worker.op_stereoisomers({"molblock": block, "open": {"atoms": [0], "bonds": []}, "most": 32, "inThreeD": True, "drawings": True})["isomers"]
+
     def test_stereoisomers_of_an_adduct_are_drawn_with_its_arrow_and_its_charges_as_drawn(self):
         # (1-fluoroethylamine->BH3, its carbon a stereocentre left open: two stereoisomers, each written back as drawn - the
         #  N->B arrow, N and B uncharged - and each reading back as the one its SMILES, of the dipolar form, says)
         adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
-        made = self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0]
-        self.assertEqual(len(made["made"]), 2)
-        self.assertEqual(len(set(made["smiles"])), 2)
-        for block, smiles in zip(made["made"], made["smiles"]):
+        made = self.isomers_drawn(adduct)
+        self.assertEqual(len(made), 2)
+        self.assertEqual(len({i["smiles"] for i in made}), 2)
+        for block, smiles in ((i["molblock"], i["smiles"]) for i in made):
             drawn = Chem.MolFromMolBlock(block, sanitize=False, removeHs=False)
             arrows = [b for b in drawn.GetBonds() if b.GetBondType() == Chem.BondType.DATIVE]
             self.assertEqual([(b.GetBeginAtom().GetSymbol(), b.GetEndAtom().GetSymbol()) for b in arrows], [("N", "B")])
@@ -1350,7 +1301,7 @@ class CoordinationBonds(unittest.TestCase):
 
     def test_an_adduct_renumbered_since_is_never_written_without_its_arrow(self):
         # (H3N->BH3 held in its dipolar form, then renumbered - its B and N swapped - so that the index its N keeps of
-        #  its acceptor no longer names one bonded to it: refused in words, and Stereoisomers sets such a one aside)
+        #  its acceptor no longer names one bonded to it: refused in words - each stereoisomer said so, which Stereoisomers sets aside)
         mol = self.worker.read(self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)]))
         renumbered = Chem.RenumberAtoms(mol, [1, 0] + list(range(2, mol.GetNumAtoms())))
         self.assertEqual(renumbered.GetAtomWithIdx(1).GetIntProp(self.worker.LENDS_TO), 1)
@@ -1373,8 +1324,7 @@ class CoordinationBonds(unittest.TestCase):
         from unittest import mock
         adduct = self.block([("C", 0, 0, 0), ("F", 0, 1.5, 0), ("C", -1.3, -0.75, 0), ("N", 1.3, -0.75, 0), ("B", 2.6, 0, 0)], [(1, 1, 2), (1, 1, 3), (1, 1, 4), (9, 4, 5)])
         with mock.patch.object(self.worker, "as_drawn", side_effect=ValueError("its coordination bond from N could not be written back as drawn")):
-            self.assertEqual(self.worker.step_stereoisomers([{"molblocks": [adduct]}], {})["structures"][0],
-                             {"aside": "its coordination bond from N could not be written back as drawn", "kind": "drawing"})
+            self.assertEqual({i.get("error") for i in self.isomers_drawn(adduct)}, {"its coordination bond from N could not be written back as drawn"})
 
     def test_its_smiles_is_of_the_dipolar_form_the_same_molecule(self):
         adduct = self.block([("N", 0, 0, 0), ("B", 1.6, 0, 0)], [(9, 1, 2)])

@@ -1,17 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { measured } from "../../../../testing/timeouts";
 
-// (the plugin's answers, by what is asked: its drawing of ethanol, and what it says the SMILES leaves open - or that
-//  it cannot be asked)
+// (the plugin's answers, by what is asked: its drawing of ethanol, and the elements it perceives as given no
+//  configuration - centres on `atoms`, double bonds on `bonds`, of ethanol's - or that it cannot be asked)
 const ETHANOL = "\n  Meno\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 C   0  0\n    1.2990    0.7500    0.0000 C   0  0\n    2.5981    0.0000    0.0000 O   0  0\n  1  2  1  0\n  2  3  1  0\nM  END\n";
-let open: { atoms: number[]; bonds: number[]; cumulated?: number[][] } | "fails" | "hangs" = { atoms: [], bonds: [] };
+let open: { atoms: number[]; bonds: number[] } | "fails" | "hangs" = { atoms: [], bonds: [] };
 vi.mock("../../../../lib/roles/worker", () => ({
   chemWorker: async () => ({
     request: async (op: string) => {
       if (op === "from_smiles") return { molblock: ETHANOL };
-      if (open === "fails") throw new Error("no such request: stereo_left_open");
+      if (open === "fails") throw new Error("no such request: stereo_elements");
       if (open === "hangs") return new Promise(() => {});
-      return open;
+      const unspecified = (kind: string) => (at: number) => ({ kind, at, state: "unspecified" });
+      return { read: true, elements: [...open.atoms.map(unspecified("centre")), ...open.bonds.map(unspecified("double"))] };
     },
   }),
 }));
@@ -20,11 +21,11 @@ vi.mock("./cleanUp", () => ({ laidOut: async (m: unknown) => m }));
 describe("a structure read from a SMILES, and the stereo it leaves open", () => {
   it("says how many stereocentres and double bonds its SMILES leaves without a configuration - none where none is", async () => {
     const { structureFromSmiles, stereoOpenSaid } = await import("./fromSmiles");
-    open = { atoms: [23], bonds: [] };
+    open = { atoms: [1], bonds: [] };
     expect(stereoOpenSaid((await structureFromSmiles("C")).stereoOpen)).toBe("1 stereocentre not specified");
-    open = { atoms: [1, 4], bonds: [7] };
+    open = { atoms: [0, 1], bonds: [1] };
     expect(stereoOpenSaid((await structureFromSmiles("C")).stereoOpen)).toBe("2 stereocentres and 1 double bond not specified");
-    open = { atoms: [], bonds: [1, 5] };
+    open = { atoms: [], bonds: [0, 1] };
     expect(stereoOpenSaid((await structureFromSmiles("C")).stereoOpen)).toBe("2 double bonds not specified");
     open = { atoms: [], bonds: [] };
     const plain = await structureFromSmiles("CCO");

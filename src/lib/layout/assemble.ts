@@ -21,7 +21,7 @@ import {
   type Point,
 } from "./geometry";
 import { metalSlots } from "./hapto";
-import { isMetal, key, METAL_BOND, orderOf, type Molecule } from "./perceive";
+import { isMetal, key, METAL_BOND, orderOf, straightThrough, type Molecule } from "./perceive";
 import { MACROCYCLE } from "./ringSystem";
 import { byStructure, ringKey, ringRank } from "./ranks";
 
@@ -186,8 +186,7 @@ export function grow(
     const between = deg === 2 && along.length === 2 && along.every((v) => isCross(mol, v));
     // (an atom straight through - between two double bonds, or by a triple
     // one: an allene's, a ketene's, CO2's middle - as it is in a chain)
-    const orders = along.map((v) => orderOf(mol, middle, v));
-    const linear = deg === 2 && along.length === 2 && (orders.includes(3) || orders.every((o) => o === 2));
+    const linear = along.length === 2 && straightThrough(mol, middle);
     // (a trident fanned, the bond into it level to the right)
     const fanEnds = tridentEnds(mol, middle);
     const fan = fanEnds ? mol.neighbours[middle].find((v) => !fanEnds.includes(v))! : -1;
@@ -557,13 +556,8 @@ function assign(
     const byCentre = [...legs].sort((u, v) => Math.abs(wrap(u - mid)) - Math.abs(wrap(v - mid)));
     return byWeight.map((c, i) => [c, byCentre[i]]);
   }
-  const orders = mol.neighbours[a].map((v) => orderOf(mol, a, v));
-  // (and the O of a P-O-P, so that a run of crosses is one line)
-  const straight =
-    deg === 2 &&
-    (orders.includes(3) ||
-      orders.filter((o) => o === 2).length === 2 ||
-      (isCross(mol, parent) && isCross(mol, children[0])));
+  // (straight through - and the O of a P-O-P, so that a run of crosses is one line)
+  const straight = deg === 2 && (straightThrough(mol, a) || (isCross(mol, parent) && isCross(mol, children[0])));
   if (straight) return [[children[0], p + Math.PI]];
   if (deg === 4) {
     const slots = [p + Math.PI, p + Math.PI / 2, p - Math.PI / 2];
