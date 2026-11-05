@@ -87,7 +87,8 @@ export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "pr
   const summary = clamped(c.summary, 11, col, 2);
   const state = clamped(c.state.text, 11, col, 2);
   const words = CARD.top + CARD.whoLine + summary.length * CARD.line + CARD.stateTop + state.length * CARD.line + (c.said ? CARD.line : 0) + (c.progress != null ? CARD.barTop + CARD.bar : 0) + CARD.bottom;
-  return { summary, state, height: Math.max(CARD.h, words + 2 * CARD.hair), words };
+  // (its words in a grid at least as tall as a card, inside its hair of padding: as its HTML, StepCard)
+  return { summary, state, height: Math.max(CARD.h, words) + 2 * CARD.hair, words };
 }
 
 /** A card as drawn: its box, words, icons and the places that take the pointer, and how tall it is; the tip, where its state is pointed at. */

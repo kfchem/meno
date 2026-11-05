@@ -6,7 +6,7 @@ import type { DiagramLevel } from "../../../../lib/energyDiagram";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, tableBodyPx } from "./look";
 import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
-import { HAIR_LINE, Port } from "./StepCard";
+import { HAIR_LINE } from "./StepCard";
 import SummaryBody from "./SummaryBody";
 
 /** How wide the band along a frame's edge is that a press takes to size it, in px. */
@@ -161,7 +161,6 @@ export default function SetFrame(p: SetFrameProps) {
           )}
         </div>
       )}
-      {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} of={h} />}
     </div>
   );
 }

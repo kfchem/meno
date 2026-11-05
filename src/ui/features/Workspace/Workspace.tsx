@@ -1235,6 +1235,7 @@ function WorkspaceContent({
       kind: workflowMenu.kind,
       id: workflowMenu.id,
       ...(workflowMenu.copy ? { copy: workflowMenu.copy } : {}),
+      ...(workflowMenu.lines ? { lines: workflowMenu.lines } : {}),
       selection: "none",
       at: clientToWorld(workflowMenu.clientX, workflowMenu.clientY) ?? pasteTarget(),
       x: workflowMenu.clientX - box.left,
