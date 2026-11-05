@@ -29,16 +29,22 @@ molecule in 3D, from its geometry:
   first and works for large molecules. Its options: the grid (coarse,
   0.15 Å; standard, 0.1 Å; fine, 0.05 Å), interactions only between
   molecules not bonded to each other, the RDG the surface is drawn at
-  (0.3), and how far the colour scale reaches (± 0.07 a.u.).
+  (0.3), the density above which the RDG is left out (0.07 a.u., the
+  manual's default in the promolecular case: its *CUTPLOT r1 r2*), and
+  how far the colour scale reaches (± 0.07 a.u.).
 - **The Multiwfn interface** - from a calculation's wavefunction where
   the molecule has one: a Molden file, a Gaussian formatted checkpoint, a
   WFN or a WFX, the one the molecule was read from - opened (read by the
   reader of its kind), or kept by another plugin's step (ORCA's and
-  Gaussian's keep theirs: WORKFLOWS.md, *The wavefunction is kept*); and otherwise from its
-  geometry alone, by the promolecular density Multiwfn builds from its own
-  atoms' densities (its manual, 3.23.2) - so that NCI needs no other
-  program. Its options: the density (the wavefunction's where there is
-  one, else promolecular; or promolecular for every molecule), the grid
+  Gaussian's keep theirs: WORKFLOWS.md, *The wavefunction is kept*); or,
+  where it is asked for, from the geometry alone, by the promolecular
+  density Multiwfn builds from its own atoms' densities (its manual,
+  3.23.2) - so that NCI needs no other program. Its options: the density
+  (the wavefunction's, or promolecular for every molecule); promolecular
+  where a molecule has no wavefunction (off unless chosen: a molecule read
+  from none is refused, saying so, and goes out of the step's *Failed*
+  exit, the others run - so that one step's surfaces are never of two
+  densities unless the chemist chose it); the grid
   (low, medium, high: about 125 000, 512 000 or 1 728 000 points over the
   whole system), the RDG the surface is drawn at - 0.5 from a
   wavefunction, 0.3 promolecular, as Multiwfn's manual has it (4.20.2) -
@@ -87,7 +93,7 @@ for either grid. Saved with the workspace as any surface is.
   the entry's fragments apart for interactions between them, as Meno gives
   them: PLUGINS.md, *The entry a plugin is given*), `ONAME NCI`, `OUTPUT
   2` (the cubes alone), `COARSE` or `FINE`, `INTERMOLECULAR`, and `CUTPLOT
-  0.07 r`; it writes `NCI-grad.cube` (the RDG) and `NCI-dens.cube`
+  <density cut> <RDG>`; it writes `NCI-grad.cube` (the RDG) and `NCI-dens.cube`
   (sign(λ2)ρ × 100, as the scale's label says). `NCIPLOT_HOME` is the
   folder above the program's (where its `dat` is, as built).
 - **Multiwfn** is run as its manual has it (2.2, 3.23.1, 3.23.2, 5.2):
@@ -113,7 +119,7 @@ built from its source by a recipe its site links to.
 
 ## Decided
 
-By the maintainer, 2026-10-10 and 2026-10-11:
+By the maintainer, 2026-10-10, 2026-10-11 and 2026-11-04:
 
 1. **NCI through plugins**, NCIPLOT and an interface to Multiwfn.
 2. **A general form**: a grid's surface coloured by another's, with a
@@ -123,6 +129,10 @@ By the maintainer, 2026-10-10 and 2026-10-11:
 4. **Either plugin alone does NCI from a geometry** (2026-10-11): Multiwfn
    by its promolecular NCI, NCIPLOT as before; each is installed apart and
    used as the chemist has it.
+5. **Multiwfn's promolecular density where there is no wavefunction is an
+   option, off unless chosen** (2026-11-04): one step's surfaces are of
+   one density unless the chemist asks for both; off, a molecule with no
+   wavefunction is refused, saying so.
 
 ## Not yet
 

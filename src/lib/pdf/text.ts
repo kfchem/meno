@@ -15,29 +15,51 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
-/** A page's letters: each one's character, and its box - left, top, right, bottom, in points from the page's top left; all naught, none. */
-export type PageText = { codes: Uint32Array; boxes: Float32Array };
+/**
+ * A page's letters: each one's character; its box - left, top, right,
+ * bottom, in points from the page's top left; all naught, none - and
+ * whether it is set bold (1; else 0), as its font says (src-tauri/src/pdf.rs
+ * `set_bold`).
+ */
+export type PageText = { codes: Uint32Array; boxes: Float32Array; bold: Uint8Array };
 
-/** A page's letters, from what the reader answers: 20 bytes each (src-tauri/src/pdf.rs, `pdf_text`). */
+/** How many bytes the reader answers with for each letter: its character, its box, how it is set (src-tauri/src/pdf.rs, `pdf_text`). */
+const LETTER_BYTES = 24;
+
+/** A page's letters, from what the reader answers: 24 bytes each (src-tauri/src/pdf.rs, `pdf_text`). */
 export function pageTextOf(buf: ArrayBuffer): PageText {
   const view = new DataView(buf);
-  const n = Math.floor(buf.byteLength / 20);
+  const n = Math.floor(buf.byteLength / LETTER_BYTES);
   const codes = new Uint32Array(n);
   const boxes = new Float32Array(n * 4);
+  const bold = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    codes[i] = view.getUint32(i * 20, true);
-    for (let k = 0; k < 4; k++) boxes[i * 4 + k] = view.getFloat32(i * 20 + 4 + k * 4, true);
+    const at = i * LETTER_BYTES;
+    codes[i] = view.getUint32(at, true);
+    for (let k = 0; k < 4; k++) boxes[i * 4 + k] = view.getFloat32(at + 4 + k * 4, true);
+    bold[i] = view.getUint32(at + 20, true) & 1;
   }
-  return { codes, boxes };
+  return { codes, boxes, bold };
 }
 
-/** A page's letters from a string and boxes: for tests, and for what is not read from a PDF. */
-export function pageTextFrom(text: string, boxes: readonly (readonly [number, number, number, number] | null)[]): PageText {
+/** A page's letters from a string and boxes, and which are bold: for tests, and for what is not read from a PDF. */
+export function pageTextFrom(text: string, boxes: readonly (readonly [number, number, number, number] | null)[], bold: readonly boolean[] = []): PageText {
   const chars = [...text];
   const codes = new Uint32Array(chars.map((c) => c.codePointAt(0)!));
   const b = new Float32Array(chars.length * 4);
   chars.forEach((_, i) => boxes[i]?.forEach((v, k) => (b[i * 4 + k] = v)));
-  return { codes, boxes: b };
+  return { codes, boxes: b, bold: Uint8Array.from(chars, (_, i) => (bold[i] ? 1 : 0)) };
+}
+
+/** Whether the letters from `a` to before `b` are all set bold - those PDFium put there itself (spaces, a line's end) aside - and any is. */
+export function setBold(t: PageText, a: number, b: number): boolean {
+  let any = false;
+  for (let i = a; i < b; i++) {
+    if (!hasBox(t, i)) continue;
+    if (!t.bold[i]) return false;
+    any = true;
+  }
+  return any;
 }
 
 const had = new Map<string, PageText | "asked">();

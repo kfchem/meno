@@ -38,7 +38,7 @@ import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wire
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, passesAsLone, passedAsLone, passedSaid, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -801,6 +801,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (what was worked out of the structure drawn - a model's values, its descriptors, its SMILES - is of each of its
         //  conformers too, the same structure: carried on with them, for a Filter or a table to read)
         const properties = record?.properties && Object.keys(record.properties).length ? record.properties : undefined;
+        // (and what it was made from, by id: the lineage of each of its conformers, the same structure)
+        const madeOf = record?.from?.length ? record.from : undefined;
         for (let f = 0; f < framesOf(m); f++) {
           worked.push({
             compound: compounds,
@@ -810,6 +812,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             xyz: frameXyz(m, f),
             ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
             ...(properties ? { properties } : {}),
+            ...(madeOf ? { madeOf: [...madeOf] } : {}),
             calc,
             keep,
           });
@@ -1167,7 +1170,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!where) return void fail(id, tooOld(plugin.id, decl.name) ?? notFound(decl.label), at, key);
       paths.set(decl.name, where);
     }
-    // (the files its kind of step takes besides, where an entry's molecule was read from one: Multiwfn's wavefunction)
+    // (the files its kind of step takes besides, where an entry's molecule was read from one: a wavefunction, say)
     // (another plugin's kind it uses only while that plugin is added, of a version it works with)
     const kinds = stepFiles(plugin, step.kind, addedNow());
     const sourcesOf = (id: number | undefined) => {
@@ -1224,7 +1227,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
-    // (a program of another plugin its jobs need - the xTB plugin's xtb, for ORCA's xTB methods: of one its manifest says it uses,
+    // (a program of another plugin its jobs need, for methods its own program runs with it: of one its manifest says it uses,
     //  that plugin added and of a version it works with - or no job starts, said, naming it; one used only for some of its work
     //  stops the plugin for nothing else)
     for (const n of [...new Set(prepared.flatMap((p) => p.needs ?? []))]) {
@@ -1243,7 +1246,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           files: p.files,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),
-          // (the cores Settings gives it - or fewer, where its plugin says it takes fewer: ORCA with no MPI, one)
+          // (the cores Settings gives it - or fewer, where its plugin says it takes fewer: a program that runs as processes with no MPI, one)
           cores: p.cores ? Math.min(p.cores, cores) : cores,
           ...(p.memory ? { memory: p.memory } : {}),
           // (its folder named from its first entry's name, or its compound's letter, and its step's kind)
@@ -1615,6 +1618,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const r of run.refused ?? []) fails([entries[r.entry]], r.kind, r.why);
       // (none where it ran no job: lone atoms alone, passed through)
       const client = plugin && run.jobs.length ? await pluginClient(plugin).catch(() => null) : null;
+      // (the solvation its options ask for, as its manifest says its program says one: what each job gave held to it,
+      //  whatever program ran it - workflow/programs `notAsAsked`)
+      const asked = solvationAsked(plugin?.steps.find((s) => s.kind === kind)?.solvation, optionsOf(optionsFor(kind, by), run.options));
       // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
       //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
       const passing = [...(run.passed ?? [])].sort((a, b) => a - b);
@@ -1707,6 +1713,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", read);
               continue;
             }
+            const unlike = notAsAsked(asked, read.output.solvation);
+            if (unlike) {
+              fails([mine[i]], unlike.kind, unlike.why);
+              continue;
+            }
             const made =
               kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source);
             if (isFailure(made)) {
@@ -1740,6 +1751,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (that entry alone failed, saying why)
           if (isFailure(out)) {
             fails([mine[i]], out.kind, out.why);
+            continue;
+          }
+          const unlike = notAsAsked(asked, out.solvation);
+          if (unlike) {
+            fails([mine[i]], unlike.kind, unlike.why);
             continue;
           }
           // (by the version its worker said it runs, as a reader's is kept)

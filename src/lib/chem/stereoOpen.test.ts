@@ -108,6 +108,20 @@ describe("what a structure leaves open, as Meno decides it", () => {
     expect(stereoLeft([open("double", 1), open("double", 3)], diene.atoms, diene.bonds).cumulated).toEqual([]);
   });
 
+  it("takes out a centre at an atom of three neighbours whose lone pair keeps no configuration - an amine's N, a plain N-methyl or an N-aryl aziridine's - and keeps an N-chloro aziridine's N and a phosphine's P", () => {
+    const left = (smiles: string, centres: number[]) => {
+      const m = mol(smiles);
+      return stereoLeft(centres.map((i) => open("centre", i)), m.atoms, m.bonds).atoms;
+    };
+    expect(left("CN(CC)CCC", [1])).toEqual([]);
+    expect(left("CC1CN1c1ccccc1", [1, 3])).toEqual([1]);
+    expect(left("CC1CN1C", [1, 3])).toEqual([1]);
+    expect(left("CC1CN1Cl", [1, 3])).toEqual([1, 3]);
+    expect(left("CP(CC)c1ccccc1", [1])).toEqual([1]);
+    // (a secondary phosphine's P, its H the fourth of four: a centre as any other, left open as perceived)
+    expect(left("C[PH]CC", [1])).toEqual([1]);
+  });
+
   it("is what is left once places made before give some of it a configuration", () => {
     const m = mol("CC=C=CC");
     const left = stereoLeft([open("double", 1), open("double", 2)], m.atoms, m.bonds);

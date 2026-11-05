@@ -7,7 +7,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
-import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
+import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
@@ -896,7 +896,7 @@ export default function PartMenu({
           ...(target.kind === "bond" && bondKind
             ? [
                 // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
-                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: BOND_KIND_KEYS[k] ?? "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
                 { name: "More kinds of bond", keys: "", run: () => setMore((m) => !m), icon: BOND_ICONS.more, checked: more, keep: true },
                 ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
               ]

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { acceptOptions, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
@@ -61,6 +63,21 @@ describe("options a plugin declares", () => {
       { id: "chk", label: "Checkpoint", type: "switch", default: true },
     ]);
     expect(acceptOptions("not a list")).toEqual([]);
+  });
+
+  it("read a whole number alone where the plugin says so - only by true - and hold what is remembered to it", () => {
+    const read = acceptOptions([
+      { id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true },
+      { id: "t", label: "Temperature", type: "number", default: 298.15, min: 1, step: 1, whole: "yes" },
+      // (none: its default is no whole number)
+      { id: "bad", label: "Bad", type: "number", default: 2.5, whole: true },
+    ]);
+    expect(read).toEqual([
+      { id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true },
+      { id: "t", label: "Temperature", type: "number", default: 298.15, min: 1, step: 1 },
+    ]);
+    expect(valuesOf(read, { count: 12.5, t: 300.5 })).toEqual({ count: 200, t: 300.5 });
+    expect(valuesOf(read, { count: 600 })).toEqual({ count: 600, t: 298.15 });
   });
 });
 
@@ -127,5 +144,41 @@ describe("a number that sets nothing", () => {
     ]);
     expect(memory).toMatchObject({ id: "maxcore", type: "number", unset: 0 });
     expect(other).not.toHaveProperty("unset");
+  });
+});
+
+describe("options a bundled plugin declares", () => {
+  // (every list of options in its manifest - a role's, a step's, a kind it writes, a look's - read as Meno reads it)
+  const lists = (x: unknown, out: unknown[][] = []): unknown[][] => {
+    if (Array.isArray(x)) x.forEach((y) => lists(y, out));
+    else if (x && typeof x === "object")
+      for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+        if (k === "options" && Array.isArray(v)) out.push(v);
+        lists(v, out);
+      }
+    return out;
+  };
+  const root = join(__dirname, "../../src-tauri/resources/plugins");
+
+  it("are each read as declared - none left out as no option, a whole number's step a whole number", () => {
+    for (const id of readdirSync(root)) {
+      let manifest: unknown;
+      try {
+        manifest = JSON.parse(readFileSync(join(root, id, "manifest.json"), "utf8"));
+      } catch {
+        continue;
+      }
+      for (const declared of lists(manifest)) {
+        const read = acceptOptions(declared).map((o) => o.id);
+        const ids = (declared as { id?: unknown }[]).map((o) => o.id);
+        // (named, where one is left out: the plugin and the option)
+        expect(ids.filter((x) => !read.includes(x as string)).map((x) => `${id}: ${String(x)}`)).toEqual([]);
+      }
+    }
+  });
+
+  it("leave out a whole number whose step is no whole one, as its arrows would step onto numbers it refuses", () => {
+    expect(acceptOptions([{ id: "n", label: "N", type: "number", default: 2, step: 0.5, whole: true }])).toEqual([]);
+    expect(acceptOptions([{ id: "n", label: "N", type: "number", default: 2, step: 2, whole: true }])).toEqual([{ id: "n", label: "N", type: "number", default: 2, step: 2, whole: true }]);
   });
 });

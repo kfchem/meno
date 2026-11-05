@@ -29,7 +29,6 @@ use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::net::Net;
@@ -481,10 +480,8 @@ struct Progress<'a> {
 }
 
 fn manifest_of(app: &AppHandle, id: &str) -> Result<Value, String> {
-    let path = app
-        .path()
-        .resolve(format!("resources/plugins/{id}/manifest.json"), BaseDirectory::Resource)
-        .map_err(|e| format!("{id}'s manifest: {e}"))?;
+    let data = app.path().app_local_data_dir().map_err(|e| format!("{id}'s manifest: {e}"))?;
+    let path = crate::installed::dir(&crate::installed::root(&data), id)?.join("manifest.json");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{id}'s manifest: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{id}'s manifest: {e}"))
 }

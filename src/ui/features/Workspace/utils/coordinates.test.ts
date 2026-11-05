@@ -128,7 +128,7 @@ describe("the energy a structure's notes give it", () => {
     expect(energyOf(["E = -76.4 Hartree"])).toBe(-76.4);
     expect(energyOf(["SCF Done: E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
     expect(energyOf(["SCF energy (a.u.) = -154.987654"])).toBe(-154.987654);
-    expect(energyOf(["FINAL SINGLE POINT ENERGY = -93.399651434575 Eh"])).toBe(-93.399651434575);
+    expect(energyOf(["FINAL SINGLE POINT ENERGY = -93.312345678901 Eh"])).toBe(-93.312345678901);
     expect(energyOf(["Electronic energy = -76.4 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
   });
 

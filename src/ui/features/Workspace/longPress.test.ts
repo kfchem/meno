@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESSES, LONG_PRESS_SHOW_MS } from "./constants";
-import { longPressMs } from "./longPress";
+import { atomLongPressMs, longPressMs } from "./longPress";
 
 const was = useAppSettings.getState().pointer;
 afterEach(() => useAppSettings.setState({ pointer: was }));
@@ -24,5 +24,14 @@ describe("a long press", () => {
       expect(ms).toBeLessThan(DOUBLE_CLICK_MS);
       expect(ms).toBeLessThan(FREE_MS);
     }
+  });
+
+  it("is none on an atom with Option or Alt held: that press is the one-click bond's, however slowly it is made", () => {
+    expect(atomLongPressMs({ altKey: true })).toBeNull();
+    expect(atomLongPressMs({ altKey: false })).toBe(LONG_PRESSES.normal);
+    expect(atomLongPressMs(null)).toBe(LONG_PRESSES.normal);
+    useAppSettings.setState({ pointer: { ...was, longPress: "longer" } });
+    expect(atomLongPressMs({})).toBe(400);
+    expect(atomLongPressMs({ altKey: true })).toBeNull();
   });
 });

@@ -71,9 +71,14 @@ And the helpers version 1 guarantees:
   to the balls and sticks themselves (hair, say).
 
 **A studio** (`studios[].file`): `setup(ctx)`, which builds the backdrop
-and its lights from `ctx.request`: in the background's colour, the lights
-as strong as asked. A studio of a transparent background builds no
-backdrop.
+and its lights from `ctx.request`, the lights as strong as asked. A studio
+is the backdrop chosen, so it draws its backdrop whatever the background
+asked: the renderer has no rule against a studio and a transparent
+background, nor does Meno, which knows no plugin's studios. Where the
+studio is itself the background, its manifest says so (`fixed` on the
+renderer's `background`, as a motion fixes its renderer), and the card
+shows the background as the studio sets it, said and not to be changed,
+so that what the card says is what the picture is.
 
 **A motion** (`motions[].file`):
 
@@ -100,6 +105,13 @@ bonds; a motion moves them, its camera and its own effects; a studio puts
 a backdrop and lights round them. None redraws the molecules from a
 palette or sizes of its own: their elements, places, radii and colours
 are Meno's.
+
+A change of molecules may choose which of A's atoms flies to which of B's
+places (Film looks and motions' Ring takes the least travel in all,
+the same element preferred). That choice is the motion's choreography,
+made inside its own file for the film alone: never a mapping of one
+molecule onto the other, never said as one, and nothing of it reaches
+Meno.
 
 ## Versions
 
