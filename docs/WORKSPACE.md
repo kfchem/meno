@@ -1198,11 +1198,11 @@ what it converts, the style's place and its card, and the molecules in
 ## Magnified display
 
 Planned on 2026-10-16 (agreed by the maintainer on 2026-10-14 as a special
-state, for 2D and 3D alike; the command centre's defaults), and approved
-with its three choices as proposed on 2026-10-16: the magnifications
-below, a 3D molecule made from a magnified drawing taking its
-magnification, and a selection's objects each about its own centre.
-Molecules in 3D built first (`utils/magnified`), then structures in 2D.
+state, for 2D and 3D alike), and approved with its three choices as
+proposed on 2026-10-16: the magnifications below, a 3D molecule made from
+a magnified drawing taking its magnification, and a selection's objects
+each about its own centre. Molecules in 3D built first
+(`utils/magnified`), then structures in 2D.
 
 **What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
 or smaller than it is - 100 % being its true size - without changing the
@@ -1219,10 +1219,10 @@ object is shown.
     workspace's style with every length k times over (layoutStructures
     `magnifiedOptions`): lines, labels, wedges, marks and the gaps between
     them all scale together, as a zoomed copy of it would. (Planned at
-    first as true places drawn through a transform; held as shown instead,
-    with the command centre's agreement on 2026-10-16, so that the pointer,
-    the selection, snapping and the page's boxes, which read where atoms
-    are, need nothing new.) **All chemistry reads it at its true size**
+    first as true places drawn through a transform; held as shown instead
+    on 2026-10-16, so that the pointer, the selection, snapping and the
+    page's boxes, which read where atoms are, need nothing new.)
+    **All chemistry reads it at its true size**
     (lib/chem/magnified2d `atTrueSize`, in `writeMolfile`): MOL, SD and
     RXN files, a copy for another program, what a plugin or a job is
     given and so a workflow's inputs, the drawing a 3D structure rises
