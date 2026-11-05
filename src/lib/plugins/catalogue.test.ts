@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptCatalogue, offersOf, type Catalogue } from "./catalogue";
+import { acceptCatalogue, offeredFor, offersOf, type Catalogue } from "./catalogue";
 
 const HEX = "a".repeat(64);
 
@@ -176,5 +176,17 @@ describe("what Settings offers of each plugin online", () => {
     expect(why([["future", "0.1.0"]])[1]).toBe("Its newer versions are for a newer Meno");
     // (a Meno that speaks its contract offers it; a system not known, every one)
     expect(offersOf(listed, new Map(), null, [1, 2]).map((o) => o.offer)).toEqual(["add", "add", "add", "add"]);
+  });
+});
+
+describe("what is offered for a role no plugin here fills", () => {
+  it("the plugins online that fill it, not here yet, for this system and this Meno", () => {
+    const listed = (acceptCatalogue(catalogue([entry(), entry({ id: "other", roles: ["checks"] }), entry({ id: "winonly", systems: ["windows"] }), entry({ id: "future", contract: 2 })])) as { catalogue: Catalogue }).catalogue;
+    const offers = offersOf(listed, new Map(), "macos");
+    expect(offeredFor("smiles", offers).map((e) => e.id)).toEqual(["sketch"]);
+    expect(offeredFor("checks", offers).map((e) => e.id)).toEqual(["other"]);
+    expect(offeredFor("conformers", offers)).toEqual([]);
+    // (one here already: nothing offered for it)
+    expect(offeredFor("smiles", offersOf(listed, new Map([["sketch", "0.2.0"]]), "macos"))).toEqual([]);
   });
 });

@@ -17,7 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
-import { readStereo, sameConfiguration, straightEnds } from "../../../../lib/layout/drawn";
+import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
 import { allylCurve } from "../../../../lib/chem/allylArc";
@@ -105,7 +105,7 @@ export function layoutJob(part: Model): LayoutJob {
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
-        "(drawn crossed, with two of its bonds in line or on top of each other, or at an atom of three bonds that keeps no configuration of its own - an amine's N, a plain N-alkyl aziridine's, a B - where a wedge states none), so nothing was moved",
+        `(${unreadWhy(drawing.atoms, drawing.bonds, unread[0])}), so nothing was moved`,
     );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own
