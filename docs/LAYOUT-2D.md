@@ -446,6 +446,11 @@ they hang from.
   chain. The O between two crosses runs straight on, so that ATP's
   triphosphate is one line; the bond joining a cross to a zigzag gives way,
   to 150 degrees.
+- **Straight through, as asked**: an atom given `linear` (`perceive.ts`;
+  Clean-up gives it to the end of a double bond drawn straight, its
+  configuration not given - IUPAC 2006 ST-4.4) is drawn straight through,
+  as an allene's middle is, its two bonds in one line, and scored so
+  (`straightThrough`; `Geometry.straight` in `metrics.ts`).
 - **At a ring atom**: one bond out goes straight out, along the bisector;
   two (a gem-dimethyl) go close together, 60 degrees apart about it; more
   split the room evenly. A substituent never takes the 120-degree side of

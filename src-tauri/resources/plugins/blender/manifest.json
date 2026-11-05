@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "uses": [
     {
       "name": "Blender",
@@ -111,7 +111,8 @@
           "default": 128,
           "min": 1,
           "max": 4096,
-          "step": 1
+          "step": 1,
+          "whole": true
         },
         {
           "id": "denoise",

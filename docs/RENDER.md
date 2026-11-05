@@ -389,7 +389,7 @@ uv, no package), and the script Blender runs, `render.py`.
 - **Looks, studios and motions of Blender's own** come from preset plugins
   that use the renderer through its interface `preset` (docs/plugins/
   blender-presets.md); the renderer itself has none. Meno carries one,
-  **Blender looks and motions** (`blender-presets`), described below. The
+  **Film looks and motions** (`blender-presets`), described below. The
   renderer runs a preset's chosen file inside its Blender, after it has
   built Meno's scene, against what the interface hands it: the request,
   and Meno's molecules as the scene's tags give them.
@@ -432,7 +432,7 @@ uv, no package), and the script Blender runs, `render.py`.
   is written in the glTF. Blender finds its own shadows and hollows as it
   lights the scene; the shadows' softness is the plugin's own option.
 
-### Blender looks and motions
+### Film looks and motions
 
 A preset plugin of Meno's, for the Blender plugin (it uses Blender from 0.7.0 to before 0.8.0, its interface `preset` from
 1.0.0 to before 2.0.0). It runs nothing of its own: Meno puts its files in the render job, and Blender runs the chosen ones.

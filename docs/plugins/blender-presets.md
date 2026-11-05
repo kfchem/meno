@@ -107,7 +107,7 @@ palette or sizes of its own: their elements, places, radii and colours
 are Meno's.
 
 A change of molecules may choose which of A's atoms flies to which of B's
-places (Blender looks and motions' Ring takes the least travel in all,
+places (Film looks and motions' Ring takes the least travel in all,
 the same element preferred). That choice is the motion's choreography,
 made inside its own file for the film alone: never a mapping of one
 molecule onto the other, never said as one, and nothing of it reaches

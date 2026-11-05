@@ -5,8 +5,12 @@
  * use, set in Settings, General.
  */
 
-/** A set of colours: its id, its name and its colours, in order, each #rrggbb. */
-export type ColourSet = { id: string; name: string; colours: readonly string[] };
+/**
+ * A set of colours: its id, its name and its colours, in order, each
+ * #rrggbb - and, of a built-in set, those of them offered for fills alone
+ * (`fillsOnly`): too pale on white to read as a line or a letter.
+ */
+export type ColourSet = { id: string; name: string; colours: readonly string[]; fillsOnly?: readonly string[] };
 
 /**
  * Meno's set (the maintainer, 2026-10-11): colour makes a drawing look
@@ -16,8 +20,18 @@ export type ColourSet = { id: string; name: string; colours: readonly string[] }
  */
 export const MENO_SET: ColourSet = { id: "meno", name: "Meno", colours: ["#317689", "#cd4560", "#b2d9e4", "#ebb3be", "#141414", "#c0c0c0"] };
 
-/** Okabe and Ito's colours but black - told apart by those who see colours otherwise. */
-export const OKABE_ITO_SET: ColourSet = { id: "okabe-ito", name: "Okabe–Ito", colours: ["#d55e00", "#e69f00", "#f0e442", "#009e73", "#56b4e9", "#0072b2", "#cc79a7"] };
+/**
+ * Okabe and Ito's colours but black - told apart by those who see colours
+ * otherwise. Their yellow, kept exact, is for fills and highlights alone:
+ * at 1.32 : 1 against white, a line or a letter in it cannot be read (the
+ * maintainer's choice).
+ */
+export const OKABE_ITO_SET: ColourSet = {
+  id: "okabe-ito",
+  name: "Okabe–Ito",
+  colours: ["#d55e00", "#e69f00", "#f0e442", "#009e73", "#56b4e9", "#0072b2", "#cc79a7"],
+  fillsOnly: ["#f0e442"],
+};
 
 /** The sets built in, kept as they are: copied to be changed. */
 export const BUILT_IN_SETS: readonly ColourSet[] = [MENO_SET, OKABE_ITO_SET];
@@ -81,6 +95,11 @@ export function allSets(c: ColourSettings): ColourSet[] {
 /** The set in use: the one named, else Meno's. */
 export function setInUse(c: ColourSettings): ColourSet {
   return allSets(c).find((s) => s.id === c.use) ?? MENO_SET;
+}
+
+/** Whether a colour of a set is for fills alone, never a line or a letter (`ColourSet.fillsOnly`). */
+export function forFillsOnly(set: ColourSet, colour: string): boolean {
+  return set.fillsOnly?.includes(colour) ?? false;
 }
 
 /** Whether a set is built in, and so kept as it is. */
