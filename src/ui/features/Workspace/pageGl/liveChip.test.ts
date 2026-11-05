@@ -5,7 +5,7 @@ import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
 import { CHIP, CHIP_SHUT } from "./chips";
 import { barsLaid, barTone, chipHeights, chipMeasures, chipPressed, frameAtBars, frameAtSlider, liveChip, LIVE, toneColour, type ChipState } from "./liveChip";
 import type { Box } from "./shapes";
-import { textWidth, wrapRuns } from "./texts";
+import { textWidth, wrapRuns, wrapText } from "./texts";
 import { pagePx } from "./units";
 
 const kcal = (e: number) => e / 627.509474;
@@ -213,6 +213,14 @@ describe("a single geometry's chip", () => {
     expect(lines[0].runs[0]).toMatchObject({ text: "A very long title indeed for a chip", color: "a" });
     expect(lines.length).toBeGreaterThan(2);
     expect(lines.slice(1).every((l) => l.width <= 120 + 1e-6)).toBe(true);
+  });
+});
+
+describe("words laid in lines", () => {
+  it("break after a hyphen inside a word as CSS's do - never before a figure", () => {
+    const w = textWidth("Method: GFN2-", 11) + 1;
+    expect(wrapText("Method: GFN2-xTB", 11, w).map((l) => l.text)).toEqual(["Method: GFN2-", "xTB"]);
+    expect(wrapText("charge -12 here", 11, textWidth("charge -1", 11)).map((l) => l.text)).toEqual(["charge", "-12 here"]);
   });
 });
 

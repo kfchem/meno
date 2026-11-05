@@ -397,10 +397,8 @@ function runRows(s: WorkflowStep): RunRow[] {
   ];
 }
 
-/** Where the steps' shut cards are drawn among the page's WebGL: over the wires (4) and the drawing's marks (40-42), under the molecules' chips (PAGE_GL_ORDER) - as their HTML lay. */
-const CARDS_ORDER = 44;
-/** Where the sets' frames and tabs are drawn: over the wires and the drawing's marks, under the cards - as their HTML lay, before the cards. */
-const SETS_ORDER = 42.5;
+/** Where the steps' shut cards are drawn among the page's WebGL: over the sets' frames (FrameTabs `FRAMES_ORDER`), under the molecules' chips (PAGE_GL_ORDER) - as their HTML lay. */
+const CARDS_ORDER = PAGE_GL_ORDER - 6;
 /** How close two presses on a set's tab come to name it anew, in ms: a double-click's. */
 const DOUBLE_MS = 400;
 /** Where the ports are drawn: over the molecules' chips (PAGE_GL_ORDER, their words + 1), under a chip opened over the rest (pageGl/PagePlaced RAISED_ORDER). */
@@ -1078,7 +1076,7 @@ export default function Workflow2D() {
       box: shownOf(b),
       tone: chosenSet === b.id || selFlow.sets.has(b.id) ? "chosen" : hoveredSet === b.id ? "hover" : "rest",
       tab: { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
-      iconAlone: true,
+      iconWhenSmall: true,
       edges: true,
     };
   });
@@ -1253,8 +1251,8 @@ export default function Workflow2D() {
       })}
       {drawn && wirePoints.get("drawn") && <WireLine target={wirePoints.get("drawn")!} color={ACCENT} zoom={zoom} />}
 
-      {/* the sets' frames and tabs, by WebGL: under the cards (SETS_ORDER) */}
-      <FrameTabs items={tabsShown} on={onSetTabs} order={SETS_ORDER} />
+      {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
+      <FrameTabs items={tabsShown} on={onSetTabs} />
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

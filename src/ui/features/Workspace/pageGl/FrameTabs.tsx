@@ -18,8 +18,14 @@ export type FrameTabsOn = {
   menu?: (key: string, e: PagePointer) => void;
 };
 
+/**
+ * Where frames are drawn among the page's WebGL: under the steps' cards and the molecules' chips, so that a card or a chip in a
+ * frame is drawn over its line - as a set's frame lay in HTML, before the cards.
+ */
+export const FRAMES_ORDER = PAGE_GL_ORDER - 7.5;
+
 /** Frames with their tabs on the page (`FrameTab`), drawn by WebGL from `order` among its WebGL and taken hold of by the page's own regions (./PageHits). */
-export default function FrameTabs({ items, on, order = PAGE_GL_ORDER }: { items: readonly FrameTab[]; on: FrameTabsOn; order?: number }) {
+export default function FrameTabs({ items, on, order = FRAMES_ORDER }: { items: readonly FrameTab[]; on: FrameTabsOn; order?: number }) {
   const camera = useThree((s) => s.camera);
   // (its words read, or its icons alone: switched past their threshold as the zoom goes, as a set's are - utils/pageScale `wordsReadAt`)
   const readRef = useRef(wordsReadAt(camera.zoom, true));

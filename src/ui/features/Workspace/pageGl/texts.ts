@@ -149,7 +149,8 @@ export function wrapRuns(runs: readonly WrapRun[], sizePx: number, maxPx: number
   for (const r of runs) {
     if (!r.text) continue;
     if (r.atomic) pieces.push({ run: r, text: r.text, atomic: true });
-    else for (const w of r.text.match(/\S*\s*/g) ?? []) if (w) pieces.push({ run: r, text: w, atomic: false });
+    // (a line may end after a space, or after a hyphen inside a word - "GFN2-xTB" - as CSS's lines do; never one before a figure, a minus)
+    else for (const w of r.text.match(/[^\s-]+-(?=[^\s\d-])|\S*\s*/g) ?? []) if (w) pieces.push({ run: r, text: w, atomic: false });
   }
   const width = (t: string, r: Run) => textWidth(t, sizePx, r.weight ?? 400);
   const lines: { run: Run; text: string }[][] = [[]];

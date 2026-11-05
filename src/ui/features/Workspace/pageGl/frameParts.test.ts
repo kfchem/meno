@@ -30,7 +30,7 @@ describe("a frame with its tab, drawn as a set's", () => {
   });
 
   it("a set's: says its name and count from its padding, read, with no icon - its icon standing in for them only where they are too small to read", () => {
-    const set = frame({ key: "set:3", iconAlone: true, tab: { icon: "rings", name: "Input", status: "3 structures" } });
+    const set = frame({ key: "set:3", iconWhenSmall: true, tab: { icon: "rings", name: "Input", status: "3 structures" } });
     const read = frameTabParts([set], true);
     expect(read.icons).toEqual([]);
     expect(read.texts[0]).toMatchObject({ text: "Input", weight: 500 });
