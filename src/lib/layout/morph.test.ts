@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coreMatches } from "./scaffold";
-import { commonAtoms, fitOnto, fitted, MATCH_MOST_ATOMS, matchedAtoms, morphAt, sameAtoms, unfitted, type MatchDrawing } from "./morph";
+import { commonAtoms, CORE_LEAST_SHARE, CORE_MOST_ATOMS, fitOnto, fitted, MATCH_MOST_ATOMS, matchedAtoms, morphAt, sameAtoms, unfitted, type MatchDrawing } from "./morph";
 
 /** Benzene drawn as a hexagon of side 1, its first atom at angle `turn` (radians), Kekulé bonds from atom `first`. */
 function benzene(turn = 0, first = 0, at = { x: 0, y: 0 }): MatchDrawing {
@@ -173,22 +173,66 @@ describe("two analogues, matched on the core they share", () => {
     // (hexane and benzene: a ring's bonds are not a chain's - no core of two)
     const hexane: MatchDrawing = { atoms: benzene().atoms, bonds: benzene().bonds.slice(0, 5).map((b) => ({ ...b, order: 1 })) };
     expect(commonAtoms(benzene(), hexane)).toBeNull();
+    // (cyclohexane and hexane, every bond single: the bond closing the ring is in one only, so the core stops at five -
+    //  whichever of the two it is matched from)
+    const cyclohexane: MatchDrawing = { atoms: benzene().atoms, bonds: benzene().bonds.map((b) => ({ ...b, order: 1 })) };
+    expect(commonAtoms(cyclohexane, hexane)!.filter((j) => j >= 0)).toHaveLength(5);
+    expect(commonAtoms(hexane, cyclohexane)!.filter((j) => j >= 0)).toHaveLength(5);
     expect(commonAtoms(phenyl("C"), phenyl("Cl"), 0)).toBeNull();
   });
 
-  it("are matched atom for atom first, where they are one structure", () => {
+  it("are matched atom for atom first, where they are one structure - however few the steps", () => {
     expect(matchedAtoms(phenyl("C"), phenyl("C"))).toEqual(sameAtoms(phenyl("C"), phenyl("C")));
+    expect(matchedAtoms(phenyl("C"), phenyl("C"), 0)).toEqual(sameAtoms(phenyl("C"), phenyl("C")));
     expect(matchedAtoms(phenyl("C"), phenyl("O"))!.filter((j) => j >= 0)).toHaveLength(6);
+    expect(matchedAtoms(phenyl("C"), phenyl("O"), 0)).toBeNull();
+  });
+
+  /** A chain of the atoms `els`, one after another. */
+  const line = (els: readonly string[]): MatchDrawing => ({
+    atoms: els.map((el, i) => ({ el, x: i * 0.87, y: i % 2 ? 0.5 : 0 })),
+    bonds: els.slice(1).map((_, i) => ({ a: i, b: i + 1, order: 1 })),
+  });
+
+  it("are matched where the core is most of the smaller - not where it is half of it", () => {
+    expect(CORE_LEAST_SHARE).toBe(0.6);
+    // (C-C-C-C-O-O and C-C-C-C-N-N: four of six; C-C-C-O-O-O and C-C-C-N-N-N: three of six)
+    expect(commonAtoms(line(["C", "C", "C", "C", "O", "O"]), line(["C", "C", "C", "C", "N", "N"]))!.filter((j) => j >= 0)).toHaveLength(4);
+    expect(commonAtoms(line(["C", "C", "C", "O", "O", "O"]), line(["C", "C", "C", "N", "N", "N"]))).toBeNull();
+  });
+
+  it("are not looked for past the most atoms a core is looked for in", () => {
+    const carbons = (n: number) => Array.from({ length: n }, () => "C");
+    // (given steps enough to find it either way: only the most decides)
+    const ample = 10 ** 7;
+    expect(commonAtoms(line([...carbons(CORE_MOST_ATOMS - 1), "O"]), line([...carbons(CORE_MOST_ATOMS - 1), "N"]), ample)).not.toBeNull();
+    expect(commonAtoms(line([...carbons(CORE_MOST_ATOMS), "O"]), line([...carbons(CORE_MOST_ATOMS), "N"]), ample)).toBeNull();
+  });
+
+  it("count no drawn hydrogen towards how much of the smaller the core must be", () => {
+    // (benzene with its six hydrogens drawn, and chlorobenzene with five: the six carbons are all of the smaller's heavy atoms -
+    //  counted with their hydrogens, they would be half of each, and too little)
+    const withH = (subst: string): MatchDrawing => {
+      const ring = benzene();
+      const outs = ring.atoms.map((a, i) => ({ el: i === 0 ? subst : "H", x: 2 * a.x, y: 2 * a.y }));
+      return { atoms: [...ring.atoms, ...outs], bonds: [...ring.bonds, ...outs.map((_, i) => ({ a: i, b: 6 + i, order: 1 }))] };
+    };
+    const m = commonAtoms(withH("H"), withH("Cl"))!;
+    expect(m.slice(0, 6).every((j) => j >= 0 && j < 6)).toBe(true);
+    expect(m.slice(6).every((j) => j === -1)).toBe(true);
   });
 
   it("move what is outside the core with it: a point put back by a fit is where it came from, mirrored or not", () => {
     const was = ethanol().atoms;
-    for (const mirror of [false, true]) {
-      const f = fitOnto(
-        was.map((a) => ({ x: -a.y + 3, y: a.x })),
-        was,
-        mirror,
-      );
+    // (turned; and turned and mirrored, fitted mirrored)
+    const turned = was.map((a) => ({ x: -a.y + 3, y: a.x }));
+    const mirrored = turned.map((a) => ({ x: -a.x, y: a.y }));
+    for (const [pts, mirror, want] of [
+      [turned, false, 1],
+      [mirrored, true, -1],
+    ] as const) {
+      const f = fitOnto(pts, was, mirror);
+      expect(f.mirror).toBe(want);
       const p = { x: 0.3, y: -1.2 };
       const back = unfitted(f, fitted(f, p));
       expect(back.x).toBeCloseTo(p.x);

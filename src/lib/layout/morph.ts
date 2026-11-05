@@ -312,5 +312,5 @@ export function unfitted(f: Fit, q: Point): Point {
  * core they share (`commonAtoms`, within `steps`; -1 for an atom outside it). Null where they share too little.
  */
 export function matchedAtoms(from: MatchDrawing, to: MatchDrawing, steps = CORE_MOST_STEPS): number[] | null {
-  return sameAtoms(from, to) ?? (steps > 0 ? commonAtoms(from, to, steps) : null);
+  return sameAtoms(from, to) ?? commonAtoms(from, to, steps);
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { CORE_MOST_STEPS } from "../../../../lib/layout/morph";
 import {
+  ALIGN_MOST_STEPS,
+  alignSteps,
   alignedRecords,
   addedStacks,
   carriedDrawing,
@@ -304,6 +307,18 @@ describe("a stack of drawings, lined up as it is opened", () => {
     const out = alignedRecords(m, [{ atoms: [1, 2, 3] }, { atoms: [10, 11, 12] }, { atoms: [20, 21, 22] }]);
     const at = (id: number) => out.atoms.find((a) => a.id === id)!;
     [10, 20].forEach((first) => [0, 1, 2].forEach((i) => expect(near(at(first + i), at(1 + i))).toBe(true)));
+  });
+
+  it("shares its steps out among its records: a long stack's records each given fewer, never more than one search takes, the whole within its most", () => {
+    expect(alignSteps(2)).toBe(CORE_MOST_STEPS);
+    let before = Infinity;
+    for (const n of [2, 3, 5, 11, 101, 1001, 10001]) {
+      const each = alignSteps(n);
+      expect(each, `${n}`).toBeLessThanOrEqual(before);
+      expect(each * (n - 1), `${n}`).toBeLessThanOrEqual(ALIGN_MOST_STEPS);
+      before = each;
+    }
+    expect(alignSteps(1001)).toBe(Math.floor(ALIGN_MOST_STEPS / 1000));
   });
 
   it("only turns one with a wedge - a mirror would change what it says - and leaves one sharing nothing, and those after it, as the file has them", () => {

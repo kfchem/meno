@@ -328,6 +328,9 @@ type AlignBond = { a: number; b: number; order: number; stereo?: string; display
 /** The most steps lining a stack up as it opens takes, for all its records together, in looking for the cores they share. */
 export const ALIGN_MOST_STEPS = 50000;
 
+/** The steps each record of a stack of `records` is given to find the core it shares with the one before it: `ALIGN_MOST_STEPS` shared out among them, never more than one search takes. */
+export const alignSteps = (records: number): number => Math.min(CORE_MOST_STEPS, Math.floor(ALIGN_MOST_STEPS / Math.max(1, records - 1)));
+
 /**
  * A stack's records lined up as it is opened (docs/WORKSPACE.md, *Stacks of drawings*; the maintainer, 2026-11-04): each
  * record that shares a core with the one before it (lib/layout/morph `matchedAtoms`: the same structure, atom for atom, or
@@ -349,7 +352,7 @@ export function alignedRecords<A extends AlignAtom, B extends AlignBond, M exten
       bonds: model.bonds.flatMap((b) => (index.has(b.a) && index.has(b.b) ? [{ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }] : [])),
     };
   };
-  const steps = Math.min(CORE_MOST_STEPS, Math.floor(ALIGN_MOST_STEPS / (records.length - 1)));
+  const steps = alignSteps(records.length);
   for (let k = 1; k < records.length; k++) {
     const was = records[k - 1].atoms.filter((id) => at.has(id));
     const now = records[k].atoms.filter((id) => at.has(id));
