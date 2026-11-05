@@ -121,7 +121,7 @@ export function inRow(models: readonly Model[], gap: number): Model {
     for (const a of m.atoms) ids.set(a.id, next++);
     for (const b of m.bonds) ids.set(-b.id - 1, next++);
     atoms.push(...m.atoms.map((a) => ({ ...a, id: ids.get(a.id)!, x: a.x - x0 + x })));
-    bonds.push(...m.bonds.map((b) => ({ ...b, id: ids.get(-b.id - 1)!, a: ids.get(b.a)!, b: ids.get(b.b)! })));
+    bonds.push(...m.bonds.map((b) => ({ ...b, id: ids.get(-b.id - 1)!, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}) })));
     x += x1 - x0 + gap;
   }
   const xs = atoms.map((a) => a.x);

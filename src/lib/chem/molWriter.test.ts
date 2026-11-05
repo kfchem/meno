@@ -27,7 +27,7 @@ const model: WriterModel = {
     { a: 10, b: 12, order: 1, stereo: "down" },
     { a: 10, b: 13, order: 1, stereo: "wavy" },
     { a: 11, b: 14, order: 2 },
-    { a: 14, b: 15, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a: 14, b: 15, order: 1, stereo: "up", narrow: 15 },
     { a: 14, b: 16, order: 1 },
   ],
 };
@@ -79,7 +79,7 @@ describe("writeMolfile", () => {
     const flipped = back.bonds.find((b) => b.stereo === "up" && b.order === 1 && byIndex(back, b.a) !== 0)!;
     const narrowFirst = byIndex(back, flipped.a);
     expect(narrowFirst).toBe(5);
-    expect(flipped.stereoOrient).toBe("reverse");
+    expect(flipped.narrow).toBe(flipped.a);
     // the shape is kept too: the same bond lengths once scaled back
     const d = (m: any, i: number, j: number) =>
       Math.hypot(m.atoms[i].x - m.atoms[j].x, m.atoms[i].y - m.atoms[j].y);

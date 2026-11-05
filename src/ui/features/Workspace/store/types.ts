@@ -115,12 +115,19 @@ export type Bond = BondChem & {
   /** A single bond's wedge, hash or wave; a double bond's "either": cis or trans not known. */
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   doubleMode?: "auto" | "center" | "left" | "right";
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (by id, `a` or `b`) a wedge is narrow at: a stereo wedge's
+   * centre, a perspective wedge's far end. Kept by atom, so a bond added or
+   * taken away beside it does not move it; every wedge in a document has
+   * one (document `wedgesHeld`). None given, the end with more bonds (`a`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn; plain when unset. "wedge" is
-   * a ring's bond in perspective toward the viewer, narrow where
-   * `stereoOrient` says; on a double bond it, or "bold", is the line the
-   * second one is drawn beside.
+   * a ring's bond in perspective toward the viewer, narrow at `narrow`; on
+   * a double bond it, or "bold", is the line the second one is drawn
+   * beside.
    */
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
@@ -1898,10 +1905,6 @@ export type EditorState = {
   setBondDoubleMode: (
     id: number,
     mode: NonNullable<Bond["doubleMode"]>,
-  ) => void;
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
   ) => void;
   setSel: (sel: Sel, anchor?: number | null) => void;
   /**

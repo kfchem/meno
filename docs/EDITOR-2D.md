@@ -697,6 +697,17 @@ Both go together, because both touch every layer.
   single bond alone: a bond made double or triple loses its, and one is
   not given to a double or triple bond (2026-10-13; a double bond's
   either-configuration is its own).
+- **A wedge's narrow end is kept by atom** (`Bond.narrow`). A wedge or
+  hashes, and a ring's bond in perspective, are narrow at the atom they
+  were drawn, read or laid out narrow at, and stay so while bonds are
+  added to or taken from either end. Before, the narrow end was the end
+  with more bonds unless the bond said otherwise, counted again after
+  every edit: two bonds drawn out of a wedge's wide end could move it to
+  the other atom, turning one configuration into another with nothing
+  said. A wedge given no narrow end - chosen from the menu, say - is
+  narrow at the end with more bonds as the edit leaves it, and from then
+  on keeps it. A click on a single bond runs plain, wedge, hashes, and
+  plain again with the other end narrow next time round.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
