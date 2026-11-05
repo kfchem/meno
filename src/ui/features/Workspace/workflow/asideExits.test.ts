@@ -6,10 +6,10 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
 import { resultOf } from "./flow";
 import { ONE_INPUT } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, GAP, portDown } from "./look";
+import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, PX, portDown } from "./look";
 import { addSet, addStep, addStepFrom, connect, moveStep, openedSet } from "./model";
 import { heldSets, setsOnPage, unseenSets } from "./onPage";
-import { clearOf, exitStart, frameAt, placeCard } from "./place";
+import { clearOf, exitStart, frameAt, placeBelow, placeCard } from "./place";
 import { placeResults, type RunResults, type RunWith } from "./run";
 
 const extentOf: RunWith["extentOf"] = () => ({ x0: -2, x1: 2, y0: -2, y1: 2 });
@@ -146,6 +146,21 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     expect(added.wires!.map((w) => w.from)).toEqual([{ set: chemist }]);
     const none = addStepFrom(doc, "generate", { set: 2 }, 900, -700);
     expect([lastStep(none).x, lastStep(none).y, none.wires ?? []]).toEqual([...Object.values(placeCard(doc, 900, -700)), []]);
+  });
+
+  it("is as tall as its words can draw a card closed - so is every card placing keeps clear of - not as tall as its ports reach (look `CARD_TALL`)", () => {
+    // (a set put a little below the level spot - clear of a card CARD_H tall there, not of one as tall as its words can draw it)
+    const below = -(CARD_H + BETWEEN + 10 * PX);
+    const doc = addSet(filter(), { x0: CARD_W + GAP, y0: below - CARD_H, x1: 2 * CARD_W + GAP, y1: below });
+    const s = lastStep(addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "xtb"));
+    expect(s.y).toBeLessThan(exitStart(doc.steps![0], "out").y + portDown(0));
+    // (a frame put under a card, and a card put down there: below as much of it as its words can draw)
+    const plain = filter();
+    expect(placeBelow(plain, 0, 0, CARD_W, CARD_H).y1).toBeLessThanOrEqual(-CARD_TALL - BETWEEN + 1e-9);
+    expect(placeCard(plain, 0, 0).y).toBeLessThanOrEqual(-CARD_TALL - BETWEEN + 1e-9);
+    // (a card put down above a set it would reach, drawn as tall as its words can draw it: lower)
+    const under = addSet(emptyWorkspaceDocument(), { x0: 0, y0: below - CARD_H, x1: CARD_W, y1: below });
+    expect(placeCard(under, 0, 0).y).toBeLessThan(0);
   });
 
   it("is one step of the history, the step and its wire undone together", () => {

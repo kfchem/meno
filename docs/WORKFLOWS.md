@@ -2311,6 +2311,10 @@ placed (the maintainer, 2026-10-31).
 - **The exit's set is no hindrance**: wired on, it is held off the page,
   and the card may stand where its frame was. Where the chemist opened
   it, its frame stays, and the card keeps clear of it.
+- **Clear by what is drawn**: the card, and every card it keeps clear
+  of, counted as tall as its words can draw it closed (look
+  `CARD_TALL`), so that the frame of its first exit, beside it, never
+  comes within `BETWEEN` of a card above whose words run long.
 - **One edit**: the step and its wire are one step of the history,
   undone together; the step is brought into view with the sets it will
   give, as before.
@@ -2777,7 +2781,11 @@ page could not be read after one run.
     structure or a wire, as far as it must (place `placeCard`): it is made
     there, so nothing on the page moves. One a wire from a step's exit
     brought goes close by that step's card instead (place `placeNext`,
-    *A step added from an exit*). A card the chemist drags lands
+    *A step added from an exit*). A card is kept clear of, and put down,
+    as tall as its words can draw it closed (look `CARD_TALL`, 135 px:
+    what it does and its state each on two lines, what its program said,
+    its bar) - not as tall as its ports reach (`CARD_H`), which its words
+    can outgrow. A card the chemist drags lands
     where they let it go. Put down
     near the window's edge, or moved lower, it is brought into view with
     the sets it will give, as what is put down is shown.

@@ -66,6 +66,15 @@ export function shuttingCard(onShutting: (id: number | null) => void, ms: number
 /** A step's card: how wide, and how tall closed, about. */
 export const CARD_W = 208 * PX;
 export const CARD_H = 76 * PX;
+/**
+ * How tall a step's card is drawn closed at the most (StepCard): its hair
+ * line, its padding, its name, what it does on two lines, its state on two,
+ * what its program said, and its bar - 2 + 8 + 20 + 32 + 6 + 32 + 16 + 9 +
+ * 10. What placing keeps clear of a card and gives a card put down (place):
+ * its words can draw it taller than `CARD_H`, never than this. Its ports,
+ * its wires and fitting the page keep to `CARD_H`.
+ */
+export const CARD_TALL = 135 * PX;
 /** How far below its top a step's ports stand: wires join where they always did as its card opens. */
 export const PORT_DOWN = 28 * PX;
 /** How far apart a card's inputs are, where it takes more than one: each under the one before. */

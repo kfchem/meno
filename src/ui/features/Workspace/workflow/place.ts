@@ -14,7 +14,7 @@ import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
 import { unseenSets } from "./onPage";
-import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, portDown, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
+import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, inputLead, nearWire, portDown, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
@@ -114,10 +114,11 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   };
   // (a set drawn nowhere lies nowhere: held off the page, or an exit's for what its step sets aside, holding nothing - workflow/held)
   const unseen = unseenSets(doc);
-  const frames: Taken["frames"] = [...(doc.sets ?? []).filter((b) => !own(b.id) && !unseen.has(b.id)), ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_H), card: s.id }))];
+  const shown = (doc.sets ?? []).filter((b) => !own(b.id) && !unseen.has(b.id));
   // (what wires go round: the sets and cards, as Workflow2D has them go round - look `wireCurve`)
-  const round = frames.slice();
-  frames.push(...inkOf(doc, own, along));
+  const round: Frame[] = [...shown, ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H))];
+  // (and what is kept clear of: each card as tall as its words can draw it closed - look `CARD_TALL`)
+  const frames: Taken["frames"] = [...shown, ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_TALL), card: s.id })), ...inkOf(doc, own, along)];
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
   const to: Taken["to"] = [];
   // (each wire from a set into a step's input - a step's result set's from its exit's port on the card, which a frame placed does
@@ -237,7 +238,7 @@ export function placeBelow(doc: WorkspaceDocument, x: number, top: number, width
  * top left.
  */
 export function placeCard(doc: WorkspaceDocument, x: number, y: number): { x: number; y: number } {
-  const f = placeBelow(doc, x, y, CARD_W, CARD_H);
+  const f = placeBelow(doc, x, y, CARD_W, CARD_TALL);
   return { x: f.x0, y: f.y1 };
 }
 
@@ -259,7 +260,7 @@ export function placeNext(doc: WorkspaceDocument, from: { set: number }, kind: S
   if (!set?.made || !step) return undefined;
   const top = exitStart(step, set.made.exit).y + portDown(Math.max(0, inputsOf(kind).findIndex((p) => p.id === port)));
   const self: Self = set.opened ? { step: step.id, exit: set.made.exit } : { set: set.id, molecules: new Set(setMembers(doc, set).molecules), step: step.id };
-  const f = placeBelow(doc, step.x + CARD_W + GAP, top, CARD_W, CARD_H, self);
+  const f = placeBelow(doc, step.x + CARD_W + GAP, top, CARD_W, CARD_TALL, self);
   return { x: f.x0, y: f.y1 };
 }
 
