@@ -165,6 +165,9 @@ describe("a frames chip opened", () => {
     expect(words(open)).toContain("ETKDG v3 + MMFF94");
     expect(open.icons![0].turn).toBeCloseTo(Math.PI / 2, 9);
     expect(open.heightPx).toBeCloseTo(shut.heightPx + m.details.made!.height, 9);
+    // (widened both ways about its middle as it opens, as the whole chip does - the maintainer, 2026-11-06)
+    expect((open.box.x0 + open.box.x1) / 2).toBeCloseTo((shut.box.x0 + shut.box.x1) / 2, 9);
+    expect(open.box.x1 - open.box.x0).toBeGreaterThan(shut.box.x1 - shut.box.x0);
   });
 
   it("eases a bar's colour between the rest's, the pointed one's and the shown one's, as its HTML eased its fill", () => {
