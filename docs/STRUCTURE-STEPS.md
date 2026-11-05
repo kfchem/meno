@@ -166,7 +166,7 @@ start of a restrained minimisation towards the product.
   (`Property`, `src/lib/entry.ts`):
   - a value of a geometry (`at`) still says the geometry it was worked out
     at;
-  - a label (a Tag's ID) rides as it is;
+  - a label (a Tag's ID, which says it is one) rides as it is;
   - restraints (`restraints`) are the bonding entry's alone: they hold its
     bonds, its coordination bonds and the torsions across its double bonds,
     and the entry is bonded as it is. The geometry entry's, of the bonding
@@ -176,7 +176,16 @@ start of a restrained minimisation towards the product.
     is not the new entry's is kept, marked not applicable ("worked out on the
     structure before Re-bond"), and said - never shown as current
     (`src/lib/steps/restructure.ts`). A structure is known by its atoms and
-    bonds, however numbered (`structureKey`).
+    bonds, however numbered (`structureKey`);
+  - any other - one that says none of these: not the geometry, not the
+    structure it was worked out on, nor that it is a label - is not known
+    to be of the new entry's structure. It is kept, marked not applicable
+    ("not known to be of the structure after Re-bond"), and said, as one of
+    another structure is: what is not known to stand is never shown as
+    standing. A name (the compound's) is such a value, and the new entry
+    has none. Where each entry stood in its set and how it ended (its
+    number, its state) are not values of it, and are not marked: Meno gives
+    the new entry its own.
 - **Group and lineage.** The group is *a → b*: the geometry entry's group,
   then the bonding entry's (each entry's own id where it has none). Both
   entries are its lineage.

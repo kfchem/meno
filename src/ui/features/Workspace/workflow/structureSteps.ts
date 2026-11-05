@@ -213,6 +213,12 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
   if (pairs === "property" && !name) return { ok: false, said: "Name the property to pair them on" };
   const gs = geometry.map((e, i) => entryOfSet(e, String(i)));
   const bs = bonding.map((e, i) => entryOfSet(e, String(i)));
+  // (each re-bonded without where it stood and how it ended - its number, state, failure - which are of the set it came from,
+  //  and which Meno gives the re-bonded entry anew: none of them a value of a structure to mark. Its group names the new one)
+  const bare = (e: Entry): Entry => {
+    const { number: _n, state: _s, failure: _f, ...properties } = e.properties;
+    return { ...e, properties };
+  };
   // (the pairs: each with each, or each geometry with the one bonding entry of its value)
   const matched = pairs === "property" ? matchedOn(gs, bs, name, "Bonding") : null;
   const kept: SetEntry[] = [];
@@ -226,7 +232,7 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
       return;
     }
     for (const k of onto) {
-      const r = rebonded(gs[i], bs[k], `${i}:${k}`);
+      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`);
       if ("failed" in r) {
         aside.push(withSaid(g, SET_ASIDE, `onto ${named(bonding[k])}: ${r.failed}`));
         continue;

@@ -1219,7 +1219,8 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
   }));
   const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.coordination ? COORDINATION_BOND : b.order }));
   const own = Object.fromEntries(Object.entries(e.properties).filter(([k]) => !MENO_OWN.has(k)));
-  const name = e.properties.name?.value;
+  // (its name where it stands - not one a step marked as of another structure)
+  const name = e.properties.name?.status === "computed" ? e.properties.name.value : undefined;
   const made: SetEntry = {
     compound: place.compound,
     number: place.number,
