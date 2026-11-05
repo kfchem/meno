@@ -325,8 +325,8 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * on one in line with it. A reader - RDKit, a chemist - may take either
  * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
  * A centre with a lone pair for its fourth group - a sulfoxide's S, a
- * phosphine's P (lib/chem/lonePairCentres) - is asked so too, as readStereo
- * reads it: its lone pair where an H left out would be.
+ * phosphine's P (lib/chem/lonePairCentres) - is asked so too: its
+ * configuration read as readStereo reads it, from its three groups.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
@@ -350,7 +350,8 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     if (atom.centre || (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4))) return;
     if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
     if (!around.some((n) => lift(c, n) !== 0)) return;
-    const order = atom.hs || lonePair ? [...around, -1] : around;
+    // (as readStereo reads it: an H left out a fourth group, a lone pair none - the volume of its three)
+    const order = atom.hs ? [...around, -1] : around;
     const lifts = order.map((n) => (n === -1 ? 0 : lift(c, n)));
     const at = (n: number) => (n === -1 ? null : atoms[n]);
     const read = (pts: ({ x: number; y: number } | null)[]) => drawnVolume(atom, pts, lifts);
