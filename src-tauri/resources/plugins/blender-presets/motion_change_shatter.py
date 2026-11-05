@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The film motion "change-shatter" of Blender looks and motions. Copyright (C) 2026 Meno contributors.
+# The film motion "change-shatter" of Film looks and motions. Copyright (C) 2026 Meno contributors.
 # Under the GNU General Public License, version 3 or later: see this plugin's LICENSE.
 """Shatter: A breaks into shards of its own spheres and sticks (a Voronoi fracture made here, Bullet rigid bodies, a kick
 and the floor), and the shards gather into B's atoms, which fuse in a wave up from the paper; B's bonds are drawn after.
