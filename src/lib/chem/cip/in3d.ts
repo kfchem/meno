@@ -14,6 +14,7 @@ import { isMetal } from "../../layout/perceive";
 import type { IdentityInput } from "../identity";
 import { protonatedAmineHeld } from "../lonePairCentres";
 import { lonePairsIn3d } from "../lonePairsIn3d";
+import { torsionSense, type Axial, type Cumulated } from "../../layout/stereo";
 import { configuredFrom, type Place } from "../stereoOpen";
 import { cipLabels } from "./index";
 
@@ -47,20 +48,94 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
   // the candidates: four single bonds to no metal (a protonated amine's N where its amine's is held), three and a lone pair, a double bond
   const four = m.atoms.flatMap((_, i) => (around[i].length === 4 && single(i) && !metal(i) && !around[i].some(metal) && held(i) !== false ? [i] : []));
   const three = m.atoms.flatMap((_, i) => (around[i].length === 3 ? [i] : []));
-  const doubles = m.bonds.flatMap((b, i) => (b.order === 2 && around[b.a1].length > 1 && around[b.a2].length > 1 && ringThrough(around, b.a1, b.a2) >= OPEN_RING ? [i] : []));
+  // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, `runsIn3d`)
+  const doublesAt = m.atoms.map((_, i) => m.bonds.filter((b) => b.order === 2 && (b.a1 === i || b.a2 === i)).length);
+  const doubles = m.bonds.flatMap((b, i) =>
+    b.order === 2 && around[b.a1].length > 1 && around[b.a2].length > 1 && doublesAt[b.a1] === 1 && doublesAt[b.a2] === 1 && ringThrough(around, b.a1, b.a2) >= OPEN_RING ? [i] : [],
+  );
   const read = configuredFrom(bonds, places, four, doubles);
   const pyramids = lonePairsIn3d(m.atoms, m.bonds, m.xyz, three).read;
   const tetra = new Map<number, { neighbours: number[]; volume: 1 | -1 }>();
   for (const c of read.centres) tetra.set(c.atom, { neighbours: c.neighbours, volume: c.sense });
   for (const [a, t] of pyramids) tetra.set(a, t);
   const stereo = new Map(read.doubles.map((d) => [d.bond, { refs: d.ends, cis: d.cis }]));
+  const { axes, cumulated, shownOn } = runsIn3d(around, m.bonds, places);
   const input: IdentityInput = {
     atoms: m.atoms.map((a, i) => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}), ...(tetra.has(i) ? { tetra: tetra.get(i)! } : {}) })),
     bonds: bonds.map((b, i) => ({ ...b, ...(stereo.has(i) ? { stereo: stereo.get(i)! } : {}) })),
+    ...(axes.length ? { axes } : {}),
+    ...(cumulated.length ? { cumulated } : {}),
   };
-  const r = cipLabels(input, { centres: [...tetra.keys()], bonds: [...stereo.keys()] });
+  const r = cipLabels(input, { centres: [...tetra.keys()], bonds: [...stereo.keys()], axes: axes.map((_, k) => k), cumulated: cumulated.map((_, k) => k) });
   const labels = (of: Map<number, unknown>) => Object.fromEntries([...of].flatMap(([k, v]) => (v && typeof v === "object" && "label" in v ? [[String(k), String(v.label)]] : [])));
-  return { atoms: labels(r.centres), bonds: labels(r.bonds) };
+  // (an allene's axis and an odd cumulene's shown on the first double bond of its run, as the drawing shows them: Ra or Sa, E or Z)
+  const runs: Record<string, string> = {};
+  for (const [k, v] of r.axes) if ("label" in v && AXIS_SHOWN[v.label]) runs[String(shownOn.axes[k])] = AXIS_SHOWN[v.label]!;
+  for (const [k, v] of r.cumulated) if ("label" in v) runs[String(shownOn.cumulated[k])] = v.label;
+  return { atoms: labels(r.centres), bonds: { ...labels(r.bonds), ...runs } };
+}
+
+/** An axis's descriptor as the page shows it (docs/CIP.md, *Axes*): M is Ra, P is Sa. */
+const AXIS_SHOWN: Record<string, string | undefined> = { M: "Ra", P: "Sa", m: "ra", p: "sa" };
+
+/**
+ * Each run of cumulated double bonds whose ends have two other neighbours
+ * each, read from the places: an allene's axis (an even number of double
+ * bonds) by the sign of the torsion from a group at one end to one at the
+ * other, an odd cumulene's cis or trans by whether those two stand on one
+ * side of the run; none where they are in line, or square (flat or
+ * twisted half way, as no such run is). Each with the first double bond of
+ * its run, to be shown on. A biaryl's axis is not read: every biaryl is
+ * twisted in 3D, whether or not its turn is held.
+ */
+function runsIn3d(
+  around: readonly number[][],
+  bonds: readonly { a1: number; a2: number; order: number }[],
+  places: Readonly<Record<number, Place>>,
+): { axes: Axial[]; cumulated: Cumulated[]; shownOn: { axes: number[]; cumulated: number[] } } {
+  const orderOf = new Map(bonds.map((b, i) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, i]));
+  const bondOf = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`);
+  const order = (a: number, b: number) => bonds[bondOf(a, b) ?? -1]?.order ?? 0;
+  const middle = (x: number) => around[x].length === 2 && around[x].every((n) => order(x, n) === 2);
+  const out = { axes: [] as Axial[], cumulated: [] as Cumulated[], shownOn: { axes: [] as number[], cumulated: [] as number[] } };
+  around.forEach((_, i) => {
+    if (middle(i)) return;
+    for (const m of around[i]) {
+      if (order(i, m) !== 2 || !middle(m)) continue;
+      const run = [i, m];
+      while (middle(run[run.length - 1]) && run.length <= around.length) run.push(around[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const j = run[run.length - 1];
+      if (j < i) continue;
+      const near = around[i].filter((n) => n !== run[1]);
+      const far = around[j].filter((n) => n !== run[run.length - 2]);
+      if (near.length !== 2 || far.length !== 2) continue;
+      const [p, q] = [Math.min(...near), Math.min(...far)];
+      if ([p, i, j, q].some((x) => !places[x])) continue;
+      const [P, I, J, Q] = [places[p], places[i], places[j], places[q]];
+      const first = bondOf(i, m)!;
+      if (run.length % 2 === 1) {
+        const sense = torsionSense(P, I, J, Q);
+        if (sense) {
+          out.axes.push({ atoms: [i, j], refs: [p, q], sense });
+          out.shownOn.axes.push(first);
+        }
+        continue;
+      }
+      // (the two groups off the run's line: the same side, cis)
+      const axis = [J[0] - I[0], J[1] - I[1], J[2] - I[2]];
+      const off = (X: Place, from: Place) => {
+        const v = [X[0] - from[0], X[1] - from[1], X[2] - from[2]];
+        const t = (v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2]) / (axis[0] ** 2 + axis[1] ** 2 + axis[2] ** 2 || 1);
+        return [v[0] - t * axis[0], v[1] - t * axis[1], v[2] - t * axis[2]];
+      };
+      const [u, w] = [off(P, I), off(Q, J)];
+      const dot = u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
+      if (Math.abs(dot) < 0.5 * Math.hypot(...u) * Math.hypot(...w)) continue;
+      out.cumulated.push({ atoms: [i, j], refs: [p, q], cis: dot > 0 });
+      out.shownOn.cumulated.push(first);
+    }
+  });
+  return out;
 }
 
 /** The size of the smallest ring through the bond a-b, up to `OPEN_RING`; Infinity past it or in none. */
