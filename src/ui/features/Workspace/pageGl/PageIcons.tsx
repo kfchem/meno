@@ -117,20 +117,10 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
       }),
     [],
   );
-  const geometry = useMemo(() => {
-    const g = new THREE.InstancedBufferGeometry();
-    const quad = new THREE.PlaneGeometry(1, 1);
-    g.index = quad.index;
-    g.setAttribute("position", quad.getAttribute("position"));
-    return g;
-  }, []);
-  useEffect(
-    () => () => {
-      material.dispose();
-      geometry.dispose();
-    },
-    [material, geometry],
-  );
+  // (a geometry of its own each time what it draws changes - few as they are - the last let go: one drawn first with none
+  //  and given its icons after, its attributes replaced, the app's WebKit drew nothing of, 2026-11-06)
+  const [geometry, setGeometry] = useState<THREE.InstancedBufferGeometry | null>(null);
+  useEffect(() => () => material.dispose(), [material]);
   useEffect(() => {
     if (!ready) return;
     material.uniforms.uAtlas.value = ready.texture;
@@ -140,6 +130,11 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
       .sort((a, b) => (a[0].z ?? 0) - (b[0].z ?? 0) || a[1] - b[1])
       .map(([t]) => t);
     const n = shown.length;
+    if (!n) {
+      setGeometry(null);
+      invalidate();
+      return;
+    }
     const centre = new Float32Array(n * 2);
     const size = new Float32Array(n);
     const uv = new Float32Array(n * 4);
@@ -152,12 +147,18 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
       colour.set(t.color);
       tint.set([colour.r, colour.g, colour.b, t.opacity ?? 1], i * 4);
     });
-    geometry.setAttribute("aCentre", new THREE.InstancedBufferAttribute(centre, 2));
-    geometry.setAttribute("aSize", new THREE.InstancedBufferAttribute(size, 1));
-    geometry.setAttribute("aUv", new THREE.InstancedBufferAttribute(uv, 4));
-    geometry.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 4));
-    geometry.instanceCount = n;
+    const g = new THREE.InstancedBufferGeometry();
+    const quad = new THREE.PlaneGeometry(1, 1);
+    g.index = quad.index;
+    g.setAttribute("position", quad.getAttribute("position"));
+    g.setAttribute("aCentre", new THREE.InstancedBufferAttribute(centre, 2));
+    g.setAttribute("aSize", new THREE.InstancedBufferAttribute(size, 1));
+    g.setAttribute("aUv", new THREE.InstancedBufferAttribute(uv, 4));
+    g.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 4));
+    g.instanceCount = n;
+    setGeometry(g);
     invalidate();
-  }, [items, ready, geometry, material, invalidate]);
-  return ready ? <mesh geometry={geometry} material={material} renderOrder={order} frustumCulled={false} /> : null;
+    return () => g.dispose();
+  }, [items, ready, material, invalidate]);
+  return ready && geometry ? <mesh geometry={geometry} material={material} renderOrder={order} frustumCulled={false} /> : null;
 }
