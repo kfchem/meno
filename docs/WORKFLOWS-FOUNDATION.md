@@ -420,7 +420,9 @@ alone. The ideal is that taking the .meno out takes everything out."
 **What a set shows** depends on its size - and on whether its exit is
 wired on: a step's result set wired on to another step is held, shown
 nowhere, what it holds kept as a large set keeps it (WORKFLOWS.md,
-*Held results*, 2026-11-05). Otherwise, by its size:
+*Held results*, 2026-11-05). An exit for what its step sets aside, wired
+on to none, shows nothing while it holds nothing: its port alone
+(WORKFLOWS.md, *Exits that set aside*). Otherwise, by its size:
 - **up to 50 entries, on the page**, as today (question 15, answered). An
   entry with frames shows its frames chip;
 - **more, as a summary in its frame**: its count with nouns, a grid of a

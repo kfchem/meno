@@ -16,7 +16,7 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { setsOnPage } from "../workflow/onPage";
+import { unseenSets } from "../workflow/onPage";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
@@ -398,8 +398,10 @@ export default function Workflow2D() {
   const sets = useEditor((s) => s.sets);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
-  // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
-  const onPage = useMemo(() => setsOnPage({ sets, wires }, sets), [sets, wires]);
+  // (the sets that lie on the page: all but those drawn nowhere - held off it, their exits wired on, or an exit's for what its step
+  //  sets aside, holding nothing: workflow/held - the same as long as those are, a card moved or not)
+  const unseen = useMemo(() => unseenSets({ sets, wires, steps }), [sets, wires, steps]);
+  const onPage = useMemo(() => (unseen.size ? sets.filter((b) => !unseen.has(b.id)) : sets), [sets, unseen]);
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);

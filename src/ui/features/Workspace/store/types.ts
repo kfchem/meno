@@ -1679,8 +1679,14 @@ export type EditorState = {
   removeSet: (id: number | readonly number[], asked?: boolean) => void;
   /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */
   askDeleteSet: number[] | null;
-  /** A step of `kind`, done by `by` - Meno, or a plugin - put down, its card's top left at (x, y), with the defaults Settings has for its kind done by it; its id. */
-  addStep: (kind: StepKind, by: string, x: number, y: number) => number;
+  /**
+   * A step of `kind`, done by `by` - Meno, or a plugin - put down, its
+   * card's top left at (x, y), with the defaults Settings has for its kind
+   * done by it; its id. Brought by a wire drawn out of a set (`from`), let
+   * go at (x, y): wired from it in the same edit, and put close by the card
+   * it is wired from, where the set is a step's exit's.
+   */
+  addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;

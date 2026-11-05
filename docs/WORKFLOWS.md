@@ -131,7 +131,8 @@ built*).
   its kind's order, the line to its set leaving from it: the port is that
   set's (*Exit ports*, below). An exit wired on to another step holds
   its set off the page, its frame drawn nowhere (*Held results*,
-  below).
+  below); so is a second exit's, wired on to none, while it holds
+  nothing: its port alone (*Exits that set aside*, below).
 - **Port** - where a wire starts or ends: a set gives from its right
   edge, and a step's exit from its port on the card's right edge; a
   step's input takes on its card's left edge.
@@ -2275,8 +2276,58 @@ wired on, not one frame for every result.
   structures are where they are chosen. Opened, it is laid out where its
   frame was, where that is clear, its line from its port.
 
-Not yet: what its port says of it pointed at; an exit not wired on that
-holds nothing shown as its port alone.
+Not yet: what its port says of it pointed at.
+
+### Exits that set aside (2026-11-05)
+
+An exit for what its step sets aside - the rest of a Filter, the
+alike of Duplicates, those that failed (kinds `StepExit.of`) - wired on
+to none and holding nothing, not run yet or given nothing, is drawn as
+its port alone: its set's frame is drawn nowhere (workflow/onPage
+`unseenSets`). On a page of many steps, most exits that set aside are
+empty, and each was a frame saying *Not run yet* or *0*. The third part
+of the direct wiring the maintainer asked for (2026-10-31).
+
+- **Holding nothing**: no member - its members known, as every set a
+  step makes has them; a set read from an older file, its members to be
+  looked for in its frame, is shown - nothing held in it, no table,
+  number or chart, none not read and none not kept. A set that says any
+  of these is shown.
+- **Only those that set aside**: a step's first exit is shown as it was,
+  *Not run yet* until it runs, and so is a later exit that is no one's
+  rest - an Atom map's *Bond changes*.
+- **Given anything, laid out** as any result set: where its frame was,
+  where that is clear - kept under its step's first exit's while it was
+  drawn nowhere, as it is while shown (run `keepExitsUnder`) - else
+  where its step's results go. Given nothing again, its port alone.
+- **Wired on, held**, as any exit's set (*Held results*); opened, shown,
+  though it holds nothing.
+- **It lies nowhere**, as a held set lies nowhere: where a set or a card
+  goes passes it by, and a box that takes its step takes it with it.
+- **Derived, never stored**: worked out again as the sets, wires or steps
+  change, the same answer kept the same while only cards move, so that
+  the page does not work out its frames again for a card dragged.
+
+### A step added from an exit (2026-11-05)
+
+A wire drawn out of a step's exit's port and let go on empty space opens
+Quick Add there, as before. The step chosen is now put close by the card
+it comes from, not where the wire was let go (model `addStepFrom`, place
+`placeNext`): `GAP` right of that card, the input the wire goes into level
+with the exit's port, so that the wire runs straight - or lower, half a
+card at a time, where something is there, never over a set, a card or a
+wire. Steps on a page stay where they were put: only a step added so is
+placed (the maintainer, 2026-10-31).
+
+- **The exit's set is no hindrance**: wired on, it is held off the page,
+  and the card may stand where its frame was. Where the chemist opened
+  it, its frame stays, and the card keeps clear of it.
+- **One edit**: the step and its wire are one step of the history,
+  undone together; the step is brought into view with the sets it will
+  give, as before.
+- **From a set the chemist made**, the step is put where the wire was let
+  go, as before. A kind none of whose inputs takes what the wire gives is
+  put there too, unwired.
 
 ### The same conformer (2026-10-22)
 
@@ -2735,7 +2786,9 @@ page could not be read after one run.
   - **A card put down** (Quick Add, or a wire let go on empty space)
     goes where it was put, or lower where that is over a set, a card, a
     structure or a wire, as far as it must (place `placeCard`): it is made
-    there, so nothing on the page moves. A card the chemist drags lands
+    there, so nothing on the page moves. One a wire from a step's exit
+    brought goes close by that step's card instead (place `placeNext`,
+    *A step added from an exit*). A card the chemist drags lands
     where they let it go. Put down
     near the window's edge, or moved lower, it is brought into view with
     the sets it will give, as what is put down is shown.
