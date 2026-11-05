@@ -148,7 +148,7 @@ for name, smiles, count, sanitized in MADE:
     if not sanitized:
         mol.UpdatePropertyCache(strict=False)
     block = Chem.MolToMolBlock(mol, kekulize=False)
-    entry = worker.op_conformers({"molblock": block, "count": count, "onPage": True})["isomers"][0]
+    entry = worker.op_conformers({"molblock": block, "count": count})["isomers"][0]
     made.append({"name": name, "smiles": smiles, **{k: entry[k] for k in ("atoms", "bonds", "frames", "energies", "modelEnergies", "field", "method", "how") if k in entry}})
 
 out = root / "src/ui/features/Workspace/chem/testdata/conformers.rdkit.json"
