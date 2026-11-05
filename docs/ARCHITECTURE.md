@@ -1236,7 +1236,7 @@ its own (`src-tauri/src/pdf.rs`, `lib/pdf`).
   says), handing over to the column's own lines once settled.
 - **Words** (`pdf_text`, `lib/pdf/text`): each page's letters, read by
   PDFium when first wanted, each with its box in points from the page's
-  top left. The place nearest the pointer, words, lines, the marks of a
+  top left and whether it is set bold. The place nearest the pointer, words, lines, the marks of a
   selection, the words to copy and a search are all worked out from them
   in the window. A selection (`pdfSel`) and a search (`pdfFind`,
   `components/pdfFind.ts`) are the view's, marked on the pages by
@@ -1352,7 +1352,7 @@ closing quits Meno once they have been asked to stop.
 | `pdf_bytes` | `utils/workspace.ts` | A PDF held, as its bytes, for a workspace's file. |
 | `pdf_render` | `lib/pdf/reader.ts` | A part of a page drawn by PDFium, as a PNG. |
 | `pdf_links` | `lib/pdf/reader.ts` | A page's links: where each lies, and where it goes. |
-| `pdf_text` | `lib/pdf/text.ts` | A page's letters, each with its box. |
+| `pdf_text` | `lib/pdf/text.ts` | A page's letters, each with its box and whether it is set bold. |
 | `pdf_objects` | `lib/pdf/figures.ts` | What a page is made of - words, paths, pictures, shadings, forms - each with its box. |
 | `pdf_figure` | `ui/features/Workspace/utils/figures.ts` | What a figure within a box is drawn with: its paths' steps, its letters, its pictures' boxes. |
 | `write_document` | `lib/io/writeDocument.ts` | A document the chemist chose where to put - saved, exported, a picture, a PDF - written whole or not at all: beside it first, then put in its place, the file there left as it was where anything fails, and what it had besides its bytes kept; with `keep-old`, the file there kept beside it first as `<name>.bak`; only where the fs plugin's scope lets the page write (`savefile.rs`; docs/FILE-IO.md, *Save and Export*). |
