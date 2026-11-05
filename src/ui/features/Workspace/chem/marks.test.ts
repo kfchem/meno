@@ -60,6 +60,18 @@ describe("marksOf", () => {
     expect([...marks.doubleBonds]).toEqual([]);
   });
 
+  it("reads the same marks whatever stereo a plugin sends - an axis's M or P, an unknown descriptor, or no bonds at all", () => {
+    // (a plugin from before Meno named axes sends them; one after sends none: either gives the valence warning, and nothing more)
+    const valence = { index: 2, hydrogens: 0, valenceError: { valence: 5, most: 4 } };
+    const before = marksOf(butene, { atoms: [valence], bonds: [{ index: 0, cip: "M" }, { index: 1, cip: "Ra" }] });
+    const after = marksOf(butene, { atoms: [valence] });
+    for (const marks of [before, after]) {
+      expect([...marks.valence]).toEqual([[12, { valence: 5, most: 4 }]]);
+      expect([...marks.doubleBonds]).toEqual([]);
+      expect([...marks.centres]).toEqual([]);
+    }
+  });
+
   it("leaves a halogen bridging metals unmarked - μ-Cl in [Pd(allyl)Cl]2 drawn with plain bonds - and marks a real overload", () => {
     // ([Pd(allyl)Cl]2: two Pd bridged by two Cl, each Pd with its allyl drawn by three plain bonds)
     const dimer: Model = {

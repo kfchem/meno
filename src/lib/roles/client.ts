@@ -202,8 +202,12 @@ export type Analysis = {
     cip?: "R" | "S" | "r" | "s";
     aromatic?: boolean;
   }[];
-  /** A bond's CIP descriptor: E or Z, or an axis of chirality's M or P - only an axis's read, until Meno names axes (docs/CIP.md). */
-  bonds: { index: number; aromatic?: boolean; cip?: "E" | "Z" | "M" | "P" }[];
+  /**
+   * Its bonds, and a descriptor on each as the plugin says (E or Z, an
+   * axis's M or P) - never read, Meno's own being the page's (docs/CIP.md);
+   * a plugin may send them or not, and any it sends are passed over.
+   */
+  bonds?: { index: number; aromatic?: boolean; cip?: string }[];
 };
 
 /** What carries lines to the worker and back. */
