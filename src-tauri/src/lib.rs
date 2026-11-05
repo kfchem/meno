@@ -11,6 +11,7 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use uuid::Uuid;
 
+mod catalogue;
 mod ccd;
 mod clipboard;
 mod defaults;
@@ -1157,6 +1158,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the plugins online: the catalogue, and a plugin's files got from it
+            catalogue::catalogue_get,
+            catalogue::plugin_stage,
+            catalogue::plugin_commit,
+            catalogue::plugin_discard,
+            catalogue::plugin_files_remove,
             // the page's errors and warnings, into Meno's log
             logfile::log_page,
             logfile::log_spot,
