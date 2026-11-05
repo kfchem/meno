@@ -1103,6 +1103,13 @@ what it converts, the style's place and its card, and the molecules in
   to undo, eased. A workspace opened in another style is offered it too:
   the card is opened to change its styles (`settingsDiffer`,
   `DocumentStylePanel`).
+- **Opened, drawn in its own style at once** (2026-11-05). A workspace's
+  3D styles come with its molecules as it opens: with nothing drawn in 3D
+  before they came, there is nothing to go over from, and its molecules
+  are made in them at once - not made in the style the canvas had and
+  eased over, each made again at every step and its hollows worked out
+  twice (Workspace/style3d `styleGoesOver`). A change of style on a
+  canvas with molecules on it is eased as before.
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the
