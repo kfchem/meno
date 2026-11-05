@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
@@ -52,6 +54,13 @@ describe("a held set opened and closed (docs/WORKFLOWS.md, *Held results*)", () 
     const chemist = { ...doc, sets: [...doc.sets!, { id: 50, x0: 0, y0: 0, x1: 1, y1: 1, members: [] }] };
     expect(openedSet(chemist, 50, true)).toBe(chemist);
     expect(openedSet(doc, 2, false)).toBe(doc);
+  });
+
+  it("is shown or held by a click on its exit's port, and its menu is on that port - its frame drawn nowhere while held", () => {
+    // (the ports are HTML, in a WebGL page: read as written)
+    const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
+    expect(layer).toMatch(/if \(!moved\) \{[\s\S]*?b\?\.made && st\.wires\.some\(\(w\) => w\.from\.set === b\.id\)\) st\.openHeld\(b\.id, !b\.opened\)/);
+    expect(layer).toMatch(/exits\.map\([\s\S]*?onContextMenu=\{menuOf\("set", b\.id\)\}/);
   });
 
   it("is opened as a step's atoms are chosen where what comes into it is held - its structures are where they are chosen - in one edit", () => {

@@ -619,7 +619,12 @@ export default function Workflow2D() {
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
-        if (!moved) return;
+        // (a click, no wire drawn: a step's result set whose exit is wired on shown on the page, or held off it again - workflow/held)
+        if (!moved) {
+          const b = st.sets.find((x) => x.id === from.set);
+          if (b?.made && st.wires.some((w) => w.from.set === b.id)) st.openHeld(b.id, !b.opened);
+          return;
+        }
         const there = dropTarget(ev);
         if (there && there !== "empty" && "take" in there) wireTo(from, there.take.step, there.take.port);
         else if (there === "empty") {
@@ -1146,6 +1151,7 @@ export default function Workflow2D() {
                       label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
                       data={{ "data-give-set": String(b.id) }}
                       onPointerDown={(e) => drawFrom(e, { set: b.id })}
+                      onContextMenu={menuOf("set", b.id)}
                       style={{ left: CARD_W / PX, top: portDown(k) / PX }}
                       of={CARD_H / PX}
                     />

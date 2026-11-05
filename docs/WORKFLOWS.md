@@ -2267,9 +2267,16 @@ wired on, not one frame for every result.
   where its step's results go; its molecules turned as they come - a
   turn given on the page is not kept while it is held.
 
-Not yet: opening a held set in place, from its port or its wire, and
-what its port says of it pointed at; an exit not wired on that holds
-nothing shown as its port alone.
+- **Opened in place**: a click on its exit's port shows it on the page,
+  and another holds it off again; so does *Show on the page* in its
+  port's menu (right-click), or *Show its results on the page* in the menu
+  of a wire out of it. Each is one edit, undone as one. Choosing a step's
+  atoms on the drawing opens what comes into it, held, first: its
+  structures are where they are chosen. Opened, it is laid out where its
+  frame was, where that is clear, its line from its port.
+
+Not yet: what its port says of it pointed at; an exit not wired on that
+holds nothing shown as its port alone.
 
 ### The same conformer (2026-10-22)
 
