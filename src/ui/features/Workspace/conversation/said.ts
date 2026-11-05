@@ -40,6 +40,8 @@ export function answerLine(s: Extract<Said, { by: "tool" }>): string {
   const a = s.answer as Record<string, unknown> | null;
   if (s.tool === "list" && a && Array.isArray(a.things)) return `${a.things.length === 1 ? "One thing" : `${a.things.length} things`} in the frame`;
   if (s.tool === "search" && a && Array.isArray(a.found)) return a.found.length === 1 ? "One found" : `${a.found.length} found`;
+  // (put down where the frame had no room: over what lies there - the person's to move, or the frame's to size)
+  if (a && typeof a.over === "string") return "Done, over what lies there: the frame has no room left";
   return "Done";
 }
 
