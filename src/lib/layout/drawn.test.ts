@@ -417,6 +417,9 @@ describe("a centre with a lone pair for its fourth group", () => {
     };
     expect(readStereo(p.atoms, p.bonds).tetra.has(0)).toBe(false);
     expect(unreadWhy(p.atoms, p.bonds, 0)).toBe("it has 5 groups round it, more than the four of a tetrahedral centre");
+    // (four bonds and an H: five groups too - its H counted with them)
+    const ph: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = { atoms: p.atoms.slice(0, 5).map((a, i) => (i === 0 ? { ...a, hs: 1 } : a)), bonds: p.bonds.slice(0, 4) };
+    expect(unreadWhy(ph.atoms, ph.bonds, 0)).toBe("it has 5 groups round it, more than the four of a tetrahedral centre");
     // (a sulfoxide drawn as a T)
     const t = sulfoxide("S", "up");
     t.atoms[1] = { ...t.atoms[1], x: 0, y: 1 };
