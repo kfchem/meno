@@ -103,7 +103,9 @@ const isMeno = (c: string): c is CursorName => c in CURSORS;
 /**
  * The page's regions (`usePageHits`), asked before anything else on the
  * canvas - the molecules, the drawing, the view's pan - as the page's HTML
- * was over them: a press or a move on one is its, and goes no further. The
+ * was over them: a press, a move, a click or a double-click on one is
+ * its, and goes no further - heard above the canvas, before the selection's
+ * own listeners on its wrapper hear it. The
  * pointer over one shows its cursor; leaving it, or another coming over it,
  * says so (`hover`).
  */
@@ -112,6 +114,10 @@ export default function PageHits({ children }: { children?: ReactNode }) {
   const { gl, camera } = useThree();
   useEffect(() => {
     const dom = gl.domElement as HTMLCanvasElement;
+    // (heard before anything else on the canvas hears it: before what listens on the canvas's own wrapper as it is pressed - the
+    //  selection's box, a double-click's Quick Add - two elements up, as a press goes down; only what lands on the canvas)
+    const host = dom.parentElement?.parentElement ?? dom.parentElement ?? dom;
+    const onCanvas = (e: Event) => e.target === dom;
     let over: (Hit & { on: HitHandlers }) | null = null;
     const find = (e: PointerEvent | MouseEvent) => {
       const screen = { x: e.clientX, y: e.clientY };
@@ -133,8 +139,8 @@ export default function PageHits({ children }: { children?: ReactNode }) {
       hit.on.hover?.(hit.key, hit.part, true);
     };
     const onMove = (e: PointerEvent) => {
-      // (a press held - a drag under way - is its own: nothing hovered meanwhile)
-      if (e.buttons) return;
+      // (a press held - a drag under way - is its own: nothing hovered meanwhile; nor over what lies over the canvas)
+      if (e.buttons || !onCanvas(e)) return;
       const { hit, at } = find(e);
       show(hit);
       if (!hit) return;
@@ -142,28 +148,38 @@ export default function PageHits({ children }: { children?: ReactNode }) {
       hit.on.move?.(hit.key, hit.part, at);
     };
     const onDown = (e: PointerEvent) => {
+      if (!onCanvas(e)) return;
       const { hit, at } = find(e);
       if (!hit) return;
       e.stopImmediatePropagation();
       if (e.button === 0) hit.on.down?.(hit.key, hit.part, at);
     };
     const onMenu = (e: MouseEvent) => {
+      if (!onCanvas(e)) return;
       const { hit, at } = find(e);
       if (!hit) return;
       e.stopImmediatePropagation();
       e.preventDefault();
       hit.on.menu?.(hit.key, hit.part, at);
     };
+    // (a click and a double-click on one are its too: the page's own - Quick Add on a double-click on empty space - never hears them)
+    const onClick = (e: MouseEvent) => {
+      if (onCanvas(e) && find(e).hit) e.stopImmediatePropagation();
+    };
     const onLeave = () => show(null);
-    dom.addEventListener("pointermove", onMove, true);
-    dom.addEventListener("pointerdown", onDown, true);
-    dom.addEventListener("contextmenu", onMenu, true);
+    host.addEventListener("pointermove", onMove, true);
+    host.addEventListener("pointerdown", onDown, true);
+    host.addEventListener("contextmenu", onMenu, true);
     dom.addEventListener("pointerleave", onLeave, true);
+    host.addEventListener("click", onClick, true);
+    host.addEventListener("dblclick", onClick, true);
     return () => {
-      dom.removeEventListener("pointermove", onMove, true);
-      dom.removeEventListener("pointerdown", onDown, true);
-      dom.removeEventListener("contextmenu", onMenu, true);
+      host.removeEventListener("pointermove", onMove, true);
+      host.removeEventListener("pointerdown", onDown, true);
+      host.removeEventListener("contextmenu", onMenu, true);
       dom.removeEventListener("pointerleave", onLeave, true);
+      host.removeEventListener("click", onClick, true);
+      host.removeEventListener("dblclick", onClick, true);
       show(null);
     };
   }, [all, gl, camera]);
