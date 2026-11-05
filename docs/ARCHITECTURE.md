@@ -171,6 +171,28 @@ immutable, so untouched parts are shared rather than copied. Each document has
 its own history (Ctrl+Z belongs to the active tab, not the whole app), edits
 sharing a `coalesceKey` inside a short window collapse into one step (a drag
 must not need one undo per frame), and the stack is capped.
+
+An edit may say who made it where it was not the person at the keyboard
+(`EditMeta.by`: "a conversation, by <its connection>"). The history keeps it
+with the step (`history().undoBy`, `redoBy`), and a step made by one is never
+merged into a step made by another, whatever their keys: the person's edits
+and another's are always steps of their own. `actAs(label, meta, act)` runs
+`act` as one **change set** (`changeSet(key, by)`): every edit it makes,
+through whatever store call and with whatever label and key it is made, is
+one step to undo, `label`, said as `by`'s - so a turn of a conversation that
+places a set, a step and a wire and sets the step's options is taken back by
+one undo (2026-11-04). Its first edit always begins a step of its own, and
+it is given a key of its own, by which its caller can always `drop` it. Where
+`act` throws, what it made stays one step, for the caller to take back.
+
+A change set does its work at once. One whose `act` waits - returns a
+promise - is refused, by its type and as soon as it returns: what it edited
+after its wait would be told from no edit of the person's. What it made
+before stays one step, to drop. While a change set runs, nothing of the
+history may be gone back on (undo, redo, a drop, a take-back, a reset), so
+that none takes back a step it did not make. An edit a listener made as it
+was told of one would be made within the change set too; no listener edits
+today.
 `subscribe` matches React's `useSyncExternalStore`; nothing in `lib/doc`
 imports React.
 
@@ -780,7 +802,7 @@ A worker is a sidecar, started by `lib/roles/worker.ts` (`chemWorker(role)`:
 the plugin chosen for the role in Settings, else the first that fills it)
 and asked through `lib/roles/client.ts`: JSON lines, a fixed set of
 requests (to_smiles, rxn_to_smiles, from_smiles, analyse, read_picture, and for 3D
-open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
+stereo_elements, stereoisomers, conformers, drawing_of, orders_from_smiles and add_hydrogens;
 a render is a job, `render/renders.ts`; the worker says its version in its
 first line, ready), MOL blocks in (written by
 `lib/roles/molblock.ts`, a label that is not an element as `*`) and V3000
@@ -917,10 +939,9 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   besides, and nothing cclib returns changed but the vibrations: the
   translations and rotations an output lists among them, at a frequency
   of naught (under 1 cm-1), are left out and the rest numbered from one,
-  as the ORCA and xTB plugins' readers do. Its tests read sample outputs
-  from `calc-samples/`, which git ignores - no program's output is
-  committed - and run by hand (`scripts/calc/test_reader_cclib.py`); the
-  app's side is tested with the plain data written by hand. An answer
+  as the ORCA and xTB plugins' readers do (`scripts/calc/test_reader_cclib.py`).
+  No program's output is committed; the app's side is tested with the
+  plain data written by hand. An answer
   never holds a number that is not one (JSON has none).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows) is a
@@ -1012,7 +1033,9 @@ stereochemistry and otherwise giving RDKit's; the editor applies it as one
 undo step.
 
 A drawn structure made in 3D (`Workspace/chem/make3d.ts`, stage 2 of
-docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
+docs/WORKSPACE.md): what its drawing leaves open is Meno's to say
+(`chem/openStereo`, on the elements `stereo_elements` perceives - lib/chem/
+stereoOpen), and `stereoisomers` makes each way it can go in 3D, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no

@@ -32,10 +32,11 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
   - a film's length in seconds - a vibration's made whole periods of 1.2 s,
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
-    or square - a film's width and height each made the nearest even
-    number, as its video needs (H.264 keeps colour for each 2x2 pixels:
-    360 px at 16:9 is 360 by 202), and its frame on the page given that
-    shape exactly, grown, never cut;
+    or square - a picture's and a film's height the nearest whole pixel
+    (360 px at 16:9 is 360 by 203), and its frame on the page given that
+    shape exactly, grown, never cut. What a renderer's own output needs of
+    the size - a video's encoder even sides, say - is the renderer's to
+    make of it;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
     outlined. The card offers the canvas's own look, *as the canvas
@@ -363,7 +364,10 @@ uv, no package), and the script Blender runs, `render.py`.
   each frame with its transparency, and then puts what it rendered over
   the background asked for - after the colours are transformed, so that
   white is white - writing a PNG, or an MP4 (H.264) through Blender's own
-  video writer.
+  video writer. H.264, as it is written here (4:2:0), keeps colour for
+  each 2x2 pixels and takes no odd side: where a side Meno asked for is
+  odd, the video is a pixel wider or taller, the frames at their own size
+  in its corner and that pixel the background asked for.
 - **Its options**: the renderer (Cycles, light traced, or EEVEE, drawn in real time),
   samples for each pixel, noise removal, where it renders (the faster of
   the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender

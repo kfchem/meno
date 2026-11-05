@@ -667,7 +667,8 @@ Taken on 2026-10-13:
   Drawn otherwise since - atoms, bonds or wedges, not where they are - the
   molecule stays as it is and says so under its frames, with *Make
   again*, made where it stood. What the drawing leaves open is made as
-  the molecule had it (so an (S) stays (S)), and Meno asks only about
+  the molecule had it (so an (S) stays (S), and an (E) (E): 2026-11-04,
+  before which a double bond came back as the first way it could go), and Meno asks only about
   stereo that is new. An undo brings the molecule back as it was turned.
   *Turn like the drawing* is in its menu.
   Pasted with its drawing, it is tied to the pasted drawing.
@@ -896,14 +897,8 @@ given with where its output was, to be asked for from there.
 
 ### Tests
 
-No program's output is committed (the maintainer, 2026-10-05). Gaussian's
-carry Gaussian's own copyright notice, and the rest are kept out the same
-way. Sample outputs - small ones from cclib's repository, ORCA's, xTB's
-and Gaussian's - are kept on the developer's machine, in a folder git
-ignores. The tests that read them run where they are there and are
-skipped where they are not, as in CI. What a reader hands back is Meno's
-own plain data, so CI tests Meno's side of it - opening, saving, showing -
-with that data written by hand.
+No program's output is committed (the maintainer, 2026-10-05); CI tests
+Meno's side with data written by hand.
 
 ### In order
 
@@ -1022,6 +1017,14 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   densities worked out on a grid from a Molden file, read and worked out
   by PySCF - each grid a promise.
   No GPL library (iodata, gbasis).
+- **WFX files**, read by Meno itself: each orbital worked out from the
+  file's own primitives (`lib/calc/wfx.ts`).
+- **Gaussian formatted checkpoints**: the Gaussian interface gives the
+  file's basis and orbitals whole, in Meno's form of a wavefunction, and
+  Meno works out each orbital on its grid itself - once it has found the
+  orbitals a list offers orthonormal over that basis, which catches a
+  basis converted wrong in a molecule, though not every such mistake
+  (docs/PLUGINS.md, *Gives a wavefunction whole*).
 
 ### In order
 
@@ -1195,11 +1198,11 @@ what it converts, the style's place and its card, and the molecules in
 ## Magnified display
 
 Planned on 2026-10-16 (agreed by the maintainer on 2026-10-14 as a special
-state, for 2D and 3D alike; the command centre's defaults), and approved
-with its three choices as proposed on 2026-10-16: the magnifications
-below, a 3D molecule made from a magnified drawing taking its
-magnification, and a selection's objects each about its own centre.
-Molecules in 3D built first (`utils/magnified`), then structures in 2D.
+state, for 2D and 3D alike), and approved with its three choices as
+proposed on 2026-10-16: the magnifications below, a 3D molecule made from
+a magnified drawing taking its magnification, and a selection's objects
+each about its own centre. Molecules in 3D built first
+(`utils/magnified`), then structures in 2D.
 
 **What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
 or smaller than it is - 100 % being its true size - without changing the
@@ -1216,10 +1219,10 @@ object is shown.
     workspace's style with every length k times over (layoutStructures
     `magnifiedOptions`): lines, labels, wedges, marks and the gaps between
     them all scale together, as a zoomed copy of it would. (Planned at
-    first as true places drawn through a transform; held as shown instead,
-    with the command centre's agreement on 2026-10-16, so that the pointer,
-    the selection, snapping and the page's boxes, which read where atoms
-    are, need nothing new.) **All chemistry reads it at its true size**
+    first as true places drawn through a transform; held as shown instead
+    on 2026-10-16, so that the pointer, the selection, snapping and the
+    page's boxes, which read where atoms are, need nothing new.)
+    **All chemistry reads it at its true size**
     (lib/chem/magnified2d `atTrueSize`, in `writeMolfile`): MOL, SD and
     RXN files, a copy for another program, what a plugin or a job is
     given and so a workflow's inputs, the drawing a 3D structure rises

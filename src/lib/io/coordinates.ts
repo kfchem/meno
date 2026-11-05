@@ -174,7 +174,7 @@ const OF_LENGTHS = /coordinat|geometr|position|distance|length|\bxyz\b/i;
  */
 const saysBohr = (l: string) => SAYS_BOHR.test(l) && !(NOTE.test(l) && !OF_LENGTHS.test(l));
 
-/** A charge said in words, and a multiplicity ("Charge = 1 Multiplicity = 1", "charge: -1, spin multiplicity: 2"), as Gaussian's output and many papers set them. */
+/** A charge said in words, and a multiplicity ("Charge = 1 Multiplicity = 1", "charge: -1, spin multiplicity: 2"), as calculation outputs and many papers set them. */
 const CHARGE_SAID = /\bcharge\s*[=:]\s*([+-]?\d+)(?![\d.])/i;
 const MULTIPLICITY_SAID = /\bmultiplicity\s*[=:]\s*(\d+)(?![\d.])/i;
 /** A line that says a charge or a multiplicity, by name and an "=" or ":" - read by the two above, or not read and so refused. */

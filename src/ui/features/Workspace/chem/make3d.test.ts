@@ -418,15 +418,19 @@ describe("withinWindow", () => {
 });
 
 describe("conformers made for the page", () => {
-  it("asks the plugin for them as the page shows them, and for nothing else", async () => {
+  it("asks the plugin for them as the page shows them, the stereoisomers Meno chose, and for nothing else", async () => {
     const asked: { op: string; args: Record<string, unknown> }[] = [];
     const chem = { request: async (op: string, args: Record<string, unknown>) => (asked.push({ op, args }), { isomers: [] }) } as unknown as ChemClient;
-    await conformersOf(chem, { molblock: "M  END", atoms: [], bonds: [], part: {} } as unknown as Parameters<typeof conformersOf>[1], "one", { count: 3 });
-    expect(asked).toEqual([{ op: "conformers", args: { molblock: "M  END", isomers: "one", options: { count: 3 }, onPage: true } }]);
+    // (the plugin that finds stereoisomers: nothing that could be stereogenic, so nothing to choose)
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const none = { centres: [], doubles: [] };
+    await conformersOf(chem, stereo, block, "one", { count: 3 });
+    expect(asked).toEqual([{ op: "conformers", args: { molblock: block.molblock, isomers: [none], options: { count: 3 }, onPage: true } }]);
     // (how many to try, as the page works it out, sent beside the plugin's options)
     asked.length = 0;
-    await conformersOf(chem, { molblock: "M  END", atoms: [], bonds: [], part: {} } as unknown as Parameters<typeof conformersOf>[1], "one", {}, 40);
-    expect(asked[0].args).toEqual({ molblock: "M  END", isomers: "one", count: 40, options: {}, onPage: true });
+    await conformersOf(chem, stereo, block, "one", {}, 40);
+    expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {}, onPage: true });
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {

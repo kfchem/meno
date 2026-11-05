@@ -48,7 +48,7 @@ built* below.
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
 | **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved - its one true path, however the path it came by was written (*One file, one tab*) - brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
 | **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
-| **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page - and, where it leaves stereocentres or double bonds without a configuration, said where a paste says what it left out: "1 stereocentre not specified", "2 stereocentres and 1 double bond not specified", "1 axis not specified" - a run of cumulated double bonds one element, an allene's axis or a butatriene's cis or trans (`stereoOpenSaid`, by the worker's `stereo_left_open` - the one definition a step refusing a structure for open stereo uses; asked of the same worker as the structure is drawn, nothing said where it cannot be asked or has not answered within 3 s). Drawn as it is, nothing chosen for it; a word made into a structure from Meno's own dictionary is not looked at |
+| **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page - and, where it leaves stereocentres or double bonds without a configuration, said where a paste says what it left out: "1 stereocentre not specified", "2 stereocentres and 1 double bond not specified", "1 axis not specified" - a run of cumulated double bonds one element, an allene's axis or a butatriene's cis or trans (`stereoOpenSaid`, by Meno's rules on the worker's `stereo_elements` - chem/openStereo, the one definition a step refusing a structure for open stereo uses; asked of the same worker as the structure is drawn, nothing said where it cannot be asked or has not answered within 3 s). Drawn as it is, nothing chosen for it; a word made into a structure from Meno's own dictionary is not looked at |
 
 ### Structure formats
 
@@ -1637,18 +1637,14 @@ As step 3 was built:
   NWChem, ORCA, Psi4, Q-Chem, Turbomole, xTB - each told by its banner as
   cclib tells it; PySCF's the Molden file. With no plugin added, *Files*
   lists Meno's own kinds only.
-  - Each program's banner is checked on a real output of it, one per
-    program from cclib's regression data (`scripts/calc/samples.json`;
-    kept out of the repository in `calc-samples/`), and cclib's worker
-    gives each one's molecule. The tests skip a file that is not there.
-  - Psi3 is left out, with no output of it to test with.
+  - Psi3 is left out.
   - `probe` is in place, and tested with made-up plugins.
 - **An ORCA output is read by the ORCA plugin** (2026-10-31; PLUGINS.md,
   *Several plugins, one role*): its manifest declares ORCA's output as its
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
-  file opened by hand alike. Written from the ORCA 6.1 manual and ORCA's
-  own outputs (ORCA 6.1.1, `scripts/calc/test_reader_orca.py`), it gives:
+  file opened by hand alike. Written from the ORCA 6.1 manual and the
+  program's printed forms (`scripts/calc/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry

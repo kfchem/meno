@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, passedAsLone, passedSaid, passesAsLone, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, notAsAsked, passedAsLone, passedSaid, passesAsLone, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, solvationAsked, UNLINKED_WHY, workedOf } from "./programs";
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
@@ -430,6 +430,39 @@ describe("a lone atom its plugin's program takes none of", () => {
     expect(passedSaid("optimise", 3)).toBe("3 lone atoms: nothing to optimise, no energy");
     expect(passedSaid("optimise", 0)).toBeNull();
     expect(passedSaid("energy", 1)).toBeNull();
+  });
+});
+
+describe("the solvation a step asked for", () => {
+  const ALPB = { says: "ALPB({solvent})", none: { id: "solvent", is: "none" } };
+
+  it("is its manifest's words, each option's value put in - none where they ask for none, unsaid where it says no solvation", () => {
+    expect(solvationAsked(ALPB, { method: "gfn2", solvent: "water" })).toBe("ALPB(water)");
+    expect(solvationAsked(ALPB, { solvent: "none" })).toBe("none");
+    expect(solvationAsked({ says: "{solvation}({solvent})", none: { id: "solvation", is: "none" } }, { solvation: "SMD", solvent: "chloroform" })).toBe("SMD(chloroform)");
+    expect(solvationAsked(undefined, { solvent: "water" })).toBeUndefined();
+    // (an option it names with no value: nothing asked, never "ALPB()")
+    expect(solvationAsked(ALPB, { method: "gfn2" })).toBeUndefined();
+    expect(solvationAsked({ says: "{solvation}({solvent})", none: { id: "solvation", is: "none" } }, { solvation: "SMD" })).toBeUndefined();
+  });
+
+  it("holds what an output says it ran in to it: the same words in any case, or those with more after a comma - else refused, saying both", () => {
+    expect(notAsAsked("ALPB(water)", "ALPB(water)")).toBeNull();
+    expect(notAsAsked("ALPB(water)", "alpb(Water)")).toBeNull();
+    expect(notAsAsked("ALPB(water)", "ALPB(water), reference state gsolv [1 M gas/solution]")).toBeNull();
+    expect(notAsAsked("none", "none")).toBeNull();
+    expect(notAsAsked("ALPB(water)", "ALPB(acetone)")).toEqual({ kind: "refused", why: "It ran in ALPB(acetone), not in ALPB(water) as asked" });
+    expect(notAsAsked("ALPB(water)", "none")).toEqual({ kind: "refused", why: "It ran in the gas phase, not in ALPB(water) as asked" });
+    expect(notAsAsked("none", "ALPB(thf)")).toEqual({ kind: "refused", why: "It ran in ALPB(thf), not in the gas phase as asked" });
+    // (more words without a comma: another name going on, not as asked; the gas phase takes nothing after it)
+    expect(notAsAsked("ALPB(water)", "ALPB(water) reference")?.kind).toBe("refused");
+    expect(notAsAsked("ALPB(water)", "ALPB(water)x")?.kind).toBe("refused");
+    expect(notAsAsked("none", "none, something")?.kind).toBe("refused");
+    // (another model, the same solvent: not as asked)
+    expect(notAsAsked("ALPB(water)", "GBSA(water)")?.kind).toBe("refused");
+    // (not said: not held to it - nor where the step asks nothing)
+    expect(notAsAsked("ALPB(water)", undefined)).toBeNull();
+    expect(notAsAsked(undefined, "ALPB(water)")).toBeNull();
   });
 });
 

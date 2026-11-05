@@ -264,6 +264,27 @@ describe("a plugin's manifest", () => {
     expect(MANIFESTS.find((m) => m.id === "crest")!.steps.map((d) => d.programs)).toEqual([["crest"], ["crest"]]);
   });
 
+  it("may say how its options ask for a solvation - each option it names a choice of the step's own, else it says none", () => {
+    const solvent = { id: "solvent", label: "Solvent", type: "choice", choices: [{ value: "none", label: "None" }, { value: "water", label: "Water" }], default: "none" };
+    const level = { id: "level", label: "Level", type: "text", default: "" };
+    const of = (solvation: unknown) => acceptManifest({ ...good, reads: [], kinds: [], steps: [{ kinds: ["energy"], programs: ["xtb"], options: [solvent, level], solvation }] })!.steps[0].solvation;
+    expect(of({ says: "ALPB({solvent})", none: { id: "solvent", is: "none" } })).toEqual({ says: "ALPB({solvent})", none: { id: "solvent", is: "none" } });
+    expect(of({ says: "ALPB({level})", none: { id: "solvent", is: "none" } })).toBeUndefined();
+    expect(of({ says: "ALPB({gone})", none: { id: "solvent", is: "none" } })).toBeUndefined();
+    expect(of({ says: "ALPB", none: { id: "solvent", is: "none" } })).toBeUndefined();
+    expect(of({ says: "ALPB({solvent})", none: { id: "solvent", is: "vacuum" } })).toBeUndefined();
+    expect(of({ says: "ALPB({solvent})" })).toBeUndefined();
+    expect(of(undefined)).toBeUndefined();
+    // (xTB's and CREST's, as Meno carries them: each step that takes a solvent)
+    expect(MANIFESTS.flatMap((m) => m.steps.filter((d) => d.solvation).map((d) => `${m.id} ${d.kind} ${d.solvation!.says}`))).toEqual([
+      "crest conformers ALPB({solvent})",
+      "crest optimise ALPB({solvent})",
+      "xtb optimise ALPB({solvent})",
+      "xtb energy ALPB({solvent})",
+      "xtb frequencies ALPB({solvent})",
+    ]);
+  });
+
   it("asks a step of a kind that is also a role it fills, saying no options, with the role's", () => {
     const opts = [{ id: "count", label: "Conformers sought", type: "number", default: 30 }];
     const read = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", options: opts }], steps: [{ kinds: ["conformers"], programs: ["python"] }, { kinds: ["optimise"], options: [] }] })!;

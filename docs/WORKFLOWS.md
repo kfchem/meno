@@ -306,12 +306,13 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Rank | a numbered list | molecules in 3D, or a conformer set | the first N by a value they carry - lowest or highest first - in each group, in each value of a property (*path*, *species*), or of all together; the rest out of its second exit, *The rest*, each saying its place, or why it was not ranked (*Rank*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number, in the order the step before gave them (a conformer search's, as its program made them; a *Rank* step's, as it ranked them); the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it. Meno's, on what the plugin that does the checks makes of each structure (PLUGINS.md, `structure_facts`): what that toolkit alone could not read or make sense of is said in its name and words ("RDKit could not read it (SANITIZE_KEKULIZE)") |
-| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
+| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than *At most* stereoisomers (32 unless changed: whole, never some of them - counted only as far as one past it, saying the most its open stereo could give), one that takes longer than its *Time for one* to look at (30 s unless changed: alone, the rest as they are), or - as the option says - all that leave stereo open. Meno's, on what the plugin that finds stereoisomers perceives and makes (*Stereoisomers is Meno's*, below) |
 | Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
 | Combine | a link | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
 | Measure | arrows apart | molecules in 3D, or a conformer set; and, where wanted, *Atoms*: a table | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them, or each row's of the table wired into *Atoms*, its columns saying how they count them (STRUCTURE-STEPS.md, *Measure*) |
+| Mode on atoms | two atoms moving, a third still (drawn) | molecules in 3D with vibrations, or a conformer set; and, where wanted, *Atoms*: a table | **the same kind of set**, every entry kept: where its lowest, imaginary vibration ranks the reacting atoms - a table's bonds formed or broken, or atoms typed - written on it (`mode.window`, `mode.ranks`, `mode.outside`) for a Filter to choose on (STRUCTURE-STEPS.md, *Mode on atoms*) |
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Restraints | atoms held to a wall (drawn) | molecules in 3D, or conformer sets | the same, each with its restraints from itself - coordination bonds at a factor of their van der Waals radii together (Alvarez 2013), pairs kept at their distance, atoms fixed - one it cannot have them out of *Failed*, saying why (STRUCTURE-STEPS.md, *Restraints*) |
@@ -328,10 +329,11 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); of the three after them, *Check structures* is
 Meno's, on the facts the plugin that does the checks gives of each
-structure, and *Stereoisomers* and *Descriptors* are a plugin's (RDKit's),
-done at once in its worker on structures drawn (PLUGINS.md, *steps on
-structures drawn*), each with its own options: they change no atom or
-bond of a structure they keep, and choose nothing for one. Those from Tag on
+structure, *Stereoisomers* is Meno's, on what the plugin that finds
+stereoisomers perceives and makes, and *Descriptors* is a plugin's
+(RDKit's), done at once in its worker on structures drawn (PLUGINS.md,
+*steps on structures drawn*), each with its own options: they change no
+atom or bond of a structure they keep, and choose nothing for one. Those from Tag on
 are Meno's own on structures (STRUCTURE-STEPS.md), on a set's entries
 alone, and no plugin fills them. A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
@@ -385,11 +387,9 @@ are a *Frequencies* step's, wired after it.
   matched on a *Tag*'s ID. *Each with each* makes at most as many pairs as
   *At most* says - 10 unless changed, so that one option does not start a
   job for every pair of two large sets (two of 29 conformers make 841). A
-  Diels-Alder pair's NEB-TS at ORCA's own GFN2-xTB, on one core
-  (2026-10-30), took 8 to 10 min for ends about 3 Å apart, and 29 to 132
-  min (median about 55) for ends 3.5 to 7.8 Å apart, as optimised starts
-  are: so 10 pairs are about a night of one core (1.5 to 22 hours). Past
-  it, nothing is run, and the step says how many it would make; pairs
+  path search takes long on one core, the longer the further apart its
+  ends are, so that a night's pairs are few. Past it, nothing is run,
+  and the step says how many it would make; pairs
   matched on a property are as many as the starts, and not limited. Each
   path keeps how its start and end were paired (`path.paired`: "in order,
   by place: start a #2 with end b #2", "each with each", "matched on pc"),
@@ -504,7 +504,7 @@ after it. Meno calls none of it a saddle point or a minimum.
 - **ORCA's plugin** runs IRC (the ORCA 6.1 manual, 4.4 *Intrinsic Reaction
   Coordinate*), both ways in one job, the manual's default direction, at
   the method and basis set given. *Steps each way* is its `%irc` MaxIter, ORCA's
-  own unless said (ORCA 6.1.1 prints 20).
+  own unless said.
   The first Hessian is ORCA's: computed where none comes with the point.
 
 ### Optimise to a saddle point
@@ -583,7 +583,10 @@ on it.
   parts, in order, each worked out alike, and each thermal part with its
   sigma read: a standard state on one side alone is refused, never
   mixed. A sum none of whose parts is a calculation's thermochemistry has
-  no sigma to read, and is refused for G - as read or left out.
+  no sigma to read, and is refused for G - as read or left out. The
+  step's line names each part at its own level: "ΔG‡ 9.41 kcal/mol (G =
+  energy at B3LYP/def2-TZVP + thermo.g-correction at GFN2-xTB + standard
+  state, 298.15 K)".
 - **What it gives**: `barrier`, in kcal/mol, the saddle point's value less
   its start's, the hartree at CODATA 2018's value (627.5094740631 kcal/mol,
   lib/units), at the saddle point's geometry, temperature and pressure;
@@ -1127,6 +1130,29 @@ are. A molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the
 states an undo goes back to as well.
 
+### Solvation as asked
+
+A step's options may ask for a solvation - xTB's and CREST's solvent, say.
+What each of its jobs gives back says the solvation it ran in, as the
+program's output says it (PLUGINS.md, *What an energy was worked out
+in*). Meno holds the two together, whatever program ran the step: an
+entry whose output says it ran in another solvation than the one asked -
+in the gas phase where a solvent was asked, or in another solvent - goes
+out of the step's Failed exit, refused, saying both: *It ran in
+ALPB(acetone), not in ALPB(water) as asked*. An output that does not say
+its solvation is not held to it; its calculation says the solvation was
+not stated, as it does anywhere (2026-11-04; before, each plugin that
+read its solvation refused such a run itself, the whole job at once).
+
+Meno knows no program's options. A step's manifest says how they ask for
+a solvation, in the words its program says one it ran in (PLUGINS.md,
+`solvation`): xTB's and CREST's, `ALPB({solvent})`, none where the
+solvent is *None*. The two are the same where they are the same words,
+in any case, or where what the output says begins with what was asked and
+says more after a comma - xtb's *ALPB(water), reference state gsolv [1 M
+gas/solution]* is ALPB(water). A step whose manifest says no solvation
+is not held to one.
+
 ### Several at once
 
 - **Jobs run as many at once as their cores and memory fit** what this
@@ -1556,8 +1582,8 @@ Decided while building it, for the maintainer to confirm:
 - **`prepare {step, entries, options, cores}`** gives each job's input
   files, its program and arguments, the entries it is for, and the files
   `collect` will want - and, where its program reads one of its files as
-  its standard input, which (`stdin`; added with the real runs of
-  2026-10-09, for Gaussian) - and the programs installed beside its own
+  its standard input, which (`stdin`, as
+  Gaussian's input is: step 6, below) - and the programs installed beside its own
   run after it, in turn, where it ended well (`then`; added 2026-10-11,
   for the program ORCA's job runs beside it - its orca_2aim: what they
   print kept apart from the job's log, which is its program's output; one
@@ -1778,9 +1804,6 @@ Decided by the maintainer (2026-10-08), as it was built:
   for the program, nor its version for the program's. Where its steps are
   - a card, Quick Add, Settings' defaults - they go by the program's name:
   *ORCA*, *Gaussian 16*. *Plugins* stays the name of the whole.
-- **Checked with stand-ins on the Mac**: no ORCA or Gaussian was installed
-  there then; the programs themselves were run on 2026-10-09 (*Real runs
-  of ORCA and Gaussian*, below).
 
 Decided while building it, for the maintainer to confirm:
 
@@ -1812,10 +1835,36 @@ Decided while building it, for the maintainer to confirm:
   kind (Opt, SP, Freq), PCM or SMD with one of 22 solvents as SCRF says,
   %NProcShared from the cores a job may use, no checkpoint file, an
   isotope by its mass number ("(Iso=n)") - and run
-  as `g16 <input.gjf` (`g16 input` until 2026-10-09: *Real runs*, below),
-  given `g16root` (the folder above its own) and GAUSS_EXEDIR (its own
-  folder), its scratch files where it runs. Why a run failed is read from
-  its output.
+  as `g16 <input.gjf`, given `g16root` (the folder above its own) and
+  GAUSS_EXEDIR (its own folder), its scratch files where it runs. Given
+  no job name, Gaussian reads its input from standard input and writes
+  its output to standard output (gaussian.com, *Running Gaussian*,
+  *Running under UNIX*): its input is the file the job names as its
+  standard input (`stdin`), and its output is the job's log, followed
+  while it runs as ORCA's and xTB's are, which `collect` says is the
+  output to read. Why a run failed is read from its output; one that
+  stops without saying why says what it printed last (*Gaussian stopped
+  without saying why, after: ...*).
+- **ORCA in parallel** runs through OpenMPI: with the cores left unset,
+  all of a computer's go to a job, so ORCA is given `%pal`, which it runs
+  through OpenMPI. Settings, *Calculations*, *Cores for each* set to 1
+  runs it. Where this computer has no OpenMPI,
+  the step's failure says so plainly, with what to do (2026-10-30): *ORCA runs on more than
+  one core only with Open MPI, whose mpirun this computer does not have
+  (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
+  install Open MPI*. Meno never runs it on fewer cores than asked without a word.
+  Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
+  processes with before any job is made - Open MPI's `mpirun` on macOS
+  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
+  jobs are given: ORCA's own folder, where it was found, before the PATH
+  Meno was started with - never the plugin's own environment's folders,
+  which no job is given. Not there, each job runs on one core - no
+  `%pal` written, one core asked, so that the queue counts it as one and
+  as many run side by side as there are cores - and the step's line says
+  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
+  applies to every program, and those that need no launcher still take
+  it. The failure above stays for a launcher found that ORCA's job then
+  cannot run.
 - **The options** are the method and basis set as text - as *Export*'s
   are - the dispersion, the solvation and its solvent, more keywords, the
   memory, and whether to keep the wavefunction (on unless turned off); the
@@ -1851,93 +1900,34 @@ Not yet, and where it comes:
   no plugin Meno carries says so since Blender became Meno's own copy,
   2026-10-12, docs/RENDER.md), and then takes only a copy new enough.
 
-### Real runs of ORCA and Gaussian (2026-10-09)
+### A job's results laid over what went in
 
-Step 6 had run only against stand-ins. On 2026-10-09 the real programs
-were run from the built app on the Mac: ORCA 6.1.1 (macOS, arm64) and
-Gaussian 16 Rev. B.01 (x86_64, under Rosetta), each located in Settings,
-*Plugins*, with one core for each job (Settings, *Calculations*: OpenMPI
-is not installed there, so ORCA runs one process). Methanol, opened from
-a MOL file, was made the input of two chains from Quick Add: ORCA's
-*Optimise* then *Frequencies* (B3LYP-D3BJ/def2-SVP), Gaussian 16's the
-same (B3LYP-D3BJ/6-31G(d)), the four queued one at a time.
+Results that are what came in worked out - *Optimise*, *Energy*,
+*Frequencies* - are put down turned the way that lays each over the
+entry it was worked out from (Horn's quaternion, as a structure in 3D is
+laid over its drawing), and then as that molecule is turned on the page.
+A program may give its geometries in a frame of its own: Gaussian may
+turn a molecule to its standard orientation before it works, and prints
+its geometries so (gaussian.com, *Symmetry*, its description). The turn
+is the view's, as any molecule's is: its geometry, its vibrations and
+anything read from its output stay as the program gave them, and *Reset
+orientation* shows it as the output has it. Its room in the result set
+is made for it turned. A program that keeps the input's orientation is
+laid over it as it is.
 
-What was seen, and what was put right:
-
-- **ORCA**: both ran and were read back as designed - *Optimise* in about
-  12 s, −115.568850 Eh, its path of 7 frames on the frames chip;
-  *Frequencies* in 10 s, its 12 vibrations in the molecule's list (330.5
-  to 3819.7 cm⁻¹, none imaginary), its partial charges by pointing at an
-  atom, and what the calculation was on the chip.
-- **Gaussian's output went to a file nobody followed.** Run as `g16
-  input`, Gaussian writes `input.log`, and what it printed - nothing - was
-  the job's log: *Show log* said *(Nothing yet)*, the running card had no
-  last line, and a run that died said *Gaussian said nothing*. Gaussian's
-  "Running Gaussian" page gives a second form, `g16 <input-file
-  >output-file`: given no job name, it reads its input from standard input
-  and writes its output to standard output. A job's program may now be
-  given one of its input files as what it reads (`stdin`, in `prepare`'s
-  answer; `jobs.rs` opens it in the job's folder, and takes only a file
-  written for that job), so Gaussian runs as `g16 <input.gjf`, its output
-  the job's log - followed while it runs, as ORCA's and xTB's are - and
-  `collect` says the log is the output to read.
-- **Gaussian gives molecules back turned.** It works in its standard
-  orientation, and that is the geometry it prints: methanol came back a
-  half turn round, a molecule's results not lying as it went in.
-  Results that are what came in worked out - *Optimise*, *Energy*,
-  *Frequencies* - are now put down turned the way that lays each over the
-  entry it was worked out from (Horn's quaternion, as a structure in 3D is
-  laid over its drawing), and then as that molecule is turned on the page.
-  The turn is the view's, as any molecule's is: its geometry, its
-  vibrations and anything read from its output stay as the program gave
-  them, and *Reset orientation* shows it as the output has it. Its room in
-  the result set is made for it turned. ORCA and xTB keep the input's
-  orientation, so for them it is the turn of the input, if any.
-- **A Gaussian run that dies without an error** now says what it printed
-  last: *Gaussian stopped without saying why, after: ...*.
-- **The vibrations could not be chosen**, in a result set or in an output
-  opened: their rows were neither pointed at nor chosen, and no molecule
-  moved (the release 0.1.7 does both). Since the page's HTML went into the
-  layer cut off where the column begins (PDF.md), which lets the pointer
-  through to the canvas, what drei's Html lays flat on the screen let it
-  through as well - the list, the frames chip's slider and details. It
-  takes the pointer again (`PageHtml`), unless it says it does not.
-
-Decided while building it, for the maintainer to confirm:
-
-- **Results laid over what went in, by the view's turn**, as above -
-  not by turning the coordinates, which would part them from the output
-  they were read from (its vibrations, the surfaces asked of it later).
-  A run shown again from *Runs* is laid over what comes in now; results
-  undone and done again are shown as the output has them, the view's
-  turns being no part of an undo.
-
-Not put right here:
-
-- **A Gaussian job that ends with an error** marks its step failed, and
-  the step says where Gaussian stopped.
-- **ORCA in parallel** still needs OpenMPI (step 6, *Not yet*): with the
-  cores left unset, all of a computer's go to a job, so ORCA is given
-  `%pal`, which it runs through OpenMPI. Settings, *Calculations*,
-  *Cores for each* set to 1 runs it. Where this computer has no OpenMPI,
-  the step's failure says so plainly, with what to do (2026-10-30): *ORCA runs on more than
-  one core only with Open MPI, whose mpirun this computer does not have
-  (the ORCA manual, 2.5.2.1): set Cores for each job to 1 in Settings, or
-  install Open MPI*. Meno never runs it on fewer cores than asked without a word.
-  Now (2026-10-31), the ORCA plugin looks for the program ORCA starts its
-  processes with before any job is made - Open MPI's `mpirun` on macOS
-  and Linux, Microsoft MPI's `mpiexec` on Windows, on the PATH ORCA's
-  jobs are given: ORCA's own folder, where it was found, before the PATH
-  Meno was started with - never the plugin's own environment's folders,
-  which no job is given. Not there, each job runs on one core - no
-  `%pal` written, one core asked, so that the queue counts it as one and
-  as many run side by side as there are cores - and the step's line says
-  so once: *run on one core: no MPI on this computer*. Never refused, whatever *Cores for each* says: it
-  applies to every program, and those that need no launcher still take
-  it. The failure above stays for a launcher found that ORCA's job then
-  cannot run.
+- **By the view's turn**, not by turning the coordinates, which would
+  part them from the output they were read from (its vibrations, the
+  surfaces asked of it later). A run shown again from *Runs* is laid over
+  what comes in now; results undone and done again are shown as the
+  output has them, the view's turns being no part of an undo.
 - **A conformer set worked out by Gaussian** keeps each conformer in its
   standard orientation: the turn is one for the molecule, not each frame.
+- **A result's vibrations are chosen and pointed at**, in a result set or
+  in an output opened. The page's HTML lies in the layer cut off where
+  the column begins (PDF.md), which lets the pointer through to the
+  canvas, so what drei's Html lays flat on the screen - the list, the
+  frames chip's slider and details - takes the pointer again
+  (`PageHtml`), unless it says it does not.
 
 ### Step 7: procedures and copying (2026-10-08)
 
@@ -2031,7 +2021,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
 - **A structure drawn whose stereo is left open is not made** by
   *Conformers* (2026-10-22), where what is open could go more than one
   way: a stereocentre or a double bond that could have a configuration and
-  is drawn without one (the roles' `open_stereo`), giving two or more
+  is drawn without one (Meno's rules on the roles' `stereo_elements`:
+  lib/chem/stereoOpen), giving two or more
   stereoisomers that can be made in 3D, or an allene's axis, whose
   stereoisomers RDKit does not count. The canvas's *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
@@ -2743,6 +2734,48 @@ step runs again, as a large set of molecules does. Held off the page,
 they are kept as the step drew them: a change of the workspace's style
 reaches them only once they are on the page.
 
+### Stereoisomers is Meno's (2026-11-04)
+
+What a structure leaves open, and what *Stereoisomers* does with it, are
+Meno's (lib/chem/stereoOpen, workflow/stereoisomers); the plugin that
+finds stereoisomers perceives and makes, as it is asked (PLUGINS.md,
+`stereo_elements` and `stereoisomers`). The same rules serve the page's
+*3D structure*, *Conformers* on structures drawn, *Enumerate*'s count of
+those left open, *Generate*'s, and a SMILES pasted.
+
+- **Left open**: a stereocentre or double bond the toolkit perceives as
+  one that could have a configuration, drawn without one or with one
+  drawn as not known (a wavy bond, a double bond of either) - but a C=N
+  whose E/Z is none of its own (below). An open double bond on an atom
+  of two double bonds is an allene's axis, and the bonds of a run are
+  one element: an allene's axis, of two or four; cis or trans, of three.
+- **At most** (an option, 32 unless changed): the most stereoisomers one
+  structure is made into, all at once - 2^5, five open stereocentres or
+  double bonds made whole, a set still to be looked over one by one; up
+  to 64, the most a step on structures drawn makes of one. One with more
+  is set aside whole, never some of them, counted only as far as one
+  past it. The page's *3D structure* and a *Conformers* step make the
+  first 32 of one, as before.
+- **Time for one** (an option, 30 s unless changed): how long one
+  structure's stereoisomers may be looked for, each tried in 3D, before
+  it is set aside alone - a camphor's take some 10 s, its bridgeheads
+  left open, so 30 s is three of those; up to ten minutes, the most a
+  step on structures drawn waits at once.
+- **Words**: one the toolkit could not read, or make sense of, is set
+  aside in its name and words, as *Check structures* says it ("RDKit
+  could not read it (SANITIZE_PROPERTIES)"; before, "RDKit cannot make
+  sense of it (...)").
+- **Made again from a drawing** (the page's *3D structure*, made anew):
+  what the drawing leaves open is given the configuration the molecule
+  made before has, read from its places by Meno - a centre's by the
+  sign of the volume its neighbours span, a double bond's by the side
+  its neighbours are on (lib/chem/stereoOpen `configuredFrom`) - where
+  it and every atom bonded to it are placed. Before, a double bond left
+  open came back as the first stereoisomer, whatever the molecule made
+  before had: of 236 such remakes of a 70-structure set, 185 came back
+  as they were - each of the 51 others but one of an inositol's missed
+  a double bond's - and now 236 do (2026-11-04).
+
 ### C=N double bonds whose E/Z is none of their own (2026-10-23)
 
 A guanidine a Generate made, CN=C(N)NCC(O)c1ccc(OC(F)F)cc1, came out of
@@ -2752,7 +2785,8 @@ other nitrogens moves to the imine nitrogen, and the double bond moves
 with it, so the two "isomers" interconvert. Its E/Z is no configuration
 of its own, and Meno never chooses one for it.
 
-- **Which C=N** (the RDKit plugin's `moving_cn`), as the InChI Technical
+- **Which C=N** (Meno's, lib/chem/stereoOpen `movingCN`, on its own
+  graph of the structure), as the InChI Technical
   Manual takes them (S. E. Stein, S. R. Heller, D. V. Tchekhovskoi,
   I. V. Pletnev, *InChI version 1, software version 1.04 (2011),
   Technical Manual*):
@@ -2774,10 +2808,11 @@ of its own, and Meno never chooses one for it.
   configuration at room temperature, or one Meno cannot rule out. Only a
   C=N in a localised double bond is looked at; one in a ring of seven
   atoms or fewer has none to give anyway.
-- **One definition, everywhere stereo is counted or made**: the plugin's
-  `open_stereo` leaves such a C=N out of what a structure leaves open,
-  and its enumeration holds it one way while the rest are tried in 3D
-  (the other way where nothing embeds so), then lets it go again. So
+- **One definition, everywhere stereo is counted or made**: Meno leaves
+  such a C=N out of what a structure leaves open (Workspace/chem/
+  openStereo), and names it to the plugin, whose enumeration holds it one
+  way while the rest are tried in 3D (the other way where nothing embeds
+  so), then lets it go again (`stereoisomers`, `notEnumerated`). So
   *Stereoisomers* gives the guanidine two, *Generate*'s count of those
   with stereo left open does not count it, *Conformers* does not refuse
   it for it, and *3D structure* does not ask about it. A C=N drawn with
@@ -2789,7 +2824,7 @@ of its own, and Meno never chooses one for it.
   of its own" - so that a table or a Filter can read it.
 - **A double bond of either configuration**, as Meno draws one a SMILES
   gives no E/Z for (CFG=2), and a stereocentre on a wavy bond, are left
-  open, as one drawn plain is. Before, `open_stereo` counted them as
+  open, as one drawn plain is. Before 2026-10-23, the plugin counted them as
   nothing open, though RDKit's enumeration gave each both ways the
   moment anything else was open: an N-methyl imine alone came out as
   drawn, beside a stereocentre as both, and *Conformers* chose one for

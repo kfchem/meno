@@ -128,6 +128,12 @@ describe("a WFX file", () => {
     expect(wfxGrid("w.wfx", orca, "orbital:1")).toEqual(wfxGrid("w.wfx", wfx({}), "orbital:1"));
   });
 
+  it("takes a <...> in a section of words - its title, its model - as their words, not a tag", () => {
+    const text = wfx({ model: "Restricted <B3LYP>" }).replace("made-up water", "water <test> </Keywords>");
+    expect(readWfx("w.wfx", text)).toMatchObject({ method: "Restricted <B3LYP>", atoms: ["O", "H", "H"] });
+    expect(() => readWfx("w.wfx", text.replace("</Title>", ""))).toThrow(/<title> is never closed/);
+  });
+
   it("gives no virial ratio where the file says 0, which no bound state's can be", () => {
     const r = readWfx("w.wfx", wfx({}).replace("2.0040000000E+00", "0.0"));
     expect(r.results?.some((x) => (x as { id: string }).id === "virial")).toBe(false);
