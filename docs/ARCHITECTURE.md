@@ -943,9 +943,12 @@ it (`lib/calc/probe.ts` `kindOfFile`, `lib/calc/read.ts` `whoReads`).
   besides, and nothing cclib returns changed but the vibrations: the
   translations and rotations an output lists among them, at a frequency
   of naught (under 1 cm-1), are left out and the rest numbered from one,
-  as the ORCA and xTB plugins' readers do (`scripts/calc/test_reader_cclib.py`).
-  No program's output is committed; the app's side is tested with the
-  plain data written by hand. An answer
+  as the ORCA and xTB plugins' readers do. Its tests
+  (`scripts/calc/test_reader_cclib.py`) run in CI in its environment from
+  its lock, as the other plugins' that need their packages do; those that
+  read a sample output are skipped where it is not there. No program's
+  output is committed; the app's side is tested with the plain data
+  written by hand. An answer
   never holds a number that is not one (JSON has none).
 - The PySCF reader (`resources/plugins/pyscf/worker.py`, in a pixi
   environment: PySCF from conda-forge, which has it for Windows) is a

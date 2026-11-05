@@ -1,6 +1,7 @@
 """Tests for the cclib plugin's worker (src-tauri/resources/plugins/cclib/worker.py).
 
-They need cclib, so they run in an environment built from its lock:
+They need cclib, so they run in an environment built from its lock - as
+CI's job "Plugins" builds it - or, by hand:
 
     uv venv .venv-cclib --python 3.12
     uv pip install --python .venv-cclib/bin/python --require-hashes --no-deps \
