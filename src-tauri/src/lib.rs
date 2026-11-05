@@ -1253,7 +1253,8 @@ pub fn run() {
             jobs::jobs_finished_bytes,
             keptjobs::job_kept,
             keptjobs::file_now,
-            keptjobs::job_write_back
+            keptjobs::job_write_back,
+            keptjobs::job_clear_saved
         ])
         .build(context)
         .expect("error while building tauri application")

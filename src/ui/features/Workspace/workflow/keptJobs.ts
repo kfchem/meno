@@ -13,7 +13,7 @@
  * out, or what is not to be had, each job's record names, with its size.
  */
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import { fileNow, jobKept, removeJob, writeJobBack, type KeptJobFile } from "../../../../lib/jobs";
+import { clearSavedFolders, fileNow, jobKept, writeJobBack, type ClearedSaved, type KeptJobFile } from "../../../../lib/jobs";
 import type { Appended } from "../../../../lib/io/writeDocument";
 import { JOB_FILE_MEDIA, MOST_FILE, MOST_WORKSPACE_FILE, type KeptData, type KeptFile, type MenoFile } from "../../../../lib/doc/menoFile";
 import { kindInfo } from "./kinds";
@@ -83,36 +83,37 @@ export function clearableJobs(jobs: JobsKept): string[] {
 
 /**
  * After a save to `path`: the folders of the jobs it holds whole
- * (`clearableJobs`) taken away - finished jobs' alone, as Meno's backend
- * takes one - each job's record held for the session, and the file noted as
- * where its files are, so that the next save keeps them from it, and Show
- * log and Show files read them there. None where the file cannot be looked
- * at as it is now. The jobs whose folders went.
+ * (`clearableJobs`) moved to the system's Trash by Meno's backend - each
+ * only where the file there, read back, holds every file of the job's
+ * record, to its size and SHA-256; where the job has finished, and its
+ * folder holds nothing the record does not (`clear`). For each that went,
+ * its record held for the session, and the file - as it was read back -
+ * noted as where its files are, so that the next save keeps them from it,
+ * and Show log and Show files read them there; nothing noted for one that
+ * stayed. The jobs whose folders went, and - once, whatever the number -
+ * why those that stayed though finished did.
  */
 export async function clearSavedJobs(
   path: string,
   jobs: JobsKept,
-  now: (path: string) => Promise<{ size: number; mtime: number | null } | null> = fileNow,
-  remove: (job: string) => Promise<unknown> = removeJob,
-): Promise<string[]> {
+  clear: (path: string, jobs: { job: string; files: { name: string; sha256: string; size: number }[] }[]) => Promise<ClearedSaved> = clearSavedFolders,
+): Promise<{ gone: string[]; said: string | null }> {
   const ids = clearableJobs(jobs);
-  if (!ids.length) return [];
-  const is = await now(path).catch(() => null);
-  if (!is) return [];
-  const from: OpenedFrom = { path, size: is.size, mtime: is.mtime };
-  const gone: string[] = [];
-  for (const id of ids) {
+  if (!ids.length) return { gone: [], said: null };
+  const asked = ids.map((job) => ({ job, files: jobs.records.get(job)!.files.map(({ name, sha256, size }) => ({ name, sha256, size })) }));
+  const done = await clear(path, asked).catch((e: unknown): ClearedSaved => ({ gone: [], left: ids.map((job) => ({ job, why: String(e), quiet: false })), at: null }));
+  const at = done.at;
+  // (gone only as the backend says - and noted only where it says what the file was as it read it back)
+  const gone = at ? done.gone.filter((id) => ids.includes(id)) : [];
+  const from: OpenedFrom | null = at && { path, size: at.size, mtime: at.mtime };
+  for (const id of gone) {
     const record = jobs.records.get(id)!;
     cleared.set(id, record);
-    for (const f of record.files) held.set(f.sha256, { read: held.get(f.sha256)?.read ?? (() => null), from });
-    try {
-      await remove(id);
-      gone.push(id);
-    } catch {
-      // (not taken away - unfinished, or held: its folder still there, read from as before)
-    }
+    for (const f of record.files) held.set(f.sha256, { read: held.get(f.sha256)?.read ?? (() => null), from: from! });
   }
-  return gone;
+  const loud = done.left.filter((l) => !l.quiet);
+  const said = loud.length ? `${loud.length === 1 ? "A job's folder was" : `${loud.length} jobs' folders were`} kept, though the workspace was saved: ${loud[0].why}.` : null;
+  return { gone, said };
 }
 
 /** A job's log as the workspace's file holds it, where the job's folder is not here: written back out (`jobs-kept`) and read; none where the file holds none, or it cannot be had. */

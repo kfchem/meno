@@ -76,9 +76,20 @@ export type CalculationSettings = {
   memoryAll?: number;
   /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
   largeWorkspaceMB?: number;
-  /** Whether a finished job's folder is kept once a workspace's file holds all of it (workflow/keptJobs `clearSavedJobs`); unset, taken away. */
-  keepJobFolders?: true;
+  /** Whether a finished job's folder is kept once a workspace's file holds all of it, as Settings was set; unset, as `JOB_FOLDERS_KEPT` says (`keepsJobFolders`). */
+  keepJobFolders?: boolean;
 };
+
+/**
+ * Whether a finished job's folder is kept once a workspace's file holds all
+ * of it, where Settings has not been set (workflow/keptJobs
+ * `clearSavedJobs`): kept, until the maintainer decides whether Meno moves
+ * such folders to the Trash on its own (docs/WORKFLOWS.md, *A job's folder*).
+ */
+export const JOB_FOLDERS_KEPT = true;
+
+/** Whether a finished job's folder is kept once a workspace's file holds all of it: as Settings says, else `JOB_FOLDERS_KEPT`. */
+export const keepsJobFolders = (c: CalculationSettings): boolean => c.keepJobFolders ?? JOB_FOLDERS_KEPT;
 
 /** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
@@ -242,7 +253,7 @@ function acceptCalculations(raw: unknown): CalculationSettings {
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
   const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
-  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}), ...(r?.keepJobFolders === true ? { keepJobFolders: true as const } : {}) };
+  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}), ...(typeof r?.keepJobFolders === "boolean" ? { keepJobFolders: r.keepJobFolders } : {}) };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */

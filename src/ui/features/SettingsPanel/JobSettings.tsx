@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { chooseJobsFolder, clearFinishedJobs, computerCores, coresCountedSaid, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
 
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
@@ -34,10 +34,10 @@ export default function JobSettings() {
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
-    // (a finished job's folder, once a workspace's file holds all of it: taken away on its own, unless kept - workflow/keptJobs `clearSavedJobs`)
-    { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: false },
+    // (a finished job's folder, once a workspace's file holds all of it: kept, or moved to the Trash - workflow/keptJobs `clearSavedJobs`)
+    { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: keepsJobFolders({}) },
   ];
-  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), "keep-folders": calculations.keepJobFolders === true };
+  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), "keep-folders": keepsJobFolders(calculations) };
   const change = (v: OptionValues) => {
     const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
     // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
@@ -50,7 +50,8 @@ export default function JobSettings() {
       ...(cores != null ? { cores } : {}),
       ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
       ...(memory != null ? { memoryAll: memory } : {}),
-      ...(v["keep-folders"] === true ? { keepJobFolders: true } : {}),
+      // (as set once changed; else as it was - unset, Meno's default)
+      ...(v["keep-folders"] !== values["keep-folders"] ? { keepJobFolders: v["keep-folders"] === true } : calculations.keepJobFolders != null ? { keepJobFolders: calculations.keepJobFolders } : {}),
     });
   };
 

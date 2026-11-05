@@ -23,7 +23,7 @@ import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } fr
 import { forFlatReaders } from "./chem/drawing";
 import { reactionArrows, reactionFileText } from "./chem/reactionFile";
 import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
@@ -886,9 +886,11 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       );
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
-      // (its jobs' folders, every file of them held by the file just written: taken away - unless Settings keeps them -
+      // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
+      //  Settings does not keep them - kept, by default - and, where any stayed though finished, said once:
       //  docs/WORKFLOWS.md, *A job's folder*)
-      if (!useAppSettings.getState().calculations.keepJobFolders) void clearSavedJobs(kept, at.jobs);
+      if (!keepsJobFolders(useAppSettings.getState().calculations))
+        void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
       naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
       const keptAs = old && fileNameOf(old);

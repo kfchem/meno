@@ -104,6 +104,10 @@ export const writeJobBack = (id: string, name: string, sha256: string, source: {
     : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => runnerOf(id).stop(id);
+/** What a save's job folders came to (src-tauri keptjobs.rs `job_clear_saved`): the jobs whose folders went to the Trash; those left, and why - `quiet` where nothing is amiss, a job not finished; and the saved file as it was read back, none where it could not be. */
+export type ClearedSaved = { gone: string[]; left: { job: string; why: string; quiet: boolean }[]; at: { size: number; mtime: number | null } | null };
+/** After a save to `path`: the folders of `jobs` moved to the system's Trash, each only where the file there, read back, holds every file of its record whole (src-tauri keptjobs.rs `job_clear_saved`). This computer's runner's: the only one there is yet. */
+export const clearSavedFolders = (path: string, jobs: { job: string; files: { name: string; sha256: string; size: number }[] }[]) => invoke<ClearedSaved>("job_clear_saved", { path, jobs });
 /** A finished job's folder taken away. */
 export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */

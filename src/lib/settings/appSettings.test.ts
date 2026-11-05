@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   acceptAppSettings,
   DEFAULT_APP_SETTINGS,
+  JOB_FOLDERS_KEPT,
+  keepsJobFolders,
   loadAppSettings,
   settingsFileText,
   useAppSettings,
@@ -87,9 +89,12 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
-    // (job folders kept once saved: true alone, else taken away)
+    // (job folders kept once saved, or not, as set; else as Meno's default - kept, for now)
     expect(acceptAppSettings({ calculations: { keepJobFolders: true } }).calculations).toEqual({ keepJobFolders: true });
+    expect(acceptAppSettings({ calculations: { keepJobFolders: false } }).calculations).toEqual({ keepJobFolders: false });
     expect(acceptAppSettings({ calculations: { keepJobFolders: "yes" } }).calculations).toEqual({});
+    expect(JOB_FOLDERS_KEPT).toBe(true);
+    expect([keepsJobFolders({}), keepsJobFolders({ keepJobFolders: false }), keepsJobFolders({ keepJobFolders: true })]).toEqual([true, false, true]);
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,

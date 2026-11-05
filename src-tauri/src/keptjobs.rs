@@ -331,7 +331,7 @@ pub fn append_job_files<F: Read + Write + Seek>(zip: F, jobs_roots: &[PathBuf], 
 /// the workspace's file it replaces is large already, and whether one it
 /// was opened from is still as it was. None where it is not there, or not a
 /// file the page could have read (`savefile::may_read`).
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct FileNow {
     pub size: u64,
     pub mtime: Option<u64>,
@@ -342,9 +342,7 @@ pub fn file_now(app: AppHandle, path: PathBuf) -> Option<FileNow> {
     if !crate::savefile::may_read(&app, &path) {
         return None;
     }
-    let m = fs::metadata(&path).ok().filter(|m| m.is_file())?;
-    let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
-    Some(FileNow { size: m.len(), mtime })
+    now_of(&path)
 }
 
 /// A job's file written back out (`job_write_back`): where its job's work
@@ -451,6 +449,198 @@ impl Write for Hashed<'_> {
     fn flush(&mut self) -> io::Result<()> {
         self.file.flush()
     }
+}
+
+/// A job's record as a save kept it: each of its files by its name in the
+/// job's folder, its SHA-256 and its size - what [`job_clear_saved`] reads
+/// the saved file back for.
+#[derive(Deserialize, Clone, Debug)]
+pub struct SavedJob {
+    pub job: String,
+    pub files: Vec<SavedFile>,
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct SavedFile {
+    pub name: String,
+    pub sha256: String,
+    pub size: u64,
+}
+
+/// A job whose folder was left where it was, and why.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct LeftJob {
+    pub job: String,
+    pub why: String,
+    /// Left as it must be, nothing amiss: the job has not finished, or its folder is not here.
+    pub quiet: bool,
+}
+
+/// What [`job_clear_saved`] did: the jobs whose folders went to the Trash,
+/// those left and why, and the saved file as it was read back - its size,
+/// and when it was written - none where it could not be.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct ClearedSaved {
+    pub gone: Vec<String>,
+    pub left: Vec<LeftJob>,
+    pub at: Option<FileNow>,
+}
+
+/// A file as it is now: its size, and when it was last written; none where it is not a file.
+fn now_of(path: &Path) -> Option<FileNow> {
+    let m = fs::metadata(path).ok().filter(|m| m.is_file())?;
+    let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+    Some(FileNow { size: m.len(), mtime })
+}
+
+/// Why the file at `zip` does not hold `f` as the job's record says - none where it does: its entry
+/// there, of its size, read through to what its SHA-256 says.
+fn not_held(archive: &mut zip::ZipArchive<File>, f: &SavedFile, buf: &mut [u8]) -> Option<String> {
+    let Ok(mut entry) = archive.by_name(&format!("files/{}", f.sha256)) else {
+        return Some(format!("the file saved does not hold its {}", f.name));
+    };
+    if entry.size() != f.size {
+        return Some(format!("the file saved holds its {} at another size", f.name));
+    }
+    let mut sha = Sha256::new();
+    let mut read = 0u64;
+    loop {
+        match entry.read(buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                sha.update(&buf[..n]);
+                read += n as u64;
+            }
+            Err(e) => return Some(format!("its {} does not read back from the file saved: {e}", f.name)),
+        }
+    }
+    (read != f.size || hex(&sha.finalize()) != f.sha256).then(|| format!("its {} reads back from the file saved as another file", f.name))
+}
+
+/// After a save to `path`: the folders of `jobs` moved to the system's Trash
+/// (`trash`), each only where the file at `path` - read back, every file of
+/// the job's record, to its size and SHA-256 - holds the job whole; where its
+/// folder holds nothing the record does not; where it has finished
+/// (`finished`); and while that file is as it was read back. Any other is
+/// left where it was, said why. Nothing is deleted outright.
+pub fn clear_saved(roots: &[PathBuf], path: &Path, jobs: &[SavedJob], finished: impl Fn(&Path) -> bool, mut trash: impl FnMut(&Path) -> Result<(), String>) -> ClearedSaved {
+    let all = |why: &str| ClearedSaved { gone: vec![], left: jobs.iter().map(|j| LeftJob { job: j.job.clone(), why: why.into(), quiet: false }).collect(), at: None };
+    let Some(before) = now_of(path) else { return all("the file saved could not be read back") };
+    let Ok(mut archive) = File::open(path).map_err(|e| e.to_string()).and_then(|f| zip::ZipArchive::new(f).map_err(|e| e.to_string())) else {
+        return all("the file saved could not be read back");
+    };
+    // (each file read back once, however many jobs name it)
+    let mut buf = vec![0u8; CHUNK];
+    let mut why_not: HashMap<(String, u64), Option<String>> = HashMap::new();
+    for f in jobs.iter().flat_map(|j| &j.files) {
+        if let std::collections::hash_map::Entry::Vacant(e) = why_not.entry((f.sha256.clone(), f.size)) {
+            e.insert(not_held(&mut archive, f, &mut buf));
+        }
+    }
+    drop(archive);
+    let same = || now_of(path).as_ref() == Some(&before);
+    if !same() {
+        return all("the file saved changed as it was read back");
+    }
+    let mut out = ClearedSaved { gone: vec![], left: vec![], at: Some(before.clone()) };
+    for j in jobs {
+        let left = |why: String, quiet: bool| LeftJob { job: j.job.clone(), why, quiet };
+        if j.files.is_empty() {
+            out.left.push(left("its record holds none of its files".into(), false));
+            continue;
+        }
+        if let Some(why) = j.files.iter().find_map(|f| why_not.get(&(f.sha256.clone(), f.size)).cloned().flatten()) {
+            out.left.push(left(why, false));
+            continue;
+        }
+        let Some(dir) = Some(&j.job).filter(|id| jobs::job_id_ok(id)).and_then(|id| jobs::job_in(roots, id)) else {
+            out.left.push(left("its folder is not here".into(), true));
+            continue;
+        };
+        if !finished(&dir) {
+            out.left.push(left("it has not finished".into(), true));
+            continue;
+        }
+        // (its folder as it is now: every file in the record, as the record has it - nothing it wrote since, nothing changed)
+        let now: HashSet<(String, String)> = kept_files(&dir).into_iter().map(|f| (f.name, f.sha256)).collect();
+        let saved: HashSet<(String, String)> = j.files.iter().map(|f| (f.name.clone(), f.sha256.clone())).collect();
+        if now != saved {
+            out.left.push(left("its folder holds what the file saved does not".into(), false));
+            continue;
+        }
+        if !same() {
+            out.left.push(left("the file saved changed as its folders went".into(), false));
+            continue;
+        }
+        match trash(&dir) {
+            Ok(()) => out.gone.push(j.job.clone()),
+            Err(e) => out.left.push(left(format!("its folder could not be moved to the Trash: {e}"), false)),
+        }
+    }
+    out
+}
+
+/// A folder moved to the system's Trash, where it can be put back from.
+#[cfg(target_os = "macos")]
+fn to_trash(dir: &Path) -> Result<(), String> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject, Bool};
+    use objc2_foundation::{NSString, NSURL};
+    let cls = AnyClass::get(c"NSFileManager").ok_or("no file manager")?;
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&dir.to_string_lossy()));
+    // SAFETY: the default file manager's trashItemAtURL:resultingItemURL:error:, neither the URL it went to nor the error asked for.
+    let done: Bool = unsafe {
+        let fm: Retained<AnyObject> = msg_send![cls, defaultManager];
+        msg_send![&*fm, trashItemAtURL: &*url, resultingItemURL: std::ptr::null_mut::<*mut AnyObject>(), error: std::ptr::null_mut::<*mut AnyObject>()]
+    };
+    if done.as_bool() {
+        Ok(())
+    } else {
+        Err("the Trash did not take it".into())
+    }
+}
+
+/// A folder moved to the Recycle Bin, where it can be put back from.
+#[cfg(windows)]
+fn to_trash(dir: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::{SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW};
+    // (a list of paths, each ended by a nul, and the list by another)
+    let from: Vec<u16> = dir.as_os_str().encode_wide().chain([0, 0]).collect();
+    let mut op = SHFILEOPSTRUCTW {
+        hwnd: std::ptr::null_mut(),
+        wFunc: FO_DELETE,
+        pFrom: from.as_ptr(),
+        pTo: std::ptr::null(),
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as u16,
+        fAnyOperationsAborted: 0,
+        hNameMappings: std::ptr::null_mut(),
+        lpszProgressTitle: std::ptr::null(),
+    };
+    // SAFETY: `op` and the list it points to live through the call.
+    let code = unsafe { SHFileOperationW(&mut op) };
+    if code == 0 && op.fAnyOperationsAborted == 0 && !dir.exists() {
+        Ok(())
+    } else {
+        Err(format!("the Recycle Bin did not take it ({code})"))
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn to_trash(_dir: &Path) -> Result<(), String> {
+    Err("Meno knows no Trash on this system".into())
+}
+
+/// After a save to `path`, the folders of the jobs it kept whole moved to the system's Trash ([`clear_saved`]).
+#[tauri::command]
+pub async fn job_clear_saved(app: AppHandle, path: PathBuf, jobs: Vec<SavedJob>) -> Result<ClearedSaved, String> {
+    if !crate::savefile::may_read(&app, &path) {
+        return Err(format!("Meno may not read {}", path.display()));
+    }
+    let roots = jobs::all_roots(&app)?;
+    tauri::async_runtime::spawn_blocking(move || clear_saved(&roots, &path, &jobs, |d| jobs::current_record(d).is_some_and(|r| r.state.finished()), to_trash))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -694,6 +884,153 @@ mod tests {
         let back = write_back(&root.join("kept"), ID, "work/run.out", &sha256, |file, sha| carried(&mut sources, &from, &sha256, &mut Hashed { file, sha }, &mut buf)).unwrap();
         assert!(!back.differs);
         assert_eq!(fs::read(root.join("kept").join(ID).join("work/run.out")).unwrap(), out);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A saved workspace's file at `root/saved.meno` holding `files` as `files/<sha256>`, each its `bytes` - and the job's record of them.
+    fn saved(root: &Path, files: &[(&str, &[u8])], record: &[KeptJobFile]) -> (PathBuf, SavedJob) {
+        let mut z = zip::ZipWriter::new(Cursor::new(base_zip("{}")));
+        z = zip::ZipWriter::new_append(z.finish().unwrap()).unwrap();
+        for (sha, bytes) in files {
+            z.start_file(format!("files/{sha}"), zip::write::SimpleFileOptions::default()).unwrap();
+            z.write_all(bytes).unwrap();
+        }
+        let path = root.join("saved.meno");
+        fs::write(&path, z.finish().unwrap().into_inner()).unwrap();
+        (path, SavedJob { job: ID.into(), files: record.iter().map(|f| SavedFile { name: f.name.clone(), sha256: f.sha256.clone(), size: f.size }).collect() })
+    }
+
+    /// A job's folder's files as a save keeps them: each SHA-256 with its bytes.
+    fn whole(dir: &Path) -> (Vec<KeptJobFile>, Vec<(String, Vec<u8>)>) {
+        let files = kept_files(dir);
+        let bytes = files.iter().map(|f| (f.sha256.clone(), fs::read(dir.join(&f.name)).unwrap())).collect();
+        (files, bytes)
+    }
+
+    fn clear(root: &Path, path: &Path, jobs: &[SavedJob], finished: bool) -> (ClearedSaved, Vec<PathBuf>) {
+        let mut trashed = vec![];
+        let out = clear_saved(&[root.to_path_buf()], path, jobs, |_| finished, |d| {
+            trashed.push(d.to_path_buf());
+            Ok(())
+        });
+        (out, trashed)
+    }
+
+    #[test]
+    fn moves_a_finished_jobs_folder_to_the_trash_only_where_the_saved_file_reads_back_holding_it_whole() {
+        let root = temp("clear");
+        let dir = job(&root);
+        let (record, bytes) = whole(&dir);
+        let held: Vec<(&str, &[u8])> = bytes.iter().map(|(s, b)| (s.as_str(), b.as_slice())).collect();
+        let (path, job) = saved(&root, &held, &record);
+        let (out, trashed) = clear(&root, &path, std::slice::from_ref(&job), true);
+        assert_eq!((out.gone, out.left, trashed), (vec![ID.to_string()], vec![], vec![dir.clone()]));
+        assert_eq!(out.at, now_of(&path));
+        // (not finished - running, or waiting: left, nothing amiss)
+        let (out, trashed) = clear(&root, &path, std::slice::from_ref(&job), false);
+        assert_eq!((out.gone.len(), trashed.len()), (0, 0));
+        assert_eq!(out.left, [LeftJob { job: ID.into(), why: "it has not finished".into(), quiet: true }]);
+        // (the Trash not taking it: left, said)
+        let failing = clear_saved(std::slice::from_ref(&root), &path, std::slice::from_ref(&job), |_| true, |_| Err("full".into()));
+        assert_eq!(failing.left[0].why, "its folder could not be moved to the Trash: full");
+        assert!(dir.is_dir());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn leaves_a_jobs_folder_where_the_saved_file_lacks_any_of_it_holds_it_otherwise_or_cannot_be_read() {
+        let root = temp("clear-not");
+        let dir = job(&root);
+        let (record, bytes) = whole(&dir);
+        let held: Vec<(&str, &[u8])> = bytes.iter().map(|(s, b)| (s.as_str(), b.as_slice())).collect();
+        let left = |path: &Path, job: &SavedJob| {
+            let (out, trashed) = clear(&root, path, std::slice::from_ref(job), true);
+            assert!(out.gone.is_empty() && trashed.is_empty(), "{out:?}");
+            assert!(!out.left[0].quiet);
+            out.left[0].why.clone()
+        };
+        // (one of its files not in it)
+        let (path, job) = saved(&root, &held[1..], &record);
+        assert_eq!(left(&path, &job), format!("the file saved does not hold its {}", record[0].name));
+        // (one in it under its SHA-256, but other bytes - of its size, and not)
+        let mut other = held.clone();
+        let same_size = vec![b'x'; record[0].size as usize];
+        other[0].1 = &same_size;
+        let (path, job) = saved(&root, &other, &record);
+        assert_eq!(left(&path, &job), format!("its {} reads back from the file saved as another file", record[0].name));
+        other[0].1 = b"another";
+        let (path, job) = saved(&root, &other, &record);
+        assert_eq!(left(&path, &job), format!("the file saved holds its {} at another size", record[0].name));
+        // (the file saved cut short - a write that failed part way - or not there at all)
+        let (path, job) = saved(&root, &held, &record);
+        let full = fs::read(&path).unwrap();
+        fs::write(&path, &full[..full.len() / 2]).unwrap();
+        assert_eq!(left(&path, &job), "the file saved could not be read back");
+        fs::remove_file(&path).unwrap();
+        assert_eq!(left(&path, &job), "the file saved could not be read back");
+        // (a record holding none of its files)
+        let (path, mut job) = saved(&root, &held, &record);
+        job.files.clear();
+        assert_eq!(left(&path, &job), "its record holds none of its files");
+        assert!(dir.is_dir());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn leaves_a_jobs_folder_holding_what_the_saved_file_does_not_or_the_saved_file_changed_meanwhile() {
+        let root = temp("clear-more");
+        let dir = job(&root);
+        let (record, bytes) = whole(&dir);
+        let held: Vec<(&str, &[u8])> = bytes.iter().map(|(s, b)| (s.as_str(), b.as_slice())).collect();
+        let (path, job) = saved(&root, &held, &record);
+        // (a file written in its folder since the save)
+        fs::write(dir.join("work/later.out"), "more\n").unwrap();
+        let (out, trashed) = clear(&root, &path, std::slice::from_ref(&job), true);
+        assert!(trashed.is_empty());
+        assert_eq!(out.left[0].why, "its folder holds what the file saved does not");
+        fs::remove_file(dir.join("work/later.out")).unwrap();
+        // (a file of it changed since)
+        fs::write(dir.join("log.txt"), "ran again\n").unwrap();
+        assert_eq!(clear(&root, &path, std::slice::from_ref(&job), true).0.left[0].why, "its folder holds what the file saved does not");
+        fs::write(dir.join("log.txt"), "ran\n").unwrap();
+        // (two jobs; the file saved written over as the first went: the second left)
+        let second = "0b6f5c1e-0000-4000-8000-000000000002";
+        let dir2 = root.join(second);
+        fs::create_dir_all(&root).unwrap();
+        copy_dir(&dir, &dir2);
+        let two = [job.clone(), SavedJob { job: second.into(), ..job.clone() }];
+        let mut trashed = vec![];
+        let out = clear_saved(std::slice::from_ref(&root), &path, &two, |_| true, |d| {
+            trashed.push(d.to_path_buf());
+            fs::write(&path, b"written over").unwrap();
+            Ok(())
+        });
+        assert_eq!((out.gone, trashed), (vec![ID.to_string()], vec![dir.clone()]));
+        assert_eq!(out.left, [LeftJob { job: second.into(), why: "the file saved changed as its folders went".into(), quiet: false }]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn copy_dir(from: &Path, to: &Path) {
+        fs::create_dir_all(to).unwrap();
+        for e in fs::read_dir(from).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                copy_dir(&p, &to.join(e.file_name()));
+            } else {
+                fs::copy(&p, to.join(e.file_name())).unwrap();
+            }
+        }
+    }
+
+    // (the system's own Trash: run by hand, `--ignored` - it puts a small empty folder in this computer's Trash)
+    #[test]
+    #[ignore]
+    fn the_trash_takes_a_folder() {
+        let root = temp("to-trash");
+        let dir = root.join("meno-trash-check");
+        fs::create_dir_all(dir.join("work")).unwrap();
+        to_trash(&dir).unwrap();
+        assert!(!dir.exists());
         fs::remove_dir_all(root).unwrap();
     }
 }
