@@ -100,6 +100,8 @@ describe("Arial's table, before the system's Arial is read", () => {
       expect(bottom(ch), ch).toBe(0);
     }
     expect(CAP_HEIGHT / ARIAL.unitsPerEm).toBeCloseTo(0.716, 3);
+    // (and its digits with them, standing as tall as the capitals, as Arial's do)
+    for (const ch of "0129") expect(arialHeight(ch, 1409), ch).toBeCloseTo(CAP_HEIGHT, 6);
   });
 
   it("has its lowercase at Arial's x-height, its ascenders up to the capitals' height, what goes below the line as Arimo's", () => {
@@ -107,7 +109,12 @@ describe("Arial's table, before the system's Arial is read", () => {
     expect(X_HEIGHT / ARIAL.unitsPerEm).toBeCloseTo(0.519, 3);
     // (an o's overshoot by the same scale)
     expect(Math.abs(top("o") - (1093 * X_HEIGHT) / 1082)).toBeLessThanOrEqual(1);
+    // (every point of a lowercase letter up to Arimo's x-height by that one scale - not the ascenders' band - its overshoots past it too)
+    for (const ch of "eacs") expect(arialHeight(ch, 1000), ch).toBeCloseTo((1000 * X_HEIGHT) / 1082, 6);
+    expect(Math.abs(top("e") - (1093 * X_HEIGHT) / 1082)).toBeLessThanOrEqual(1);
     for (const ch of "bdhkl") expect(top(ch), ch).toBeCloseTo(CAP_HEIGHT, 6);
+    // (a t's or an f's top, between the x-height and the ascenders', in their band)
+    for (const ch of "tf") expect(arialHeight(ch, 1283), ch).toBeCloseTo(X_HEIGHT + ((1283 - 1082) * (CAP_HEIGHT - X_HEIGHT)) / (1484 - 1082), 6);
     expect(bottom("g")).toBe(-425);
     expect(bottom("p")).toBe(-425);
   });
