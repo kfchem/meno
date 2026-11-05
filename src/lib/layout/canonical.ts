@@ -36,6 +36,23 @@ const adjacency = (input: LayoutInput) => {
   return adj;
 };
 
+/**
+ * How a double bond's or an axis's end is set against its reference
+ * neighbour: 1 where the reference is the end's lower-ranked other
+ * neighbour (or its only one), -1 where it is the higher-ranked, 0 where
+ * the end's two others share a rank - no unit, as far as the ranks tell.
+ * A cis/trans or a sense written as it stands times each end's, so that
+ * whichever neighbour a drawing or a reading took for its reference, one
+ * configuration is written one way.
+ */
+const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: number, partner: number, ref: number): number => {
+  const others = adj[at].filter((e) => e.to !== partner).map((e) => e.to);
+  if (others.length < 2) return 1;
+  const other = others.find((o) => o !== ref);
+  if (other == null) return 1;
+  return Math.sign(r[other] - r[ref]) || 0;
+};
+
 /** Each star's pi system and each atom's stars (`LayoutAtom.pi`), both ways: what tells a haptic ring's atoms from others. */
 const piLinks = (input: LayoutInput) => {
   const links: number[][] = input.atoms.map(() => []);
@@ -52,11 +69,18 @@ const piLinks = (input: LayoutInput) => {
 function classed(input: LayoutInput): { rank: number[]; first: string[]; withStereo: (r: number[]) => number[] } {
   const adj = adjacency(input);
   const pis = piLinks(input);
-  // (which atoms are an axis of chirality's, and which its references)
+  // (which atoms are an axis of chirality's, and which its ends' other
+  // neighbours - each of them, not only the one taken for its reference:
+  // which that was is no part of what the atoms are)
   const onAxis = input.atoms.map(() => "");
   for (const x of input.axes ?? []) {
     for (const a of x.atoms) onAxis[a] += "a";
-    for (const a of x.refs) onAxis[a] += "r";
+    const [u, v] = x.atoms;
+    for (const [end, across] of [
+      [u, v],
+      [v, u],
+    ])
+      for (const e of adj[end]) if (e.to !== across) onAxis[e.to] += "r";
   }
   // what each atom is: everything the layout reads of it - its element (or
   // the label it stands for), charge, H count, bonds and their orders, a
@@ -90,20 +114,17 @@ function classed(input: LayoutInput): { rank: number[]; first: string[]; withSte
         const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
         parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
       }
+      // (each end's reference against its other neighbour: endSet)
       for (const b of stereoAt[i]) {
         const [p, q] = b.stereo!.refs;
-        // (each end's other neighbour too, the ref compared with it)
-        const end = (at: number, ref: number) => {
-          const others = adj[at].filter((e) => e.to !== (at === b.a ? b.b : b.a)).map((e) => e.to);
-          return others.length < 2 ? 1 : Math.sign(r[ref] - r[others.find((o) => o !== ref)!]) || 0;
-        };
-        parts.push((b.stereo!.cis ? 1 : -1) * end(b.a, p) * end(b.b, q));
+        parts.push((b.stereo!.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, p) * endSet(adj, r, b.b, b.a, q));
       }
-      // (and an axis of chirality's sense, against its references' ranks)
+      // (and an axis of chirality's sense, likewise)
       for (const x of input.axes ?? []) {
         if (!x.atoms.includes(i)) continue;
         const [p, q] = x.refs;
-        parts.push(x.sense * (Math.sign(r[p] - r[q]) || 0));
+        const [u, v] = x.atoms;
+        parts.push(x.sense * endSet(adj, r, u, v, p) * endSet(adj, r, v, u, q));
       }
       return parts.join(",");
     });
@@ -314,6 +335,7 @@ function search(start: number[], n: number, refined: (r: number[]) => number[], 
  * for two orders only where they are the same molecule the same way.
  */
 function written(input: LayoutInput, what: readonly string[], r: readonly number[]): string {
+  const adj = adjacency(input);
   const at = new Array<number>(r.length);
   r.forEach((p, a) => (at[p] = a));
   const pad = (v: number) => String(v).padStart(6, "0");
@@ -324,16 +346,18 @@ function written(input: LayoutInput, what: readonly string[], r: readonly number
   const bonds = input.bonds
     .map((b) => {
       const [p, q] = r[b.a] < r[b.b] ? [b.a, b.b] : [b.b, b.a];
-      const st = b.stereo ? `:${b.stereo.cis ? "c" : "t"}${pad(r[b.stereo.refs[p === b.a ? 0 : 1]])}${pad(r[b.stereo.refs[p === b.a ? 1 : 0]])}` : "";
+      // (cis or trans as its ends' lower-ranked neighbours have it, whichever neighbours it was given against: endSet)
+      const st = b.stereo ? `:${(b.stereo.cis ? 1 : -1) * endSet(adj, r, b.a, b.b, b.stereo.refs[0]) * endSet(adj, r, b.b, b.a, b.stereo.refs[1]) > 0 ? "c" : "t"}` : "";
       return `${pad(r[p])}${pad(r[q])}:${b.order}${st}`;
     })
     .sort();
   const pis = at.map((a) => (input.atoms[a].pi ?? []).map((m) => pad(r[m])).sort().join(".")).join(";");
+  // (an axis's sense likewise, as its ends' lower-ranked neighbours have it - the same seen from either end)
   const axes = (input.axes ?? [])
     .map((x) => {
-      const [a, b] = r[x.atoms[0]] < r[x.atoms[1]] ? [x.atoms[0], x.atoms[1]] : [x.atoms[1], x.atoms[0]];
-      const [p, q] = a === x.atoms[0] ? x.refs : [x.refs[1], x.refs[0]];
-      return `${pad(r[a])}${pad(r[b])}:${pad(r[p])}${pad(r[q])}:${x.sense}`;
+      const [u, v] = x.atoms;
+      const [a, b] = r[u] < r[v] ? [u, v] : [v, u];
+      return `${pad(r[a])}${pad(r[b])}:${x.sense * endSet(adj, r, u, v, x.refs[0]) * endSet(adj, r, v, u, x.refs[1])}`;
     })
     .sort();
   return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}`;
