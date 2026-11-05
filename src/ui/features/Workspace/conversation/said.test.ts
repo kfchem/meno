@@ -24,4 +24,10 @@ describe("the exchange's rows", () => {
     ]);
     expect(rows.map((r) => (r.kind === "call" ? `${callSaid(r.call)} · ${r.answer ? answerLine(r.answer) : "-"}` : r.said.by))).toEqual(["person", "Put down an arrow · Done", "Put down CCO · Meno does not read it", "model"]);
   });
+
+  it("says where a piece was put over what lies there, the frame having no room left", () => {
+    const over = { by: "tool" as const, tool: "put_structure", ok: true, answer: { id: "structure:9", over: "put down over what lies there: the frame has no room left" }, at: 1 };
+    expect(answerLine(over)).toBe("Done, over what lies there: the frame has no room left");
+    expect(answerLine({ ...over, answer: { id: "structure:9" } })).toBe("Done");
+  });
 });
