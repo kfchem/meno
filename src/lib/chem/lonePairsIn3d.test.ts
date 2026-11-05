@@ -205,3 +205,48 @@ describe("lonePairsIn3d", () => {
     expect(lonePairsIn3d(atoms, bonds, xyz, [0, 0])).toEqual(lonePairsIn3d(atoms, bonds, xyz, [0]));
   });
 });
+
+describe("the key of the centres read, its rings' bonds marked aromatic or written out", () => {
+  // (a phosphine's P - its methyl's C, a pyrrol-2-yl's C, Cl - the pyrrole's other atoms and its H further out: synthetic)
+  const ring: BondIn3d[] = [
+    { a1: 2, a2: 4, order: 2 },
+    { a1: 4, a2: 5, order: 1 },
+    { a1: 5, a2: 6, order: 2 },
+    { a1: 6, a2: 7, order: 1 },
+    { a1: 7, a2: 2, order: 1 },
+  ];
+  const pyrrolyl = (aromatic: boolean): { atoms: AtomIn3d[]; bonds: BondIn3d[] } => ({
+    atoms: [{ el: "P" }, { el: "C" }, { el: "C" }, { el: "Cl" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "N" }, { el: "H" }, { el: "H" }, { el: "H" }, { el: "H" }],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 0, a2: 3, order: 1 },
+      ...ring.map((b) => (aromatic ? { ...b, order: 4 } : b)),
+      { a1: 7, a2: 8, order: 1 },
+      { a1: 4, a2: 9, order: 1 },
+      { a1: 5, a2: 10, order: 1 },
+      { a1: 6, a2: 11, order: 1 },
+    ],
+  });
+  const MORE = [
+    [-1.5, 2.6, -0.4],
+    [-1.2, 3.9, -0.6],
+    [0.1, 4.0, -0.6],
+    [0.5, 2.7, -0.5],
+    [1.5, 2.4, -0.5],
+    [-2.0, 4.7, -0.7],
+    [0.8, 4.8, -0.7],
+    [-2.5, 2.2, -0.3],
+  ];
+  const keyOf = (aromatic: boolean, mirror = false) => {
+    const m = pyrrolyl(aromatic);
+    return lonePairsIn3d(m.atoms, m.bonds, pyramid(PLACES, MORE, mirror), [0]).key;
+  };
+
+  it("is one for one molecule whether a file marks its rings' bonds aromatic or writes them out - a pyrrole's, which identity keeps as drawn", () => {
+    expect(keyOf(false)).not.toBeNull();
+    expect(keyOf(true)).toBe(keyOf(false));
+    // (and its mirror image, another)
+    expect(keyOf(true, true)).not.toBe(keyOf(true));
+  });
+});

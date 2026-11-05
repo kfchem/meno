@@ -17,6 +17,7 @@
  * configuration. It is then not read, and stays unspecified.
  */
 import { identityKey, type IdentityAtom } from "./identity";
+import { AROMATIC_BOND, kekuleOrders } from "./kekulize";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 
 /** An atom of a molecule in 3D as this reads it. */
@@ -93,6 +94,10 @@ export function lonePairsIn3d(atoms: readonly AtomIn3d[], bonds: readonly BondIn
     if (volume === 0) continue;
     read.set(c, { neighbours: [...around[c]], volume: volume > 0 ? 1 : -1 });
   }
+  // (bonds marked aromatic - a file's type 4 - written out as a Kekulé structure first: identity takes the aromatic form of
+  //  any one Kekulé structure - lib/chem/identity `aromaticForm` - never order 4 as given, so that one molecule read with its
+  //  rings' bonds marked aromatic has the key it has read with them written out: a pyrrole's as much as a benzene's)
+  const written = bonds.some((b) => b.order === AROMATIC_BOND) ? kekuleOrders(atoms.map((a) => ({ el: a.el, hs: 0, ...(a.charge ? { charge: a.charge } : {}) })), bonds) : bonds.map((b) => b.order);
   const key = read.size
     ? identityKey({
         atoms: atoms.map(
@@ -104,7 +109,7 @@ export function lonePairsIn3d(atoms: readonly AtomIn3d[], bonds: readonly BondIn
             ...(read.has(i) ? { tetra: read.get(i)! } : {}),
           }),
         ),
-        bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+        bonds: bonds.map((b, k) => ({ a: b.a1, b: b.a2, order: written[k] })),
       })
     : null;
   return { read, flat, none, key };
