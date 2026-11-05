@@ -24,7 +24,7 @@ const onOffer = (over: Partial<CatalogueEntry> = {}): CatalogueEntry => ({
   manifestSha256: "a".repeat(64),
   ...over,
 });
-const listed = (plugins: CatalogueEntry[]) => useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins } });
+const listed = (plugins: CatalogueEntry[]) => useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins } });
 
 afterEach(() => {
   useOnline.setState({ state: "unlisted", catalogue: undefined });
