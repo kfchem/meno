@@ -770,14 +770,14 @@ function stableJson(v: unknown): string {
 }
 
 /** What a calculation was, without what is each entry's own: its results, its output, its job among several, its wavefunction, the readers that could not read it. */
-function calcLevel(c: CalcInfo | undefined): string {
+export function calcLevel(c: CalcInfo | undefined): string {
   if (!c) return "";
   const { results: _results, source: _source, job: _job, wavefunction: _wavefunction, unread: _unread, ...level } = c;
   return stableJson(level);
 }
 
 /** A calculation, or a way of making, in a few words: its program, method and basis, or what its energies are from. */
-function madeWords(e: SetEntry): string {
+export function madeWords(e: SetEntry): string {
   const c = e.calc;
   return c ? [c.program, c.method, c.basis].filter(Boolean).join(" ") || "a calculation" : e.keep?.made?.energies ?? "no calculation";
 }

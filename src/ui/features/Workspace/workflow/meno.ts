@@ -426,7 +426,7 @@ function onesSaid(entries: readonly SetEntry[]): string {
 const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" };
 
 /** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
-const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
+export const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
 
 /**
  * The energy a window or shares are worked out on (docs/WORKFLOWS.md,
@@ -437,8 +437,8 @@ const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(
  * else the electronic energy, and, where any had a G, why not it. Said
  * either way: which it was.
  */
-type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
-function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly { said: string; entries: readonly SetEntry[] }[] = byCompound(entries).map((c) => ({ said: `compound ${compoundLetter(c[0].compound)}'s`, entries: c }))): Basis {
+export type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
+export function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly { said: string; entries: readonly SetEntry[] }[] = byCompound(entries).map((c) => ({ said: `compound ${compoundLetter(c[0].compound)}'s`, entries: c }))): Basis {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
   const electronic = (why?: string): Basis => ({
     energy: (e) => (hasEnergy(e) ? e.energy : undefined),

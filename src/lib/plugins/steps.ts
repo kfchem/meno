@@ -49,6 +49,7 @@ export const STEP_KINDS = [
   "saddle-point",
   "barrier",
   "ensemble",
+  "onto-structures",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
@@ -93,6 +94,7 @@ export const MENO_ONLY: readonly StepKind[] = [
   "rank",
   "ensemble",
   "barrier",
+  "onto-structures",
 ];
 
 /**

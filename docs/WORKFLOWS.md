@@ -319,6 +319,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
+| 3D results onto structures | two tables, a row of each linked (drawn; its own to come) | *Structures*: structures drawn; *3D results*: molecules in 3D, or conformer sets | the same structures, none set aside, each with what was made of it in 3D - by its lasting id - written on its record: its conformers in the set, its lowest E and G, its share among the structures of its formula, its state in 3D (*3D results onto structures*, below) |
 | Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
@@ -3378,6 +3379,49 @@ of a reaction path's two ends put back on its saddle point, matched on
   still needs. It takes molecules in 3D and conformer sets; a table to
   join from, and joining by identity or by drawn atom (the foundation's
   other two ways), are not built yet.
+### 3D results onto structures (2026-11-05)
+
+*3D results onto structures*, Meno's own (workflow/ontoStructures), puts
+what was found in 3D back onto the structures drawn it was found for, so
+that a set of structures read as a table - or charted, filtered, ranked -
+has each one's results in its row. Which 3D set is read is the one wired
+in: a step, not a table's guess (the maintainer, 2026-10-29).
+
+- **Two inputs**: *Structures*, structures drawn, which come out as they
+  came, none set aside; and *3D results*, molecules in 3D or conformer
+  sets - what *Conformers* made of them, and the steps after.
+- **Matched by lasting id alone.** Each conformer names the structure it
+  was made of by the structure's lasting id (*Lineage in 3D*, above;
+  `DrawnRecord.id`); never by what a structure is, its SMILES or identity.
+  A structure with no lasting id, or whose id another structure among
+  them has too, is given nothing, saying so; conformers made of none of
+  them are counted in what the step says.
+- **What each is given**, on its record, as any other value - each under
+  its name, a number with its unit:
+  - *conformers in 3D*: how many of its conformers the set holds;
+  - *state in 3D*: finished; or how many of its conformers did not
+    finish; or none of them finished, and why; or *no 3D result*;
+  - *E min* (Eh): the lowest electronic energy of its finished
+    conformers, as that conformer's energy is - where they come from one
+    calculation; else not worked out, and why;
+  - *G min* (Eh): the lowest free energy, where each finished conformer
+    has one and all were worked out alike (temperature, pressure,
+    solvent, program, method, basis, treatment); else not worked out, and
+    why - never a G of one level beside another's;
+  - *share among isomers*: its Boltzmann share at *Shares at* (298.15 K,
+    the IUPAC standard temperature, as Populations' own) among the
+    structures of its formula and charge alone: each of their finished
+    conformers weighed as *Populations* weighs one - by G where each has
+    one alike, else by E, said which - with each one's degeneracy where
+    each has one; refused, naming it, where one is no minimum. Structures
+    of another formula are never weighed against it: their energies are
+    of other atoms. One alone in its formula has all of its own (1).
+- **Never a number in place of none.** A value that cannot be worked out
+  says why in its cell ("not worked out: its conformer #2 has no free
+  energy"), and a structure with no 3D result has no share, not 0.
+- Failed and unfinished conformers are never a minimum: they are left out
+  of E min, G min and the shares, and counted in its state.
+
 ### Add and Number (2026-10-29)
 
 *Add* and *Number*, Meno's own, make the free energy at a higher level
