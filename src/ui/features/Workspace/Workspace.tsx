@@ -74,6 +74,8 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
+import { addOnline } from "../../../lib/calc/addOnline";
+import { useOnline } from "../../../lib/plugins/online";
 import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
@@ -3012,28 +3014,46 @@ function Elapsed({ since }: { since: number }) {
   );
 }
 
+/**
+ * What the import alert offers where no plugin added reads a file: each
+ * plugin that would - one here, added as any plugin is; one on offer
+ * online, got first, asking first (lib/calc/workers `addOnline`) - and the
+ * file read again once one is.
+ */
 function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () => void }) {
   const states = useReaders((s) => s.state);
+  const catalogue = useOnline((s) => s.catalogue);
+  const [getting, setGetting] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   return (
     <>
       {suggest.map((id) => {
         const p = anyPluginById(id);
-        if (!p) return null;
-        const adding = states[id] === "adding" || states[id] === "waiting";
+        const entry = p ? undefined : catalogue?.plugins.find((e) => e.id === id);
+        const name = p?.name ?? entry?.name;
+        if (!name) return null;
+        const adding = getting === id || states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}
             disabled={adding}
             onClick={(e) => {
               e.stopPropagation();
-              void addPlugin(p).then(again, () => undefined);
+              if (p) return void addPlugin(p).then(again, () => undefined);
+              if (!entry) return;
+              setGetting(id);
+              setProblem(null);
+              void addOnline(entry)
+                .then(again, (err: unknown) => setProblem(err instanceof Error ? err.message : String(err)))
+                .finally(() => setGetting(null));
             }}
             className="shrink-0 rounded-md border border-gh-line px-2 py-0.5 transition-colors duration-150 ease-meno hover:bg-gh-base disabled:opacity-60"
           >
-            {adding ? `Adding ${p.name}…` : `Add ${p.name}`}
+            {adding ? `Adding ${name}…` : `Add ${name}`}
           </button>
         );
       })}
+      {problem && <span className="text-accel-accent">{problem}</span>}
     </>
   );
 }
