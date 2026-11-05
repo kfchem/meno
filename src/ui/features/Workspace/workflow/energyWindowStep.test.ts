@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Property } from "../../../../lib/entry";
-import { factor } from "../../../../lib/units";
+import { factor, GAS_CONSTANT_HARTREE } from "../../../../lib/units";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { setMolecules } from "./entries";
@@ -105,7 +105,10 @@ describe("Energy window, of the lowest in each value of a property", () => {
     const window = info.options!.find((o) => o.id === "window")!;
     expect(window.type === "number" && Number.isNaN(window.default)).toBe(true);
     expect(window.note).toBe(WINDOW_GUIDE);
-    expect(WINDOW_GUIDE).toContain("2.73 kcal/mol");
+    // (its two numbers one with the other: RT ln 100 at the temperature it says is the window it says, to the places it gives)
+    const [, kelvin, kcal] = /at ([\d.]+) K one ([\d.]+) kcal\/mol/.exec(WINDOW_GUIDE)!;
+    expect((GAS_CONSTANT_HARTREE * Number(kelvin) * Math.log(100) * factor("Eh", "kcal/mol")).toFixed(2)).toBe(kcal);
+    expect(kcal).toBe("2.73");
     // (none given, one that is no number, one below 0: each needs a window, and the card says so in place of how it works)
     const given: (Record<string, string | number> | undefined)[] = [undefined, {}, { window: "" }, { window: Number.NaN }, { window: -1 }];
     for (const options of given) expect(needsOf({ kind: "energy-window", options })).toBe("Give the window, in kcal/mol");
