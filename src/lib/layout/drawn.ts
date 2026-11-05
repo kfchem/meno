@@ -28,7 +28,7 @@
 import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
 import { freeCorners, solidOf } from "./cage";
 import { isMetal, key, perceive, type CisTrans } from "./perceive";
-import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Stereo, type Tetrahedral } from "./stereo";
+import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral } from "./stereo";
 
 export type DrawnAtom = {
   x: number;
@@ -62,8 +62,10 @@ export type DrawnStereo = {
   tetra: Map<number, Tetrahedral>;
   /** By bond index. */
   cisTrans: Map<number, CisTrans>;
-  /** Each axis's refs the lower-numbered neighbour at each end. */
+  /** Each axis's refs the lower-numbered neighbour at each end: a biaryl's, an allene's. */
   axes: Axial[];
+  /** Each odd cumulene set cis or trans, by its ends (a butatriene's). */
+  cumulated: Cumulated[];
 };
 
 type V3 = [number, number, number];
@@ -282,7 +284,62 @@ export function readStereo(
     }
   });
 
-  return { tetra, cisTrans, axes };
+  // an allene's axis and an odd cumulene's cis or trans: each run of
+  // cumulated double bonds, end to end, drawn straight through
+  const odd: Cumulated[] = [];
+  const middle = (x: number) => neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
+  atoms.forEach((_, i) => {
+    if (middle(i)) return;
+    for (const m of neighbours[i]) {
+      if (bondOf.get(key(i, m))!.order !== 2 || !middle(m)) continue;
+      const run = [i, m];
+      while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const j = run[run.length - 1];
+      if (j < i) continue;
+      const [ti, tj] = [run[1], run[run.length - 2]];
+      const near = neighbours[i].filter((n) => n !== ti);
+      const far = neighbours[j].filter((n) => n !== tj);
+      // (each end with two groups, an H among them at most)
+      if (!near.length || !far.length || near.length + (atoms[i].hs ?? 0) !== 2 || far.length + (atoms[j].hs ?? 0) !== 2) continue;
+      // a wavy bond at an end: either
+      if ([i, j].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
+      if (run.length % 2 === 1) {
+        // an allene's (an even number of double bonds): a wedge out of one end
+        // to a group of it, the other end's groups in the page, read as a
+        // biaryl's axis is - its ends not bonded, the turn the same
+        for (const [e, f, en, fn] of [
+          [i, j, near, far],
+          [j, i, far, near],
+        ] as const) {
+          const lifted = en.find((n) => lift(e, n) !== 0);
+          if (lifted == null) continue;
+          const refs: [number, number] = [Math.min(...en), Math.min(...fn)];
+          const sense = drawnAxisSense((k) => atoms[k], { atoms: [e, f], refs }, lifted, lift(e, lifted) as 1 | -1);
+          if (sense) axes.push({ atoms: [e, f], refs, sense });
+          break;
+        }
+        continue;
+      }
+      // an odd cumulene's (an odd number of double bonds): each end's group
+      // off the line through the run, on one side of it or the other, as a
+      // double bond's are read
+      const along = { x: atoms[j].x - atoms[i].x, y: atoms[j].y - atoms[i].y };
+      const side = (r: number, from: number) => {
+        const v = { x: atoms[r].x - atoms[from].x, y: atoms[r].y - atoms[from].y };
+        const t = along.x * v.y - along.y * v.x;
+        return Math.abs(t) < 1e-6 * (Math.hypot(along.x, along.y) * Math.hypot(v.x, v.y) || 1) ? 0 : Math.sign(t);
+      };
+      const straightOn = (end: number, other: number, n: number) =>
+        apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
+      const ri = near.find((n) => !straightOn(i, ti, n));
+      const rj = far.find((n) => !straightOn(j, tj, n));
+      if (ri == null || rj == null) continue;
+      const [si, sj] = [side(ri, i), side(rj, j)];
+      if (si && sj) odd.push({ atoms: [i, j], refs: [ri, rj], cis: si === sj });
+    }
+  });
+
+  return { tetra, cisTrans, axes, cumulated: odd };
 }
 
 /** How far a bond in the page is turned, either way, to ask whether what the drawing says of a centre or a double bond stays the same. */

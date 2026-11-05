@@ -94,7 +94,7 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
 export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
-  const { tetra, cisTrans, axes } = stereo;
+  const { tetra, cisTrans, axes, cumulated } = stereo;
   // (a double bond drawn straight at an end, its configuration not given: that end kept straight - IUPAC 2006 ST-4.4 - so that
   //  what is laid out leaves it unsaid too, rather than saying one or the other)
   const straight = straightEnds(drawing.atoms, drawing.bonds);
@@ -163,6 +163,15 @@ export function layoutJob(part: Model): LayoutJob {
             atoms: [at.get(ax.atoms[0])!, at.get(ax.atoms[1])!] as const,
             refs: [at.get(ax.refs[0])!, at.get(ax.refs[1])!] as const,
             sense: ax.sense,
+          })),
+        }
+      : {}),
+    ...(cumulated.length
+      ? {
+          cumulated: cumulated.map((x) => ({
+            atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!] as const,
+            refs: [at.get(x.refs[0])!, at.get(x.refs[1])!] as const,
+            cis: x.cis,
           })),
         }
       : {}),
@@ -626,7 +635,7 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
   return stereoChange(part, relayout(doc, change).model, {
     centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
-    doubles: new Set(job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : []))),
+    doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...(job.input.cumulated ?? []).map((x) => pair(job.ids[x.atoms[0]], job.ids[x.atoms[1]]))]),
     axes: new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]]))),
   });
 }
@@ -680,7 +689,7 @@ function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; 
 function stereoOf(m: Model) {
   const d = drawingOf(m);
   const ids = m.atoms.map((a) => a.id);
-  const { tetra, cisTrans, axes: drawnAxes } = readStereo(d.atoms, d.bonds);
+  const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
   const degree = degrees(m.bonds);
   const asId = (n: number) => (n === -1 || (m.atoms[n].el === "H" && degree.get(ids[n]) === 1) ? -1 : ids[n]);
   const centres = new Map<number, Tetrahedral>(
@@ -693,7 +702,23 @@ function stereoOf(m: Model) {
     const refs: [number, number] = a < z ? [ids[ct.refs[0]], ids[ct.refs[1]]] : [ids[ct.refs[1]], ids[ct.refs[0]]];
     doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: ct.cis });
   }
-  const others = (x: number, not: number) => d.bonds.flatMap((b) => (b.a === x && b.b !== not ? [b.b] : b.b === x && b.a !== not ? [b.a] : []));
+  // (an odd cumulene's as a double bond's, by its ends)
+  for (const x of cumulated) {
+    const [a, z] = [ids[x.atoms[0]], ids[x.atoms[1]]];
+    const refs: [number, number] = a < z ? [ids[x.refs[0]], ids[x.refs[1]]] : [ids[x.refs[1]], ids[x.refs[0]]];
+    doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: x.cis });
+  }
+  // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
+  const bonded = (x: number, y: number) => d.bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
+  const through = (x: number, end: number) => {
+    if (bonded(x, end)) return end;
+    const run = d.bonds.find((b) => b.order >= 2 && (b.a === x || b.b === x));
+    return run ? (run.a === x ? run.b : run.a) : end;
+  };
+  const others = (x: number, end: number) => {
+    const skip = through(x, end);
+    return d.bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));
+  };
   const lowest = (x: number, not: number) => others(x, not).reduce((p, q) => (ids[p] < ids[q] ? p : q));
   const axes = new Map<string, number>();
   for (const ax of drawnAxes) {
