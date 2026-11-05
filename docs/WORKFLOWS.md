@@ -2957,7 +2957,10 @@ molecules in 3D does: *Open as a table* on its menu (workflow
   holds off it (`drawnCollection`), all of them, in the step's order - the
   page's first, as a step after it takes them (`setStructures`). A set
   that shows 50 of 120 has 120 rows.
-- **Its columns**: its place (#); its SMILES as the step that made it
+- **Its columns**: its place (#); which structure it is, as a number
+  (`structure`): the number its record carries where every one carries
+  one (an *Enumerate*'s), else its place from 1, never the two mixed - what
+  a chart takes across to plot a value for each structure (2026-11-06); its SMILES as the step that made it
   gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
   where any did; its SMILES as Meno writes it from the drawing (`SMILES
   (drawing, constitution only)`: Kekulé, a label of no element as `*`,
@@ -3446,7 +3449,9 @@ one - and gives a
 chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
-each entry's number, then its energy).
+each entry's number, then its energy; structures drawn: which structure
+each is, `structure`, then the first value their records hold - a value
+for each structure).
 - **A chart of molecules plots no entry that is no result**: one that
   failed, by any kind, or whose marks did not read refuses it, each named,
   as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).
