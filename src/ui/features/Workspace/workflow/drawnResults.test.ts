@@ -555,11 +555,12 @@ describe("structures drawn, into Meno's own steps", () => {
   it("are taken by none yet: a step of Meno's refuses the wire, and the 2D path says it does none of them", () => {
     let doc: WorkspaceDocument = { ...emptyWorkspaceDocument(), model: chiral(), nextId: 5 };
     doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
-    doc = addStep(doc, "duplicates", 10, 0);
+    // (Energy window: of conformers' energies, nothing a structure drawn has - Duplicates takes them since 2026-11-06)
+    doc = addStep(doc, "energy-window", 10, 0);
     const step = doc.steps![0].id;
     expect(canWire(doc, { set: 1 }, step)).toBe(false);
     expect(runStep(connect(doc, { set: 1 }, step), step, W).steps![0].ran).toMatchObject({ ok: false, said: "Nothing comes into it" });
-    expect(runMenoDrawn("duplicates", drawnEntries(doc.model, [[1, 2, 3, 4]]))).toEqual({ ok: false, said: "Meno does not do this itself on structures drawn" });
-    expect(runMenoDrawn("duplicates", [])).toEqual({ ok: false, said: "Nothing came in" });
+    expect(runMenoDrawn("energy-window", drawnEntries(doc.model, [[1, 2, 3, 4]]))).toEqual({ ok: false, said: "Meno does not do this itself on structures drawn" });
+    expect(runMenoDrawn("energy-window", [])).toEqual({ ok: false, said: "Nothing came in" });
   });
 });

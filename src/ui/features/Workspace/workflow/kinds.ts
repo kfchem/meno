@@ -258,7 +258,8 @@ export const KINDS: readonly KindInfo[] = [
     // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
     whole: true,
     icon: "copies",
-    takes: ["molecules", "conformers"],
+    // (structures drawn too: alike by identity with configuration - workflow/meno `duplicatesDrawn`)
+    takes: ["molecules", "conformers", "structures"],
     gives: "same",
     runs: "entries",
     made: "Unlike",
