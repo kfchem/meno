@@ -19,6 +19,9 @@ export const COLORS = {
   ink: "#1f2328",
   quiet: "#59636e",
   hairline: "#d1d9e0",
+  // (FrameTabs' names for the same three, until one set of names is agreed - local merge only)
+  text: "#1f2328",
+  line: "#d1d9e0",
 
   // Base drawing colors (kept here for centralization)
   bond: "#000000",
