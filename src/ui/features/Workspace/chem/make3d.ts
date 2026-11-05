@@ -29,7 +29,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
-import { undrawnHydrogens } from "./drawing";
+import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
@@ -151,7 +151,10 @@ export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Mod
       const bare = !standsForMolecule(part);
       const asked = etaBound(bare ? { ...part, atoms: part.atoms.map((a) => ({ ...a, valence: a.valence ?? 0 })) } : part);
       const index = molIndex(asked);
-      const molblock = chemMolblock(asked);
+      // (a centre the drawing shows by depth alone - a cage in perspective, no wedge - given the wedge that says it, as a file is:
+      //  chem/drawing `forFlatReaders`. It adds an H where the engine drew one, after every atom and bond of the part and its
+      //  stars, so the places the part's atoms and bonds hold in the block - those `index` and `atoms` name - stay as they are)
+      const molblock = chemMolblock(forFlatReaders(asked));
       const centres = centresIn(molblock);
       // (a dative arrow or a coordination bond between two atoms - not a multi-centre bond's to its star, which is none of the molecule's bonds)
       const coordination = index.bonds.flatMap((b, i) => ((b.dative || b.coordination) && !b.endpoints?.length ? [i] : []));
