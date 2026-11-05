@@ -1316,6 +1316,44 @@ pointer's reach are in the screen's own units and do not change. Pictures
 made of the drawing - exported, copied, rendered, a talk's - are drawn at
 their own sizes, whichever is chosen.
 
+## Drawn by WebGL
+
+What is placed on the page is drawn by WebGL, with the page, rather than
+laid over it in HTML (LOOK.md, rule 7): a page of 283 molecules in 3D held
+some 14 700 elements in their chips alone, and laying them out again at
+each frame of a zoom held it to a frame every 0.6 s (2026-11-05). What draws
+it, in `features/Workspace/pageGl/`:
+- **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
+  canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
+  shrinks with the page, its lines too, never thinner than one device
+  pixel. A control - a port, a handle - is as large as a hand needs it
+  instead: its screen pixels where the page is near, no more than its own
+  page pixels zoomed out, nor than its share of what it belongs to
+  (`Control`).
+- **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
+  worked out from its distance to its edge in the fragment shader -
+  rounded corners, a line inside the edge as a CSS inset ring is, solid or
+  dashed - so that thousands are one draw call, smooth at any zoom; the
+  zoom told to the shader each frame, nothing packed again for it.
+- **Words** (`PageTexts`): in IBM Plex Sans, the files the app's HTML is set
+  in - Regular from its TrueType file and Medium from IBM's WOFF of it, the
+  forms troika reads - in batches (components/textBatch); each placed by
+  its anchor and cut with an ellipsis past its width, how wide measured as
+  the app's text is measured (`textWidth`), so that what holds it is sized
+  in the same render it is drawn.
+- **Icons** (`PageIcons`): the steps' kinds and states and a warning, drawn
+  once into an atlas as the page's HTML draws them (workflow/icons,
+  Heroicons) and tinted as each is drawn; a part with icons of its own
+  adds them (`addPageIcon`).
+- **What the pointer is over** (`PageHits`, `usePageHits`, `useHitAt`): each
+  part names the places that take the pointer - a rectangle, a circle at
+  the size a hand takes it, a band of screen pixels along a frame's edge -
+  and they are asked before anything else on the canvas, the topmost
+  first, as the page's HTML was over the molecules and the drawing: a press
+  or a move on one is its own. Among circles that both reach the pointer,
+  the nearest; a frame's corner over the sides it joins. A drop asks the
+  same (`useHitAt`) where HTML asked `elementFromPoint`.
+
 ## Styles in 3D
 
 Built on 2026-10-10. The maintainer's ruling: a molecule in 3D
