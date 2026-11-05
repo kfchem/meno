@@ -11,14 +11,14 @@ import { chosenFrom, presetOffer } from "../render/presets";
 import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
 import { valuesOf, type Option, type OptionValues } from "../../../../lib/options";
-import { RING_CONFORMERS, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
+import { RING_CONFORMERS, roundsAsked, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
 import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
-import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
+import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, optionsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -191,7 +191,20 @@ export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | un
   return d && `${d.label} ${tooOld(by, d.name) ? "too old" : "not found"}`;
 }
 
-/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (kinds `needsOf`). */
+/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (kinds `needsOf`, `roundsNeed`). */
 export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
-  return missingFor(s) ?? needsOf(s);
+  const by = byOf(s);
+  return missingFor(s) ?? needsOf(s) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), optionsOf(optionsFor(s.kind, by), s.options));
+}
+
+/**
+ * What a *Conformers* step asked for as many as the molecule needs still
+ * needs, where its plugin's search takes draws and so is asked in rounds
+ * (lib/chem/conformersSought `roundsAsked`): its window for new conformers,
+ * the chemist's own - its own, else Settings' - none until given.
+ */
+export function roundsNeed(kind: StepKind, draws: boolean, values: OptionValues): string | undefined {
+  if (kind !== "conformers" || !draws) return undefined;
+  const asked = roundsAsked(values, () => 1);
+  return asked && "needs" in asked ? asked.needs : undefined;
 }
