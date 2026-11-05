@@ -105,6 +105,11 @@ describe("a ring that can flip", () => {
       expect(flips(smiles), smiles).toBe(false);
   });
 
+  it("is none of a ring aromatic only with the ring fused to it (lib/chem/aromaticity): indolizine's six-ring, through its N's lone pair, 10 with its five-ring", () => {
+    // (held free to flip until the rule took rings in pairs: its six-ring alone counts 7)
+    expect(flips("C1=CC=CN2C=CC=C12")).toBe(false);
+  });
+
   it("is one with an atom out of the pi system, or of 4n pi electrons: cyclopentadiene's CH2, cyclooctatetraene's tub", () => {
     for (const smiles of ["C1C=CC=C1", "C1=CC=CC=CC=C1", "C1CC2=CC=CC=C2C1", "C=C1C=CC=C1"]) expect(flips(smiles), smiles).toBe(true);
   });

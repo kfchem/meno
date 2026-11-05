@@ -17,8 +17,8 @@ export type Check = (typeof CHECKS)[number];
 /** Its options: each finding set aside, or kept. */
 export const CHECK_OPTIONS: readonly Option[] = [
   { id: "parts", label: "More than one part (a salt, a mixture)", type: "choice", choices: [{ value: "aside", label: "Set aside" }, { value: "keep", label: "Keep" }], default: "aside" },
-  { id: "valence", label: "An atom with more bonds than it can have", type: "choice", choices: [{ value: "aside", label: "Set aside" }, { value: "keep", label: "Keep as drawn" }], default: "aside" },
-  { id: "electrons", label: "A part with no electrons (H+)", type: "choice", choices: [{ value: "aside", label: "Set aside" }, { value: "keep", label: "Keep" }], default: "aside" },
+  { id: "valence", label: "An atom with more bonds than it can have", brief: "Too many bonds", type: "choice", choices: [{ value: "aside", label: "Set aside" }, { value: "keep", label: "Keep as drawn" }], default: "aside" },
+  { id: "electrons", label: "A part with no electrons (H+)", brief: "No electrons", type: "choice", choices: [{ value: "aside", label: "Set aside" }, { value: "keep", label: "Keep" }], default: "aside" },
   { id: "radicals", label: "Radicals", type: "choice", choices: [{ value: "aside", label: "Set aside" }, { value: "keep", label: "Keep" }], default: "aside" },
 ];
 

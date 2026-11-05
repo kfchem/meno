@@ -18,6 +18,7 @@ import { MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
+import { blocksOf } from "./make3d";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 import { measured } from "../../../../testing/timeouts";
 
@@ -90,6 +91,20 @@ function stereo(m: Model) {
   return new Map(
     [...readStereo(d.atoms, d.bonds).tetra].map(([c, t]) => [ids[c], { neighbours: t.neighbours.map(asId), volume: t.volume }]),
   );
+}
+
+/**
+ * The stereochemistry the plugin that makes a structure in 3D is told of `m` (chem/make3d `blocksOf`), read back from the
+ * MOL block it is sent, by the drawing's atom ids - an H added for the plugin (not the drawing's) as an implicit one.
+ */
+function toldTo3d(m: Model) {
+  const [block] = blocksOf(m, m.atoms.map((a) => a.id));
+  const back = editorModelOf(moleculesToEditorModel(readMoleculesFromText(block.molblock, "mol")).model);
+  const drawn = new Map(back.atoms.map((a, i) => [a.id, i < block.atoms.length ? block.atoms[i] : -1]));
+  return {
+    block,
+    told: new Map([...stereo(back)].map(([c, t]) => [drawn.get(c)!, { neighbours: t.neighbours.map((n) => (n === -1 ? -1 : drawn.get(n)!)), volume: t.volume }])),
+  };
 }
 
 const centroid = (m: Model, ids: Set<number>) => {
@@ -409,6 +424,50 @@ describe("cleanUp", () => {
     }
   }, measured(3_100));
 
+  it("tells the plugin that makes it in 3D every centre of tetrodotoxin, drawn in perspective with no wedge at all", async () => {
+    const given = fromSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const { store } = canvas(flatDrawing(given));
+    await cleanUp(store);
+    const drawn = store.getState().model;
+    expect(drawn.bonds.some((b) => b.stereo === "up" || b.stereo === "down")).toBe(false);
+    const shown = stereo(drawn);
+    expect(shown.size).toBe(given.atoms.filter((a) => a.tetra).length);
+    // (each centre the drawing shows by its depth alone, told the plugin by a wedge in the block - before, none of them was)
+    const { block, told } = toldTo3d(drawn);
+    // (the H a wedge needed, added to the block after every atom of the drawing: the places the drawing's atoms and bonds
+    //  hold in the block - those the block names - are its own, as many as it has, the H none of them)
+    const count = Number(/M {2}V30 COUNTS (\d+)/.exec(block.molblock)?.[1] ?? block.molblock.split("\n")[3].slice(0, 3).trim());
+    expect(count).toBeGreaterThan(drawn.atoms.length);
+    expect(block.atoms).toEqual(drawn.atoms.map((a) => a.id));
+    expect(block.bonds).toHaveLength(drawn.bonds.length);
+    for (const [c, t] of shown) {
+      expect(told.get(c), `centre ${c}`).toBeDefined();
+      expect(sameConfiguration(t, told.get(c)!), `centre ${c}`).toBe(true);
+    }
+  }, measured(3_100));
+
+  it("tells it every centre of each cage the engine draws in perspective", async () => {
+    for (const [name, g] of Object.entries(cages)) {
+      const { store } = canvas(flatDrawing(g as LayoutInput));
+      await cleanUp(store);
+      const drawn = store.getState().model;
+      const { told } = toldTo3d(drawn);
+      for (const [c, t] of stereo(drawn)) expect(told.get(c) && sameConfiguration(t, told.get(c)!), `${name} ${c}`).toBe(true);
+    }
+  }, measured(2_200));
+
+  it("sends a structure drawn flat, its centres wedged, as it is: nothing added to its block, every centre told", () => {
+    const drawn = flatDrawing(fromSmiles("C[C@@H](N)C(=O)O"));
+    expect(drawn.atoms.some((a) => a.z != null)).toBe(false);
+    const { block, told } = toldTo3d(drawn);
+    // (its atom count, as a V3000 or a V2000 block writes it)
+    const count = /M {2}V30 COUNTS (\d+)/.exec(block.molblock)?.[1] ?? block.molblock.split("\n")[3].slice(0, 3).trim();
+    expect(count).toBe(String(drawn.atoms.length));
+    const shown = stereo(drawn);
+    expect(shown.size).toBe(1);
+    for (const [c, t] of shown) expect(sameConfiguration(t, told.get(c)!)).toBe(true);
+  });
+
   it("takes away an H it no longer draws, and keeps one it does", async () => {
     // cocaine drawn flat has an H on each bridgehead, to carry its wedge;
     // in perspective the cage shows them, and they go
@@ -453,20 +512,21 @@ describe("cleanUp", () => {
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
-    // a selenoxide's Se, wedged: a centre with a lone pair that a wedge
-    // states to no reader, so none that Clean-up can lay out and keep
-    const selenoxide: Model = {
-      atoms: [atom(1, 0, 0, "Se"), atom(2, 0, 1, "O"), atom(3, -1, -0.5), atom(4, 1, -0.5)],
+    // an amine's N, wedged: its lone pair keeps no configuration
+    // (lib/chem/lonePairCentres), so the wedge states none that Clean-up
+    // can lay out and keep
+    const amine: Model = {
+      atoms: [atom(1, 0, 0, "N"), atom(2, 0, 1), atom(3, -1, -0.5), atom(4, 1, -0.5)],
       bonds: [
-        { id: 5, a: 1, b: 2, order: 2 },
+        { id: 5, a: 1, b: 2, order: 1 },
         { id: 6, a: 1, b: 3, order: 1, stereo: "up" },
         { id: 7, a: 1, b: 4, order: 1 },
       ],
     };
-    const { store } = canvas(selenoxide);
+    const { store } = canvas(amine);
     await expect(cleanUp(store)).rejects.toThrow(/nothing was moved/);
-    await expect(cleanUp(store)).rejects.toThrow(/three bonds and no fourth group: at Se a wedge states no configuration/);
-    expect(store.getState().model).toEqual(selenoxide);
+    await expect(cleanUp(store)).rejects.toThrow(/at N do not say its configuration in a way Clean-up can keep \(it has three bonds and keeps no configuration of its own, so a wedge at it states none\)/);
+    expect(store.getState().model).toEqual(amine);
     // (a phosphorane's P, wedged: five groups, said so - not three bonds)
     const phosphorane: Model = {
       atoms: [atom(1, 0, 0, "P"), atom(2, 0, 1, "F"), atom(3, -1, -0.5, "F"), atom(4, 1, -0.5, "F"), atom(5, 1, 0.5, "F"), atom(6, 0, -1, "F")],
@@ -477,8 +537,9 @@ describe("cleanUp", () => {
   });
 
   it("lays out a centre with a lone pair for its fourth group, keeping its configuration on one wedge", async () => {
-    // methyl ethyl sulfoxide's S, a phosphine's P, a sulfonium's S: each
-    // wedged, each the other way round too
+    // methyl ethyl sulfoxide's S, a phosphine's P, a sulfonium's S, a
+    // selenoxide's Se, a stibine's Sb, a telluroxide's Te, a bismuthine's
+    // Bi: each wedged, each the other way round too
     const centre = (el: string, stereo: "up" | "down", charge?: number, doubled = true): Model => ({
       atoms: [{ ...atom(1, 0, 0, el), ...(charge ? { charge } : {}) }, atom(2, 0, 1, doubled ? "O" : "C"), atom(3, -1, -0.5), atom(4, 1, -0.5), atom(5, 2, 0)],
       bonds: [
@@ -488,7 +549,7 @@ describe("cleanUp", () => {
         { id: 9, a: 4, b: 5, order: 1 },
       ],
     });
-    for (const [el, charge, doubled] of [["S", 0, true], ["P", 0, false], ["S", 1, false]] as const) {
+    for (const [el, charge, doubled] of [["S", 0, true], ["P", 0, false], ["S", 1, false], ["Se", 0, true], ["Sb", 0, false], ["Te", 0, true], ["Bi", 0, false]] as const) {
       for (const stereo of ["up", "down"] as const) {
         const before = centre(el, stereo, charge, doubled);
         const { store } = canvas(before);

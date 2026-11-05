@@ -125,23 +125,22 @@ describe("an energy diagram", () => {
 });
 
 describe("an energy diagram's levels as Levels lists them", () => {
-  // HCN, its isomerisation's saddle point and HNC as ORCA 6.1.1 gave them (r2SCAN-3c, Opt Freq), opened in the order P, R, TS:
-  // each FINAL SINGLE POINT ENERGY, in hartrees
+  // HCN, its isomerisation's saddle point and HNC, opened in the order P, R, TS: each one's energy in hartrees, made up
   const opened = levels([
-    ["P", 1, -93.375824209007],
-    ["R", 1, -93.399651434575],
-    ["TS", 1, -93.324592691836],
+    ["P", 1, -93.376],
+    ["R", 1, -93.4],
+    ["TS", 1, -93.325],
   ]);
 
-  it("draws them in the order listed, relative to the one named - R, TS, P relative to R: P 15.0, TS 47.1 kcal/mol above", () => {
+  it("draws them in the order listed, relative to the one named - R, TS, P relative to R: P 15.1, TS 47.1 kcal/mol above", () => {
     const d = ok(diagramOf(opened, { levels: "R\nTS\nP", reference: "R" }));
     expect(d.levels.map((l) => [l.name, Number(l.value.toFixed(2))])).toEqual([
       ["R", 0],
-      ["TS", 47.1],
-      ["P", 14.95],
+      ["TS", 47.06],
+      ["P", 15.06],
     ]);
-    // (by hand: (-93.324592691836 + 93.399651434575) x 627.509; (-93.375824209007 + 93.399651434575) x 627.509)
-    expect([((-93.324592691836 + 93.399651434575) * KCAL).toFixed(2), ((-93.375824209007 + 93.399651434575) * KCAL).toFixed(2)]).toEqual(["47.10", "14.95"]);
+    // (by hand: (-93.325 + 93.4) x 627.509; (-93.376 + 93.4) x 627.509)
+    expect([((-93.325 + 93.4) * KCAL).toFixed(2), ((-93.376 + 93.4) * KCAL).toFixed(2)]).toEqual(["47.06", "15.06"]);
     expect([d.reference, d.links]).toEqual(["R", [[0, 1], [1, 2]]]);
     expect(diagramSaid(d)).toBe("3 levels \u00b7 relative to R");
     // (none listed: as they came, relative to the first)

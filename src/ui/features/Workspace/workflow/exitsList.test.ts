@@ -39,6 +39,7 @@ describe("a kind's exits, as a list", () => {
       displace: [first("Displaced", "same"), rest("Not displaced", "same")],
       "path-search": [first("Refined structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       rank: [first("The first {keep}", "same"), rest("The rest", "same")],
+      "mode-on-atoms": [first("With the mode on atoms", "same")],
       join: [first("Joined", "same"), rest("Not joined", "same")],
       barrier: [first("With barriers", "molecules"), failed()],
       restraints: [first("Restrained", "same"), failed()],

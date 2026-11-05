@@ -20,7 +20,10 @@ body {
  * the app carries in its resources). Bold text is set in the semibold.
  * Plex Sans in italics too - R and S, the t of t-Bu, as IUPAC sets them -
  * so that the browser need not slant the upright letters. The files are
- * IBM's own, from the @ibm/plex-sans 1.1.0 release (font version 3.005).
+ * unchanged: Plex Sans's from IBM's @ibm/plex-sans 1.1.0 release (font
+ * version 3.005), Plex Mono's from @ibm/plex-mono 2.5.0 (2.005), and Plex
+ * Sans JP's Regular from Google Fonts (github.com/google/fonts,
+ * ofl/ibmplexsansjp, version 1.001).
  */
 @font-face {
   font-family: "IBM Plex Sans";
