@@ -226,11 +226,20 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
-/// *This computer's runner knows its resources*): cores, and memory in MiB.
+/// *This computer's runner knows its resources*): cores, and memory in MiB;
+/// and whether the computer is kept awake while a job's program runs
+/// (awake.rs) - so unless Settings turned it off, as where nothing says.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub cores: u32,
     pub memory: u64,
+    #[serde(default = "kept_awake")]
+    pub awake: bool,
+}
+
+/// The computer kept awake while jobs run, unless Settings says otherwise.
+fn kept_awake() -> bool {
+    true
 }
 
 /// What this computer has: its cores - each a thread its system runs at once, two to a physical core where it
@@ -263,7 +272,7 @@ fn taken(spec: &JobSpec, here: Resources) -> u32 {
 /// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
 fn default_limits() -> Limits {
     let here = computer();
-    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3 }
+    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3, awake: true }
 }
 
 /// What the jobs in `root` may use at once, as last written there; the defaults where nothing is.
@@ -591,6 +600,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         }
     }
     let started = Some(now_ms());
+    // (the computer kept awake from now until it and those after it have ended, unless Settings says not: awake.rs)
+    let _awake = dir.parent().filter(|root| limits_in(root).awake).map(|_| crate::awake::hold());
 
     // its program, in its work folder, what it says going into its log
     let input = spec.stdin.as_deref();
@@ -2843,9 +2854,9 @@ pub fn computer_resources() -> Resources {
 /// runner reads it as it looks for its turn - those waiting take it up at once. At least a core; memory within what
 /// the computer has, nought counting none.
 #[tauri::command]
-pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64) -> Result<(), String> {
+pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>) -> Result<(), String> {
     let root = jobs_root(&app)?;
-    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST) }).map_err(|e| e.to_string())
+    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
 }
 
 /// Limits written whole: a runner never reads half of them.
@@ -2948,7 +2959,7 @@ mod tests {
     /// A job running a script of the system's shell, of a core, in a queue whose jobs may use `slots` cores in all:
     /// so many at once.
     fn shell(root: &Path, script: &str, slots: u32) -> PathBuf {
-        write_limits(root, Limits { cores: slots, memory: 0 }).unwrap();
+        write_limits(root, Limits { cores: slots, memory: 0, awake: true }).unwrap();
         sized(root, script, 1, 0)
     }
 
@@ -3337,7 +3348,7 @@ mod tests {
 
     #[test]
     fn starts_a_job_where_its_cores_and_memory_fit_beside_those_running_and_never_one_ahead_of_its_turn() {
-        let l = Limits { cores: 8, memory: 16_000 };
+        let l = Limits { cores: 8, memory: 16_000, awake: true };
         // (nothing running: any job, a larger one than the limits included, runs alone)
         assert!(fits(l, (0, 0), 0, 32, 64_000));
         assert!(fits(l, (4, 8_000), 1, 4, 8_000));
@@ -3346,7 +3357,7 @@ mod tests {
         // (a job that declares no memory is counted by its cores alone; and limits with none - the computer's memory
         //  not told - count none)
         assert!(fits(l, (4, 16_000), 1, 4, 0));
-        assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
+        assert!(fits(Limits { cores: 8, memory: 0, awake: true }, (4, 16_000), 1, 4, 8_000));
         // (more than the computer has: refused, in plain words; within it, though over the limits, not)
         let here = Resources { cores: 10, physical: 10, memory: 32 * 1024 };
         assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
@@ -3357,7 +3368,7 @@ mod tests {
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
         let root = temp();
-        write_limits(&root, Limits { cores: 6, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 6, memory: 0, awake: true }).unwrap();
         let first = sized(&root, PAUSE, 4, 0);
         std::thread::sleep(Duration::from_millis(5));
         let second = sized(&root, PAUSE, 4, 0);
@@ -3412,7 +3423,7 @@ mod tests {
         let data = temp();
         let scratch = temp();
         assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
-        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096, awake: true }).unwrap();
         // (one made in Meno's own before)
         let before = sized(&jobs_in(&data), ECHO, 1, 0);
         write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
@@ -3420,7 +3431,7 @@ mod tests {
         let chosen = scratch.join(IN_CHOSEN);
         assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
         // (what jobs may use goes with it)
-        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096, awake: true });
         // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
         let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
         assert!(runner_folder(&data, &dir).is_ok());
@@ -3481,8 +3492,14 @@ mod tests {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
         assert!(default_limits().cores >= 1);
-        write_limits(&root, Limits { cores: 3, memory: 2048 }).unwrap();
-        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048 });
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: true }).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048, awake: true });
+        // (the computer kept awake unless Settings turned it off - and so where limits written before it say nothing of it)
+        assert!(default_limits().awake);
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: false }).unwrap();
+        assert!(!limits_in(&root).awake);
+        fs::write(root.join(LIMITS), r#"{"cores": 2, "memory": 1024}"#).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 2, memory: 1024, awake: true });
         // (the computer's memory told: three quarters of it, by default)
         let here = computer();
         assert!(here.memory > 0, "{here:?}");
@@ -4534,7 +4551,7 @@ mod tests {
         let tool = away.join("tool");
         fs::write(&tool, "#!/bin/sh\necho needed program ran\n").unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
-        write_limits(&root, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let spec = JobSpec {
             plugin: "test".into(),
             name: "shell".into(),
@@ -4680,7 +4697,7 @@ mod tests {
     fn a_runner_runs_a_job_needing_another_plugins_program_linked_in_its_folder_and_no_other_link() {
         let (base, data, plugins) = needing(true);
         let jobs = data.join("jobs");
-        write_limits(&jobs, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&jobs, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
         let (env, needed) = needs_given(&data, &manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap(), "asker", &["helper".into()], &|p| crate::installed::dir(&plugins, p)).unwrap();
         assert_eq!(env, BTreeMap::from([("TOOLEXE".to_string(), "./tool".to_string())]));
