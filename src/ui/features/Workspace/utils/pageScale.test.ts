@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_PX, WORDS_LEAST, wordsReadAt, ZOOM_WRITTEN_STEP, zoomWritten } from "./pageScale";
+import { HAIR_STEP, hairWritten, PAGE_PX, WORDS_LEAST, wordsReadAt, ZOOM_WRITTEN_STEP, zoomWritten } from "./pageScale";
 import { SWITCH_BAND } from "./zoomSwitch";
 
 /** The zoom at which a page pixel is `scale` screen pixels. */
@@ -61,5 +61,23 @@ describe("what the page's HTML is sized by, written again as the zoom goes", () 
     expect(writes[writes.length - 1]).toBe(6.667);
     // (each write while it moved, at least a step from the one before)
     for (let i = 1; i < writes.length - 1; i++) expect(Math.abs(Math.log(writes[i] / writes[i - 1]))).toBeGreaterThanOrEqual(ZOOM_WRITTEN_STEP);
+  });
+});
+
+describe("a card's and a set's lines, as the zoom goes", () => {
+  it("are a page pixel - one of the layer's - written first, and never again while zoomed in", () => {
+    expect(hairWritten(Number.NaN, zoomAt(1), 2)).toBe(1);
+    for (const scale of [0.6, 1, 2, 6]) expect(hairWritten(1, zoomAt(scale), 2), `${scale}`).toBeNull();
+  });
+
+  it("are never thinner than a device pixel: under that floor written in steps of a quarter, and back to one as the zoom comes out from under it", () => {
+    // (a page pixel a quarter of a device pixel on a screen of two: four of the layer's)
+    expect(hairWritten(1, zoomAt(0.125), 2)).toBeCloseTo(4, 9);
+    // (a step too small to be seen: left)
+    expect(hairWritten(4, zoomAt(0.125 * 1.1), 2)).toBeNull();
+    expect(hairWritten(4, zoomAt(0.125 * HAIR_STEP * 1.01), 2)).toBeCloseTo(4 / (HAIR_STEP * 1.01), 6);
+    expect(hairWritten(4, zoomAt(1), 2)).toBe(1);
+    // (on a screen of one, the floor a whole screen pixel)
+    expect(hairWritten(1, zoomAt(0.5), 1)).toBeCloseTo(2, 9);
   });
 });

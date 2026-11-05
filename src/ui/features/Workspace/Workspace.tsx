@@ -143,7 +143,7 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActio
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { useCanvasRatio } from "./canvasRatio";
-import { editorLayoutOptions, startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom, setDrawnRatio } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
@@ -356,6 +356,8 @@ function WorkspaceContent({
   const store = useEditorStore();
   // (how finely the canvas is drawn, as Settings has it: a change shows at once)
   const canvasRatio = useCanvasRatio();
+  // (bonds never thinner than one of the canvas's device pixels: layoutOptions `minLinePx`)
+  setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
