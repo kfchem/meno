@@ -606,8 +606,10 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   *Duplicates* step does.
 - **Minimise with restraints, and a search that holds them.** The RDKit
   plugin fills *Minimise with restraints*: each entry minimised in MMFF94
-  (or MMFF94s, or UFF, as the step asks; UFF where MMFF has no
-  parameters; refused, said, where neither has), its restraints held by
+  (or MMFF94s, or UFF, as the step asks; where MMFF has no parameters,
+  UFF in its place, or the entry refused, as the step's *Where MMFF has no
+  parameters* says - UFF unless chosen otherwise; refused, said, where
+  neither has), its restraints held by
   RDKit's own constraints as the entry record states them:
   - a distance by RDKit's distance constraint, ½ k d², the record's k as
     it is (kcal mol⁻¹ Å⁻²);
@@ -810,8 +812,9 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   other's conformers are its reflections, each checked to have the
   configuration asked for (one that has not is asked for itself). So a
   molecule with one shape can come back as many frames of it: [OsCl6]2-,
-  ten embeddings sought, gives nine, its octahedron and eight relabellings
-  of it (the tenth is dropped below the floor); the page keeps one, and a
+  ten embeddings sought, gives ten, its octahedron and eight relabellings
+  of it, and one with two ligands under the floor, which Meno sets aside
+  (lib/chem/metalHolds `keptMade`); the page keeps one, and a
   *Duplicates* step after a workflow's *Conformers* keeps one. Where it
   embedded from random coordinates (an η complex, or a crowded cage that
   would not embed otherwise), its *Embedded* row says so.
