@@ -264,7 +264,8 @@ type StereoUnit = { centre: number } | { bond: number } | { axis: number };
  * sets nothing - an isopropyl's CH, a prenyl's C=C(CH3)2 - and is taken
  * out, so that the structure is one whether drawn so or not. Alike means
  * in one orbit of the structure with that configuration left out and
- * every other one kept: 1,4-dimethylcyclohexane's ring arms at one centre
+ * every other one kept, under the symmetries that keep the unit's own
+ * atoms where they are: 1,4-dimethylcyclohexane's ring arms at one centre
  * are alike until the other centre's configuration is counted, and its cis
  * and trans stay apart. Each is tried in turn, again after each one taken
  * out, until none is. Where a search for the orbits ran out of steps, the
@@ -297,13 +298,17 @@ export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; compl
       ...g.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i }] : [])),
       ...(g.axes ?? []).map((_, i) => ({ axis: i })),
     ];
+    if (!units.length) return { input: g, complete };
     // (atoms the ranks tell apart are apart in every orbit: only those they leave alike are searched)
     const classes = symmetryClasses(g);
     let next: LayoutInput | null = null;
     for (const u of units) {
       if (!sides(g, u).some((side) => alike(classes, side))) continue;
       const left = without(g, u);
-      const found = orbitsAsDrawn(left);
+      // (the unit's own atoms marked, for the search only: the orbits of what keeps it where it is, not of what takes it
+      // onto another atom alike - 1,3-dichloro-2,4-dimethylcyclobutane's two CHCl, one open, swapped by a half turn)
+      const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : g.axes![u.axis].atoms);
+      const found = orbitsAsDrawn({ ...left, atoms: left.atoms.map((a, i) => (own.has(i) ? { ...a, el: `${a.el}*` } : a)) });
       if (!found.complete) complete = false;
       else if (sides(g, u).some((side) => alike(found.orbit, side))) {
         next = left;

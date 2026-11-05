@@ -402,6 +402,42 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     expect(one("O=C(O)[C@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@H](O)[C@@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@H](O)C(O)[C@@H](O)C(=O)O")).toBe(true);
   });
 
+  it("is weighed with the unit where it is: another atom alike that a symmetry takes it onto does not make its groups alike", () => {
+    // (1,3-dichloro-2,4-dimethylcyclobutane, ring C0-C3: Cl on C0 and C2, methyls on C1 and C3; C0 and both methyls'
+    // CH drawn, C2 open. A half turn takes C0 onto C2, but no symmetry keeping C0 swaps its ring arms where the
+    // methyls are cis: its Cl cis or trans to them, two structures. Where they are trans, C0's arms are alike)
+    const ring = (v0: 1 | -1, v1: 1 | -1, v3: 1 | -1): LayoutInput => ({
+      atoms: [
+        { el: "C", hs: 1, tetra: { neighbours: [1, 3, 4, -1], volume: v0 } },
+        { el: "C", hs: 1, tetra: { neighbours: [0, 2, 6, -1], volume: v1 } },
+        { el: "C", hs: 1 },
+        { el: "C", hs: 1, tetra: { neighbours: [2, 0, 7, -1], volume: v3 } },
+        { el: "Cl", hs: 0 },
+        { el: "Cl", hs: 0 },
+        { el: "C", hs: 3 },
+        { el: "C", hs: 3 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 1, b: 2, order: 1 },
+        { a: 2, b: 3, order: 1 },
+        { a: 3, b: 0, order: 1 },
+        { a: 0, b: 4, order: 1 },
+        { a: 2, b: 5, order: 1 },
+        { a: 1, b: 6, order: 1 },
+        { a: 3, b: 7, order: 1 },
+      ],
+    });
+    // (the methyls cis where C1's and C3's volumes are the same, as their neighbours are listed)
+    expect(identityText(ring(1, 1, 1))).not.toBe(identityText(ring(-1, 1, 1)));
+    expect(identityText(ring(1, 1, -1))).toBe(identityText(ring(-1, 1, -1)));
+  });
+
+  it("is looked for again after each one taken out: 2,4-dimethylpentan-3-ol's C3 has alike groups only once both isopropyls' CH are", () => {
+    const plain = identityText(fromSmiles("CC(C)C(O)C(C)C"));
+    for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
+  });
+
   it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps", () => {
     // (forty methanes beside the isopropanol: the search cannot finish)
     const methanes = Array(40).fill("C").join(".");
