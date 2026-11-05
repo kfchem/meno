@@ -36,8 +36,8 @@ What xtb is asked is as xtb's own documentation has it
   holds the total energy and the gradient norm, and its last geometry in
   `xtbopt.xyz`; whether it converged as xtb says it in its output (it
   writes `.xtboptok` whether it did or not);
-- a run whose solvation, as its output says it, is not what was asked is
-  refused.
+- the solvation as its output says it, which Meno holds to what was
+  asked, as of any program's step (the manifest's `solvation`).
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -239,7 +239,7 @@ def energy_in(comment):
 
 def g98_intensities(text):
     """Each vibration's frequency (cm-1) and IR intensity (km/mol) as xtb's `g98.out` gives them, in its Gaussian
-    form: "Frequencies --   600.1838   600.1838  1424.9489" over "IR Inten    --    68.7004    68.7003     0.0000"."""
+    form: "Frequencies --   612.3456   612.3456  1412.3456" over "IR Inten    --    67.8901    67.8900     0.0000"."""
     freqs, irs = [], []
     for line in (text or "").splitlines():
         head, _, values = line.partition("--")
@@ -315,11 +315,6 @@ def output_of(step, entry, options, log, files):
         out["version"] = VERSION
     if out.get("method") is None:
         out["method"] = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
-    solvent = options.get("solvent", "none")
-    solvation = out.get("solvation")
-    as_asked = solvation == "none" if solvent == "none" else solvation is not None and f"({solvent})" in solvation
-    if solvation is not None and not as_asked:
-        raise Refused(f"xtb ran with solvation {solvation}, not as asked ({solvent})")
     # (a frequency job's imaginary frequencies, as xtb judged them; another's, not judged)
     if step != "frequencies":
         out.pop("imaginary", None)

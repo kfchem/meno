@@ -22,9 +22,9 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
         await waitTurn(held.analyse);
         return { atoms: [], bonds: [] };
       }
-      if (op === "open_stereo") {
+      if (op === "stereo_elements") {
         await waitTurn(held.open);
-        return { atoms: [], bonds: [], isomers: 1 };
+        return { read: true, elements: [] };
       }
       throw new Error(`no ${op} here`);
     },
@@ -85,7 +85,7 @@ describe("Enumerate as a step, its checks at hand", () => {
     expect(ran).toMatchObject({ ok: false, stopped: true });
     expect(ran.said).toMatch(/^Stopped after /);
     // (asked of the first product alone: the others never)
-    expect(held.asked.filter((op) => op === "open_stereo")).toHaveLength(1);
+    expect(held.asked.filter((op) => op === "stereo_elements")).toHaveLength(1);
     expect(st().sets.some((b) => b.made?.step === step && (b.members?.length ?? 0) > 0)).toBe(false);
     expect(st().menoWorking[step]).toBeUndefined();
   });

@@ -17,7 +17,7 @@ const hcn: ReaderOutput = {
   multiplicity: 1,
   atoms: ["C", "N", "H"],
   frames: [[0, 0, 0, 0, 0, 1.156, 0, 0, -1.066]],
-  energies: [-93.399651434575],
+  energies: [-93.312345678901],
   results: [{ id: "energy.what", on: "molecule", group: "Calculation", label: "Energy", value: SAID }],
 };
 
@@ -50,7 +50,7 @@ describe("an ORCA output's energies, as its reader gives them", () => {
     ]) {
       const found = (cclib: ReaderOutput) => order.map((from) => ({ from, version: "1", output: from === "cclib" ? cclib : other }));
       const read = combine(found(hcn)).output;
-      expect([read.energies, read.method, read.basis], order.join()).toEqual([[-93.399651434575], "r2SCAN-3c", undefined]);
+      expect([read.energies, read.method, read.basis], order.join()).toEqual([[-93.312345678901], "r2SCAN-3c", undefined]);
       // (none read: none, never another reader's in their place)
       const unread = combine(found(none)).output;
       expect([unread.energies, unread.method, unread.basis], order.join()).toEqual([undefined, "r2SCAN-3c", undefined]);

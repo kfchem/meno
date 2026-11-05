@@ -18,9 +18,16 @@ const asked: { molblock: string; count?: number; options: Record<string, unknown
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
  * stereo open, by what they hold - methanol, or every one.
  */
-const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; cumulenes?: number[]; cumulated?: number[][]; free?: boolean } };
+const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "allene" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; free?: boolean } };
 /** Whether a molblock is methanol's, C and O. */
 const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
+/** Whether a molblock is an allene's, three carbons and nothing else. */
+const allene = (mol: { atoms: { symbol: string }[] }) => mol.atoms.length === 3 && mol.atoms.every((a) => a.symbol === "C");
+/** Whether a structure is said to leave its stereo open: a stereocentre, here, unless `openAs` says what else. */
+const leftOpen = (molblock: string) => {
+  const mol = readMolfile(molblock)!;
+  return worker.open === "all" || (worker.open === "methanol" && methanol(mol)) || (worker.open === "allene" && allene(mol));
+};
 /** What a held request is let go with: the worker stopped. */
 let letGo: ((e: Error) => void) | null = null;
 
@@ -34,6 +41,24 @@ vi.mock("../../../../lib/plugins/process", async (actual) => ({
 
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
+  // (the plugin that finds stereoisomers: the elements it perceives, as `openAs` says, and as many stereoisomers - none where none holds)
+  chemWorker: async (role: string) => ({
+    request: async (op: string, payload: { molblocks: string[] }) => {
+      if (role !== "stereoisomers") throw new Error(`no ${role} here`);
+      const open = leftOpen(payload.molblocks[0]);
+      if (op === "stereo_elements") {
+        const elements = open
+          ? [...(worker.openAs.atoms ?? [0]).map((at) => ({ kind: "centre", at, state: "unspecified" })), ...(worker.openAs.bonds ?? []).map((at) => ({ kind: "double", at, state: "unspecified" }))]
+          : [];
+        return { read: true, elements };
+      }
+      if (op === "stereoisomers") {
+        const n = worker.openAs.free ? 0 : (worker.openAs.isomers ?? 2);
+        return { isomers: Array.from({ length: n }, (_, k) => ({ configured: { centres: [], doubles: [] }, smiles: `isomer ${k}` })), free: n === 0 };
+      }
+      throw new Error(`no ${op} here`);
+    },
+  }),
   pluginWorker: async () => {
     worker.taken++;
     // (the worker goes with the one it cannot make - held past its time, it is stopped: what is asked of it after is refused)
@@ -41,11 +66,6 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
     return {
       request: async (op: string, payload: { molblock: string; options: Record<string, unknown> }) => {
         if (gone) throw new Error("The worker was stopped");
-        // (what a structure's drawing leaves open: a stereocentre, here, where it is said to)
-        if (op === "open_stereo") {
-          const open = worker.open === "all" || (worker.open === "methanol" && methanol(readMolfile(payload.molblock)!));
-          return open ? { atoms: [0], bonds: [], isomers: 2, cumulenes: [], cumulated: [], free: false, ...worker.openAs } : { atoms: [], bonds: [], isomers: 1, cumulenes: [], free: false };
-        }
         if (op !== "conformers") throw new Error(`no ${op} here`);
         asked.push(payload);
         if (worker.holds) await new Promise((_, reject) => (letGo = reject));
@@ -67,7 +87,6 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
               energies: [-0.01],
               field: "MMFF94",
               cip: { atoms: {}, bonds: {} },
-              chosen: { atoms: {}, bonds: {} },
               smiles: "",
             },
           ],
@@ -88,13 +107,14 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
 import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
-import { setMembers } from "../workflow/entries";
+import { entryOfSet, setEntries, setMembers } from "../workflow/entries";
+import { readWorkspace, workspaceText } from "../utils/workspace";
 import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
 /** Three structures drawn side by side - water, ethane (which RDKit, here, cannot make) and methanol - and a conformer search by RDKit on them. */
-async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>, records: (DrawnRecord | undefined)[] = []) {
+async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>, records: (DrawnRecord | undefined)[] = [], third: "methanol" | "allene" = "methanol") {
   const doc = createWorkspaceDocument();
   const parts: { el: string; at: [number, number] }[][] = [
     [{ el: "O", at: [0, 0] }],
@@ -102,10 +122,16 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
       { el: "C", at: [0, 0] },
       { el: "C", at: [1.5, 0] },
     ],
-    [
-      { el: "C", at: [0, 0] },
-      { el: "O", at: [1.5, 0] },
-    ],
+    third === "allene"
+      ? [
+          { el: "C", at: [0, 0] },
+          { el: "C", at: [1.3, 0] },
+          { el: "C", at: [2.6, 0] },
+        ]
+      : [
+          { el: "C", at: [0, 0] },
+          { el: "O", at: [1.5, 0] },
+        ],
   ];
   doc.edit("draw", (d) => {
     const atoms: Atom[] = [];
@@ -117,7 +143,8 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
       if (p.length === 1) {
         atoms.push({ id: base + 1, el: "H", x: -400 + 12 * i + 1, y: 0.8, r: 0.9 }, { id: base + 2, el: "H", x: -400 + 12 * i - 1, y: 0.8, r: 0.9 });
         bonds.push({ id: base + 50, a: base, b: base + 1, order: 1 }, { id: base + 51, a: base, b: base + 2, order: 1 });
-      } else bonds.push({ id: base + 50, a: base, b: base + 1, order: 1 });
+      } else if (p.length === 3) bonds.push({ id: base + 50, a: base, b: base + 1, order: 2 }, { id: base + 51, a: base + 1, b: base + 2, order: 2 });
+      else bonds.push({ id: base + 50, a: base, b: base + 1, order: 1 });
     });
     return { ...d, model: { atoms: [...d.model.atoms, ...atoms], bonds }, nextId: 1000 };
   });
@@ -171,6 +198,19 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
       [[1, "g/mol"]],
       [[3, "g/mol"]],
     ]);
+  });
+
+  it("carries what each structure drawn was made from onto each of its conformers - their lineage, as their entries give it - and keeps it in the workspace's file", async () => {
+    const { st } = await searched(undefined, [{ from: ["a#1"] }, { from: ["b#1"] }, { from: ["c#2", "d#1"] }]);
+    const made = st().molecules3d.filter((m) => m.conformerSet);
+    // (water and methanol made - ethane cannot be here - each with its own structure's)
+    expect(made.map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    expect(setEntries(made, "conformers").map((e) => entryOfSet(e, "x").from)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    const again = createWorkspaceDocument();
+    const opened = createEditorStore(again);
+    connectStoreToDocument(opened, again);
+    opened.getState().openWorkspace(readWorkspace(workspaceText(st()))!, true);
+    expect(opened.getState().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
   });
 
   it("writes what was worked out of each structure drawn into an SD file with each of its conformers, as its record says it", async () => {
@@ -344,9 +384,9 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
   });
 
   it("never makes one with an allene's axis left open: its stereoisomers are not counted, so one could be chosen unseen", async () => {
-    worker.open = "methanol";
-    worker.openAs = { isomers: 1, cumulenes: [0] };
-    const { step } = await searched();
+    worker.open = "allene";
+    worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1 };
+    const { step } = await searched(undefined, [], "allene");
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
     expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
   });
@@ -442,9 +482,9 @@ describe("the stereo a structure leaves open, counted once each", () => {
   });
 
   it("says the record of an allene drawn without its axis as one axis open", async () => {
-    worker.open = "methanol";
-    worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1, cumulenes: [0, 1], cumulated: [[0, 1]] };
-    const { step, st } = await searched();
+    worker.open = "allene";
+    worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1 };
+    const { step, st } = await searched(undefined, [], "allene");
     const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
     expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toContainEqual({ failed: "1 axis not specified: put Stereoisomers before Conformers" });
   });

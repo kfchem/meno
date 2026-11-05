@@ -36,6 +36,7 @@ export const STEP_KINDS = [
   "compare-bonding",
   "take-frames",
   "displace",
+  "mode-on-atoms",
   "path-search",
   "rank",
   "join",
@@ -57,7 +58,9 @@ export type StepKind = (typeof STEP_KINDS)[number];
  * boundary, 2026-10-31 - a plugin runs its program and converts what it made,
  * and fills only kinds that run one). A manifest's step of one is left out, as
  * one of a kind not here is. *Check structures* is Meno's on what the plugin
- * that does the checks makes of each structure (workflow/checkStructures).
+ * that does the checks makes of each structure (workflow/checkStructures);
+ * *Stereoisomers*, on what the plugin that finds stereoisomers perceives and
+ * makes (workflow/stereoisomers).
  */
 export const MENO_ONLY: readonly StepKind[] = [
   "energy-window",
@@ -69,6 +72,7 @@ export const MENO_ONLY: readonly StepKind[] = [
   "chart",
   "energy-diagram",
   "check-structures",
+  "stereoisomers",
   "enumerate",
   "tag",
   "species",
@@ -80,6 +84,7 @@ export const MENO_ONLY: readonly StepKind[] = [
   "take-frames",
   "displace",
   "atom-map",
+  "mode-on-atoms",
   "number",
   "add",
   "restraints",

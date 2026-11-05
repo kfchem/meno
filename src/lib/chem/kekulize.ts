@@ -8,9 +8,10 @@
  * takes exactly one, a pyrrole-type N-H or a furan O takes none, and of the
  * nitrogens whose hydrogens the file does not state, those left without one
  * - each read as an N-H - are as many as make each ring system's pi
- * electrons 4n + 2 (Hückel's rule, counted as below): a tetrazine none, a
- * tetrazole and a benzotriazole one, porphine two, guanine two beside its
- * C=O. Where no choice makes 4n + 2, as few as can be. Which nitrogen
+ * electrons 4n + 2 (Hückel's rule, each atom counted as lib/chem/
+ * aromaticity counts it): a tetrazine none, a tetrazole and a
+ * benzotriazole one, porphine two, guanine two beside its C=O. Where no
+ * choice makes 4n + 2, as few as can be. Which nitrogen
  * carries it, where the file does not say - a tetrazole's, a purine's - is
  * chosen by the atoms' ranks, not their order in the file, so that one
  * molecule written two ways is read as one; the tautomer itself is not in
@@ -26,6 +27,8 @@
  * the ring needs it, as a pyridine's N does. Where no assignment satisfies every atom, as many
  * carbons as possible still get their double bond and the rest stay single.
  */
+
+import { piElectrons } from "./aromaticity";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -122,28 +125,15 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     .filter((i) => roles[i] === "may" && !QUERY_ATOMS.has(atoms[i]?.el ?? "") && partners[i].length > 0)
     .sort(byRank);
 
-  // Hückel's rule: as IUPAC defines it (Gold Book H02867, "Hückel (4n + 2)
-  // rule", doi:10.1351/goldbook.H02867, from PAC 66, 1077 (1994), p. 1122),
-  // it is of a monocyclic, planar or nearly planar system with 4n + 2 pi
-  // electrons, and is generally held to n = 0 to 5. Meno goes beyond that
-  // on purpose: it applies the count to each ring system as a whole, fused
-  // rings included (a purine, a porphine), and sets no upper bound on n - a
-  // porphine's 18 is n = 4, and a larger system is counted the same way.
-  // Electrons are counted as the RDKit Book counts them ("The RDKit
-  // Aromaticity Model", rdkit.org/docs/RDKit_Book.html, the 2026.09.1
-  // documentation, read 2026-10-21): c 1, n 1, an n with a third neighbour
-  // or its H 2, o, s, se, te 2, a ring atom's exocyclic double bond to O or
-  // N 0 (it "steals" the electron). Beyond the table's examples: an
-  // exocyclic C=S, C=Se, C=P or C=As 0 too, as RDKit counts them (measured:
-  // a 2-pyridone's ring is aromatic in RDKit with each of these on its
-  // carbon, and not with C=C); a charged carbon, which the table does not
-  // list, 0 as a cation and 2 as an anion (the tropylium's, the
-  // cyclopentadienide's). After E. Hückel, Z. Phys.
-  // 70, 204 (1931) and its sequels, Z. Phys. 72, 310 (1931) and 76, 628
-  // (1932) - not opened here. Of the ways to give the double bonds, those
-  // whose every system holding an atom that may take one counts 4N + 2 come
-  // first - guanine's two N-H with its C=O, a tetrazine's none - and where
-  // none does, the fewest left without (an atom of no known count: no count)
+  // Each atom's pi electrons are counted as Meno counts them for its rule on
+  // aromatic rings (lib/chem/aromaticity `piElectrons`). How many N carry an
+  // H is a count over each ring system whole: of the ways to give the double
+  // bonds, those whose every system holding an atom that may take one counts
+  // 4n + 2 come first - guanine's two N-H with its C=O, a tetrazine's none,
+  // a porphine's two (26) - and where none does, the fewest left without
+  // (an atom of no known count: no count). Not the rule's rings and pairs:
+  // a porphine with no N-H has 18 round each pyrrole and the inner ring,
+  // which would take it for aromatic with two hydrogens fewer
   const system = new Int32Array(atoms.length).fill(-1);
   {
     const near = atoms.map(() => [] as number[]);
@@ -167,23 +157,19 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     }
   }
   const inRing = (i: number, j: number) => system[i] >= 0 && system[i] === system[j];
-  /** An atom's pi electrons, given whether it has its double bond in the ring; null where it is not known. */
-  const electrons = (i: number, matched: boolean): number | null => {
-    const el = canonical(atoms[i]?.el ?? "");
-    const charge = atoms[i]?.charge ?? 0;
-    if (hasMultiple[i]) {
-      // (its double bond made already: in the ring, one; out of it - a C=O, C=N, C=S, C=Se, C=P, C=As - none, the
-      // bond taking its electron, as RDKit counts it; out of it to a carbon, one)
-      const out = bonds.find((b) => (b.order === 2 || b.order === 3) && (b.a1 === i || b.a2 === i) && !inRing(b.a1, b.a2));
-      if (!out) return 1;
-      return ["O", "N", "S", "Se", "Te", "P", "As"].includes(canonical(atoms[out.a1 === i ? out.a2 : out.a1]?.el ?? "")) ? 0 : 1;
-    }
-    if (matched) return 1;
+  /** An atom's pi electrons as the matching stands (lib/chem/aromaticity `piElectrons`); null where not known. */
+  const electrons = (i: number): number | null => {
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return null;
-    if (el === "C") return charge < 0 ? 2 : charge > 0 ? 0 : null;
-    if (el === "B") return charge < 0 ? 1 : 0;
-    if (["N", "P", "As", "O", "S", "Se", "Te"].includes(el)) return 2;
-    return null;
+    // (its double bond made already: in the ring, or out of it - a C=O, a C=S - to the element across it)
+    const out = bonds.find((b) => b.order === 2 && (b.a1 === i || b.a2 === i) && !inRing(b.a1, b.a2));
+    return piElectrons({
+      el: canonical(atoms[i]?.el ?? ""),
+      charge: atoms[i]?.charge ?? 0,
+      inSystem: matched[i] >= 0 || (hasMultiple[i] && !out),
+      outTo: out ? canonical(atoms[out.a1 === i ? out.a2 : out.a1]?.el ?? "") : null,
+      triple: bonds.some((b) => b.order === 3 && (b.a1 === i || b.a2 === i)),
+      degree: degree[i] + (atoms[i]?.hs ?? 0),
+    });
   };
   const counted = new Set(willing.map((i) => system[i]));
   const huckel = (): boolean => {
@@ -193,7 +179,7 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
       if (!counted.has(k)) continue;
       const was = sum.get(k);
       if (was === null) continue;
-      const e = electrons(i, matched[i] >= 0);
+      const e = electrons(i);
       sum.set(k, e === null ? null : (was ?? 0) + e);
     }
     for (const total of sum.values()) if (total !== null && total % 4 !== 2) return false;
