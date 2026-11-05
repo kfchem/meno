@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { DrawnModel, Model } from "../store/types";
-import { readDrawnRecord, setMembers, structureLineage } from "./entries";
+import { hash, readDrawnRecord, setMembers, structureIdAt, structureLineage } from "./entries";
 import { resultOf } from "./flow";
 import { addSet, addStep, membersSettled } from "./model";
 import { appendParts, carriedRenumbered, partsOf } from "./parts";
@@ -61,8 +61,8 @@ function chains(...at: { x: number; y: number; id: number }[]): WorkspaceDocumen
 
 /** The lasting ids of a set's structures, as they stand. */
 const idsOf = (doc: WorkspaceDocument, set: number) => setMembers(doc, doc.sets!.find((b) => b.id === set)!).records.map((r) => r?.id);
-/** The lasting ids of what a step's exit holds. */
-const exitIds = (doc: WorkspaceDocument, exit = "out") => idsOf(doc, resultOf(doc, doc.steps![0].id, exit)!.id);
+/** The lasting ids of what a step's exit holds - the first step's, else the `step`th. */
+const exitIds = (doc: WorkspaceDocument, exit = "out", step = 0) => idsOf(doc, resultOf(doc, doc.steps![step].id, exit)!.id);
 
 /** `doc` with its atom `id` made element `to`, settled as an edit is. */
 const madeAnother = (doc: WorkspaceDocument, id: number, to: string) => membersSettled({ ...doc, model: { ...doc.model, atoms: doc.model.atoms.map((a) => (a.id === id ? { ...a, el: to } : a)) } }, doc);
@@ -118,6 +118,23 @@ describe("a structure's lasting id", () => {
     expect([...out, ...rest].every(Boolean)).toBe(true);
     expect(new Set([...out, ...rest]).size).toBe(4);
     expect([exitIds(placeResults(stepPage(), stepPage().steps![0], results(), W)), exitIds(placeResults(stepPage(), stepPage().steps![0], results(), W), "rest")]).toEqual([out, rest]);
+  });
+
+  it("is told apart by where it is put: one structure at the first place of two exits of a step, and of another step's two, has four", () => {
+    const two = addStep(stepPage(), "duplicates", 5, 40);
+    const once = placeResults(two, two.steps![0], drawn([chloroethane()], [chloroethane()]), W);
+    const both = placeResults(once, once.steps![1], drawn([chloroethane()], [chloroethane()]), W);
+    const ids = [exitIds(both), exitIds(both, "rest"), exitIds(both, "out", 1), exitIds(both, "rest", 1)].flat();
+    expect(ids).toHaveLength(4);
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(4);
+  });
+
+  it("is two hashes wide: two drawings one hash alone takes as the same are told apart", () => {
+    // (two found by trying, each FNV-1a hash of the text the id is worked out from the same)
+    const [a, b] = ["C5pf8", "Cmrj6"];
+    expect(hash(`step 1 out|0|${a}`)).toBe(hash(`step 1 out|0|${b}`));
+    expect(structureIdAt("step 1 out", 0, a)).not.toBe(structureIdAt("step 1 out", 0, b));
   });
 
   it("is kept where a step gives on the structure it was given with it - and is another's where it gives another with it", () => {
