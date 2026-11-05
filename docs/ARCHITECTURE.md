@@ -1054,8 +1054,9 @@ through all its atoms, written as a multi-centre bond by
 `chem/etaBound.ts`, held over its metal; every conformer as made - which
 are kept Meno's, `keptMade`, a salt's parts set side by side,
 `chem/partsApart.ts`; every conformer kept in the order made, with every centre's CIP
-label; of two enantiomers, the one whose SMILES comes first is made and the
-other is its mirror image), and the page keeps each once, lowest first,
+label; of two enantiomers, the one whose identity with its configuration
+comes first is made, and the other as its reflection, `chem/pageMirror`),
+and the page keeps each once, lowest first,
 laid over the first, equivalent atoms in the first's places
 (`chem/pageConformers`, in a worker of its own: `chem/shownConformers`;
 WORKSPACE.md, *The page's conformers*). Both take
