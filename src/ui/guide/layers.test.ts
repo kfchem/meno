@@ -30,6 +30,8 @@ describe("the guide among the window's layers", () => {
     expect(source).toMatch(/createPortal\(/);
     expect(source).toMatch(/document\.body,\n\s*\);/);
     expect(source).toMatch(/className="fixed inset-0[^"]*" style=\{\{ zIndex: QUESTION_LAYER \}\}/);
+    // (over the whole window, it takes the pointer only where a question is: empty, it never stands in the way of a click; a question in it, its own)
+    expect(source).toContain('className="fixed inset-0 pointer-events-none [&>*]:pointer-events-auto"');
   });
 
   it("has every question asked in a layer: the window's own (layouts/QuestionLayer), or its canvas's - never a box of its own inside a tab", () => {
