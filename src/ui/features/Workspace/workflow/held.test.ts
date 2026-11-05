@@ -5,7 +5,9 @@ import { acceptManifest } from "../../../../lib/plugins/manifest";
 import type { Restraint } from "../../../../lib/entry";
 import TIGHTBIND from "../../../../test/plugins/tightbind/manifest.json?raw";
 import { optionsFor } from "./doers";
-import { convergedOf, heldWhy } from "./converged";
+import { convergedIn, convergedOf, heldWhy } from "./converged";
+import { readCarried3D } from "../utils/copyPaste";
+import type { Molecule3D } from "../store/types";
 import { HOLD_OPTION } from "./kinds";
 import { notAllMinima } from "./meno";
 import { fixedAtoms, heldAsked, heldRefused, isFailure, workedOf } from "./programs";
@@ -104,6 +106,20 @@ describe("holding an entry's restraints as it is optimised", () => {
     // (moved by a thousandth of an ångström: not held)
     const moved = [0, 0, 0, 0.961, 0, 0, -0.24, 0.93, 0];
     expect(workedOf("optimise", e, output({ frames: [[...e.xyz], moved] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e))).toEqual({ kind: "failed", why: "Atom 2 moved though held" });
+  });
+
+  it("goes through a file and back with the atoms it held - a record that does not say them as it must, none", () => {
+    const e = water([{ kind: "fixed", atoms: [0, 2] }]);
+    const held = worked(workedOf("optimise", e, output(), ["tightbind 0.2.0"], undefined, fixedAtoms(e)));
+    const m = { id: 1, at: { x: 0, y: 0 }, atoms: e.atoms.map((a, k) => ({ ...a, x: MIN[3 * k], y: MIN[3 * k + 1], z: MIN[3 * k + 2] })), bonds: e.bonds, converged: [held.converged] } as unknown as Molecule3D;
+    const back = readCarried3D(JSON.parse(JSON.stringify(m)));
+    expect(back?.converged).toEqual([{ how: "optimisation with atoms held", geometry: held.converged!.geometry, held: [0, 2] }]);
+    // (what does not read: none - never one of a run that held atoms read back as a free one)
+    const g = held.converged!.geometry;
+    for (const bad of [[-1], [0.5], [], "0, 2", null]) expect(convergedIn({ how: "optimisation with atoms held", geometry: g, held: bad }), JSON.stringify(bad)).toBeNull();
+    expect(convergedIn({ how: "optimisation with atoms held", geometry: g })).toBeNull();
+    expect(convergedIn({ how: "optimisation", geometry: g, held: [0] })).toBeNull();
+    expect(convergedIn({ how: "saddle point optimisation with atoms held", geometry: g, held: [3] })).toEqual({ how: "saddle point optimisation with atoms held", geometry: g, held: [3] });
   });
 
   it("is no minimum for a step that takes minima, until it is optimised free of them", () => {

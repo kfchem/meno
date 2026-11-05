@@ -44,7 +44,12 @@ export function convergedOf(e: { converged?: Converged; xyz: readonly number[]; 
 export function convergedIn(v: unknown): Converged | null {
   const c = v as { how?: unknown; geometry?: unknown } | null;
   if (!c || typeof c !== "object" || typeof c.geometry !== "string" || !c.geometry) return null;
+  if (!(CONVERGED_HOW as readonly unknown[]).includes(c.how)) return null;
+  // (atoms held: said by how it converged, and listed - each from 0, at least one - or the record is none: never one of a run
+  //  that held atoms read back as a free one's, nor the other way round)
   const held = (c as { held?: unknown }).held;
-  const atoms = Array.isArray(held) && held.length && held.every((a) => Number.isInteger(a) && a >= 0) ? { held: held as number[] } : {};
-  return (CONVERGED_HOW as readonly unknown[]).includes(c.how) ? { how: c.how as ConvergedHow, geometry: c.geometry, ...atoms } : null;
+  const atoms = Array.isArray(held) && held.length > 0 && held.every((a) => Number.isInteger(a) && a >= 0) ? (held as number[]) : null;
+  const says = (c.how as string).endsWith("with atoms held");
+  if (says !== (atoms != null) || (!says && held !== undefined)) return null;
+  return { how: c.how as ConvergedHow, geometry: c.geometry, ...(atoms ? { held: [...atoms] } : {}) };
 }
