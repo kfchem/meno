@@ -1,11 +1,12 @@
-import { useThree } from "@react-three/fiber";
-import { useMemo } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useMemo, useRef, useState } from "react";
 import type * as THREE from "three";
 import { useEditor, useEditorStore } from "../store";
 import { MOV_PX } from "../constants";
 import { PX } from "../workflow/look";
 import { pageAt } from "../utils/page";
 import FrameTabs, { type FrameTab } from "../pageGl/FrameTabs";
+import { fading, presenceAt, presentAt, type Present } from "../pageGl/presence";
 import type { PagePointer } from "../pageGl/PageHits";
 import type { Side } from "../pageGl/hits";
 import { connectionFor } from "./connections";
@@ -47,7 +48,16 @@ export default function ConversationFrames() {
   const shown = useEditor((s) => s.conversationShown);
   const talking = useEditor((s) => s.talking);
   const { gl, camera } = useThree();
-  const items = useMemo(() => conversationTabs(conversations, { hovered, shown, talking }), [conversations, hovered, shown, talking]);
+  const live = useMemo(() => conversationTabs(conversations, { hovered, shown, talking }), [conversations, hovered, shown, talking]);
+  // (each coming in and going out over Meno's base time - one gone drawn as it last was till it has: pageGl/presence)
+  const present = useRef<Map<string, Present<FrameTab>> | null>(null);
+  const [, redraw] = useState(0);
+  const now = performance.now();
+  present.current = presentAt(present.current ?? new Map(), live, now, present.current == null);
+  useFrame(() => {
+    if (present.current && fading(present.current, performance.now())) redraw((n) => n + 1);
+  });
+  const items = [...present.current.values()].map((p) => ({ ...p.item, opacity: presenceAt(p, now), ...(p.gone != null ? { noHits: true as const } : {}) }));
   const byKey = (key: string) => conversations.find((c) => `conversation:${c.id}` === key);
 
   /** Where a pointer is on the page. */

@@ -52,4 +52,9 @@ describe("a frame with its tab, drawn as a set's", () => {
     const parts = frameTabParts([frame({ opacity: 0.4, tab: { icon: "chat", name: "A", warn: "W" } })], true);
     for (const p of [...parts.shapes, ...parts.texts, ...parts.icons]) expect(p.opacity, p.key).toBe(0.4);
   });
+
+  it("going, is drawn but taken hold of nowhere", () => {
+    const parts = frameTabParts([frame({ edges: true, noHits: true, opacity: 0.3 })], true);
+    expect([parts.shapes.length, parts.regions]).toEqual([1, []]);
+  });
 });

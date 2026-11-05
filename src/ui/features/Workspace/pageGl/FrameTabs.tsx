@@ -35,6 +35,8 @@ export type FrameTab = {
   tab: { icon: string; name: string; status?: string; warn?: string };
   edges?: true;
   opacity?: number;
+  /** Going - fading out, as it last was: drawn, never taken hold of. */
+  noHits?: true;
 };
 
 /** What a frame's parts are told: its tab pressed, an edge or a corner pressed, the pointer onto its tab or off it, its menu asked for. */
@@ -108,6 +110,7 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean): { shap
       }
     }
     // (what takes the pointer: its tab - along the frame's whole top, or its own box - and, where it is sized, its edges)
+    if (it.noHits) continue;
     regions.push({ key: it.key, part: "tab", rect: { x0, y0: top - BAND, x1: it.tabOnly ? tabRight : x1, y1: top }, z: 1, cursor: "default" });
     if (it.edges && !it.tabOnly) for (const side of SIDES) regions.push({ key: it.key, part: `edge:${side}`, band: { x0, y0, x1, y1, widthPx: FRAME_PX.edge, side }, z: 0, cursor: CURSOR[side] });
   }
