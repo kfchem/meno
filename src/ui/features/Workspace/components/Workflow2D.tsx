@@ -1117,8 +1117,13 @@ export default function Workflow2D() {
       const twice = tabPressed.current?.set === b.id && now - tabPressed.current.at < DOUBLE_MS;
       tabPressed.current = { set: b.id, at: now };
       if (twice && !b.made) {
+        // (its field opened as the button comes up, as a double-click is: opened as it goes down, the press's own end took its focus)
         (e.event as PointerEvent).stopPropagation();
-        setRenaming(b.id);
+        const up = () => {
+          window.removeEventListener("pointerup", up, true);
+          window.setTimeout(() => setRenaming(b.id), 0);
+        };
+        window.addEventListener("pointerup", up, true);
         return;
       }
       dragSet(asPress(e), b);
